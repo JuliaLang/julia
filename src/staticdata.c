@@ -2,6 +2,44 @@
 
 /*
   saving and restoring system images
+
+  This performs serialization and deserialization, somewhat similar to dump.c. However, while dump.c is exhaustive,
+  here we focus on issues like pointer relocation and registering with the garbage collector. We also need to pay special
+  attention to things like builtin functions, C-implemented types (those in jltypes.c), the metadata for
+  documentation, 
+
+  During serialization, the flow has several steps:
+
+  - step 1 inserts relevant items into `backref_table`, an `obj` => `id::Int` mapping. `id` is assigned by
+    order of insertion. This is effectively a recursive traversal, singling out items like pointers and symbols
+    that need restoration when the system image is loaded. This stage is implemented by `jl_serialize_value`
+    and its callees; while it would be simplest to use recursion, this risks stack overflow,
+    so recursion is mimicked using a work-queue managed by `jl_serialize_reachable`.
+
+    It's worth emphasizing that despite the name `jl_serialize_value`, the only goal of this stage is to
+    insert objects into `backref_table`, specifically the objects/fields that will require touch-up when the system
+    image is loaded.
+
+  - step 2 (the biggest of four steps) takes all items in `backref_table` and actually serializes them.
+    They are first ordered by `id` and then serialized. Serialization constructs `layout_table`, where `layout_table[id]` is
+    the stream position of the item corresponding to `id`. There are actually several distinct streams (see the
+    fields in `jl_serializer_state`) that reflect the format of ELF/LLVM; for example, global variables get added to the
+    data stream but also added to the `gvar_record` section. Anything with a pointer gets added to
+    the serializer's `relocs_list`. Finally, a few items (modules, typenames, methods) will need custom touch-up beyond
+    mere pointer relocation and are added to `reinit_list` or `ccallable_list`.
+
+    Certain key items (e.g., builtin types & functions, integers smaller than 512) get serialized via a tag table.
+
+    This step is handled by `jl_write_values`, followed by serializing `reinit_list` and `ccallable_list`,
+    the entire symbol table, and specially-tagged items.
+
+  - step 3 combines the different sections (fields of `jl_serializer_state`) into one
+
+  - step 4 writes the values of tagged items and `reinit_list`/`ccallable_list`
+
+The tables written to the serializer stream make deserialization fairly straightforward. Much of the "real work" is
+done by `get_item_for_reloc`.
+
 */
 #include <stdlib.h>
 #include <string.h>
@@ -51,15 +89,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_globalref_type);
         INSERT_TAG(jl_string_type);
         INSERT_TAG(jl_module_type);
-        INSERT_TAG(jl_tvar_type);
-        INSERT_TAG(jl_method_instance_type);
-        INSERT_TAG(jl_method_type);
-        INSERT_TAG(jl_code_instance_type);
-        INSERT_TAG(jl_linenumbernode_type);
-        INSERT_TAG(jl_lineinfonode_type);
-        INSERT_TAG(jl_gotonode_type);
-        INSERT_TAG(jl_quotenode_type);
-        INSERT_TAG(jl_gotoifnot_type);
+        INSERT_TAG(jl_tvar_type);reinit
         INSERT_TAG(jl_argument_type);
         INSERT_TAG(jl_returnnode_type);
         INSERT_TAG(jl_const_type);
@@ -218,15 +248,13 @@ static uintptr_t nsym_tag;
 // (reverse of symbol_table)
 static arraylist_t deser_sym;
 
-// table of all objects that are serialized
-static htable_t backref_table;
-static int backref_table_numel;
-static arraylist_t layout_table;
-static arraylist_t object_worklist;
-
-// list of (size_t pos, (void *f)(jl_value_t*)) entries
-// for the serializer to mark values in need of rework by function f
-// during deserialization later
+// table of all objects that are serializeds->relocs
+// Both `reinit_list` and `ccallable_list` are lists of (size_t pos, code) entries
+// for the serializer to mark values in need of rework during deserialization
+// codes:
+//   1: typename   (reinit_list)
+//   2: module     (reinit_list)
+//   3: method     (ccallable_list)
 static arraylist_t reinit_list;
 
 // @ccallable entry points to install
@@ -257,14 +285,14 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     NULL };
 
 typedef struct {
-    ios_t *s;
+    ios_t *s;                   // the main stream
     ios_t *const_data;
     ios_t *symbols;
-    ios_t *relocs;
+    ios_t *relocs;              // for (de)serializing relocs_list and gctags_list
     ios_t *gvar_record;
     ios_t *fptr_record;
-    arraylist_t relocs_list;
-    arraylist_t gctags_list;
+    arraylist_t relocs_list;    // a list of (location, target) pairs
+    arraylist_t gctags_list;    //      "
     jl_ptls_t ptls;
 } jl_serializer_state;
 
@@ -275,14 +303,16 @@ static int gmp_limb_size = 0;
 
 static jl_sym_t *jl_docmeta_sym = NULL;
 
+// Tags of category `t` are located at offsets `t << RELOC_TAG_OFFSET`
+// Consequently there is room for 2^RELOC_TAG_OFFSET pointers, etc
 enum RefTags {
-    DataRef,
-    ConstDataRef,
-    TagRef,
-    SymbolRef,
-    BindingRef,
-    FunctionRef,
-    BuiltinFunctionRef
+    DataRef,           // pointers
+    ConstDataRef,      // constant data (e.g., arrays, layouts)
+    TagRef,            // items serialized via their tags 
+    SymbolRef,         // symbols
+    BindingRef,        // module bindings
+    FunctionRef,       // generic functions
+    BuiltinFunctionRef // builtin functions
 };
 
 // calling conventions for internal entry points.
