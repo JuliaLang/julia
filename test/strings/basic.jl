@@ -1039,7 +1039,7 @@ let s = "∀x∃y", u = codeunits(s)
     @test u[1] == 0xe2
     @test u[2] == 0x88
     @test u[8] == 0x79
-    @test_throws Base.CanonicalIndexError (u[1] = 0x00)
+    @test_throws ErrorException (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end

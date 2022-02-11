@@ -22,95 +22,6 @@ struct ArgInfo
     argtypes::Vector{Any}
 end
 
-struct TriState; state::UInt8; end
-const ALWAYS_FALSE     = TriState(0x00)
-const ALWAYS_TRUE      = TriState(0x01)
-const TRISTATE_UNKNOWN = TriState(0x02)
-
-function tristate_merge(old::TriState, new::TriState)
-    (old === ALWAYS_FALSE || new === ALWAYS_FALSE) && return ALWAYS_FALSE
-    old === TRISTATE_UNKNOWN && return old
-    return new
-end
-
-struct Effects
-    consistent::TriState
-    effect_free::TriState
-    nothrow::TriState
-    terminates::TriState
-    # This effect is currently only tracked in inference and modified
-    # :consistent before caching. We may want to track it in the future.
-    inbounds_taints_consistency::Bool
-end
-Effects(consistent::TriState, effect_free::TriState, nothrow::TriState, terminates::TriState) =
-    Effects(consistent, effect_free, nothrow, terminates, false)
-Effects() = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
-
-Effects(e::Effects; consistent::TriState=e.consistent,
-    effect_free::TriState = e.effect_free, nothrow::TriState=e.nothrow, terminates::TriState=e.terminates,
-    inbounds_taints_consistency::Bool = e.inbounds_taints_consistency) =
-        Effects(consistent, effect_free, nothrow, terminates, inbounds_taints_consistency)
-
-is_total_or_error(effects::Effects) =
-    effects.consistent === ALWAYS_TRUE && effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE
-
-is_total(effects::Effects) =
-    is_total_or_error(effects) && effects.nothrow === ALWAYS_TRUE
-
-is_removable_if_unused(effects::Effects) =
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE &&
-    effects.nothrow === ALWAYS_TRUE
-
-const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE)
-
-encode_effects(e::Effects) = e.consistent.state | (e.effect_free.state << 2) | (e.nothrow.state << 4) | (e.terminates.state << 6)
-decode_effects(e::UInt8) =
-    Effects(TriState(e & 0x3),
-        TriState((e >> 2) & 0x3),
-        TriState((e >> 4) & 0x3),
-        TriState((e >> 6) & 0x3), false)
-
-function tristate_merge(old::Effects, new::Effects)
-    Effects(tristate_merge(
-            old.consistent, new.consistent),
-        tristate_merge(
-            old.effect_free, new.effect_free),
-        tristate_merge(
-            old.nothrow, new.nothrow),
-        tristate_merge(
-            old.terminates, new.terminates),
-        old.inbounds_taints_consistency ||
-        new.inbounds_taints_consistency)
-end
-
-struct EffectsOverride
-    consistent::Bool
-    effect_free::Bool
-    nothrow::Bool
-    terminates::Bool
-    terminates_locally::Bool
-end
-
-function encode_effects_override(eo::EffectsOverride)
-    e = 0x00
-    eo.consistent && (e |= 0x01)
-    eo.effect_free && (e |= 0x02)
-    eo.nothrow && (e |= 0x04)
-    eo.terminates && (e |= 0x08)
-    eo.terminates_locally && (e |= 0x10)
-    e
-end
-
-decode_effects_override(e::UInt8) =
-    EffectsOverride(
-        (e & 0x01) != 0x00,
-        (e & 0x02) != 0x00,
-        (e & 0x04) != 0x00,
-        (e & 0x08) != 0x00,
-        (e & 0x10) != 0x00)
-
 """
     InferenceResult
 
@@ -123,13 +34,11 @@ mutable struct InferenceResult
     result # ::Type, or InferenceState if WIP
     src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
     valid_worlds::WorldRange # if inference and optimization is finished
-    ipo_effects::Effects # if inference is finished
-    effects::Effects # if optimization is finished
     function InferenceResult(linfo::MethodInstance,
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing,
                              va_override::Bool = false)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange(), Effects(), Effects())
+        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
     end
 end
 

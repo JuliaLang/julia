@@ -701,7 +701,7 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     return field
 end
 
-function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Type{Bool}}
+function getfield_nothrow(argtypes::Vector{Any})
     if length(argtypes) == 2
         boundscheck = Bool
     elseif length(argtypes) == 3
@@ -712,21 +712,11 @@ function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Ty
     elseif length(argtypes) == 4
         boundscheck = argtypes[4]
     else
-        return nothing
+        return false
     end
-    widenconst(boundscheck) !== Bool && return nothing
-    boundscheck = widenconditional(boundscheck)
-    if isa(boundscheck, Const)
-        return boundscheck.val
-    else
-        return Bool
-    end
-end
-
-function getfield_nothrow(argtypes::Vector{Any})
-    boundscheck = getfield_boundscheck(argtypes)
-    boundscheck === nothing && return false
-    return getfield_nothrow(argtypes[1], argtypes[2], !(boundscheck === false))
+    widenconst(boundscheck) !== Bool && return false
+    bounds_check_disabled = isa(boundscheck, Const) && boundscheck.val === false
+    return getfield_nothrow(argtypes[1], argtypes[2], !bounds_check_disabled)
 end
 function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::Bool)
     # If we don't have boundscheck and don't know the field, don't even bother
@@ -1714,85 +1704,6 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
     return false
 end
 
-# known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
-
-# known to be effect-free (but not necessarily nothrow)
-const _EFFECT_FREE_BUILTINS = [
-    fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize
-]
-
-const _CONSISTENT_BUILTINS = Any[
-    tuple, # tuple is immutable, thus tuples of egal arguments are egal
-    ===,
-    typeof,
-    nfields,
-    fieldtype,
-    apply_type,
-    isa,
-    UnionAll,
-    Core.sizeof,
-    Core.kwfunc,
-    Core.ifelse,
-    (<:),
-    typeassert,
-    throw
-]
-
-const _SPECIAL_BUILTINS = Any[
-    Core._apply_iterate
-]
-
-function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
-    if isa(f, IntrinsicFunction)
-        return intrinsic_effects(f, argtypes)
-    end
-
-    @assert !contains_is(_SPECIAL_BUILTINS, f)
-
-    nothrow = false
-    if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
-        # consistent if the argtype is immutable
-        if isvarargtype(argtypes[2])
-            return Effects(Effects(), effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE)
-        end
-        s = widenconst(argtypes[2])
-        if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(Effects(), effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE)
-        end
-        s = s::DataType
-        ipo_consistent = !ismutabletype(s)
-        nothrow = false
-        if f === Core.getfield && !isvarargtype(argtypes[end]) &&
-                getfield_boundscheck(argtypes[2:end]) !== true
-            # If we cannot independently prove inboundsness, taint consistency.
-            # The inbounds-ness assertion requires dynamic reachability, while
-            # :consistent needs to be true for all input values.
-            # N.B. We do not taint for `--check-bounds=no` here -that happens in
-            # InferenceState.
-            nothrow = getfield_nothrow(argtypes[2], argtypes[3], true)
-            ipo_consistent &= nothrow
-        end
-    else
-        ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
-    end
-    # If we computed nothrow above for getfield, no need to repeat the procedure here
-    if !nothrow
-        nothrow = isvarargtype(argtypes[end]) ? false :
-            builtin_nothrow(f, argtypes[2:end], rt)
-    end
-    effect_free = contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
-
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        ALWAYS_TRUE)
-end
-
 function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
@@ -1933,45 +1844,6 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Array{Any, 1})
         end
     end
     return true
-end
-
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
-end
-
-# whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
-    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
-
-function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
-    if f === Intrinsics.llvmcall
-        # llvmcall can do arbitrary things
-        return Effects()
-    end
-
-    ipo_consistent = !(f === Intrinsics.pointerref || # this one is volatile
-        f === Intrinsics.arraylen || # this one is volatile
-        f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-        f === Intrinsics.cglobal) # cglobal lookup answer changes at runtime
-
-    effect_free = !(f === Intrinsics.pointerset)
-
-    nothrow = isvarargtype(argtypes[end]) ? false :
-        intrinsic_nothrow(f, argtypes[2:end])
-
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        ALWAYS_TRUE)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function

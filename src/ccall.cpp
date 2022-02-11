@@ -1247,9 +1247,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
     return "";
 }
 
-const int fc_args_start = 6;
-
-// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, [cconv | (cconv, effects)], args..., roots...)
+// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, cconv, args..., roots...)
 static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
     JL_NARGSV(ccall, 5);
@@ -1259,14 +1257,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     size_t nccallargs = jl_svec_len(at);
     size_t nreqargs = jl_unbox_long(args[4]); // if vararg
     assert(jl_is_quotenode(args[5]));
-    jl_value_t *jlcc = jl_quotenode_value(args[5]);
-    jl_sym_t *cc_sym = NULL;
-    if (jl_is_symbol(jlcc)) {
-        cc_sym = (jl_sym_t*)jlcc;
-    }
-    else if (jl_is_tuple(jlcc)) {
-        cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
-    }
+    jl_sym_t *cc_sym = *(jl_sym_t**)args[5];
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
     JL_GC_PUSH3(&rt, &at, &symarg.gcroot);
@@ -1288,8 +1279,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
 
     auto ccallarg = [=] (size_t i) {
-        assert(i < nccallargs && i + fc_args_start <= nargs);
-        return args[fc_args_start + i];
+        assert(i < nccallargs && i + 6 <= nargs);
+        return args[6 + i];
     };
 
     auto _is_libjulia_func = [&] (uintptr_t ptr, StringRef name) {
@@ -1323,7 +1314,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
     // emit roots
     SmallVector<Value*, 16> gc_uses;
-    for (size_t i = nccallargs + fc_args_start; i <= nargs; i++) {
+    for (size_t i = nccallargs + 6; i <= nargs; i++) {
         // Julia (expression) value of current parameter gcroot
         jl_value_t *argi_root = args[i];
         if (jl_is_long(argi_root))

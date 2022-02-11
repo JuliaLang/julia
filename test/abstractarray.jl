@@ -529,7 +529,7 @@ mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
 @testset "ErrorException if getindex is not defined" begin
     Base.length(::TestThrowNoGetindex) = 2
     Base.size(::TestThrowNoGetindex) = (2,)
-    @test_throws Base.CanonicalIndexError isassigned(TestThrowNoGetindex{Float64}(), 1)
+    @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
 end
 
 function test_in_bounds(::Type{TestAbstractArray})
@@ -565,10 +565,10 @@ end
 function test_getindex_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws Base.CanonicalIndexError getindex(U, 1)
-    @test_throws Base.CanonicalIndexError Base.unsafe_getindex(U, 1)
-    @test_throws Base.CanonicalIndexError getindex(V, 1, 1)
-    @test_throws Base.CanonicalIndexError Base.unsafe_getindex(V, 1, 1)
+    @test_throws ErrorException getindex(U, 1)
+    @test_throws ErrorException Base.unsafe_getindex(U, 1)
+    @test_throws ErrorException getindex(V, 1, 1)
+    @test_throws ErrorException Base.unsafe_getindex(V, 1, 1)
 end
 
 function test_setindex!_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
@@ -583,10 +583,10 @@ end
 function test_setindex!_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws Base.CanonicalIndexError setindex!(U, 0, 1)
-    @test_throws Base.CanonicalIndexError Base.unsafe_setindex!(U, 0, 1)
-    @test_throws Base.CanonicalIndexError setindex!(V, 0, 1, 1)
-    @test_throws Base.CanonicalIndexError Base.unsafe_setindex!(V, 0, 1, 1)
+    @test_throws ErrorException setindex!(U, 0, 1)
+    @test_throws ErrorException Base.unsafe_setindex!(U, 0, 1)
+    @test_throws ErrorException setindex!(V, 0, 1, 1)
+    @test_throws ErrorException Base.unsafe_setindex!(V, 0, 1, 1)
 end
 
 function test_get(::Type{TestAbstractArray})

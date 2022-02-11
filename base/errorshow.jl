@@ -170,10 +170,6 @@ function showerror(io::IO, ex::InexactError)
     Experimental.show_error_hints(io, ex)
 end
 
-function showerror(io::IO, ex::CanonicalIndexError)
-    print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
-end
-
 typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)

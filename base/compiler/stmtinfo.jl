@@ -47,13 +47,6 @@ function nmatches(info::UnionSplitInfo)
     return n
 end
 
-struct ConstResult
-    mi::MethodInstance
-    result
-    ConstResult(mi::MethodInstance) = new(mi)
-    ConstResult(mi::MethodInstance, @nospecialize val) = new(mi, val)
-end
-
 """
     info::ConstCallInfo
 
@@ -63,7 +56,7 @@ the inference results with constant information `info.results::Vector{Union{Noth
 """
 struct ConstCallInfo
     call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,InferenceResult,ConstResult}}
+    results::Vector{Union{Nothing,InferenceResult}}
 end
 
 """
@@ -129,7 +122,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct InvokeCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult}
+    result::Union{Nothing,InferenceResult}
 end
 
 """
@@ -141,7 +134,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct OpaqueClosureCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult}
+    result::Union{Nothing,InferenceResult}
 end
 
 """

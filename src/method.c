@@ -146,7 +146,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 return expr;
             }
             if (e->head == jl_foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
+                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
@@ -176,15 +176,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 check_c_types("ccall method definition", rt, at);
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
-                jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
-                if (!jl_is_symbol(cc)) {
-                    JL_TYPECHK(ccall method definition, tuple, cc);
-                    if (jl_nfields(cc) != 2) {
-                        jl_error("In ccall calling convention, expected two argument tuple or symbol.");
-                    }
-                    JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
-                    JL_TYPECHK(ccall method definition, uint8, jl_get_nth_field(cc, 1));
-                }
+                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
@@ -316,15 +308,6 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
-                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 5) {
-                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
-                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
-                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates = jl_unbox_bool(jl_exprarg(ma, 3));
-                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
-                    }
-                }
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -465,7 +448,6 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->pure = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
-    src->purity.bits = 0;
     return src;
 }
 
@@ -653,7 +635,6 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->pure = src->pure;
     m->constprop = src->constprop;
-    m->purity.bits = src->purity.bits;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
