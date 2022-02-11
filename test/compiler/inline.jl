@@ -1045,3 +1045,13 @@ function call_call_ambig(b::Bool)
 	return 1
 end
 @test !fully_eliminated(call_call_ambig, Tuple{Bool})
+
+# Test that a missing methtable identification gets tainted
+# appropriately
+struct FCallback; f::Union{Nothing, Function}; end
+f_invoke_callback(fc) = let f=fc.f; (f !== nothing && f(); nothing); end
+function f_call_invoke_callback(f::FCallback)
+    f_invoke_callback(f)
+    return nothing
+end
+@test !fully_eliminated(f_call_invoke_callback, Tuple{FCallback})
