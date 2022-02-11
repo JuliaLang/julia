@@ -351,7 +351,7 @@ function /(a::Complex{T}, b::Complex{T}) where T<:Real
         if isfinite(a)
             return complex(zero(T)*sign(are)*sign(bre), -zero(T)*sign(aim)*sign(bim))
         end
-        return T(Nan+NaN*im)
+        return T(NaN)+T(NaN)*im
     end
     if abs(bre) <= abs(bim)
         r = bre / bim
@@ -371,7 +371,7 @@ function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
         if isfinite(z)
             return complex(zero(T)*sign(a)*sign(c), -zero(T)*sign(b)*sign(d))
         end
-        return T(Nan+NaN*im)
+        return T(NaN)+T(NaN)*im
     end
     mag = inv(muladd(c, c, d^2))
     re_part = muladd(a, c, b*d)
@@ -393,7 +393,7 @@ function /(z::ComplexF64, w::ComplexF64)
         if isfinite(z)
             return complex(0.0*sign(a)*sign(c), -0.0*sign(b)*sign(d))
         end
-        return Nan+NaN*im
+        return NaN+NaN*im
     end
     halfov = 0.5*floatmax(Float64)              # overflow threshold
     twounϵ = floatmin(Float64)*2.0/eps(Float64) # underflow threshold
