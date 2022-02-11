@@ -88,6 +88,7 @@ end
             @test isequal(T(-0.0) / im, Complex(T(-0.0), T(+0.0)))
             @test isequal(T(+1.0) / im, Complex(T(+0.0), T(-1.0)))
             @test isequal(T(-1.0) / im, Complex(T(-0.0), T(+1.0)))
+            @test isequal(complex(one(T)) / complex(T(Inf), T(Inf)), complex(zero(T)))
         end
     end
     @test isequal(true + complex(true,false), complex(true,false) + complex(true,false))

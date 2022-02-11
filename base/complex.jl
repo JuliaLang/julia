@@ -386,7 +386,7 @@ function /(z::ComplexF64, w::ComplexF64)
     a, b = reim(z); c, d = reim(w)
     absa = abs(a); absb = abs(b);  ab = absa >= absb ? absa : absb # equiv. to max(abs(a),abs(b)) but without NaN-handling (faster)
     absc = abs(c); absd = abs(d);  cd = absc >= absd ? absc : absd
-
+    ((absc==Inf) | (absd==Inf)) && return complex(copysign(0.0, c), flipsign(0.0, d)) * z
     halfov = 0.5*floatmax(Float64)              # overflow threshold
     twounϵ = floatmin(Float64)*2.0/eps(Float64) # underflow threshold
 
