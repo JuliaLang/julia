@@ -839,7 +839,7 @@ JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 
-void *jl_create_native(jl_array_t *methods, const jl_cgparams_t *cgparams, int policy);
+void *jl_create_native(jl_array_t *methods, const jl_cgparams_t *cgparams, int policy, int imaging_mode);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);

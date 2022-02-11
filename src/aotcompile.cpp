@@ -256,9 +256,9 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions. The `policy` flag switches between the default
-// mode `0`, the extern mode `1`, and imaging mode `2`.
+// mode `0`, the extern mode `1`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy)
+void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode)
 {
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
@@ -276,7 +276,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
         compiler_start_time = jl_hrtime();
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
-    if (policy == CompilationPolicy::ImagingMode)
+    if (_imaging_mode)
         imaging_mode = 1;
     std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
 
@@ -410,7 +410,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    if (policy == CompilationPolicy::ImagingMode)
+    if (_imaging_mode)
         imaging_mode = 0;
     jl_printf(JL_STDOUT, "Contents of the LLVM module:\ngvars:\n");
     for (auto &item : data->jl_sysimg_gvars) {
