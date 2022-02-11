@@ -124,6 +124,8 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(Code - Section + Size);
     tbl->UnwindData = (DWORD)(UnwindData - Section);
+    assert(Code >= Section && Code + Size <= Section + Allocated);
+    assert(UnwindData >= Section && UnwindData <= Section + Allocated);
 #else // defined(_CPU_X86_64_)
     Section += (uintptr_t)Code;
     mod_size = Size;
@@ -265,20 +267,13 @@ public:
         uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : Object.symbols()) {
             StringRef sName = cantFail(sym_iter.getName());
-            uint8_t **pAddr = NULL;
-            if (sName.equals("__UnwindData")) {
-                pAddr = &UnwindData;
-            }
-            else if (sName.equals("__catchjmp")) {
-                pAddr = &catchjmp;
-            }
-            if (pAddr) {
+            if (sName.equals("__UnwindData") || sName.equals("__catchjmp")) {
                 uint64_t Addr = cantFail(sym_iter.getAddress());
                 auto Section = cantFail(sym_iter.getSection());
                 assert(Section != EndSection && Section->isText());
                 uint64_t SectionAddr = Section->getAddress();
-                sName = cantFail(Section->getName());
-                uint64_t SectionLoadAddr = getLoadAddress(sName);
+                StringRef secName = cantFail(Section->getName());
+                uint64_t SectionLoadAddr = getLoadAddress(secName);
                 assert(SectionLoadAddr);
                 if (SectionAddrCheck) // assert that all of the Sections are at the same location
                     assert(SectionAddrCheck == SectionAddr &&
@@ -288,8 +283,13 @@ public:
                 SectionWriteCheck = SectionLoadAddr;
                 if (lookupWriteAddress)
                     SectionWriteCheck = (uintptr_t)lookupWriteAddress((void*)SectionLoadAddr);
-                Addr += SectionWriteCheck - SectionLoadAddr;
-                *pAddr = (uint8_t*)Addr;
+                Addr += SectionWriteCheck - SectionLoadCheck;
+                if (sName.equals("__UnwindData")) {
+                    UnwindData = (uint8_t*)Addr;
+                }
+                else if (sName.equals("__catchjmp")) {
+                    catchjmp = (uint8_t*)Addr;
+                }
             }
         }
         assert(catchjmp);
@@ -312,6 +312,7 @@ public:
         UnwindData[6] = 1;    // first instruction
         UnwindData[7] = 0x50; // push RBP
         *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
+        UnwindData -= SectionWriteCheck - SectionLoadCheck;
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
