@@ -851,7 +851,7 @@ or thousands of variants compiled for it. Each of these increases the size of th
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
-## "Unionize" collections
+## ["Unionize" collections](@id unionize-collections)
 
 When working e.g with agent based models or finite elements with varying element geometries, a common pattern is the occurence of collections (e.g. Vectors) of objects of different types on which one wants to perform certain actions depending on their type. By default, the element type of a vector of objects of different struct types is a common supertype, often `Any`. For dispatch -- choosing the right method of a function to be applied -- the compiler needs
 to assume that new matching types can be added  after compilation. Thus arises the need for expensive [dynamic dispatch](https://discourse.julialang.org/t/dynamic-dispatch/6963/2) at runtime.
@@ -953,7 +953,7 @@ The compiler then  knows that the number of possible types of the elements of th
   0.000097 seconds (1 allocation: 16 bytes)
 ```
 This pattern can be applied in at least the following situations
- 
+
 - __Collection of objects:__  as discussed above via e.g. defining `Vector{Union{T1,T2,T3,T4,T5}}`.
 - __Collection of types:__  Julia allows to use types as variables. These can be stored  in a collection as well, and it is possible to  dispatch on a (concrete or abstract) type parameter by defining `f(::Type{T})`. A corresponding "unionized" collection can be defined e.g. as  `Vector{Union{Type{T1},Type{T2},Type{T3},Type{T4},Type{T5}}}`.
 - __Collection of functions:__ Instead of objects or types, one also can store functions in a collection. As each function has its own type, accessing a function as a member of a collection once again will lead to dynamic dispatch, unless this collection is defined similar to `Vector{Union{typeof(f1),typeof(f2),typeof(f3),typeof(f4),typeof(f5)}}`.
