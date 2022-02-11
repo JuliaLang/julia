@@ -347,20 +347,13 @@ muladd(z::Complex, w::Complex, x::Real) =
 
 function /(a::Complex{T}, b::Complex{T}) where T<:Real
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
+    (isinf(bre) | isinf(bim)) && return complex(copysign(zero(T), bre), flipsign(-zero(T), bim)) * a
     if abs(bre) <= abs(bim)
-        if isinf(bre) && isinf(bim)
-            r = sign(bre)/sign(bim)
-        else
-            r = bre / bim
-        end
+        r = bre / bim
         den = bim + r*bre
         Complex((are*r + aim)/den, (aim*r - are)/den)
     else
-        if isinf(bre) && isinf(bim)
-            r = sign(bim)/sign(bre)
-        else
-            r = bim / bre
-        end
+        r = bim / bre
         den = bre + r*bim
         Complex((are + aim*r)/den, (aim - are*r)/den)
     end
@@ -369,7 +362,7 @@ end
 function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
     c, d = reim(widen(w))
     a, b = reim(widen(z))
-    (isinf(c) | isinf(d)) && return complex(copysign(zero(T), c), flipsign(zero(T), d)) * z
+    (isinf(c) | isinf(d)) && return complex(copysign(zero(T), c), flipsign(-zero(T), d)) * z
     mag = inv(muladd(c, c, d^2))
     re_part = muladd(a, c, b*d)
     im_part = muladd(b, c, -a*d)
@@ -386,7 +379,7 @@ function /(z::ComplexF64, w::ComplexF64)
     a, b = reim(z); c, d = reim(w)
     absa = abs(a); absb = abs(b);  ab = absa >= absb ? absa : absb # equiv. to max(abs(a),abs(b)) but without NaN-handling (faster)
     absc = abs(c); absd = abs(d);  cd = absc >= absd ? absc : absd
-    ((absc==Inf) | (absd==Inf)) && return complex(copysign(0.0, c), flipsign(0.0, d)) * z
+    ((absc==Inf) | (absd==Inf)) && return complex(copysign(0.0, c), flipsign(-0.0, d))*z
     halfov = 0.5*floatmax(Float64)              # overflow threshold
     twounϵ = floatmin(Float64)*2.0/eps(Float64) # underflow threshold
 
