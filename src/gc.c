@@ -27,6 +27,8 @@ static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 
+static uint64_t t_start = 0;
+
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
         for (jl_gc_callback_list_t *cb = list; \
@@ -1847,14 +1849,19 @@ STATIC_INLINE int gc_mark_scan_objarray(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
                                         jl_value_t **begin, jl_value_t **end,
                                         jl_value_t **pnew_obj, uintptr_t *ptag, uint8_t *pbits)
 {
+
+
     (void)jl_assume(objary == (gc_mark_objarray_t*)sp->data);
     for (; begin < end; begin += objary->step) {
         *pnew_obj = *begin;
         if (*pnew_obj)
             verify_parent2("obj array", objary->parent, begin, "elem(%d)",
                            gc_slot_to_arrayidx(objary->parent, begin));
-        if (!gc_try_setmark(*pnew_obj, &objary->nptr, ptag, pbits))
-            continue;
+
+        if (!gc_try_setmark(*pnew_obj, &objary->nptr, ptag, pbits)) {
+	  continue;
+	}
+
         begin += objary->step;
         // Found an object to mark
         if (begin < end) {
@@ -2547,7 +2554,7 @@ mark: {
             jl_value_t **data = jl_svec_data(new_obj);
             size_t dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
             if (update_meta)
-                gc_setmark(ptls, o, bits, dtsz);
+	      gc_setmark(ptls, o, bits, dtsz);
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             uintptr_t nptr = (l << 2) | (bits & GC_OLD);
@@ -2984,6 +2991,7 @@ static void jl_gc_premark(jl_ptls_t ptls2)
     ptls2->heap.remset->len = 0;
     ptls2->heap.remset_nptr = 0;
 
+
     // avoid counting remembered objects & bindings twice
     // in `perm_scanned_bytes`
     size_t len = remset->len;
@@ -3125,6 +3133,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     int64_t live_sz_est = scanned_bytes + perm_scanned_bytes;
     int64_t estimate_freed = live_sz_ub - live_sz_est;
 
+
     gc_verify(ptls);
 
     gc_stats_all_pool();
@@ -3134,50 +3143,48 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.total_allocd += gc_num.since_sweep;
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
+
     // 5. next collection decision
     int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
+
     int nptr = 0;
     for (int i = 0;i < jl_n_threads;i++)
         nptr += jl_all_tls_states[i]->heap.remset_nptr;
-    int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
+
+    int large_frontier = nptr*sizeof(void*) >= default_collect_interval;
+
+    // many pointers in the intergen frontier => "quick" mark is not quick
     // trigger a full collection if the number of live bytes doubles since the last full
     // collection and then remains at least that high for a while.
     if (grown_heap_age == 0) {
-        if (live_bytes > 2 * last_full_live)
-            grown_heap_age = 1;
+      if (live_bytes > 2 * last_full_live)
+	grown_heap_age = 1;
     }
     else if (live_bytes >= last_live_bytes) {
         grown_heap_age++;
     }
+
     int sweep_full = 0;
     int recollect = 0;
-    if ((large_frontier ||
-         ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
-          (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
-         grown_heap_age > 1) && gc_num.pause > 1) {
-        sweep_full = 1;
+
+    if (not_freed_enough) {
+      gc_num.interval = gc_num.interval * 2;
     }
+
+    if (large_frontier) {
+      sweep_full = 1;
+    }
+
+    if (gc_num.interval > max_collect_interval) {
+
+      if (not_freed_enough)
+	sweep_full = 1;
+
+      gc_num.interval = max_collect_interval;
+    }
+
+
     // update heuristics only if this GC was automatically triggered
-    if (collection == JL_GC_AUTO) {
-        if (sweep_full) {
-            if (large_frontier)
-                gc_num.interval = last_long_collect_interval;
-            if (not_freed_enough || large_frontier) {
-                if (gc_num.interval <= 2*(max_collect_interval/5)) {
-                    gc_num.interval = 5 * (gc_num.interval / 2);
-                }
-            }
-            last_long_collect_interval = gc_num.interval;
-        }
-        else {
-            // reset interval to default, or at least half of live_bytes
-            int64_t half = live_bytes/2;
-            if (default_collect_interval < half && half <= max_collect_interval)
-                gc_num.interval = half;
-            else
-                gc_num.interval = default_collect_interval;
-        }
-    }
     if (gc_sweep_always_full) {
         sweep_full = 1;
     }
@@ -3248,10 +3255,20 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
+
+    // If the current interval is larger than half the live data decrease the interval
+    int64_t half = live_bytes/2;
+    if (gc_num.interval > half) gc_num.interval = half;
+    // But never go below default
+    if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
+
+    gc_time_summary(sweep_full, t_start, gc_end_t, gc_num.freed, live_bytes, gc_num.interval, pause);
+
     if (prev_sweep_full) {
         last_full_live = live_bytes;
         grown_heap_age = 0;
     }
+
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
     gc_num.total_time += pause;
@@ -3390,6 +3407,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
 }
 
+
 // System-wide initializations
 void jl_gc_init(void)
 {
@@ -3406,6 +3424,7 @@ void jl_gc_init(void)
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
+    t_start = jl_hrtime();
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
@@ -3419,6 +3438,7 @@ void jl_gc_init(void)
 #endif
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
+    t_start = jl_hrtime();
 }
 
 // callback for passing OOM errors from gmp
