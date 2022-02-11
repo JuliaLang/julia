@@ -1089,7 +1089,7 @@ end
 
         # divide complex by complex Inf
         @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
-        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
     end
 end
 
