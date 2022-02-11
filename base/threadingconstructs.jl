@@ -42,49 +42,77 @@ function threading_run(func)
     end
 end
 
-function _threadsfor(iter, lbody, schedule)
-    lidx = iter.args[1]         # index
-    range = iter.args[2]
-    quote
-        local threadsfor_fun
-        let range = $(esc(range))
-        function threadsfor_fun(onethread=false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
-            else
-                tid = threadid()
-                len, rem = divrem(lenr, nthreads())
-            end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
-            # run this thread's iterations
-            for i = f:l
-                local $(esc(lidx)) = @inbounds r[i]
-                $(esc(lbody))
+
+
+function _threadsfor(a, body, schedule)
+    rang = map(x-> x.args[2], a) #extract the ranges from the expression
+    lidx = map(x-> x.args[1], a) #extract the variable names from the expression
+    rangelen = length(rang)
+    #create variables to store information about each iterator
+    starts = [Meta.parse("start__" * string(x)) for x in lidx]
+    ends = [Meta.parse("end__" * string(x)) for x in lidx]
+    ranges = [Meta.parse("range__" * string(x)) for x in lidx]
+    values = [Meta.parse("val__" * string(x)) for x in lidx]
+    #create expressions initializing these variables
+    initranges = [:($(ranges[x]) = range[$x]) for x in 1:rangelen]
+    initstarts = ((x, y) -> :($x = firstindex($y) ) ).(starts, ranges)
+    initends = ((x, y) -> :($x = lastindex($y) ) ).(ends, ranges)
+    initstartingindices  = ((x, y) -> :($x += $y)).(values, starts)
+    #updates to variables
+    updatevalues = [:( $(esc(lidx[x])) = @inbounds $(ranges[x])[$(values[x])] ) for x in 1:rangelen]
+    initvalues = [ :($(values[1]) = (tid - 1) * len + min(tid - 1, rem))] #initial calculation of the first dimension
+    for x in 2:rangelen
+        push!(initvalues, :(($(values[x]), $(values[x - 1])) = divrem($(values[x - 1]), length($(ranges[x - 1]))))) #initial calculation for every dimension
+    end
+    checks = :() #checks are not necessary when there is only one variable
+    for x in rangelen:-1:2
+        checks =
+        quote
+            if $(values[x - 1]) > $(ends[x - 1]) #check the bounds of the values, starting from the end, if a bound is crossed, reset the previous value, increase the current one, and check the next
+                $(values[x - 1]) = $(starts[x - 1]) #set value to firstindex() of that range
+                $(values[x]) += 1
+                $checks
+                $(updatevalues[x]) #only update variable if it changes
             end
         end
+    end
+    quote
+        local threadsfor_fun
+        let range = [$(esc.(rang)...)]
+            totallength = reduce(*, length.(range))
+            function threadsfor_fun(onethread=false)
+                #load into local variables
+                $(initranges...)
+                tlen = totallength
+                #calculate the iteration length for the current thread
+                if onethread
+                    tid = 1
+                    len, rem = tlen, 0
+                else
+                    tid = threadid()
+                    len, rem = divrem(tlen, nthreads())
+                end
+                if len == 0 && rem < tid #no iterations available for this thread
+                    return
+                end
+                #inits
+                $(initstarts...)
+                $(initends...)
+                $(initvalues...)
+                $(initstartingindices...)
+                #distribute the remainder across the threads
+                if tid <= rem
+                    len += 1
+                end
+                $(updatevalues...) #set all variables to their initial values, they will be updated later in the loop
+                $(values[begin]) -=1 #reduce code duplication by "omitting" the first increment
+                for i in 1:len
+                    $(values[1]) += 1
+                    $checks
+                    $(updatevalues[1])
+                    $(esc(body))
+                end
+            end
         end
         if ccall(:jl_in_threaded_region, Cint, ()) != 0
             $(if schedule === :static
@@ -146,9 +174,9 @@ macro threads(args...)
         throw(ArgumentError("@threads requires a `for` loop expression"))
     end
     if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+        return _threadsfor(ex.args[1].args, ex.args[2], sched)
     end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
+    return _threadsfor([ex.args[1]], ex.args[2], sched)
 end
 
 """
