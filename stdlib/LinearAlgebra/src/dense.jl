@@ -1538,6 +1538,14 @@ function cond(A::AbstractMatrix, p::Real=2)
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
 
+"""
+    rcond(M, p::Real=2)
+
+Estimate of the reciprocal condition number of the matrix `M`, computed using the operator `p`-norm. 
+Valid values for `p` are `1`, `2` (default), or `Inf`.
+"""
+rcond(A::AbstractMatrix, p::Real=2) = inv(cond(A, p))
+
 function rcond(A::StridedMatrix{<:BlasFloat}, p::Real=2)
     checksquare(A)
     if p == 1
