@@ -61,8 +61,8 @@ using Base.Checked: checked_length
 end
 
 using Dates, Random
-isdefined(Main, :PhysQuantities) || @eval Main include("testhelpers/PhysQuantities.jl")
-using .Main.PhysQuantities
+isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
+using .Main.Furlongs
 
 # Compare precision in a manner sensitive to subnormals, which lose
 # precision compared to widening.
@@ -248,12 +248,12 @@ end
     @test isnan(Float64(x0/0))
     @test isnan(Float64(x0/0.0))
 
-    x = Base.TwicePrecision(PhysQuantity{1}(4.0))
-    @test x.hi*2 === PhysQuantity{1}(8.0)
-    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x*2   # not a MethodError for convert
-    @test x.hi/2 === PhysQuantity{1}(2.0)
-    @test_throws ErrorException("Int is incommensurate with PhysQuantity") x/2
-    @test zero(typeof(x)) === Base.TwicePrecision(PhysQuantity{1}(0.0))
+    x = Base.TwicePrecision(Furlong{1}(4.0))
+    @test x.hi*2 === Furlong{1}(8.0)
+    @test_throws TypeError x*2   # not a MethodError for convert
+    @test x.hi/2 === Furlong{1}(2.0)
+    @test_throws TypeError x/2
+    @test zero(typeof(x)) === Base.TwicePrecision(Furlong{1}(0.0))
 end
 @testset "ranges" begin
     @test size(10:1:0) == (0,)
