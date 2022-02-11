@@ -4,7 +4,31 @@ using Test
 using Base.Meta
 using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
 
-include(normpath(@__DIR__, "irutils.jl"))
+# utilities
+# =========
+
+import Core.Compiler: argextype, singleton_type
+
+argextype(@nospecialize args...) = argextype(args..., Any[])
+code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
+get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
+
+# check if `x` is a statement with a given `head`
+isnew(@nospecialize x) = Meta.isexpr(x, :new)
+
+# check if `x` is a dynamic call of a given function
+iscall(y) = @nospecialize(x) -> iscall(y, x)
+function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
+    return iscall(x) do @nospecialize x
+        singleton_type(argextype(x, src)) === f
+    end
+end
+iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
+
+# check if `x` is a statically-resolved call of a function whose name is `sym`
+isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
+isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
+isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
 
 # domsort
 # =======
@@ -449,7 +473,9 @@ struct FooPartial
     global f_partial
     f_partial(x) = new(x, 2).x
 end
-@test fully_eliminated(f_partial, Tuple{Float64})
+let ci = code_typed(f_partial, Tuple{Float64})[1].first
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode)
+end
 
 # A SSAValue after the compaction line
 let m = Meta.@lower 1 + 1
@@ -631,7 +657,11 @@ function no_op_refint(r)
     r[]
     return
 end
-@test fully_eliminated(no_op_refint,Tuple{Base.RefValue{Int}}; retval=nothing)
+let code = code_typed(no_op_refint,Tuple{Base.RefValue{Int}})[1].first.code
+    @test length(code) == 1
+    @test isa(code[1], Core.ReturnNode)
+    @test code[1].val === nothing
+end
 
 # check getfield elim handling of GlobalRef
 const _some_coeffs = (1,[2],3,4)
@@ -742,6 +772,19 @@ end
 
 # test `stmt_effect_free` and DCE
 # ===============================
+
+function fully_eliminated(f, args)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode)
+    end
+end
+function fully_eliminated(f, args, retval)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
+    end
+end
 
 let # effect-freeness computation for array allocation
 

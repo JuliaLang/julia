@@ -277,8 +277,9 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-function CodeInstance(
-    result::InferenceResult, @nospecialize(inferred_result), valid_worlds::WorldRange)
+function CodeInstance(result::InferenceResult, @nospecialize(inferred_result),
+                      valid_worlds::WorldRange, effects::Effects, ipo_effects::Effects,
+		              relocatability::UInt8)
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
@@ -308,13 +309,10 @@ function CodeInstance(
             const_flags = 0x00
         end
     end
-    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
-        # TODO: Actually do something with non-IPO effects
-        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects),
-        relocatability)
+	    encode_effects(effects), encode_effects(ipo_effects), relocatability)
 end
 
 # For the NativeInterpreter, we don't need to do an actual cache query to know
@@ -388,7 +386,10 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
-        code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
+        code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds,
+            # TODO: Actually do something with non-IPO effects
+            result.ipo_effects, result.ipo_effects, relocatability)
     end
     unlock_mi_inference(interp, linfo)
     nothing

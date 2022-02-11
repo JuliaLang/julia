@@ -4,8 +4,6 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
-include(normpath(@__DIR__, "irutils.jl"))
-
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -152,6 +150,19 @@ end
     @test !any(x -> x isa Expr && x.head === :invoke, src.code)
 end
 
+function fully_eliminated(f, args)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode)
+    end
+end
+function fully_eliminated(f, args, retval)
+    @nospecialize f args
+    let code = code_typed(f, args)[1][1].code
+        return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
+    end
+end
+
 # check that ismutabletype(type) can be fully eliminated
 f_mutable_nothrow(s::String) = Val{typeof(s).name.flags}
 @test fully_eliminated(f_mutable_nothrow, (String,))
@@ -235,7 +246,7 @@ function f_subtype()
     T = SomeArbitraryStruct
     T <: Bool
 end
-@test fully_eliminated(f_subtype, Tuple{}; retval=false)
+@test fully_eliminated(f_subtype, Tuple{}, false)
 
 # check that pointerref gets deleted if unused
 f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
@@ -259,7 +270,7 @@ function foo_apply_apply_type_svec()
     B = Tuple{Float32, Float32}
     Core.apply_type(A..., B.types...)
 end
-@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
+@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}, NTuple{3, Float32})
 
 # The that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
@@ -273,7 +284,7 @@ b30118(x...) = c30118(x)
 f34900(x::Int, y) = x
 f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
-@test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
+@test fully_eliminated(f34900, Tuple{Int, Int}, Core.Argument(2))
 
 @testset "check jl_ir_flag_inlineable for inline macro" begin
     @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
@@ -313,7 +324,10 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-@test fully_eliminated(NonIsBitsDims, (); retval=QuoteNode(NonIsBitsDims()))
+let ci = code_typed(NonIsBitsDims, Tuple{})[1].first
+    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
+        ci.code[1].val.value == NonIsBitsDims()
+end
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
@@ -909,7 +923,7 @@ end
         g() = Core.get_binding_type($m, :y)
     end
 
-    @test fully_eliminated(m.f, Tuple{}; retval=Int)
+    @test fully_eliminated(m.f, Tuple{}, Int)
     src = code_typed(m.g, ())[][1]
     @test count(iscall((src, Core.get_binding_type)), src.code) == 1
     @test m.g() === Any
@@ -948,48 +962,17 @@ end
 @test fully_eliminated(f_sin_perf, Tuple{})
 
 # Test that we inline the constructor of something that is not const-inlineable
-const THE_REF_NULL = Ref{Int}()
 const THE_REF = Ref{Int}(0)
 struct FooTheRef
     x::Ref
-    FooTheRef(v) = new(v === nothing ? THE_REF_NULL : THE_REF)
+    FooTheRef() = new(THE_REF)
 end
-let src = code_typed1() do
-        FooTheRef(nothing)
-    end
-    @test count(isnew, src.code) == 1
+f_make_the_ref() = FooTheRef()
+f_make_the_ref_but_dont_return_it() = (FooTheRef(); nothing)
+let src = code_typed1(f_make_the_ref, ())
+    @test count(x->isexpr(x, :new), src.code) == 1
 end
-let src = code_typed1() do
-        FooTheRef(0)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        Base.@invoke FooTheRef(nothing::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        Base.@invoke FooTheRef(0::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
-@test fully_eliminated() do
-    FooTheRef(nothing)
-    nothing
-end
-@test fully_eliminated() do
-    FooTheRef(0)
-    nothing
-end
-@test fully_eliminated() do
-    Base.@invoke FooTheRef(nothing::Any)
-    nothing
-end
-@test fully_eliminated() do
-    Base.@invoke FooTheRef(0::Any)
-    nothing
-end
+@test fully_eliminated(f_make_the_ref_but_dont_return_it, Tuple{})
 
 # Test that the Core._apply_iterate bail path taints effects
 function f_apply_bail(f)
