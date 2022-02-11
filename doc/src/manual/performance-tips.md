@@ -853,8 +853,7 @@ can easily waste enormous resources.
 
 ## "Unionize" collections
 
-When working e.g with agent based models or finite elements with varying element geometries, a common pattern is the occurence of collections (e.g. Vectors) of objects of different types on which one wants to perform certain actions depending on their type. By default, the element type of a vector of objects of different struct types is a common
-supertype, often `Any`. For dispatch -- choosing the right method of a function to be applied -- the compiler needs
+When working e.g with agent based models or finite elements with varying element geometries, a common pattern is the occurence of collections (e.g. Vectors) of objects of different types on which one wants to perform certain actions depending on their type. By default, the element type of a vector of objects of different struct types is a common supertype, often `Any`. For dispatch -- choosing the right method of a function to be applied -- the compiler needs
 to assume that new matching types can be added  after compilation. Thus arises the need for expensive [dynamic dispatch](https://discourse.julialang.org/t/dynamic-dispatch/6963/2) at runtime.
 
 
@@ -900,7 +899,7 @@ typeof(any_collection)
 Vector{Any} (alias for Array{Any, 1})
 ```
 
-When defining the collection in the default way (resulting in a `Vector{Any}`, each access of an element is linked to an allocation with significant runtime overhead due to __dynamic dispatch__: 
+When defining the collection in the default way (resulting in a `Vector{Any}`, each access of an element is linked to an allocation with significant runtime overhead due to __dynamic dispatch__:
 ```jldoctest unionsplit; filter = r"[0-9\.]+ seconds \(.*?\)"
 @time sumup_f(t1_collection); nothing
 @time sumup_f(any_collection); nothing
