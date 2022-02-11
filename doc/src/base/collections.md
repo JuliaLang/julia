@@ -94,6 +94,7 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
+Base.allequal
 Base.reduce(::Any, ::Any)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
