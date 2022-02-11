@@ -750,7 +750,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
             elseif p == Inf
                 return LAPACK.trcon!('I', $uploc, $isunitc, A.data)
             else # use fallback
-                return inv(cond(copyto!(similar(parent(A)), A), p))
+                return inv(cond(copy_oftype(A, eltype(A)), p))
             end
         end
     
