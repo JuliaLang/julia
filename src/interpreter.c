@@ -696,6 +696,9 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = oc->world;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)oc;
@@ -710,7 +713,6 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
-
     size_t defargs = source->nargs;
     int isva = !!oc->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -722,6 +724,9 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     }
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(code->code, s, 0, 0);
+    locals[0] = r; // GC root
+    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
+    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }
