@@ -85,16 +85,11 @@ function _threadsfor(iter, lbody, schedule)
             end
         end
         end
-        if $(schedule === :dynamic)
+        if $(schedule === :dynamic || schedule === :default)
             threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0
-            $(if schedule === :static
-              :(error("`@threads :static` cannot be used concurrently or nested"))
-              else
-              # only use threads when called from outside @threads
-              :(threadsfor_fun(onethread = true))
-              end)
-        else
+        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+            error("`@threads :static` cannot be used concurrently or nested")
+        else # :static
             threading_run(threadsfor_fun, true)
         end
         nothing
@@ -126,21 +121,21 @@ For example, the above conditions imply that:
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is used).
 
-
 Schedule options are:
 - `:static` creates one task per thread and divides the iterations equally among
             them, assigning each task specifically to each thread.
             Specifying `:static` is an error if used from inside another `@threads` loop
             or from a thread other than 1.
-- `:dynamic` will schedule iterations dynamically to available worker threads,
+- `:dynamic` (default) will schedule iterations dynamically to available worker threads,
             assuming that the workload for each iteration is uniform.
 
-Without the scheduler argument, the exact scheduling is unspecified; i.e. it may be
-different across Julia releases. Currently, the behavior is dependent on the calling thread.
-The default is `:static` when called from thread 1. The loop will be executed without threading
-when called from other threads.
+Without the scheduler argument, the exact scheduling is unspecified and varies across Julia releases.
 
-The default schedule (used when no `schedule` argument is present) is subject to change.
+!!! compat "Julia 1.5"
+    The `schedule` argument is available as of Julia 1.5.
+
+!!! compat "Julia 1.8"
+    The `:dynamic` option for the `schedule` argument is available and the default as of Julia 1.8.
 
 For example, an illustration of the different scheduling strategies where `busywait`
 is a non-yielding timed loop that runs for a number of seconds.
@@ -171,12 +166,6 @@ julia> @time begin
 
 The `:dynamic` example takes 2 seconds since one of the non-occupied threads is able
 to run two of the 1-second iterations to complete the for loop.
-
-!!! compat "Julia 1.5"
-    The `schedule` argument is available as of Julia 1.5.
-
-!!! compat "Julia 1.8"
-    The `:dynamic` option for the `schedule` argument is available as of Julia 1.8.
 
 See also: [`@spawn`](@ref Threads.@spawn), [`nthreads()`](@ref Threads.nthreads),
 [`threadid()`](@ref Threads.threadid), `pmap` in [`Distributed`](@ref man-distributed),
