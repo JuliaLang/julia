@@ -546,7 +546,6 @@ typedef struct {
 typedef struct {
     // not first-class
     jl_sym_t *name;
-    _Atomic(jl_value_t*) value;
     _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
     struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
     _Atomic(jl_value_t*) ty;  // binding type
@@ -554,6 +553,9 @@ typedef struct {
     uint8_t exportp:1;
     uint8_t imported:1;
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
+    uint8_t isunboxed:1;
+    uint8_t isunion:1;
+    // _Atomic(jl_value_t*) value;
 } jl_binding_t;
 
 typedef struct {

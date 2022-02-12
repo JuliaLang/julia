@@ -154,11 +154,29 @@ JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
     return mod->istopmod;
 }
 
-static jl_binding_t *new_binding(jl_sym_t *name)
+static size_t sizeof_binding(int isunboxed, int isunion, size_t *elsz, size_t *al, size_t *data_offset) {
+    if (!isunboxed) {
+        *elsz = sizeof(void*);
+        *al = *elsz;
+    }
+    else {
+        *elsz = LLT_ALIGN(*elsz, *al);
+    }
+    size_t offset = sizeof(jl_binding_t);
+    if (isunboxed && isunion)
+        offset++;
+    *data_offset = LLT_ALIGN(data_offset, JL_SMALL_BYTE_ALIGNMENT);
+    return *data_offset + *elsz;
+}
+static jl_binding_t *new_binding(jl_sym_t *name, jl_value_t *ty)
 {
     jl_task_t *ct = jl_current_task;
     assert(jl_is_symbol(name));
-    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ct->ptls, sizeof(jl_binding_t));
+    size_t elsz = 0, al = 0, data_offset = 0;
+    int isunboxed = jl_islayout_inline(ty, &elsz, &al);
+    int isunion = jl_is_uniontype(ty);
+    size_t tsz = sizeof_binding(isunboxed, isunion, &elsz, &al, &data_offset);
+    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ct->ptls, tsz);
     b->name = name;
     b->value = NULL;
     b->owner = NULL;
@@ -168,11 +186,14 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     b->exportp = 0;
     b->imported = 0;
     b->deprecated = 0;
+    b->isunboxed = isunboxed;
+    b->isunion = isunion;
+    memset(b + data_offset, 0, tsz - data_offset);
     return b;
 }
 
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error)
+jl_binding_t *jl_get_binding_wr_(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, jl_value_t *ty, int error)
 {
     JL_LOCK(&m->lock);
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
@@ -200,6 +221,9 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
 
     JL_UNLOCK(&m->lock);
     return b;
+}
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error)
+    return jl_get_binding_wr_(m, var, jl_any_type, error)
 }
 
 // Hash tables don't generically root their contents, but they do for bindings.
