@@ -118,8 +118,8 @@ definition in the current module, the system will search for it among variables 
 and use it if it is found there. This means that all uses of that global within the current
 module will resolve to the definition of that variable in `ModuleName`.
 
-To loading a module from a package, the statement `using ModuleName` can be used.
-To loading a module from a locally defined module, a dot needs to be added before the module name like `using .ModuleName`.
+To load a module from a package, the statement `using ModuleName` can be used.
+To load a module from a locally defined module, a dot needs to be added before the module name like `using .ModuleName`.
 
 To continue with our example,
 
