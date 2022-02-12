@@ -369,7 +369,7 @@ function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
     a, b = reim(widen(z))
     if (isinf(c) | isinf(d))
         if isfinite(z)
-            return complex(zero(T)*sign(a)*sign(c), -zero(T)*sign(b)*sign(d))
+            return complex(zero(T)*sign(real(z))*sign(real(w)), -zero(T)*sign(imag(z))*sign(imag(w)))
         end
         return T(NaN)+T(NaN)*im
     end
