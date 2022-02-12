@@ -75,7 +75,7 @@ OBJCONV_JLL_NAME := Objconv
 OBJCONV_JLL_VER  := 2.49.1+0
 
 # blastrampoline
-BLASTRAMPOLINE_VER := 4.0.0
+BLASTRAMPOLINE_VER := 5.0.1
 BLASTRAMPOLINE_JLL_NAME := libblastrampoline
 
 # OpenBLAS
@@ -103,6 +103,7 @@ LIBSUITESPARSE_JLL_NAME := SuiteSparse
 
 # unwind
 UNWIND_VER := 1.5.0
+UNWIND_VER_TAG := 1.5
 UNWIND_JLL_NAME := LibUnwind
 UNWIND_JLL_VER  := 1.5.0+1
 

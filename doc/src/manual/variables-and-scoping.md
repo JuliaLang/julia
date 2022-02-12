@@ -799,3 +799,58 @@ WARNING: redefinition of constant x. This may fail, cause incorrect answers, or 
 julia> f()
 1
 ```
+
+## [Typed Globals](@id man-typed-globals)
+
+!!! compat "Julia 1.8"
+    Support for typed globals was added in Julia 1.8
+
+Similar to being declared as constants, global bindings can also be declared to always be of a
+constant type. This can either be done without assigning an actual value using the syntax
+`global x::T` or upon assignment as `x::T = 123`.
+
+```jldoctest
+julia> x::Float64 = 2.718
+2.718
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> Base.return_types(f)
+1-element Vector{Any}:
+ Float64
+```
+
+For any assignment to a global, Julia will first try to convert it to the appropriate type using
+[`convert`](@ref):
+
+```jldoctest
+julia> global y::Int
+
+julia> y = 1.0
+1.0
+
+julia> y
+1
+
+julia> y = 3.14
+ERROR: InexactError: Int64(3.14)
+Stacktrace:
+[...]
+```
+
+The type does not need to be concrete, but annotations with abstract types typically have little
+performance benefit.
+
+Once a global has either been assigned to or its type has been set, the binding type is not allowed
+to change:
+
+```jldoctest
+julia> x = 1
+1
+
+julia> global x::Int
+ERROR: cannot set type for global x. It already has a value or is already set to a different type.
+Stacktrace:
+[...]
+```

@@ -629,8 +629,10 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
 
         @assert new_node_inst !== UNDEF # we filtered these out earlier
         show_type = should_print_ssa_type(new_node_inst)
-        with_output_color(:green, io) do io′
-            print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+        let maxlength_idx=maxlength_idx, show_type=show_type
+            with_output_color(:green, io) do io′
+                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+            end
         end
 
         if new_node_type === UNDEF # try to be robust against errors
@@ -786,6 +788,21 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
     max_bb_idx_size = length(string(length(cfg.blocks)))
     config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     nothing
+end
+
+tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
+tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :orange
+
+function Base.show(io::IO, e::Core.Compiler.Effects)
+    print(io, "(")
+    printstyled(io, string(tristate_letter(e.consistent), 'c'); color=tristate_color(e.consistent))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.effect_free), 'e'); color=tristate_color(e.effect_free))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.nothrow), 'n'); color=tristate_color(e.nothrow))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.terminates), 't'); color=tristate_color(e.terminates))
+    print(io, ')')
 end
 
 @specialize

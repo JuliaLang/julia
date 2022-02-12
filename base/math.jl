@@ -18,7 +18,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p, @constprop
+             exp10, expm1, log1p, @constprop, @assume_effects
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
@@ -1033,7 +1033,7 @@ end
     return pow_body(x, n)
 end
 
-@noinline function pow_body(x::Float64, n::Integer)
+@assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
     if n < 0

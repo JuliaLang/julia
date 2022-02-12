@@ -60,7 +60,7 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LU{Float64, Matrix{Float64}}
+LU{Float64, Matrix{Float64}, Vector{Int64}}
 L factor:
 3×3 Matrix{Float64}:
   1.0    0.0       0.0
@@ -84,7 +84,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 3×3 Tridiagonal{Float64, Vector{Float64}}:
  -1.64286   0.0   ⋅

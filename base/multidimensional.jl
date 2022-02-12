@@ -2,9 +2,9 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import .Base: eltype, length, size, first, last, in, getindex,
-                 setindex!, IndexStyle, min, max, zero, oneunit, isless, eachindex,
-                 ndims, IteratorSize, convert, show, iterate, promote_rule, to_indices
+    import .Base: eltype, length, size, first, last, in, getindex, setindex!, IndexStyle,
+                  min, max, zero, oneunit, isless, eachindex, ndims, IteratorSize,
+                  convert, show, iterate, promote_rule, to_indices, to_index
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
@@ -452,8 +452,10 @@ module IteratorsMD
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
-    @inline to_indices(A, inds, I::Tuple{CartesianIndices, Vararg{Any}}) =
-        to_indices(A, inds, (I[1].indices..., tail(I)...))
+    @inline function to_indices(A, inds, I::Tuple{CartesianIndices{N}, Vararg{Any}}) where N
+        _, indstail = split(inds, Val(N))
+        (map(i -> to_index(A, i), I[1].indices)..., to_indices(A, indstail, tail(I))...)
+    end
     # but preserve CartesianIndices{0} as they consume a dimension.
     @inline to_indices(A, inds, I::Tuple{CartesianIndices{0},Vararg{Any}}) =
         (first(I), to_indices(A, inds, tail(I))...)
@@ -811,10 +813,12 @@ ensure_indexable(I::Tuple{}) = ()
 # until Julia gets smart enough to elide the call on its own:
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
 # But some index types require more context spanning multiple indices
-# CartesianIndexes are simple; they just splat out
-@inline to_indices(A, inds, I::Tuple{CartesianIndex, Vararg{Any}}) =
-    to_indices(A, inds, (I[1].I..., tail(I)...))
-# But for arrays of CartesianIndex, we just skip the appropriate number of inds
+# CartesianIndex is unfolded outside the inner to_indices for better inference
+@inline function to_indices(A, inds, I::Tuple{CartesianIndex{N}, Vararg{Any}}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (map(i -> to_index(A, i), I[1].I)..., to_indices(A, indstail, tail(I))...)
+end
+# For arrays of CartesianIndex, we just skip the appropriate number of inds
 @inline function to_indices(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg{Any}}) where N
     _, indstail = IteratorsMD.split(inds, Val(N))
     (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)

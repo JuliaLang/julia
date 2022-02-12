@@ -67,8 +67,14 @@ at least `interval` seconds again elapse. If `interval` is equal to `0`, the tim
 once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
 [`isopen`](@ref) to check whether a timer is still active.
 
-Note: `interval` is subject to accumulating time skew. If you need precise events at a particular
-absolute time, create a new timer at each expiration with the difference to the next time computed.
+!!! note
+    `interval` is subject to accumulating time skew. If you need precise events at a particular
+    absolute time, create a new timer at each expiration with the difference to the next time computed.
+
+!!! note
+    A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
+    used to timeout a non-yielding while loop.
+
 """
 mutable struct Timer
     handle::Ptr{Cvoid}

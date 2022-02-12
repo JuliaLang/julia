@@ -605,7 +605,15 @@ precompile_test_harness("code caching") do dir
                   fpush(X[])
                   nothing
               end
+              function getelsize(list::Vector{T}) where T
+                  n = 0
+                  for item in list
+                      n += sizeof(T)
+                  end
+                  return n
+              end
               precompile(callboth, ())
+              precompile(getelsize, (Vector{Int32},))
           end
           """)
     Base.compilecache(Base.PkgId(string(Cache_module)))
@@ -627,6 +635,16 @@ precompile_test_harness("code caching") do dir
     @test_broken M.X ∈ groups[Mid]           # requires caching external compilation results
     @test M.X2 ∈ groups[rootid(@__MODULE__)]
     @test !isempty(groups[Bid])
+    minternal = which(M.getelsize, (Vector,))
+    mi = minternal.specializations[1]
+    ci = mi.cache
+    @test ci.relocatability == 1
+    Base.invokelatest() do
+        M.getelsize(M.X2[])
+    end
+    mi = minternal.specializations[2]
+    ci = mi.cache
+    @test ci.relocatability == 0
     # PkgA loads PkgB, and both add roots to the same method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),

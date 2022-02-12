@@ -462,10 +462,10 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (maxabs == 0 || isinf(maxabs)) && return maxabs
+    (iszero(maxabs) || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
-    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    if isfinite(length(x)*maxabs*maxabs) && !iszero(maxabs*maxabs) # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
         while true
             y = iterate(x, s)
@@ -492,13 +492,13 @@ function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (maxabs == 0 || isinf(maxabs)) && return maxabs
+        (iszero(maxabs) || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && !iszero(maxabs^spp)) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while true
             y = iterate(x, s)
@@ -634,7 +634,7 @@ julia> norm(-2, Inf)
 @inline function norm(x::Number, p::Real=2)
     afx = abs(float(x))
     if p == 0
-        if x == 0
+        if iszero(x)
             return zero(afx)
         elseif !isnan(x)
             return oneunit(afx)
@@ -977,7 +977,7 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
 end
-rank(x::Number) = x == 0 ? 0 : 1
+rank(x::Number) = iszero(x) ? 0 : 1
 
 """
     tr(M)
@@ -1144,7 +1144,7 @@ end
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
 
-cond(x::Number) = x == 0 ? Inf : 1.0
+cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 #Skeel condition numbers

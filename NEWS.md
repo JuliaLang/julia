@@ -12,6 +12,7 @@ New language features
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
+* New function `allequal(itr)` for testing if all elements in an iterator are equal. ([#43354])
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
@@ -20,6 +21,7 @@ New language features
   them after construction, providing for greater clarity and optimization
   ability of these objects ([#43305]).
 * Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
+* Type annotations can now be added to global variables to make accessing the variable type stable. ([#43671])
 * Slurping in assignments is now also allowed in non-final position. This is
   handled via `Base.split_rest`. ([#42902])
 
@@ -32,11 +34,15 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
-* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
+* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex iterator, if possible ([#43110]).
 * Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
   to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
 * `Base.ifelse` is now defined as a generic function rather than a builtin one, allowing packages to
   extend its definition ([#37343]).
+* Every assignment to a global variable now first goes through a call to `convert(Any, x)` (or `convert(T, x)`
+  respectively if a type `T` has already been declared for the global). This means great care should be taken
+  to ensure the invariant `convert(Any, x) === x` always holds, as this change could otherwise lead to
+  unexpected behavior. ([#43671])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -54,6 +60,7 @@ Compiler/Runtime improvements
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
 * Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
+* Inference now tracks various effects such as sideeffectful-ness and nothrow-ness on a per-specialization basis. Code heavily dependent on constant propagation should see significant compile-time performance improvements and certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro. (#43852).
 
 Command-line option changes
 ---------------------------
@@ -68,6 +75,9 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* A new `:dynamic` schedule option for `Threads.@threads` which is similar to the default behavior except iterations
+  will be scheduled dynamically to available worker threads rather than pinned to each thread. This option is more
+  composable with (possibly nested) `@spawn` and `@threads` loops ([#43919])
 
 Build system changes
 --------------------
@@ -203,6 +213,9 @@ Standard library changes
   be used to supply custom character mappings, and a `Unicode.julia_chartransform`
   function is provided to reproduce the mapping used in identifier normalization
   by the Julia parser ([#42561]).
+
+#### Test
+* `TestLogger` and `LogRecord` are now exported from the Test stdlib.  ([#44080])
 
 
 Deprecated or removed

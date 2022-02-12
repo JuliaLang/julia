@@ -28,6 +28,8 @@ include(mod, x) = Core.include(mod, x)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+convert(::Type{Any}, Core.@nospecialize x) = x
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")

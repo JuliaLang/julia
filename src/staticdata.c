@@ -26,7 +26,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    152
+#define NUM_TAGS    153
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -198,6 +198,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin__expr);
         INSERT_TAG(jl_builtin_ifelse);
         INSERT_TAG(jl_builtin__typebody);
+        INSERT_TAG(jl_builtin_donotdelete);
 
         // All optional tags must be placed at the end, so that we
         // don't accidentally have a `NULL` in the middle
@@ -244,14 +245,15 @@ static htable_t field_replace;
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
     &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
-    &jl_f__call_latest, &jl_f__call_in_world, &jl_f_isdefined,
+    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_opaque_closure_call,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
+    &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete,
     NULL };
 
 typedef struct {
@@ -412,6 +414,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
                 jl_serialize_value(s, jl_atomic_load_relaxed(&b->value));
             jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->ty));
         }
     }
 
@@ -701,7 +704,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
                 write_pointerfield(s, jl_atomic_load_relaxed(&b->value));
             write_pointerfield(s, jl_atomic_load_relaxed(&b->globalref));
             write_pointerfield(s, (jl_value_t*)b->owner);
-            size_t flag_offset = offsetof(jl_binding_t, owner) + sizeof(b->owner);
+            write_pointerfield(s, jl_atomic_load_relaxed(&b->ty));
+            size_t flag_offset = offsetof(jl_binding_t, ty) + sizeof(b->ty);
             ios_write(s->s, (char*)b + flag_offset, sizeof(*b) - flag_offset);
             tot += sizeof(jl_binding_t);
             count += 1;
@@ -1688,6 +1692,23 @@ static void jl_strip_all_codeinfos(void)
     jl_foreach_reachable_mtable(strip_all_codeinfos_, NULL);
 }
 
+static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
+{
+    jl_method_t *m = def->func.method;
+    m->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
+    return 1;
+}
+
+static void set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
+{
+    jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
+}
+
+static void jl_set_nroots_sysimg(void)
+{
+    jl_foreach_reachable_mtable(set_nroots_sysimg_, NULL);
+}
+
 // --- entry points ---
 
 static void jl_init_serializer2(int);
@@ -1703,6 +1724,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
+    jl_set_nroots_sysimg();
 
     int en = jl_gc_enable(0);
     jl_init_serializer2(1);

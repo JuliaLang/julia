@@ -250,9 +250,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     for (caller, _, _) in results
         opt = caller.src
         if opt isa OptimizationState # implies `may_optimize(interp) === true`
-            result_type = caller.result
-            @assert !(result_type isa LimitedAccuracy)
-            analyzed = optimize(interp, opt, OptimizationParams(interp), result_type)
+            analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
             if isa(analyzed, ConstAPI)
                 # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
                 # we're doing it is so that code_llvm can return the code
@@ -279,8 +277,8 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     return true
 end
 
-function CodeInstance(result::InferenceResult, @nospecialize(inferred_result),
-                      valid_worlds::WorldRange)
+function CodeInstance(
+    result::InferenceResult, @nospecialize(inferred_result), valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type isa LimitedAccuracy)
@@ -310,9 +308,13 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result),
             const_flags = 0x00
         end
     end
+    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
-        const_flags, first(valid_worlds), last(valid_worlds))
+        const_flags, first(valid_worlds), last(valid_worlds),
+        # TODO: Actually do something with non-IPO effects
+        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects),
+        relocatability)
 end
 
 # For the NativeInterpreter, we don't need to do an actual cache query to know
@@ -414,6 +416,16 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
+function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
+    # Always throwing an error counts or never returning both count as consistent,
+    # but we don't currently model idempontency using dataflow, so we don't notice.
+    # Fix that up here to improve precision.
+    if !ipo_effects.inbounds_taints_consistency && rt === Union{}
+        return Effects(ipo_effects, consistent=ALWAYS_TRUE)
+    end
+    return ipo_effects
+end
+
 # inference completed on `me`
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
@@ -472,6 +484,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
+    me.result.ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -712,9 +725,13 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
+    # Also taint the termination effect, because we can no longer guarantee the absence
+    # of recursion.
+    tristate_merge!(parent, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
+        tristate_merge!(child, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -770,6 +787,16 @@ end
 
 generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
 
+function tristate_merge!(caller::InferenceState, callee::Effects)
+    caller.ipo_effects = tristate_merge(caller.ipo_effects, callee)
+end
+
+function tristate_merge!(caller::InferenceState, callee::InferenceState)
+    tristate_merge!(caller, Effects(callee))
+end
+
+ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::InferenceState)
     mi = specialize_method(method, atype, sparams)::MethodInstance
@@ -780,6 +807,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             # but the inlinear will request to use it, we re-infer it here and keep it around in the local cache
             cache = :local
         else
+            effects = ipo_effects(code)
             update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
             rettype = code.rettype
             if isdefined(code, :rettype_const)
@@ -787,23 +815,23 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 # the second subtyping conditions are necessary to distinguish usual cases
                 # from rare cases when `Const` wrapped those extended lattice type objects
                 if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-                    return PartialStruct(rettype, rettype_const), mi
+                    return PartialStruct(rettype, rettype_const), mi, effects
                 elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
-                    return rettype_const, mi
+                    return rettype_const, mi, effects
                 elseif isa(rettype_const, InterConditional) && !(InterConditional <: rettype)
-                    return rettype_const, mi
+                    return rettype_const, mi, effects
                 else
-                    return Const(rettype_const), mi
+                    return Const(rettype_const), mi, effects
                 end
             else
-                return rettype, mi
+                return rettype, mi, effects
             end
         end
     else
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
-        return Any, nothing
+        return Any, nothing, Effects()
     end
     if !caller.cached && caller.parent === nothing
         # this caller exists to return to the user
@@ -820,22 +848,22 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if frame === nothing
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
-            return Any, nothing
+            return Any, nothing, Effects()
         end
         if caller.cached || caller.parent !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
-        return frame.bestguess, frame.inferred ? mi : nothing
+        return frame.bestguess, frame.inferred ? mi : nothing, rt_adjust_effects(frame.bestguess, Effects(frame))
     elseif frame === true
         # unresolvable cycle
-        return Any, nothing
+        return Any, nothing, Effects()
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
-    return frame.bestguess, nothing
+    return frame.bestguess, nothing, rt_adjust_effects(frame.bestguess, Effects(frame))
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
