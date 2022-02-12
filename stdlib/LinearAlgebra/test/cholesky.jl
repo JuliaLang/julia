@@ -410,9 +410,6 @@ end
     factors, uplo, piv, rank, tol, info =
         cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
 
-    @test CholeskyPivoted(factors, uplo, Vector{Int32}(piv), rank, tol, info) == cholp
-    @test CholeskyPivoted(factors, uplo, Vector{Int64}(piv), rank, tol, info) == cholp
-
     @test CholeskyPivoted(factors, uplo, piv, Int32(rank), tol, info) == cholp
     @test CholeskyPivoted(factors, uplo, piv, Int64(rank), tol, info) == cholp
 
