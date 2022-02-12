@@ -940,22 +940,31 @@ JL_CALLABLE(jl_f_setfield)
     enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(setfield!, 3, 4);
     if (nargs == 4) {
-        JL_TYPECHK(getfield, symbol, args[3]);
+        JL_TYPECHK(setfield!, symbol, args[3]);
         order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 0, 1);
     }
     jl_value_t *v = args[0];
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    size_t idx = get_checked_fieldindex("setfield!", st, v, args[1], 1);
-    int isatomic = !!jl_field_isatomic(st, idx);
-    if (isatomic == (order == jl_memory_order_notatomic))
-        jl_atomic_error(isatomic ? "setfield!: atomic field cannot be written non-atomically"
-                                 : "setfield!: non-atomic field cannot be written atomically");
-    jl_value_t *ft = jl_field_type_concrete(st, idx);
-    if (!jl_isa(args[2], ft))
-        jl_type_error("setfield!", ft, args[2]);
-    if (order >= jl_memory_order_acq_rel || order == jl_memory_order_release)
-        jl_fence(); // `st->[idx]` will have at least relaxed ordering
-    set_nth_field(st, v, idx, args[2], isatomic);
+    if (st == jl_module_type) {
+        JL_TYPECHK(setfield!, symbol, args[1]);
+        if (order != jl_memory_order_notatomic)
+            jl_atomic_error("setfield!: module binding cannot be written atomically");
+        jl_binding_t *b = jl_get_binding_wr((jl_module_t*)v, (jl_sym_t*)args[1], 1);
+        jl_checked_assignment(b, args[2]);
+    }
+    else {
+        size_t idx = get_checked_fieldindex("setfield!", st, v, args[1], 1);
+        int isatomic = !!jl_field_isatomic(st, idx);
+        if (isatomic == (order == jl_memory_order_notatomic))
+            jl_atomic_error(isatomic ? "setfield!: atomic field cannot be written non-atomically"
+                                     : "setfield!: non-atomic field cannot be written atomically");
+        jl_value_t *ft = jl_field_type_concrete(st, idx);
+        if (!jl_isa(args[2], ft))
+            jl_type_error("setfield!", ft, args[2]);
+        if (order >= jl_memory_order_acq_rel || order == jl_memory_order_release)
+            jl_fence(); // `st->[idx]` will have at least relaxed ordering
+        set_nth_field(st, v, idx, args[2], isatomic);
+    }
     return args[2];
 }
 

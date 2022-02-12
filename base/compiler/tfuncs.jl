@@ -817,7 +817,6 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         if isa(name, Const)
             nv = name.val
             if isa(sv, Module)
-                setfield && return Bottom
                 if isa(nv, Symbol)
                     return abstract_eval_global(sv, nv)
                 end
@@ -865,7 +864,6 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         return Bottom
     end
     if s <: Module
-        setfield && return Bottom
         hasintersect(widenconst(name), Symbol) || return Bottom
         return Any
     end

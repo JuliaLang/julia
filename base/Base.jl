@@ -29,7 +29,11 @@ macro noinline() Expr(:meta, :noinline) end
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
 getproperty(x::Module, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v) # to get a decent error
+function setproperty!(x::Module, f::Symbol, v)
+    @inline
+    val::Core.get_binding_type(x, f) = v
+    return setfield!(x, f, val)
+end
 getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
@@ -41,7 +45,11 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x::Module, f::Symbol, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+function setproperty!(x::Module, f::Symbol, v, order::Symbol)
+    @inline
+    val::Core.get_binding_type(x, f) = v
+    return setfield!(x, f, val, order)
+end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))

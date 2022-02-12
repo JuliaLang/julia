@@ -7698,3 +7698,23 @@ end
     @test a == 1
     @test b == Core.svec(2, 3)
 end
+
+@testset "setproperty! on modules" begin
+    m = Module()
+    @eval m global x::Int
+
+    setfield!(m, :x, 1)
+    @test m.x === 1
+    setfield!(m, :x, 2, :not_atomic)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setfield!(m, :x, 3, :release)
+    @test_throws ErrorException setfield!(m, :x, 4.)
+
+    m.x = 1
+    @test m.x === 1
+    setproperty!(m, :x, 2, :not_atomic)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :release)
+    m.x = 4.
+    @test m.x === 4
+end
