@@ -4,6 +4,7 @@ Julia v1.9 Release Notes
 New language features
 ---------------------
 
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
 
 Language changes
 ----------------

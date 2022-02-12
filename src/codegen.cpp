@@ -2152,7 +2152,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         if (e->head == jl_call_sym) {
             jl_value_t *f = static_eval(ctx, jl_exprarg(e, 0));
             if (f) {
-                if (jl_array_dim0(e->args) == 3 && f == jl_builtin_getfield) {
+                if (jl_array_dim0(e->args) == 3 && (f == jl_builtin_getfield || f == jl_builtin_getglobal)) {
                     m = (jl_module_t*)static_eval(ctx, jl_exprarg(e, 1));
                     // Check the tag before evaluating `s` so that a value of random
                     // type won't be corrupted.
@@ -3249,6 +3249,38 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return false;
     }
 
+    else if (f == jl_builtin_getglobal && (nargs == 2 || nargs == 3)) {
+        const jl_cgval_t &mod = argv[1];
+        const jl_cgval_t &sym = argv[2];
+        enum jl_memory_order order = jl_memory_order_unspecified;
+
+        if (nargs == 3) {
+            const jl_cgval_t &arg3 = argv[3];
+            if (arg3.typ == (jl_value_t*)jl_symbol_type && arg3.constant)
+                order = jl_get_atomic_order((jl_sym_t*)arg3.constant, true, false);
+            else
+                return false;
+        }
+        else
+            order = jl_memory_order_monotonic;
+
+        if (order == jl_memory_order_invalid) {
+            emit_atomic_error(ctx, "invalid atomic ordering");
+            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+            return true;
+        }
+
+        if (sym.constant && sym.typ == (jl_value_t*)jl_symbol_type) {
+            jl_sym_t *name = (jl_sym_t*)sym.constant;
+            if (mod.constant && jl_is_module(mod.constant)) {
+                *ret = emit_globalref(ctx, (jl_module_t*)mod.constant, name);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     else if ((f == jl_builtin_setfield && (nargs == 3 || nargs == 4)) ||
              (f == jl_builtin_swapfield && (nargs == 3 || nargs == 4)) ||
              (f == jl_builtin_replacefield && (nargs == 4 || nargs == 5 || nargs == 6)) ||
@@ -3872,7 +3904,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         assert(b != NULL);
         if (b->owner != m) {
             char *msg;
-            (void)asprintf(&msg, "cannot assign a value to variable %s.%s from module %s",
+            (void)asprintf(&msg, "cannot assign a value to imported variable %s.%s from module %s",
                     jl_symbol_name(b->owner->name), jl_symbol_name(s), jl_symbol_name(m->name));
             emit_error(ctx, msg);
             free(msg);

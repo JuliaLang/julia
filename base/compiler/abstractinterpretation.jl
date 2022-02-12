@@ -1964,10 +1964,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
 end
 
 function abstract_eval_global(M::Module, s::Symbol)
-    if isdefined(M,s)
-        if isconst(M,s)
-            return Const(getfield(M,s))
-        end
+    if isdefined(M, s) && isconst(M, s)
+        return Const(Core.getglobal(M, s))
     end
     ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
     ty === nothing && return Any

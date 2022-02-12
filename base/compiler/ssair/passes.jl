@@ -418,7 +418,7 @@ function lift_leaves(compact::IncrementalCompact,
         elseif isa(leaf, GlobalRef)
             mod, name = leaf.mod, leaf.name
             if isdefined(mod, name) && isconst(mod, name)
-                leaf = getfield(mod, name)
+                leaf = Core.getglobal(mod, name)
             else
                 return nothing
             end
