@@ -208,8 +208,124 @@ We want to encode both these cases in a way which is simplest for downstream
 tools to use. This is an open question, but for now we use `K"error"` as the
 kind, with the `TRIVIA_FLAG` set for unexpected syntax.
 
+# Syntax trees
 
-### More about syntax kinds
+Julia's `Expr` abstract syntax tree can't store precise source locations or
+deal with syntax trivia like whitespace or comments. So we need some new tree
+types in `JuliaSyntax`.
+
+JuliaSyntax currently deals in three types of trees:
+* `GreenNode` is a minimal *lossless syntax tree* where
+  - Nodes store a kind and length in bytes, but no text
+  - Syntax trivia are included in the list of children
+  - Children are strictly in source order
+* `SyntaxNode` is an *abstract syntax tree* which has
+  - An absolute position and pointer to the source text
+  - Children strictly in source order
+  - Leaf nodes store values, not text
+  - Trivia are ignored, but there is a 1:1 mapping of non-trivia nodes to the
+    associated `GreenTree` nodes.
+* `Expr` is used as a conversion target for compatibility
+
+Wherever possible, the tree structure of `GreenNode`/`SyntaxNode` is 1:1 with
+`Expr`. There are, however, some exceptions.
+
+## Tree differences between GreenNode and Expr
+
+First, `GreenNode` inherently stores source position, so there's no need for
+the `LineNumberNode`s used by `Expr`. There's also a small number of other
+differences
+
+### Flattened generators
+
+Flattened generators are uniquely problematic because the Julia AST doesn't
+respect a key rule we normally expect: that the children of an AST node are a
+*contiguous* range in the source text. This is because the `for`s in
+`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop to
+mean
+
+```
+for x in xs
+for y in ys
+  push!(xy, collection)
+```
+
+so the `xy` prefix is in the *body* of the innermost for loop. Following this,
+the standard Julia AST is like so:
+
+```
+(flatten
+  (generator
+    (generator
+      xy
+      (= y ys))
+    (= x xs)))
+```
+
+however, note that if this tree were flattened, the order would be
+`(xy) (y in ys) (x in xs)` and the `x` and `y` iterations are *opposite* of the
+source order.
+
+However, our green tree is strictly source-ordered, so we must deviate from the
+Julia AST. The natural representation seems to be to remove the generators and
+use a flattened structure:
+
+```
+(flatten
+  xy
+  (= x xs)
+  (= y ys))
+```
+
+### Whitespace trivia inside strings
+
+For triple quoted strings, the indentation isn't part of the string data so
+should also be excluded from the string content within the green tree. That is,
+it should be treated as separate whitespace trivia tokens. With this separation
+things like formatting should be much easier. The same reasoning goes for
+escaping newlines and following whitespace with backslashes in normal strings.
+
+Detecting string trivia during parsing means that string content is split over
+several tokens. Here we wrap these in the K"string" kind (as is already used
+for interpolations). The individual chunks can then be reassembled during Expr
+construction. (A possible alternative might be to reuse the K"String" and
+K"CmdString" kinds for groups of string chunks (without interpolation).)
+
+Take as an example the following Julia fragment.
+
+```julia
+x = """
+    $a
+    b"""
+```
+
+Here this is parsed as `(= x (string-s a "\n" "b"))` (the `-s` flag in
+`string-s` means "triple quoted string")
+
+Looking at the green tree, we see the indentation before the `$a` and `b` are
+marked as trivia:
+
+```
+julia> text = "x = \"\"\"\n    \$a\n    b\"\"\""
+       show(stdout, MIME"text/plain"(), parseall(GreenNode, text, rule=:statement), text)
+     1:23     │[=]
+     1:1      │  Identifier             ✔   "x"
+     2:2      │  Whitespace                 " "
+     3:3      │  =                          "="
+     4:4      │  Whitespace                 " "
+     5:23     │  [string]
+     5:7      │    """                      "\"\"\""
+     8:8      │    String                   "\n"
+     9:12     │    Whitespace               "    "
+    13:13     │    $                        "\$"
+    14:14     │    Identifier           ✔   "a"
+    15:15     │    String               ✔   "\n"
+    16:19     │    Whitespace               "    "
+    20:20     │    String               ✔   "b"
+    21:23     │    """                      "\"\"\""
+```
+
+## More about syntax kinds
 
 We generally track the type of syntax nodes with a syntax "kind", stored
 explicitly in each node an integer tag. This effectively makes the node type a
@@ -238,6 +354,7 @@ There's arguably a few downsides:
   `head` and `args` fields.) This could be a disadvantage for code which
   processes one specific kind but for generic code processing many kinds
   having a generic but *concrete* data layout should be faster.
+
 
 # Differences from the flisp parser
 
@@ -359,47 +476,6 @@ parsing `key=val` pairs inside parentheses.
   `(a;b)` is parsed as a block! This leads to more inconsistency in the use of
   `kw` for keywords.
 
-
-### Flattened generators
-
-Flattened generators are uniquely problematic because the Julia AST doesn't
-respect a key rule we normally expect: that the children of an AST node are a
-*contiguous* range in the source text. This is because the `for`s in
-`[xy for x in xs for y in ys]` are parsed in the normal order of a for loop to
-mean
-
-```
-for x in xs
-for y in ys
-  push!(xy, collection)
-```
-
-so the `xy` prefix is in the *body* of the innermost for loop. Following this,
-the standard Julia AST is like so:
-
-```
-(flatten
-  (generator
-    (generator
-      xy
-      (= y ys))
-    (= x xs)))
-```
-
-however, note that if this tree were flattened, the order would be
-`(xy) (y in ys) (x in xs)` and the `x` and `y` iterations are *opposite* of the
-source order.
-
-However, our green tree is strictly source-ordered, so we must deviate from the
-Julia AST. The natural representation seems to be to remove the generators and
-use a flattened structure:
-
-```
-(flatten
-  xy
-  (= x xs)
-  (= y ys))
-```
 
 ### Other oddities
 
