@@ -599,7 +599,7 @@ end
 
 """
     build_tree(::Type{NodeType}, stream::ParseStream;
-               wrap_toplevel_as_kind=nothing)
+               wrap_toplevel_as_kind=nothing, kws...)
 
 Construct a tree with `NodeType` nodes from a ParseStream using depth-first
 traversal. `NodeType` must have the constructors
@@ -616,7 +616,7 @@ a bottom-up tree builder interface similar to rust-analyzer. (In that case we'd
 traverse the list of ranges backward rather than forward.)
 """
 function build_tree(::Type{NodeType}, stream::ParseStream;
-                    wrap_toplevel_as_kind=nothing) where NodeType
+                    wrap_toplevel_as_kind=nothing, kws...) where NodeType
     stack = Vector{NamedTuple{(:range,:node),Tuple{TaggedRange,NodeType}}}()
     for (span_index, range) in enumerate(stream.ranges)
         if kind(range) == K"TOMBSTONE"
