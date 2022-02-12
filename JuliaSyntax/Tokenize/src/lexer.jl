@@ -478,6 +478,19 @@ function lex_string_chunk(l)
         # Start interpolation
         readchar(l)
         return emit(l, Tokens.EX_OR)
+    elseif !state.raw && pc == '\\' && (pc2 = dpeekchar(l)[2]; 
+                                        pc2 == '\r' || pc2 == '\n')
+        # Process escaped newline as whitespace
+        readchar(l)
+        readon(l)
+        readchar(l)
+        if pc2 == '\r' && peekchar(l) == '\n'
+            readchar(l)
+        end
+        while (pc = peekchar(l); pc == ' ' || pc == '\t')
+            readchar(l)
+        end
+        return emit(l, Tokens.WHITESPACE)
     elseif pc == state.delim && string_terminates(l, state.delim, state.triplestr)
         # Terminate string
         pop!(l.string_states)
@@ -493,14 +506,55 @@ function lex_string_chunk(l)
     readon(l)
     # Read a chunk of string characters
     if state.raw
-        read_raw_string(l, state.delim, state.triplestr)
+        # Raw strings treat all characters as literals with the exception that
+        # the closing quotes can be escaped with an odd number of \ characters.
+        while true
+            pc = peekchar(l)
+            if string_terminates(l, state.delim, state.triplestr) || eof(pc)
+                break
+            elseif state.triplestr && (pc == '\n' || pc == '\r')
+                # triple quoted newline splitting
+                readchar(l)
+                if pc == '\r' && peekchar(l) == '\n'
+                    readchar(l)
+                end
+                break
+            end
+            c = readchar(l)
+            if c == '\\'
+                n = 1
+                while true
+                    readchar(l)
+                    n += 1
+                    if peekchar(l) != '\\'
+                        break
+                    end
+                end
+                if peekchar(l) == state.delim && !iseven(n)
+                    readchar(l)
+                end
+            end
+        end
     else
         while true
             pc = peekchar(l)
             if pc == '$' || eof(pc)
                 break
+            elseif state.triplestr && (pc == '\n' || pc == '\r')
+                # triple quoted newline splitting
+                readchar(l)
+                if pc == '\r' && peekchar(l) == '\n'
+                    readchar(l)
+                end
+                break
             elseif pc == state.delim && string_terminates(l, state.delim, state.triplestr)
                 break
+            elseif pc == '\\'
+                # Escaped newline
+                pc2 = dpeekchar(l)[2]
+                if pc2 == '\r' || pc2 == '\n'
+                    break
+                end
             end
             c = readchar(l)
             if c == '\\'
@@ -925,44 +979,6 @@ function string_terminates(l, delim::Char, triplestr::Bool)
         c1 === delim && c2 === delim && c3 === delim
     else
         peekchar(l) === delim
-    end
-end
-
-function terminate_string(l, delim::Char, triplestr::Bool)
-    # @assert string_terminates(l, delim, triplestr)
-    readchar(l)
-    if triplestr
-        readchar(l)
-        readchar(l)
-        return delim == '"' ? Tokens.TRIPLE_DQUOTE : Tokens.TRIPLE_BACKTICK
-    else
-        return delim == '"' ? Tokens.DQUOTE : Tokens.BACKTICK
-    end
-end
-
-# Read a raw string for use with custom string macros
-#
-# Raw strings treat all characters as literals with the exception that the
-# closing quotes can be escaped with an odd number of \ characters.
-function read_raw_string(l::Lexer, delim::Char, triplestr::Bool)
-    while true
-        if string_terminates(l, delim, triplestr) || eof(peekchar(l))
-            return
-        end
-        c = readchar(l)
-        if c == '\\'
-            n = 1
-            while true
-                readchar(l)
-                n += 1
-                if peekchar(l) != '\\'
-                    break
-                end
-            end
-            if peekchar(l) == delim && !iseven(n)
-                readchar(l)
-            end
-        end
     end
 end
 

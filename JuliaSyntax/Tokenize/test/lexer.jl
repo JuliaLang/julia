@@ -202,7 +202,7 @@ end
        """))
 
     kinds = [T.COMMENT, T.NEWLINE_WS,
-             T.TRIPLE_DQUOTE, T.STRING, T.TRIPLE_DQUOTE, T.NEWLINE_WS,
+             T.TRIPLE_DQUOTE, T.STRING, T.STRING, T.TRIPLE_DQUOTE, T.NEWLINE_WS,
              T.INTEGER, T.NEWLINE_WS,
              T.ENDMARKER]
     @test T.kind.(toks) == kinds
@@ -345,6 +345,26 @@ end
     ts = collect(tokenize(raw""" isa"x $ \ y" """))
     @test ts[2] ~ (T.ISA        , "isa")
     @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+end
+
+@testset "string escaped newline whitespace" begin
+    ts = collect(tokenize("\"x\\\n \ty\""))
+    @test ts[1] ~ (T.DQUOTE , "\"")
+    @test ts[2] ~ (T.STRING, "x")
+    @test ts[3] ~ (T.WHITESPACE, "\\\n \t")
+    @test ts[4] ~ (T.STRING, "y")
+    @test ts[5] ~ (T.DQUOTE , "\"")
+end
+
+@testset "triple quoted string line splitting" begin
+    ts = collect(tokenize("\"\"\"\nx\r\ny\rz\n\r\"\"\""))
+    @test ts[1] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
+    @test ts[2] ~ (T.STRING, "\n")
+    @test ts[3] ~ (T.STRING, "x\r\n")
+    @test ts[4] ~ (T.STRING, "y\r")
+    @test ts[5] ~ (T.STRING, "z\n")
+    @test ts[6] ~ (T.STRING, "\r")
+    @test ts[7] ~ (T.TRIPLE_DQUOTE, "\"\"\"")
 end
 
 @testset "interpolation" begin
