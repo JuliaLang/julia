@@ -130,8 +130,8 @@ end
 head(range::TaggedRange)       = range.head
 kind(range::TaggedRange)       = kind(range.head)
 flags(range::TaggedRange)      = flags(range.head)
-first_byte(range::TaggedRange) = range.first_byte
-last_byte(range::TaggedRange)  = range.last_byte
+first_byte(range::TaggedRange) = Int(range.first_byte)
+last_byte(range::TaggedRange)  = Int(range.last_byte)
 span(range::TaggedRange)       = 1 + last_byte(range) - first_byte(range)
 
 #-------------------------------------------------------------------------------
@@ -492,14 +492,40 @@ the kind or flags of a token in a way which would require unbounded lookahead
 in a recursive descent parser. Modifying the output with reset_node! is useful
 in those cases.
 """
-function reset_node!(stream::ParseStream, mark::ParseStreamPosition;
+function reset_node!(stream::ParseStream, pos::ParseStreamPosition;
                      kind=nothing, flags=nothing)
-    range = stream.ranges[mark.output_index]
+    range = stream.ranges[pos.output_index]
     k = isnothing(kind)  ? (@__MODULE__).kind(range)  : kind
     f = isnothing(flags) ? (@__MODULE__).flags(range) : flags
-    stream.ranges[mark.output_index] =
+    stream.ranges[pos.output_index] =
         TaggedRange(SyntaxHead(k, f), range.orig_kind,
                     first_byte(range), last_byte(range), range.start_mark)
+end
+
+"""
+Move `numbytes` from the range at output position `pos+1` to the output
+position `pos`. If the donor range becomes empty, mark it dead with
+K"TOMBSTONE" and return `true`, otherwise return `false`.
+
+Hack alert! This is used only for managing the complicated rules related to
+dedenting triple quoted strings.
+"""
+function steal_node_bytes!(stream::ParseStream, pos::ParseStreamPosition, numbytes)
+    i = pos.output_index
+    r1 = stream.ranges[i]
+    r2 = stream.ranges[i+1]
+    @assert span(r1) == 0
+    @assert numbytes <= span(r2)
+    fb2 = r2.first_byte + numbytes
+    rhs_empty = fb2 > last_byte(r2)
+    head2 = rhs_empty ? SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS) : r2.head
+    stream.ranges[i]   = TaggedRange(r1.head, r1.orig_kind,
+                                     r2.first_byte, fb2 - 1,
+                                     r1.start_mark)
+    stream.ranges[i+1] = TaggedRange(head2, r2.orig_kind,
+                                     fb2, r2.last_byte,
+                                     r2.start_mark)
+    return rhs_empty
 end
 
 function Base.position(stream::ParseStream)

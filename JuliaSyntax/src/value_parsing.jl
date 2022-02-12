@@ -72,7 +72,7 @@ is_indentation(c) = c == ' ' || c == '\t'
 """
 Process Julia source code escape sequences for raw strings
 """
-function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::Integer, skip_initial_newline::Bool)
+function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool)
     delim = is_cmd ? '`' : '"'
     i = firstindex(str)
     lastidx = lastindex(str)
@@ -86,16 +86,7 @@ function unescape_raw_string(io::IO, str::AbstractString, is_cmd::Bool, dedent::
                 end
                 c = '\n'
             end
-            if c == '\n'
-                if i > 1 || !skip_initial_newline
-                    write(io, c)
-                end
-                if i+1 <= lastidx && str[i+1] != '\n' && str[i+1] != '\r'
-                    i += dedent
-                end
-            else
-                write(io, c)
-            end
+            write(io, c)
             i = nextind(str, i)
             continue
         end
@@ -124,7 +115,7 @@ end
 Process Julia source code escape sequences for non-raw strings.
 `str` should be passed without delimiting quotes.
 """
-function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer, skip_initial_newline::Bool)
+function unescape_julia_string(io::IO, str::AbstractString)
     i = firstindex(str)
     lastidx = lastindex(str)
     while i <= lastidx
@@ -137,16 +128,7 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer, ski
                 end
                 c = '\n'
             end
-            if c == '\n'
-                if i > 1 || !skip_initial_newline
-                    write(io, c)
-                end
-                if i+1 <= lastidx && str[i+1] != '\n' && str[i+1] != '\r'
-                    i += dedent
-                end
-            else
-                write(io, c)
-            end
+            write(io, c)
             i = nextind(str, i)
             continue
         end
@@ -190,14 +172,6 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer, ski
                 throw(ArgumentError("octal escape sequence out of range"))
             end
             write(io, UInt8(n))
-        elseif c == '\n' || c == '\r'
-            # Remove \n \r and \r\n newlines + indentation following \
-            if c == '\r' && i < lastidx && str[i+1] == '\n'
-                i += 1
-            end
-            while i < lastidx && is_indentation(str[i+1])
-                i += 1
-            end
         else
             u = # C escapes
                 c == 'n' ? '\n' :
@@ -221,116 +195,14 @@ function unescape_julia_string(io::IO, str::AbstractString, dedent::Integer, ski
     end
 end
 
-function unescape_julia_string(str::AbstractString, is_cmd::Bool,
-                               is_raw::Bool, dedent::Integer=0,
-                               skip_initial_newline=false)
+function unescape_julia_string(str::AbstractString, is_cmd::Bool, is_raw::Bool)
     io = IOBuffer()
     if is_raw
-        unescape_raw_string(io, str, is_cmd, dedent, skip_initial_newline)
+        unescape_raw_string(io, str, is_cmd)
     else
-        unescape_julia_string(io, str, dedent, skip_initial_newline)
+        unescape_julia_string(io, str)
     end
     String(take!(io))
-end
-
-# Compute length of longest common prefix of mixed spaces and tabs, in
-# characters (/bytes).
-#
-# Initial whitespace is never regarded as indentation in any triple quoted
-# string chunk, as it's always preceded in the source code by a visible token
-# of some kind; either a """ delimiter or $() interpolation.
-#
-# This pass runs *before* normalization of newlines so that
-# unescaping/normalization can happen in a single pass.
-#
-# TODO: Should we do triplequoted string splitting as part of the main parser?
-# It would be conceptually clean if the trivial whitespace was emitted as
-# syntax trivia.
-#
-# flisp: triplequoted-string-indentation-
-function triplequoted_string_indentation(strs, is_raw)
-    if isempty(strs)
-        return 0
-    end
-    refstr = SubString(strs[1], 1, 0)
-    reflen = -1
-    for str in strs
-        i = 1
-        lastidx = lastindex(str)
-        while i <= lastidx
-            c = str[i]
-            if c == '\\' && !is_raw
-                # Escaped newlines stop indentation detection for the current
-                # line but do not start detection of indentation on the next
-                # line
-                if i+1 <= lastidx
-                    if str[i+1] == '\n'
-                        i += 1
-                    elseif str[i+1] == '\r'
-                        i += 1
-                        if i+1 <= lastidx && str[i+1] == '\n'
-                            i += 1
-                        end
-                    end
-                end
-            elseif c == '\n' || c == '\r'
-                while i <= lastidx
-                    c = str[i]
-                    (c == '\n' || c == '\r') || break
-                    i += 1
-                end
-                if i <= lastidx
-                    # At this point we've found the start of a nonempty line.
-                    if reflen < 0
-                        # Find indentation we'll use as a reference
-                        j = i-1
-                        while j < lastidx && is_indentation(str[j+1])
-                            j += 1
-                        end
-                        refstr = SubString(str, i, j)
-                        reflen = j - i + 1
-                        if j > i
-                            i = j
-                        end
-                    else
-                        # Matching indentation with reference, shortening
-                        # length if necessary.
-                        j = i-1
-                        while j+1 <= lastidx && j-i+2 <= reflen
-                            if str[j+1] != refstr[j-i+2]
-                                break
-                            end
-                            j += 1
-                        end
-                        if j-i+1 < reflen
-                            reflen = j-i+1
-                        end
-                        if j > i
-                            i = j
-                        end
-                    end
-                else
-                    # A newline directly before the end of the string means a
-                    # delimiter was in column zero, implying zero indentation.
-                    reflen = 0
-                end
-            end
-            i <= lastidx || break
-            i = nextind(str, i)
-        end
-    end
-    max(reflen, 0)
-end
-
-function process_triple_strings!(strs, is_raw)
-    if isempty(strs)
-        return strs
-    end
-    dedent = triplequoted_string_indentation(strs, is_raw)
-    for i = 1:length(strs)
-        strs[i] = unescape_julia_string(strs[i], false, is_raw, dedent, i==1)
-    end
-    strs
 end
 
 #-------------------------------------------------------------------------------

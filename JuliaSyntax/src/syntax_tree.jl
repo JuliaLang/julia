@@ -50,9 +50,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k in KSet`String CmdString`
             is_cmd = k == K"CmdString"
             is_raw = has_flags(head(raw), RAW_STRING_FLAG)
-            has_flags(head(raw), TRIPLE_STRING_FLAG) ?
-                process_triple_strings!([val_str], is_raw)[1] :
-                unescape_julia_string(val_str, is_cmd, is_raw)
+            unescape_julia_string(val_str, is_cmd, is_raw)
         elseif is_operator(k)
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
@@ -83,37 +81,12 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
     else
         cs = SyntaxNode[]
         pos = position
-        if kind(raw) == K"string" && has_flags(head(raw), TRIPLE_STRING_FLAG)
-            # Triple quoted strings need special processing of sibling String literals
-            strs = SubString[]
-            str_nodes = SyntaxNode[]
-            for (i,rawchild) in enumerate(children(raw))
-                if !is_trivia(rawchild) || is_error(rawchild)
-                    if kind(rawchild) == K"String"
-                        val_range = pos:pos + span(rawchild) - 1
-                        push!(strs, view(source, val_range))
-                        n = SyntaxNode(source, rawchild, pos, nothing, true, nothing)
-                        push!(cs, n)
-                        push!(str_nodes, n)
-                    else
-                        push!(cs, SyntaxNode(source, rawchild, pos))
-                    end
-                end
-                pos += rawchild.span
+        for (i,rawchild) in enumerate(children(raw))
+            # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
+            if !is_trivia(rawchild) || is_error(rawchild)
+                push!(cs, SyntaxNode(source, rawchild, pos))
             end
-            is_raw = has_flags(head(raw), RAW_STRING_FLAG)
-            process_triple_strings!(strs, is_raw)
-            for (s,n) in zip(strs, str_nodes)
-                n.val = s
-            end
-        else
-            for (i,rawchild) in enumerate(children(raw))
-                # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
-                if !is_trivia(rawchild) || is_error(rawchild)
-                    push!(cs, SyntaxNode(source, rawchild, pos))
-                end
-                pos += rawchild.span
-            end
+            pos += rawchild.span
         end
         node = SyntaxNode(source, raw, position, nothing, false, cs)
         for c in cs
@@ -391,6 +364,41 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
         pushfirst!(args, numeric_flags(flags(node)))
     elseif headsym == :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
+    elseif headsym == :string && length(args) > 1
+        # Julia string literals may be interspersed with trivia in two situations:
+        # 1. Triple quoted string indentation is trivia
+        # 2. An \ before newline removes the newline and any following indentation
+        #
+        # Such trivia is eagerly removed by the reference parser, so here we
+        # concatenate adjacent string chunks together for compatibility.
+        #
+        # TODO: Manage the non-interpolation cases with String and CmdString
+        # kinds instead?
+        args2 = Vector{Any}()
+        i = 1
+        while i <= length(args)
+            if args[i] isa String && i < length(args) && args[i+1] isa String
+                buf = IOBuffer()
+                while i <= length(args) && args[i] isa String
+                    write(buf, args[i])
+                    i += 1
+                end
+                push!(args2, String(take!(buf)))
+            else
+                push!(args2, args[i])
+                i += 1
+            end
+        end
+        args = args2
+        if length(args2) == 1 && args2[1] isa String
+            # If there's a single string remaining after joining we unwrap to
+            # give a string literal.
+            # """\n  a\n  b""" ==>  "a\nb"
+            return args2[1]
+        end
+    # elseif headsym == :string && length(args) == 1 && version <= (1,5)
+    #   Strip string from interpolations in 1.5 and lower to preserve
+    #   "hi$("ho")" ==>  (string "hi" "ho")
     elseif headsym == :(=)
         if is_eventually_call(args[1]) && !iteration_spec
             if Meta.isexpr(args[2], :block)
