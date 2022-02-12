@@ -75,7 +75,7 @@ Multi-threading changes
 
 * `Threads.@threads` now defaults to a new `:dynamic` schedule option which is similar to the previous behavior except
   that iterations will be scheduled dynamically to available worker threads rather than pinned to each thread. This
-  behavior is more composable with (possibly nested) `@spawn` and `@threads` loops ([#43919])
+  behavior is more composable with (possibly nested) `@spawn` and `@threads` loops ([#43919], [#44136])
 
 Build system changes
 --------------------
