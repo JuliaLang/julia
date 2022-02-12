@@ -131,7 +131,9 @@ true
 ```
 """
 macro task(ex)
-    :(Task(()->$(esc(ex))))
+    # Avoid using `@opaque` to make bootstrap easier
+    thunk = esc(Expr(:opaque_closure, :(()->($ex))))
+    :(Task($thunk))
 end
 
 """
@@ -473,7 +475,8 @@ isolating the asynchronous code from changes to the variable's value in the curr
 macro async(expr)
     letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+    # Avoid using `@opaque` to make bootstrap easier
+    thunk = esc(Expr(:opaque_closure, :(()->($expr))))
     var = esc(sync_varname)
     quote
         let $(letargs...)

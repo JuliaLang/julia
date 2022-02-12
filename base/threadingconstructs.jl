@@ -223,7 +223,8 @@ isolating the asynchronous code from changes to the variable's value in the curr
 macro spawn(expr)
     letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+    # Avoid using `@opaque` to make bootstrap easier
+    thunk = esc(Expr(:opaque_closure, :(()->($expr))))
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
