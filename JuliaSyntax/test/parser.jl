@@ -300,6 +300,9 @@ tests = [
         "x`str`"     => """(macrocall @x_cmd "str")"""
         "x\"\""      => """(macrocall @x_str "")"""
         "x``"        => """(macrocall @x_cmd "")"""
+        # Triple quoted procesing for custom strings
+        "r\"\"\"\nx\"\"\""      => raw"""(macrocall @r_str "x")"""
+        "r\"\"\"\n x\n y\"\"\"" => raw"""(macrocall @r_str (string-sr "x\n" "y"))"""
         # Macro sufficies can include keywords and numbers
         "x\"s\"y"    => """(macrocall @x_str "s" "y")"""
         "x\"s\"end"  => """(macrocall @x_str "s" "end")"""
@@ -549,7 +552,6 @@ tests = [
         ": end"   => ":"
         # var syntax
         """var"x" """  =>  "x"
-        """var""\"x""\""""  =>  "x"
         """var"x"+"""  =>  "x"
         """var"x")"""  =>  "x"
         """var"x"("""  =>  "x"
@@ -641,20 +643,58 @@ tests = [
         ((v=v"1.8",), "[;;]")  =>  "(ncat-2)"
         ((v=v"1.8",), "[\n  ;; \n ]")  =>  "(ncat-2)"
         ((v=v"1.7",), "[;;]")  =>  "(ncat-2 (error))"
-    ],
-    JuliaSyntax.parse_string => [
+        # parse_string
         "\"a \$(x + y) b\""  =>  "(string \"a \" (call-i x + y) \" b\")"
         "\"hi\$(\"ho\")\""   =>  "(string \"hi\" (string \"ho\"))"
         "\"hi\$(\"\"\"ho\"\"\")\""  =>  "(string \"hi\" (string-s \"ho\"))"
-        ((v=v"1.5",), "\"hi\$(\"ho\")\"") =>  "(string \"hi\" \"ho\")"
         "\"a \$foo b\""  =>  "(string \"a \" foo \" b\")"
         "\"\$var\""      =>  "(string var)"
         "\"\$outer\""    =>  "(string outer)"
         "\"\$in\""       =>  "(string in)"
-        "\"\""  =>  "\"\""
+        # Triple-quoted dedenting:
+        "\"\"\"\nx\"\"\""   =>  "\"x\""
+        "\"\"\"\n\nx\"\"\"" =>  raw"""(string-s "\n" "x")"""
+        # Various newlines (\n \r \r\n) and whitespace (' ' \t)
+        "\"\"\"\n x\n y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
+        "\"\"\"\r x\r y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
+        "\"\"\"\r\n x\r\n y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
+        # Spaces or tabs or mixtures acceptable
+        "\"\"\"\n\tx\n\ty\"\"\""  =>  raw"""(string-s "x\n" "y")"""
+        "\"\"\"\n \tx\n \ty\"\"\""  =>  raw"""(string-s "x\n" "y")"""
+        # Mismatched tab vs space not deindented
+        # Find minimum common prefix in mismatched whitespace
+        "\"\"\"\n\tx\n y\"\"\""  =>  raw"""(string-s "\tx\n" " y")"""
+        "\"\"\"\n x\n  y\"\"\""  =>  raw"""(string-s "x\n" " y")"""
+        "\"\"\"\n  x\n y\"\"\""  =>  raw"""(string-s " x\n" "y")"""
+        "\"\"\"\n \tx\n  y\"\"\""  =>  raw"""(string-s "\tx\n" " y")"""
+        "\"\"\"\n  x\n \ty\"\"\""  =>  raw"""(string-s " x\n" "\ty")"""
+        # Empty lines don't affect dedenting
+        "\"\"\"\n x\n\n y\"\"\""  =>  raw"""(string-s "x\n" "\n" "y")"""
+        # Non-empty first line doesn't participate in deindentation
+        "\"\"\" x\n y\"\"\""  =>  raw"""(string-s " x\n" "y")"""
+        # Dedenting and interpolations
+        "\"\"\"\n  \$a\n  \$b\"\"\""  =>  raw"""(string-s a "\n" b)"""
+        "\"\"\"\n  \$a \n  \$b\"\"\""  =>  raw"""(string-s a " \n" b)"""
+        "\"\"\"\n  \$a\n  \$b\n\"\"\""  =>  raw"""(string-s "  " a "\n" "  " b "\n")"""
+        # Empty chunks after dedent are removed
+        "\"\"\"\n \n \"\"\""  =>  "\"\\n\""
+        # Newline at end of string
+        "\"\"\"\n x\n y\n\"\"\""  =>  raw"""(string-s " x\n" " y\n")"""
+        # Empty strings, or empty after triple quoted processing
+        "\"\""              =>  "\"\""
+        "\"\"\"\n  \"\"\""  =>  "\"\""
+        # Missing delimiter
+        "\"str"  =>  "\"str\" (error)"
+        # String interpolations
         "\"\$x\$y\$z\""  =>  "(string x y z)"
         "\"\$(x)\""  =>  "(string x)"
         "\"\$x\""  =>  "(string x)"
+        # Strings with embedded whitespace trivia
+        "\"a\\\nb\""     =>  raw"""(string "a" "b")"""
+        "\"a\\\rb\""     =>  raw"""(string "a" "b")"""
+        "\"a\\\r\nb\""   =>  raw"""(string "a" "b")"""
+        "\"a\\\n \tb\""  =>  raw"""(string "a" "b")"""
+        # Strings with only a single valid string chunk
         "\"str\""  =>  "\"str\""
     ],
     JuliaSyntax.parse_docstring => [
@@ -667,12 +707,10 @@ tests = [
     ],
 ]
 
-# Known bugs
+# Known bugs / incompatibilities
 broken_tests = [
     JuliaSyntax.parse_atom => [
-        # Triple-quoted string processing
-        "\"\"\"\n\$x\"\"\"" => "(string x)"
-        "\"\"\"\$x\n\"\"\"" => "(string x \"\n\")"
+        """var""\"x""\""""  =>  "x"
         # Operator-named macros without spaces
         "@!x"   => "(macrocall @! x)"
         "@..x"  => "(macrocall @.. x)"

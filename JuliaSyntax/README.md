@@ -458,6 +458,18 @@ use a flattened structure:
   to be the module name after the `.` is parsed. But `$` can never be a valid
   module name in normal Julia code so this makes no sense.
 
+* Triple quoted `var"""##"""` identifiers are allowed. But it's not clear these
+  are required or desired given that they come with the complex triple-quoted
+  string deindentation rules.
+
+* Deindentation of triple quoted strings with mismatched whitespace is weird
+  when there's nothing but whitespace. For example, we have
+  `"\"\"\"\n  \n \n  \"\"\"" ==> "\n \n"` so the middle line of whitespace
+  here isn't dedented but the other two longer lines are?? Here it seems more
+  consistent that either (a) the middle line should be deindented completely,
+  or (b) all lines should be dedented only one character, as that's the
+  matching prefix.
+
 # Comparisons to other packages
 
 ### Official Julia compiler

@@ -100,6 +100,10 @@ function reset_node!(ps::ParseState, args...; kws...)
     reset_node!(ps.stream, args...; kws...)
 end
 
+function steal_node_bytes!(ps::ParseState, args...)
+    steal_node_bytes!(ps.stream, args...)
+end
+
 function Base.position(ps::ParseState, args...)
     position(ps.stream, args...)
 end
@@ -110,6 +114,10 @@ end
 
 function emit_diagnostic(ps::ParseState, args...; kws...)
     emit_diagnostic(ps.stream, args...; kws...)
+end
+
+function textbuf(ps::ParseState)
+    textbuf(ps.stream)
 end
 
 #-------------------------------------------------------------------------------
@@ -1590,12 +1598,15 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # x`str` ==> (macrocall @x_cmd "str")
             # x""    ==> (macrocall @x_str "")
             # x``    ==> (macrocall @x_cmd "")
+            # Triple quoted procesing for custom strings
+            # r"""\nx""" ==> (macrocall @r_str "x")
+            # r"""\n x\n y"""     ==> (macrocall @r_str (string-sr "x\n" "y"))
 
             # Use a special token kind for string and cmd macro names so the
             # names can be expanded later as necessary.
             outk = is_string_delim(k) ? K"StringMacroName" : K"CmdMacroName"
             finish_macroname(ps, mark, valid_macroname, macro_name_position, outk)
-            parse_raw_string(ps)
+            parse_string(ps, true)
             t = peek_token(ps)
             k = kind(t)
             if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k))
@@ -2958,36 +2969,50 @@ function parse_brackets(after_parse::Function,
     end
 end
 
-# Parse a string and any embedded interpolations
+is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))
+
+# Parse a string, embedded interpolations and deindent triple quoted strings
+# by marking indentation characters as whitespace trivia.
 #
 # flisp: parse-string-literal-, parse-interpolate
-function parse_string(ps::ParseState)
+function parse_string(ps::ParseState, raw::Bool)
     mark = position(ps)
     delim_k = peek(ps)
-    str_flags = delim_k == K"\"" ? EMPTY_FLAGS : TRIPLE_STRING_FLAG
+    triplestr = delim_k in KSet`""" \`\`\``
+    string_chunk_kind = delim_k in KSet`" """` ? K"String" : K"CmdString"
+    indent_ref_i = 0
+    indent_ref_len = typemax(Int)
+    if triplestr
+        indent_chunks = Vector{ParseStreamPosition}()
+    end
+    buf = textbuf(ps)
+    str_flags = (triplestr ? TRIPLE_STRING_FLAG : EMPTY_FLAGS) |
+                (raw       ? RAW_STRING_FLAG : EMPTY_FLAGS)
     bump(ps, TRIVIA_FLAG)
-    n_components = 0
+    first_chunk = true
+    n_valid_chunks = 0
+    removed_initial_newline = false
+    had_interpolation = false
+    prev_chunk_newline = false
     while true
-        k = peek(ps)
+        t = peek_token(ps)
+        k = kind(t)
         if k == K"$"
-            n_components += 1
+            @assert !raw  # The lexer detects raw strings separately
             bump(ps, TRIVIA_FLAG)
             k = peek(ps)
             if k == K"("
                 # "a $(x + y) b"  ==> (string "a " (call-i x + y) " b")
                 m = position(ps)
                 parse_atom(ps)
-                if ps.stream.version >= (1,6)
-                    # https://github.com/JuliaLang/julia/pull/38692
-                    prev = peek_behind(ps)
-                    if prev.kind == K"String"
-                        # Wrap interpolated literal strings in (string) so we can
-                        # distinguish them from the surrounding text (issue #38501)
-                        # "hi$("ho")"      ==>  (string "hi" (string "ho"))
-                        # "hi$("""ho""")"  ==>  (string "hi" (string-s "ho"))
-                        #v1.5: "hi$("ho")" ==>  (string "hi" "ho")
-                        emit(ps, m, K"string", prev.flags)
-                    end
+                # https://github.com/JuliaLang/julia/pull/38692
+                prev = peek_behind(ps)
+                if prev.kind == string_chunk_kind
+                    # Wrap interpolated literal strings in (string) so we can
+                    # distinguish them from the surrounding text (issue #38501)
+                    # "hi$("ho")"      ==>  (string "hi" (string "ho"))
+                    # "hi$("""ho""")"  ==>  (string "hi" (string-s "ho"))
+                    emit(ps, m, K"string", prev.flags)
                 end
             elseif k == K"var"
                 # var identifiers disabled in strings
@@ -3002,55 +3027,148 @@ function parse_string(ps::ParseState)
                 bump_invisible(ps, K"error",
                     error="identifier or parenthesized expression expected after \$ in string")
             end
-        elseif k == K"String"
-            bump(ps, str_flags)
-        elseif k == delim_k
-            if n_components == 0
-                # "" ==> ""
-                bump_invisible(ps, K"String", str_flags)
+            first_chunk = false
+            n_valid_chunks += 1
+            had_interpolation = true
+            prev_chunk_newline = false
+        elseif k == string_chunk_kind
+            if triplestr && first_chunk && span(t) <= 2 &&
+                    begin
+                        s = span(t)
+                        b = buf[last_byte(t)]
+                        # Test whether the string is a single logical newline
+                        (s == 1 && (b == UInt8('\n') || b == UInt8('\r'))) ||
+                        (s == 2 && (buf[first_byte(t)] == UInt8('\r') && b == UInt8('\n')))
+                    end
+                # First line of triple string is a newline only: mark as trivia.
+                # """\nx"""    ==> "x"
+                # """\n\nx"""  ==> (string-s "\n" "x")
+                bump(ps, TRIVIA_FLAG)
+                first_chunk = false
+                prev_chunk_newline = true
+            else
+                if triplestr
+                    # Triple-quoted dedenting:
+                    # Various newlines (\n \r \r\n) and whitespace (' ' \t)
+                    # """\n x\n y"""      ==> (string-s "x\n" "y")
+                    # """\r x\r y"""      ==> (string-s "x\n" "y")
+                    # """\r\n x\r\n y"""  ==> (string-s "x\n" "y")
+                    # Spaces or tabs or mixtures acceptable
+                    # """\n\tx\n\ty"""    ==> (string-s "x\n" "y")
+                    # """\n \tx\n \ty"""  ==> (string-s "x\n" "y")
+                    #
+                    # Mismatched tab vs space not deindented
+                    # Find minimum common prefix in mismatched whitespace
+                    # """\n\tx\n y"""     ==> (string-s "\tx\n" " y")
+                    # """\n x\n  y"""   ==> (string-s "x\n" " y")
+                    # """\n  x\n y"""   ==> (string-s " x\n" "y")
+                    # """\n \tx\n  y""" ==> (string-s "\tx\n" " y")
+                    # """\n  x\n \ty""" ==> (string-s " x\n" "\ty")
+                    #
+                    # Empty lines don't affect dedenting
+                    # """\n x\n\n y"""    ==> (string-s "x\n" "\n" "y")
+                    # Non-empty first line doesn't participate in deindentation
+                    # """ x\n y"""    ==> (string-s " x\n" "y")
+                    #
+                    # Dedenting and interpolations
+                    # """\n  $a\n  $b"""    ==> (string-s a "\n" b)
+                    # """\n  $a \n  $b"""   ==> (string-s a " \n" b)
+                    # """\n  $a\n  $b\n"""  ==> (string-s "  " a "\n" "  " b "\n")
+                    #
+                    if prev_chunk_newline && (b = buf[first_byte(t)];
+                                              b != UInt8('\n') && b != UInt8('\r'))
+                        # Compute length of longest common prefix of mixed
+                        # spaces and tabs, in bytes
+                        #
+                        # Initial whitespace is never regarded as indentation
+                        # in any triple quoted string chunk, as it's always
+                        # preceded in the source code by a visible token of
+                        # some kind; either a """ delimiter or $()
+                        # interpolation.
+                        if indent_ref_i == 0
+                            # No indentation found yet. Find indentation we'll
+                            # use as a reference
+                            i = first_byte(t) - 1
+                            while i < last_byte(t) && is_indentation(buf[i+1])
+                                i += 1
+                            end
+                            indent_ref_i = first_byte(t)
+                            indent_ref_len = i - first_byte(t) + 1
+                        else
+                            # Matching the current indentation with reference,
+                            # shortening length if necessary.
+                            j = 0
+                            while j < span(t) && j < indent_ref_len
+                                if buf[j + first_byte(t)] != buf[j + indent_ref_i]
+                                    break
+                                end
+                                j += 1
+                            end
+                            indent_ref_len = min(indent_ref_len, j)
+                        end
+                        # Prepare a place for indentiation trivia, if necessary
+                        push!(indent_chunks, bump_invisible(ps, K"TOMBSTONE"))
+                    end
+                    b = buf[last_byte(t)]
+                    prev_chunk_newline = b == UInt8('\n') || b == UInt8('\r')
+                end
+                bump(ps, str_flags)
+                first_chunk = false
+                n_valid_chunks += 1
             end
-            bump(ps, TRIVIA_FLAG)
-            break
         else
-            # Recovery
-            # "str   ==> "str" (error-t)
-            bump_invisible(ps, K"error", TRIVIA_FLAG, error="Unterminated string literal")
             break
         end
-        n_components += 1
     end
-    if n_components > 1
+    had_end_delim = peek(ps) == delim_k
+    if triplestr && prev_chunk_newline && had_end_delim
+        # Newline at end of string
+        # """\n x\n y\n"""    ==> (string-s " x\n" " y\n")
+        indent_ref_len = 0
+    end
+    if triplestr && indent_ref_len > 0
+        for pos in indent_chunks
+            reset_node!(ps, pos, kind=K"Whitespace", flags=TRIVIA_FLAG)
+            rhs_empty = steal_node_bytes!(ps, pos, indent_ref_len)
+            if rhs_empty
+                # Empty chunks after dedent are removed
+                # """\n \n """        ==> (string-s "\n")
+                n_valid_chunks -= 1
+            end
+        end
+    end
+    if had_end_delim
+        if n_valid_chunks == 0
+            # Empty strings, or empty after triple quoted processing
+            # "" ==> ""
+            # """\n  """ ==> ""
+            bump_invisible(ps, string_chunk_kind, str_flags)
+        end
+        bump(ps, TRIVIA_FLAG)
+    else
+        # Missing delimiter recovery
+        # "str   ==> "str" (error)
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="Unterminated string literal")
+    end
+    if n_valid_chunks > 1 || had_interpolation
+        # String interpolations
         # "$x$y$z"  ==> (string x y z)
         # "$(x)"    ==> (string x)
         # "$x"      ==> (string x)
         # """$x"""  ==> (string-s x)
+        #
+        # Strings with embedded whitespace trivia
+        # "a\\\nb"      ==> (string "a" "b")
+        # "a\\\rb"      ==> (string "a" "b")
+        # "a\\\r\nb"    ==> (string "a" "b")
+        # "a\\\n \tb"   ==> (string "a" "b")
         emit(ps, mark, K"string", str_flags)
     else
-        # Strings with no interpolations
+        # Strings with only a single valid string chunk
         # "str" ==> "str"
-    end
-end
-
-function parse_raw_string(ps::ParseState; remap_kind=K"Nothing")
-    emark = position(ps)
-    delim_k = peek(ps)
-    bump(ps, TRIVIA_FLAG)
-    flags = RAW_STRING_FLAG | (delim_k in KSet`""" \`\`\`` ?
-                               TRIPLE_STRING_FLAG : EMPTY_FLAGS)
-    if peek(ps) in KSet`String CmdString`
-        bump(ps, flags; remap_kind=remap_kind)
-    else
-        outk = remap_kind != K"Nothing" ? remap_kind :
-               delim_k in KSet`" """`     ? K"String"    :
-               delim_k in KSet`\` \`\`\`` ? K"CmdString" :
-               internal_error("unexpected delimiter ", delim_k)
-        bump_invisible(ps, outk, flags)
-    end
-    if peek(ps) == delim_k
-        bump(ps, TRIVIA_FLAG)
-    else
-        # Recovery
-        bump_invisible(ps, K"error", error="Unterminated string literal")
+        # "a\\\n"   ==> "a"
+        # "a\\\r"   ==> "a"
+        # "a\\\r\n" ==> "a"
     end
 end
 
@@ -3137,16 +3255,31 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         end
     elseif is_keyword(leading_kind)
         if leading_kind == K"var" && (t = peek_token(ps,2);
-                                      kind(t) in KSet`" """` && !t.had_whitespace)
+                                      kind(t) == K"\"" && !t.had_whitespace)
             # var"x"     ==> x
-            # var"""x""" ==> x
             # Raw mode unescaping
-            # var""      ==>
+            # var""     ==>
             # var"\""   ==> "
             # var"\\""  ==> \"
             # var"\\x"  ==> \\x
+            #
+            # NB: Triple quoted var identifiers are not implemented, but with
+            # the complex deindentation rules they seem like a misfeature
+            # anyway, maybe?
+            # var"""x""" !=> x
             bump(ps, TRIVIA_FLAG)
-            parse_raw_string(ps, remap_kind=K"Identifier")
+            bump(ps, TRIVIA_FLAG)
+            if peek(ps) == K"String"
+                bump(ps, RAW_STRING_FLAG; remap_kind=K"Identifier")
+            else
+                bump_invisible(ps, K"Identifier", RAW_STRING_FLAG)
+            end
+            if peek(ps) == K"\""
+                bump(ps, TRIVIA_FLAG)
+            else
+                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                               error="Unterminated string literal")
+            end
             t = peek_token(ps)
             k = kind(t)
             if t.had_whitespace || is_operator(k) ||
@@ -3188,13 +3321,13 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         parse_macro_name(ps)
         parse_call_chain(ps, mark, true)
     elseif is_string_delim(leading_kind)
-        parse_string(ps)
+        parse_string(ps, false)
     elseif leading_kind in KSet`\` \`\`\``
         # ``          ==>  (macrocall core_@cmd "")
         # `cmd`       ==>  (macrocall core_@cmd "cmd")
         # ```cmd```   ==>  (macrocall core_@cmd "cmd"-s)
         bump_invisible(ps, K"core_@cmd")
-        parse_raw_string(ps)
+        parse_string(ps, true)
         emit(ps, mark, K"macrocall")
     elseif is_literal(leading_kind)
         bump(ps)
