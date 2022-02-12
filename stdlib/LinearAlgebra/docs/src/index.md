@@ -266,7 +266,7 @@ julia> b = [1 2 3; 4 5 6]
  4  5  6
 
 julia> b - U
-ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
+ERROR: DimensionMismatch: matrix is not square: dimensions are (2, 3)
 Stacktrace:
 [...]
 ```
