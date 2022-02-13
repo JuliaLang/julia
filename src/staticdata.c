@@ -1382,6 +1382,7 @@ static jl_value_t *jl_read_value(jl_serializer_state *s)
     return (jl_value_t*)get_item_for_reloc(s, base, size, offset);
 }
 
+JL_DLLEXPORT int32_t (*jl_sysimg_cpuflags[3])(void);
 
 static void jl_update_all_fptrs(jl_serializer_state *s)
 {
@@ -1393,7 +1394,6 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
         return;
     int sysimg_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
-    uintptr_t base = (uintptr_t)&s->s->buf[0];
     jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
     uint32_t clone_idx = 0;
     for (i = 0; i < sysimg_fvars_max; i++) {
@@ -1407,8 +1407,8 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                 specfunc = 0;
                 offset = ~offset;
             }
+            uintptr_t base = (uintptr_t)&s->s->buf[0];
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            uintptr_t base = (uintptr_t)fvars.base;
             assert(jl_is_method(codeinst->def->def.method) && codeinst->invoke != jl_fptr_const_return);
             assert(specfunc ? codeinst->invoke != NULL : codeinst->invoke == NULL);
             linfos[i] = codeinst->def;
@@ -1421,7 +1421,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                     offset = fvars.clone_offsets[clone_idx];
                 break;
             }
-            void *fptr = (void*)(base + offset);
+            void *fptr = (void*)((uintptr_t)fvars.base + offset);
             if (specfunc) {
                 codeinst->specptr.fptr = fptr;
                 codeinst->isspecsig = 1; // TODO: set only if confirmed to be true
@@ -1432,6 +1432,20 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
         }
     }
     jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
+    // now populate the feature flags accessors too
+    for (; i < sysimg_fvars_max + 3; i++) {
+        int32_t offset = fvars.offsets[i];
+        for (; clone_idx < fvars.nclones; clone_idx++) {
+            uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+            if (idx < i)
+                continue;
+            if (idx == i)
+                offset = fvars.clone_offsets[clone_idx];
+            break;
+        }
+        void *fptr = (void*)((uintptr_t)fvars.base + offset);
+        ((void**)jl_sysimg_cpuflags)[i - sysimg_fvars_max] = fptr;
+    }
 }
 
 

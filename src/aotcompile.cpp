@@ -20,6 +20,7 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
@@ -592,6 +593,7 @@ void jl_dump_native_impl(void *native_code,
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 {
+    PM->add(new MachineModuleInfoWrapperPass(static_cast<const LLVMTargetMachine*>(TM))); // do as llc does, not as it says
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
     PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 }

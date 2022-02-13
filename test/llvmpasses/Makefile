@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 
 check: .
 
-TESTS = $(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*.jl $(SRCDIR)/*.ll))
+TESTS = $(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*.jl $(SRCDIR)/*.ll  $(SRCDIR)/*.mir))
 
 . $(TESTS):
 	PATH=$(build_bindir):$(build_depsbindir):$$PATH \
