@@ -365,7 +365,7 @@ julia> push!(a, 2, 3)
 Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
-ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
