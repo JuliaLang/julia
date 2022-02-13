@@ -127,7 +127,7 @@ julia> X = [1.0, 2.0, 3.0, 4.0];
 julia> A = X * X';
 
 julia> C = cholesky(A, RowMaximum(), check = false)
-CholeskyPivoted{Float64, Matrix{Float64}}
+CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}
 U factor with rank 1:
 4×4 UpperTriangular{Float64, Matrix{Float64}}:
  4.0  2.0  3.0  1.0
@@ -150,23 +150,25 @@ julia> l == C.L && u == C.U
 true
 ```
 """
-struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+struct CholeskyPivoted{T,S<:AbstractMatrix,P<:AbstractVector{<:Integer}} <: Factorization{T}
     factors::S
     uplo::Char
-    piv::Vector{BlasInt}
+    piv::P
     rank::BlasInt
     tol::Real
     info::BlasInt
 
-    function CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix}
+    function CholeskyPivoted{T,S,P}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix,P<:AbstractVector}
         require_one_based_indexing(factors)
-        new(factors, uplo, piv, rank, tol, info)
+        new{T,S,P}(factors, uplo, piv, rank, tol, info)
     end
 end
-function CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::Vector{<:Integer},
-                            rank::Integer, tol::Real, info::Integer) where T
-    CholeskyPivoted{T,typeof(A)}(A, uplo, piv, rank, tol, info)
-end
+CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::AbstractVector{<:Integer},
+                rank::Integer, tol::Real, info::Integer) where T =
+    CholeskyPivoted{T,typeof(A),typeof(piv)}(A, uplo, piv, rank, tol, info)
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix},
+           CholeskyPivoted{T,S,typeof(piv)}(factors, uplo, piv, rank, tol, info))
 
 
 # iteration for destructuring into components
@@ -306,7 +308,7 @@ end
 function cholesky!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
                    ::RowMaximum; tol = 0.0, check::Bool = true)
     AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
-    C = CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
+    C = CholeskyPivoted{eltype(AA),typeof(AA),typeof(piv)}(AA, A.uplo, piv, rank, tol, info)
     check && chkfullrank(C)
     return C
 end
@@ -438,7 +440,7 @@ julia> X = [1.0, 2.0, 3.0, 4.0];
 julia> A = X * X';
 
 julia> C = cholesky(A, RowMaximum(), check = false)
-CholeskyPivoted{Float64, Matrix{Float64}}
+CholeskyPivoted{Float64, Matrix{Float64}, Vector{Int64}}
 U factor with rank 1:
 4×4 UpperTriangular{Float64, Matrix{Float64}}:
  4.0  2.0  3.0  1.0
