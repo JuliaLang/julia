@@ -1055,3 +1055,17 @@ function f_call_invoke_callback(f::FCallback)
     return nothing
 end
 @test !fully_eliminated(f_call_invoke_callback, Tuple{FCallback})
+
+# https://github.com/JuliaLang/julia/issues/41694
+Base.@assume_effects :terminates_globally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+@test fully_eliminated() do
+    issue41694(2)
+end
