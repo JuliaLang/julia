@@ -503,7 +503,7 @@ function test_thread_cfunction()
     @test cfs[2] == cf(fs[2])
     @test length(unique(cfs)) == 1000
     ok = zeros(Int, nthreads())
-    @threads for i in 1:10000
+    @threads :static for i in 1:10000
         i = mod1(i, 1000)
         fi = fs[i]
         cfi = cf(fi)
@@ -705,9 +705,9 @@ let ch = Channel{Char}(0), t
     @test String(collect(ch)) == "hello"
 end
 
-# errors inside @threads
+# errors inside @threads :static
 function _atthreads_with_error(a, err)
-    Threads.@threads for i in eachindex(a)
+    Threads.@threads :static for i in eachindex(a)
         if err
             error("failed")
         end
