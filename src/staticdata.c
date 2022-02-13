@@ -1799,7 +1799,7 @@ static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
 
 static int set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
 {
-    jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
+    return jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
 }
 
 static void jl_set_nroots_sysimg(void)
