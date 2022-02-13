@@ -154,6 +154,16 @@ JL_DLLEXPORT uint8_t jl_istopmod(jl_module_t *mod)
     return mod->istopmod;
 }
 
+JL_DLLEXPORT void jl_set_projmod(jl_module_t *mod)
+{
+    jl_project_module = mod;
+}
+
+JL_DLLEXPORT uint8_t jl_unset_projmod(void)
+{
+    jl_project_module = NULL;
+}
+
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
     jl_task_t *ct = jl_current_task;

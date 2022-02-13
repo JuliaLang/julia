@@ -306,21 +306,27 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             --code-coverage=$covfile --code-coverage=none`) == "0"
         @test !isfile(covfile)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
-            --code-coverage=$covfile --code-coverage`) == "1"
+            --code-coverage=$covfile --code-coverage`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
         @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
-            --code-coverage=$covfile --code-coverage=user`) == "1"
+            --code-coverage=$covfile --code-coverage=project`) == "1"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test isempty(got) || ("", got)
+        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+            --code-coverage=$covfile --code-coverage=user`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
         @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
-            --code-coverage=$covfile --code-coverage=all`) == "2"
+            --code-coverage=$covfile --code-coverage=all`) == "3"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)

@@ -1579,6 +1579,7 @@ extern JL_DLLEXPORT jl_module_t *jl_main_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_core_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_base_module JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_top_module JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_module_t *jl_project_module JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name);
 JL_DLLEXPORT void jl_set_module_nospecialize(jl_module_t *self, int on);
 JL_DLLEXPORT void jl_set_module_optlevel(jl_module_t *self, int lvl);
@@ -2071,8 +2072,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 // Settings for code_coverage and malloc_log
 // NOTE: if these numbers change, test/cmdlineargs.jl will have to be updated
 #define JL_LOG_NONE 0
-#define JL_LOG_USER 1
-#define JL_LOG_ALL  2
+#define JL_LOG_PROJECT 1
+#define JL_LOG_USER 2
+#define JL_LOG_ALL  3
 
 #define JL_OPTIONS_CHECK_BOUNDS_DEFAULT 0
 #define JL_OPTIONS_CHECK_BOUNDS_ON 1

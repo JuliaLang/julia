@@ -106,9 +106,9 @@ The following is a complete list of command-line switches available when launchi
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto}`       |Emit bounds checks always, never, or respect `@inbounds` declarations|
 |`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
-|`--code-coverage={none\|user\|all}`    |Count executions of source lines|
+|`--code-coverage={none\|project\|user\|all}`    |Count executions of source lines|
 |`--code-coverage`                      |equivalent to `--code-coverage=user`|
-|`--track-allocation={none\|user\|all}` |Count bytes allocated by each source line|
+|`--track-allocation={none\|project\|user\|all}` |Count bytes allocated by each source line|
 |`--track-allocation`                   |equivalent to `--track-allocation=user`|
 
 !!! compat "Julia 1.1"

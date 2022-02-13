@@ -145,12 +145,12 @@ static const char opts[]  =
     " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // instrumentation options
-    " --code-coverage={none|user|all}, --code-coverage\n"
+    " --code-coverage={none|project|user|all}, --code-coverage\n"
     "                           Count executions of source lines (omitting setting is equivalent to \"user\")\n"
     " --code-coverage=tracefile.info\n"
     "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
-    " --track-allocation={none|user|all}, --track-allocation\n"
+    " --track-allocation={none|project|user|all}, --track-allocation\n"
     "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
     " --bug-report=KIND         Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
     "                           expressions. It first tries to use BugReporting.jl installed in current environment and\n"
@@ -499,7 +499,9 @@ restart_switch:
         case opt_code_coverage:
             if (optarg != NULL) {
                 size_t endof = strlen(optarg);
-                if (!strcmp(optarg, "user"))
+                if (!strcmp(optarg,"project"))
+                    codecov = JL_LOG_PROJECT;
+                else if (!strcmp(optarg, "user"))
                     codecov = JL_LOG_USER;
                 else if (!strcmp(optarg, "all"))
                     codecov = JL_LOG_ALL;
@@ -520,7 +522,9 @@ restart_switch:
             break;
         case opt_track_allocation:
             if (optarg != NULL) {
-                if (!strcmp(optarg,"user"))
+                if (!strcmp(optarg,"project"))
+                    malloclog = JL_LOG_PROJECT;
+                else if (!strcmp(optarg,"user"))
                     malloclog = JL_LOG_USER;
                 else if (!strcmp(optarg,"all"))
                     malloclog = JL_LOG_ALL;

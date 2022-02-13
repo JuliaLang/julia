@@ -1093,8 +1093,29 @@ function _require_prelocked(uuidkey::PkgId)
         error("package `$(uuidkey.name)` did not define the expected \
               module `$(uuidkey.name)`, check for typos in package module name")
     end
-    return root_module(uuidkey)
+    root_mod = root_module(uuidkey)
+    if JLOptions().code_coverage == 1 || JLOptions().malloc_log == 1 # 1 == "project" mode
+        pkg_dir = pkgdir(root_mod)
+        act_proj_dir = dirname(active_project())
+        if moduleroot(root_mod) == root_mod && (pkg_dir == act_proj_dir || pkg_dir in explicit_project_dirs)
+            @debug "Project tracking: $(repr(root_mod)) set as the project module" pkg_dir act_proj_dir explicit_project_dirs
+            set_project_module(root_mod)
+        end
+    end
+    return root_mod
 end
+
+# needed for Pkg.test because it conducts the tests in a temporary env, not the project env
+const explicit_project_dirs = String[]
+
+"""
+    set_project_module(m::Module)
+
+Set a given module as the project module, marking it and its submodules
+for inclusion when code coverage and allocation tracking is set to `project` mode.
+"""
+set_project_module(m::Module) = ccall(:jl_set_projmod, Cvoid, (Any,), m)
+unset_project_module() = ccall(:jl_unset_projmod, Cvoid, ())
 
 const loaded_modules = Dict{PkgId,Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse

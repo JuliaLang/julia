@@ -193,16 +193,20 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         if isempty(coverage_file) || occursin("%p", coverage_file)
             if opts.code_coverage == 1
-                push!(addflags, "--code-coverage=user")
+                push!(addflags, "--code-coverage=project")
             elseif opts.code_coverage == 2
+                push!(addflags, "--code-coverage=user")
+            elseif opts.code_coverage == 3
                 push!(addflags, "--code-coverage=all")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
     if opts.malloc_log == 1
-        push!(addflags, "--track-allocation=user")
+        push!(addflags, "--track-allocation=project")
     elseif opts.malloc_log == 2
+        push!(addflags, "--track-allocation=user")
+    elseif opts.malloc_log == 3
         push!(addflags, "--track-allocation=all")
     end
     if opts.color == 1

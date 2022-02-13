@@ -85,6 +85,7 @@
     XX(jl_pinode_type) \
     XX(jl_pointer_type) \
     XX(jl_pointer_typename) \
+    XX(jl_project_module) \
     XX(jl_quotenode_type) \
     XX(jl_readonlymemory_exception) \
     XX(jl_ref_type) \
