@@ -3,7 +3,18 @@
 /*
   saving and restoring system images
 
-  This performs serialization and deserialization of in-memory data. The dump.c file is similar, but has less complete coverage than this. One main difference is that this format focuses on deserialization performance, while dump.c is focused on being a single pass, but suffers therefore from extra complexity. On deserialization, we only need to deal with pointer relocation, registering with the garbage collector, and making note of special internal types. During serialization, we also need to pay special attention to things like builtin functions, C-implemented types (those in jltypes.c), the metadata for documentation, optimal layouts, integration with native system image generation, and preparing other preprocessing directives.
+  This performs serialization and deserialization of in-memory data. The dump.c file is similar, but has less complete coverage:
+  dump.c has no knowledge of native code (and simply discards it), whereas this supports native code caching in .o files.
+  Duplication is avoided by elevating the .o-serialized versions of global variables and native-compiled functions to become
+  the authoritative source for such entities in the system image, with references to these objects appropriately inserted into
+  the (de)serialized version of Julia's internal data. This makes deserialization simple and fast: we only need to deal with
+  pointer relocation, registering with the garbage collector, and making note of special internal types. During serialization,
+  we also need to pay special attention to things like builtin functions, C-implemented types (those in jltypes.c), the metadata
+  for documentation, optimal layouts, integration with native system image generation, and preparing other preprocessing
+  directives.
+
+  dump.c has capabilities missing from this serializer, most notably the ability to handle external references. This is not needed
+  for system images as they are self-contained. However, it would be needed to support incremental compilation of packages.
 
   During serialization, the flow has several steps:
 
@@ -14,21 +25,27 @@
     so recursion is mimicked using a work-queue managed by `jl_serialize_reachable`.
 
     It's worth emphasizing that despite the name `jl_serialize_value`, the only goal of this stage is to
-    insert objects into `backref_table`, specifically the objects/fields that will require touch-up when the system
-    image is loaded.
+    insert objects into `backref_table`. The entire system gets inserted, either directly or indirectly via
+    fields of other objects. Objects requiring pointer relocation or gc registration must be directly inserted.
+    In later stages, such objects get referenced by their `id`.
 
-  - step 2 (the biggest of four steps) takes all items in `backref_table` and actually serializes them.
-    They are first ordered by `id` and then serialized. Serialization constructs `layout_table`, where `layout_table[id]` is
-    the stream position of the item corresponding to `id`. There are actually several distinct streams (see the
-    fields in `jl_serializer_state`) that reflect the format of ELF/LLVM; for example, global variables get added to the
-    data stream but also added to the `gvar_record` section. Anything with a pointer gets added to
-    the serializer's `relocs_list`. Finally, a few items (modules, typenames, methods) will need custom touch-up beyond
-    mere pointer relocation and are added to `reinit_list` or `ccallable_list`.
+  - step 2 (the biggest of four steps) takes all items in `backref_table` and actually serializes them ordered
+    by `id`. The system is serialized into several distinct streams (see `jl_serializer_state`), a "main stream"
+    (the `s` field) as well as parallel streams for writing specific categories of additional internal data (e.g.,
+    global data invisible to codegen, as well as deserialization "touch-up" tables, see below). These different streams
+    will be concatenated in later steps. Certain key items (e.g., builtin types & functions, integers smaller than
+    512) get serialized via a tag table.
 
-    Certain key items (e.g., builtin types & functions, integers smaller than 512) get serialized via a tag table.
+    Serialization constructs "touch up" tables used during deserialization. Pointers and items requiring gc
+    registration get encoded as `(position(s), index)` pairs in `relocs_list` and `gctags_list`, respectively.
+    Note that `position(s)` is the offset of the object from the beginning of the deserialized blob and thus
+    all that's needed for pointer relocation. `index` is a bitfield-encoded index into lists of
+    different categories of data (e.g., mutable data, constant data, symbols, functions, etc.). The different
+    lists and their bitfield flags are given by the `RefTags` enum: if `i` is the index into one of these
+    categorical lists, then `index = r << RELOC_TAG_OFFSET + i` where `r` is the `RefTags` category.
+    When a list is handled by a serializer sub-stream, then `i` is instead the offset within that sub-stream.
 
-    This step is handled by `jl_write_values`, followed by serializing `reinit_list` and `ccallable_list`,
-    the entire symbol table, and specially-tagged items.
+    This step is handled by `jl_write_values`, followed by special handling of the dedicated parallel streams.
 
   - step 3 combines the different sections (fields of `jl_serializer_state`) into one
 
@@ -256,8 +273,8 @@ static arraylist_t deser_sym;
 // table of all objects that are serialized
 static htable_t backref_table;
 static int backref_table_numel;
-static arraylist_t layout_table;
-static arraylist_t object_worklist;
+static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `backref_table`
+static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 
 // Both `reinit_list` and `ccallable_list` are lists of (size_t pos, code) entries
 // for the serializer to mark values in need of rework during deserialization
@@ -272,7 +289,7 @@ static arraylist_t ccallable_list;
 
 // hash of definitions for predefined function pointers
 static htable_t fptr_to_id;
-void *native_functions;
+void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching data from LLVM
 
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
@@ -296,12 +313,12 @@ static const jl_fptr_args_t id_to_fptrs[] = {
 
 typedef struct {
     ios_t *s;                   // the main stream
-    ios_t *const_data;
-    ios_t *symbols;
+    ios_t *const_data;          // codegen-invisible internal data (e.g., datatype layouts, list-like typename fields, foreign types, internal arrays)
+    ios_t *symbols;             // names (char*) of symbols (some may be referenced by pointer in generated code)
     ios_t *relocs;              // for (de)serializing relocs_list and gctags_list
-    ios_t *gvar_record;
-    ios_t *fptr_record;
-    arraylist_t relocs_list;    // a list of (location, target) pairs
+    ios_t *gvar_record;         // serialized array mapping gvid => spos
+    ios_t *fptr_record;         // serialized array mapping fptrid => spos
+    arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
     jl_ptls_t ptls;
 } jl_serializer_state;
@@ -316,9 +333,9 @@ static jl_sym_t *jl_docmeta_sym = NULL;
 // Tags of category `t` are located at offsets `t << RELOC_TAG_OFFSET`
 // Consequently there is room for 2^RELOC_TAG_OFFSET pointers, etc
 enum RefTags {
-    DataRef,           // pointers
-    ConstDataRef,      // constant data (e.g., arrays, layouts)
-    TagRef,            // items serialized via their tags 
+    DataRef,           // mutable data
+    ConstDataRef,      // constant data (e.g., layouts)
+    TagRef,            // items serialized via their tags
     SymbolRef,         // symbols
     BindingRef,        // module bindings
     FunctionRef,       // generic functions
