@@ -271,7 +271,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     if shell == :posix
         # ssh connects to a POSIX shell
 
-        cmds = "$(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
+        cmds = "exec $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
         # set environment variables
         for (var, val) in env
             occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
@@ -287,7 +287,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     elseif shell == :csh
         # ssh connects to (t)csh
 
-        remotecmd = "$(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
+        remotecmd = "exec $(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
 
         # set environment variables
         for (var, val) in env
