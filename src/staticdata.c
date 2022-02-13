@@ -3,10 +3,7 @@
 /*
   saving and restoring system images
 
-  This performs serialization and deserialization, somewhat similar to dump.c. However, while dump.c is exhaustive,
-  here we focus on issues like pointer relocation and registering with the garbage collector. We also need to pay special
-  attention to things like builtin functions, C-implemented types (those in jltypes.c), the metadata for
-  documentation, 
+  This performs serialization and deserialization of in-memory data. The dump.c file is similar, but has less complete coverage than this. One main difference is that this format focuses on deserialization performance, while dump.c is focused on being a single pass, but suffers therefore from extra complexity. On deserialization, we only need to deal with pointer relocation, registering with the garbage collector, and making note of special internal types. During serialization, we also need to pay special attention to things like builtin functions, C-implemented types (those in jltypes.c), the metadata for documentation, optimal layouts, integration with native system image generation, and preparing other preprocessing directives.
 
   During serialization, the flow has several steps:
 
@@ -89,7 +86,15 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_globalref_type);
         INSERT_TAG(jl_string_type);
         INSERT_TAG(jl_module_type);
-        INSERT_TAG(jl_tvar_type);reinit
+        INSERT_TAG(jl_tvar_type);
+        INSERT_TAG(jl_method_instance_type);
+        INSERT_TAG(jl_method_type);
+        INSERT_TAG(jl_code_instance_type);
+        INSERT_TAG(jl_linenumbernode_type);
+        INSERT_TAG(jl_lineinfonode_type);
+        INSERT_TAG(jl_gotonode_type);
+        INSERT_TAG(jl_quotenode_type);
+        INSERT_TAG(jl_gotoifnot_type);
         INSERT_TAG(jl_argument_type);
         INSERT_TAG(jl_returnnode_type);
         INSERT_TAG(jl_const_type);
@@ -248,7 +253,12 @@ static uintptr_t nsym_tag;
 // (reverse of symbol_table)
 static arraylist_t deser_sym;
 
-// table of all objects that are serializeds->relocs
+// table of all objects that are serialized
+static htable_t backref_table;
+static int backref_table_numel;
+static arraylist_t layout_table;
+static arraylist_t object_worklist;
+
 // Both `reinit_list` and `ccallable_list` are lists of (size_t pos, code) entries
 // for the serializer to mark values in need of rework during deserialization
 // codes:
