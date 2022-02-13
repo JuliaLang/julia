@@ -21,35 +21,36 @@
   - step 1 inserts relevant items into `backref_table`, an `obj` => `id::Int` mapping. `id` is assigned by
     order of insertion. This is effectively a recursive traversal, singling out items like pointers and symbols
     that need restoration when the system image is loaded. This stage is implemented by `jl_serialize_value`
-    and its callees; while it would be simplest to use recursion, this risks stack overflow,
-    so recursion is mimicked using a work-queue managed by `jl_serialize_reachable`.
+    and its callees; while it would be simplest to use recursion, this risks stack overflow, so recursion is mimicked
+    using a work-queue managed by `jl_serialize_reachable`.
 
     It's worth emphasizing that despite the name `jl_serialize_value`, the only goal of this stage is to
     insert objects into `backref_table`. The entire system gets inserted, either directly or indirectly via
-    fields of other objects. Objects requiring pointer relocation or gc registration must be directly inserted.
+    fields of other objects. Objects requiring pointer relocation or gc registration must be inserted directly.
     In later stages, such objects get referenced by their `id`.
 
   - step 2 (the biggest of four steps) takes all items in `backref_table` and actually serializes them ordered
     by `id`. The system is serialized into several distinct streams (see `jl_serializer_state`), a "main stream"
     (the `s` field) as well as parallel streams for writing specific categories of additional internal data (e.g.,
     global data invisible to codegen, as well as deserialization "touch-up" tables, see below). These different streams
-    will be concatenated in later steps. Certain key items (e.g., builtin types & functions, integers smaller than
-    512) get serialized via a tag table.
+    will be concatenated in later steps. Certain key items (e.g., builtin types & functions associated with `INSERT_TAG`
+    below, integers smaller than 512) get serialized via a hard-coded tag table.
 
-    Serialization constructs "touch up" tables used during deserialization. Pointers and items requiring gc
-    registration get encoded as `(position(s), index)` pairs in `relocs_list` and `gctags_list`, respectively.
-    Note that `position(s)` is the offset of the object from the beginning of the deserialized blob and thus
-    all that's needed for pointer relocation. `index` is a bitfield-encoded index into lists of
-    different categories of data (e.g., mutable data, constant data, symbols, functions, etc.). The different
-    lists and their bitfield flags are given by the `RefTags` enum: if `i` is the index into one of these
-    categorical lists, then `index = r << RELOC_TAG_OFFSET + i` where `r` is the `RefTags` category.
-    When a list is handled by a serializer sub-stream, then `i` is instead the offset within that sub-stream.
+    Serialization builds "touch up" tables used during deserialization. Pointers and items requiring gc
+    registration get encoded as `(location, target)` pairs in `relocs_list` and `gctags_list`, respectively.
+    `location` is the site that needs updating (e.g., the address of a pointer referencing an object), and is
+    set to `position(s)`, the offset of the object from the beginning of the deserialized blob.
+    `target` is a bitfield-encoded index into lists of different categories of data (e.g., mutable data, constant data,
+    symbols, functions, etc.) to which the pointer at `location` refers. The different lists and their bitfield flags
+    are given by the `RefTags` enum: if `t` is the category tag (one of the `RefTags` enums) and `i` is the index into
+    one of the corresponding categorical list, then `index = t << RELOC_TAG_OFFSET + i`. The simplest source for the
+    details of this encoding can be found in the pair of functions `get_reloc_for_item` and `get_item_for_reloc`.
 
-    This step is handled by `jl_write_values`, followed by special handling of the dedicated parallel streams.
+    Most of step 2 is handled by `jl_write_values`, followed by special handling of the dedicated parallel streams.
 
   - step 3 combines the different sections (fields of `jl_serializer_state`) into one
 
-  - step 4 writes the values of tagged items and `reinit_list`/`ccallable_list`
+  - step 4 writes the values of the hard-coded tagged items and `reinit_list`/`ccallable_list`
 
 The tables written to the serializer stream make deserialization fairly straightforward. Much of the "real work" is
 done by `get_item_for_reloc`.
@@ -630,6 +631,9 @@ static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
     }
 }
 
+// Maybe encode a global variable. `gid` is the LLVM index, 0 if the object is not serialized
+// in the generated code (and thus not a gvar from that standpoint, maybe only stored in the internal-data sysimg).
+// `reloc_id` is the RefTags-encoded `target`.
 static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id) JL_NOTSAFEPOINT
 {
     if (gid == 0)
@@ -659,7 +663,9 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
     write_padding(s, sizeof(void*));
 }
 
-
+// Return the integer `id` for `v`. Generically this is looked up in `backref_table`,
+// but symbols, small integers, and a couple of special items (`nothing` and the root Task)
+// have special handling.
 #define backref_id(s, v) _backref_id(s, (jl_value_t*)(v))
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
@@ -706,6 +712,8 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPO
 }
 
 
+// Save blank space in stream `s` for a pointer `fld`, storing both location and target
+// in `relocs_list`.
 static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSAFEPOINT
 {
     if (fld != NULL) {
@@ -715,6 +723,8 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSA
     write_pointer(s->s);
 }
 
+// Save blank space in stream `s` for a pointer `fld`, storing both location and target
+// in `gctags_list`.
 static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref) JL_NOTSAFEPOINT
 {
     arraylist_push(&s->gctags_list, (void*)(uintptr_t)ios_pos(s->s));
@@ -722,13 +732,14 @@ static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref) JL_NOTSAF
     write_pointer(s->s);
 }
 
-
+// Special handling from `jl_write_values` for modules
 static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t *m)
 {
     size_t reloc_offset = ios_pos(s->s);
     size_t tot = sizeof(jl_module_t);
-    ios_write(s->s, (char*)m, tot);
+    ios_write(s->s, (char*)m, tot);     // raw memory dump of the `jl_module_t` structure
 
+    // Handle the fields requiring special attention
     jl_module_t *newm = (jl_module_t*)&s->s->buf[reloc_offset];
     newm->name = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, name)));
@@ -819,6 +830,7 @@ static size_t jl_sort_size(jl_datatype_t *dt)
 }
 #endif
 
+// Used by `qsort` to order `backref_table` by `id`
 static int sysimg_sort_order(const void *pa, const void *pb)
 {
     uintptr_t sa = ((uintptr_t*)pa)[1];
@@ -840,6 +852,7 @@ static int sysimg_sort_order(const void *pa, const void *pb)
 }
 
 jl_value_t *jl_find_ptr = NULL;
+// The main function for serializing all the items queued in `backref_table`
 static void jl_write_values(jl_serializer_state *s)
 {
     arraylist_t objects_list;
@@ -849,6 +862,7 @@ static void jl_write_values(jl_serializer_state *s)
     arraylist_grow(&layout_table, backref_table_numel);
     memset(layout_table.items, 0, backref_table_numel * sizeof(void*));
 
+    // Order `backref_table` by `id`
     size_t i, len = backref_table.size;
     void **p = backref_table.table;
     for (i = 0; i < len; i += 2) {
@@ -863,10 +877,11 @@ static void jl_write_values(jl_serializer_state *s)
     assert(backref_table_numel * 2 == objects_list.len);
     qsort(objects_list.items, backref_table_numel, sizeof(void*) * 2, sysimg_sort_order);
 
+    // Serialize all entries
     for (i = 0, len = backref_table_numel * 2; i < len; i += 2) {
-        jl_value_t *v = (jl_value_t*)objects_list.items[i];
+        jl_value_t *v = (jl_value_t*)objects_list.items[i];           // the object
         JL_GC_PROMISE_ROOTED(v);
-        uintptr_t item = (uintptr_t)objects_list.items[i + 1];
+        uintptr_t item = (uintptr_t)objects_list.items[i + 1];        // the id
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((t->instance == NULL || t->instance == v) && "detected singleton construction corruption");
         // realign stream to expected gc alignment (16 bytes)
@@ -876,7 +891,7 @@ static void jl_write_values(jl_serializer_state *s)
         write_gctaggedfield(s, backref_id(s, t));
         size_t reloc_offset = ios_pos(s->s);
         assert(item < layout_table.len && layout_table.items[item] == NULL);
-        layout_table.items[item] = (void*)reloc_offset;
+        layout_table.items[item] = (void*)reloc_offset;               // store the inverse mapping of `backref_table` (`id` => object)
         record_gvar(s, jl_get_llvm_gv(native_functions, v), ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
 
         // write data
@@ -884,6 +899,7 @@ static void jl_write_values(jl_serializer_state *s)
             write_pointer(s->s);
         }
         else if (jl_is_array(v)) {
+            // Internal data for types in julia.h with `jl_array_t` field(s)
 #define JL_ARRAY_ALIGN(jl_value, nbytes) LLT_ALIGN(jl_value, nbytes)
             jl_array_t *ar = (jl_array_t*)v;
             jl_value_t *et = jl_tparam0(jl_typeof(v));
@@ -913,6 +929,7 @@ static void jl_write_values(jl_serializer_state *s)
 
             // write data
             if (!ar->flags.ptrarray && !ar->flags.hasptr) {
+                // Non-pointer eltypes get encoded in the const_data section
                 uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), alignment_amt);
                 write_padding(s->const_data, data - ios_pos(s->const_data));
                 // write data and relocations
@@ -938,6 +955,7 @@ static void jl_write_values(jl_serializer_state *s)
                 }
             }
             else {
+                // Pointer eltypes are encoded in the mutable data section
                 size_t data = LLT_ALIGN(ios_pos(s->s), alignment_amt);
                 size_t padding_amt = data - ios_pos(s->s);
                 write_padding(s->s, padding_amt);
@@ -1004,6 +1022,7 @@ static void jl_write_values(jl_serializer_state *s)
                 ios_write(s->s, (char*)v, t->size);
         }
         else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
+            // foreign types require special handling
             jl_value_t *sizefield = jl_get_nth_field(v, 1);
             int32_t sz = jl_unbox_int32(sizefield);
             int32_t nw = (sz == 0 ? 1 : (sz < 0 ? -sz : sz));
@@ -1021,6 +1040,7 @@ static void jl_write_values(jl_serializer_state *s)
             write_pointer(s->s);
         }
         else {
+            // Generic object::DataType serialization by field
             const char *data = (const char*)v;
             size_t i, nf = jl_datatype_nfields(t);
             size_t tot = 0;
@@ -1052,6 +1072,7 @@ static void jl_write_values(jl_serializer_state *s)
                 }
             }
 
+            // A few objects need additional handling beyond the generic serialization above
             if (jl_is_method(v)) {
                 write_padding(s->s, sizeof(jl_method_t) - tot);
                 if (((jl_method_t*)v)->ccallable) {
@@ -1060,6 +1081,7 @@ static void jl_write_values(jl_serializer_state *s)
                 }
             }
             else if (jl_is_code_instance(v)) {
+                // Handle the native-code pointers
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
                 jl_code_instance_t *newm = (jl_code_instance_t*)&s->s->buf[reloc_offset];
 
@@ -1178,6 +1200,8 @@ static void jl_write_values(jl_serializer_state *s)
 }
 
 
+// Record all symbols that get referenced by the generated code
+// and queue them for pointer relocation
 static void jl_write_gv_syms(jl_serializer_state *s, jl_sym_t *v)
 {
     // since symbols are static, they might not have had a
@@ -1194,6 +1218,8 @@ static void jl_write_gv_syms(jl_serializer_state *s, jl_sym_t *v)
         jl_write_gv_syms(s, v->right);
 }
 
+// Record all hardcoded-tagged items that get referenced by
+// the generated code and queue them for pointer relocation
 static void jl_write_gv_tagref(jl_serializer_state *s, jl_value_t *v)
 {
     int32_t gv = jl_get_llvm_gv(native_functions, (jl_value_t*)v);
@@ -1231,6 +1257,8 @@ static inline uint32_t load_uint32(uintptr_t *base)
 }
 
 
+// In deserialization, create Symbols and set up the
+// index for backreferencing
 static void jl_read_symbols(jl_serializer_state *s)
 {
     assert(deser_sym.len == nsym_tag);
@@ -1247,10 +1275,13 @@ static void jl_read_symbols(jl_serializer_state *s)
 }
 
 
+// In serialization, extract the appropriate serializer position for RefTags-encoded index `reloc_item`.
+// Used for hard-coded tagged items, `relocs_list`, and `gctags_list`
 static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
 {
     enum RefTags tag = (enum RefTags)(reloc_item >> RELOC_TAG_OFFSET);
     if (tag == DataRef) {
+        // first serialized segment
         // need to compute the final relocation offset via the layout table
         assert(reloc_item < layout_table.len);
         uintptr_t reloc_base = (uintptr_t)layout_table.items[reloc_item];
@@ -1291,7 +1322,7 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
     }
 }
 
-
+// Compute target location at deserialization
 static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t base, size_t size, uint32_t reloc_id)
 {
     enum RefTags tag = (enum RefTags)(reloc_id >> RELOC_TAG_OFFSET);
@@ -1451,6 +1482,8 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     int sysimg_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
     uintptr_t base = (uintptr_t)&s->s->buf[0];
+    // These will become MethodInstance references, but they start out as a list of
+    // offsets into `s` for CodeInstances
     jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
     uint32_t clone_idx = 0;
     for (i = 0; i < sysimg_fvars_max; i++) {
@@ -1468,7 +1501,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             uintptr_t base = (uintptr_t)fvars.base;
             assert(jl_is_method(codeinst->def->def.method) && codeinst->invoke != jl_fptr_const_return);
             assert(specfunc ? codeinst->invoke != NULL : codeinst->invoke == NULL);
-            linfos[i] = codeinst->def;
+            linfos[i] = codeinst->def;     // now it's a MethodInstance
             int32_t offset = fvars.offsets[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
@@ -1488,10 +1521,12 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
             }
         }
     }
+    // Tell LLVM about the native code
     jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
 }
 
 
+// Pointer relocation for native-code referenced global variables
 static void jl_update_all_gvars(jl_serializer_state *s)
 {
     if (sysimg_gvars_base == NULL)
@@ -1512,6 +1547,7 @@ static void jl_update_all_gvars(jl_serializer_state *s)
 }
 
 
+// Reinitialization
 static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
 {
     size_t i, l;
@@ -1591,6 +1627,7 @@ static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
 
 
 
+// Code below helps slim down the images
 static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
 {
     size_t l = jl_svec_len(cache), i;
@@ -1749,6 +1786,10 @@ static void jl_strip_all_codeinfos(void)
     jl_foreach_reachable_mtable(strip_all_codeinfos_, NULL);
 }
 
+// Method roots created during sysimg construction are exempted from
+// triggering non-relocatability of compressed CodeInfos.
+// Set the number of such roots in each method when the sysimg is
+// serialized.
 static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
 {
     jl_method_t *m = def->func.method;
@@ -1756,7 +1797,7 @@ static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
     return 1;
 }
 
-static void set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
+static int set_nroots_sysimg_(jl_methtable_t *mt, void *_env)
 {
     jl_typemap_visitor(mt->defs, set_nroots_sysimg__, NULL);
 }
