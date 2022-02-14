@@ -129,7 +129,7 @@ int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
 // number of cycles since power-on
-static inline uint64_t cycleclock(void)
+static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
     uint64_t low, high;

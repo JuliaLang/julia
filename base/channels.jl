@@ -63,6 +63,7 @@ Channel(sz=0) = Channel{Any}(sz)
 
 Create a new task from `func`, bind it to a new channel of type
 `T` and size `size`, and schedule the task, all in a single call.
+The channel is automatically closed when the task terminates.
 
 `func` must accept the bound channel as its only argument.
 

@@ -1482,8 +1482,17 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if f === _apply_iterate
             return abstract_apply(interp, argtypes, sv, max_methods)
         elseif f === invoke
-            return abstract_invoke(interp, arginfo, sv)
+            call = abstract_invoke(interp, arginfo, sv)
+            if call.info === false
+                if call.rt === Bottom
+                    tristate_merge!(sv, Effects(EFFECTS_TOTAL, nothrow=ALWAYS_FALSE))
+                else
+                    tristate_merge!(sv, Effects())
+                end
+            end
+            return call
         elseif f === modifyfield!
+            tristate_merge!(sv, Effects()) # TODO
             return abstract_modifyfield!(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
@@ -1622,13 +1631,16 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
     if isa(ft, PartialOpaque)
         newargtypes = copy(argtypes)
         newargtypes[1] = ft.env
+        tristate_merge!(sv, Effects()) # TODO
         return abstract_call_opaque_closure(interp, ft, ArgInfo(arginfo.fargs, newargtypes), sv)
     elseif (uft = unwrap_unionall(widenconst(ft)); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
+        tristate_merge!(sv, Effects()) # TODO
         return CallMeta(rewrap_unionall((uft::DataType).parameters[2], widenconst(ft)), false)
     elseif f === nothing
         # non-constant function, but the number of arguments is known
         # and the ft is not a Builtin or IntrinsicFunction
         if hasintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure})
+            tristate_merge!(sv, Effects())
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
@@ -1866,7 +1878,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 effects.consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-                effects.terminates ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+                effects.terminates_globally ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
             ))
         else
             tristate_merge!(sv, Effects())
@@ -2040,8 +2052,11 @@ end
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
         def = frame.linfo.def
-        if isa(def, Method) && decode_effects_override(def.purity).terminates_locally
-            return nothing
+        if isa(def, Method)
+            effects = decode_effects_override(def.purity)
+            if effects.terminates_globally || effects.terminates_locally
+                return nothing
+            end
         end
         tristate_merge!(frame, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     end
