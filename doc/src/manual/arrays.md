@@ -1050,6 +1050,56 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 ([dot syntax](@ref man-vectorized)). Nested "dot calls" `f.(...)` (including calls to `.+` etcetera)
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
+For two arrays `A` and `B` of different sizes, one could intuitively reason about the broadcasting
+behavior using the following three "rules". These rules do not strictly match the internal
+implementation but still provide some insight:
+
+1. If the dimensions are different, "add" trailing singleton dimensions to the "smaller" ones so that
+  their dimensions match.
+2. If the dimensions are the same but axes are different, "repeat" the singleton dimensions so that
+   their axes match.
+3. If step 1 and 2 fails to generate arrays of the same axes, the broadcasting fails. Then one
+   should manually reshape, permute, or repeat the arrays to meet the rules.
+
+Now let's check these rules with simple examples:
+
+```julia-repl
+julia> A, B = rand(3), rand(3, 1);
+
+julia> A .+ B == repeat(A, 1, 1) .+ B # rule 1: "add" trailing dimension to A
+true
+
+julia> A, B = rand(3, 1), rand(3, 4);
+
+julia> A .+ B == repeat(A, 1, 4) .+ B # rule 2: "repeat" singleton dimensions
+true
+
+julia> rand(3) .+ rand(4, 3) # After trailing dimension is "added", sizes are differnt: (3, 1) vs (4, 3)
+ERROR: DimensionMismatch("arrays could not be broadcast to a common size; got a dimension with lengths 3 and 4")
+...
+```
+
+The rules can also be applied in a mutual sense, and it can be applied to more than two arrays:
+
+```julia-repl
+julia> A, B = rand(1, 3), rand(3, 1, 2);
+
+julia> A .+ B == repeat(A, 3, 1, 2) .+ repeat(B, 1, 3, 1) # mutually repeat A and B
+true
+
+julia> A, B, C = rand(2), rand(1, 3), rand(1, 1, 4);
+
+julia> D = A .+ B .+ C; # size: (2, 3, 4)
+
+julia> D == repeat(A, 1, 3, 4) .+ repeat(B, 2, 1, 4) .+ repeat(C, 2, 3, 1)
+true
+```
+
+Note that the rules are applied only in a virtual sense; the broadcasting is internally implemented
+as very efficient for loops without the need to replicate the arrays. Because the broadcasting is
+implemented as efficient for loops and because Julia has performant loop implementation,
+*generally*, one might not expect it to be faster than manually written loops for common CPUs.
+
 Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation);
 it also handles scalars, tuples and other collections.  By default, only some argument types are
 considered scalars, including (but not limited to) `Number`s, `String`s, `Symbol`s, `Type`s, `Function`s
