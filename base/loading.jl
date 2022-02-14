@@ -352,7 +352,7 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
-        path = manifest_uuid_path(Sys.STDLIB::String, pkg)
+        path = manifest_uuid_path(Sys.STDLIB, pkg)
         path === nothing || return entry_path(path, pkg.name)
     end
     return nothing
@@ -748,7 +748,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 

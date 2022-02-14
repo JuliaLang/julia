@@ -390,7 +390,7 @@ Hello World!
 """
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
-show(x) = show(stdout::IO, x)
+show(x) = show(stdout, x)
 
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
@@ -2710,7 +2710,7 @@ MyStruct
 function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
     # this is typically used interactively, so default to being in Main
     mod = get(stdout, :module, Main)
-    dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
+    dump(IOContext(stdout, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
 
 

@@ -323,8 +323,8 @@ end
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
-    BINDIR = Sys.BINDIR::String
-    SYSCONFDIR = Base.SYSCONFDIR::String
+    BINDIR = Sys.BINDIR
+    SYSCONFDIR = Base.SYSCONFDIR
     if !isempty(SYSCONFDIR)
         p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
         isfile(p1) && return p1
