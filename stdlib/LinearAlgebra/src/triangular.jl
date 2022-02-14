@@ -674,10 +674,22 @@ mul!(C::AbstractMatrix, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVec
 mul!(C::AbstractVecOrMat, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
     (B = adjB.parent; lmul!(A, adjoint!(C, B)))
 
-# The three methods are necessary to avoid ambiguities with definitions in matmul.jl
-mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = lmul!(A, copyto!(C, B))
-mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
+# The three methods are neceesary to avoid ambiguities with definitions in matmul.jl
+mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = _multrimat!(C, A, B)
+mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
+mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
+mul!(C::AbstractMatrix  , A::AbstractMatrix, B::AbstractTriangular)   = _mulmattri!(C, A, B)
+
+# generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
+_multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
+_mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = rmul!(copyto!(C, A), B)
+
+for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval _multrimat!(C::AbstractVecOrMat{T}, A::$tri{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
+        lmul!(A, copyto!(C, B))
+    @eval _mulmattri!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::$tri{T}) where {T<:BlasFloat} =
+        rmul!(copyto!(C, A), B)
+end
 
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
     mul!(C, A, copy(B), alpha, beta)
@@ -893,8 +905,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-lmul!(A::AbstractTriangular, B::StridedVecOrMat) = @inline mul!(B, A, B)
-function mul!(C::StridedVecOrMat, A::UpperTriangular, B::StridedVecOrMat)
+for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval lmul!(A::$tri, B::StridedVecOrMat) = @inline _multrimat!(B, A, B)
+    @eval mul!(C::StridedVecOrMat, A::$tri, B::StridedVecOrMat) = _multrimat!(C, A, B)
+end
+function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
@@ -907,17 +922,17 @@ function mul!(C::StridedVecOrMat, A::UpperTriangular, B::StridedVecOrMat)
     end
     @inbounds for j in 1:n
         for i in 1:m
-            Bij = A.data[i,i]*B[i,j]
+            Cij = A.data[i,i] * B[i,j]
             for k in i + 1:m
-                Bij += A.data[i,k]*B[k,j]
+                Cij += A.data[i,k] * B[k,j]
             end
-            C[i,j] = Bij
+            C[i,j] = Cij
         end
     end
     C
 end
 
-function mul!(C::StridedVecOrMat, A::UnitUpperTriangular, B::StridedVecOrMat)
+function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
@@ -930,17 +945,17 @@ function mul!(C::StridedVecOrMat, A::UnitUpperTriangular, B::StridedVecOrMat)
     end
     @inbounds for j in 1:n
         for i in 1:m
-            Bij = B[i,j]
+            Cij = A[i,i] * B[i,j]
             for k in i + 1:m
-                Bij += A.data[i,k]*B[k,j]
+                Cij += A.data[i,k] * B[k,j]
             end
-            C[i,j] = Bij
+            C[i,j] = Cij
         end
     end
     C
 end
 
-function mul!(C::StridedVecOrMat, A::LowerTriangular, B::StridedVecOrMat)
+function _multrimat!(C::AbstractVecOrMat, A::LowerTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
@@ -953,16 +968,16 @@ function mul!(C::StridedVecOrMat, A::LowerTriangular, B::StridedVecOrMat)
     end
     @inbounds for j in 1:n
         for i in m:-1:1
-            Bij = A.data[i,i]*B[i,j]
+            Cij = A.data[i,i] * B[i,j]
             for k in 1:i - 1
-                Bij += A.data[i,k]*B[k,j]
+                Cij += A.data[i,k] * B[k,j]
             end
-            C[i,j] = Bij
+            C[i,j] = Cij
         end
     end
     C
 end
-function mul!(C::StridedVecOrMat, A::UnitLowerTriangular, B::StridedVecOrMat)
+function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
@@ -975,11 +990,11 @@ function mul!(C::StridedVecOrMat, A::UnitLowerTriangular, B::StridedVecOrMat)
     end
     @inbounds for j in 1:n
         for i in m:-1:1
-            Bij = B[i,j]
+            Cij = A[i,i] * B[i,j]
             for k in 1:i - 1
-                Bij += A.data[i,k]*B[k,j]
+                Cij += A.data[i,k] * B[k,j]
             end
-            C[i,j] = Bij
+            C[i,j] = Cij
         end
     end
     C
@@ -987,7 +1002,7 @@ end
 
 for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function mul!(C::StridedVecOrMat, xA::UpperTriangular{<:Any,<:$t}, B::StridedVecOrMat)
+        function _multrimat!(C::AbstractVecOrMat, xA::UpperTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
             A = xA.data
             require_one_based_indexing(C, A, B)
             m, n = size(B, 1), size(B, 2)
@@ -1002,17 +1017,17 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pA = parent(A)
             @inbounds for j in 1:n
                 for i in 1:m
-                    Bij = $tfun(pA[i,i])*B[i,j]
+                    Cij = $tfun(pA[i,i]) * B[i,j]
                     for k in i + 1:m
-                        Bij += $tfun(pA[k,i])*B[k,j]
+                        Cij += $tfun(pA[k,i]) * B[k,j]
                     end
-                    C[i,j] = Bij
+                    C[i,j] = Cij
                 end
             end
             C
         end
 
-        function mul!(C::StridedVecOrMat, xA::UnitUpperTriangular{<:Any,<:$t}, B::StridedVecOrMat)
+        function _multrimat!(C::AbstractVecOrMat, xA::UnitUpperTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
             A = xA.data
             require_one_based_indexing(C, A, B)
             m, n = size(B, 1), size(B, 2)
@@ -1027,17 +1042,17 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pA = parent(A)
             @inbounds for j in 1:n
                 for i in 1:m
-                    Bij = B[i,j]
+                    Cij = xA[i,i] * B[i,j]
                     for k in i + 1:m
-                        Bij += $tfun(pA[k,i])*B[k,j]
+                        Cij += $tfun(pA[k,i]) * B[k,j]
                     end
-                    C[i,j] = Bij
+                    C[i,j] = Cij
                 end
             end
             C
         end
 
-        function mul!(C::StridedVecOrMat, xA::LowerTriangular{<:Any,<:$t}, B::StridedVecOrMat)
+        function _multrimat!(C::AbstractVecOrMat, xA::LowerTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
             A = xA.data
             require_one_based_indexing(C, A, B)
             m, n = size(B, 1), size(B, 2)
@@ -1052,16 +1067,16 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pA = parent(A)
             @inbounds for j in 1:n
                 for i in m:-1:1
-                    Bij = $tfun(pA[i,i])*B[i,j]
+                    Cij = $tfun(pA[i,i]) * B[i,j]
                     for k in 1:i - 1
-                        Bij += $tfun(pA[k,i])*B[k,j]
+                        Cij += $tfun(pA[k,i]) * B[k,j]
                     end
-                    C[i,j] = Bij
+                    C[i,j] = Cij
                 end
             end
             C
         end
-        function mul!(C::StridedVecOrMat, xA::UnitLowerTriangular{<:Any,<:$t}, B::StridedVecOrMat)
+        function _multrimat!(C::AbstractVecOrMat, xA::UnitLowerTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
             A = xA.data
             require_one_based_indexing(C, A, B)
             m, n = size(B, 1), size(B, 2)
@@ -1076,11 +1091,11 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pA = parent(A)
             @inbounds for j in 1:n
                 for i in m:-1:1
-                    Bij = B[i,j]
+                    Cij = xA[i,i] * B[i,j]
                     for k in 1:i - 1
-                        Bij += $tfun(pA[k,i])*B[k,j]
+                        Cij += $tfun(pA[k,i]) * B[k,j]
                     end
-                    C[i,j] = Bij
+                    C[i,j] = Cij
                 end
             end
             C
@@ -1088,8 +1103,12 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     end
 end
 
-rmul!(A::StridedMatrix, B::AbstractTriangular) = @inline mul!(A, A, B)
-function mul!(C::StridedVecOrMat, A::StridedMatrix, B::UpperTriangular)
+for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval rmul!(A::StridedMatrix, B::$tri) = @inline _mulmattri!(A, A, B)
+    @eval mul!(C::StridedVecOrMat, A::StridedMatrix, B::$tri) = _mulmattri!(C, A, B)
+end
+
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     N = size(B, 1)
@@ -1102,16 +1121,16 @@ function mul!(C::StridedVecOrMat, A::StridedMatrix, B::UpperTriangular)
     end
     @inbounds for i in 1:m
         for j in n:-1:1
-            Aij = A[i,j]*B[j,j]
+            Cij = A[i,j] * B[j,j]
             for k in 1:j - 1
-                Aij += A[i,k]*B.data[k,j]
+                Cij += A[i,k] * B.data[k,j]
             end
-            C[i,j] = Aij
+            C[i,j] = Cij
         end
     end
     C
 end
-function mul!(C::StridedMatrix, A::StridedMatrix, B::UnitUpperTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     N = size(B, 1)
@@ -1124,17 +1143,17 @@ function mul!(C::StridedMatrix, A::StridedMatrix, B::UnitUpperTriangular)
     end
     @inbounds for i in 1:m
         for j in n:-1:1
-            Aij = A[i,j]
+            Cij = A[i,j] * B[j,j]
             for k in 1:j - 1
-                Aij += A[i,k]*B.data[k,j]
+                Cij += A[i,k] * B.data[k,j]
             end
-            C[i,j] = Aij
+            C[i,j] = Cij
         end
     end
     C
 end
 
-function mul!(C::StridedMatrix, A::StridedMatrix, B::LowerTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     N = size(B, 1)
@@ -1147,16 +1166,16 @@ function mul!(C::StridedMatrix, A::StridedMatrix, B::LowerTriangular)
     end
     @inbounds for i in 1:m
         for j in 1:n
-            Aij = A[i,j]*B[j,j]
+            Cij = A[i,j] * B[j,j]
             for k in j + 1:n
-                Aij += A[i,k]*B.data[k,j]
+                Cij += A[i,k] * B.data[k,j]
             end
-            C[i,j] = Aij
+            C[i,j] = Cij
         end
     end
     C
 end
-function mul!(C::StridedMatrix, A::StridedMatrix, B::UnitLowerTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     N = size(B, 1)
@@ -1169,11 +1188,11 @@ function mul!(C::StridedMatrix, A::StridedMatrix, B::UnitLowerTriangular)
     end
     @inbounds for i in 1:m
         for j in 1:n
-            Aij = A[i,j]
+            Cij = A[i,j] * B[j,j]
             for k in j + 1:n
-                Aij += A[i,k]*B.data[k,j]
+                Cij += A[i,k] * B.data[k,j]
             end
-            C[i,j] = Aij
+            C[i,j] = Cij
         end
     end
     C
@@ -1181,7 +1200,7 @@ end
 
 for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     @eval begin
-        function mul!(C::StridedMatrix, A::StridedMatrix, B::UpperTriangular{<:Any,<:$t})
+        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular{<:Any,<:$t})
             require_one_based_indexing(C, A, B)
             m, n = size(A)
             N = size(B, 1)
@@ -1195,17 +1214,17 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pB = parent(parent(B))
             @inbounds for i in 1:m
                 for j = n:-1:1
-                    Aij = A[i,j]*$tfun(pB[j,j])
+                    Cij = A[i,j] * $tfun(pB[j,j])
                     for k in 1:j - 1
-                        Aij += A[i,k]*$tfun(pB[j,k])
+                        Cij += A[i,k] * $tfun(pB[j,k])
                     end
-                    C[i,j] = Aij
+                    C[i,j] = Cij
                 end
             end
             C
         end
 
-        function mul!(C::StridedMatrix, A::StridedMatrix, B::UnitUpperTriangular{<:Any,<:$t})
+        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular{<:Any,<:$t})
             require_one_based_indexing(C, A, B)
             m, n = size(A)
             N = size(B, 1)
@@ -1219,17 +1238,17 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pB = parent(parent(B))
             @inbounds for i in 1:m
                 for j in n:-1:1
-                    Aij = A[i,j]
+                    Cij = A[i,j] * B[j,j]
                     for k = 1:j - 1
-                        Aij += A[i,k]*$tfun(pB[j,k])
+                        Cij += A[i,k] * $tfun(pB[j,k])
                     end
-                    C[i,j] = Aij
+                    C[i,j] = Cij
                 end
             end
             C
         end
 
-        function mul!(C::StridedMatrix, A::StridedMatrix, B::LowerTriangular{<:Any,<:$t})
+        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular{<:Any,<:$t})
             require_one_based_indexing(C, A, B)
             m, n = size(A)
             N = size(B, 1)
@@ -1243,17 +1262,17 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pB = parent(parent(B))
             @inbounds for i in 1:m
                 for j in 1:n
-                    Aij = A[i,j]*$tfun(pB[j,j])
+                    Cij = A[i,j] * $tfun(pB[j,j])
                     for k in j + 1:n
-                        Aij += A[i,k]*$tfun(pB[j,k])
+                        Cij += A[i,k] * $tfun(pB[j,k])
                     end
-                    C[i,j] = Aij
+                    C[i,j] = Cij
                 end
             end
             C
         end
 
-        function mul!(C::StridedMatrix, A::StridedMatrix, B::UnitLowerTriangular{<:Any,<:$t})
+        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular{<:Any,<:$t})
             require_one_based_indexing(C, A, B)
             m, n = size(A)
             N = size(B, 1)
@@ -1267,11 +1286,11 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             pB = parent(parent(B))
             @inbounds for i in 1:m
                 for j in 1:n
-                    Aij = A[i,j]
+                    Cij = A[i,j] * B[j,j]
                     for k in j + 1:n
-                        Aij += A[i,k]*$tfun(pB[j,k])
+                        Cij += A[i,k] * $tfun(pB[j,k])
                     end
-                    C[i,j] = Aij
+                    C[i,j] = Cij
                 end
             end
             C
@@ -1317,13 +1336,12 @@ function ldiv!(c::AbstractVector, A::UnitUpperTriangular, b::AbstractVector)
     if !(n == length(c))
         throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
     end
-    o = oneunit(eltype(A))
     @inbounds for i in n:-1:1
         bi = b[i]
         for j in i+1:n
             bi -= A.data[i,j] * c[j]
         end
-        c[i] = o \ bi
+        c[i] = A[i,i] \ bi
     end
     return c
 end
@@ -1356,13 +1374,12 @@ function ldiv!(c::AbstractVector, A::UnitLowerTriangular, b::AbstractVector)
     if n != length(c)
         throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
     end
-    o = oneunit(eltype(A))
     @inbounds for i in 1:n
         bi = b[i]
         for j in 1:i-1
             bi -= A.data[i,j] * c[j]
         end
-        c[i] = o \ bi
+        c[i] = A[i,i] \ bi
     end
     return c
 end
@@ -1415,13 +1432,12 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             if n != length(c)
                 throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
             end
-            o = oneunit(eltype(A))
             @inbounds for i in n:-1:1
                 bi = b[i]
                 for j in i+1:n
                     bi -= $tfun(A[j,i]) * c[j]
                 end
-                c[i] = o \ bi
+                c[i] = xA[i,i] \ bi
             end
             return c
         end
@@ -1458,13 +1474,12 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             if n != length(c)
                 throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
             end
-            o = oneunit(eltype(A))
             @inbounds for i in 1:n
                 bi = b[i]
                 for j in 1:i-1
                     bi -= $tfun(A[j,i]) * c[j]
                 end
-                c[i] = o \ bi
+                c[i] = xA[i,i] \ bi
             end
             return c
         end
@@ -1487,7 +1502,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
             for k in 1:j - 1
                 Aij -= C[i,k]*B.data[k,j]
             end
-            C[i,j] = Aij/B.data[j,j]
+            C[i,j] = Aij / B.data[j,j]
         end
     end
     C
@@ -1501,14 +1516,13 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
     if size(C) != size(A)
         throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
     end
-    o = oneunit(eltype(B))
     @inbounds for i in 1:m
         for j in 1:n
             Aij = A[i,j]
             for k in 1:j - 1
                 Aij -= C[i,k]*B.data[k,j]
             end
-            C[i,j] = Aij / o
+            C[i,j] = Aij / B[j,j]
         end
     end
     C
@@ -1543,14 +1557,13 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
     if size(C) != size(A)
         throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
     end
-    o = oneunit(eltype(B))
     @inbounds for i in 1:m
         for j in n:-1:1
             Aij = A[i,j]
             for k in j + 1:n
                 Aij -= C[i,k]*B.data[k,j]
             end
-            C[i,j] = Aij / o
+            C[i,j] = Aij / B[j,j]
         end
     end
     C
@@ -1596,7 +1609,7 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
                     for k in j + 1:n
                         Aij -= C[i,k] * $tfun(B[j,k])
                     end
-                    C[i,j] = Aij / o
+                    C[i,j] = Aij / xB[j,j]
                 end
             end
             C
@@ -1633,14 +1646,13 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
             if size(C) != size(A)
                 throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
             end
-            o = oneunit(eltype(B))
             @inbounds for i in 1:m
                 for j in 1:n
                     Aij = A[i,j]
                     for k in 1:j - 1
                         Aij -= C[i,k]*$tfun(B[j,k])
                     end
-                    C[i,j] = Aij / o
+                    C[i,j] = Aij / xB[j,j]
                 end
             end
             C

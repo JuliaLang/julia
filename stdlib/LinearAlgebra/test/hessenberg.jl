@@ -92,10 +92,10 @@ let n = 10
             @testset "Multiplication/division" begin
                 for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
                             UpperTriangular(A), UnitUpperTriangular(A))
-                    @test (H*x)::UpperHessenberg == Array(H)*x
-                    @test (x*H)::UpperHessenberg == x*Array(H)
-                    @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
-                    @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test (H*x)::UpperHessenberg ≈ Array(H)*x
+                    @test (x*H)::UpperHessenberg ≈ x*Array(H)
+                    @test H/x ≈ Array(H)/x# broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test x\H ≈ x\Array(H)# broken = eltype(H) <: Furlong && x isa UpperTriangular
                     @test H/x isa UpperHessenberg
                     @test x\H isa UpperHessenberg
                 end
@@ -108,13 +108,12 @@ let n = 10
             H = UpperHessenberg(Furlong.(Areal))
             for A in (A, Furlong.(A))
                 @testset "Multiplication/division Furlong" begin
-                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U))
-                        @test (H*x)::UpperHessenberg == Array(H)*x
-                        @test (x*H)::UpperHessenberg == x*Array(H)
-                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
-                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
-                        @test H/x isa UpperHessenberg
-                        @test x\H isa UpperHessenberg
+                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                                UpperTriangular(A), UnitUpperTriangular(A))
+                        @test map(x -> x.val, (H*x)::UpperHessenberg) ≈ map(x -> x.val, Array(H)*x)
+                        @test map(x -> x.val, (x*H)::UpperHessenberg) ≈ map(x -> x.val, x*Array(H))
+                        @test map(x -> x.val, (H/x)::UpperHessenberg) ≈ map(x -> x.val, Array(H)/x)
+                        @test map(x -> x.val, (x\H)::UpperHessenberg) ≈ map(x -> x.val, x\Array(H))
                     end
                     x = Bidiagonal(d, dl, :L)
                     @test H*x == Array(H)*x
