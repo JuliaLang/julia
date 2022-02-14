@@ -1329,7 +1329,7 @@ function print_statement_costs(io::IO, @nospecialize(tt::Type);
     end
 end
 
-print_statement_costs(args...; kwargs...) = print_statement_costs(stdout::IO, args...; kwargs...)
+print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type), world=get_world_counter())
     min_valid = RefValue{UInt}(typemin(UInt))

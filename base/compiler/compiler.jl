@@ -29,6 +29,7 @@ macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
 convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 
 # essential files and libraries
 include("essentials.jl")
