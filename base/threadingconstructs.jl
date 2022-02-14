@@ -122,12 +122,12 @@ For example, the above conditions imply that:
 - Write only to locations not shared across iterations (unless a lock or atomic operation is used).
 
 Schedule options are:
+- `:dynamic` (default) will schedule iterations dynamically to available worker threads,
+            assuming that the workload for each iteration is uniform.
 - `:static` creates one task per thread and divides the iterations equally among
             them, assigning each task specifically to each thread.
             Specifying `:static` is an error if used from inside another `@threads` loop
             or from a thread other than 1.
-- `:dynamic` (default) will schedule iterations dynamically to available worker threads,
-            assuming that the workload for each iteration is uniform.
 
 Without the scheduler argument, the exact scheduling is unspecified and varies across Julia releases.
 
