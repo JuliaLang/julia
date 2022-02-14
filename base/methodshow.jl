@@ -199,6 +199,10 @@ end
 
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
+    _url = Base.url(m)
+    if !isempty(_url)
+        println(io, "# ", _url)
+    end
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
