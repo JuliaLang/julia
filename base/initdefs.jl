@@ -29,7 +29,8 @@ exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
 
 function Base.show(io::IO, m::MIME"text/plain", fn::typeof(exit))
-    invoke(show, Tuple{IO, MIME"text/plain", Function}, io, m, fn)
+    TT = Tuple{IO, MIME"text/plain", Function}
+    invoke(show, TT, io, m, fn)
     println(io)
     print(io, "Hint: To exit Julia, use Ctrl-D or type exit() and press enter.")
     return nothing
