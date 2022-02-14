@@ -94,8 +94,9 @@ dispatch is extremely expensive.
 Each statement gets analyzed for its total cost in a function called
 `statement_cost`. You can display the cost associated with each statement
 as follows:
-```jldoctest; filter=r"tuple.jl:\d+"
+```jldoctest; filter = [r"tuple.jl:\d+", r"# https.*"]
 julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
+# https://github.com/JuliaLang/julia/tree/5e7b6dd090791ca545897d9625a82cae34c116b1/base/tuple.jl#L221
 map(f, t::Tuple{Any}) in Base at tuple.jl:179
   0 1 ─ %1  = Base.getfield(_3, 1, true)::Int64
   1 │   %2  = Base.sitofp(Float64, %1)::Float64
