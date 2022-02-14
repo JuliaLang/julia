@@ -521,12 +521,11 @@ dense vector `collect(1:6)`:
 
 ```jldoctest
 julia> reinterpret(Complex{Int}, 1:6) # `UnitRange` does not have a buffer holding array values
-3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
+3-element reinterpret(Complex{Int64}, ::UnitRange{Int64}):
  1 + 2im
  3 + 4im
  5 + 6im
 ```
-
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 
