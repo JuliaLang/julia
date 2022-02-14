@@ -263,6 +263,7 @@ end
 
 Base.IteratorSize(::Type{<:Broadcasted{<:Any,<:NTuple{N,Base.OneTo}}}) where {N} = Base.HasShape{N}()
 Base.IteratorSize(::Type{<:Broadcasted{<:AbstractArrayStyle{N}, Nothing}}) where {N} = Base.HasShape{N}()
+Base.IteratorSize(::Type{<:Broadcasted{<:ArrayStyle, Nothing, <:Any, <:Tuple{T, N}}}) where {T, N} = Base.HasShape{ndims(T)}()
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.

@@ -858,7 +858,11 @@ end
 # issue 43847: collect preserves shape of broadcasted
 let
     bc = Broadcast.broadcasted(*, [1 2; 3 4], 2)
-    @test size(collect(bc)) == size(bc)
+    @test collect(Iterators.product(bc, bc)) == collect(Iterators.product(copy(bc), copy(bc)))
+
+    a1 = AD1(rand(2,3))
+    bc1 = Broadcast.broadcasted(*, a1, 2)
+    @test collect(Iterators.product(bc1, bc1)) == collect(Iterators.product(copy(bc1), copy(bc1)))
  end
 
 # issue #31295
