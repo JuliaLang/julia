@@ -515,8 +515,9 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
  1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 
-For lazy array containers, the `reinterpret` works on an element-wise sense, so the memory
-might not reflect the actual memory storage:
+Additionally, `reinterpret` does not require the array `A` to have a dense block of memory;
+it can be "lazy" arrays. For instance, `reinterpret` on range `1:6` works the same as the
+dense vector `collect(1:6)`:
 
 ```jldoctest
 julia> reinterpret(Complex{Int}, 1:6) # `UnitRange` does not have a buffer holding array values
