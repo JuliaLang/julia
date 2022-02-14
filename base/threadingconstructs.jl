@@ -129,7 +129,7 @@ For example, the above conditions imply that:
 - Communicating between iterations using blocking primitives like `Channel`s is incorrect.
 - Write only to locations not shared across iterations (unless a lock or atomic operation is
   used).
-- The value of [`threadid()`](@ref Threads.threadid) may be changed even within a single
+- The value of [`threadid()`](@ref Threads.threadid) may change even within a single
   iteration.
 
 ## Schedulers
