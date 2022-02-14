@@ -118,6 +118,9 @@ Standard library changes
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
 
+* The `printf` functions support now variable width and precision specifiers
+  in format strings.  ([#41526])
+
 #### Package Manager
 
 #### LinearAlgebra

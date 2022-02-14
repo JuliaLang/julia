@@ -8,7 +8,9 @@ export @printf, @sprintf
 
 # format specifier categories
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
-const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
+const DecimalFloats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}}
+const HexFloats = Union{Val{'a'}, Val{'A'}}
+const Floats = Union{DecimalFloats, HexFloats}
 const Chars = Union{Val{'c'}, Val{'C'}}
 const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
@@ -30,19 +32,21 @@ struct Spec{T} # T => %type => Val{'type'}
     hash::Bool
     width::Int
     precision::Int
+    argno::Int
 end
 
 # recreate the format specifier string from a typed Spec
-Base.string(f::Spec{T}; modifier::String="") where {T} =
+function Base.string(f::Spec{T}; modifier::String="") where {T}
+    width, prec = f.width, f.precision
     string("%", f.leftalign ? "-" : "", f.plus ? "+" : "", f.space ? " " : "",
-        f.zero ? "0" : "", f.hash ? "#" : "", f.width > 0 ? f.width : "",
-        f.precision == 0 ? ".0" : f.precision > 0 ? ".$(f.precision)" : "", modifier, char(T))
+        f.zero ? "0" : "", f.hash ? "#" : "", width > 0 ? width : width == 0 ? "" : "*",
+        prec == 0 ? ".0" : prec > 0 ? ".$prec" : prec == -1 ? "" : ".*",
+        modifier, char(T))
+end
 Base.show(io::IO, f::Spec) = print(io, string(f))
 
 floatfmt(s::Spec{T}) where {T} =
-    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0)
-ptrfmt(s::Spec{T}, x) where {T} =
-    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8)
+    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0, s.argno)
 
 """
     Printf.Format(format_str)
@@ -74,7 +78,7 @@ struct Format{S, T}
 end
 
 # what number base should be used for a given format specifier?
-base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
+base(T) = T <: Union{HexBases, Val{'p'}} ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
 # parse format string
@@ -82,6 +86,7 @@ function Format(f::AbstractString)
     isempty(f) && throw(ArgumentError("empty format string"))
     bytes = codeunits(f)
     len = length(bytes)
+    argno = 0 # no of consumed args so far
     pos = 1
     b = 0x00
     while pos <= len
@@ -128,27 +133,45 @@ function Format(f::AbstractString)
             zero = false
         end
         # parse width
-        width = 0
-        while b - UInt8('0') < 0x0a
-            width = 10 * width + (b - UInt8('0'))
+        if b == UInt8('*')
+            argno += 1
+            width = argnotowp(argno)
+            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
             b = bytes[pos]
             pos += 1
-            pos > len && break
+        else
+            width = 0
+            while b - UInt8('0') < 0x0a
+                width = 10 * width + (b - UInt8('0'))
+                b = bytes[pos]
+                pos += 1
+                pos > len && break
+            end
         end
         # parse precision
-        precision = 0
         parsedprecdigits = false
+        precision = 0
         if b == UInt8('.')
             pos > len && throw(ArgumentError("incomplete format string: '$f'"))
-            parsedprecdigits = true
             b = bytes[pos]
             pos += 1
-            if pos <= len
-                while b - UInt8('0') < 0x0a
-                    precision = 10precision + (b - UInt8('0'))
-                    b = bytes[pos]
-                    pos += 1
-                    pos > len && break
+            if b == UInt8('*')
+                argno += 1
+                precision = argnotowp(argno)
+                pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+                b = bytes[pos]
+                pos += 1
+                parsedprecdigits = true
+            else
+                precision = 0
+                parsedprecdigits = true
+                if pos <= len
+                    while b - UInt8('0') < 0x0a
+                        precision = 10precision + (b - UInt8('0'))
+                        b = bytes[pos]
+                        pos += 1
+                        pos > len && break
+                    end
                 end
             end
         end
@@ -171,14 +194,11 @@ function Format(f::AbstractString)
         type = Val{Char(b)}
         if type <: Ints && precision > 0
             zero = false
-        elseif (type <: Strings || type <: Chars) && !parsedprecdigits
-            precision = -1
-        elseif type <: Union{Val{'a'}, Val{'A'}} && !parsedprecdigits
-            precision = -1
-        elseif type <: Floats && !parsedprecdigits
-            precision = 6
+        elseif !parsedprecdigits
+            precision = default_precision(type)
         end
-        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision))
+        argno += 1
+        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision, argno))
         start = pos
         while pos <= len
             b = bytes[pos]
@@ -197,6 +217,35 @@ function Format(f::AbstractString)
         push!(strs, start:pos - 1 - (b == UInt8('%')))
     end
     return Format(bytes, strs, Tuple(fmts))
+end
+
+default_precision(::Type{T}) where T<:Union{Strings,Chars,HexFloats} = -1
+default_precision(::Type{T}) where T<:DecimalFloats = 6
+default_precision(::Type) = 0
+
+const ARGNO_SHIFT = 10
+# convert argument number to the representation stored in width/precision
+# fields of Spec. As the literal cvalues may be >= -1, the encodings of arg
+# numbers must be < -1. Assuming argno > 0.
+argnotowp(argno) = - argno - ARGNO_SHIFT
+
+# determine width or precision from spec and optionally argument
+# second output indicates a negative value of a variable value
+function spectowp(width, args)
+    if width >= -1
+        (width, false)
+    else
+        w = Int(args[-width - ARGNO_SHIFT])
+        (abs(w), w < 0)
+    end
+end
+
+# extract argument, width, precision, and leftalign
+function argwidthprec(spec::Spec{T}, args) where T
+    width, z = spectowp(spec.width, args) # negative width sets leftalign flag
+    prec, w = spectowp(spec.precision, args)
+    prec = w ? default_precision(T) : prec # ignore negative precision
+    args[spec.argno], width, prec, z | spec.leftalign
 end
 
 macro format_str(str)
@@ -218,8 +267,8 @@ const HEX = b"0123456789ABCDEF"
     return pos
 end
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
-    leftalign, width = spec.leftalign, spec.width
+@inline function fmt(buf, pos, args, spec::Spec{T}) where {T <: Chars}
+    arg, width, _, leftalign = argwidthprec(spec, args)
     c = Char(first(arg))
     w = textwidth(c)
     if !leftalign && width > w
@@ -239,8 +288,9 @@ end
 end
 
 # strings
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
-    leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
+@inline function fmt(buf, pos, args, spec::Spec{T}) where {T <: Strings}
+    arg, width, prec, leftalign = argwidthprec(spec, args)
+    hash = spec.hash
     str = string(arg)
     slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
     op = p = prec == -1 ? slen : min(slen, prec)
@@ -279,16 +329,21 @@ end
     return pos
 end
 
-# integers
+# integers and pointers
 toint(x) = x
 toint(x::Rational) = Integer(x)
 
-fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
-    fmt(buf, pos, arg, floatfmt(spec))
-
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+@inline function fmt(buf, pos, args, spec::Spec{T}) where {T <: Union{Ints,Pointer}}
+    arg, width, prec, leftalign = argwidthprec(spec, args)
+    plus, space, hash = spec.plus, spec.space, spec.hash
+    zero = prec > 0 ? false : spec.zero
+    if T <: Pointer
+        arg = UInt64(arg)
+        prec = Sys.WORD_SIZE == 64 ? 16 : 8
+        hash = true
+    elseif arg isa AbstractFloat
+        return fmt(buf, pos, args, floatfmt(spec))
+    end
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
@@ -296,7 +351,7 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     x = arg2 isa Base.BitSigned ? unsigned(abs(arg2)) : abs(arg2)
     arglen = n + (neg || (plus | space)) +
         (T == Val{'o'} && hash ? 1 : 0) +
-        (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
+        (T <: Union{Val{'x'}, Val{'X'}, Pointer} && hash ? 2 : 0)
     arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
@@ -315,7 +370,7 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     if T == Val{'o'} && hash
         buf[pos] = UInt8('0')
         pos += 1
-    elseif T == Val{'x'} && hash
+    elseif T <: Union{Val{'x'}, Pointer} && hash
         buf[pos] = UInt8('0')
         buf[pos + 1] = UInt8('x')
         pos += 2
@@ -329,7 +384,8 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
             buf[pos] = UInt8('0')
             pos += 1
         end
-    elseif n < prec
+    end
+    if n < prec
         for _ = 1:(prec - n)
             buf[pos] = UInt8('0')
             pos += 1
@@ -341,8 +397,8 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
         end
     end
     while i > 0
-        @inbounds buf[pos + i - 1] = bs == 16 ?
-            (T == Val{'x'} ? hex[(x & 0x0f) + 1] : HEX[(x & 0x0f) + 1]) :
+        buf[pos + i - 1] = bs == 16 ?
+            (T != Val{'X'} ? hex[(x & 0x0f) + 1] : HEX[(x & 0x0f) + 1]) :
             (48 + (bs == 8 ? (x & 0x07) : rem(x, 10)))
         if bs == 8
             x >>= 3
@@ -396,14 +452,15 @@ _snprintf(ptr, siz, str, arg) =
 
 const __BIG_FLOAT_MAX__ = 8192
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+@inline function fmt(buf, pos, args, spec::Spec{T}) where {T <: Floats}
+    arg, width, prec, leftalign = argwidthprec(spec, args)
+    plus, space, zero, hash = spec.plus, spec.space, spec.zero, spec.hash
     x = tofloat(arg)
     if x isa BigFloat
         if isfinite(x)
             GC.@preserve buf begin
                 siz = length(buf) - pos + 1
+                spec = Spec{T}(leftalign, plus, space, zero, hash, width, prec, 0)
                 str = string(spec; modifier="R")
                 len = _snprintf(pointer(buf, pos), siz, str, x)
                 if len > siz
@@ -451,7 +508,7 @@ const __BIG_FLOAT_MAX__ = 8192
                 newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
             end
         end
-    elseif T == Val{'a'} || T == Val{'A'}
+    elseif T <: HexFloats
         x, neg = x < 0 || x === -Base.zero(x) ? (-x, true) : (x, false)
         newpos = pos
         if neg
@@ -556,7 +613,7 @@ const __BIG_FLOAT_MAX__ = 8192
             # right aligned
             n = width - (newpos - pos)
             if zero
-                ex = (arg < 0 || (plus | space)) + (T <: Union{Val{'a'}, Val{'A'}} ? 2 : 0)
+                ex = (arg < 0 || (plus | space)) + (T <: HexFloats ? 2 : 0)
                 so = pos + ex
                 len = (newpos - pos) - ex
                 copyto!(buf, so + n, buf, so, len)
@@ -576,11 +633,9 @@ const __BIG_FLOAT_MAX__ = 8192
     return newpos
 end
 
-# pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
-
 # position counters
-function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+function fmt(_, pos, args, spec::Spec{PositionCounter})
+    arg, _, _, _ = argwidthprec(spec, args)
     arg[] = pos - 1
     pos
 end
@@ -590,9 +645,9 @@ function fix_dec end
 function ini_dec end
 
 # generic fallback
-function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+function fmtfallback(buf, pos, args, spec::Spec{T}) where {T}
+    arg, width, prec, leftalign = argwidthprec(spec, args)
+    plus, space, zero, hash = spec.plus, spec.space, spec.zero, spec.hash
     buf2 = Base.StringVector(309 + 17 + 5)
     ise = T <: Union{Val{'e'}, Val{'E'}}
     isg = T <: Union{Val{'g'}, Val{'G'}}
@@ -731,7 +786,7 @@ const UNROLL_UPTO = 16
     N = length(f.formats)
     Base.@nexprs 16 i -> begin
         if N >= i
-            pos = fmt(buf, pos, args[i], f.formats[i])
+            pos = fmt(buf, pos, args, f.formats[i])
             for j in f.substringranges[i + 1]
                 b = f.str[j]
                 if !escapechar
@@ -746,7 +801,7 @@ const UNROLL_UPTO = 16
     end
     if N > 16
         for i = 17:length(f.formats)
-            pos = fmt(buf, pos, args[i], f.formats[i])
+            pos = fmt(buf, pos, args, f.formats[i])
             for j in f.substringranges[i + 1]
                 b = f.str[j]
                 if !escapechar
@@ -762,29 +817,36 @@ const UNROLL_UPTO = 16
     return pos
 end
 
-function plength(f::Spec{T}, x) where {T <: Chars}
+function plength(f::Spec{T}, args) where {T <: Chars}
+    x, width, _ = argwidthprec(f, args)
     c = Char(first(x))
     w = textwidth(c)
-    return max(f.width, w) + (ncodeunits(c) - w)
+    return max(width, w) + (ncodeunits(c) - w)
 end
-plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
-
-function plength(f::Spec{T}, x) where {T <: Strings}
+function plength(f::Spec{Pointer}, args)
+    x, width, _ = argwidthprec(f, args)
+    max(width, 2 * sizeof(x) + 2)
+end
+function plength(f::Spec{T}, args) where {T <: Strings}
+    x, width, prec = argwidthprec(f, args)
     str = string(x)
     sw = textwidth(str)
-    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - sw)
+    p = prec == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : min(prec, sw)
+    return max(width, p) + (sizeof(str) - sw)
 end
-
-function plength(f::Spec{T}, x) where {T <: Ints}
-    x2 = toint(x)
-    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+function plength(f::Spec{T}, args) where {T <: Ints}
+    x, width, prec = argwidthprec(f, args)
+    if x isa AbstractFloat
+        max(width, 0 + 309 + 17 + f.hash + 5)
+    else
+        x2 = toint(x)
+        max(width, prec + ndigits(x2, base=base(T), pad=1) + 5)
+    end
 end
-
-plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, 0 + 309 + 17 + f.hash + 5)
-plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.precision + 309 + 17 + f.hash + 5)
+function plength(f::Spec{T}, args) where {T <: Floats}
+    _, width, prec = argwidthprec(f, args)
+    max(width, prec + 309 + 17 + f.hash + 5)
+end
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
@@ -793,12 +855,12 @@ plength(::Spec{PositionCounter}, x) = 0
     # unroll up to 16 formats
     Base.@nexprs 16 i -> begin
         if N >= i
-            len += plength(formats[i], args[i])
+            len += plength(formats[i], args)
         end
     end
     if N > 16
         for i = 17:length(formats)
-            len += plength(formats[i], args[i])
+            len += plength(formats[i], args)
         end
     end
     return len
@@ -818,7 +880,7 @@ for more details on C `printf` support.
 function format end
 
 function format(io::IO, f::Format, args...) # => Nothing
-    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    numargs(f) == length(args) || argmismatch(length(f.formats), length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     write(io, resize!(buf, pos - 1))
@@ -826,11 +888,21 @@ function format(io::IO, f::Format, args...) # => Nothing
 end
 
 function format(f::Format, args...) # => String
-    length(f.formats) == length(args) || argmismatch(length(f.formats), length(args))
+    numargs(f) == length(args) || argmismatch(numargs(f), length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
     return String(resize!(buf, pos - 1))
 end
+
+function numargs(f::Format)
+    n = length(f.formats)
+    for fi in f.formats
+        n += fi.width < -1
+        n += fi.precision < -1
+    end
+    n
+end
+
 
 """
     @printf([io::IO], "%Fmt", args...)

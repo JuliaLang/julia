@@ -12,11 +12,13 @@ using Test, Printf
         @test (Printf.@sprintf "%-20p" 0) == "0x0000000000000000  "
         @test (Printf.@sprintf "%20p" C_NULL) == "  0x0000000000000000"
         @test (@sprintf "%-20p" C_NULL) == "0x0000000000000000  "
+        @test (@sprintf "%020p" C_NULL) == "0x000000000000000000"
     elseif Sys.WORD_SIZE == 32
         @test (Printf.@sprintf "%20p" 0) == "          0x00000000"
         @test (Printf.@sprintf "%-20p" 0) == "0x00000000          "
         @test (@sprintf "%20p" C_NULL) == "          0x00000000"
         @test (@sprintf "%-20p" C_NULL) == "0x00000000          "
+        @test (@sprintf "%020p" C_NULL) == "0x000000000000000000"
     end
 
     #40318
@@ -76,11 +78,18 @@ end
         @test Printf.format(Printf.Format(fmt), num) == val
     end
     @test( Printf.@sprintf( "%10.5g", -123.4 ) == "    -123.4")
+    @test( Printf.@sprintf( "%-10.5g", -123.4 ) == "-123.4    ")
+    @test( Printf.@sprintf( "%*.5g", -10, -123.4 ) == "-123.4    ")
+    @test( Printf.@sprintf( "%-*.*g", 10, 5, -123.4 ) == "-123.4    ")
+    @test( Printf.@sprintf( "%-10.*g", 5, -123.4 ) == "-123.4    ")
     @test( Printf.@sprintf( "%010.5g", -123.4 ) == "-0000123.4")
     @test( Printf.@sprintf( "%.6g", 12340000.0 ) == "1.234e+07")
     @test( Printf.@sprintf( "%#.6g", 12340000.0 ) == "1.23400e+07")
     @test( Printf.@sprintf( "%10.5g", big"-123.4" ) == "    -123.4")
     @test( Printf.@sprintf( "%010.5g", big"-123.4" ) == "-0000123.4")
+    @test( Printf.@sprintf( "%0*.5g", 10, big"-123.4" ) == "-0000123.4")
+    @test( Printf.@sprintf( "%010.*g", 5, big"-123.4" ) == "-0000123.4")
+    @test( Printf.@sprintf( "%0*.*g", 10, 5, big"-123.4" ) == "-0000123.4")
     @test( Printf.@sprintf( "%.6g", big"12340000.0" ) == "1.234e+07")
     @test( Printf.@sprintf( "%#.6g", big"12340000.0") == "1.23400e+07")
 
@@ -374,6 +383,7 @@ end
         num in (1.2345, big"1.2345")
         @test Printf.format(Printf.Format(fmt), num) == val
     end
+
 
     for (fmt, val) in (("%i", "42"),
                    ("%u", "42"),
@@ -780,6 +790,28 @@ end
     @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
     @test (Printf.@sprintf("%s%n", "😉", x); x[] == 4)
     @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
+end
+
+@testset "%*.*sfdxp" begin
+    @test @sprintf("%*.*s", 5, 2, "abc") ==   "   ab"
+    @test @sprintf("%*.*s", -5, 2, "abc") ==  "ab   "
+    @test @sprintf("%*.*s", 5, -2, "abc") ==  "  abc"
+    @test @sprintf("%*.*s", -5, -2, "abc") == "abc  "
+    @test @sprintf("%*.*f", 10, 4, 1.23456789) ==   "    1.2346"
+    @test @sprintf("%*.*f", -10, 4, 1.23456789) ==  "1.2346    "
+    @test @sprintf("%*.*f", 10, -4, 1.23456789) ==  "  1.234568"
+    @test @sprintf("%*.*f", -10, -4, 1.23456789) == "1.234568  "
+    @test @sprintf("%*.*d", 8, 6, 123) ==  "  000123"
+    @test @sprintf("%0*.*d", 8, 6, 123) == "  000123"
+    @test @sprintf("%*.*d", 8, -6, 123) == "     123"
+    @test @sprintf("%#0*x", 20, UInt(0x123)) ==   "0x000000000000000123"
+    @test @sprintf("%#*x", 20, UInt(0x123)) ==    "               0x123"
+    @test @sprintf("%#0*.6x", 20, UInt(0x123)) == "            0x000123"
+    ptr_str = Sys.WORD_SIZE == 64 ? "  0x0000000000000123" : "          0x00000123"
+    @test @sprintf("%*p", 20, Ptr{Nothing}(UInt(0x123))) == ptr_str
+    @test @sprintf("%0*p", 20, Ptr{Nothing}(UInt(0x123))) == "0x000000000000000123"
+    io = IOBuffer()
+    @test (@printf(io, "%*d", 5, 42); String(take!(io)) == "   42")
 end
 
 end # @testset "Printf"
