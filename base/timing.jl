@@ -40,7 +40,7 @@ function GC_Diff(new::GC_Num, old::GC_Num)
     # logic from `src/gc.c:jl_gc_total_bytes`
     old_allocd = gc_total_bytes(old)
     new_allocd = gc_total_bytes(new)
-    return GC_Diff(new_allocd - old_allocd,
+    return GC_Diff(new_allocd       - old_allocd,
                    new.malloc       - old.malloc,
                    new.realloc      - old.realloc,
                    new.poolalloc    - old.poolalloc,
@@ -98,13 +98,12 @@ function prettyprint_getunits(value, numunits, factor)
     return number, unit
 end
 
-function padded_nonzero_print(value, str)
-    if value != 0
-        blanks = "                "[1:(18 - length(str))]
+function padded_nonzero_print(value, str, always_print = true)
+    if always_print || value != 0
+        blanks = "                "[1:(19 - length(str))]
         println(str, ":", blanks, value)
     end
 end
-
 
 function format_bytes(bytes) # also used by InteractiveUtils
     bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
@@ -152,15 +151,17 @@ end
 function timev_print(elapsedtime, diff::GC_Diff, compile_time, _lpad)
     allocs = gc_alloc_count(diff)
     time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true, _lpad)
-    print("elapsed time (ns): $elapsedtime\n")
+    padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
     padded_nonzero_print(diff.poolalloc,    "pool allocs")
     padded_nonzero_print(diff.bigalloc,     "non-pool GC allocs")
-    padded_nonzero_print(diff.malloc,       "malloc() calls")
-    padded_nonzero_print(diff.realloc,      "realloc() calls")
-    padded_nonzero_print(diff.freecall,     "free() calls")
-    padded_nonzero_print(diff.pause,        "GC pauses")
+    padded_nonzero_print(diff.malloc,       "malloc() calls", false)
+    padded_nonzero_print(diff.realloc,      "realloc() calls", false)
+    # always print number of frees if there are mallocs
+    padded_nonzero_print(diff.freecall,     "free() calls", diff.malloc > 0)
+    minor_collects = diff.pause - diff.full_sweep
+    padded_nonzero_print(minor_collects,    "minor collections")
     padded_nonzero_print(diff.full_sweep,   "full collections")
 end
 

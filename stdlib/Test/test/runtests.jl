@@ -5,7 +5,7 @@ using Test: guardseed
 using Serialization
 using Distributed: RemoteException
 
-import Logging: Debug, Info, Warn
+import Logging: Debug, Info, Warn, with_logger
 
 @testset "@test" begin
     atol = 1
@@ -869,6 +869,14 @@ erronce() = @error "an error" maxlog=1
 
     # Respect `maxlog` (#41625). We check we only find one logging message.
     @test_logs (:error, "an error") (erronce(); erronce())
+
+    # Test `respect_maxlog=false`:
+    test_logger = Test.TestLogger(; respect_maxlog=false)
+    with_logger(test_logger) do
+        erronce()
+        erronce()
+    end
+    @test length(test_logger.logs) == 2
 
     # Test failures
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin

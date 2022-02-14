@@ -213,7 +213,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
+elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -2586,6 +2586,7 @@ end
 
 """
     keepat!(a::Vector, inds)
+    keepat!(a::BitVector, inds)
 
 Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
@@ -2610,6 +2611,7 @@ keepat!(a::Vector, inds) = _keepat!(a, inds)
 
 """
     keepat!(a::Vector, m::AbstractVector{Bool})
+    keepat!(a::BitVector, m::AbstractVector{Bool})
 
 The in-place version of logical indexing `a = a[m]`. That is, `keepat!(a, m)` on
 vectors of equal length `a` and `m` will remove all elements from `a` for which

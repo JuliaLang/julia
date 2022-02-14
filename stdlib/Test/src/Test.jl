@@ -22,6 +22,7 @@ export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
+export TestLogger, LogRecord
 
 using Random
 using Random: AbstractRNG, default_rng

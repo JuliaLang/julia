@@ -12,6 +12,7 @@ New language features
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
+* New function `allequal(itr)` for testing if all elements in an iterator are equal. ([#43354])
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
@@ -57,6 +58,7 @@ Compiler/Runtime improvements
 * Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
   matching method ([#43113]).
 * Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
+* Inference now tracks various effects such as sideeffectful-ness and nothrow-ness on a per-specialization basis. Code heavily dependent on constant propagation should see significant compile-time performance improvements and certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro. (#43852).
 
 Command-line option changes
 ---------------------------
@@ -71,6 +73,9 @@ Command-line option changes
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now defaults to a new `:dynamic` schedule option which is similar to the previous behavior except
+  that iterations will be scheduled dynamically to available worker threads rather than pinned to each thread. This
+  behavior is more composable with (possibly nested) `@spawn` and `@threads` loops ([#43919], [#44136])
 
 Build system changes
 --------------------
@@ -204,6 +209,9 @@ Standard library changes
   be used to supply custom character mappings, and a `Unicode.julia_chartransform`
   function is provided to reproduce the mapping used in identifier normalization
   by the Julia parser ([#42561]).
+
+#### Test
+* `TestLogger` and `LogRecord` are now exported from the Test stdlib.  ([#44080])
 
 
 Deprecated or removed

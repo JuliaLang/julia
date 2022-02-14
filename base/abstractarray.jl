@@ -1238,10 +1238,16 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
+struct CanonicalIndexError
+    func::String
+    type::Any
+    CanonicalIndexError(func::String, @nospecialize(type)) = new(func, type)
+end
+
 error_if_canonical_getindex(::IndexLinear, A::AbstractArray, ::Int) =
-    error("getindex not defined for ", typeof(A))
+    throw(CanonicalIndexError("getindex", typeof(A)))
 error_if_canonical_getindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
-    error("getindex not defined for ", typeof(A))
+    throw(CanonicalIndexError("getindex", typeof(A)))
 error_if_canonical_getindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
@@ -1333,9 +1339,9 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
 end
 
 error_if_canonical_setindex(::IndexLinear, A::AbstractArray, ::Int) =
-    error("setindex! not defined for ", typeof(A))
+    throw(CanonicalIndexError("setindex!", typeof(A)))
 error_if_canonical_setindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
-    error("setindex! not defined for ", typeof(A))
+    throw(CanonicalIndexError("setindex!", typeof(A)))
 error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
@@ -1753,7 +1759,8 @@ end
 """
     vcat(A...)
 
-Concatenate along dimension 1.
+Concatenate along dimension 1. To efficiently concatenate a large vector of arrays,
+use `reduce(vcat, x)`.
 
 # Examples
 ```jldoctest
@@ -1779,13 +1786,29 @@ julia> vcat(c...)
 2×3 Matrix{Int64}:
  1  2  3
  4  5  6
+
+julia> vs = [[1, 2], [3, 4], [5, 6]]
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [3, 4]
+ [5, 6]
+
+julia> reduce(vcat, vs)
+6-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
 ```
 """
 vcat(X...) = cat(X...; dims=Val(1))
 """
     hcat(A...)
 
-Concatenate along dimension 2.
+Concatenate along dimension 2. To efficiently concatenate a large vector of arrays,
+use `reduce(hcat, x)`.
 
 # Examples
 ```jldoctest
@@ -1830,6 +1853,17 @@ julia> hcat(x, [1; 2; 3])
  1
  2
  3
+
+julia> vs = [[1, 2], [3, 4], [5, 6]]
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [3, 4]
+ [5, 6]
+
+julia> reduce(hcat, vs)
+2×3 Matrix{Int64}:
+ 1  3  5
+ 2  4  6
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -2120,7 +2154,9 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 
+
 # Examples for construction of the arguments:
+```julia
 [a b c ; d e f ;;;
  g h i ; j k l ;;;
  m n o ; p q r ;;;
@@ -2137,6 +2173,7 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  _____________
  4             = elements in each 4d slice (4,)
  => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
+```
 """
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)

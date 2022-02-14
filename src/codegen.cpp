@@ -476,9 +476,9 @@ static AttributeList get_func_attrs(LLVMContext &C)
 static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
 {
     AttributeSet FnAttrs = AttributeSet::get(C, makeArrayRef({Attribute::get(C, "thunk")}));
-    FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
-    FnAttrs.addAttribute(C, Attribute::WillReturn);
-    FnAttrs.addAttribute(C, Attribute::NoUnwind);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::InaccessibleMemOnly);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::WillReturn);
+    FnAttrs = FnAttrs.addAttribute(C, Attribute::NoUnwind);
     return AttributeList::get(C,
             FnAttrs,
             Attributes(C, {Attribute::NonNull}),
@@ -3480,7 +3480,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         // For now we emit this as a vararg call to the builtin
         // (which doesn't look at the arguments). In the future,
         // this should be an LLVM builtin.
-        auto it = builtin_func_map.find(jl_f_donotdelete);
+        auto it = builtin_func_map.find(jl_f_donotdelete_addr);
         if (it == builtin_func_map.end()) {
             return false;
         }
@@ -8155,6 +8155,7 @@ extern "C" void jl_init_llvm(void)
           { jl_f__apply_pure_addr,        new JuliaFunction{XSTR(jl_f__apply_pure), get_func_sig, get_func_attrs} },
           { jl_f__call_latest_addr,       new JuliaFunction{XSTR(jl_f__call_latest), get_func_sig, get_func_attrs} },
           { jl_f__call_in_world_addr,     new JuliaFunction{XSTR(jl_f__call_in_world), get_func_sig, get_func_attrs} },
+          { jl_f__call_in_world_total_addr, new JuliaFunction{XSTR(jl_f__call_in_world_total), get_func_sig, get_func_attrs} },
           { jl_f_throw_addr,              new JuliaFunction{XSTR(jl_f_throw), get_func_sig, get_func_attrs} },
           { jl_f_tuple_addr,              jltuple_func },
           { jl_f_svec_addr,               new JuliaFunction{XSTR(jl_f_svec), get_func_sig, get_func_attrs} },
