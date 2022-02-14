@@ -87,6 +87,7 @@ New library functions
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
 * `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
+* `Iterators.unfold(f, init)` can be used to quickly write iterators or as a kind of lazy `while` loop ([#43203])
 
 New library features
 --------------------
