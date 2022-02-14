@@ -1878,7 +1878,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 effects.consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-                effects.terminates ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+                effects.terminates_globally ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
             ))
         else
             tristate_merge!(sv, Effects())
@@ -2052,8 +2052,11 @@ end
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
         def = frame.linfo.def
-        if isa(def, Method) && decode_effects_override(def.purity).terminates_locally
-            return nothing
+        if isa(def, Method)
+            effects = decode_effects_override(def.purity)
+            if effects.terminates_globally || effects.terminates_locally
+                return nothing
+            end
         end
         tristate_merge!(frame, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     end

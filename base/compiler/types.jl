@@ -89,7 +89,7 @@ struct EffectsOverride
     consistent::Bool
     effect_free::Bool
     nothrow::Bool
-    terminates::Bool
+    terminates_globally::Bool
     terminates_locally::Bool
 end
 
@@ -98,7 +98,7 @@ function encode_effects_override(eo::EffectsOverride)
     eo.consistent && (e |= 0x01)
     eo.effect_free && (e |= 0x02)
     eo.nothrow && (e |= 0x04)
-    eo.terminates && (e |= 0x08)
+    eo.terminates_globally && (e |= 0x08)
     eo.terminates_locally && (e |= 0x10)
     e
 end
