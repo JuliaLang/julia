@@ -6,6 +6,7 @@
 #ifdef _OS_WINDOWS_
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEPSTRING ";"
+#define JL_PATH_MAX PATH_MAX
 #if defined(_COMPILER_CLANG_)
 #define JL_PATH_MAX MAX_PATH
 #endif
