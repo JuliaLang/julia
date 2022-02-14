@@ -58,6 +58,7 @@ replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatom
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
 convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)

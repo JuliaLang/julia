@@ -29,6 +29,6 @@ let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
     global wait_readnb(::CoreIO, nb::Int) = nothing
 end
 
-stdin = devnull
-stdout = Core.stdout
-stderr = Core.stderr
+stdin::IO = devnull
+stdout::IO = Core.stdout
+stderr::IO = Core.stderr
