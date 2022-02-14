@@ -28,6 +28,9 @@ include(mod, x) = Core.include(mod, x)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -66,6 +69,8 @@ sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
 add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
+
+include("strings/lazy.jl")
 
 # core array operations
 include("indices.jl")

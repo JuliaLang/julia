@@ -524,6 +524,10 @@ end
 module M1 var"#foo#"() = 2 end
 @test occursin("M1.var\"#foo#\"", sprint(show, M1.var"#foo#", context = :module=>@__MODULE__))
 
+# PR #43932
+module var"#43932#" end
+@test endswith(sprint(show, var"#43932#"), ".var\"#43932#\"")
+
 # issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
@@ -1875,30 +1879,33 @@ end
     @test read(td.io, String) == "1"
 end
 
-function _methodsstr(f)
+function _methodsstr(@nospecialize f)
     buf = IOBuffer()
     show(buf, methods(f))
-    String(take!(buf))
+    return String(take!(buf))
 end
 
 @testset "show function methods" begin
-    @test occursin("methods for generic function \"sin\":", _methodsstr(sin))
+    @test occursin("methods for generic function \"sin\":\n", _methodsstr(sin))
 end
 @testset "show macro methods" begin
-    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":")
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":\n")
 end
 @testset "show constructor methods" begin
-    @test occursin("methods for type constructor:\n", _methodsstr(Vector))
+    @test occursin(" methods for type constructor:\n", _methodsstr(Vector))
 end
 @testset "show builtin methods" begin
-    @test startswith(_methodsstr(typeof), "# built-in function; no methods")
+    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\":\n")
 end
 @testset "show callable object methods" begin
-    @test occursin("methods:", _methodsstr(:))
+    @test occursin("methods for callable object:\n", _methodsstr(:))
 end
 @testset "#20111 show for function" begin
     K20111(x) = y -> x
     @test startswith(_methodsstr(K20111(1)), "# 1 method for anonymous function")
+end
+@testset "show non-callable object" begin
+    @test "# 0 methods for callable object" == _methodsstr(1.0f0)
 end
 
 @generated f22798(x::Integer, y) = :x
@@ -1999,7 +2006,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, :statement)[1]) # use parse to control the line numbers
+end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     ir = Core.Compiler.inflate_ir(src)
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info

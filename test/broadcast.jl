@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, Tuple{typeof(aa),}) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -695,12 +695,12 @@ end
     A = [[1,2,3],4:5,6]
     A[1] .= 0
     @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
     A = [[1,2,3],4:5]
     A[1] .= 0
     @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test_throws Base.CanonicalIndexError A[2] .= 0
 end
 
 # Issue #22180

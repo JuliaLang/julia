@@ -500,15 +500,17 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
         int pool_id = jl_gc_szclass_align8(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        s = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+        // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
+        // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+        s = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
-        s = jl_gc_big_alloc(ptls, allocsz);
+        s = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
     jl_set_typeof(s, jl_string_type);
-    maybe_record_alloc_to_profile(s, len);
+    maybe_record_alloc_to_profile(s, len, jl_string_type);
     *(size_t*)s = len;
     jl_string_data(s)[len] = 0;
     return s;

@@ -8,11 +8,11 @@ namespace JL_I {
 
 using namespace JL_I;
 
-FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue}, false); }
-FunctionType *get_intr_args2(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue}, false); }
-FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
-FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
-FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(T_prjlvalue, {T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue, T_prjlvalue}, false); }
+FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C)}, false); }
+FunctionType *get_intr_args2(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
+FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
+FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
+FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
 
 static JuliaFunction *runtime_func[num_intrinsics] = {
 #define ADD_I(name, nargs) new JuliaFunction{XSTR(jl_##name), get_intr_args##nargs, nullptr},
@@ -596,8 +596,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
 
     if (ety == (jl_value_t*)jl_any_type) {
-        Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
-        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, ctx.builder.CreateInBoundsGEP(T_prjlvalue, thePtr, im1), Align(align_nb));
+        Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
+        LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, thePtr, im1), Align(align_nb));
         tbaa_decorate(ctx.tbaa().tbaa_data, load);
         return mark_julia_type(ctx, load, true, ety);
     }
@@ -727,8 +727,8 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     AtomicOrdering llvm_order = get_llvm_atomic_order(order);
 
     if (ety == (jl_value_t*)jl_any_type) {
-        Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
-        LoadInst *load = ctx.builder.CreateAlignedLoad(T_prjlvalue, thePtr, Align(sizeof(jl_value_t*)));
+        Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
+        LoadInst *load = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, thePtr, Align(sizeof(jl_value_t*)));
         tbaa_decorate(ctx.tbaa().tbaa_data, load);
         load->setOrdering(llvm_order);
         return mark_julia_type(ctx, load, true, ety);
@@ -817,7 +817,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
         // n.b.: the expected value (y) must be rooted, but not the others
-        Value *thePtr = emit_unbox(ctx, T_pprjlvalue, e, e.typ);
+        Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
         bool isboxed = true;
         jl_cgval_t ret = typed_store(ctx, thePtr, nullptr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                     llvm_order, llvm_failorder, sizeof(jl_value_t*), false, issetfield, isreplacefield, isswapfield, ismodifyfield, false, modifyop, "atomic_pointermodify");
@@ -946,7 +946,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
 
     Value *ifelse_result;
     bool isboxed = t1 != t2 || !deserves_stack(t1);
-    Type *llt1 = isboxed ? T_prjlvalue : julia_type_to_llvm(ctx, t1);
+    Type *llt1 = isboxed ? ctx.types().T_prjlvalue : julia_type_to_llvm(ctx, t1);
     if (!isboxed) {
         if (type_is_ghost(llt1))
             return x;
@@ -1041,7 +1041,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 if (!y_vboxed)
                     y_vboxed = ConstantPointerNull::get(cast<PointerType>(x_vboxed->getType()));
                 ret.Vboxed = ctx.builder.CreateSelect(isfalse, y_vboxed, x_vboxed);
-                assert(ret.Vboxed->getType() == T_prjlvalue);
+                assert(ret.Vboxed->getType() == ctx.types().T_prjlvalue);
             }
             return ret;
         }

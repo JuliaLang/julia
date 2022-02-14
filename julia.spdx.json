@@ -116,7 +116,7 @@
         {
             "name": "SuiteSparse.jl",
             "SPDXID": "SPDXRef-JuliaSuiteSparse",
-            "downloadLocation": "git+https://github.com/JuliaLang/SuiteSparse.jl.git",
+            "downloadLocation": "git+https://github.com/JuliaSparse/SuiteSparse.jl.git",
             "filesAnalyzed": false,
             "homepage": "https://julialang.org",
             "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SuiteSparse.version",
@@ -128,7 +128,7 @@
         {
             "name": "SparseArrays.jl",
             "SPDXID": "SPDXRef-JuliaSparseArrays",
-            "downloadLocation": "git+https://github.com/JuliaLang/SparseArrays.jl.git",
+            "downloadLocation": "git+https://github.com/JuliaSparse/SparseArrays.jl.git",
             "filesAnalyzed": false,
             "homepage": "https://julialang.org",
             "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SparseArrays.version",
@@ -272,7 +272,7 @@
         {
             "name": "PCRE",
             "SPDXID": "SPDXRef-PCRE",
-            "downloadLocation": "https://ftp.pcre.org/pub/pcre/",
+            "downloadLocation": "git+https://github.com/PhilipHazel/pcre2.git",
             "filesAnalyzed": false,
             "homepage": "https://www.pcre.org",
             "sourceInfo": "The version in use can be found in the file deps/Versions.make",

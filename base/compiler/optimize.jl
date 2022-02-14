@@ -149,16 +149,6 @@ const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE = 0x01 << 4
 
-# known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
-
-# known to be effect-free if the are nothrow
-const _PURE_OR_ERROR_BUILTINS = [
-    fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, arraysize, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
-]
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #########
@@ -219,7 +209,13 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                         Any[argextype(args[i], src) for i = 2:length(args)])
             end
             contains_is(_PURE_BUILTINS, f) && return true
-            contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
+            # `get_binding_type` sets the type to Any if the binding doesn't exist yet
+            if f === Core.get_binding_type
+                length(args) == 3 || return false
+                M, s = argextype(args[2], src), argextype(args[3], src)
+                return get_binding_type_effect_free(M, s)
+            end
+            contains_is(_EFFECT_FREE_BUILTINS, f) || return false
             rt === Bottom && return false
             return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
         elseif head === :new
@@ -291,12 +287,14 @@ function alloc_array_ndims(name::Symbol)
     return nothing
 end
 
+const FOREIGNCALL_ARG_START = 6
+
 function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+6 || return false
-    atype = instanceof_tfunc(argextype(args[6], src))[1]
+    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
+    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
     dims = Csize_t[]
     for i in 1:ndims
-        dim = argextype(args[i+6], src)
+        dim = argextype(args[i+FOREIGNCALL_ARG_START], src)
         isa(dim, Const) || return false
         dimval = dim.val
         isa(dimval, Int) || return false
@@ -306,9 +304,9 @@ function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,I
 end
 
 function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ 7 || return false
-    atype = instanceof_tfunc(argextype(args[6], src))[1]
-    dims = argextype(args[7], src)
+    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
+    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
+    dims = argextype(args[FOREIGNCALL_ARG_START+1], src)
     isa(dims, Const) || return dims === Tuple{}
     dimsval = dims.val
     isa(dimsval, Tuple{Vararg{Int}}) || return false
@@ -384,7 +382,7 @@ end
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,
-           params::OptimizationParams, ir::IRCode, result) -> analyzed::Union{Nothing,ConstAPI}
+           params::OptimizationParams, ir::IRCode, caller::InferenceResult) -> analyzed::Union{Nothing,ConstAPI}
 
 Post process information derived by Julia-level optimizations for later uses:
 - computes "purity", i.e. side-effect-freeness
@@ -394,7 +392,7 @@ In a case when the purity is proven, `finish` can return `ConstAPI` object wrapp
 value so that the runtime system will use the constant calling convention for the method calls.
 """
 function finish(interp::AbstractInterpreter, opt::OptimizationState,
-                params::OptimizationParams, ir::IRCode, @nospecialize(result))
+                params::OptimizationParams, ir::IRCode, caller::InferenceResult)
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
@@ -402,8 +400,10 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
-    wresult = isa(result, InterConditional) ? widenconditional(result) : result
-    if (isa(wresult, Const) || isconstType(wresult))
+    result = caller.result
+    @assert !(result isa LimitedAccuracy)
+    result = isa(result, InterConditional) ? widenconditional(result) : result
+    if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
@@ -437,14 +437,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(wresult, Const)
-                val = wresult.val
+            if isa(result, Const)
+                val = result.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
                 end
             else
-                @assert isconstType(wresult)
-                analyzed = ConstAPI(wresult.parameters[1])
+                @assert isconstType(result)
+                analyzed = ConstAPI(result.parameters[1])
             end
             force_noinline || (src.inlineable = true)
         end
@@ -501,9 +501,10 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
+function optimize(interp::AbstractInterpreter, opt::OptimizationState,
+                  params::OptimizationParams, caller::InferenceResult)
     @timeit "optimizer" ir = run_passes(opt.src, opt)
-    return finish(interp, opt, params, ir, result)
+    return finish(interp, opt, params, ir, caller)
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState)
@@ -611,22 +612,6 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes) # consumes `ir`
     return ir
 end
-
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
-end
-
-# whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref ||
-    f === Intrinsics.have_fma || is_pure_intrinsic_infer(f)
 
 ## Computing the cost of a function body
 

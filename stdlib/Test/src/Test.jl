@@ -22,6 +22,7 @@ export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
+export TestLogger, LogRecord
 
 using Random
 using Random: AbstractRNG, default_rng
@@ -87,7 +88,7 @@ struct Pass <: Result
     value
     source::Union{Nothing,LineNumberNode}
     message_only::Bool
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing, message_only=false)
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false)
         return new(test_type, orig_expr, data, thrown, source, message_only)
     end
 end
@@ -168,7 +169,7 @@ struct Error <: Result
     backtrace::String
     source::LineNumberNode
 
-    function Error(test_type, orig_expr, value, bt, source)
+    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
             bt = scrub_exc_stack(bt)
         end
@@ -1684,12 +1685,12 @@ function detect_ambiguities(mods::Module...;
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
+            m.sig == Tuple && continue # ignore Builtins
             is_in_mods(m.module, recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
-            ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)
+            ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
             ambig[] == 0 && continue
-            isa(ms, Bool) && continue
             for match2 in ms
                 match2 = match2::Core.MethodMatch
                 m2 = match2.method

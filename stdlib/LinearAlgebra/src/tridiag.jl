@@ -736,6 +736,7 @@ end
 
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du-B.du)
+-(A::Tridiagonal) = Tridiagonal(-A.dl, -A.d, -A.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
@@ -852,4 +853,13 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     end
     r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     return r
+end
+
+function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
+    if !ishermitian(S)
+        check && checkpositivedefinite(-1)
+        return Cholesky(S, 'U', convert(BlasInt, -1))
+    end
+    T = choltype(eltype(S))
+    cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
 end

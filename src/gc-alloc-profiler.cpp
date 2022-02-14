@@ -20,6 +20,8 @@ struct jl_raw_alloc_t {
     jl_datatype_t *type_address;
     jl_raw_backtrace_t backtrace;
     size_t size;
+    jl_task_t *task;
+    uint64_t timestamp;
 };
 
 // == These structs define the global singleton profile buffer that will be used by
@@ -46,7 +48,7 @@ jl_combined_results g_combined_results; // Will live forever.
 
 // === stack stuff ===
 
-jl_raw_backtrace_t get_raw_backtrace() {
+jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
     // A single large buffer to record backtraces onto
     static jl_bt_element_t static_bt_data[JL_MAX_BT_SIZE];
 
@@ -118,9 +120,10 @@ JL_DLLEXPORT void jl_free_alloc_profile() {
 
 // == callback called into by the outside ==
 
-void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOINT {
+void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t *type) JL_NOTSAFEPOINT {
     auto& global_profile = g_alloc_profile;
-    auto& profile = global_profile.per_thread_profiles[jl_threadid()];
+    auto thread_id = jl_atomic_load_relaxed(&jl_current_task->tid);
+    auto& profile = global_profile.per_thread_profiles[thread_id];
 
     auto sample_val = double(rand()) / double(RAND_MAX);
     auto should_record = sample_val <= global_profile.sample_rate;
@@ -128,11 +131,12 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size) JL_NOTSAFEPOIN
         return;
     }
 
-    auto type = (jl_datatype_t*)jl_typeof(val);
     profile.allocs.emplace_back(jl_raw_alloc_t{
         type,
         get_raw_backtrace(),
-        size
+        size,
+        jl_current_task,
+        cycleclock()
     });
 }
 

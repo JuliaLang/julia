@@ -10,6 +10,8 @@ Create a async condition that wakes up tasks waiting for it
 when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active.
+
+This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
 mutable struct AsyncCondition
     handle::Ptr{Cvoid}
@@ -65,8 +67,14 @@ at least `interval` seconds again elapse. If `interval` is equal to `0`, the tim
 once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
 [`isopen`](@ref) to check whether a timer is still active.
 
-Note: `interval` is subject to accumulating time skew. If you need precise events at a particular
-absolute time, create a new timer at each expiration with the difference to the next time computed.
+!!! note
+    `interval` is subject to accumulating time skew. If you need precise events at a particular
+    absolute time, create a new timer at each expiration with the difference to the next time computed.
+
+!!! note
+    A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
+    used to timeout a non-yielding while loop.
+
 """
 mutable struct Timer
     handle::Ptr{Cvoid}
@@ -103,7 +111,10 @@ unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
-    if !set
+    if set
+        # full barrier now for AsyncCondition
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+    else
         t.handle == C_NULL && return false
         iolock_begin()
         set = t.set
@@ -184,9 +195,9 @@ end
 
 function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
-    lock(async.cond)
+    lock(async.cond) # acquire barrier
     try
-        @atomic :monotonic async.set = true
+        @atomic :release async.set = true
         notify(async.cond, true)
     finally
         unlock(async.cond)

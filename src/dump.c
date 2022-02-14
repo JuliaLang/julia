@@ -387,6 +387,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
                 jl_serialize_value(s, e);
             jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->ty));
             write_int8(s->s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
         }
     }
@@ -516,6 +517,8 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
 
     write_uint8(s->s, TAG_CODE_INSTANCE);
     write_uint8(s->s, flags);
+    write_uint8(s->s, codeinst->ipo_purity_bits);
+    write_uint8(s->s, codeinst->purity_bits);
     jl_serialize_value(s, (jl_value_t*)codeinst->def);
     if (write_ret_type) {
         jl_serialize_value(s, codeinst->inferred);
@@ -528,6 +531,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
         jl_serialize_value(s, NULL);
         jl_serialize_value(s, jl_any_type);
     }
+    write_uint8(s->s, codeinst->relocatability);
     jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
 }
 
@@ -702,8 +706,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int8(s->s, m->pure);
         write_int8(s->s, m->is_for_opaque_closure);
         write_int8(s->s, m->constprop);
+        write_uint8(s->s, m->purity.bits);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
+        jl_serialize_value(s, (jl_value_t*)m->root_blocks);
+        write_int32(s->s, m->nroots_sysimg);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
         jl_serialize_value(s, (jl_value_t*)m->source);
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
@@ -1568,11 +1575,16 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->pure = read_int8(s->s);
     m->is_for_opaque_closure = read_int8(s->s);
     m->constprop = read_int8(s->s);
+    m->purity.bits = read_uint8(s->s);
     m->slot_syms = jl_deserialize_value(s, (jl_value_t**)&m->slot_syms);
     jl_gc_wb(m, m->slot_syms);
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
     if (m->roots)
         jl_gc_wb(m, m->roots);
+    m->root_blocks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->root_blocks);
+    if (m->root_blocks)
+        jl_gc_wb(m, m->root_blocks);
+    m->nroots_sysimg = read_int32(s->s);
     m->ccallable = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->ccallable);
     if (m->ccallable) {
         jl_gc_wb(m, m->ccallable);
@@ -1644,6 +1656,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     int flags = read_uint8(s->s);
     int validate = (flags >> 0) & 3;
     int constret = (flags >> 2) & 1;
+    codeinst->ipo_purity_bits = read_uint8(s->s);
+    codeinst->purity_bits = read_uint8(s->s);
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
     codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
@@ -1657,6 +1671,7 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         codeinst->invoke = jl_fptr_const_return;
     if ((flags >> 3) & 1)
         codeinst->precompile = 1;
+    codeinst->relocatability = read_uint8(s->s);
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
     if (validate) {
@@ -1700,6 +1715,8 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
         if (bglobalref != NULL) jl_gc_wb(m, bglobalref);
         b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);
         if (b->owner != NULL) jl_gc_wb(m, b->owner);
+        jl_value_t *bty = jl_deserialize_value(s, (jl_value_t**)&b->ty);
+        *(jl_value_t**)&b->ty = bty;
         int8_t flags = read_int8(s->s);
         b->deprecated = (flags>>3) & 1;
         b->constp = (flags>>2) & 1;
@@ -2312,6 +2329,8 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
     JL_GC_PUSH2(&mod_array, &udeps);
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    assert(jl_precompile_toplevel_module == NULL);
+    jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
     serializer_worklist = worklist;
     write_header(&f);
@@ -2426,6 +2445,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     write_int32(&f, 0); // mark the end of the source text
     ios_close(&f);
     JL_GC_POP();
+    jl_precompile_toplevel_module = NULL;
 
     return 0;
 }
