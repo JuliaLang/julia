@@ -28,6 +28,13 @@ the keyboard shortcut `^D`.
 exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
 exit() = exit(0)
 
+function Base.show(io::IO, m::MIME"text/plain", fn::F) where F <: typeof(exit)
+    invoke(show, Tuple{IO, MIME"text/plain", F}, io, m, fn)
+    println(io)
+    print(io, "Hint: To exit Julia, use Ctrl-D or type exit() and press enter.")
+    return nothing
+end
+
 const roottask = current_task()
 
 is_interactive = false
