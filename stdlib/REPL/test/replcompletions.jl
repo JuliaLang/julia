@@ -1030,12 +1030,12 @@ let current_dir, forbidden
      # Issue #19310
     if Sys.iswindows()
         current_dir = pwd()
-        cd("C:")
+        cd("C:\\")
         test_complete("C"); @test true
         test_complete("C:"); @test true
         test_complete("C:\\"); @test true
-        if isdir("D:")
-            cd("D:")
+        if isdir("D:\\")
+            cd("D:\\")
             test_complete("C"); @test true
             test_complete("C:"); @test true
             test_complete("C:\\"); @test true
