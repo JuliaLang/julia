@@ -659,44 +659,23 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 # BlasFloat routines #
 ######################
 
-lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
-
-@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal, alpha::Number, beta::Number) =
-    mul!(C, copyto!(similar(parent(A)), A), B, alpha, beta)
-@inline mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular, alpha::Number, beta::Number) =
-    mul!(C, A, copyto!(similar(parent(B)), B), alpha, beta)
-mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; lmul!(A, transpose!(C, B)))
-mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
-    (B = transB.parent; lmul!(A, transpose!(C, B)))
-mul!(C::AbstractMatrix, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; lmul!(A, adjoint!(C, B)))
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, adjB::Adjoint{<:Any,<:AbstractVecOrMat}) =
-    (B = adjB.parent; lmul!(A, adjoint!(C, B)))
-
-# The three methods are neceesary to avoid ambiguities with definitions in matmul.jl
+lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # this should really be deprecated
 mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = _multrimat!(C, A, B)
 mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
 mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
-mul!(C::AbstractMatrix  , A::AbstractMatrix, B::AbstractTriangular)   = _mulmattri!(C, A, B)
-
-# generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
-_multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
-_mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = rmul!(copyto!(C, A), B)
-
-for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval _multrimat!(C::AbstractVecOrMat{T}, A::$tri{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        lmul!(A, copyto!(C, B))
-    @eval _mulmattri!(C::AbstractMatrix{T}, A::AbstractMatrix{T}, B::$tri{T}) where {T<:BlasFloat} =
-        rmul!(copyto!(C, A), B)
-end
-
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
     mul!(C, A, copy(B), alpha, beta)
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
     mul!(C, A, copy(B), alpha, beta)
-mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Adjoint}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Transpose}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
+# mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Adjoint}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
+# mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Transpose}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
+mul!(C::AbstractMatrix  , A::AbstractMatrix, B::AbstractTriangular)   = _mulmattri!(C, A, B)
+mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractTriangular) =
+    Base.@invoke _multrimat!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix)
+
+# generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
+_multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
+_mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = rmul!(copyto!(C, A), B)
 
 # preserve triangular structure in in-place multiplication
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
@@ -708,6 +687,10 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                         (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
                         (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
     @eval function mul!(C::$cty, A::$aty, B::$bty)
+        _multrimat!(parent(C), A, B)
+        return C
+    end
+    @eval function mul!(C::$cty{T}, A::$aty{T}, B::$bty{T}) where {T<:BlasFloat}
         lmul!(A, copyto!(parent(C), B))
         return C
     end
@@ -814,6 +797,22 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'U', 'N'),
     end
 end
 
+# give BLAS a chance
+for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$tri{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+        lmul!(A, copyto!(C, B))
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$tri{T,<:Adjoint}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+        lmul!(A, copyto!(C, B))
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$tri{T,<:Transpose}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+        lmul!(A, copyto!(C, B))
+    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$tri{T}) where {T<:BlasFloat} =
+        rmul!(copyto!(C, A), B)
+    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$tri{T,<:Adjoint}) where {T<:BlasFloat} =
+        rmul!(copyto!(C, A), B)
+    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$tri{T,<:Transpose}) where {T<:BlasFloat} =
+        rmul!(copyto!(C, A), B)
+end
+
 function inv(A::LowerTriangular{T}) where T
     S = typeof((zero(T)*one(T) + zero(T))/one(T))
     LowerTriangular(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
@@ -906,8 +905,10 @@ end
 
 ## Generic triangular multiplication
 for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval lmul!(A::$tri, B::StridedVecOrMat) = @inline _multrimat!(B, A, B)
-    @eval mul!(C::StridedVecOrMat, A::$tri, B::StridedVecOrMat) = _multrimat!(C, A, B)
+    @eval lmul!(A::$tri, B::StridedVecOrMat) =
+        Base.@invoke _multrimat!(B::AbstractVecOrMat, A::$tri, B::AbstractVecOrMat)
+    @eval mul!(C::StridedVecOrMat, A::$tri, B::StridedVecOrMat) =
+        Base.@invoke _multrimat!(C::AbstractVecOrMat, A::$tri, B::AbstractVecOrMat)
 end
 function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
@@ -1104,8 +1105,10 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
 end
 
 for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval rmul!(A::StridedMatrix, B::$tri) = @inline _mulmattri!(A, A, B)
-    @eval mul!(C::StridedVecOrMat, A::StridedMatrix, B::$tri) = _mulmattri!(C, A, B)
+    @eval rmul!(A::StridedMatrix, B::$tri) =
+        Base.@invoke _mulmattri!(A::AbstractMatrix, A::AbstractMatrix, B::$tri)
+    @eval mul!(C::StridedMatrix, A::StridedMatrix, B::$tri) =
+        Base.@invoke _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::$tri)
 end
 
 function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
