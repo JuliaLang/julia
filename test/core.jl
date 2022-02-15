@@ -7703,18 +7703,17 @@ end
     m = Module()
     @eval m global x::Int
 
-    setfield!(m, :x, 1)
-    @test m.x === 1
-    setfield!(m, :x, 2, :not_atomic)
+    @test_throws ConcurrencyViolationError setfield!(m, :x, 1)
+    setfield!(m, :x, 2, :release)
     @test m.x === 2
-    @test_throws ConcurrencyViolationError setfield!(m, :x, 3, :release)
-    @test_throws ErrorException setfield!(m, :x, 4.)
+    @test_throws ConcurrencyViolationError setfield!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setfield!(m, :x, 4., :release)
 
     m.x = 1
     @test m.x === 1
-    setproperty!(m, :x, 2, :not_atomic)
+    setproperty!(m, :x, 2, :release)
     @test m.x === 2
-    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :release)
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
     m.x = 4.
     @test m.x === 4
 end

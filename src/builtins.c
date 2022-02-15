@@ -947,9 +947,11 @@ JL_CALLABLE(jl_f_setfield)
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (st == jl_module_type) {
         JL_TYPECHK(setfield!, symbol, args[1]);
-        if (order != jl_memory_order_notatomic)
-            jl_atomic_error("setfield!: module binding cannot be written atomically");
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("setfield!: module binding cannot be written non-atomically");
         jl_binding_t *b = jl_get_binding_wr((jl_module_t*)v, (jl_sym_t*)args[1], 1);
+        if (order >= jl_memory_order_acq_rel || order == jl_memory_order_release)
+            jl_fence();
         jl_checked_assignment(b, args[2]);
     }
     else {
