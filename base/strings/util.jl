@@ -479,8 +479,8 @@ function rpad(
 end
 
 """
-    eachsplit(str::AbstractString, dlm; limit::Integer=0)
-    eachsplit(str::AbstractString; limit::Integer=0)
+    eachsplit(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    eachsplit(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
 
 Split `str` on occurrences of the delimiter(s) `dlm` and return an iterator over the
 substrings.  `dlm` can be any of the formats allowed by [`findnext`](@ref)'s first argument
@@ -489,8 +489,10 @@ of characters.
 
 If `dlm` is omitted, it defaults to [`isspace`](@ref).
 
-The iterator will return a maximum of `limit` results if the keyword argument is supplied.
-The default of `limit=0` implies no maximum.
+The optional keyword arguments are:
+ - `limit`: the maximum size of the result. `limit=0` implies no maximum (default)
+ - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
+   a `dlm` argument, `true` with a `dlm` argument.
 
 See also [`split`](@ref).
 
@@ -574,7 +576,7 @@ The optional keyword arguments are:
  - `keepempty`: whether empty fields should be kept in the result. Default is `false` without
    a `dlm` argument, `true` with a `dlm` argument.
 
-See also [`rsplit`](@ref).
+See also [`rsplit`](@ref), [`eachsplit`](@ref).
 
 # Examples
 ```jldoctest

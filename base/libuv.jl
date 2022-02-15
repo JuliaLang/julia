@@ -130,21 +130,21 @@ function reinit_stdio()
 end
 
 """
-    stdin
+    stdin::IO
 
 Global variable referring to the standard input stream.
 """
 :stdin
 
 """
-    stdout
+    stdout::IO
 
 Global variable referring to the standard out stream.
 """
 :stdout
 
 """
-    stderr
+    stderr::IO
 
 Global variable referring to the standard error stream.
 """

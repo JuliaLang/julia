@@ -629,7 +629,7 @@ let testb() = b"0123"
     b = testb()
     @test eltype(b) === UInt8
     @test b isa AbstractVector
-    @test_throws ErrorException b[4] = '4'
+    @test_throws Base.CanonicalIndexError b[4] = '4'
     @test testb() == UInt8['0','1','2','3']
 end
 

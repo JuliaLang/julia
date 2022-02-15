@@ -131,9 +131,13 @@ const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB::String
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB::String))
+    if isdefined(@__MODULE__, :Sys)
+        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
+        STDLIB = Sys.STDLIB::String
+        if BUILD_STDLIB_PATH != STDLIB
+            # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+            path = replace(path, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+        end
     end
     return path
 end

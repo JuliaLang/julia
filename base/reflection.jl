@@ -1230,7 +1230,7 @@ end
 Similar to [`code_typed`](@ref), except the argument is a tuple type describing
 a full signature to query.
 """
-function code_typed_by_type(@nospecialize(tt#=::Type=#);
+function code_typed_by_type(@nospecialize(tt::Type);
                             optimize=true,
                             debuginfo::Symbol=:default,
                             world = get_world_counter(),
@@ -1301,7 +1301,7 @@ function print_statement_costs(io::IO, @nospecialize(f), @nospecialize(t); kwarg
     print_statement_costs(io, tt; kwargs...)
 end
 
-function print_statement_costs(io::IO, @nospecialize(tt#=::Type=#);
+function print_statement_costs(io::IO, @nospecialize(tt::Type);
                                world = get_world_counter(),
                                interp = Core.Compiler.NativeInterpreter(world))
     matches = _methods_by_ftype(tt, -1, world)::Vector
@@ -1331,7 +1331,7 @@ end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
-function _which(@nospecialize(tt#=::Type=#), world=get_world_counter())
+function _which(@nospecialize(tt::Type), world=get_world_counter())
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     match = ccall(:jl_gf_invoke_lookup_worlds, Any,

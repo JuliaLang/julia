@@ -517,7 +517,7 @@ function get_type(T, found::Bool, default_any::Bool)
 end
 
 # Method completion on function call expression that look like :(max(1))
-MAX_METHOD_COMPLETIONS = 40
+MAX_METHOD_COMPLETIONS::Int = 40
 function complete_methods(ex_org::Expr, context_module::Module=Main)
     out = Completion[]
     funct, found = get_type(ex_org.args[1], context_module)::Tuple{Any,Bool}
@@ -525,12 +525,12 @@ function complete_methods(ex_org::Expr, context_module::Module=Main)
 
     args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
     push!(args_ex, Vararg{Any})
-    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_METHOD_COMPLETIONS::Int)
+    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_METHOD_COMPLETIONS)
 
     return out
 end
 
-MAX_ANY_METHOD_COMPLETIONS = 10
+MAX_ANY_METHOD_COMPLETIONS::Int = 10
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
     out = Completion[]
     args_ex, kwargs_ex = try
@@ -550,7 +550,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
                 funct = Core.Typeof(func)
                 if !in(funct, seen)
                     push!(seen, funct)
-                    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS::Int)
+                    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS)
                 end
             elseif callee_module === Main && isa(func, Module)
                 callee_module2 = func
@@ -561,7 +561,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
                             funct = Core.Typeof(func)
                             if !in(funct, seen)
                                 push!(seen, funct)
-                                complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS::Int)
+                                complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS)
                             end
                         end
                     end
