@@ -81,3 +81,8 @@ end
     # non-Functions
     @test retry(Float64)(1) === 1.0
 end
+
+@testset "SystemError initialization" begin
+    e = SystemError("fail")
+    @test e.extrainfo === nothing
+end
