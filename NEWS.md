@@ -22,6 +22,7 @@ New language features
   ability of these objects ([#43305]).
 * Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
 * Type annotations can now be added to global variables to make accessing the variable type stable. ([#43671])
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
 
 Language changes
 ----------------
