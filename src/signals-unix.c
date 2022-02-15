@@ -61,6 +61,7 @@ bt_context_t *jl_to_bt_context(void *sigctx)
 #endif
 }
 
+
 static int thread0_exit_count = 0;
 static void jl_exit_thread0(int exitstate, jl_bt_element_t *bt_data, size_t bt_size);
 
@@ -518,22 +519,17 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     sigprof.sigev_notify = SIGEV_SIGNAL;
     sigprof.sigev_signo = SIGUSR1;
     sigprof.sigev_value.sival_ptr = &timerprof;
-    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
-    running = 1;
-    if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1) {
-        running = 0;
+    if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1)
         return -2;
-    }
 
     // Start the timer
     itsprof.it_interval.tv_sec = 0;
     itsprof.it_interval.tv_nsec = 0;
     itsprof.it_value.tv_sec = nsecprof / GIGA;
     itsprof.it_value.tv_nsec = nsecprof % GIGA;
-    if (timer_settime(timerprof, 0, &itsprof, NULL) == -1) {
-        running = 0;
+    if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
-    }
+    running = 1;
     return 0;
 }
 
@@ -652,18 +648,6 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
 }
 #endif
 
-void trigger_profile_peek(void)
-{
-    jl_safe_printf("\n======================================================================================\n");
-    jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
-    jl_safe_printf("======================================================================================\n");
-    bt_size_cur = 0; // clear profile buffer
-    if (jl_profile_start_timer() < 0)
-        jl_safe_printf("ERROR: Could not start profile timer\n");
-    else
-        profile_autostop_time = jl_hrtime() + (profile_peek_duration * 1e9);
-}
-
 static void *signal_listener(void *arg)
 {
     static jl_bt_element_t bt_data[JL_MAX_BT_SIZE + 1];
@@ -769,17 +753,11 @@ static void *signal_listener(void *arg)
 
         int doexit = critical;
 #ifdef SIGINFO
-        if (sig == SIGINFO) {
-            if (running != 1)
-                trigger_profile_peek();
+        if (sig == SIGINFO)
             doexit = 0;
-        }
 #else
-        if (sig == SIGUSR1) {
-            if (running != 1)
-                trigger_profile_peek();
+        if (sig == SIGUSR1)
             doexit = 0;
-        }
 #endif
 
         bt_size = 0;
@@ -857,7 +835,6 @@ static void *signal_listener(void *arg)
         }
 #ifndef HAVE_MACH
         if (profile && running) {
-            jl_check_profile_autostop();
 #if defined(HAVE_TIMER)
             timer_settime(timerprof, 0, &itsprof, NULL);
 #elif defined(HAVE_ITIMER)
