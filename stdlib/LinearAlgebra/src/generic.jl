@@ -449,45 +449,11 @@ diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to cons
 # Dot products and norms
 
 # special cases of norm; note that they don't need to handle isempty(x)
-function generic_normMinusInf(x)
-    (v, s) = iterate(x)::Tuple
-    minabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        minabs = ifelse(isnan(minabs) | (minabs < vnorm), minabs, vnorm)
-    end
-    return float(minabs)
-end
+generic_normMinusInf(x) = float(mapreduce(norm, min, x))
 
-function generic_normInf(x)
-    (v, s) = iterate(x)::Tuple
-    maxabs = norm(v)
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        vnorm = norm(v)
-        maxabs = ifelse(isnan(maxabs) | (maxabs > vnorm), maxabs, vnorm)
-    end
-    return float(maxabs)
-end
+generic_normInf(x) = float(mapreduce(norm, max, x))
 
-function generic_norm1(x)
-    (v, s) = iterate(x)::Tuple
-    av = float(norm(v))
-    T = typeof(av)
-    sum::promote_type(Float64, T) = av
-    while true
-        y = iterate(x, s)
-        y === nothing && break
-        (v, s) = y
-        sum += norm(v)
-    end
-    return convert(T, sum)
-end
+generic_norm1(x) = mapreduce(float ∘ norm, +, x)
 
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
@@ -496,10 +462,10 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (maxabs == 0 || isinf(maxabs)) && return maxabs
+    (iszero(maxabs) || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
-    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    if isfinite(length(x)*maxabs*maxabs) && !iszero(maxabs*maxabs) # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
         while true
             y = iterate(x, s)
@@ -526,13 +492,13 @@ function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (maxabs == 0 || isinf(maxabs)) && return maxabs
+        (iszero(maxabs) || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && !iszero(maxabs^spp)) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while true
             y = iterate(x, s)
@@ -668,7 +634,7 @@ julia> norm(-2, Inf)
 @inline function norm(x::Number, p::Real=2)
     afx = abs(float(x))
     if p == 0
-        if x == 0
+        if iszero(x)
             return zero(afx)
         elseif !isnan(x)
             return oneunit(afx)
@@ -1011,7 +977,7 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
 end
-rank(x::Number) = x == 0 ? 0 : 1
+rank(x::Number) = iszero(x) ? 0 : 1
 
 """
     tr(M)
@@ -1146,6 +1112,30 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
+"""
+    A / B
+
+Matrix right-division: `A / B` is equivalent to `(B' \\ A')'` where [`\\`](@ref) is the left-division operator.
+For square matrices, the result `X` is such that `A == X*B`.
+
+See also: [`rdiv!`](@ref).
+
+# Examples
+```jldoctest
+julia> A = Float64[1 4 5; 3 9 2]; B = Float64[1 4 2; 3 4 2; 8 7 1];
+
+julia> X = A / B
+2×3 Matrix{Float64}:
+ -0.65   3.75  -1.2
+  3.25  -2.75   1.0
+
+julia> isapprox(A, X*B)
+true
+
+julia> isapprox(X, A*pinv(B))
+true
+```
+"""
 function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
@@ -1154,7 +1144,7 @@ end
 # /(x::Number,A::StridedMatrix) = x*inv(A)
 /(x::Number, v::AbstractVector) = x*pinv(v)
 
-cond(x::Number) = x == 0 ? Inf : 1.0
+cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 #Skeel condition numbers
@@ -1594,6 +1584,8 @@ julia> logabsdet(B)
 ```
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lu(A, check=false))
+
+logabsdet(a::Number) = log(abs(a)), sign(a)
 
 """
     logdet(M)

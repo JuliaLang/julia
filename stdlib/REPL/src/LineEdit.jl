@@ -326,7 +326,7 @@ function show_completions(s::PromptState, completions::Vector{String})
         for col = 0:num_cols
             idx = row + col*entries_per_col
             if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col)
+                cmove_col(terminal(s), (colmax+2)*col+1)
                 print(terminal(s), completions[idx])
             end
         end
@@ -1971,7 +1971,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     parent = mode(s)
 
     transition(s, p) do
-        pss = state(s, p)
+        local pss = state(s, p)
         pss.parent = parent
         pss.histprompt.parent_prompt = parent
         pss.prefix = String(buf.data[1:position(buf)])

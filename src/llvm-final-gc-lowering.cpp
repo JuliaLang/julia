@@ -64,7 +64,7 @@ private:
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 1);
+    assert(target->arg_size() == 1);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
     // Create the GC frame.
@@ -96,7 +96,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(1))->getLimitedValue(INT_MAX);
 
@@ -110,7 +110,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
-            builder.CreateAlignedLoad(pgcstack, Align(sizeof(void*))),
+            builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(
                     builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1),
                     PointerType::get(T_ppjlvalue, 0)),
@@ -124,14 +124,14 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 1);
+    assert(target->arg_size() == 1);
     auto gcframe = target->getArgOperand(0);
 
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(target);
     Instruction *gcpop =
         cast<Instruction>(builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 1));
-    Instruction *inst = builder.CreateAlignedLoad(gcpop, Align(sizeof(void*)));
+    Instruction *inst = builder.CreateAlignedLoad(T_prjlvalue, gcpop, Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
         inst,
@@ -143,7 +143,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
     auto index = target->getArgOperand(1);
 
@@ -162,14 +162,14 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 1);
+    assert(target->arg_size() == 1);
     target->setCalledFunction(queueRootFunc);
     return target;
 }
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->arg_size() == 2);
     auto sz = (size_t)cast<ConstantInt>(target->getArgOperand(1))->getZExtValue();
     // This is strongly architecture and OS dependent
     int osize;

@@ -319,6 +319,9 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -328,7 +331,11 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 # be computed in a type-stable way even for e.g. integers.
 @inline function literal_pow(f::typeof(^), x, ::Val{p}) where {p}
     if p < 0
-        literal_pow(^, inv(x), Val(-p))
+        if x isa BitInteger64
+            f(Float64(x), p) # inv would cause rounding, while Float64^Integer is able to compensate the inverse
+        else
+            f(inv(x), -p)
+        end
     else
         f(x, p)
     end
@@ -483,14 +490,19 @@ julia> prevpow(4, 16)
 16
 ```
 """
-function prevpow(a::Real, x::Real)
+function prevpow(a::T, x::Real) where T <: Real
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
     # See comment in nextpos() for a == special case.
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
-    p = a^(n+1)
-    p <= x ? p : a^n
+    p = a^n
+    if a isa Integer
+        wp, overflow = mul_with_overflow(a, p)
+        return (wp <= x && !overflow) ? wp : p
+    end
+    wp = p*a
+    return wp <= x ? wp : p
 end
 
 ## ndigits (number of digits) in base 10 ##
@@ -1040,7 +1052,7 @@ function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
-        n = -n + k -1
+        n = -n + k - one(T)
         if isodd(k)
             sgn = -sgn
         end
@@ -1051,15 +1063,15 @@ function binomial(n::T, k::T) where T<:Integer
     if k > (n>>1)
         k = (n - k)
     end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
+    x = nn = n - k + one(T)
+    nn += one(T)
+    rr = T(2)
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
-        rr += 1
-        nn += 1
+        rr += one(T)
+        nn += one(T)
     end
-    convert(T, copysign(x, sgn))
+    copysign(x, sgn)
 end

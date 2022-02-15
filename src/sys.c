@@ -530,9 +530,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             a = jl_take_buffer(&dest);
         }
         else {
-#ifdef STORE_ARRAY_LEN
             a->length = n;
-#endif
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
         }
@@ -620,14 +618,23 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
     }
 
 #if defined(__APPLE__) && defined(_CPU_AARCH64_)
-    // Manually subtract efficiency cores for Apple's big.LITTLE cores
-    int32_t family = 0;
-    len = 4;
-    sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
-    if (family >= 1 && count > 1) {
-        if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
-            // We know the Apple M1 has 4 efficiency cores, so subtract them out.
-            count -= 4;
+//MacOS 12 added a way to query performance cores
+    char buf[7];
+    len = 7;
+    sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
+    if (buf[0] > 1 && buf[1] > 0){
+        len = 4;
+        sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
+    }
+    else {
+        int32_t family = 0;
+        len = 4;
+        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+        if (family >= 1 && count > 1) {
+            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+                count -= 4;
+            }
         }
     }
 #endif
@@ -914,11 +921,6 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #else
     return (size_t)0;
 #endif
-}
-
-JL_DLLEXPORT int jl_threading_enabled(void)
-{
-    return 1;
 }
 
 #ifdef __cplusplus

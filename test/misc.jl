@@ -158,6 +158,47 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test try unlock(l) finally end === nothing
 end
 
+@testset "Semaphore" begin
+    sem_size = 2
+    n = 100
+    s = Base.Semaphore(sem_size)
+
+    # explicit acquire-release form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            Base.acquire(s)
+            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+            sleep(rand(0:0.01:0.1))
+            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+            Base.release(s)
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
+
+    # do-block syntax
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            @test Base.acquire(s) do
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                return :resultvalue
+            end == :resultvalue
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
+end
+
 # task switching
 
 @noinline function f6597(c)
@@ -1023,6 +1064,10 @@ end
     GC.gc(true); GC.gc(false)
 
     GC.safepoint()
+
+    GC.enable_logging(true)
+    GC.gc()
+    GC.enable_logging(false)
 end
 
 @testset "fieldtypes Module" begin
@@ -1037,13 +1082,30 @@ end
 # Test that read fault on a prot-none region does not incorrectly give
 # ReadOnlyMemoryEror, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
-let script = :(let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
-    (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
-    C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0)); try
-    unsafe_load(ptr)
-    catch e; println(e) end; end)
-    @test !success(`$(Base.julia_cmd()) -e $script`)
+let script = :(
+        let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
+                                  (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
+                                  C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0))
+            try
+                unsafe_load(ptr)
+            catch e
+                println(e)
+            end
+        end
+    )
+    cmd = if Sys.isunix()
+        # Set the maximum core dump size to 0 to keep this expected crash from
+        # producing a (and potentially overwriting an existing) core dump file
+        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e '$script'"`
+    else
+        `$(Base.julia_cmd()) -e '$script'`
+    end
+    @test !success(cmd)
 end
 
 # issue #41656
 @test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+
+@testset "Base/timing.jl" begin
+    @test Base.jit_total_bytes() >= 0
+end

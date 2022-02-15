@@ -32,9 +32,6 @@ using namespace llvm;
 
 typedef Instruction TerminatorInst;
 
-std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
-                                           bool isConstant=false);
-
 namespace {
 
 struct LowerPTLS: public ModulePass {
@@ -70,8 +67,8 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
-    pgcstack->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
-    pgcstack->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
+    addFnAttr(pgcstack, Attribute::ReadNone);
+    addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
 Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const
@@ -264,7 +261,7 @@ bool LowerPTLS::runOnModule(Module &_M)
         return false;
 
     ctx = &M->getContext();
-    tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
+    tbaa_const = tbaa_make_child_with_context(*ctx, "jtbaa_const", nullptr, true).first;
 
     T_int8 = Type::getInt8Ty(*ctx);
     T_size = sizeof(size_t) == 8 ? Type::getInt64Ty(*ctx) : Type::getInt32Ty(*ctx);
@@ -276,7 +273,7 @@ bool LowerPTLS::runOnModule(Module &_M)
 #endif
     T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
     T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
-    T_ppjlvalue = cast<PointerType>(T_pppjlvalue->getElementType());
+    T_ppjlvalue = JuliaType::get_ppjlvalue_ty(*ctx);
     if (imaging_mode) {
         pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
         pgcstack_key_slot = create_aliased_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)

@@ -14,6 +14,11 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+# Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
+# of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
+# which will enable assertions in LLVM.
+# An "assert build" of Julia is a build that has both FORCE_ASSERTIONS=1
+# and LLVM_ASSERTIONS=1.
 FORCE_ASSERTIONS ?= 0
 
 # OPENBLAS build options
@@ -41,6 +46,7 @@ USE_SYSTEM_LIBM:=0
 USE_SYSTEM_OPENLIBM:=0
 UNTRUSTED_SYSTEM_LIBM:=0
 USE_SYSTEM_DSFMT:=0
+USE_SYSTEM_LIBBLASTRAMPOLINE:=0
 USE_SYSTEM_BLAS:=0
 USE_SYSTEM_LAPACK:=0
 USE_SYSTEM_GMP:=0
@@ -54,6 +60,7 @@ USE_SYSTEM_NGHTTP2:=0
 USE_SYSTEM_CURL:=0
 USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
+USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_P7ZIP:=0
 
@@ -328,6 +335,7 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
 # LLVM Options
 LLVMROOT := $(build_prefix)
+# Set LLVM_ASSERTIONS to 1 to enable assertions in LLVM.
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
 # set to 1 to get clang and compiler-rt
@@ -866,6 +874,10 @@ ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 DIST_ARCH:=ppc64le
 endif
 ifeq (1,$(ISX86))
+# on x86 make sure not to use 80 bit math when we want 64 bit math.
+ifeq (32,$(BINARY))
+JCFLAGS += -mfpmath=sse
+endif
 DIST_ARCH:=$(BINARY)
 endif
 ifneq (,$(findstring arm,$(ARCH)))
@@ -889,7 +901,6 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
 BINARY:=64
-HAVE_SSP:=1
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
 MCPU:=apple-a12
@@ -1027,6 +1038,12 @@ else
 PATCHELF := $(build_depsbindir)/patchelf
 endif
 
+ifeq ($(USE_SYSTEM_LIBWHICH), 1)
+LIBWHICH := libwhich
+else
+LIBWHICH := $(build_depsbindir)/libwhich
+endif
+
 # On aarch64 and powerpc64le, we assume the page size is 64K.  Our binutils linkers
 # and such already assume this, but `patchelf` seems to be behind the times.  We
 # explicitly tell it to use this large page size so that when we rewrite rpaths and
@@ -1127,7 +1144,7 @@ endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
 FC_VERSION := $(shell $(FC) --version 2>/dev/null | head -1)
-FC_OR_CC_VERISON := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
+FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
 BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
@@ -1196,12 +1213,12 @@ else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/julia/' -Wl,-rpath,'@loader_path/'
+  RPATH_LIB := -Wl,-rpath,'@loader_path/'
 else
   RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
   RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/julia' -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
+  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/' -Wl,-z,origin
 endif
 
 # --whole-archive
@@ -1399,6 +1416,9 @@ else
 endif
 endef
 
+# Overridable in Make.user
+WINE ?= wine
+
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
@@ -1408,8 +1428,8 @@ spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
 else
 ifeq ($(OS), WINNT) # unix-to-Windows cross-compile
-spawn = wine $(1)
-cygpath_w = `winepath -w $(1)`
+spawn = $(WINE) $(1)
+cygpath_w = `$(WINE) winepath.exe -w $(1)`
 else # not Windows
 spawn = $(1)
 cygpath_w = $(1)

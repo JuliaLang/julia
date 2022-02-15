@@ -49,6 +49,7 @@ Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(s::AbstractString, ::Pair...)
+Base.eachsplit
 Base.split
 Base.rsplit
 Base.strip
@@ -66,6 +67,8 @@ Base.uppercasefirst
 Base.lowercasefirst
 Base.join
 Base.chop
+Base.chopprefix
+Base.chopsuffix
 Base.chomp
 Base.thisind
 Base.nextind

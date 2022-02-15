@@ -243,7 +243,6 @@ void jl_show_sigill(void *_ctx)
 // what to do on a critical error on a thread
 void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
 {
-
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
@@ -254,6 +253,10 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             ct->gcstack = NULL;
             ct->eh = NULL;
             ct->excstack = NULL;
+            ct->ptls->locks.len = 0;
+            ct->ptls->in_pure_callback = 0;
+            ct->ptls->in_finalizer = 1;
+            ct->world_age = 1;
         }
 #ifndef _OS_WINDOWS_
         sigset_t sset;

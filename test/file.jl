@@ -113,6 +113,16 @@ end
         @test dirname(t) == d
     end
     @test_throws ArgumentError tempname(randstring())
+
+    # 38873: check that `TMPDIR` being set does not
+    # override the parent argument to `tempname`.
+    mktempdir() do d
+        withenv("TMPDIR"=>tempdir()) do
+            t = tempname(d)
+            @test dirname(t) == d
+        end
+    end
+    @test_throws ArgumentError tempname(randstring())
 end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
@@ -1703,7 +1713,7 @@ end
     dstat = diskstat()
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
-    @test occursin(r"^DiskStat\(.*, available: \d+, total: \d+, used: \d+\)$", sprint(show, dstat))
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
     # Test diskstat(::AbstractString)
     dstat = diskstat(pwd())
     @test dstat.total < 32PB

@@ -242,6 +242,9 @@ end
         s = S([1,2]) ∩ S([3,4])
         @test s == S()
         s = intersect(S([5,6,7,8]), S([7,8,9]))
+        slong = S(collect(3:63))
+        # test #36339 length/order short-cut
+        @test intersect(S([5,6,7,8]), slong) == intersect(slong, S([5,6,7,8]))
         @test s == S([7,8])
         @test intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])) == S([2,3])
         let s1 = S([1,2,3])
@@ -508,6 +511,35 @@ end
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
 end
+
+@testset "allequal" begin
+    @test allequal(Set())
+    @test allequal(Set(1))
+    @test !allequal(Set([1, 2]))
+    @test allequal(Dict())
+    @test allequal(Dict(:a => 1))
+    @test !allequal(Dict(:a => 1, :b => 2))
+    @test allequal([])
+    @test allequal([1])
+    @test allequal([1, 1])
+    @test !allequal([1, 1, 2])
+    @test allequal([:a, :a])
+    @test !allequal([:a, :b])
+    @test !allequal(1:2)
+    @test allequal(1:1)
+    @test !allequal(4.0:0.3:7.0)
+    @test allequal(4:-1:5)       # empty range
+    @test !allequal(7:-1:1)       # negative step
+    @test !allequal(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
+    @test !allequal(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allequal(StepRangeLen(1.0, 0.0, 2))
+    @test !allequal(StepRangeLen(1.0, 1.0, 2))
+    @test allequal(LinRange(1, 1, 0))
+    @test allequal(LinRange(1, 1, 1))
+    @test allequal(LinRange(1, 1, 2))
+    @test !allequal(LinRange(1, 2, 2))
+end
+
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
     @test s !== filter( isodd, s) == S([1,3])
@@ -794,6 +826,7 @@ end
     b = [2]
     c = [3]
     d = [4]
+    e = [5]
     A = Base.IdSet{Vector{Int}}([a, b, c, d])
     @test !isempty(A)
     B = copy(A)
@@ -805,6 +838,9 @@ end
     @test !isempty(A)
     a_ = pop!(A, a)
     @test a_ === a
+    @test !isempty(A)
+    e_ = pop!(A, a, e)
+    @test e_ === e
     @test !isempty(A)
     A = empty!(A)
     @test isempty(A)

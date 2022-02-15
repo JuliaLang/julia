@@ -12,6 +12,9 @@ an integer according to the rounding mode `r`. In other words, the quantity
 
 without any intermediate rounding.
 
+!!! compat "Julia 1.4"
+    The three-argument method taking a `RoundingMode` requires Julia 1.4 or later.
+
 See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this function.
 
 # Examples:
@@ -156,6 +159,8 @@ julia> divrem(7,3)
 ```
 """
 divrem(x, y) = divrem(x, y, RoundToZero)
+
+
 function divrem(a, b, r::RoundingMode)
     if r === RoundToZero
         # For compat. Remove in 2.0.
@@ -165,6 +170,25 @@ function divrem(a, b, r::RoundingMode)
         (fld(a, b), mod(a, b))
     else
         (div(a, b, r), rem(a, b, r))
+    end
+end
+#avoids calling rem for Integers-Integers (all modes),
+#a-d*b not precise for Floats - AbstractFloat, AbstractIrrational. Rationals are still slower
+function divrem(a::Integer, b::Integer, r::Union{typeof(RoundUp),
+                                                typeof(RoundDown),
+                                                typeof(RoundToZero)})
+    if r === RoundToZero
+        # For compat. Remove in 2.0.
+        d = div(a, b)
+        (d, a - d*b)
+    elseif r === RoundDown
+        # For compat. Remove in 2.0.
+        d = fld(a, b)
+        (d, a - d*b)
+    elseif r === RoundUp
+        # For compat. Remove in 2.0.
+        d = div(a, b, r)
+        (d, a - d*b)
     end
 end
 function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearest))

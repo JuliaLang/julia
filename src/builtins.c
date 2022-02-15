@@ -78,20 +78,18 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    size_t f, nf = jl_datatype_nfields(dt);
-    for (f = 0; f < nf; f++) {
+    size_t nf = jl_datatype_nfields(dt);
+    // npointers is used at end, but fetched here for locality with nfields.
+    int npointers = ((jl_datatype_t*)dt)->layout->npointers;
+    for (size_t f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *ao = (char*)a + offs;
         char *bo = (char*)b + offs;
         if (jl_field_isptr(dt, f)) {
-            jl_value_t *af = *(jl_value_t**)ao;
-            jl_value_t *bf = *(jl_value_t**)bo;
-            if (af != bf) {
-                if (af == NULL || bf == NULL)
-                    return 0;
-                if (!jl_egal(af, bf))
-                    return 0;
-            }
+            // Save ptr recursion until the end -- only recurse if otherwise equal
+            // Note that we also skip comparing the pointers for null here, because
+            // null fields are rare so it can save CPU to delay this read too.
+            continue;
         }
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
@@ -121,6 +119,20 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
                     return 0;
             }
+        }
+    }
+    // If we've gotten here, the objects are bitwise equal, besides their pointer fields.
+    // Now, we will recurse into jl_egal for the pointed-to elements, which might be
+    // arbitrarily expensive.
+    for (size_t p = 0; p < npointers; p++) {
+        size_t offs = jl_ptr_offset(dt, p);
+        jl_value_t *af = ((jl_value_t**)a)[offs];
+        jl_value_t *bf = ((jl_value_t**)b)[offs];
+        if (af != bf) {
+            if (af == NULL || bf == NULL)
+                return 0;
+            if (!jl_egal(af, bf))
+                return 0;
         }
     }
     return 1;
@@ -778,6 +790,31 @@ JL_CALLABLE(jl_f__call_in_world)
     return ret;
 }
 
+JL_CALLABLE(jl_f__call_in_world_total)
+{
+    JL_NARGSV(_call_in_world_total, 2);
+    JL_TYPECHK(_apply_in_world, ulong, args[0]);
+    jl_task_t *ct = jl_current_task;
+    int last_in = ct->ptls->in_pure_callback;
+    jl_value_t *ret = NULL;
+    size_t last_age = ct->world_age;
+    JL_TRY {
+        ct->ptls->in_pure_callback = 1;
+        size_t world = jl_unbox_ulong(args[0]);
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (ct->world_age > world)
+            ct->world_age = world;
+        ret = jl_apply(&args[1], nargs - 1);
+        ct->world_age = last_age;
+        ct->ptls->in_pure_callback = last_in;
+    }
+    JL_CATCH {
+        ct->ptls->in_pure_callback = last_in;
+        jl_rethrow();
+    }
+    return ret;
+}
+
 // tuples ---------------------------------------------------------------------
 
 JL_CALLABLE(jl_f_tuple)
@@ -855,6 +892,10 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
         JL_TYPECHKS(name, symbol, arg);
         idx = jl_field_index(st, (jl_sym_t*)arg, 1);
     }
+    if (mutabl && jl_field_isconst(st, idx)) {
+        jl_errorf("%s: const field .%s of type %s cannot be changed", name,
+                jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+    }
     return idx;
 }
 
@@ -863,9 +904,9 @@ JL_CALLABLE(jl_f_getfield)
     enum jl_memory_order order = jl_memory_order_unspecified;
     JL_NARGS(getfield, 2, 4);
     if (nargs == 4) {
-        JL_TYPECHK(getfield, symbol, args[3]);
-        JL_TYPECHK(getfield, bool, args[4]);
-        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
+        JL_TYPECHK(getfield, symbol, args[2]);
+        JL_TYPECHK(getfield, bool, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
     }
     else if (nargs == 3) {
         if (!jl_is_bool(args[2])) {
@@ -1468,6 +1509,11 @@ JL_CALLABLE(jl_f__setsuper)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_donotdelete)
+{
+    return jl_nothing;
+}
+
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
     size_t nf = jl_svec_len(ft);
@@ -1604,6 +1650,10 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&
               memcmp(dta->name->atomicfields, dtb->name->atomicfields, (jl_svec_len(dta->name->names) + 31) / 32 * sizeof(uint32_t)) == 0)) &&
+          (dta->name->constfields == NULL
+           ? dtb->name->constfields == NULL
+           : (dtb->name->constfields != NULL &&
+              memcmp(dta->name->constfields, dtb->name->constfields, (jl_svec_len(dta->name->names) + 31) / 32 * sizeof(uint32_t)) == 0)) &&
           jl_egal((jl_value_t*)jl_field_names(dta), (jl_value_t*)jl_field_names(dtb)) &&
           jl_nparams(dta) == jl_nparams(dtb)))
         return 0;
@@ -1645,6 +1695,44 @@ JL_CALLABLE(jl_f__equiv_typedef)
 {
     JL_NARGS(_equiv_typedef, 2, 2);
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f_get_binding_type)
+{
+    JL_NARGS(get_binding_type, 2, 2);
+    JL_TYPECHK(get_binding_type, module, args[0]);
+    JL_TYPECHK(get_binding_type, symbol, args[1]);
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *sym = (jl_sym_t*)args[1];
+    jl_value_t *ty = jl_binding_type(mod, sym);
+    if (ty == (jl_value_t*)jl_nothing) {
+        jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
+        if (b) {
+            jl_value_t *old_ty = NULL;
+            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            return jl_atomic_load_relaxed(&b->ty);
+        }
+        return (jl_value_t*)jl_any_type;
+    }
+    return ty;
+}
+
+JL_CALLABLE(jl_f_set_binding_type)
+{
+    JL_NARGS(set_binding_type!, 2, 3);
+    JL_TYPECHK(set_binding_type!, module, args[0]);
+    JL_TYPECHK(set_binding_type!, symbol, args[1]);
+    jl_value_t *ty = nargs == 2 ? (jl_value_t*)jl_any_type : args[2];
+    JL_TYPECHK(set_binding_type!, type, ty);
+    jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
+    jl_value_t *old_ty = NULL;
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
+        if (nargs == 2)
+            return jl_nothing;
+        jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
+                  jl_symbol_name(b->name));
+    }
+    return jl_nothing;
 }
 
 // IntrinsicFunctions ---------------------------------------------------------
@@ -1763,8 +1851,9 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b)
 {
     assert(jl_isa(b, (jl_value_t*)jl_builtin_type));
-    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&jl_gf_mtable(b)->cache);
-    jl_code_instance_t *ci = jl_atomic_load_relaxed(&entry->func.linfo->cache);
+    jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&jl_gf_mtable(b)->defs);
+    jl_method_instance_t *mi = jl_atomic_load_relaxed(&entry->func.method->unspecialized);
+    jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
     return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 
@@ -1818,6 +1907,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_apply_pure", jl_f__apply_pure);
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);
+    add_builtin_func("_call_in_world_total", jl_f__call_in_world_total);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);
@@ -1825,6 +1915,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_setsuper!", jl_f__setsuper);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
+    add_builtin_func("get_binding_type", jl_f_get_binding_type);
+    add_builtin_func("set_binding_type!", jl_f_set_binding_type);
+    jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

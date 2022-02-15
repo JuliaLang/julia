@@ -89,9 +89,9 @@ const DEPOT_PATH = String[]
 function append_default_depot_path!(DEPOT_PATH)
     path = joinpath(homedir(), ".julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR::String, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR::String, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -169,7 +169,11 @@ See also
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 # HOME_PROJECT is no longer used, here just to avoid breaking things
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
-const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing)
+const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing) # Modify this only via `Base.set_active_project(proj)`
+## Watchers for when the active project changes (e.g., Revise)
+# Each should be a thunk, i.e., `f()`. To determine the current active project,
+# the thunk can query `Base.active_project()`.
+const active_project_callbacks = []
 
 function current_project(dir::AbstractString)
     # look for project file in current dir and parents
@@ -231,10 +235,11 @@ function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
-    ACTIVE_PROJECT[] =
+    set_active_project(
         project === nothing ? nothing :
         project == "" ? nothing :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
+    )
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -246,7 +251,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB::String
+        env == "@stdlib" && return Sys.STDLIB
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
@@ -280,7 +285,7 @@ load_path_expand(::Nothing) = nothing
 """
     active_project()
 
-Return the path of the active `Project.toml` file.
+Return the path of the active `Project.toml` file. See also [`Base.set_active_project`](@ref).
 """
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
@@ -305,6 +310,23 @@ function active_project(search_load_path::Bool=true)
         basename(project) in project_names && return project
     end
 end
+
+"""
+    set_active_project(projfile::Union{AbstractString,Nothing})
+
+Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+"""
+function set_active_project(projfile::Union{AbstractString,Nothing})
+    ACTIVE_PROJECT[] = projfile
+    for f in active_project_callbacks
+        try
+            Base.invokelatest(f)
+        catch
+            @error "active project callback $f failed" maxlog=1
+        end
+    end
+end
+
 
 """
     load_path()

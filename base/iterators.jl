@@ -103,10 +103,18 @@ size(r::Reverse) = size(r.itr)
 IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
 IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
 last(r::Reverse) = first(r.itr) # the first shall be last
-first(r::Reverse) = last(r.itr) # and the last shall be first
 
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
 @propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
+    y = iterate(state...)
+    y === nothing && return y
+    idx, itrs = y
+    (A.itr[idx], (state[1], itrs))
+end
+
+# Fallback method of `iterate(::Reverse{T})` which assumes the collection has `getindex(::T) and `reverse(eachindex(::T))`
+# don't propagate inbounds for this just in case
+function iterate(A::Reverse, state=(reverse(eachindex(A.itr)),))
     y = iterate(state...)
     y === nothing && return y
     idx, itrs = y
@@ -119,7 +127,7 @@ reverse(r::Reverse) = r.itr
 reverse(x::Union{Number,AbstractChar}) = x
 reverse(p::Pair) = Base.reverse(p) # copying pairs is cheap
 
-iterate(r::Reverse{<:Tuple}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
+iterate(r::Reverse{<:Union{Tuple, NamedTuple}}, i::Int = length(r.itr)) = i < 1 ? nothing : (r.itr[i], i-1)
 
 # enumerate
 
@@ -160,6 +168,7 @@ size(e::Enumerate) = size(e.itr)
     n === nothing && return n
     (i, n[1]), (i+1, n[2])
 end
+last(e::Enumerate) = (length(e.itr), e.itr[end])
 
 eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
 
@@ -238,19 +247,34 @@ pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
 size(v::Pairs) = size(getfield(v, :itr))
-@propagate_inbounds function iterate(v::Pairs{K, V}, state...) where {K, V}
-    x = iterate(getfield(v, :itr), state...)
-    x === nothing && return x
-    indx, n = x
-    item = getfield(v, :data)[indx]
-    return (Pair{K, V}(indx, item), n)
+
+@propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
+    return Pair{K, V}(idx, getfield(p, :data)[idx])
 end
+
+@propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
+    x = iterate(getfield(p, :itr), state...)
+    x === nothing && return x
+    idx, next = x
+    return (_pairs_elt(p, idx), next)
+end
+
+@propagate_inbounds function iterate(r::Reverse{<:Pairs}, state=(reverse(getfield(r.itr, :itr)),))
+    x = iterate(state...)
+    x === nothing && return x
+    idx, next = x
+    return (_pairs_elt(r.itr, idx), (state[1], next))
+end
+
 @inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
 
-reverse(v::Pairs) = Pairs(getfield(v, :data), reverse(getfield(v, :itr)))
+function last(v::Pairs{K, V}) where {K, V}
+    idx = last(getfield(v, :itr))
+    return Pair{K, V}(idx, v[idx])
+end
 
 haskey(v::Pairs, key) = (key in getfield(v, :itr))
 keys(v::Pairs) = getfield(v, :itr)
@@ -398,7 +422,8 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-reverse(z::Zip) = Zip(Base.map(reverse, z.is))
+reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
+last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
 
 # filter
 
@@ -457,6 +482,7 @@ IteratorEltype(::Type{Filter{F,I}}) where {F,I} = IteratorEltype(I)
 IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
+last(f::Filter) = first(reverse(f))
 
 # Accumulate -- partial reductions of a function over an iterator
 
@@ -790,7 +816,7 @@ end
 
 IteratorSize(::Type{<:TakeWhile}) = SizeUnknown()
 eltype(::Type{TakeWhile{I,P}} where P) where {I} = eltype(I)
-IteratorEltype(::Type{TakeWhile{I}} where P) where {I} = IteratorEltype(I)
+IteratorEltype(::Type{TakeWhile{I, P}} where P) where {I} = IteratorEltype(I)
 
 
 # dropwhile
@@ -883,6 +909,7 @@ function iterate(it::Cycle, state)
 end
 
 reverse(it::Cycle) = Cycle(reverse(it.xs))
+last(it::Cycle) = last(it.xs)
 
 # Repeated - repeat an object infinitely many times
 
@@ -921,6 +948,7 @@ IteratorSize(::Type{<:Repeated}) = IsInfinite()
 IteratorEltype(::Type{<:Repeated}) = HasEltype()
 
 reverse(it::Union{Repeated,Take{<:Repeated}}) = it
+last(it::Union{Repeated,Take{<:Repeated}}) = first(it)
 
 # Product -- cartesian product of iterators
 struct ProductIterator{T<:Tuple}
@@ -1052,6 +1080,7 @@ end
 end
 
 reverse(p::ProductIterator) = ProductIterator(Base.map(reverse, p.iterators))
+last(p::ProductIterator) = Base.map(last, p.iterators)
 
 # flatten an iterator of iterators
 
@@ -1131,6 +1160,7 @@ length(f::Flatten{Tuple{}}) = 0
 end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
+last(f::Flatten) = last(last(f.it))
 
 """
     partition(collection, n)

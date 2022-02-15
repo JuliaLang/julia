@@ -234,7 +234,11 @@ isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
 """
     isunordered(x)
 
-Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+Return `true` if `x` is a value that is not orderable according to [`<`](@ref), such as `NaN`
+or `missing`.
+
+The values that evaluate to `true` with this predicate may be orderable with respect to other
+orderings such as [`isless`](@ref).
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
@@ -504,58 +508,6 @@ julia> minmax('c','b')
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
-"""
-    extrema(itr) -> Tuple
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-
-# Examples
-```jldoctest
-julia> extrema(2:10)
-(2, 10)
-
-julia> extrema([9,pi,4.5])
-(3.141592653589793, 9.0)
-```
-"""
-extrema(itr) = _extrema_itr(identity, itr)
-
-"""
-    extrema(f, itr) -> Tuple
-
-Compute both the minimum and maximum of `f` applied to each element in `itr` and return
-them as a 2-tuple. Only one pass is made over `itr`.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
-
-# Examples
-```jldoctest
-julia> extrema(sin, 0:π)
-(0.0, 0.9092974268256817)
-```
-"""
-extrema(f, itr) = _extrema_itr(f, itr)
-
-function _extrema_itr(f, itr)
-    y = iterate(itr)
-    y === nothing && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = y
-    vmin = vmax = f(v)
-    while true
-        y = iterate(itr, s)
-        y === nothing && break
-        (x, s) = y
-        fx = f(x)
-        vmax = max(fx, vmax)
-        vmin = min(fx, vmin)
-    end
-    return (vmin, vmax)
-end
-
-extrema(x::Real) = (x, x)
-extrema(f, x::Real) = (y = f(x); (y, y))
-
 ## definitions providing basic traits of arithmetic operators ##
 
 """
@@ -636,7 +588,7 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a,b),c), xs...)
+        ($op)(a, b, c, xs...) = (@inline; afoldl($op, ($op)(($op)(a,b),c), xs...))
         # a further concern is that it's easy for a type like (Int,Int...)
         # to match many definitions, so we need to keep the number of
         # definitions down to avoid losing type information.
@@ -952,7 +904,7 @@ Applies a function to the preceding argument. This allows for easy function chai
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> x->x.^2 |> sum |> inv
+julia> [1:5;] |> (x->x.^2) |> sum |> inv
 0.01818181818181818
 ```
 """

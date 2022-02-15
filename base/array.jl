@@ -193,17 +193,17 @@ end
 
 
 """
-    Base.bitsunionsize(U::Union)
+    Base.bitsunionsize(U::Union) -> Int
 
 For a `Union` of [`isbitstype`](@ref) types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`.
 
 # Examples
 ```jldoctest
 julia> Base.bitsunionsize(Union{Float64, UInt8})
-0x0000000000000008
+8
 
 julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
-0x0000000000000010
+16
 ```
 """
 function bitsunionsize(u::Union)
@@ -213,7 +213,7 @@ function bitsunionsize(u::Union)
 end
 
 length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
+elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -1531,6 +1531,23 @@ deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,)
 
 struct Nowhere; end
 push!(::Nowhere, _) = nothing
+_growend!(::Nowhere, _) = nothing
+
+@inline function _push_deleted!(dltd, a::Vector, ind)
+    if @inbounds isassigned(a, ind)
+        push!(dltd, @inbounds a[ind])
+    else
+        _growend!(dltd, 1)
+    end
+end
+
+@inline function _copy_item!(a::Vector, p, q)
+    if @inbounds isassigned(a, q)
+        @inbounds a[p] = a[q]
+    else
+        _unsetindex!(a, p)
+    end
+end
 
 function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
@@ -1538,7 +1555,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     y === nothing && return a
     (p, s) = y
     checkbounds(a, p)
-    push!(dltd, @inbounds a[p])
+    _push_deleted!(dltd, a, p)
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1552,14 +1569,14 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             end
         end
         while q < i
-            @inbounds a[p] = a[q]
+            _copy_item!(a, p, q)
             p += 1; q += 1
         end
-        push!(dltd, @inbounds a[i])
+        _push_deleted!(dltd, a, i)
         q = i+1
     end
     while q <= n
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += 1; q += 1
     end
     _deleteend!(a, n-p+1)
@@ -1572,7 +1589,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += !i
     end
     _deleteend!(a, n-p+1)
@@ -1923,18 +1940,7 @@ julia> findnext(A, CartesianIndex(1, 1))
 CartesianIndex(2, 1)
 ```
 """
-function findnext(A, start)
-    l = last(keys(A))
-    i = oftype(l, start)
-    i > l && return nothing
-    while true
-        A[i] && return i
-        i == l && break
-        # nextind(A, l) can throw/overflow
-        i = nextind(A, i)
-    end
-    return nothing
-end
+findnext(A, start) = findnext(identity, A, start)
 
 """
     findfirst(A)
@@ -1971,14 +1977,7 @@ julia> findfirst(A)
 CartesianIndex(2, 1)
 ```
 """
-function findfirst(A)
-    for (i, a) in pairs(A)
-        if a
-            return i
-        end
-    end
-    return nothing
-end
+findfirst(A) = findfirst(identity, A)
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
 findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
@@ -2114,18 +2113,7 @@ julia> findprev(A, CartesianIndex(2, 1))
 CartesianIndex(2, 1)
 ```
 """
-function findprev(A, start)
-    f = first(keys(A))
-    i = oftype(f, start)
-    i < f && return nothing
-    while true
-        A[i] && return i
-        i == f && break
-        # prevind(A, f) can throw/underflow
-        i = prevind(A, i)
-    end
-    return nothing
-end
+findprev(A, start) = findprev(identity, A, start)
 
 """
     findlast(A)
@@ -2163,14 +2151,7 @@ julia> findlast(A)
 CartesianIndex(2, 1)
 ```
 """
-function findlast(A)
-    for (i, a) in Iterators.reverse(pairs(A))
-        if a
-            return i
-        end
-    end
-    return nothing
-end
+findlast(A) = findlast(identity, A)
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
 findlast(A::AbstractArray) = findprev(A, last(keys(A)))
@@ -2363,6 +2344,7 @@ Int64[]
 function findall(A)
     collect(first(p) for p in pairs(A) if last(p))
 end
+
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
 function findall(A::AbstractArray{Bool})
     n = count(A)
@@ -2604,6 +2586,7 @@ end
 
 """
     keepat!(a::Vector, inds)
+    keepat!(a::BitVector, inds)
 
 Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
@@ -2628,6 +2611,7 @@ keepat!(a::Vector, inds) = _keepat!(a, inds)
 
 """
     keepat!(a::Vector, m::AbstractVector{Bool})
+    keepat!(a::BitVector, m::AbstractVector{Bool})
 
 The in-place version of logical indexing `a = a[m]`. That is, `keepat!(a, m)` on
 vectors of equal length `a` and `m` will remove all elements from `a` for which

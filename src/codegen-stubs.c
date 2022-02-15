@@ -15,7 +15,7 @@ JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
 JL_DLLEXPORT int32_t jl_get_llvm_gv_fallback(void *native_code, jl_value_t *p) UNAVAILABLE
 
-JL_DLLEXPORT int jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
+JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir_fallback(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
@@ -61,6 +61,11 @@ JL_DLLEXPORT void jl_teardown_codegen_fallback(void)
 {
 }
 
+JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
+{
+    return 0;
+}
+
 JL_DLLEXPORT void jl_lock_profile_fallback(void)
 {
 }
@@ -72,6 +77,14 @@ JL_DLLEXPORT void jl_unlock_profile_fallback(void)
 JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
+{
+}
+
+JL_DLLEXPORT void jl_dump_emitted_mi_name_fallback(void *s)
+{
+}
+
+JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
 {
 }
 
@@ -100,6 +113,8 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
     return 0;
 }
 
+JL_DLLEXPORT void jl_add_optimization_passes_fallback(void *PM, int opt_level, int lower_intrinsics) UNAVAILABLE
+
 JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_fallback(void *PM) UNAVAILABLE
@@ -127,3 +142,5 @@ JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_fallback(void *PM) UNAVAILABLE
 JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_fallback(void *PM, bool_t Strong) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE
+
+JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_fallback(void *PM) UNAVAILABLE

@@ -212,6 +212,12 @@ eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 Compute the memory stride in bytes between consecutive elements of `eltype`
 stored inside the given `type`, if the array elements are stored densely with a
 uniform linear stride.
+
+# Examples
+```jldoctest
+julia> Base.elsize(rand(Float32, 10))
+4
+```
 """
 elsize(A::AbstractArray) = elsize(typeof(A))
 
@@ -908,19 +914,21 @@ end
 # copy from an some iterable object into an AbstractArray
 function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer)
     if (sstart < 1)
-        throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
+        throw(ArgumentError(LazyString("source start offset (",sstart,") is < 1")))
     end
     y = iterate(src)
     for j = 1:(sstart-1)
         if y === nothing
-            throw(ArgumentError(string("source has fewer elements than required, ",
-                                       "expected at least ",sstart,", got ",j-1)))
+            throw(ArgumentError(LazyString(
+                "source has fewer elements than required, ",
+                "expected at least ", sstart,", got ", j-1)))
         end
         y = iterate(src, y[2])
     end
     if y === nothing
-        throw(ArgumentError(string("source has fewer elements than required, ",
-                                   "expected at least ",sstart,", got ",sstart-1)))
+        throw(ArgumentError(LazyString(
+            "source has fewer elements than required, ",
+            "expected at least ",sstart," got ", sstart-1)))
     end
     i = Int(dstart)
     while y !== nothing
@@ -934,19 +942,22 @@ end
 
 # this method must be separate from the above since src might not have a length
 function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::Integer)
-    n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    n < 0 && throw(ArgumentError(LazyString("tried to copy n=",n,
+        ", elements, but n should be nonnegative")))
     n == 0 && return dest
     dmax = dstart + n - 1
     inds = LinearIndices(dest)
     if (dstart ∉ inds || dmax ∉ inds) | (sstart < 1)
-        sstart < 1 && throw(ArgumentError(string("source start offset (",sstart,") is < 1")))
+        sstart < 1 && throw(ArgumentError(LazyString("source start offset (",
+            sstart,") is < 1")))
         throw(BoundsError(dest, dstart:dmax))
     end
     y = iterate(src)
     for j = 1:(sstart-1)
         if y === nothing
-            throw(ArgumentError(string("source has fewer elements than required, ",
-                                       "expected at least ",sstart,", got ",j-1)))
+            throw(ArgumentError(LazyString(
+                "source has fewer elements than required, ",
+                "expected at least ",sstart,", got ",j-1)))
         end
         y = iterate(src, y[2])
     end
@@ -1058,7 +1069,8 @@ function copyto!(dest::AbstractArray, dstart::Integer,
                src::AbstractArray, sstart::Integer,
                n::Integer)
     n == 0 && return dest
-    n < 0 && throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
+    n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
+        n," elements, but n should be nonnegative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
@@ -1076,12 +1088,12 @@ end
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
     if length(ir_dest) != length(ir_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
-                                   length(ir_src)," and ",length(ir_dest),")")))
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
+            length(ir_src)," and ",length(ir_dest),")")))
     end
     if length(jr_dest) != length(jr_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
-                                   length(jr_src)," and ",length(jr_dest),")")))
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
+            length(jr_src)," and ",length(jr_dest),")")))
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
@@ -1226,10 +1238,16 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
+struct CanonicalIndexError
+    func::String
+    type::Any
+    CanonicalIndexError(func::String, @nospecialize(type)) = new(func, type)
+end
+
 error_if_canonical_getindex(::IndexLinear, A::AbstractArray, ::Int) =
-    error("getindex not defined for ", typeof(A))
+    throw(CanonicalIndexError("getindex", typeof(A)))
 error_if_canonical_getindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
-    error("getindex not defined for ", typeof(A))
+    throw(CanonicalIndexError("getindex", typeof(A)))
 error_if_canonical_getindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
@@ -1321,9 +1339,9 @@ function unsafe_setindex!(A::AbstractArray, v, I...)
 end
 
 error_if_canonical_setindex(::IndexLinear, A::AbstractArray, ::Int) =
-    error("setindex! not defined for ", typeof(A))
+    throw(CanonicalIndexError("setindex!", typeof(A)))
 error_if_canonical_setindex(::IndexCartesian, A::AbstractArray{T,N}, ::Vararg{Int,N}) where {T,N} =
-    error("setindex! not defined for ", typeof(A))
+    throw(CanonicalIndexError("setindex!", typeof(A)))
 error_if_canonical_setindex(::IndexStyle, ::AbstractArray, ::Any...) = nothing
 
 ## Internal definitions
@@ -1741,7 +1759,8 @@ end
 """
     vcat(A...)
 
-Concatenate along dimension 1.
+Concatenate along dimension 1. To efficiently concatenate a large vector of arrays,
+use `reduce(vcat, x)`.
 
 # Examples
 ```jldoctest
@@ -1767,13 +1786,29 @@ julia> vcat(c...)
 2×3 Matrix{Int64}:
  1  2  3
  4  5  6
+
+julia> vs = [[1, 2], [3, 4], [5, 6]]
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [3, 4]
+ [5, 6]
+
+julia> reduce(vcat, vs)
+6-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
 ```
 """
 vcat(X...) = cat(X...; dims=Val(1))
 """
     hcat(A...)
 
-Concatenate along dimension 2.
+Concatenate along dimension 2. To efficiently concatenate a large vector of arrays,
+use `reduce(hcat, x)`.
 
 # Examples
 ```jldoctest
@@ -1818,6 +1853,17 @@ julia> hcat(x, [1; 2; 3])
  1
  2
  3
+
+julia> vs = [[1, 2], [3, 4], [5, 6]]
+3-element Vector{Vector{Int64}}:
+ [1, 2]
+ [3, 4]
+ [5, 6]
+
+julia> reduce(hcat, vs)
+2×3 Matrix{Int64}:
+ 1  3  5
+ 2  4  6
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -2108,7 +2154,9 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 
+
 # Examples for construction of the arguments:
+```julia
 [a b c ; d e f ;;;
  g h i ; j k l ;;;
  m n o ; p q r ;;;
@@ -2125,6 +2173,7 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  _____________
  4             = elements in each 4d slice (4,)
  => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
+```
 """
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
 hvncat(dim::Int, xs...) = _hvncat(dim, true, xs...)

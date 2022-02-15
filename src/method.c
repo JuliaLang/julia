@@ -76,7 +76,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         if (e->head == jl_global_sym && binding_effects) {
             // execute the side-effects of "global x" decl immediately:
             // creates uninitialized mutable binding in module for each global
-            jl_toplevel_eval_flex(module, expr, 0, 1);
+            jl_eval_global_expr(module, e, 1);
             expr = jl_nothing;
         }
         if (jl_is_toplevel_only_expr(expr) || e->head == jl_const_sym ||
@@ -146,7 +146,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 return expr;
             }
             if (e->head == jl_foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
+                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
@@ -176,7 +176,15 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 check_c_types("ccall method definition", rt, at);
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
-                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
+                jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
+                if (!jl_is_symbol(cc)) {
+                    JL_TYPECHK(ccall method definition, tuple, cc);
+                    if (jl_nfields(cc) != 2) {
+                        jl_error("In ccall calling convention, expected two argument tuple or symbol.");
+                    }
+                    JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
+                    JL_TYPECHK(ccall method definition, uint8, jl_get_nth_field(cc, 1));
+                }
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
@@ -308,6 +316,15 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
+                    if (jl_expr_nargs(ma) == 5) {
+                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
+                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
+                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
+                        li->purity.overrides.ipo_terminates = jl_unbox_bool(jl_exprarg(ma, 3));
+                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
+                    }
+                }
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -448,6 +465,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->pure = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
+    src->purity.bits = 0;
     return src;
 }
 
@@ -635,6 +653,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->pure = src->pure;
     m->constprop = src->constprop;
+    m->purity.bits = src->purity.bits;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
@@ -731,6 +750,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = NULL;
     m->slot_syms = NULL;
     m->roots = NULL;
+    m->root_blocks = NULL;
+    m->nroots_sysimg = 0;
     m->ccallable = NULL;
     m->module = module;
     m->external_mt = NULL;
@@ -985,6 +1006,81 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_POP();
 
     return m;
+}
+
+// root blocks
+
+static uint64_t current_root_id(jl_array_t *root_blocks)
+{
+    if (!root_blocks)
+        return 0;
+    assert(jl_is_array(root_blocks));
+    size_t nx2 = jl_array_len(root_blocks);
+    if (nx2 == 0)
+        return 0;
+    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    return blocks[nx2-2];
+}
+
+static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
+{
+    assert(jl_is_array(root_blocks));
+    jl_array_grow_end(root_blocks, 2);
+    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    int nx2 = jl_array_len(root_blocks);
+    blocks[nx2-2] = modid;
+    blocks[nx2-1] = len;
+}
+
+JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
+{
+    JL_GC_PUSH2(&m, &root);
+    uint64_t modid = 0;
+    if (mod) {
+        assert(jl_is_module(mod));
+        modid = mod->build_id;
+    }
+    assert(jl_is_method(m));
+    if (!m->roots) {
+        m->roots = jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->roots);
+    }
+    if (!m->root_blocks && modid != 0) {
+        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
+        jl_gc_wb(m, m->root_blocks);
+    }
+    if (current_root_id(m->root_blocks) != modid)
+        add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    jl_array_ptr_1d_push(m->roots, root);
+    JL_GC_POP();
+}
+
+// given the absolute index i of a root, retrieve its relocatable reference
+// returns 1 if the root is relocatable
+int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i)
+{
+    if (!m->root_blocks) {
+        rr->key = 0;
+        rr->index = i;
+        return i < m->nroots_sysimg;
+    }
+    rle_index_to_reference(rr, i, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    if (rr->key)
+        return 1;
+    return i < m->nroots_sysimg;
+}
+
+// get a root, given its key and index relative to the key
+// this is the relocatable way to get a root from m->roots
+jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
+{
+    if (!m->root_blocks) {
+        assert(key == 0);
+        return jl_array_ptr_ref(m->roots, index);
+    }
+    rle_reference rr = {key, index};
+    size_t i = rle_reference_to_index(&rr, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    return jl_array_ptr_ref(m->roots, i);
 }
 
 #ifdef __cplusplus

@@ -3,7 +3,6 @@
 #include "llvm-version.h"
 #include "platform.h"
 
-
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -16,7 +15,11 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -30,7 +33,17 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "julia_assert.h"
 
-RTDyldMemoryManager* createRTDyldMemoryManager(void);
+#ifdef JL_USE_JITLINK
+# if JL_LLVM_VERSION >= 140000
+#  include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
+# endif
+# include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
+# include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
+#else
+# include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#endif
+
+#define DEBUG_TYPE "jitlayers"
 
 void jl_init_jit(void) { }
 
@@ -43,7 +56,7 @@ void jl_dump_compiles_impl(void *s)
 }
 JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
-void jl_dump_llvm_opt(void *s)
+void jl_dump_llvm_opt_impl(void *s)
 {
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
@@ -85,10 +98,6 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_info_t *src,
         size_t world)
 {
-    // TODO: Merge with jl_dump_compiles?
-    static ios_t f_precompile;
-    static JL_STREAM* s_precompile = NULL;
-
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
@@ -182,26 +191,6 @@ static jl_callptr_t _jl_compile_codeinst(
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
-        if (jl_options.trace_compile != NULL) {
-            if (s_precompile == NULL) {
-                const char* t = jl_options.trace_compile;
-                if (!strncmp(t, "stderr", 6))
-                    s_precompile = JL_STDERR;
-                else {
-                    if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-                        jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-                    s_precompile = (JL_STREAM*) &f_precompile;
-                }
-            }
-            if (!jl_has_free_typevars(mi->specTypes)) {
-                jl_printf(s_precompile, "precompile(");
-                jl_static_show(s_precompile, mi->specTypes);
-                jl_printf(s_precompile, ")\n");
-
-                if (s_precompile != JL_STDERR)
-                    ios_flush(&f_precompile);
-            }
-        }
         if (dump_compiles_stream != NULL) {
             jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", end_time - start_time);
             jl_static_show(dump_compiles_stream, mi->specTypes);
@@ -211,7 +200,7 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params, LLVMContext &ctxt);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
@@ -229,7 +218,7 @@ int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *d
     Module *into = (Module*)llvmmod;
     if (into == NULL)
         into = jl_create_llvm_module("cextern");
-    const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams);
+    const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams, into->getContext());
     bool success = true;
     if (!sysimg) {
         if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
@@ -318,10 +307,12 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
-        // If the caller didn't provide the source,
-        // see if it is inferred, or try to infer it for ourself.
-        // (but don't bother with typeinf on macros or toplevel thunks)
-        src = jl_type_infer(mi, world, 0);
+        if (mi->def.method->source != jl_nothing) {
+            // If the caller didn't provide the source and IR is available,
+            // see if it is inferred, or try to infer it for ourself.
+            // (but don't bother with typeinf on macros or toplevel thunks)
+            src = jl_type_infer(mi, world, 0);
+        }
     }
     jl_code_instance_t *compiled = jl_method_compiled(mi, world);
     if (compiled) {
@@ -449,77 +440,6 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
 }
 
-// A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
-class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
-private:
-    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr;
-
-public:
-    ForwardingMemoryManager(std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr) : MemMgr(MemMgr) {}
-    virtual ~ForwardingMemoryManager() = default;
-    virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
-                                     unsigned SectionID,
-                                     StringRef SectionName) override {
-        return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
-    }
-    virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
-                                     unsigned SectionID,
-                                     StringRef SectionName,
-                                     bool IsReadOnly) override {
-        return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
-    }
-    virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
-                                        uintptr_t RODataSize,
-                                        uint32_t RODataAlign,
-                                        uintptr_t RWDataSize,
-                                        uint32_t RWDataAlign) override {
-        return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
-    }
-    virtual bool needsToReserveAllocationSpace() override {
-        return MemMgr->needsToReserveAllocationSpace();
-    }
-    virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
-                                  size_t Size) override {
-        return MemMgr->registerEHFrames(Addr, LoadAddr, Size);
-    }
-    virtual void deregisterEHFrames() override {
-        return MemMgr->deregisterEHFrames();
-    }
-    virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
-        return MemMgr->finalizeMemory(ErrMsg);
-    }
-    virtual void notifyObjectLoaded(RuntimeDyld &RTDyld,
-                                    const object::ObjectFile &Obj) override {
-        return MemMgr->notifyObjectLoaded(RTDyld, Obj);
-    }
-};
-
-
-// Custom object emission notification handler for the JuliaOJIT
-extern JITEventListener *CreateJuliaJITEventListener();
-
-JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
-                                         const object::ObjectFile &obj,
-                                         const RuntimeDyld::LoadedObjectInfo &L,
-                                         RTDyldMemoryManager *memmgr);
-
-#if JL_LLVM_VERSION >= 120000
-template <typename ObjT, typename LoadResult>
-void JuliaOJIT::registerObject(const ObjT &Obj, const LoadResult &LO)
-{
-    const ObjT* Object = &Obj;
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
-}
-#else
-template <typename ObjT, typename LoadResult>
-void JuliaOJIT::registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO)
-{
-    const ObjT* Object = &Obj;
-    NotifyFinalizer(H, *Object, *LO);
-    ORCNotifyObjectEmitted(JuliaListener.get(), *Object, *LO, MemMgr.get());
-}
-#endif
-
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 {
 #ifdef DISABLE_OPT
@@ -535,7 +455,7 @@ static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
-    addMachinePasses(&PM, &TM);
+    addMachinePasses(&PM, &TM, optlevel);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 }
@@ -610,7 +530,7 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         raw_string_ostream OS(Buf);
         logAllUnhandledErrors(Obj.takeError(), OS, "");
         OS.flush();
-        llvm::report_fatal_error("FATAL: Unable to compile LLVM Module: '" + Buf + "'\n"
+        llvm::report_fatal_error(llvm::Twine("FATAL: Unable to compile LLVM Module: '") + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
     }
 
@@ -635,12 +555,257 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
     return CompilerResultT(std::move(ObjBuffer));
 }
 
+void jl_register_jit_object(const object::ObjectFile &debugObj,
+                            std::function<uint64_t(const StringRef &)> getLoadAddress,
+                            std::function<void *(void *)> lookupWriteAddress);
+
+#ifdef JL_USE_JITLINK
+
+namespace {
+
+using namespace llvm::orc;
+
+struct JITObjectInfo {
+    std::unique_ptr<MemoryBuffer> BackingBuffer;
+    std::unique_ptr<object::ObjectFile> Object;
+    StringMap<uint64_t> SectionLoadAddresses;
+};
+
+class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
+    std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
+    // Resources from distinct MaterializationResponsibilitys can get merged
+    // after emission, so we can have multiple debug objects per resource key.
+    std::map<ResourceKey, std::vector<std::unique_ptr<JITObjectInfo>>> RegisteredObjs;
+
+public:
+    void notifyMaterializing(MaterializationResponsibility &MR, jitlink::LinkGraph &G,
+                             jitlink::JITLinkContext &Ctx,
+                             MemoryBufferRef InputObject) override
+    {
+        // Keeping around a full copy of the input object file (and re-parsing it) is
+        // wasteful, but for now, this lets us reuse the existing debuginfo.cpp code.
+        // Should look into just directly pulling out all the information required in
+        // a JITLink pass and just keeping the required tables/DWARF sections around
+        // (perhaps using the LLVM DebuggerSupportPlugin as a reference).
+        auto NewBuffer =
+            MemoryBuffer::getMemBufferCopy(InputObject.getBuffer(), G.getName());
+        auto NewObj =
+            cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
+
+        assert(PendingObjs.count(&MR) == 0);
+        PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(
+            new JITObjectInfo{std::move(NewBuffer), std::move(NewObj), {}});
+    }
+
+    Error notifyEmitted(MaterializationResponsibility &MR) override
+    {
+        auto It = PendingObjs.find(&MR);
+        if (It == PendingObjs.end())
+            return Error::success();
+
+        auto NewInfo = PendingObjs[&MR].get();
+        auto getLoadAddress = [NewInfo](const StringRef &Name) -> uint64_t {
+            auto result = NewInfo->SectionLoadAddresses.find(Name);
+            if (result == NewInfo->SectionLoadAddresses.end()) {
+                LLVM_DEBUG({
+                    dbgs() << "JLDebuginfoPlugin: No load address found for section '"
+                           << Name << "'\n";
+                });
+                return 0;
+            }
+            return result->second;
+        };
+
+        jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+
+        cantFail(MR.withResourceKeyDo([&](ResourceKey K) {
+            RegisteredObjs[K].push_back(std::move(PendingObjs[&MR]));
+            PendingObjs.erase(&MR);
+        }));
+
+        return Error::success();
+    }
+
+    Error notifyFailed(MaterializationResponsibility &MR) override
+    {
+        PendingObjs.erase(&MR);
+        return Error::success();
+    }
+
+    Error notifyRemovingResources(ResourceKey K) override
+    {
+        RegisteredObjs.erase(K);
+        // TODO: If we ever unload code, need to notify debuginfo registry.
+        return Error::success();
+    }
+
+    void notifyTransferringResources(ResourceKey DstKey, ResourceKey SrcKey) override
+    {
+        auto SrcIt = RegisteredObjs.find(SrcKey);
+        if (SrcIt != RegisteredObjs.end()) {
+            for (std::unique_ptr<JITObjectInfo> &Info : SrcIt->second)
+                RegisteredObjs[DstKey].push_back(std::move(Info));
+            RegisteredObjs.erase(SrcIt);
+        }
+    }
+
+    void modifyPassConfig(MaterializationResponsibility &MR, jitlink::LinkGraph &,
+                          jitlink::PassConfiguration &PassConfig) override
+    {
+        auto It = PendingObjs.find(&MR);
+        if (It == PendingObjs.end())
+            return;
+
+        JITObjectInfo &Info = *It->second;
+        PassConfig.PostAllocationPasses.push_back([&Info](jitlink::LinkGraph &G) -> Error {
+            for (const jitlink::Section &Sec : G.sections()) {
+                // Canonical JITLink section names have the segment name included, e.g.
+                // "__TEXT,__text" or "__DWARF,__debug_str". There are some special internal
+                // sections without a comma separator, which we can just ignore.
+                size_t SepPos = Sec.getName().find(',');
+                if (SepPos >= 16 || (Sec.getName().size() - (SepPos + 1) > 16)) {
+                    LLVM_DEBUG({
+                        dbgs() << "JLDebuginfoPlugin: Ignoring section '" << Sec.getName()
+                               << "'\n";
+                    });
+                    continue;
+                }
+                auto SecName = Sec.getName().substr(SepPos + 1);
+                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart();
+            }
+            return Error::success();
+        });
+    }
+};
+}
+
+# ifdef LLVM_SHLIB
+class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
+public:
+    Error registerEHFrames(JITTargetAddress EHFrameSectionAddr,
+                         size_t EHFrameSectionSize) override {
+        register_eh_frames(
+            jitTargetAddressToPointer<uint8_t *>(EHFrameSectionAddr),
+            EHFrameSectionSize);
+        return Error::success();
+    }
+
+    Error deregisterEHFrames(JITTargetAddress EHFrameSectionAddr,
+                           size_t EHFrameSectionSize) override {
+        deregister_eh_frames(
+            jitTargetAddressToPointer<uint8_t *>(EHFrameSectionAddr),
+            EHFrameSectionSize);
+        return Error::success();
+    }
+};
+# endif
+
+#else // !JL_USE_JITLINK
+
+RTDyldMemoryManager* createRTDyldMemoryManager(void);
+
+// A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
+class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
+private:
+    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr;
+
+public:
+    ForwardingMemoryManager(std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr) : MemMgr(MemMgr) {}
+    virtual ~ForwardingMemoryManager() = default;
+    virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+                                     unsigned SectionID,
+                                     StringRef SectionName) override {
+        return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
+    }
+    virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+                                     unsigned SectionID,
+                                     StringRef SectionName,
+                                     bool IsReadOnly) override {
+        return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
+    }
+    virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
+                                        uintptr_t RODataSize,
+                                        uint32_t RODataAlign,
+                                        uintptr_t RWDataSize,
+                                        uint32_t RWDataAlign) override {
+        return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
+    }
+    virtual bool needsToReserveAllocationSpace() override {
+        return MemMgr->needsToReserveAllocationSpace();
+    }
+    virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+                                  size_t Size) override {
+        return MemMgr->registerEHFrames(Addr, LoadAddr, Size);
+    }
+    virtual void deregisterEHFrames() override {
+        return MemMgr->deregisterEHFrames();
+    }
+    virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
+        return MemMgr->finalizeMemory(ErrMsg);
+    }
+    virtual void notifyObjectLoaded(RuntimeDyld &RTDyld,
+                                    const object::ObjectFile &Obj) override {
+        return MemMgr->notifyObjectLoaded(RTDyld, Obj);
+    }
+};
+
+
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+void *lookupWriteAddressFor(RTDyldMemoryManager *MemMgr, void *rt_addr);
+#endif
+
+void registerRTDyldJITObject(const object::ObjectFile &Object,
+                             const RuntimeDyld::LoadedObjectInfo &L,
+                             const std::shared_ptr<RTDyldMemoryManager> &MemMgr)
+{
+    auto SavedObject = L.getObjectForDebug(Object).takeBinary();
+    // If the debug object is unavailable, save (a copy of) the original object
+    // for our backtraces.
+    // This copy seems unfortunate, but there doesn't seem to be a way to take
+    // ownership of the original buffer.
+    if (!SavedObject.first) {
+        auto NewBuffer =
+            MemoryBuffer::getMemBufferCopy(Object.getData(), Object.getFileName());
+        auto NewObj =
+            cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
+        SavedObject = std::make_pair(std::move(NewObj), std::move(NewBuffer));
+    }
+    const object::ObjectFile *DebugObj = SavedObject.first.release();
+    SavedObject.second.release();
+
+    StringMap<object::SectionRef> loadedSections;
+    // Use the original Object, not the DebugObject, as this is used for the
+    // RuntimeDyld::LoadedObjectInfo lookup.
+    for (const object::SectionRef &lSection : Object.sections()) {
+        auto sName = lSection.getName();
+        if (sName) {
+            bool inserted = loadedSections.insert(std::make_pair(*sName, lSection)).second;
+            assert(inserted);
+            (void)inserted;
+        }
+    }
+    auto getLoadAddress = [loadedSections = std::move(loadedSections),
+                           &L](const StringRef &sName) -> uint64_t {
+        auto search = loadedSections.find(sName);
+        if (search == loadedSections.end())
+            return 0;
+        return L.getSectionLoadAddress(search->second);
+    };
+
+    jl_register_jit_object(*DebugObj, getLoadAddress,
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        [MemMgr](void *p) { return lookupWriteAddressFor(MemMgr.get(), p); }
+#else
+        nullptr
+#endif
+    );
+}
+#endif
+
 JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
   : TM(TM),
     DL(TM.createDataLayout()),
     ObjStream(ObjBufferSV),
-    MemMgr(createRTDyldMemoryManager()),
-    JuliaListener(CreateJuliaJITEventListener()),
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
 #if JL_LLVM_VERSION >= 130000
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),
@@ -649,6 +814,16 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
 #endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
+#ifdef JL_USE_JITLINK
+    // TODO: Port our memory management optimisations to JITLink instead of using the
+    // default InProcessMemoryManager.
+# if JL_LLVM_VERSION < 140000
+    ObjectLayer(ES, std::make_unique<jitlink::InProcessMemoryManager>()),
+# else
+    ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
+# endif
+#else
+    MemMgr(createRTDyldMemoryManager()),
     ObjectLayer(
             ES,
             [this]() {
@@ -656,21 +831,27 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
                 return result;
             }
         ),
+#endif
     CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this))
 {
-#if JL_LLVM_VERSION >= 120000
+#ifdef JL_USE_JITLINK
+# if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+    // When dynamically linking against LLVM, use our custom EH frame registration code
+    // also used with RTDyld to inform both our and the libc copy of libunwind.
+    auto ehRegistrar = std::make_unique<JLEHFrameRegistrar>();
+# else
+    auto ehRegistrar = std::make_unique<jitlink::InProcessEHFrameRegistrar>();
+# endif
+    ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
+        ES, std::move(ehRegistrar)));
+
+    ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
+#else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LOS) {
-            registerObject(Object, &LOS);
-        });
-#else
-    ObjectLayer.setNotifyLoaded(
-        [this](RTDyldObjHandleT H,
-               const object::ObjectFile &Object,
-               const RuntimeDyld::LoadedObjectInfo &LOS) {
-            registerObject(H, Object, &LOS);
+               const RuntimeDyld::LoadedObjectInfo &LO) {
+            registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
     for (int i = 0; i < 4; i++) {
@@ -688,7 +869,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     // tells DynamicLibrary to load the program, not a library.
     std::string ErrorStr;
     if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr))
-        report_fatal_error("FATAL: unable to dlopen self\n" + ErrorStr);
+        report_fatal_error(llvm::Twine("FATAL: unable to dlopen self\n") + ErrorStr);
 
     GlobalJD.addGenerator(
       cantFail(orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -736,8 +917,8 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
             NewExports.push_back(getMangledName(F.getName()));
         }
     }
-#ifndef JL_NDEBUG
-    // validate the relocations for M
+#if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
+    // validate the relocations for M (not implemented for the JITLink memory manager yet)
     for (Module::global_object_iterator I = M->global_objects().begin(), E = M->global_objects().end(); I != E; ) {
         GlobalObject *F = &*I;
         ++I;
@@ -756,27 +937,14 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
-#if JL_LLVM_VERSION >= 120000
     // TODO: what is the performance characteristics of this?
     cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
-#else
-    auto key = ES.allocateVModule();
-    // TODO: what is the performance characteristics of this?
-    cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx), key));
-#endif
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
         cantFail(ES.lookup({&JD}, Name));
 
 }
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::removeModule(ModuleHandleT H)
-{
-    //(void)CompileLayer.remove(H);
-}
-#endif
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
@@ -843,24 +1011,36 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
 }
 
 
+#ifdef JL_USE_JITLINK
+# if JL_LLVM_VERSION < 140000
+#  warning "JIT debugging (GDB integration) not available on LLVM < 14.0 (for JITLink)"
+void JuliaOJIT::enableJITDebuggingSupport() {}
+# else
+extern "C" orc::shared::CWrapperFunctionResult
+llvm_orc_registerJITLoaderGDBAllocAction(const char *Data, size_t Size);
+
+void JuliaOJIT::enableJITDebuggingSupport()
+{
+    // We do not use GDBJITDebugInfoRegistrationPlugin::Create, as the runtime name
+    // lookup is unnecessarily involved/fragile for our in-process JIT use case
+    // (with the llvm_orc_registerJITLoaderGDBAllocAction symbol being in either
+    // libjulia-codegen or yet another shared library for LLVM depending on the build
+    // flags, etc.).
+    const auto Addr = ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBAllocAction);
+    ObjectLayer.addPlugin(std::make_unique<orc::GDBJITDebugInfoRegistrationPlugin>(Addr));
+}
+# endif
+#else
+void JuliaOJIT::enableJITDebuggingSupport()
+{
+    RegisterJITEventListener(JITEventListener::createGDBRegistrationListener());
+}
+
 void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 {
     if (!L)
         return;
-#if JL_LLVM_VERSION >= 120000
     this->ObjectLayer.registerJITEventListener(*L);
-#else
-    EventListeners.push_back(L);
-#endif
-}
-
-#if JL_LLVM_VERSION < 120000
-void JuliaOJIT::NotifyFinalizer(RTDyldObjHandleT Key,
-                                const object::ObjectFile &Obj,
-                                const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo)
-{
-    for (auto &Listener : EventListeners)
-        Listener->notifyObjectLoaded(Key, Obj, LoadedObjectInfo);
 }
 #endif
 
@@ -886,12 +1066,20 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
     return getMangledName(GV->getName());
 }
 
+#ifdef JL_USE_JITLINK
+size_t JuliaOJIT::getTotalBytes() const
+{
+    // TODO: Implement in future custom JITLink memory manager.
+    return 0;
+}
+#else
 size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
 
 size_t JuliaOJIT::getTotalBytes() const
 {
     return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
 }
+#endif
 
 JuliaOJIT *jl_ExecutionEngine;
 
@@ -1043,7 +1231,7 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
     jl_jit_share_data(*m);
     assert(jl_ExecutionEngine);
@@ -1132,7 +1320,7 @@ void add_named_global(StringRef name, void *addr)
 }
 
 extern "C" JL_DLLEXPORT
-size_t jl_jit_total_bytes(void)
+size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
 }

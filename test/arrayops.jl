@@ -6,8 +6,6 @@ using .Main.OffsetArrays
 
 isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
 
-using SparseArrays
-
 using Random, LinearAlgebra
 using Dates
 
@@ -593,6 +591,10 @@ end
         @test findnext(b, T(3)) isa keytype(b)
         @test findprev(b, T(1)) isa keytype(b)
         @test findprev(b, T(2)) isa keytype(b)
+    end
+
+    @testset "issue 43078" begin
+        @test_throws TypeError findall([1])
     end
 end
 @testset "find with Matrix" begin
@@ -1197,9 +1199,6 @@ end
     m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
-
-    # issue #21123
-    @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -1517,6 +1516,11 @@ end
     @test_throws BoundsError deleteat!([], [2])
     @test deleteat!([], []) == []
     @test deleteat!([], Bool[]) == []
+    let a = Vector{Any}(undef, 2)
+        a[1] = 1
+        @test isassigned(deleteat!(copy(a), [2]), 1)
+        @test !isassigned(deleteat!(copy(a), [1]), 1)
+    end
 end
 
 @testset "comprehensions" begin
@@ -1950,13 +1954,6 @@ end
     @test isless(CartesianIndex((2,1)), CartesianIndex((1,2)))
     @test !isless(CartesianIndex((1,2)), CartesianIndex((2,1)))
 
-    a = spzeros(2,3)
-    @test CartesianIndices(size(a)) == eachindex(a)
-    a[CartesianIndex{2}(2,3)] = 5
-    @test a[2,3] == 5
-    b = view(a, 1:2, 2:3)
-    b[CartesianIndex{2}(1,1)] = 7
-    @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
     @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
     @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
@@ -2009,16 +2006,6 @@ end
     y = iterate(itr, y[2])
     @test y === nothing
     @test r[val] == 3
-    r = sparse(2:3:8)
-    itr = eachindex(r)
-    y = iterate(itr)
-    @test y !== nothing
-    y = iterate(itr, y[2])
-    y = iterate(itr, y[2])
-    @test y !== nothing
-    val, state = y
-    @test r[val] == 8
-    @test iterate(itr, state) == nothing
 end
 
 R = CartesianIndices((1,3))

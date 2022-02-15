@@ -44,6 +44,7 @@
     XX(jl_array_to_string) \
     XX(jl_array_typetagdata) \
     XX(jl_arrayunset) \
+    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -460,7 +461,6 @@
     XX(jl_task_stack_buffer) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
-    XX(jl_threading_enabled) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -539,15 +539,19 @@
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
+    YY(jl_jit_total_bytes) \
     YY(jl_lock_profile) \
     YY(jl_unlock_profile) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
+    YY(jl_dump_emitted_mi_name) \
+    YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
+    YY(jl_add_optimization_passes) \
     YY(LLVMExtraAddLowerSimdLoopPass) \
     YY(LLVMExtraAddFinalLowerGCPass) \
     YY(LLVMExtraAddPropagateJuliaAddrspaces) \
@@ -562,4 +566,5 @@
     YY(LLVMExtraAddRemoveNIPass) \
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
+    YY(LLVMExtraAddCPUFeaturesPass) \
 

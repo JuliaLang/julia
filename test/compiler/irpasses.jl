@@ -4,7 +4,10 @@ using Test
 using Base.Meta
 using Core: PhiNode, SSAValue, GotoNode, PiNode, QuoteNode, ReturnNode, GotoIfNot
 
-# Tests for domsort
+include(normpath(@__DIR__, "irutils.jl"))
+
+# domsort
+# =======
 
 ## Test that domsort doesn't mangle single-argument phis (#29262)
 let m = Meta.@lower 1 + 1
@@ -67,7 +70,318 @@ let m = Meta.@lower 1 + 1
     Core.Compiler.verify_ir(ir)
 end
 
-# Tests for SROA
+# SROA
+# ====
+
+struct ImmutableXYZ; x; y; z; end
+mutable struct MutableXYZ; x; y; z; end
+
+# should optimize away very basic cases
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+end
+
+# should handle simple mutabilities
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.y = 42
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), 42, #=x=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        xyz.x, xyz.z = xyz.z, xyz.x
+        xyz.x, xyz.y, xyz.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=z=# Core.Argument(4), #=y=# Core.Argument(3), #=x=# Core.Argument(2)]
+    end
+end
+# circumvent uninitialized fields as far as there is a solid `setfield!` definition
+let src = code_typed1() do
+        r = Ref{Any}()
+        r[] = 42
+        return r[]
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,)) do cond
+        r = Ref{Any}()
+        if cond
+            r[] = 42
+            return r[]
+        else
+            r[] = 32
+            return r[]
+        end
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,)) do cond
+        r = Ref{Any}()
+        if cond
+            r[] = 42
+        else
+            r[] = 32
+        end
+        return r[]
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any,Any)) do c1, c2, x, y, z
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            else
+                r[] = y
+            end
+        else
+            r[] = z
+        end
+        return r[]
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Bool,)) do cond
+        r = Ref{Any}()
+        if cond
+            r[] = 42
+        end
+        return r[]
+    end
+    # N.B. `r` should be allocated since `cond` might be `false` and then it will be thrown
+    @test any(isnew, src.code)
+end
+let src = code_typed1((Bool,Bool,Any,Any)) do c1, c2, x, y
+        r = Ref{Any}()
+        if c1
+            if c2
+                r[] = x
+            end
+        else
+            r[] = y
+        end
+        return r[]
+    end
+    # N.B. `r` should be allocated since `c2` might be `false` and then it will be thrown
+    @test any(isnew, src.code)
+end
+
+# should include a simple alias analysis
+struct ImmutableOuter{T}; x::T; y::T; z::T; end
+mutable struct MutableOuter{T}; x::T; y::T; z::T; end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        outer = ImmutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test !any(src.code) do @nospecialize x
+        Meta.isexpr(x, :new)
+    end
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        # #42831 forms ::PartialStruct(ImmutableOuter{Any}, Any[ImmutableXYZ, ImmutableXYZ, ImmutableXYZ])
+        # so the succeeding `getproperty`s are type stable and inlined
+        outer = ImmutableOuter{Any}(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
+end
+
+# FIXME our analysis isn't yet so powerful at this moment: may be unable to handle nested objects well
+# OK: mutable(immutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        t   = (xyz,)
+        v = t[1].x
+        v, v, v
+    end
+    @test !any(isnew, src.code)
+end
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        outer = ImmutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test !any(isnew, src.code)
+    @test any(src.code) do @nospecialize x
+        iscall((src, tuple), x) &&
+        x.args[2:end] == Any[#=x=# Core.Argument(2), #=y=# Core.Argument(3), #=y=# Core.Argument(4)]
+    end
+end
+let # this is a simple end to end test case, which demonstrates allocation elimination
+    # by handling `mutable[RefValue{String}](immutable[Tuple](...))` case correctly
+    # NOTE this test case isn't so robust and might be subject to future changes of the broadcasting implementation,
+    # in that case you don't really need to stick to keeping this test case around
+    simple_sroa(s) = broadcast(identity, Ref(s))
+    s = Base.inferencebarrier("julia")::String
+    simple_sroa(s)
+    # NOTE don't hard-code `"julia"` in `@allocated` clause and make sure to execute the
+    # compiled code for `simple_sroa`, otherwise everything can be folded even without SROA
+    @test @allocated(simple_sroa(s)) == 0
+end
+# FIXME: immutable(mutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = ImmutableXYZ(x, y, z)
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test_broken !any(isnew, src.code)
+end
+# FIXME: mutable(mutable(...)) case
+let src = code_typed1((Any,Any,Any)) do x, y, z
+        xyz = MutableXYZ(x, y, z)
+        outer = MutableOuter(xyz, xyz, xyz)
+        outer.x.x, outer.y.y, outer.z.z
+    end
+    @test_broken !any(isnew, src.code)
+end
+
+let # should work with constant globals
+    # immutable case
+    # --------------
+    src = @eval Module() begin
+        const REF_FLD = :x
+        struct ImmutableRef{T}
+            x::T
+        end
+
+        code_typed((Int,)) do x
+            r = ImmutableRef{Int}(x) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(isnew, src.code) == 0
+
+    # mutable case
+    # ------------
+    src = @eval Module() begin
+        const REF_FLD = :x
+        code_typed() do
+            r = Ref{Int}(42) # should be eliminated
+            x = getfield(r, REF_FLD) # should be eliminated
+            return sin(x)
+        end |> only |> first
+    end
+    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(isnew, src.code) == 0
+end
+
+# should work nicely with inlining to optimize away a complicated case
+# adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
+struct Point
+    x::Float64
+    y::Float64
+end
+#=@inline=# add(a::Point, b::Point) = Point(a.x + b.x, a.y + b.y)
+function compute_points()
+    a = Point(1.5, 2.5)
+    b = Point(2.25, 4.75)
+    for i in 0:(100000000-1)
+        a = add(add(a, b), b)
+    end
+    a.x, a.y
+end
+let src = code_typed1(compute_points)
+    @test !any(isnew, src.code)
+end
+
+# comparison lifting
+# ==================
+
+let # lifting `===`
+    src = code_typed1((Bool,Int,)) do c, x
+        y = c ? x : nothing
+        y === nothing # => ϕ(false, true)
+    end
+    @test count(iscall((src, ===)), src.code) == 0
+
+    # should optimize away the iteration protocol
+    src = code_typed1((Int,)) do n
+        s = 0
+        for i in 1:n
+            s += i
+        end
+        s
+    end
+    @test !any(src.code) do @nospecialize x
+        iscall((src, ===), x) && argextype(x.args[2], src) isa Union
+    end
+end
+
+let # lifting `isa`
+    src = code_typed1((Bool,Int,)) do c, x
+        y = c ? x : nothing
+        isa(y, Int) # => ϕ(true, false)
+    end
+    @test count(iscall((src, isa)), src.code) == 0
+
+    src = code_typed1((Int,)) do n
+        s = 0
+        itr = 1:n
+        st = iterate(itr)
+        while !isa(st, Nothing)
+            i, st = itr
+            s += i
+            st = iterate(itr, st)
+        end
+        s
+    end
+    @test !any(src.code) do @nospecialize x
+        iscall((src, isa), x) && argextype(x.args[2], src) isa Union
+    end
+end
+
+let # lifting `isdefined`
+    src = code_typed1((Bool,Some{Int},)) do c, x
+        y = c ? x : nothing
+        isdefined(y, 1) # => ϕ(true, false)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+
+    src = code_typed1((Int,)) do n
+        s = 0
+        itr = 1:n
+        st = iterate(itr)
+        while isdefined(st, 2)
+            i, st = itr
+            s += i
+            st = iterate(itr, st)
+        end
+        s
+    end
+    @test !any(src.code) do @nospecialize x
+        iscall((src, isdefined), x) && argextype(x.args[2], src) isa Union
+    end
+end
 
 mutable struct Foo30594; x::Float64; end
 Base.copy(x::Foo30594) = Foo30594(x.x)
@@ -135,9 +449,7 @@ struct FooPartial
     global f_partial
     f_partial(x) = new(x, 2).x
 end
-let ci = code_typed(f_partial, Tuple{Float64})[1].first
-    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode)
-end
+@test fully_eliminated(f_partial, Tuple{Float64})
 
 # A SSAValue after the compaction line
 let m = Meta.@lower 1 + 1
@@ -180,7 +492,7 @@ let m = Meta.@lower 1 + 1
     src.ssaflags = fill(Int32(0), nstmts)
     ir = Core.Compiler.inflate_ir(src, Any[], Any[Any, Any])
     @test Core.Compiler.verify_ir(ir) === nothing
-    ir = @test_nowarn Core.Compiler.getfield_elim_pass!(ir)
+    ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
@@ -319,11 +631,7 @@ function no_op_refint(r)
     r[]
     return
 end
-let code = code_typed(no_op_refint,Tuple{Base.RefValue{Int}})[1].first.code
-    @test length(code) == 1
-    @test isa(code[1], Core.ReturnNode)
-    @test code[1].val === nothing
-end
+@test fully_eliminated(no_op_refint,Tuple{Base.RefValue{Int}}; retval=nothing)
 
 # check getfield elim handling of GlobalRef
 const _some_coeffs = (1,[2],3,4)
@@ -384,48 +692,6 @@ exc39508 = ErrorException("expected")
 end
 @test test39508() === exc39508
 
-let # `getfield_elim_pass!` should work with constant globals
-    # immutable pass
-    src = @eval Module() begin
-        const REF_FLD = :x
-        struct ImmutableRef{T}
-            x::T
-        end
-
-        code_typed((Int,)) do x
-            r = ImmutableRef{Int}(x) # should be eliminated
-            x = getfield(r, REF_FLD) # should be eliminated
-            return sin(x)
-        end |> only |> first
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
-        return Core.Compiler.widenconst(ft) == typeof(getfield)
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        return Meta.isexpr(stmt, :new)
-    end
-
-    # mutable pass
-    src = @eval Module() begin
-        const REF_FLD = :x
-        code_typed() do
-            r = Ref{Int}(42) # should be eliminated
-            x = getfield(r, REF_FLD) # should be eliminated
-            return sin(x)
-        end |> only |> first
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        Meta.isexpr(stmt, :call) || return false
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
-        return Core.Compiler.widenconst(ft) == typeof(getfield)
-    end
-    @test !any(src.code) do @nospecialize(stmt)
-        return Meta.isexpr(stmt, :new)
-    end
-end
-
 let
     # `typeassert` elimination after SROA
     # NOTE we can remove this optimization once inference is able to reason about memory-effects
@@ -439,9 +705,129 @@ let
         end |> only |> first
     end
     # eliminate `typeassert(x2.x, Foo)`
-    @test all(src.code) do @nospecialize stmt
-        Meta.isexpr(stmt, :call) || return true
-        ft = Core.Compiler.argextype(stmt.args[1], src, Any[], src.slottypes)
-        return Core.Compiler.widenconst(ft) !== typeof(typeassert)
+    @test count(iscall((src, typeassert)), src.code) == 0
+end
+
+let
+    # Test for https://github.com/JuliaLang/julia/issues/43402
+    # Ensure that structs required not used outside of the ccall,
+    # still get listed in the ccall_preserves
+
+    src = @eval Module() begin
+        @inline function effectful()
+            s1 = Ref{Csize_t}()
+            s2 = Ref{Csize_t}()
+            ccall(:some_ccall, Cvoid,
+                  (Ref{Csize_t},Ref{Csize_t}),
+                  s1, s2)
+            return s1[], s2[]
+        end
+
+        code_typed() do
+            s1, s2 = effectful()
+            return s1
+        end |> only |> first
     end
+
+    refs = map(Core.SSAValue, findall(x->x isa Expr && x.head == :new, src.code))
+    some_ccall = findfirst(x -> x isa Expr && x.head == :foreigncall && x.args[1] == :(:some_ccall), src.code)
+    @assert some_ccall !== nothing
+    stmt = src.code[some_ccall]
+    nccallargs = length(stmt.args[3]::Core.SimpleVector)
+    preserves = stmt.args[6+nccallargs:end]
+    @test length(refs) == 2
+    @test length(preserves) == 2
+    @test all(alloc -> alloc in preserves, refs)
+end
+
+# test `stmt_effect_free` and DCE
+# ===============================
+
+let # effect-freeness computation for array allocation
+
+    # should eliminate dead allocations
+    good_dims = (0, 2)
+    for dim in good_dims, N in 0:10
+        dims = ntuple(i->dim, N)
+        @eval @test fully_eliminated(()) do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+    end
+
+    # shouldn't eliminate errorneous dead allocations
+    bad_dims = [-1,           # should keep "invalid Array dimensions"
+                typemax(Int)] # should keep "invalid Array size"
+    for dim in bad_dims, N in 1:10
+        dims = ntuple(i->dim, N)
+        @eval @test !fully_eliminated(()) do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+    end
+
+    # some high-level examples
+    @test fully_eliminated(()) do
+        Int[]
+        nothing
+    end
+    @test fully_eliminated(()) do
+        Matrix{Tuple{String,String}}(undef, 4, 4)
+        nothing
+    end
+    @test fully_eliminated(()) do
+        IdDict{Any,Any}()
+        nothing
+    end
+end
+
+# allow branch folding to look at type information
+let ci = code_typed1(optimize=false) do
+        cond = 1 + 1 == 2
+        if !cond
+            gcd(24, 36)
+        else
+            gcd(64, 128)
+        end
+    end
+    ir = Core.Compiler.inflate_ir(ci)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 1
+    ir = Core.Compiler.compact!(ir, true)
+    @test count(@nospecialize(stmt)->isa(stmt, Core.GotoIfNot), ir.stmts.inst) == 0
+end
+
+# Test that adce_pass! can drop phi node uses that can be concluded unused
+# from PiNode analysis.
+let src = @eval Module() begin
+        @noinline mkfloat() = rand(Float64)
+        @noinline use(a::Float64) = ccall(:jl_, Cvoid, (Any,), a)
+        dispatch(a::Float64) = use(a)
+        dispatch(a::Tuple) = nothing
+        function foo(b)
+            a = mkfloat()
+            a = b ? (a, 2.0) : a
+            dispatch(a)
+        end
+        code_typed(foo, Tuple{Bool})[1][1]
+    end
+    @test count(iscall((src, Core.tuple)), src.code) == 0
+end
+
+# Test that cfg_simplify can converging control flow through empty blocks
+function foo_cfg_empty(b)
+    if b
+        @goto x
+    end
+    @label x
+    return 1
+end
+let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test length(ir.stmts) == 3
+    @test length(ir.cfg.blocks) == 3
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) <= 2
+    @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
 end

@@ -15,12 +15,12 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new [ex=true]
+    @deprecate old new [export_old=true]
 
 Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
 with the specified signature in the process.
 
-To prevent `old` from being exported, set `ex` to `false`.
+To prevent `old` from being exported, set `export_old` to `false`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -53,13 +53,13 @@ julia> methods(old)
 will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
 define nor deprecate the method `old(x::Float64)`.
 """
-macro deprecate(old, new, ex=true)
+macro deprecate(old, new, export_old=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
         Expr(:toplevel,
-            ex ? Expr(:export, esc(old)) : nothing,
+            export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
@@ -83,7 +83,7 @@ macro deprecate(old, new, ex=true)
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export, esc(oldsym)) : nothing,
+        export_old ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
@@ -286,5 +286,6 @@ end
 
 @deprecate var"@_inline_meta"   var"@inline"   false
 @deprecate var"@_noinline_meta" var"@noinline" false
+@deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations

@@ -141,7 +141,7 @@
            ((typed_hcat)  (string (deparse (cadr e))
                                   (deparse (cons 'hcat (cddr e)))))
            ((ncat)        (string #\[ (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " "))
-                                      (if (= (length (cddr e)) 1)
+                                      (if (<= (length (cddr e)) 1)
                                           (deparse-semicolons (cadr e))
                                           "") #\]))
            ((typed_ncat)  (string (deparse (cadr e))
@@ -378,7 +378,7 @@
   (or (symbol? e) (decl? e)))
 
 (define (eventually-decl? e)
-  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
+  (or (symbol? e) (and (pair? e) (memq (car e) '(|::| atomic const)) (eventually-decl? (cadr e)))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 
