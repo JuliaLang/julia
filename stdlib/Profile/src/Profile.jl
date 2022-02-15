@@ -73,11 +73,9 @@ Set the duration in seconds of the profile "peek" that is triggered via `SIGINFO
 set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Float64,), t)
 
 precompile_script = """
-let _Profile = Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")
-    Base.loaded_modules[_Profile].@profile sleep(1)
-    Base.loaded_modules[_Profile].peek_report[]()
-    Base.loaded_modules[_Profile].clear()
-end
+Profile.@profile sleep(0.5)
+Profile.peek_report[]()
+Profile.clear()
 """
 
 ####
