@@ -360,22 +360,24 @@ cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconv
     end
 end
 
-check_store(a::StridedReinterpretArray) = check_store(parent(a))
-check_store(a::FastContiguousSubArray) = check_store(parent(a))
-check_store(a::Array) = true
-check_store(a::AbstractArray) = false
+check_ptr_indexable(a::ReinterpretArray, sz = elsize(a)) = check_ptr_indexable(parent(a), sz)
+check_ptr_indexable(a::ReshapedArray, sz) = check_ptr_indexable(parent(a), sz)
+check_ptr_indexable(a::FastContiguousSubArray, sz) = check_ptr_indexable(parent(a), sz)
+check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
+check_ptr_indexable(a::Memory, sz) = true
+check_ptr_indexable(a::AbstractArray, sz) = false
 
 @propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
-    check_store(a) && return _getindex_ptr(a, inds...)
+    check_ptr_indexable(a) && return _getindex_ptr(a, inds...)
     _getindex_ra(a, inds[1], tail(inds))
 end
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
     check_readable(a)
-    check_store(a) && return _getindex_ptr(a, i)
+    check_ptr_indexable(a) && return _getindex_ptr(a, i)
     if isa(IndexStyle(a), IndexLinear)
         return _getindex_ra(a, i, ())
     end
@@ -515,13 +517,13 @@ end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
-    check_store(a) && return _setindex_ptr!(a, v, inds...)
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, inds...)
     _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
     check_writable(a)
-    check_store(a) && return _setindex_ptr!(a, v, i)
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, i)
     if isa(IndexStyle(a), IndexLinear)
         return _setindex_ra!(a, v, i, ())
     end
