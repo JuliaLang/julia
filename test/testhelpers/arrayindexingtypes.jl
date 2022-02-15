@@ -66,3 +66,6 @@ Base.axes(A::WrapperArray) = axes(A.parent)
 Base.getindex(A::WrapperArray, i::Int...) = A.parent[i...]
 Base.setindex!(A::WrapperArray, v, i::Int...) = A.parent[i...] = v
 Base.similar(A::WrapperArray, ::Type{T}, dims::Dims) where T = similar(A.parent, T, dims)
+Base.unsafe_convert(::Type{Ptr{T}}, A::WrapperArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.strides(A::WrapperArray) = strides(A.parent)
+Base.elsize(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.elsize(A)
