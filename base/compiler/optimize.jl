@@ -235,16 +235,15 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
         elseif head === :foreigncall
             return foreigncall_effect_free(stmt, src)
         elseif head === :new_opaque_closure
-            length(args) < 5 && return false
+            length(args) < 4 && return false
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
             typ ⊑ Tuple || return false
-            isva = argextype(args[2], src)
-            rt_lb = argextype(args[3], src)
-            rt_ub = argextype(args[4], src)
-            src = argextype(args[5], src)
-            if !(isva ⊑ Bool && rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+            rt_lb = argextype(args[2], src)
+            rt_ub = argextype(args[3], src)
+            src = argextype(args[4], src)
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
                 return false
             end
             return true

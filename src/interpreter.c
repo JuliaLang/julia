@@ -287,9 +287,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
-        JL_NARGSV(new_opaque_closure, 5);
+        JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv[4], argv+5, nargs-5);
+            argv[3], argv+4, nargs-4);
         JL_GC_POP();
         return ret;
     }
@@ -714,7 +714,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->continue_at = 0;
     s->mi = NULL;
     size_t defargs = source->nargs;
-    int isva = !!oc->isva;
+    int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
     for (size_t i = 1; i < defargs - isva; i++)
         s->locals[i] = args[i - 1];
