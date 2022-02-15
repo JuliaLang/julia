@@ -432,10 +432,10 @@ find_extended_inds() = ()
 function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
     return unsafe_convert(Ptr{T}, V.parent) + _memory_offset(V.parent, map(first, V.indices)...)
 end
+unsafe_convert(::Type{Ptr{T}}, V::FastContiguousSubArray{T}) where {T} = unsafe_convert(Ptr{T}, V.parent) + V.offset1 * sizeof(T)
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
 pointer(V::FastContiguousSubArray, i::Int) = pointer(V.parent, V.offset1 + i)
-
 function pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::AbstractCartesianIndex{N}) where {N}
     index = first_index(V)
     strds = strides(V)

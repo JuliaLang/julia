@@ -508,3 +508,13 @@ end
     @test setindex!(x, SomeSingleton(:), 3, 5) == x2
     @test_throws MethodError x[2,4] = nothing
 end
+
+@testset "pointer for StridedArray" begin
+    a = rand(Float64, 251)
+    v = view(a, UInt(2):UInt(251));
+    A = reshape(v, 25, 10);
+    @test A isa StridedArray && pointer(A) === pointer(a, 2)
+    Av = view(A, 1:20, 1:2)
+    @test Av isa StridedArray && pointer(Av) === pointer(a, 2)
+    @test Av * Av' isa Array
+end
