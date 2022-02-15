@@ -254,6 +254,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
   * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia (compared with Python, Julia is faster at ordinary control flow but slower at exception-catching).
   * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
+  * When broadcasting, Julia adds trailing dimensions while Numpy adds leading dimensions. Codes like `ones(2) .+ zeros(2,3)` works in julia while `np.ones((2,)) + np.zeros((2,3))` errors in Numpy.
   * Be careful with non-constant global variables in Julia, especially in tight loops. Since you can write close-to-metal code in Julia (unlike Python), the effect of globals can be drastic (see [Performance Tips](@ref man-performance-tips)).
   * In Julia, rounding and truncation are explicit. Python's `int(3.7)` should be `floor(Int, 3.7)` or `Int(floor(3.7))` and is distinguished from `round(Int, 3.7)`. `floor(x)` and `round(x)` on their own return an integer value of the same type as `x` rather than always returning `Int`.
   * In Julia, parsing is explicit. Python's `float("3.7")` would be `parse(Float64, "3.7")` in Julia.
