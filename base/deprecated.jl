@@ -39,13 +39,16 @@ old (generic function with 1 method)
 Calls to `@deprecate` without explicit type-annotations will define deprecated methods
 accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
 the arguments of `old`. For example,
-```jldoctest
-julia> new(x::Int) = x
+```jldoctest; filter = r"in Main at.*"
+julia> new(x::Int) = x;
 
-julia> new(x::Float64) = 2x
+julia> new(x::Float64) = 2x;
 
-julia> @deprecate old(x::Int) new(x)
-old (generic function with 1 method)
+julia> @deprecate old(x::Int) new(x);
+
+julia> methods(old)
+# 1 method for generic function "old":
+[1] old(x::Int64) in Main at deprecated.jl:70
 ```
 will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
 define nor deprecate the method `old(x::Float64)`.
