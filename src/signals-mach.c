@@ -643,7 +643,6 @@ void *mach_profile_listener(void *arg)
         }
         jl_unlock_profile_mach(0, keymgr_locked);
         if (running) {
-            jl_check_profile_autostop();
             // Reset the alarm
             kern_return_t ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
             HANDLE_MACH_ERROR("clock_alarm", ret)
