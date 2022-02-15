@@ -15,10 +15,10 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new [ex=true]
+    @deprecate old new [export_old=true]
 
 Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
-exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
+exporting `old` by setting `export_old` to `false`. `@deprecate` defines a new method with the same
 signature as `old`.
 
 !!! compat "Julia 1.5"
@@ -35,13 +35,13 @@ julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
 """
-macro deprecate(old, new, ex=true)
+macro deprecate(old, new, export_old=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
         Expr(:toplevel,
-            ex ? Expr(:export, esc(old)) : nothing,
+            export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
@@ -65,7 +65,7 @@ macro deprecate(old, new, ex=true)
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export, esc(oldsym)) : nothing,
+        export_old ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
