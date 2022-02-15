@@ -146,7 +146,7 @@ Standard library changes
 * Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Profile
-* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+* CPU profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
   grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
   Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
   each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
@@ -154,6 +154,9 @@ Standard library changes
 * The new `Profile.Allocs` module allows memory allocations to be profiled. The stack trace, type, and size of each
   allocation is recorded, and a `sample_rate` argument allows a tunable amount of allocations to be skipped,
   reducing performance overhead. ([#42768])
+* A fixed duration cpu profile can now be triggered by the user during running tasks without `Profile` being loaded
+  first and the report will show during execution. On MacOS & FreeBSD press `ctrl-t` or raise a `SIGINFO`.
+  For other platforms raise a `SIGUSR1` i.e. `% kill -USR1 $julia_pid`. Not currently available on windows. ([#43179])
 
 #### Random
 
