@@ -40,7 +40,7 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 dotgetproperty(x, f) = getproperty(x, f)
 
 getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-function setproperty!(x::Module, f::Symbol, v, order::Symbol=:release)
+function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
     @inline
     val::Core.get_binding_type(x, f) = v
     return setfield!(x, f, val, order)
