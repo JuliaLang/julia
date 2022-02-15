@@ -808,7 +808,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     jl_value_t *old_ty = NULL;
     if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
-        jl_errorf("cannot set type for global %s. It already has a value of a different type.",
+        jl_errorf("cannot assign an incompatible value to the global %s.",
                   jl_symbol_name(b->name));
     }
     if (b->constp) {
