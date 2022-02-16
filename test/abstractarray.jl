@@ -1584,6 +1584,19 @@ end
     end
 end
 
+@testset "stride for 0 dims array #44087" begin
+    struct Fill44087 <: AbstractArray{Int,0}
+        a::Int
+    end
+    # `stride` shouldn't work if `strides` is not defined.
+    @test_throws MethodError stride(Fill44087(1), 1)
+    # It is intentionally to only check the return type. (The value is somehow arbitrary)
+    @test stride(fill(1), 1) isa Int
+    @test stride(reinterpret(Float64, fill(Int64(1))), 1) isa Int
+    @test stride(reinterpret(reshape, Float64, fill(Int64(1))), 1) isa Int
+    @test stride(Base.ReshapedArray(fill(1), (), ()), 1) isa Int
+end
+
 @testset "to_indices inference (issue #42001 #44059)" begin
     @test (@inferred to_indices([], ntuple(Returns(CartesianIndex(1)), 32))) == ntuple(Returns(1), 32)
     @test (@inferred to_indices([], ntuple(Returns(CartesianIndices(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
