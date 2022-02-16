@@ -608,7 +608,7 @@ const arch_march_isa_mapping = let
             "armv8_0" => get_set("aarch64", "armv8.0-a"),
             "armv8_1" => get_set("aarch64", "armv8.1-a"),
             "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
-            "armv8_4_crypto_sve" => get_set("aarch64", "armv8.4-a+crypto+sve"),
+            "a64fx" => get_set("aarch64", "a64fx"),
         ],
         "powerpc64le" => [
             "power8" => get_set("powerpc64le", "power8"),
