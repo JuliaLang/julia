@@ -517,17 +517,21 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
 
     write_uint8(s->s, TAG_CODE_INSTANCE);
     write_uint8(s->s, flags);
+    write_uint8(s->s, codeinst->ipo_purity_bits);
+    write_uint8(s->s, codeinst->purity_bits);
     jl_serialize_value(s, (jl_value_t*)codeinst->def);
     if (write_ret_type) {
         jl_serialize_value(s, codeinst->inferred);
         jl_serialize_value(s, codeinst->rettype_const);
         jl_serialize_value(s, codeinst->rettype);
+        jl_serialize_value(s, codeinst->argescapes);
     }
     else {
         // skip storing useless data
         jl_serialize_value(s, NULL);
         jl_serialize_value(s, NULL);
         jl_serialize_value(s, jl_any_type);
+        jl_serialize_value(s, jl_nothing);
     }
     write_uint8(s->s, codeinst->relocatability);
     jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
@@ -704,6 +708,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int8(s->s, m->pure);
         write_int8(s->s, m->is_for_opaque_closure);
         write_int8(s->s, m->constprop);
+        write_uint8(s->s, m->purity.bits);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
         jl_serialize_value(s, (jl_value_t*)m->root_blocks);
@@ -1572,6 +1577,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->pure = read_int8(s->s);
     m->is_for_opaque_closure = read_int8(s->s);
     m->constprop = read_int8(s->s);
+    m->purity.bits = read_uint8(s->s);
     m->slot_syms = jl_deserialize_value(s, (jl_value_t**)&m->slot_syms);
     jl_gc_wb(m, m->slot_syms);
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
@@ -1652,6 +1658,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     int flags = read_uint8(s->s);
     int validate = (flags >> 0) & 3;
     int constret = (flags >> 2) & 1;
+    codeinst->ipo_purity_bits = read_uint8(s->s);
+    codeinst->purity_bits = read_uint8(s->s);
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
     codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
@@ -1661,6 +1669,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         jl_gc_wb(codeinst, codeinst->rettype_const);
     codeinst->rettype = jl_deserialize_value(s, &codeinst->rettype);
     jl_gc_wb(codeinst, codeinst->rettype);
+    codeinst->argescapes = jl_deserialize_value(s, &codeinst->argescapes);
+    jl_gc_wb(codeinst, codeinst->argescapes);
     if (constret)
         codeinst->invoke = jl_fptr_const_return;
     if ((flags >> 3) & 1)

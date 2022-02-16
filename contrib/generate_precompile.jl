@@ -7,7 +7,7 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 using Base.Meta
 
@@ -102,7 +102,7 @@ precompile_script = """
 # end
 """
 
-julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
+julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
@@ -221,6 +221,7 @@ Profile = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
           nothing)
 if Profile !== nothing
+    repl_script *= Profile.precompile_script
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
@@ -229,6 +230,11 @@ if Profile !== nothing
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Vector{Int}, Vector{UInt}})
     """
 end
+
+const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
 
 function generate_precompile_statements()
     start_time = time_ns()
@@ -288,9 +294,7 @@ function generate_precompile_statements()
                     "JULIA_PKG_PRECOMPILE_AUTO" => "0",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                   --cpu-target=native --startup-file=no --color=yes
-                   -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                   -i $cmdargs```,
+                   --cpu-target=native --startup-file=no -i $cmdargs```,
                    pts, pts, pts; wait=false)
         end
         Base.close_stdio(pts)
@@ -312,7 +316,7 @@ function generate_precompile_statements()
             close(ptm)
         end
         # wait for the definitive prompt before start writing to the TTY
-        readuntil(output_copy, "julia>")
+        readuntil(output_copy, JULIA_PROMPT)
         sleep(0.1)
         readavailable(output_copy)
         # Input our script
@@ -330,9 +334,16 @@ function generate_precompile_statements()
                 write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
-                readuntil(output_copy, "> ")
+                strbuf = ""
+                while true
+                    strbuf *= String(readavailable(output_copy))
+                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(PKG_PROMPT, strbuf) && break
+                    occursin(SHELL_PROMPT, strbuf) && break
+                    occursin(HELP_PROMPT, strbuf) && break
+                    sleep(0.1)
+                end
             end
             println()
         end

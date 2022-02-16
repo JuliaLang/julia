@@ -6,14 +6,15 @@
 #ifdef _OS_WINDOWS_
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEPSTRING ";"
+#define JL_PATH_MAX PATH_MAX
 #if defined(_COMPILER_CLANG_)
-#define PATH_MAX MAX_PATH
+#define JL_PATH_MAX MAX_PATH
 #endif
 #else
 #define PATHSEPSTRING "/"
 #define PATHLISTSEPSTRING ":"
-#ifndef PATH_MAX // many platforms don't have a max path, we define one anyways
-#define PATH_MAX 1024
+#ifndef JL_PATH_MAX // many platforms don't have a max path, we define one anyways
+#define JL_PATH_MAX 1024
 #endif
 #endif
 

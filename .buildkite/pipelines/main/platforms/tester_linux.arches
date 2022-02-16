@@ -1,5 +1,5 @@
 # PLATFORM    LABEL         GROUP    ALLOW_FAIL    ARCH        ARCH_ROOTFS    MAKE_FLAGS     TIMEOUT_BK    TIMEOUT_RR     RETRIES    IS_RR    IS_ST    IS_MT    ROOTFS_TAG    ROOTFS_HASH
-linux         32_g1         g1       .             32          i686           .              .             .              .          .        .        .        v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
+linux         32_g1         g1       .             32          i686           .              120           .              .          .        .        .        v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
 linux         32_g2         g2       .             32          i686           .              .             .              3          .        .        .        v4.8          b6dffc772ab4c2cd7fd4f83459308f6f0d89b957
 
 linux         64_g1_mt      g1       .             64          x86_64         .              .             .              .          .        .        yes      v4.8          2a058481b567f0e91b9aa3ce4ad4f09e6419355a

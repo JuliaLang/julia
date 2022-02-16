@@ -27,7 +27,8 @@ threads.
     In older versions you must use the environment variable instead.
 
 !!! compat "Julia 1.7"
-    Using `auto` together with the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
 ```bash

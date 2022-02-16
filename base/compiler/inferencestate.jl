@@ -59,6 +59,9 @@ mutable struct InferenceState
     inferred::Bool
     dont_work_on_me::Bool
 
+    # Inferred purity flags
+    ipo_effects::Effects
+
     # The place to look up methods while working on this function.
     # In particular, we cache method lookup results for the same function to
     # fast path repeated queries.
@@ -113,6 +116,16 @@ mutable struct InferenceState
         valid_worlds = WorldRange(src.min_world,
             src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
 
+        # TODO: Currently, any :inbounds declaration taints consistency,
+        #       because we cannot be guaranteed whether or not boundschecks
+        #       will be eliminated and if they are, we cannot be guaranteed
+        #       that no undefined behavior will occur (the effects assumptions
+        #       are stronger than the inbounds assumptions, since the latter
+        #       requires dynamic reachability, while the former is global).
+        inbounds = inbounds_option()
+        inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
+        consistent = inbounds_taints_consistency ? TRISTATE_UNKNOWN : ALWAYS_TRUE
+
         @assert cache === :no || cache === :local || cache === :global
         frame = new(
             params, result, linfo,
@@ -126,12 +139,25 @@ mutable struct InferenceState
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
             cache === :global, false, false,
+            Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE,
+                   inbounds_taints_consistency),
             CachedMethodTable(method_table(interp)),
             interp)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)
         return frame
     end
+end
+Effects(state::InferenceState) = state.ipo_effects
+
+function any_inbounds(code::Vector{Any})
+    for i=1:length(code)
+        stmt = code[i]
+        if isa(stmt, Expr) && stmt.head === :inbounds
+            return true
+        end
+    end
+    return false
 end
 
 function compute_trycatch(code::Vector{Any}, ip::BitSet)

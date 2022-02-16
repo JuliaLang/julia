@@ -285,6 +285,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@assume_effects
 Base.@deprecate
 ```
 

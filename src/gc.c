@@ -1134,6 +1134,7 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
         else
             free(d);
         gc_num.freed += jl_array_nbytes(a);
+        gc_num.freecall++;
     }
 }
 

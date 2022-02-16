@@ -497,6 +497,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,

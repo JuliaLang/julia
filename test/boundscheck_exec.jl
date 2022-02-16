@@ -272,4 +272,16 @@ end
     end
 end
 
+
+# Test that --check-bounds=off doesn't permit const prop of indices into
+# function that are not dynamically reachable (the same test for @inbounds
+# is in the compiler tests).
+function f_boundscheck_elim(n)
+    # Inbounds here assumes that this is only ever called with n==0, but of
+    # course the compiler has no way of knowing that, so it must not attempt
+    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    ntuple(x->getfield(sin, x), n)
+end
+@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
 end

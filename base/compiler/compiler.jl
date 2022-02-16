@@ -29,6 +29,7 @@ macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
 convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 
 # essential files and libraries
 include("essentials.jl")
@@ -97,6 +98,8 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core docsystem
 include("docs/core.jl")
+import Core.Compiler.CoreDocs
+Core.atdoc!(CoreDocs.docm)
 
 # sorting
 function sort end
