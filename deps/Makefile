@@ -214,6 +214,7 @@ include $(SRCDIR)/blastrampoline.mk
 include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
+include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
@@ -224,7 +225,6 @@ include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
-include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/p7zip.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

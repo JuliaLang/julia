@@ -129,6 +129,35 @@ static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
     return i;
 }
 
+static double profile_autostop_time = -1.0;
+static double profile_peek_duration = 1.0; // seconds
+
+double jl_get_profile_peek_duration(void) {
+    return profile_peek_duration;
+}
+void jl_set_profile_peek_duration(double t) {
+    profile_peek_duration = t;
+    return;
+}
+
+uintptr_t profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+{
+    profile_show_peek_cond_loc = cond;
+    return;
+}
+
+static void jl_check_profile_autostop(void) {
+    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+        profile_autostop_time = -1.0;
+        jl_profile_stop_timer();
+        jl_safe_printf("\n==============================================================\n");
+        jl_safe_printf("Profile collected. A report will print at the next yield point\n");
+        jl_safe_printf("==============================================================\n\n");
+        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+    }
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
@@ -253,6 +282,10 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             ct->gcstack = NULL;
             ct->eh = NULL;
             ct->excstack = NULL;
+            ct->ptls->locks.len = 0;
+            ct->ptls->in_pure_callback = 0;
+            ct->ptls->in_finalizer = 1;
+            ct->world_age = 1;
         }
 #ifndef _OS_WINDOWS_
         sigset_t sset;

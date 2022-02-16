@@ -27,7 +27,8 @@ threads.
     In older versions you must use the environment variable instead.
 
 !!! compat "Julia 1.7"
-    Using `auto` together with the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
 ```bash
@@ -306,9 +307,6 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * After a task starts running on a certain thread (e.g. via `@spawn`), it
-    will always be restarted on the same thread after blocking. In the future
-    this limitation will be removed, and tasks will migrate between threads.
   * `@threads` currently uses a static schedule, using all threads and assigning
     equal iteration counts to each. In the future the default schedule is likely
     to change to be dynamic.

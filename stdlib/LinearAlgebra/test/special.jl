@@ -375,12 +375,18 @@ using .Main.Furlongs
     @test one(S) isa SymTridiagonal
 
     # eltype with dimensions
-    D = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4])
-    Bu = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
-    Bl =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
-    T = Tridiagonal{Furlong{2, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
-    S = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3])
-    mats = [D, Bu, Bl, T, S]
+    D0 = Diagonal{Furlong{0, Int64}}([1, 2, 3, 4])
+    Bu0 = Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
+    Bl0 =  Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
+    T0 = Tridiagonal{Furlong{0, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
+    S0 = SymTridiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3])
+    F2 = Furlongs.Furlong{2}(1)
+    D2 = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2)
+    Bu2 = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'U')
+    Bl2 =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'L')
+    T2 = Tridiagonal{Furlong{2, Int64}}([1, 2, 3].*F2, [1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    S2 = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    mats = Any[D0, Bu0, Bl0, T0, S0, D2, Bu2, Bl2, T2, S2]
     for A in mats
         @test iszero(zero(A))
         @test isone(one(A))
@@ -451,6 +457,33 @@ end
     @test Bu + S ≈ Mbu + Ms
     @test S + Bl ≈ Ms + Mbl
     @test Bl + S ≈ Mbl + Ms
+end
+
+@testset "Ensure Strided * (Sym)Tridiagonal is Dense" begin
+    x = rand(3)
+    y = rand(3)
+    z = rand(2)
+
+    l = rand(12, 12)
+    # strided but not a Matrix
+    v = @view l[1:4:end, 1:4:end]
+    M_v = Matrix(v)
+    m = rand(3, 3)
+
+    S = SymTridiagonal(x, y)
+    T = Tridiagonal(z, x, z)
+    M_S = Matrix(S)
+    M_T = Matrix(T)
+
+    @test m * T ≈ m * M_T
+    @test m * S ≈ m * M_S
+    @test v * T ≈ M_v * T
+    @test v * S ≈ M_v * S
+
+    @test m * T isa Matrix
+    @test m * S isa Matrix
+    @test v * T isa Matrix
+    @test v * S isa Matrix
 end
 
 end # module TestSpecial

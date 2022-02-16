@@ -469,6 +469,8 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             if (getValueAddrSpace(NewV) == 0)
                 break;
             CurrentV = NewV;
+        } else if (auto *Freeze = dyn_cast<FreezeInst>(CurrentV)) {
+            CurrentV = Freeze->getOperand(0); // Can be formed by optimizations, treat as a no-op
         } else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
             CurrentV = GEP->getOperand(0);
             // GEP can make vectors from a single base pointer
@@ -1521,7 +1523,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (callee) {
                     if (callee == gc_preserve_begin_func) {
                         std::vector<int> args;
-                        for (Use &U : CI->arg_operands()) {
+                        for (Use &U : CI->args()) {
                             Value *V = U;
                             if (isa<Constant>(V))
                                 continue;
@@ -1566,7 +1568,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     continue;
                 }
                 std::vector<int> CalleeRoots;
-                for (Use &U : CI->arg_operands()) {
+                for (Use &U : CI->args()) {
                     // Find all callee rooted arguments.
                     // Record them instead of simply remove them from live values here
                     // since they can be useful during refinement
@@ -2256,6 +2258,18 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                         I->setMetadata(LLVMContext::MD_tbaa, MutableTBAA);
                 }
             }
+            // FCA chains created by SROA start with an undef value
+            // if the type contains an tracked pointer that can lead to a partial
+            // initialisation and LateLower might have inserted an extractvalue
+            // of an undef field. Fix this by changing it to start with an zero-init
+            if (auto *IV = dyn_cast<InsertValueInst>(*&it)) {
+                Value *SourceAggregate = IV->getAggregateOperand();
+                if (isa<UndefValue>(SourceAggregate)) {
+                    IV->setOperand(IV->getAggregateOperandIndex(), ConstantAggregateZero::get(IV->getType()));
+                    ChangesMade = true;
+                }
+            }
+
             auto *CI = dyn_cast<CallInst>(&*it);
             if (!CI) {
                 ++it;
@@ -2273,7 +2287,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
-                assert(CI->getNumArgOperands() == 3);
+                assert(CI->arg_size() == 3);
 
                 // Initialize an IR builder.
                 IRBuilder<> builder(CI);
@@ -2346,7 +2360,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
-                assert(CI->getNumArgOperands() == 1);
+                assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
                 auto tag = EmitLoadTag(builder, CI->getArgOperand(0));
@@ -2359,7 +2373,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
             } else if (write_barrier_func && callee == write_barrier_func) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
-                assert(CI->getNumArgOperands() >= 1);
+                assert(CI->arg_size() >= 1);
                 write_barriers.push_back(CI);
                 ChangesMade = true;
                 ++it;
@@ -2367,7 +2381,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
             } else if (CC == JLCALL_F_CC ||
                        CC == JLCALL_F2_CC) {
                 assert(T_prjlvalue);
-                size_t nargs = CI->getNumArgOperands();
+                size_t nargs = CI->arg_size();
                 size_t nframeargs = nargs;
                 if (CC == JLCALL_F_CC)
                     nframeargs -= 1;
@@ -2409,12 +2423,12 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto old_attrs = CI->getAttributes();
                 NewCall->setAttributes(AttributeList::get(CI->getContext(),
-                                                          old_attrs.getFnAttributes(),
-                                                          old_attrs.getRetAttributes(), {}));
+                                                          getFnAttrs(old_attrs),
+                                                          getRetAttrs(old_attrs), {}));
                 NewCall->copyMetadata(*CI);
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
-            } else if (CI->getNumArgOperands() == CI->getNumOperands()) {
+            } else if (CI->arg_size() == CI->getNumOperands()) {
                 /* No operand bundle to lower */
                 ++it;
                 continue;
@@ -2447,7 +2461,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         Value *anyChldNotMarked = NULL;
-        for (unsigned i = 1; i < CI->getNumArgOperands(); i++) {
+        for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
             Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child), 1);
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));

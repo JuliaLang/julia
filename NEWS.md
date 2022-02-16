@@ -12,6 +12,7 @@ New language features
   to enforce the involved function calls to be (or not to be) inlined. ([#41312])
 * The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
 * New function `eachsplit(str)` for iteratively performing `split(str)`.
+* New function `allequal(itr)` for testing if all elements in an iterator are equal. ([#43354])
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
@@ -19,6 +20,8 @@ New language features
 * Mutable struct fields may now be annotated as `const` to prevent changing
   them after construction, providing for greater clarity and optimization
   ability of these objects ([#43305]).
+* Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
+* Type annotations can now be added to global variables to make accessing the variable type stable. ([#43671])
 
 Language changes
 ----------------
@@ -29,17 +32,33 @@ Language changes
 * `@time` and `@timev` now take an optional description to allow annotating the source of time reports.
   i.e. `@time "Evaluating foo" foo()` ([#42431])
 * New `@showtime` macro to show both the line being evaluated and the `@time` report ([#42431])
-* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex interator, if possible ([#43110]).
+* Iterating an `Iterators.Reverse` now falls back on reversing the eachindex iterator, if possible ([#43110]).
 * Unbalanced Unicode bidirectional formatting directives are now disallowed within strings and comments,
   to mitigate the ["trojan source"](https://www.trojansource.codes) vulnerability ([#42918]).
+* `Base.ifelse` is now defined as a generic function rather than a builtin one, allowing packages to
+  extend its definition ([#37343]).
+* Every assignment to a global variable now first goes through a call to `convert(Any, x)` (or `convert(T, x)`
+  respectively if a type `T` has already been declared for the global). This means great care should be taken
+  to ensure the invariant `convert(Any, x) === x` always holds, as this change could otherwise lead to
+  unexpected behavior. ([#43671])
 
 Compiler/Runtime improvements
 -----------------------------
 
+* Bootstrapping time has been improved by about 25% ([#41794]).
 * The LLVM-based compiler has been separated from the run-time library into a new library,
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
+* Conditional type constraint can now be forwarded interprocedurally (i.e. propagated from caller to callee) ([#42529]).
+* Julia-level SROA (Scalar Replacement of Aggregates) has been improved, i.e. allowing elimination of
+  `getfield` call with constant global field ([#42355]), enabling elimination of mutable struct with
+  uninitialized fields ([#43208]), improving performance ([#43232]), handling more nested `getfield`
+  calls ([#43239]).
+* Abstract callsite can now be inlined or statically resolved as far as the callsite has a single
+  matching method ([#43113]).
+* Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
+* Inference now tracks various effects such as sideeffectful-ness and nothrow-ness on a per-specialization basis. Code heavily dependent on constant propagation should see significant compile-time performance improvements and certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro. (#43852).
 
 Command-line option changes
 ---------------------------
@@ -49,10 +68,14 @@ Command-line option changes
 * New option `--strip-ir` to remove the compiler's IR (intermediate representation) of source
   code when building a system image. The resulting image will only work if `--compile=all` is
   used, or if all needed code is precompiled ([#42925]).
+* When the program file is `-` the code to be executed is read from standard in ([#43191]).
 
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now defaults to a new `:dynamic` schedule option which is similar to the previous behavior except
+  that iterations will be scheduled dynamically to available worker threads rather than pinned to each thread. This
+  behavior is more composable with (possibly nested) `@spawn` and `@threads` loops ([#43919], [#44136])
 
 Build system changes
 --------------------
@@ -62,6 +85,7 @@ New library functions
 ---------------------
 
 * `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
 * `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
 
 New library features
@@ -86,8 +110,10 @@ Standard library changes
   arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
   constructing the range. ([#40382])
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* `extrema` now supports `init` keyword argument ([#36265], [#43604]).
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * `Iterators.countfrom` now accepts any type that defines `+`. ([#37747])
+* The `LazyString` and the `lazy"str"` macro were added to support delayed construction of error messages in error paths. ([#33711])
 
 #### InteractiveUtils
 * A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
@@ -120,11 +146,17 @@ Standard library changes
 * Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
 
 #### Profile
-* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
+* CPU profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
   grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
   Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
   each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
   profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
+* The new `Profile.Allocs` module allows memory allocations to be profiled. The stack trace, type, and size of each
+  allocation is recorded, and a `sample_rate` argument allows a tunable amount of allocations to be skipped,
+  reducing performance overhead. ([#42768])
+* A fixed duration cpu profile can now be triggered by the user during running tasks without `Profile` being loaded
+  first and the report will show during execution. On MacOS & FreeBSD press `ctrl-t` or raise a `SIGINFO`.
+  For other platforms raise a `SIGUSR1` i.e. `% kill -USR1 $julia_pid`. Not currently available on windows. ([#43179])
 
 #### Random
 
@@ -140,6 +172,10 @@ Standard library changes
   the exception information.
 
 #### SparseArrays
+
+* The code for SparseArrays has been moved from the Julia repo to the external
+  repo at https://github.com/JuliaSparse/SparseArrays.jl. This is only a code
+  movement and does not impact any usage ([#43813]).
 
 * New sparse concatenation functions `sparse_hcat`, `sparse_vcat`, and `sparse_hvcat` return
   `SparseMatrixCSC` output independent from the types of the input arguments. They make
@@ -177,6 +213,9 @@ Standard library changes
   function is provided to reproduce the mapping used in identifier normalization
   by the Julia parser ([#42561]).
 
+#### Test
+* `TestLogger` and `LogRecord` are now exported from the Test stdlib.  ([#44080])
+
 
 Deprecated or removed
 ---------------------
@@ -188,6 +227,8 @@ External dependencies
 
 Tooling Improvements
 ---------------------
+* `GC.enable_logging(true)` can be used to log each garbage collection, with the
+  time it took and the amount of memory that was collected ([#43511]).
 
 
 <!--- generated by NEWS-update.jl: -->

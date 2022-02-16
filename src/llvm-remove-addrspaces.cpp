@@ -394,9 +394,19 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
         for (unsigned i = 0; i < Attrs.getNumAttrSets(); ++i) {
             for (Attribute::AttrKind TypedAttr :
                  {Attribute::ByVal, Attribute::StructRet, Attribute::ByRef}) {
-                if (Type *Ty = Attrs.getAttribute(i, TypedAttr).getValueAsType()) {
-                    Attrs = Attrs.replaceAttributeType(C, i, TypedAttr,
-                                                       TypeRemapper.remapType(Ty));
+#if JL_LLVM_VERSION >= 140000
+                auto Attr = Attrs.getAttributeAtIndex(i, TypedAttr);
+#else
+                auto Attr = Attrs.getAttribute(i, TypedAttr);
+#endif
+                if (Type *Ty = Attr.getValueAsType()) {
+#if JL_LLVM_VERSION >= 140000
+                    Attrs = Attrs.replaceAttributeTypeAtIndex(
+                        C, i, TypedAttr, TypeRemapper.remapType(Ty));
+#else
+                    Attrs = Attrs.replaceAttributeType(
+                        C, i, TypedAttr, TypeRemapper.remapType(Ty));
+#endif
                     break;
                 }
             }

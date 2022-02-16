@@ -35,20 +35,19 @@ export BINDIR,
 
 import ..Base: show
 
-global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
 """
-    Sys.BINDIR
+    Sys.BINDIR::String
 
 A string containing the full path to the directory containing the `julia` executable.
 """
-:BINDIR
+global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 """
-    Sys.STDLIB
+    Sys.STDLIB::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
@@ -56,7 +55,7 @@ const BUILD_STDLIB_PATH = STDLIB
 # helper to avoid triggering precompile warnings
 
 """
-    Sys.CPU_THREADS
+    Sys.CPU_THREADS::Int
 
 The number of logical CPU cores available in the system, i.e. the number of threads
 that the CPU can run concurrently. Note that this is not necessarily the number of
@@ -65,36 +64,38 @@ CPU cores, for example, in the presence of
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-CPU_THREADS = 1 # for bootstrap, changed on startup
+global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
-    Sys.ARCH
+    Sys.ARCH::Symbol
 
 A symbol representing the architecture of the build configuration.
 """
-const ARCH = ccall(:jl_get_ARCH, Any, ())
+const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
 
 """
-    Sys.KERNEL
+    Sys.KERNEL::Symbol
 
 A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
 """
-const KERNEL = ccall(:jl_get_UNAME, Any, ())
+const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
 
 """
-    Sys.MACHINE
+    Sys.MACHINE::String
 
 A string containing the build triple.
 """
-const MACHINE = Base.MACHINE
+const MACHINE = Base.MACHINE::String
 
 """
-    Sys.WORD_SIZE
+    Sys.WORD_SIZE::Int
 
 Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
+
+global SC_CLK_TCK::Clong, CPU_NAME::String, JIT::String
 
 function __init__()
     env_threads = nothing
@@ -122,7 +123,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR::String, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 

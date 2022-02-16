@@ -6,10 +6,10 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
+#include "julia.h"
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
-#include "julia.h"
 
 enum AddressSpace {
     Generic = 0,
@@ -36,6 +36,35 @@ namespace JuliaType {
 
     static inline llvm::PointerType* get_ppjlvalue_ty(llvm::LLVMContext &C) {
         return llvm::PointerType::get(get_pjlvalue_ty(C), 0);
+    }
+
+    static inline llvm::PointerType* get_pprjlvalue_ty(llvm::LLVMContext &C) {
+        return llvm::PointerType::get(get_prjlvalue_ty(C), 0);
+    }
+
+    static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        std::vector<llvm::Type*> ftargs(0);
+        ftargs.push_back(T_prjlvalue);  // function
+        ftargs.push_back(T_pprjlvalue); // args[]
+        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
+        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+    }
+
+    static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        std::vector<llvm::Type*> ftargs(0);
+        ftargs.push_back(T_prjlvalue);  // function
+        ftargs.push_back(T_pprjlvalue); // args[]
+        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
+        ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
+        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+    }
+
+    static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
+        return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false)->getPointerTo();
     }
 }
 
@@ -133,13 +162,14 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
+    auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
     auto T_size = builder.GetInsertBlock()->getModule()->getDataLayout().getIntPtrType(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-        JuliaType::get_pjlvalue_ty(builder.getContext()), current_task,
+        T_pjlvalue, current_task,
         ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
         "ptls_field");
-    LoadInst *ptls_load = builder.CreateAlignedLoad(
+    LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,
         emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
     // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
     tbaa_decorate(tbaa, ptls_load);
@@ -147,4 +177,127 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
     builder.Insert(ptls);
     return ptls;
+}
+
+// Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
+//
+// Once we no longer support LLVM < 14, these can be mechanically removed by
+// translating foo(Bar, …) into Bar->foo(…) resp. Bar.foo(…).
+namespace {
+using namespace llvm;
+
+inline void addFnAttr(CallInst *Target, Attribute::AttrKind Attr)
+{
+#if JL_LLVM_VERSION >= 140000
+    Target->addFnAttr(Attr);
+#else
+    Target->addAttribute(AttributeList::FunctionIndex, Attr);
+#endif
+}
+
+template<class T, class A>
+inline void addRetAttr(T *Target, A Attr)
+{
+#if JL_LLVM_VERSION >= 140000
+    Target->addRetAttr(Attr);
+#else
+    Target->addAttribute(AttributeList::ReturnIndex, Attr);
+#endif
+}
+
+inline void addAttributeAtIndex(Function *F, unsigned Index, Attribute Attr)
+{
+#if JL_LLVM_VERSION >= 140000
+    F->addAttributeAtIndex(Index, Attr);
+#else
+    F->addAttribute(Index, Attr);
+#endif
+}
+
+inline AttributeSet getFnAttrs(const AttributeList &Attrs)
+{
+#if JL_LLVM_VERSION >= 140000
+    return Attrs.getFnAttrs();
+#else
+    return Attrs.getFnAttributes();
+#endif
+}
+
+inline AttributeSet getRetAttrs(const AttributeList &Attrs)
+{
+#if JL_LLVM_VERSION >= 140000
+    return Attrs.getRetAttrs();
+#else
+    return Attrs.getRetAttributes();
+#endif
+}
+
+inline bool hasFnAttr(const AttributeList &L, Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.hasFnAttr(Kind);
+#else
+    return L.hasAttribute(AttributeList::FunctionIndex, Kind);
+#endif
+}
+
+inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
+                                         unsigned Index, Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.addAttributeAtIndex(C, Index, Kind);
+#else
+    return L.addAttribute(C, Index, Kind);
+#endif
+}
+
+inline AttributeList addAttributeAtIndex(const AttributeList &L, LLVMContext &C,
+                                         unsigned Index, Attribute Attr)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.addAttributeAtIndex(C, Index, Attr);
+#else
+    return L.addAttribute(C, Index, Attr);
+#endif
+}
+
+inline AttributeList addAttributesAtIndex(const AttributeList &L, LLVMContext &C,
+                                          unsigned Index, const AttrBuilder &Builder)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.addAttributesAtIndex(C, Index, Builder);
+#else
+    return L.addAttributes(C, Index, Builder);
+#endif
+}
+
+inline AttributeList addFnAttribute(const AttributeList &L, LLVMContext &C,
+                                    Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.addFnAttribute(C, Kind);
+#else
+    return L.addAttribute(C, AttributeList::FunctionIndex, Kind);
+#endif
+}
+
+inline AttributeList addRetAttribute(const AttributeList &L, LLVMContext &C,
+                                     Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.addRetAttribute(C, Kind);
+#else
+    return L.addAttribute(C, AttributeList::ReturnIndex, Kind);
+#endif
+}
+
+inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.hasAttributesAtIndex(Index);
+#else
+    return L.hasAttributes(Index);
+#endif
+}
+
 }

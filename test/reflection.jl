@@ -197,9 +197,9 @@ let
     @test TestMod7648.TestModSub9475 == which(@__MODULE__, :a9475)
 end
 
-@test_throws ArgumentError("argument is not a generic function") which(===, Tuple{Int, Int})
-@test_throws ArgumentError("argument is not a generic function") code_typed(===, Tuple{Int, Int})
-@test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
+@test which(===, Tuple{Int, Int}) isa Method
+@test length(code_typed(===, Tuple{Int, Int})) === 1
+@test only(Base.return_types(===, Tuple{Int, Int})) === Any
 
 module TestingExported
 using Test
@@ -545,7 +545,6 @@ end
 # code_typed_by_type
 @test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
-@test_throws ErrorException("signature does not correspond to a generic function") Base.code_typed_by_type(Tuple{Any})
 
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
