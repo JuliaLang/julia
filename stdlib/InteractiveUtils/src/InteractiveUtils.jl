@@ -92,6 +92,8 @@ controlled with boolean keyword arguments:
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
+    indent = "  "
+    
     println(io, "Julia Version $VERSION")
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
@@ -100,7 +102,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io, "DEBUG build")
     end
     println(io, "Platform Info:")
-    println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
+    println(io, indent, "OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     if verbose
@@ -115,7 +117,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
             println(io, "      ", lsb)
         end
         if Sys.isunix()
-            println(io, "  uname: ", readchomp(`uname -mprsv`))
+            println(io, indent, "uname: ", readchomp(`uname -mprsv`))
         end
     end
 
@@ -123,25 +125,25 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
         for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
-            prefix = i == 1 ? "  CPU: " : "       "
+            prefix = i == 1 ? "$(indent)CPU: " : "       "
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
+        println(io, indent, "CPU: ", length(cpu), " × ", cpu[1].model)
     end
 
     if verbose
-        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
-        print(io, "  Load Avg: ")
+        println(io, indent, "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        try println(io, indent, "Uptime: $(Sys.uptime()) sec"); catch; end
+        print(io, indent, "Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
         println(io)
     end
-    println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
-    println(io, "  LIBM: ",Base.libm_name)
-    println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
+    println(io, indent, "WORD_SIZE: ", Sys.WORD_SIZE)
+    println(io, indent, "LIBM: ",Base.libm_name)
+    println(io, indent, "LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, indent, "Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)
@@ -150,9 +152,9 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         return occursin(r"PATH|FLAG|^TERM$|HOME", k) && !is_nonverbose_env(k)
     end
     env_strs = String[
-        String["  $(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
+        String["$(indent)$(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
         (verbose ?
-         String["  $(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
+         String["$(indent)$(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
          String[]);
     ]
     if !isempty(env_strs)
