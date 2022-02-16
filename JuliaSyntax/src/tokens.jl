@@ -113,15 +113,17 @@ function is_whitespace(t)
     kind(t) in (K"Whitespace", K"NewlineWs")
 end
 
-function _kind_str(k::Kind)
-    _kind_to_str[k]
-end
-
 """
 Return the string representation of a token kind, or `nothing` if the kind
 represents a class of tokens like K"Identifier".
+
+When `unique=true` only return a string when the kind uniquely defines the
+corresponding input token, otherwise return `nothing`.  When `unique=false`,
+return the name of the kind.
+
+TODO: Replace `untokenize()` with `Base.string()`?
 """
-function untokenize(k::Kind)
-    get(_kind_to_str_unique, k, nothing)
+function untokenize(k::Kind; unique=true)
+    get(unique ? _kind_to_str_unique : _kind_to_str, k, nothing)
 end
 

@@ -625,9 +625,6 @@ tests = [
         "[x y]"  =>  "(hcat x y)"
         # Mismatched rows
         "[x y ; z]"  =>  "(vcat (row x y) z)"
-        # Double semicolon with spaces allowed (only) for line continuation
-        "[x y ;;\n z w]"  =>  "(hcat x y z w)"
-        # "[x y ;; z w]"  =>  "(hcat x y (error) z w)" # FIXME
         # Single elements in rows
         ((v=v"1.7",), "[x ; y ;; z ]")  =>  "(ncat-2 (nrow-1 x y) z)"
         ((v=v"1.7",), "[x  y ;;; z ]")  =>  "(ncat-3 (row x y) z)"
@@ -638,6 +635,24 @@ tests = [
         # Column major
         ((v=v"1.7",), "[x ; y ;; z ; w ;;; a ; b ;; c ; d]")  =>
             "(ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))"
+        # Array separators
+        # Newlines before semicolons are not significant
+        "[a \n ;]"  =>  "(vcat a)"
+        # Newlines after semicolons are not significant
+        "[a ; \n]"  =>  "(vcat a)"
+        "[a ; \n\n b]"  =>  "(vcat a b)"
+        ((v=v"1.7",), "[a ;; \n b]")  =>  "(ncat-2 a b)"
+        # In hcat with spaces as separators, `;;` is a line
+        # continuation character
+        ((v=v"1.7",), "[a b ;; \n c]")  =>  "(hcat a b c)"
+        ((v=v"1.7",), "[a b \n ;; c]")  =>  "(ncat-2 (row a b (error-t)) c)"
+        # Can't mix spaces and multiple ;'s
+        ((v=v"1.7",), "[a b ;; c]")  =>  "(ncat-2 (row a b (error-t)) c)"
+        # Treat a linebreak prior to a value as a semicolon (ie, separator for
+        # the first dimension) if no previous semicolons observed
+        "[a \n b]"  =>  "(vcat a b)"
+        # Can't mix multiple ;'s and spaces
+        ((v=v"1.7",), "[a ;; b c]")  =>  "(ncat-2 a (row b (error-t) c))"
         # Empty nd arrays
         ((v=v"1.8",), "[;]")   =>  "(ncat-1)"
         ((v=v"1.8",), "[;;]")  =>  "(ncat-2)"

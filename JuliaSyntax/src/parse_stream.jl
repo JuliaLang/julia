@@ -51,11 +51,11 @@ numeric_flags(head::SyntaxHead) = numeric_flags(flags(head))
 is_error(head::SyntaxHead)  = kind(head) == K"error"
 
 function Base.summary(head::SyntaxHead)
-    _kind_str(kind(head))
+    untokenize(head, unique=false, include_flag_suff=false)
 end
 
-function untokenize(head::SyntaxHead; include_flag_suff=true)
-    str = untokenize(kind(head))
+function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
+    str = untokenize(kind(head); unique=unique)
     if is_dotted(head)
         str = "."*str
     end
