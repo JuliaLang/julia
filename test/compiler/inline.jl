@@ -1081,6 +1081,6 @@ let m = Module()
             x
         end
     end
-    src = code_typed1(f)
+    src = code_typed1(m.f)
     @test count(x -> isa(x, Core.PiNode), src.code) == 0
 end
