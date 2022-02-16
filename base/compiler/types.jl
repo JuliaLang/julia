@@ -120,15 +120,17 @@ mutable struct InferenceResult
     linfo::MethodInstance
     argtypes::Vector{Any}
     overridden_by_const::BitVector
-    result # ::Type, or InferenceState if WIP
-    src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
+    result                   # ::Type, or InferenceState if WIP
+    src                      # ::Union{CodeInfo, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
-    ipo_effects::Effects # if inference is finished
-    effects::Effects # if optimization is finished
+    ipo_effects::Effects     # if inference is finished
+    effects::Effects         # if optimization is finished
+    argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     function InferenceResult(linfo::MethodInstance,
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange(), Effects(), Effects())
+        return new(linfo, argtypes, overridden_by_const, Any, nothing,
+            WorldRange(), Effects(), Effects(), nothing)
     end
 end
 
