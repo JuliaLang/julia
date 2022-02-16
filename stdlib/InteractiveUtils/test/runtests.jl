@@ -245,9 +245,7 @@ end
     InteractiveUtils.diagnostics(buf)
     output = read(buf, String)
     @test occursin("Julia Version $VERSION", output)
-    @test occursin("Environment:", ver)
-
-    InteractiveUtils.diagnostics(stdout) # TODO: delete this line before merging the PR
+    @test occursin("Environment:", output)
 end
 
 @testset "stdlib_diagnostics()" begin
