@@ -3237,7 +3237,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
 
-    if (collection == GC_AUTO) {
+    if (collection == JL_GC_AUTO) {
       // If the current interval is larger than half the live data decrease the interval
       int64_t half = live_bytes/2;
       if (gc_num.interval > half) gc_num.interval = half;
