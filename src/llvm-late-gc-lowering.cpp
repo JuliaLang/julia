@@ -1556,7 +1556,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee == write_barrier_func || callee->getName() == "memcmp") {
+                        callee == write_barrier_func || callee == write_barrier_binding_func ||
+                        callee->getName() == "memcmp") {
                         continue;
                     }
                     if (callee->hasFnAttribute(Attribute::ReadNone) ||
@@ -2376,7 +2377,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
+            } else if ((write_barrier_func && callee == write_barrier_func) ||
+                       (write_barrier_binding_func && callee == write_barrier_binding_func)) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
                 assert(CI->arg_size() >= 1);
@@ -2482,7 +2484,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        if (CI->getCalledOperand() == write_barrier_func) {
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        }
+        else if (CI->getCalledOperand() == write_barrier_binding_func) {
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCBinding), parent);
+        }
+        else {
+            assert(false);
+        }
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {

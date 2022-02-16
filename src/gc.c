@@ -1643,7 +1643,7 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_N
     }
 }
 
-void gc_queue_binding(jl_binding_t *bnd)
+JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);

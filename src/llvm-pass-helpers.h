@@ -68,6 +68,7 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
+    llvm::Function *write_barrier_binding_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -133,6 +134,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // `julia.queue_gc_binding`: an intrinsic that queues a binding for GC.
+    extern const IntrinsicDescription queueGCBinding;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
@@ -153,6 +157,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_gc_queue_binding`: queues a binding for GC.
+    extern const WellKnownFunctionDescription GCQueueBinding;
 }
 
 #endif
