@@ -1854,8 +1854,7 @@ STATIC_INLINE int gc_mark_scan_objarray(jl_ptls_t ptls, jl_gc_mark_sp_t *sp,
             verify_parent2("obj array", objary->parent, begin, "elem(%d)",
                            gc_slot_to_arrayidx(objary->parent, begin));
         if (!gc_try_setmark(*pnew_obj, &objary->nptr, ptag, pbits))
-	  continue;
-
+            continue;
         begin += objary->step;
         // Found an object to mark
         if (begin < end) {
@@ -2548,7 +2547,7 @@ mark: {
             jl_value_t **data = jl_svec_data(new_obj);
             size_t dtsz = l * sizeof(void*) + sizeof(jl_svec_t);
             if (update_meta)
-	        gc_setmark(ptls, o, bits, dtsz);
+                gc_setmark(ptls, o, bits, dtsz);
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, dtsz);
             uintptr_t nptr = (l << 2) | (bits & GC_OLD);
@@ -3143,9 +3142,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // many pointers in the intergen frontier => "quick" mark is not quick
     int large_frontier = nptr*sizeof(void*) >= default_collect_interval;
-    // trigger a full collection if the number of live bytes doubles since the last full
-    // collection and then remains at least that high for a while.
-
     int sweep_full = 0;
     int recollect = 0;
 
@@ -3165,7 +3161,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 	gc_num.interval = max_collect_interval;
       }
     }
-
     if (gc_sweep_always_full) {
         sweep_full = 1;
     }
@@ -3384,7 +3379,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     assert(gc_num.interval == default_collect_interval);
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
 }
-
 
 // System-wide initializations
 void jl_gc_init(void)
