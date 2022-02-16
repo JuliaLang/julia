@@ -825,6 +825,12 @@ end
     dir = joinpath(pwd(), "dir")
     cmd = addenv(setenv(`julia`; dir=dir), Dict())
     @test cmd.dir == dir
+
+    @test addenv(``, ["a=b=c"], inherit=false).env == ["a=b=c"]
+    cmd = addenv(``, "a"=>"b=c", inherit=false)
+    @test cmd.env == ["a=b=c"]
+    cmd = addenv(cmd, "b"=>"b")
+    @test issetequal(cmd.env, ["b=b", "a=b=c"])
 end
 
 @testset "setenv with dir (with tests for #42131)" begin
