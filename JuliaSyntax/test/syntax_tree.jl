@@ -24,4 +24,11 @@
                  Expr(:(=), Expr(:call, :f), :xs),
                  Expr(:block))
     end
+
+    @testset "Long form anonymous functions" begin
+        @test parseall(Expr, "function (xs...)\nbody end", rule=:statement) ==
+            Expr(:function,
+                 Expr(:..., :xs),
+                 Expr(:block, :body))
+    end
 end

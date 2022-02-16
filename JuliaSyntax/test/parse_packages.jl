@@ -20,8 +20,9 @@ base_tests_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 end
 
 end
-if haskey(ENV, "PARSE_STDLIB")
-# TODO: Turn on by default
+
+if VERSION < v"1.8-DEV" || haskey(ENV, "PARSE_STDLIB")
+# TODO: Fix on 1.8
 
 @testset "Parse Julia stdlib at $(Sys.STDLIB)" begin
     for stdlib in readdir(Sys.STDLIB)
