@@ -89,22 +89,20 @@ function normalize_arch(arch::String)
     return arch
 end
 
-const ALL_FEATURES = let
-    get_features(prefix::String) =
-        getfield.(Ref(@__MODULE__), filter(n -> startswith(String(n), prefix), (names(@__MODULE__; all=true))))
-    Dict(
-        "i686" => get_features("JL_X86"),
-        "x86_64" => get_features("JL_X86"),
-        "armv6l" => get_features("JL_AArch32"),
-        "armv7l" => get_features("JL_AArch32"),
-        "aarch64" => get_features("JL_AArch64"),
-        "powerpc64le" => UInt32[],
-    )
-end
+let
+    # Collect all relevant features for the current architecture, if any.
+    FEATURES = UInt32[]
+    arch = normalize_arch(String(Sys.ARCH))
+    if arch in keys(ISAs_by_family)
+        for isa in ISAs_by_family[arch]
+            unique!(append!(FEATURES, last(isa).features))
+        end
+    end
 
-# Use `@eval` to statically determine the list of features for the current architecture.
-@eval function cpu_isa()
-    return ISA(Set{UInt32}(feat for feat in $(ALL_FEATURES[normalize_arch(String(Sys.ARCH))]) if test_cpu_feature(feat)))
+    # Use `@eval` to inline the list of features.
+    @eval function cpu_isa()
+        return ISA(Set{UInt32}(feat for feat in $(FEATURES) if test_cpu_feature(feat)))
+    end
 end
 
 """
