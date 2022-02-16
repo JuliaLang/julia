@@ -145,10 +145,14 @@ releases. Currently, `:dynamic` is used when the scheduler is not specified.
 that the workload for each iteration is uniform.
 
 This scheduling option is merely a hint to the underlying execution mechanism. However, a
-few properties can be assumed for understanding when to use this scheduling option. The
-number of `Task`s used by `:dynamic` scheduler is bounded by a small constant multiple of
-the number of available worker threads ([`nthreads()`](@ref Threads.nthreads)). Each task
-processes contiguous regions of the iteration space.
+few properties can be expected. The number of `Task`s used by `:dynamic` scheduler is
+bounded by a small constant multiple of the number of available worker threads
+([`nthreads()`](@ref Threads.nthreads)). Each task processes contiguous regions of the
+iteration space. Thus, `@threads :dynamic for x in xs; f(x); end` is typically more
+efficient than `@sync for x in xs; @spawn f(x); end` if `length(xs)` is significantly
+larger than the number of the worker threads and the run-time of `f(x)` is relatively
+smaller than the cost of spawning and synchronizaing a task (which can be estimated roughly
+by `wait(@spawn nothing)`).
 
 !!! compat "Julia 1.8"
     The `:dynamic` option for the `schedule` argument is available and the default as of Julia 1.8.
