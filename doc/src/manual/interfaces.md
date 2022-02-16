@@ -12,8 +12,8 @@ to generically build upon those behaviors.
 | `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
 | `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `Base.IteratorSize(IterType)`  | `Base.HasLength()`     | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
-| `Base.IteratorEltype(IterType)`| `Base.HasEltype()`     | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                    |
+| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
+| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
 | `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
@@ -21,15 +21,15 @@ to generically build upon those behaviors.
 
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
-| `Base.HasLength()`                         | [`length(iter)`](@ref)                     |
-| `Base.HasShape{N}()`                       | `length(iter)`  and `size(iter, [dim])`    |
-| `Base.IsInfinite()`                        | (*none*)                                   |
-| `Base.SizeUnknown()`                       | (*none*)                                   |
+| `HasLength()`                              | [`length(iter)`](@ref)                     |
+| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim])`    |
+| `IsInfinite()`                             | (*none*)                                   |
+| `SizeUnknown()`                            | (*none*)                                   |
 
 | Value returned by `IteratorEltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
-| `Base.HasEltype()`                           | `eltype(IterType)` |
-| `Base.EltypeUnknown()`                       | (*none*)           |
+| `HasEltype()`                                | `eltype(IterType)` |
+| `EltypeUnknown()`                            | (*none*)           |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
