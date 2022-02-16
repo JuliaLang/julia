@@ -260,7 +260,7 @@ static void _compile_all_deq(jl_array_t *found)
         jl_method_t *m = ml->func.method;
         if (m->source == NULL) // TODO: generic implementations of generated functions
             continue;
-        mi = jl_get_unspecialized(mi);
+        mi = jl_get_unspecialized(m);
         assert(mi == m->unspecialized); // make sure we didn't get tricked by a generated function, since we can't handle those
         jl_code_instance_t *ucache = jl_get_method_inferred(mi, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         if (ucache->invoke != NULL)
