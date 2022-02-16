@@ -240,7 +240,7 @@ end
 end
 
 @testset "diagnostics()" begin
-    # check that diagnostics(io) doesn't error, produces some output
+    # check that `InteractiveUtils.diagnostics(io)` doesn't error, produces some output
     buf = PipeBuffer()
     InteractiveUtils.diagnostics(buf)
     output = read(buf, String)
@@ -248,6 +248,17 @@ end
     @test occursin("Environment:", ver)
 
     InteractiveUtils.diagnostics(stdout) # TODO: delete this line before merging the PR
+end
+
+@testset "stdlib_diagnostics()" begin
+    # check that `InteractiveUtils.stdlib_diagnostics(io)` doesn't error, produces some output
+    buf = PipeBuffer()
+    InteractiveUtils.stdlib_diagnostics(buf)
+    output = read(buf, String)
+    @test occursin("Julia Version $VERSION", output)
+    @test occursin("Environment:", ver)
+
+    InteractiveUtils.stdlib_diagnostics(stdout) # TODO: delete this line before merging the PR
 end
 
 const curmod = @__MODULE__
