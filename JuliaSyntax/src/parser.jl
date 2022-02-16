@@ -2572,10 +2572,6 @@ end
 # Mismatched rows
 # [x y ; z]     ==>  (vcat (row x y) z)
 #
-# Double semicolon with spaces allowed (only) for line continuation
-#v1.7: [x y ;;\n z w]  ==>  (hcat x y z w)
-#v1.7: [x y ;; z w]    ==>  (hcat x y (error) z w)
-#
 # Single elements in rows
 #v1.7: [x ; y ;; z ]  ==>  (ncat-2 (nrow-1 x y) z)
 #v1.7: [x  y ;;; z ]  ==>  (ncat-3 (row x y) z)
@@ -2592,6 +2588,7 @@ end
 function parse_array(ps::ParseState, mark, closer, end_is_symbol)
     ps = ParseState(ps, end_symbol=end_is_symbol)
 
+    array_order = Ref(:unknown)
     # Outer array parsing loop - parse chain of separators with descending
     # precedence such as
     #v1.7: [a ; b ;; c ;;; d ;;;; e] ==> (ncat-4 (ncat-3 (ncat-2 (ncat-1 a b) c) d) e)
@@ -2604,9 +2601,9 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
     #
     # For an excellent overview of Pratt parsing, see
     # https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
-    (dim, binding_power) = parse_array_separator(ps)
+    (dim, binding_power) = parse_array_separator(ps, array_order)
     while true
-        (next_dim, next_bp) = parse_array_inner(ps, binding_power)
+        (next_dim, next_bp) = parse_array_inner(ps, binding_power, array_order)
         if next_bp == typemin(Int)
             break
         end
@@ -2624,20 +2621,20 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
            (K"ncat", set_numeric_flags(dim))
 end
 
-# Parse equal and ascending precedence chains of array concatenation operators
-# (semicolons, newlines and whitespace). Invariants:
+# Parse equal and ascending precedence chains of array concatenation operators -
+# semicolons, newlines and whitespace. Invariants:
 #
 # * The caller must have already consumed
 #   - The left hand side
-#   - The concatenation operator, providing the current binding_power.
-#   So eg, we're here in the input stream
+#   - The concatenation operator, providing `binding_power`.
+#   So eg, we're here in the input stream, either at an element or closing token
 #                |
 #          [a ;; b ; c ]
 #          [a ;; ]
 #
 # * The caller must call emit() to delimit the AST node for this binding power.
 #
-function parse_array_inner(ps, binding_power)
+function parse_array_inner(ps, binding_power, array_order)
     mark = NO_POSITION
     dim = -1
     bp = binding_power
@@ -2655,13 +2652,13 @@ function parse_array_inner(ps, binding_power)
             # Parse one expression
             mark = position(ps)
             parse_eq_star(ps)
-            (next_dim, next_bp) = parse_array_separator(ps)
+            (next_dim, next_bp) = parse_array_separator(ps, array_order)
         else # bp > binding_power
             # Recurse to parse a separator with greater binding power. Eg:
             # [a ;; b ; c ]
             #       |   ^------ the next input is here
             #       '---------- the mark is here
-            (next_dim, next_bp) = parse_array_inner(ps, bp)
+            (next_dim, next_bp) = parse_array_inner(ps, bp, array_order)
             if bp == 0
                 emit(ps, mark, K"row")
             else
@@ -2674,46 +2671,83 @@ end
 
 # Parse a separator in an array concatenation
 #
-# Here we aim to identify:
+# Here we return a tuple (dim, binding_power) containing
 # * Dimension on which the next separator acts
 # * Binding power (precedence) of the separator, where whitespace binds
 #   tightest:  ... < `;;;` < `;;` < `;`,`\n` < whitespace. We choose binding
 #   power of 0 for whitespace and negative numbers for other separators.
 #
 # FIXME: Error messages for mixed spaces and ;; delimiters
-function parse_array_separator(ps; skip_newlines=false)
-    t = peek_token(ps; skip_newlines=skip_newlines)
-    k = kind(t)
-    if k == K";"
+function parse_array_separator(ps, array_order)
+    sep_mismatch_err = "cannot mix space and ;; separators in an array expression, except to wrap a line"
+    mark = position(ps)
+    t = peek_token(ps, skip_newlines=true)
+    if kind(t) == K";"
+        # Newlines before semicolons are not significant
+        # [a \n ;]     ==> (vcat a)
+        bump_trivia(ps)
         n_semis = 1
         while true
-            bump(ps, TRIVIA_FLAG; skip_newlines=skip_newlines)
+            bump(ps, TRIVIA_FLAG)
             t = peek_token(ps)
-            if kind(t) != K";" || t.had_whitespace
+            if kind(t) != K";"
                 break
+            end
+            if t.had_whitespace
+                bump_disallowed_space(ps)
             end
             n_semis += 1
         end
-        # FIXME - following is ncat, not line continuation
-        # [a ;; \n c]
-        if n_semis == 2 && peek(ps) == K"NewlineWs"
-            # Line continuation
-            # [a b ;; \n \n c]
-            while peek(ps) == K"NewlineWs"
-                bump(ps, TRIVIA_FLAG)
-            end
-            return (2, 0)
-        else
-            return (n_semis, -n_semis)
-        end
-    elseif k == K"NewlineWs"
+        had_newline = peek(ps) == K"NewlineWs"
+        # Newlines after semicolons are not significant
+        # [a ; \n]     ==> (vcat a)
+        # [a ; \n\n b] ==> (vcat a b)
+        #v1.7: [a ;; \n b]  ==> (ncat-2 a b)
         bump_trivia(ps)
-        # Newlines separate the first dimension
+        if n_semis == 2
+            if array_order[] === :row_major
+                if had_newline
+                    # In hcat with spaces as separators, `;;` is a line
+                    # continuation character
+                    #v1.7: [a b ;; \n c]  ==>  (hcat a b c)
+                    #v1.7: [a b \n ;; c]  ==>  (ncat-2 (row a b (error-t)) c)
+                    return (2, 0)
+                else
+                    # Can't mix spaces and multiple ;;
+                    #v1.7:  [a b ;; c]  ==>  (ncat-2 (row a b (error-t)) c)
+                    emit(ps, mark, K"error", TRIVIA_FLAG, error=sep_mismatch_err)
+                end
+            else
+                array_order[] = :column_major
+            end
+        end
+        return (n_semis, -n_semis)
+    end
+    t = peek_token(ps)
+    k = kind(t)
+    if k == K"NewlineWs"
+        bump_trivia(ps)
+        # Treat a linebreak prior to a value as a semicolon (ie, separator for
+        # the first dimension) if no previous semicolons observed
+        # [a \n b]  ==> (vcat a b)
+        return (1, -1)
+    elseif k == K","
+        # Treat `,` as semicolon for the purposes of recovery
+        # [a; b, c] ==> (vcat a b (error-t) c)
+        bump(ps, TRIVIA_FLAG, error="unexpected comma in array expression")
         return (1, -1)
     else
         if t.had_whitespace && !is_closing_token(ps, k)
+            if array_order[] === :column_major
+                # Can't mix multiple ;'s and spaces
+                #v1.7:  [a ;; b c]  ==>  (ncat-2 a (row b (error-t) c))
+                bump_trivia(ps, TRIVIA_FLAG, error=sep_mismatch_err)
+            else
+                array_order[] = :row_major
+            end
             return (2, 0)
         else
+            # Something else; use typemin to exit array parsing
             return (typemin(Int), typemin(Int))
         end
     end
@@ -2739,10 +2773,11 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
         #v1.8: [;;]          ==>  (ncat-2)
         #v1.8: [\n  ;; \n ]  ==>  (ncat-2)
         #v1.7: [;;]          ==>  (ncat-2 (error))
-        n_semis, _ = parse_array_separator(ps; skip_newlines=true)
+        bump_trivia(ps)
+        dim, _ = parse_array_separator(ps, Ref(:unknown))
         min_supported_version(v"1.8", ps, mark, "empty multidimensional array syntax")
         bump_closing_token(ps, closer)
-        return (K"ncat", set_numeric_flags(n_semis))
+        return (K"ncat", set_numeric_flags(dim))
     end
     parse_eq_star(ps)
     k = peek(ps, skip_newlines=true)

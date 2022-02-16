@@ -79,7 +79,7 @@ function _show_green_node(io, node, indent, pos, str, show_trivia)
     if is_leaf
         line = string(posstr, indent, summary(node))
     else
-        line = string(posstr, indent, '[', summary(node), "]")
+        line = string(posstr, indent, '[', summary(node), ']')
     end
     if !is_trivia(node) && is_leaf
         line = rpad(line, 40) * "✔"
