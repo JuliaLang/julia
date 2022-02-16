@@ -103,9 +103,8 @@ A macro to execute a `for` loop in parallel. The iteration space is distributed 
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
 
-See also: [`@spawn`](@ref Threads.@spawn),
-`pmap` in [`Distributed`](@ref man-distributed), and
-`BLAS.set_num_threads` in [`LinearAlgebra`](@ref man-linalg).
+See also: [`@spawn`](@ref Threads.@spawn) and
+`pmap` in [`Distributed`](@ref man-distributed).
 
 # Extended help
 
