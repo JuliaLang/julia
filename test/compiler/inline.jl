@@ -1069,3 +1069,18 @@ end
 @test fully_eliminated() do
     issue41694(2)
 end
+
+let m = Module()
+    @eval m begin
+        global x::Int = 0
+        function f()
+            global x = 0
+            while x<10
+                x += 1
+            end
+            x
+        end
+    end
+    src = code_typed1(f)
+    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+end
