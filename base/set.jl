@@ -390,9 +390,8 @@ allpairs(f::F, v::AbstractVector) where {F<:Function} = # haslength && getindex 
 
 allpairs(f::F, s) where {F<:Function} = # !haslength , !hasgetindex
     all(enumerate(s)) do (i,e1)
-        all(zip(1:i-1, s)) do (_,e2)
+        Iterators.take(s, i-1) do e2
             f(e1, e2) end end
-
 
 
 """
