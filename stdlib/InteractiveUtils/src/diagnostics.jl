@@ -65,7 +65,7 @@ end
 # Copied from https://github.com/JuliaLang/Pkg.jl/blob/68ba0adc9b686db83dd65676cdd2c55313bd2520/src/utils.jl#L27
 _stdlib_dir() = normpath(joinpath(Sys.BINDIR::String, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)"))
 
-_stdlib_names() = readdir(stdlib_dir())
+_stdlib_names() = readdir(_stdlib_dir())
 
 # Bake this into the sysimage
 const _STDLIB_NAMES = _stdlib_names()
