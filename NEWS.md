@@ -59,6 +59,7 @@ Compiler/Runtime improvements
   matching method ([#43113]).
 * Builtin function are now a bit more like generic functions, and can be enumerated with `methods` ([#43865]).
 * Inference now tracks various effects such as sideeffectful-ness and nothrow-ness on a per-specialization basis. Code heavily dependent on constant propagation should see significant compile-time performance improvements and certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro. (#43852).
+* Some bounds checks can be automatically removed by LLVM at compile time, without the need for `@boundscheck` or `@inbounds`. ([#42692])
 
 Command-line option changes
 ---------------------------
