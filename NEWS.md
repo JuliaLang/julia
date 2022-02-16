@@ -22,6 +22,7 @@ New language features
   ability of these objects ([#43305]).
 * Empty n-dimensional arrays can now be created using multiple semicolons inside square brackets, i.e. `[;;;]` creates a 0×0×0 `Array`. ([#41618])
 * Type annotations can now be added to global variables to make accessing the variable type stable. ([#43671])
+* The number of potentially matching methods considered during inference can now be set on a per-module basis with the experimental macro `Base.Experimental.@max_methods`. Setting this to 1 or 2 can significiantly reduce compile times at the expense of inference precision.
 
 Language changes
 ----------------
