@@ -12,12 +12,15 @@ function core_parser_hook(code, filename, offset, options)
         seek(io, offset)
 
         stream = ParseStream(io)
-        rule = options == :all ? :toplevel : options
+        rule = options === :all ? :toplevel : options
         JuliaSyntax.parse(stream; rule=rule)
 
-        ex = any_error(stream) ?
-            Expr(:error, ParseError(SourceFile(code), stream.diagnostics)) :
+        ex = if any_error(stream)
+            e = Expr(:error, ParseError(SourceFile(code), stream.diagnostics))
+            options === :all ? Expr(:toplevel, e) : e
+        else
             build_tree(Expr, stream)
+        end
 
         pos = last_byte(stream) - 1
 
