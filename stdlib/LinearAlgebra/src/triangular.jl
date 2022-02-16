@@ -230,7 +230,7 @@ getindex(A::UpperTriangular, i::Integer, j::Integer) =
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
@@ -240,10 +240,10 @@ end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+        iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+        x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
             "of a UnitUpperTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
@@ -253,7 +253,7 @@ end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " *
+        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
@@ -263,10 +263,10 @@ end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " *
+        iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+        x == oneunit(x) || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
             "of a UnitLowerTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
@@ -298,23 +298,23 @@ istril(A::Transpose) = istriu(A.parent)
 istriu(A::Adjoint) = istril(A.parent)
 istriu(A::Transpose) = istril(A.parent)
 
-function tril!(A::UpperTriangular, k::Integer=0)
+function tril!(A::UpperTriangular{T}, k::Integer=0) where {T}
     n = size(A,1)
     if k < 0
-        fill!(A.data,0)
+        fill!(A.data, zero(T))
         return A
     elseif k == 0
         for j in 1:n, i in 1:j-1
-            A.data[i,j] = 0
+            A.data[i,j] = zero(T)
         end
         return A
     else
         return UpperTriangular(tril!(A.data,k))
     end
 end
-triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data,k))
+triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data, k))
 
-function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where T
+function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
     n = size(A,1)
     if k < 0
         fill!(A.data, zero(T))
@@ -337,25 +337,25 @@ function triu!(A::UnitUpperTriangular, k::Integer=0)
     for i in diagind(A)
         A.data[i] = oneunit(eltype(A))
     end
-    return triu!(UpperTriangular(A.data),k)
+    return triu!(UpperTriangular(A.data), k)
 end
 
-function triu!(A::LowerTriangular, k::Integer=0)
+function triu!(A::LowerTriangular{T}, k::Integer=0) where {T}
     n = size(A,1)
     if k > 0
-        fill!(A.data,0)
+        fill!(A.data, zero(T))
         return A
     elseif k == 0
         for j in 1:n, i in j+1:n
-            A.data[i,j] = 0
+            A.data[i,j] = zero(T)
         end
         return A
     else
-        return LowerTriangular(triu!(A.data,k))
+        return LowerTriangular(triu!(A.data, k))
     end
 end
 
-tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data,k))
+tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data, k))
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
     n = size(A,1)
@@ -372,7 +372,7 @@ function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
         for i in diagind(A)
             A.data[i] = oneunit(T)
         end
-        return LowerTriangular(triu!(A.data,k))
+        return LowerTriangular(triu!(A.data, k))
     end
 end
 
@@ -380,7 +380,7 @@ function tril!(A::UnitLowerTriangular, k::Integer=0)
     for i in diagind(A)
         A.data[i] = oneunit(eltype(A))
     end
-    return tril!(LowerTriangular(A.data),k)
+    return tril!(LowerTriangular(A.data), k)
 end
 
 adjoint(A::LowerTriangular) = UpperTriangular(adjoint(A.data))
@@ -667,11 +667,8 @@ mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _multrim
     mul!(C, A, copy(B), alpha, beta)
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
     mul!(C, A, copy(B), alpha, beta)
-# mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Adjoint}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-# mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Transpose}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-mul!(C::AbstractMatrix  , A::AbstractMatrix, B::AbstractTriangular)   = _mulmattri!(C, A, B)
-mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractTriangular) =
-    Base.@invoke _multrimat!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix)
+mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _mulmattri!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _multrimat!(C, A, B)
 
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A, copyto!(C, B))
@@ -798,31 +795,32 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'U', 'N'),
 end
 
 # give BLAS a chance
-for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$tri{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
         lmul!(A, copyto!(C, B))
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$tri{T,<:Adjoint}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T,<:Adjoint}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
         lmul!(A, copyto!(C, B))
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$tri{T,<:Transpose}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T,<:Transpose}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
         lmul!(A, copyto!(C, B))
-    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$tri{T}) where {T<:BlasFloat} =
+    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$t{T}) where {T<:BlasFloat} =
         rmul!(copyto!(C, A), B)
-    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$tri{T,<:Adjoint}) where {T<:BlasFloat} =
+    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$t{T,<:Adjoint}) where {T<:BlasFloat} =
         rmul!(copyto!(C, A), B)
-    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$tri{T,<:Transpose}) where {T<:BlasFloat} =
+    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$t{T,<:Transpose}) where {T<:BlasFloat} =
         rmul!(copyto!(C, A), B)
 end
 
-function inv(A::LowerTriangular{T}) where T
-    S = typeof((zero(T)*one(T) + zero(T))/one(T))
-    LowerTriangular(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
+    @eval function inv(A::$t{T}) where {T}
+        S = typeof(inv(oneunit(T)))
+        if S <: BlasFloat
+            $t(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
+        else
+            J = I(size(A, 1))
+            $t(ldiv!(_denseinit(\, A, J, parent(A)), A, J))
+        end
+    end
 end
-function inv(A::UpperTriangular{T}) where T
-    S = typeof((zero(T)*one(T) + zero(T))/one(T))
-    UpperTriangular(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
-end
-inv(A::UnitUpperTriangular{T}) where {T} = UnitUpperTriangular(ldiv!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
-inv(A::UnitLowerTriangular{T}) where {T} = UnitLowerTriangular(ldiv!(A, Matrix{T}(I, size(A, 1), size(A, 1))))
 
 errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
@@ -904,11 +902,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
 end
 
 ## Generic triangular multiplication
-for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval lmul!(A::$tri, B::StridedVecOrMat) =
-        Base.@invoke _multrimat!(B::AbstractVecOrMat, A::$tri, B::AbstractVecOrMat)
-    @eval mul!(C::StridedVecOrMat, A::$tri, B::StridedVecOrMat) =
-        Base.@invoke _multrimat!(C::AbstractVecOrMat, A::$tri, B::AbstractVecOrMat)
+for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval lmul!(A::$t, B::StridedVecOrMat) =
+        Base.@invoke _multrimat!(B::AbstractVecOrMat, A::$t, B::AbstractVecOrMat)
+    @eval mul!(C::StridedVecOrMat, A::$t, B::StridedVecOrMat) =
+        Base.@invoke _multrimat!(C::AbstractVecOrMat, A::$t, B::AbstractVecOrMat)
 end
 function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
@@ -1104,11 +1102,11 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
     end
 end
 
-for tri in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval rmul!(A::StridedMatrix, B::$tri) =
-        Base.@invoke _mulmattri!(A::AbstractMatrix, A::AbstractMatrix, B::$tri)
-    @eval mul!(C::StridedMatrix, A::StridedMatrix, B::$tri) =
-        Base.@invoke _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::$tri)
+for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
+    @eval rmul!(A::StridedMatrix, B::$t) =
+        Base.@invoke _mulmattri!(A::AbstractMatrix, A::AbstractMatrix, B::$t)
+    @eval mul!(C::StridedMatrix, A::StridedMatrix, B::$t) =
+        Base.@invoke _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::$t)
 end
 
 function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
