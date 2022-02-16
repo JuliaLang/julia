@@ -378,6 +378,23 @@ function unique!(itr)
     return _unique!(itr)
 end
 
+
+"""
+TBD
+"""
+allpairs(f::F, v::AbstractVector) where {F<:Function} = # haslength && getindex # no AbstractArray, not everything is a product # with stride, cartesian index; eachindex
+    all(1:length(v)) do i
+        e1 = v[i]
+        all(1:(i-1)) do j
+            f(e1, v[j]) end end
+
+allpairs(f::F, s) where {F<:Function} = # !haslength , !hasgetindex
+    all(enumerate(s)) do (i,e1)
+        all(zip(1:i-1, s)) do (_,e2)
+            f(e1, e2) end end
+
+
+
 """
     allunique(itr) -> Bool
 
@@ -400,32 +417,35 @@ julia> allunique([a, a])
 false
 ```
 """
-function allunique(C)
-    seen = Dict{eltype(C), Nothing}()
-    x = iterate(C)
-    if haslength(C) && length(C) > 1000
-        for i in OneTo(1000)
-            v, s = x
-            idx = ht_keyindex2!(seen, v)
-            idx > 0 && return false
-            _setindex!(seen, nothing, v, -idx)
-            x = iterate(C, s)
-        end
-        sizehint!(seen, length(C))
-    end
-    while x !== nothing
-        v, s = x
-        idx = ht_keyindex2!(seen, v)
+allunique(s) = allpairs(!isequal, s)
+allpairs(::typeof(!isequal), ::Union{AbstractSet,AbstractDict}) = true
+allpairs(::typeof(!isequal), r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+allpairs(::typeof(!isequal), v::AbstractVector) = _all_neq_fast(v)
+allpairs(::typeof(!isequal), s) = _all_neq_fast(s)
+function _all_neq_fast(s)
+    seen = Dict{eltype(s), Nothing}()
+    @inline function _step(itr) # closure: s, itr, seen
+        (e, itr2) = itr
+        idx = ht_keyindex2!(seen, e)
         idx > 0 && return false
-        _setindex!(seen, nothing, v, -idx)
-        x = iterate(C, s)
+        _setindex!(seen, nothing, e, -idx)
+        iterate(s, itr2)
     end
-    return true
+    itr = iterate(s)
+    if haslength(s) && length(s) > 1000
+        for _ in OneTo(1000)
+            itr = _step(itr)
+            itr == false && return false
+        end
+        sizehint!(seen, length(s))
+    end
+    while itr !== nothing
+        itr = _step(itr)
+        itr == false && return false
+    end
+    true
 end
 
-allunique(::Union{AbstractSet,AbstractDict}) = true
-
-allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
 """
     allequal(itr) -> Bool
@@ -455,11 +475,19 @@ julia> allequal(Dict(:a => 1, :b => 1))
 false
 ```
 """
-allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+allequal(s) = allpairs(isequal, s)
+allpairs(::typeof(isequal), c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+allpairs(::typeof(isequal), r::AbstractRange) = _all_eq_fast(r)
+allpairs(::typeof(isequal), v::AbstractVector) = _all_eq_fast(v)
+allpairs(::typeof(isequal), itr) = _all_eq_fast(itr)
+_all_eq_fast(s) = isempty(s) ? true : all(isequal(first(s)), s)
 
-allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
 
-allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
+"""
+TBD
+"""
+alldisjoint(s) = allpairs(isdisjoint, s)
+# allmindistances(s, val) = allpairs(s) do e1,e2; dist(e1,e2)>=val end # tbd
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
