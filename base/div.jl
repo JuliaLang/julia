@@ -12,6 +12,9 @@ an integer according to the rounding mode `r`. In other words, the quantity
 
 without any intermediate rounding.
 
+!!! compat "Julia 1.4"
+    The three-argument method taking a `RoundingMode` requires Julia 1.4 or later.
+
 See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this function.
 
 # Examples:

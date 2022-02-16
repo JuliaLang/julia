@@ -82,6 +82,7 @@ JL_DLLEXPORT jl_sym_t *jl_propagate_inbounds_sym;
 JL_DLLEXPORT jl_sym_t *jl_specialize_sym;
 JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
+JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
 JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 JL_DLLEXPORT jl_sym_t *jl_colon_sym;
@@ -330,6 +331,7 @@ void jl_init_common_symbols(void)
     jl_propagate_inbounds_sym = jl_symbol("propagate_inbounds");
     jl_aggressive_constprop_sym = jl_symbol("aggressive_constprop");
     jl_no_constprop_sym = jl_symbol("no_constprop");
+    jl_purity_sym = jl_symbol("purity");
     jl_isdefined_sym = jl_symbol("isdefined");
     jl_nospecialize_sym = jl_symbol("nospecialize");
     jl_specialize_sym = jl_symbol("specialize");

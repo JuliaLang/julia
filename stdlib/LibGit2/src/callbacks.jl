@@ -366,8 +366,8 @@ struct CertHostKey
     sha1    :: NTuple{20,UInt8}
     sha256  :: NTuple{32,UInt8}
     type    :: Cint
+    hostkey :: Ptr{Cchar}
     len     :: Csize_t
-    data    :: NTuple{1024,UInt8}
 end
 
 function verify_host_error(message::AbstractString)
@@ -433,14 +433,14 @@ function ssh_knownhost_check(
     host  :: AbstractString,
     cert  :: CertHostKey,
 )
-    key = collect(cert.data)[1:cert.len]
+    key = unsafe_wrap(Array, cert.hostkey, cert.len)
     return ssh_knownhost_check(files, host, key)
 end
 
 function ssh_knownhost_check(
     files :: AbstractVector{<:AbstractString},
     host  :: AbstractString,
-    key   :: Vector{UInt8},
+    key   :: Vector{Cchar},
 )
     if (m = match(r"^(.+):(\d+)$", host)) !== nothing
         host = m.captures[1]
@@ -476,7 +476,7 @@ function ssh_knownhost_check(
             hosts  :: Ptr{Cvoid},
             host   :: Cstring,
             port   :: Cint,
-            key    :: Ptr{UInt8},
+            key    :: Ptr{Cchar},
             len    :: Csize_t,
             mask   :: Cint,
             C_NULL :: Ptr{Ptr{KnownHost}},

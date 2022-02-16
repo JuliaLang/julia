@@ -19,7 +19,7 @@ extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
@@ -91,17 +91,19 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == jl_opaque_closure_method_sym) {
-                if (nargs != 4) {
+                if (nargs != 5) {
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
                 jl_value_t *nargs = jl_exprarg(e, 1);
-                jl_value_t *functionloc = jl_exprarg(e, 2);
-                jl_value_t *ci = jl_exprarg(e, 3);
+                int isva = jl_exprarg(e, 2) == jl_true;
+                jl_value_t *functionloc = jl_exprarg(e, 3);
+                jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci, isva);
+                return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
@@ -146,7 +148,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 return expr;
             }
             if (e->head == jl_foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
+                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
@@ -176,7 +178,15 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 check_c_types("ccall method definition", rt, at);
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
-                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
+                jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
+                if (!jl_is_symbol(cc)) {
+                    JL_TYPECHK(ccall method definition, tuple, cc);
+                    if (jl_nfields(cc) != 2) {
+                        jl_error("In ccall calling convention, expected two argument tuple or symbol.");
+                    }
+                    JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
+                    JL_TYPECHK(ccall method definition, uint8, jl_get_nth_field(cc, 1));
+                }
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
@@ -308,6 +318,15 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
+                    if (jl_expr_nargs(ma) == 5) {
+                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
+                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
+                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
+                        li->purity.overrides.ipo_terminates = jl_unbox_bool(jl_exprarg(ma, 3));
+                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
+                    }
+                }
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -448,6 +467,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->pure = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
+    src->purity.bits = 0;
     return src;
 }
 
@@ -635,6 +655,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->pure = src->pure;
     m->constprop = src->constprop;
+    m->purity.bits = src->purity.bits;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
@@ -760,14 +781,13 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
     // TODO: Maybe have a signature of (parent method, stmt#)?
     m->sig = (jl_value_t*)jl_anytuple_type;
-    // Unused for opaque closures. va-ness is determined on construction
-    m->isva = 0;
+    m->isva = isva;
     m->is_for_opaque_closure = 1;
     if (name == jl_nothing) {
         m->name = jl_symbol("opaque closure");

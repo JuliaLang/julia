@@ -753,10 +753,10 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
     Cholesky(A, 'U', convert(BlasInt, info))
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
-
-cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
-    cholesky!(cholcopy(A), NoPivot(); check = check)
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+@inline cholcopy(A::Diagonal) = copy_oftype(A, choltype(A))
+@inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copy_oftype(A, choltype(A))
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

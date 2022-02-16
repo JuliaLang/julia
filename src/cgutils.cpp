@@ -573,8 +573,10 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         bool isTuple = jl_is_tuple_type(jt);
         jl_svec_t *ftypes = jl_get_fieldtypes(jst);
         size_t i, ntypes = jl_svec_len(ftypes);
-        if (!jl_struct_try_layout(jst))
-            return NULL; // caller should have checked jl_type_mappable_to_c already, but we'll be nice
+        if (!jl_struct_try_layout(jst)) {
+            assert(0 && "caller should have checked jl_type_mappable_to_c already");
+            abort();
+        }
         if (ntypes == 0 || jl_datatype_nbits(jst) == 0)
             return getVoidTy(ctxt);
         Type *_struct_decl = NULL;
@@ -597,7 +599,8 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
             if (jl_field_isatomic(jst, i)) {
                 // TODO: eventually support this?
                 // though it's a bit unclear how the implicit load should be interpreted
-                return NULL;
+                assert(0 && "caller should have checked jl_type_mappable_to_c already");
+                abort();
             }
             Type *lty;
             if (jl_field_isptr(jst, i)) {

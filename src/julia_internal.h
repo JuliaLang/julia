@@ -128,8 +128,12 @@ int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT void jl_set_peek_cond(uintptr_t);
+JL_DLLEXPORT double jl_get_profile_peek_duration(void);
+JL_DLLEXPORT void jl_set_profile_peek_duration(double);
+
 // number of cycles since power-on
-static inline uint64_t cycleclock(void)
+static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
     uint64_t low, high;
@@ -658,8 +662,9 @@ extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
-jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva, jl_value_t *rt_lb,
-    jl_value_t *rt_ub, jl_value_t *source,  jl_value_t **env, size_t nenv);
+jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_value_t *source,  jl_value_t **env, size_t nenv);
+JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 // Each tuple can exist in one of 4 Vararg states:
 //   NONE: no vararg                            Tuple{Int,Float32}
@@ -1433,6 +1438,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_propagate_inbounds_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_specialize_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_colon_sym;
