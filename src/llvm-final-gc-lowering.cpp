@@ -37,6 +37,7 @@ struct FinalLowerGC: private JuliaPassContext {
 
 private:
     Function *queueRootFunc;
+    Function *queueBindingFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
     Instruction *pgcstack;
@@ -58,6 +59,9 @@ private:
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     Value *lowerQueueGCRoot(CallInst *target, Function &F);
+
+    // Lowers a `julia.queue_gc_binding` intrinsic.
+    Value *lowerQueueGCBinding(CallInst *target, Function &F);
 };
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
@@ -165,6 +169,13 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
     return target;
 }
 
+Value *FinalLowerGC::lowerQueueGCBinding(CallInst *target, Function &F)
+{
+    assert(target->arg_size() == 1);
+    target->setCalledFunction(queueBindingFunc);
+    return target;
+}
+
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
     assert(target->arg_size() == 2);
@@ -197,10 +208,11 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
     // Initialize platform-specific references.
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
+    queueBindingFunc = getOrDeclare(jl_well_known::GCQueueBinding);
     poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
 
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
+    GlobalValue *functionList[] = {queueRootFunc, queueBindingFunc, poolAllocFunc, bigAllocFunc};
     unsigned j = 0;
     for (unsigned i = 0; i < sizeof(functionList) / sizeof(void*); i++) {
         if (!functionList[i])
@@ -216,8 +228,8 @@ bool FinalLowerGC::doInitialization(Module &M) {
 
 bool FinalLowerGC::doFinalization(Module &M)
 {
-    GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
-    queueRootFunc = poolAllocFunc = bigAllocFunc = nullptr;
+    GlobalValue *functionList[] = {queueRootFunc, queueBindingFunc, poolAllocFunc, bigAllocFunc};
+    queueRootFunc = queueBindingFunc = poolAllocFunc = bigAllocFunc = nullptr;
     auto used = M.getGlobalVariable("llvm.compiler.used");
     if (!used)
         return false;
@@ -282,6 +294,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
     auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
     auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
+    auto queueGCBindingFunc = getOrNull(jl_intrinsics::queueGCBinding);
 
     // Lower all calls to supported intrinsics.
     for (BasicBlock &BB : F) {
@@ -313,6 +326,9 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             else if (callee == queueGCRootFunc) {
                 replaceInstruction(CI, lowerQueueGCRoot(CI, F), it);
+            }
+            else if (callee == queueGCBindingFunc) {
+                replaceInstruction(CI, lowerQueueGCBinding(CI, F), it);
             }
             else {
                 ++it;

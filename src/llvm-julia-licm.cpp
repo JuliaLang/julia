@@ -61,7 +61,8 @@ struct JuliaLICM : public JuliaPassContext {
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
+        if (!gc_preserve_begin_func && !write_barrier_func && !write_barrier_binding_func &&
+            !alloc_obj_func)
             return false;
         auto LI = &GetLI();
         auto DT = &GetDT();
@@ -132,7 +133,8 @@ struct JuliaLICM : public JuliaPassContext {
                         CallInst::Create(call, {}, exit_pts[i]);
                     }
                 }
-                else if (callee == write_barrier_func) {
+                else if (callee == write_barrier_func ||
+                         callee == write_barrier_binding_func) {
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
