@@ -230,3 +230,26 @@ call_global_opaque_closure() = GLOBAL_OPAQUE_CLOSURE()
 let oc = @opaque a->sin(a)
     @test length(code_typed(oc, (Int,))) == 1
 end
+
+# constructing an opaque closure from IRCode
+using Core.Compiler: IRCode
+using Core: CodeInfo
+
+function OC(ir::IRCode, env...)
+    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ());
+    src.slotflags = UInt8[]
+    nargs = length(ir.argtypes)
+    src.slotnames = fill(:none, nargs)
+    Core.Compiler.replace_code_newstyle!(src, ir, nargs);
+    Core.Compiler.widen_all_consts!(src);
+    src.inferred = true
+    # NOTE: we need ir.argtypes[1] == typeof(env)
+
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
+          Tuple{ir.argtypes[2:end]...}, Union{}, Any, @__MODULE__, src, 0, nothing, nargs-1, false, env)
+end
+
+let ci = code_typed(+, (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test OC(ir)(40, 2) == 42
+end
