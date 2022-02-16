@@ -497,8 +497,10 @@ export
 # collections
     all!,
     all,
+    allpairs,
     allequal,
     allunique,
+    alldisjoint,
     any!,
     any,
     firstindex,
