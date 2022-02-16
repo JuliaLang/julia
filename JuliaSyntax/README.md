@@ -546,6 +546,10 @@ parsing `key=val` pairs inside parentheses.
   or (b) all lines should be dedented only one character, as that's the
   matching prefix.
 
+* Parsing of anonymous function arguments is somewhat inconsistent.
+  `function (xs...) \n body end` parses the argument list as `(... xs)`, whereas
+  `function (x) \n body end` parses the argument list as `(tuple x)`.
+
 # Comparisons to other packages
 
 ### Official Julia compiler

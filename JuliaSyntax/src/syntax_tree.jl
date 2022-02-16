@@ -415,6 +415,16 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
             # Add block for source locations
             args[2] = Expr(:block, loc, args[2])
         end
+    elseif headsym == :function
+        if length(args) > 1 && Meta.isexpr(args[1], :tuple)
+            # Convert to weird Expr forms for long-form anonymous functions.
+            #
+            # (function (tuple (... xs)) body) ==> (function (... xs) body)
+            if length(args[1].args) == 1 && Meta.isexpr(args[1].args[1], :...)
+                # function (xs...) \n body end
+                args[1] = args[1].args[1]
+            end
+        end
     end
     if headsym == :inert || (headsym == :quote && length(args) == 1 &&
                  !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
