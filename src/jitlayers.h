@@ -4,6 +4,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/PassManager.h>
 #include "llvm/IR/LegacyPassManager.h"
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
@@ -260,6 +261,11 @@ Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 Pass *createDemoteFloat16Pass();
 Pass *createCPUFeaturesPass();
+Pass *createLowerSimdLoopPass();
+
+// NewPM
+#include "passes.h"
+
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {
