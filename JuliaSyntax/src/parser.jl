@@ -2677,7 +2677,6 @@ end
 #   tightest:  ... < `;;;` < `;;` < `;`,`\n` < whitespace. We choose binding
 #   power of 0 for whitespace and negative numbers for other separators.
 #
-# FIXME: Error messages for mixed spaces and ;; delimiters
 function parse_array_separator(ps, array_order)
     sep_mismatch_err = "cannot mix space and ;; separators in an array expression, except to wrap a line"
     mark = position(ps)

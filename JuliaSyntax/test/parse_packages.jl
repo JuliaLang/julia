@@ -21,9 +21,6 @@ end
 
 end
 
-if VERSION < v"1.8-DEV" || haskey(ENV, "PARSE_STDLIB")
-# TODO: Fix on 1.8
-
 @testset "Parse Julia stdlib at $(Sys.STDLIB)" begin
     for stdlib in readdir(Sys.STDLIB)
         fulldir = joinpath(Sys.STDLIB, stdlib)
@@ -33,6 +30,4 @@ if VERSION < v"1.8-DEV" || haskey(ENV, "PARSE_STDLIB")
             end
         end
     end
-end
-
 end
