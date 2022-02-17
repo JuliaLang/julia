@@ -51,3 +51,11 @@ end
 @testset "Unicode doc lookup (#41589)" begin
     @test REPL.lookup_doc(:(÷=)) isa Markdown.MD
 end
+
+@testset "#44009" begin
+    R = Complex{<:Integer}
+    b = REPL.Binding(@__MODULE__, :R)
+    @test REPL.summarize(b, Tuple{}) isa Markdown.MD
+end
+
+

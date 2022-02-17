@@ -367,7 +367,6 @@ struct _jl_method_instance_t {
 typedef struct jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
-    uint8_t isva;
     size_t world;
     jl_method_t *source;
     jl_fptr_args_t invoke;
@@ -410,6 +409,7 @@ typedef struct _jl_code_instance_t {
             uint8_t terminates:2;
         } purity_flags;
     };
+    jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype

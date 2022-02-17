@@ -546,7 +546,13 @@ julia> stride(A,3)
 function stride(A::AbstractArray, k::Integer)
     st = strides(A)
     k ≤ ndims(A) && return st[k]
-    return sum(st .* size(A))
+    ndims(A) == 0 && return 1
+    sz = size(A)
+    s = st[1] * sz[1]
+    for i in 2:ndims(A)
+        s += st[i] * sz[i]
+    end
+    return s
 end
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
@@ -2363,6 +2369,24 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     d2 = row_first ? 1 : 2
 
     outdims = zeros(Int, N)
+
+    # validate shapes for lowest level of concatenation
+    d = findfirst(>(1), dims)
+    if d !== nothing # all dims are 1
+        nblocks = length(as) ÷ dims[d]
+        for b ∈ 1:nblocks
+            offset = ((b - 1) * dims[d])
+            startelementi = offset + 1
+            for i ∈ offset .+ (2:dims[d])
+                for dd ∈ 1:N
+                    dd == d && continue
+                    if size(as[startelementi], dd) != size(as[i], dd)
+                        throw(ArgumentError("incompatible shape in element $i"))
+                    end
+                end
+            end
+        end
+    end
 
     # discover number of rows or columns
     for i ∈ 1:dims[d1]
