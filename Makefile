@@ -472,7 +472,7 @@ endif
 
 	# Include all git-tracked filenames
 	git ls-files >> light-source-dist.tmp
-	
+
 	# Include documentation filenames
 	find doc/_build/html >> light-source-dist.tmp
 

@@ -452,7 +452,7 @@ the `value` that was passed; this means that if the `value` is itself modified,
 all elements of the `fill`ed array will reflect that modification because they're
 _still_ that very `value`. This is of no concern with `fill(1.0, (5,5))` as the
 `value` `1.0` is immutable and cannot itself be modified, but can be unexpected
-with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
+with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
 places _the very same_ empty array in all three locations of the returned vector:
 
 ```jldoctest

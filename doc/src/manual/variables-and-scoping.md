@@ -124,7 +124,7 @@ man-scope-table) for a complete list). If such a block is syntactically nested
 inside of another local scope, the scope it creates is nested inside of all the
 local scopes that it appears within, which are all ultimately nested inside of
 the global scope of the module in which the code is evaluated. Variables in
-outer scopes are visible from any scope they contain — meaning that they can be
+outer scopes are visible from any scope they contain — meaning that they can be
 read and written in inner scopes — unless there is a local variable with the
 same name that "shadows" the outer variable of the same name. This is true even
 if the outer local is declared after (in the sense of textually below) an inner
@@ -532,7 +532,7 @@ prints this very direct warning:
 This addresses both issues while preserving the "programming at scale" benefits of the 1.0 behavior:
 global variables have no spooky effect on the meaning of code that may be far away; in the REPL
 copy-and-paste debugging works and beginners don't have any issues; any time someone either forgets
-a `global` annotation or accidentally shadows an existing global with a local in a soft scope,
+a `global` annotation or accidentally shadows an existing global with a local in a soft scope,
 which would be confusing anyway, they get a nice clear warning.
 
 An important property of this design is that any code that executes in a file without a warning will

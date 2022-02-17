@@ -1545,7 +1545,7 @@ Alternatively, in isolation `m1` and `m2` might be ordered, but if a third
 method cannot be sorted with them, they may cause an ambiguity together.
 
 For parametric types, the `ambiguous_bottom` keyword argument controls whether
-`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
 it is considered ambiguous, when `false` it is not.
 
 # Examples
