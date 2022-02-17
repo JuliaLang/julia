@@ -479,8 +479,10 @@ allpairs(::typeof(isequal), c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
 allpairs(::typeof(isequal), r::AbstractRange) = _all_eq_fast(r)
 allpairs(::typeof(isequal), v::AbstractVector) = _all_eq_fast(v)
 allpairs(::typeof(isequal), itr) = _all_eq_fast(itr)
-_all_eq_fast(s) = isempty(s) ? true : all(isequal(first(s)), s)
-
+_all_eq_fast(s) = isempty(s) ||
+    let itr = iterate(s) ;
+        all(isequal(itr[1]), Iterators.rest(itr))
+    end
 
 """
 TBD
