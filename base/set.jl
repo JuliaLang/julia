@@ -481,7 +481,7 @@ allpairs(::typeof(isequal), v::AbstractVector) = _all_eq_fast(v)
 allpairs(::typeof(isequal), itr) = _all_eq_fast(itr)
 _all_eq_fast(s) = isempty(s) ||
     let itr = iterate(s) ;
-        all(isequal(itr[1]), Iterators.rest(itr))
+        all(isequal(itr[1]), Iterators.rest(s, itr[2]))
     end
 
 """
