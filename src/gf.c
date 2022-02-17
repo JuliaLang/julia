@@ -1403,8 +1403,10 @@ static void invalidate_external(jl_method_instance_t *mi, size_t max_world) {
     }
 }
 
+static void do_nothing_with_codeinst(jl_code_instance_t *ci) {}
+
 // recursively invalidate cached methods that had an edge to a replaced method
-static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
+static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced, size_t max_world, int depth)
 {
     if (_jl_debug_method_invalidation) {
         jl_value_t *boxeddepth = NULL;
@@ -1424,6 +1426,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
             codeinst->max_world = max_world;
         }
         assert(codeinst->max_world <= max_world);
+        (*f)(codeinst);
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     // recurse to all backedges to update their valid range also
@@ -1433,14 +1436,14 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
         size_t i, l = jl_array_len(backedges);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *replaced = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
-            invalidate_method_instance(replaced, max_world, depth + 1);
+            invalidate_method_instance(f, replaced, max_world, depth + 1);
         }
     }
     JL_UNLOCK(&replaced->def.method->writelock);
 }
 
 // invalidate cached methods that overlap this definition
-static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
+void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
     JL_LOCK(&replaced_mi->def.method->writelock);
     jl_array_t *backedges = replaced_mi->backedges;
@@ -1450,7 +1453,7 @@ static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_w
         size_t i, l = jl_array_len(backedges);
         jl_method_instance_t **replaced = (jl_method_instance_t**)jl_array_ptr_data(backedges);
         for (i = 0; i < l; i++) {
-            invalidate_method_instance(replaced[i], max_world, 1);
+            invalidate_method_instance(f, replaced[i], max_world, 1);
         }
     }
     JL_UNLOCK(&replaced_mi->def.method->writelock);
@@ -1613,7 +1616,7 @@ static void jl_method_table_invalidate(jl_methtable_t *mt, jl_typemap_entry_t *m
         if ((jl_value_t*)mi != jl_nothing) {
             invalidated = 1;
             invalidate_external(mi, methodentry->max_world);
-            invalidate_backedges(mi, methodentry->max_world, "jl_method_table_disable");
+            invalidate_backedges(&do_nothing_with_codeinst, mi, methodentry->max_world, "jl_method_table_disable");
         }
     }
     if (invalidated && _jl_debug_method_invalidation) {
@@ -1744,7 +1747,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                 if (missing) {
                     jl_method_instance_t *backedge = (jl_method_instance_t*)backedges[i];
                     invalidate_external(backedge, max_world);
-                    invalidate_method_instance(backedge, max_world, 0);
+                    invalidate_method_instance(&do_nothing_with_codeinst, backedge, max_world, 0);
                     invalidated = 1;
                     if (_jl_debug_method_invalidation)
                         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
@@ -1814,7 +1817,7 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                         invalidate_external(mi, max_world);
                         if (mi->backedges) {
                             invalidated = 1;
-                            invalidate_backedges(mi, max_world, "jl_method_table_insert");
+                            invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_insert");
                         }
                     }
                 }

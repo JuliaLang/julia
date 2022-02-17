@@ -774,6 +774,103 @@ precompile_test_harness("code caching") do dir
             @test length(meths) == 2
         end
     end
+
+    # Invalidations (this test is adapted from from SnoopCompile)
+    function hasvalid(mi, world)
+        isdefined(mi, :cache) || return false
+        ci = mi.cache
+        while true
+            ci.max_world >= world && return true
+            isdefined(ci, :next) || return false
+            ci = ci.next
+        end
+    end
+
+    StaleA = :StaleA_0xab07d60518763a7e
+    StaleB = :StaleB_0xab07d60518763a7e
+    StaleC = :StaleC_0xab07d60518763a7e
+    write(joinpath(dir, "$StaleA.jl"),
+        """
+        module $StaleA
+
+        stale(x) = rand(1:8)
+        stale(x::Int) = length(digits(x))
+
+        not_stale(x::String) = first(x)
+
+        use_stale(c) = stale(c[1]) + not_stale("hello")
+        build_stale(x) = use_stale(Any[x])
+
+        # force precompilation
+        build_stale(37)
+        stale('c')
+
+        end
+        """
+    )
+    write(joinpath(dir, "$StaleB.jl"),
+        """
+        module $StaleB
+
+        # StaleB does not know about StaleC when it is being built.
+        # However, if StaleC is loaded first, we get `"jl_insert_method_instance"`
+        # invalidations.
+        using $StaleA
+
+        # This will be invalidated if StaleC is loaded
+        useA() = $StaleA.stale("hello")
+
+        # force precompilation
+        useA()
+
+        end
+        """
+    )
+    write(joinpath(dir, "$StaleC.jl"),
+        """
+        module $StaleC
+
+        using $StaleA
+
+        $StaleA.stale(x::String) = length(x)
+        call_buildstale(x) = $StaleA.build_stale(x)
+
+        call_buildstale("hey")
+
+        end # module
+        """
+    )
+    for pkg in (StaleA, StaleB, StaleC)
+        Base.compilecache(Base.PkgId(string(pkg)))
+    end
+    @eval using $StaleA
+    @eval using $StaleC
+    @eval using $StaleB
+    MA = getfield(@__MODULE__, StaleA)
+    MB = getfield(@__MODULE__, StaleB)
+    MC = getfield(@__MODULE__, StaleC)
+    world = Base.get_world_counter()
+    m = only(methods(MA.use_stale))
+    mi = m.specializations[1]
+    @test_broken hasvalid(mi, world)   # it should have been re-inferred by StaleC
+    m = only(methods(MA.build_stale))
+    mis = filter(!isnothing, collect(m.specializations))
+    @test length(mis) == 2
+    for mi in mis
+        if mi.specTypes.parameters[2] == Int
+            @test mi.cache.max_world < world
+        else
+            # The variant for String got "healed" by recompilation in StaleC
+            @test mi.specTypes.parameters[2] == String
+            @test mi.cache.max_world == typemax(UInt)
+        end
+    end
+    m = only(methods(MB.useA))
+    mi = m.specializations[1]
+    @test !hasvalid(mi, world)      # invalidated by the stale(x::String) method in StaleC
+    m = only(methods(MC.call_buildstale))
+    mi = m.specializations[1]
+    @test hasvalid(mi, world)       # was compiled with the new method
 end
 
 # test --compiled-modules=no command line option

@@ -2160,12 +2160,45 @@ static void jl_insert_methods(jl_array_t *list)
     }
 }
 
+void remove_code_instance_from_validation(jl_code_instance_t *codeinst)
+{
+    ptrhash_remove(&new_code_instance_validate, codeinst);
+}
+
 static void jl_insert_method_instances(jl_array_t *list)
 {
     size_t i, l = jl_array_len(list);
+    // Validate the MethodInstances
+    jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
+    memset(jl_array_data(valids), 1, l);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_method_instance(mi));
+        if (jl_is_method(mi->def.method)) {
+            // Is this still the method we'd be calling?
+            jl_methtable_t *mt = jl_method_table_for(mi->specTypes);
+            jl_value_t *mworld = jl_methtable_lookup(mt, mi->specTypes, world);
+            if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld) {
+                jl_array_uint8_set(valids, i, 0);
+                invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
+                // The codeinst of this mi haven't yet been removed
+                jl_code_instance_t *codeinst = mi->cache;
+                while (codeinst) {
+                    remove_code_instance_from_validation(codeinst);
+                    codeinst = codeinst->next;
+                }
+                if (_jl_debug_method_invalidation) {
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, mworld);
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, jl_cstr_to_string("jl_method_table_insert")); // GC disabled
+                }
+            }
+        }
+    }
+    // While it's tempting to just remove the invalidated MIs altogether,
+    // this hurts the ability of SnoopCompile to diagnose problems.
+    for (i = 0; i < l; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
         jl_method_instance_t *milive = jl_specializations_get_or_insert(mi);
         ptrhash_put(&uniquing_table, mi, milive);  // store the association for the 2nd pass
     }
@@ -2315,7 +2348,7 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             // then enable it
             jl_code_instance_t *codeinst = caller->cache;
             while (codeinst) {
-                if (codeinst->min_world > 0)
+                if (ptrhash_get(&new_code_instance_validate, codeinst) != HT_NOTFOUND && codeinst->min_world > 0)
                     codeinst->max_world = ~(size_t)0;
                 ptrhash_remove(&new_code_instance_validate, codeinst);  // mark it as handled
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
