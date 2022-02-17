@@ -65,9 +65,6 @@ jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
     jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(bt_bytes);
     memcpy(bt_data, shared_bt_data_buffer, bt_bytes);
 
-    // Now, "clear" the ptls buffer, so that this buffer isn't incorrectly rooting objects
-    // in that buffer.
-    ptls->bt_size = 0;
 
     return jl_raw_backtrace_t{
         bt_data,
