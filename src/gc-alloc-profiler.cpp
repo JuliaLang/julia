@@ -54,6 +54,9 @@ jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
     // per-thread backtrace buffer.
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_bt_element_t *shared_bt_data_buffer = ptls->profiling_bt_buffer;
+    if (shared_bt_data_buffer == NULL)
+        ptls->profiling_bt_buffer = shared_bt_data_buffer = \
+                malloc_s(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
 
     size_t bt_size = rec_backtrace(shared_bt_data_buffer, JL_MAX_BT_SIZE, 2);
 
