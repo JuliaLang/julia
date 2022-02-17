@@ -72,7 +72,9 @@ const _STDLIB_NAMES = _stdlib_names()
 
 function _loaded_stdlibs()
     modules = copy(Base.loaded_modules_array())
-    stdlib_names = _STDLIB_NAMES
+    stdlib_names = copy(_STDLIB_NAMES)
+    push!(stdlib_names, "Base")
+    push!(stdlib_names, "Core")
     filter!(m -> String(nameof(m)) in stdlib_names, modules)
     return modules
 end
