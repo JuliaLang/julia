@@ -254,7 +254,7 @@ end
     InteractiveUtils.stdlib_diagnostics(buf)
     output = read(buf, String)
     @test occursin("Julia Version $VERSION", output)
-    @test occursin("Environment:", ver)
+    @test occursin("Environment:", output)
 
     InteractiveUtils.stdlib_diagnostics(stdout) # TODO: delete this line before merging the PR
 end
