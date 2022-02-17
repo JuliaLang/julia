@@ -1070,17 +1070,14 @@ end
     issue41694(2)
 end
 
-let m = Module()
-    @eval m begin
-        global x::Int = 0
-        function f()
-            global x = 0
-            while x<10
-                x += 1
-            end
-            x
-        end
+global x44200::Int = 0
+function f44200()
+    global x = 0
+    while x < 10
+        x += 1
     end
-    src = code_typed1(m.f)
+    x
+end
+let src = code_typed1(m.f)
     @test count(x -> isa(x, Core.PiNode), src.code) == 0
 end
