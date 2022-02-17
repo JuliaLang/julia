@@ -382,7 +382,7 @@ end
 """
 TBD
 """
-allpairs(f::F, v::AbstractVector) where {F<:Function} = # haslength && getindex # no AbstractArray, not everything is a product # with stride, cartesian index; eachindex
+allpairs(f::F, v::AbstractVector) where {F<:Function} = # haslength && getindex # no AbstractArray, not everything is a product
     all(1:length(v)) do i
         e1 = v[i]
         all(1:(i-1)) do j
@@ -488,7 +488,7 @@ _all_eq_fast(s) = isempty(s) ||
 TBD
 """
 alldisjoint(s) = allpairs(isdisjoint, s)
-# allmindistances(s, val) = allpairs(s) do e1,e2; dist(e1,e2)>=val end # tbd
+# allmindists(s, val) = allpairs(s) do e1,e2; dist(e1,e2)>=val end # tbd
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
