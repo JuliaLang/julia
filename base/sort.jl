@@ -444,6 +444,23 @@ struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
 end
 
+"""
+    RadixSort(fallback)
+
+Indicate that a sorting function should use the radix sort
+algorithm for long vectors and `fallback` for short vectors.
+RadixSort is stable if the fallback is stable.
+
+Characteristics:
+  * *stable*: preserves the ordering of elements which compare
+    equal (e.g. "a" and "A" in a sort of letters which ignores
+    case).
+  * *not in-place* in memory.
+  * *great performance* for very large collections.
+"""
+struct RadixSort{Fallback <: Algorithm} <: Algorithm
+    fallback::Fallback
+end
 
 """
     InsertionSort
@@ -495,8 +512,8 @@ Characteristics:
 """
 const MergeSort     = MergeSortAlg()
 
-const DEFAULT_UNSTABLE = QuickSort
-const DEFAULT_STABLE   = MergeSort
+const DEFAULT_UNSTABLE = RadixSort(QuickSort)
+const DEFAULT_STABLE   = RadixSort(MergeSort)
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
@@ -652,6 +669,85 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
     return v
 end
 
+function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
+               ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
+    MASK = UInt(1) << CHUNK_SIZE - 0x1
+    counts = Vector{unsigned(typeof(hi-lo))}(undef, MASK+2)
+
+    @inbounds for shift in 0:CHUNK_SIZE:bits-1
+
+        counts .= zero(eltype(counts))
+
+        for k in lo:hi
+            x = v[k]
+            idx = (x >> shift)&MASK + 2
+            counts[idx] += one(eltype(counts))
+        end
+
+        sum = lo-1
+        for i in 1:(MASK+1)
+            sum += counts[i]
+            counts[i] = sum
+        end
+        # could be replaced by `accumulate!(+, counts, counts)`
+
+        for k in lo:hi # Is this iteration slower than it could be?
+            x = v[k]
+            i = (x >> shift)&MASK + 1
+            j = counts[i] += 1
+            t[j] = x
+            # consider adding sortperm here
+        end
+
+        v, t = t, v
+
+    end
+
+    v
+end
+
+used_bits(x::Union{Signed, Unsigned}) = sizeof(x)*8 - leading_zeros(x)
+function radix_heuristic(mn, mx, length)
+    #Skip sorting
+    mn == mx && return 0, 0, false
+
+    #Dispatch to count sort
+    length + mn > mx && return 0, 0, true #TODO optimize
+
+    bits = used_bits(mx-mn)
+
+    guess = log(length)*3/4+3
+    chunk = Int(cld(bits, cld(bits, guess)))
+
+    bits, chunk, false
+end
+
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::RadixSort, o::Ordering)
+    Serial.Serializable(eltype(v), o) === nothing && return sort!(v, lo, hi, a.fallback, o)
+    hi <= lo && return v
+    hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+    (hi - lo < 2000 || (hi - lo < 200_000 && sizeof(eltype(v)) == 16)) && return sort!(v, lo, hi, a.fallback, o)
+
+    u, mn, mx = Serial.serialize!(v, lo, hi, o)
+
+    bits, chunk_size, count = radix_heuristic(mn, mx, hi-lo+1)
+
+    if count
+        # This overflows and returns incorrect results if the range is more than typemax(Int)
+        # sourt_int_range! would need to allocate an array of more than typemax(Int) elements,
+        # so policy should never dispatch to sort_int_range! in that case.
+        u = sort_int_range!(u, lo, hi, 1+mx-mn, mn) # 1 not one().
+        mn = zero(mn)
+    elseif bits > 0
+        u[lo:hi] .-= mn
+        #Dynamic dispatch:
+        u = radix_sort!(u, lo, hi, unsigned(bits), Val(UInt8(chunk_size)), similar(u))
+    else
+        mn = zero(mn)
+    end
+
+    Serial.deserialize!(v, u, lo, hi, o, mn)
+end
 
 ## generic sorting methods ##
 
@@ -711,32 +807,20 @@ function sort!(v::AbstractVector;
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
-    ordr = ord(lt,by,rev,order)
-    if (ordr === Forward || ordr === Reverse) && eltype(v)<:Integer
-        n = length(v)
-        if n > 1
-            min, max = extrema(v)
-            (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
-                return sort_int_range!(v, rangelen, min, ordr === Reverse ? reverse : identity)
-            end
-        end
-    end
-    sort!(v, alg, ordr)
+    sort!(v, alg, ord(lt,by,rev,order))
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse)
+function sort_int_range!(x::AbstractVector{<:Integer}, lo, hi, rangelen, minval)
     offs = 1 - minval
 
     counts = fill(0, rangelen)
-    @inbounds for i = eachindex(x)
+    @inbounds for i = lo:hi
         counts[x[i] + offs] += 1
     end
 
-    idx = firstindex(x)
-    @inbounds for i = maybereverse(1:rangelen)
+    idx = lo
+    @inbounds for i = 1:rangelen
         lastidx = idx + counts[i] - 1
         val = i-offs
         for j = idx:lastidx
@@ -1098,7 +1182,6 @@ function sort!(A::AbstractArray;
     ordr = ord(lt, by, rev, order)
     nd = ndims(A)
     k = dims
-
     1 <= k <= nd || throw(ArgumentError("dimension out of range"))
 
     remdims = ntuple(i -> i == k ? 1 : axes(A, i), nd)
@@ -1109,10 +1192,116 @@ function sort!(A::AbstractArray;
     A
 end
 
+## sorting serialization to alow radix sorting primitives other than UInts ##
+module Serial
+using ...Order
+
+"""
+    Serializable(T::Type, order::Ordering)
+
+Return `Some(typeof(serialize(x::T, order)))` if [`serialize`](@ref) and
+[`deserialize`](@ref) are implemented.
+
+If either is not implemented, return nothing.
+"""
+Serializable(T::Type, order::Ordering) = nothing
+
+"""
+    serialize(x, order::Ordering)::Unsigned
+
+Map `x` to an un unsigned integer, maintaining sort order.
+
+The map should be reversible with [`deserialize`](@ref), so `isless(order, a, b)` must be
+a linear ordering for `a, b <: typeof(x)`. Satisfies
+`isless(order, a, b) === (serialize(order, a) < serialize(order, b))`
+and `x === deserialize(typeof(x), serialize(order, x), order)`
+
+See also: [`Serializable`](@ref) [`deserialize`](@ref)
+"""
+function serialize end
+
+"""
+    deserialize(T::Type, u::Unsigned, order::Ordering)
+
+Reconstruct the unique value `x::T` that serializes to `u`. Satisfies
+`x === deserialize(T, order, serialize(order, x::T))` for all `x <: T`.
+
+See also: [`serialize`](@ref) [`Serializable`](@ref)
+"""
+function deserialize end
+
+
+### Primitive Types
+
+# Integers
+serialize(x::Unsigned, ::ForwardOrdering) = x
+deserialize(::Type{T}, u::T, ::ForwardOrdering) where T <: Unsigned = u
+
+serialize(x::Signed, ::ForwardOrdering) =
+    unsigned(xor(x, typemin(x)))
+deserialize(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
+    xor(signed(u), typemin(T))
+
+Serializable(T::Type{<:Union{Unsigned, Signed}}, ::ForwardOrdering) =
+    isbitstype(T) ? Some(unsigned(T)) : nothing
+
+
+# Floats are not Serializable under regular orderings because they fail on NaN edge cases.
+# Float serialization is defined in ..Float, where the Left and Right orderings guarante
+# that there are no NaN values
+
+# Booleans
+# serialize! fails on Vector{Bool} because the reinterpret is sketchy
+# try `sort!(collect(trues(501)), alg=Sort.RadixSort(QuickSort), rev=true)`
+# serialize(x::Bool, ::ForwardOrdering) = UInt8(x)
+# deserialize(::Type{Bool}, u::UInt8, ::ForwardOrdering) = Bool(u)
+# Serializable(::Type{Bool}, ::ForwardOrdering) = UInt8
+
+# Chars
+serialize(x::Char, ::ForwardOrdering) = reinterpret(UInt32, x)
+deserialize(::Type{Char}, u::UInt32, ::ForwardOrdering) = reinterpret(Char, u)
+Serializable(::Type{Char}, ::ForwardOrdering) = UInt32
+
+### Reverse orderings
+serialize(x, rev::ReverseOrdering) = ~serialize(x, rev.fwd)
+deserialize(T::Type, u::Unsigned, rev::ReverseOrdering) = deserialize(T, ~u, rev.fwd)
+Serializable(T::Type, order::ReverseOrdering) = Serializable(T, order.fwd)
+
+
+### Vectors
+"""docstring"""
+function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
+    u = reinterpret(something(Serializable(eltype(v), order)), v)
+    @inbounds u[lo] = mn = mx = serialize(v[lo], order)
+    i = lo # rename lo -> i for clarity only
+    @inbounds while i < hi
+        i += 1
+
+        ui = u[i] = serialize(v[i], order)
+
+        mx = max(ui, mx)
+        mn = min(ui, mn)
+    end
+    u, mn, mx
+end
+
+"""docstring"""
+function deserialize!(v::AbstractVector, u::AbstractVector{U},
+    lo::Integer, hi::Integer, order::Ordering, offset::U) where U <: Unsigned
+    @inbounds for i in lo:hi
+        v[i] = deserialize(eltype(v), u[i]+offset, order)
+    end
+    v
+end
+
+end # module Sort.Serial
+
+
 ## fast clever sorting for floats ##
 
 module Float
 using ..Sort
+using ..Sort.Serial
 using ...Order
 using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing
 
@@ -1139,6 +1328,14 @@ right(o::Perm) = Perm(right(o.order), o.data)
 
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+
+for (float, int) in ((Float32, Int32), (Float64, Int64))
+    @eval Serial.serialize(x::$float, ::Left) = Serial.serialize(reinterpret($int, x), Reverse)
+    @eval Serial.deserialize(T::Type{$float}, u::unsigned($int), ::Left) = reinterpret($float, Serial.deserialize($int, u, Reverse))
+    @eval Serial.serialize(x::$float, ::Right) = Serial.serialize(reinterpret($int, x), Forward)
+    @eval Serial.deserialize(T::Type{$float}, u::unsigned($int), ::Right) = reinterpret($float, Serial.deserialize($int, u, Forward))
+    @eval Serial.Serializable(::Type{$float}, ::Union{Left, Right}) = unsigned($int)
+end
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::DirectOrdering, x::Missing) = false
