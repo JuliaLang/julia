@@ -393,8 +393,8 @@ function lift_leaves(compact::IncrementalCompact,
                     ocleaf = simple_walk(compact, ocleaf)
                 end
                 ocdef, _ = walk_to_def(compact, ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
-                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-4
+                    lift_arg!(compact, leaf, cache_key, ocdef, 4+field, lifted_leaves)
                     continue
                 end
                 return nothing
@@ -1065,9 +1065,14 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
     end
 end
 
+function is_some_union(@nospecialize(t))
+    isa(t, MaybeUndef) && (t = t.typ)
+    return isa(t, Union)
+end
+
 function is_union_phi(compact::IncrementalCompact, idx::Int)
     inst = compact.result[idx]
-    return isa(inst[:inst], PhiNode) && isa(inst[:type], Union)
+    return isa(inst[:inst], PhiNode) && is_some_union(inst[:type])
 end
 
 """
@@ -1097,7 +1102,7 @@ function adce_pass!(ir::IRCode)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
-            if isa(compact.result[idx][:type], Union)
+            if is_some_union(compact.result[idx][:type])
                 push!(unionphis, Pair{Int,Any}(idx, Union{}))
             end
         elseif isa(stmt, PiNode)
@@ -1106,7 +1111,7 @@ function adce_pass!(ir::IRCode)
                 r = searchsorted(unionphis, val.id; by = first)
                 if !isempty(r)
                     unionphi = unionphis[first(r)]
-                    t = Union{unionphi[2], widenconst(stmt.typ)}
+                    t = tmerge(unionphi[2], stmt.typ)
                     unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
                 end
             end
@@ -1132,18 +1137,34 @@ function adce_pass!(ir::IRCode)
     end
     non_dce_finish!(compact)
     for phi in all_phis
-        count_uses(compact.result[phi][:inst]::PhiNode, phi_uses)
+        inst = compact.result[phi]
+        for ur in userefs(inst[:inst]::PhiNode)
+            use = ur[]
+            if isa(use, SSAValue)
+                phi_uses[use.id] += 1
+                stmt = compact.result[use.id][:inst]
+                if isa(stmt, PhiNode)
+                    r = searchsorted(unionphis, use.id; by=first)
+                    if !isempty(r)
+                        unionphi = unionphis[first(r)]
+                        unionphis[first(r)] = Pair{Int,Any}(unionphi[1],
+                            tmerge(unionphi[2], inst[:type]))
+                    end
+                end
+            end
+        end
     end
     # Narrow any union phi nodes that have unused branches
     for i = 1:length(unionphis)
         unionphi = unionphis[i]
         phi = unionphi[1]
         t = unionphi[2]
-        if phi_uses[phi] != 0
-            continue
-        end
         if t === Union{}
             compact.result[phi][:inst] = nothing
+            continue
+        elseif t === Any
+            continue
+        elseif compact.result[phi][:type] ⊑ t
             continue
         end
         to_drop = Int[]
@@ -1153,14 +1174,15 @@ function adce_pass!(ir::IRCode)
             if !isassigned(stmt.values, i)
                 # Should be impossible to have something used only by PiNodes that's undef
                 push!(to_drop, i)
-            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)), t)
+            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)),
+                                 widenconst(t))
                 push!(to_drop, i)
             end
         end
+        compact.result[phi][:type] = t
         isempty(to_drop) && continue
         deleteat!(stmt.values, to_drop)
         deleteat!(stmt.edges, to_drop)
-        compact.result[phi][:type] = t
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]

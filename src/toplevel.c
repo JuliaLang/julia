@@ -297,6 +297,30 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     return args[0];
 }
 
+void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
+    // create uninitialized mutable binding for "global x" decl
+    size_t i, l = jl_array_len(ex->args);
+    for (i = 0; i < l; i++) {
+        jl_value_t *arg = jl_exprarg(ex, i);
+        jl_module_t *gm;
+        jl_sym_t *gs;
+        if (jl_is_globalref(arg)) {
+            gm = jl_globalref_mod(arg);
+            gs = jl_globalref_name(arg);
+        }
+        else {
+            assert(jl_is_symbol(arg));
+            gm = m;
+            gs = (jl_sym_t*)arg;
+        }
+        jl_binding_t *b = jl_get_binding_wr(gm, gs, 0);
+        if (set_type && b) {
+            jl_value_t *old_ty = NULL;
+            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+        }
+    }
+}
+
 // module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
@@ -797,23 +821,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == jl_global_sym) {
-        // create uninitialized mutable binding for "global x" decl
-        size_t i, l = jl_array_len(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_value_t *arg = jl_exprarg(ex, i);
-            jl_module_t *gm;
-            jl_sym_t *gs;
-            if (jl_is_globalref(arg)) {
-                gm = jl_globalref_mod(arg);
-                gs = jl_globalref_name(arg);
-            }
-            else {
-                assert(jl_is_symbol(arg));
-                gm = m;
-                gs = (jl_sym_t*)arg;
-            }
-            jl_get_binding_wr(gm, gs, 0);
-        }
+        jl_eval_global_expr(m, ex, 0);
         JL_GC_POP();
         return jl_nothing;
     }

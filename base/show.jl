@@ -390,7 +390,7 @@ Hello World!
 """
 show(io::IO, @nospecialize(x)) = show_default(io, x)
 
-show(x) = show(stdout::IO, x)
+show(x) = show(stdout, x)
 
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
@@ -1420,7 +1420,7 @@ julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ"
 ```
 """
 function ispostfixoperator(s::Union{Symbol,AbstractString})
-    s = String(s)
+    s = String(s)::String
     return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
 end
 
@@ -1778,7 +1778,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && (nargs != 2 || !is_expr(args[2], :tuple))
         # standalone .op
-        if nargs == 1 && args[1] isa Symbol && isoperator(args[1])
+        if nargs == 1 && args[1] isa Symbol && isoperator(args[1]::Symbol)
             print(io, "(.", args[1], ")")
         elseif nargs == 2 && is_quoted(args[2])
             item = args[1]
@@ -1867,10 +1867,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head === Symbol("'") && nargs == 1) || (
         # ' with unicode suffix is a call expression
         head === :call && nargs == 2 && args[1] isa Symbol &&
-        ispostfixoperator(args[1]) && args[1] !== Symbol("'")
+        ispostfixoperator(args[1]::Symbol) && args[1]::Symbol !== Symbol("'")
     )
         op, arg1 = head === Symbol("'") ? (head, args[1]) : (args[1], args[2])
-        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1))
+        if isa(arg1, Expr) || (isa(arg1, Symbol) && isoperator(arg1::Symbol))
             show_enclosed_list(io, '(', [arg1::Union{Expr, Symbol}], ", ", ')', indent, 0)
         else
             show_unquoted(io, arg1, indent, 0, quote_level)
@@ -1918,7 +1918,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         elseif func_prec > 0 # is a binary operator
             na = length(func_args)
             if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
-                    all(!isa(a, Expr) || a.head !== :... for a in func_args)
+                    all(a -> !isa(a, Expr) || a.head !== :..., func_args)
                 sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
@@ -2486,7 +2486,9 @@ module IRShow
     const Compiler = Core.Compiler
     using Core.IR
     import ..Base
-    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument, isexpr, compute_basic_blocks, block_for_inst
+    import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument,
+        isexpr, compute_basic_blocks, block_for_inst,
+        TriState, Effects, ALWAYS_TRUE, ALWAYS_FALSE
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
@@ -2708,7 +2710,7 @@ MyStruct
 function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
     # this is typically used interactively, so default to being in Main
     mod = get(stdout, :module, Main)
-    dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
+    dump(IOContext(stdout, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
 
 

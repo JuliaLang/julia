@@ -868,7 +868,7 @@ static RegisterPass<JuliaPipeline<2>> Y("julia", "Runs the entire julia pipeline
 static RegisterPass<JuliaPipeline<3>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
 
 extern "C" JL_DLLEXPORT
-void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
+void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
 }
 

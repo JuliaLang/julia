@@ -529,7 +529,7 @@ mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
 @testset "ErrorException if getindex is not defined" begin
     Base.length(::TestThrowNoGetindex) = 2
     Base.size(::TestThrowNoGetindex) = (2,)
-    @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
+    @test_throws Base.CanonicalIndexError isassigned(TestThrowNoGetindex{Float64}(), 1)
 end
 
 function test_in_bounds(::Type{TestAbstractArray})
@@ -565,10 +565,10 @@ end
 function test_getindex_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws ErrorException getindex(U, 1)
-    @test_throws ErrorException Base.unsafe_getindex(U, 1)
-    @test_throws ErrorException getindex(V, 1, 1)
-    @test_throws ErrorException Base.unsafe_getindex(V, 1, 1)
+    @test_throws Base.CanonicalIndexError getindex(U, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_getindex(U, 1)
+    @test_throws Base.CanonicalIndexError getindex(V, 1, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_getindex(V, 1, 1)
 end
 
 function test_setindex!_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
@@ -583,10 +583,10 @@ end
 function test_setindex!_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws ErrorException setindex!(U, 0, 1)
-    @test_throws ErrorException Base.unsafe_setindex!(U, 0, 1)
-    @test_throws ErrorException setindex!(V, 0, 1, 1)
-    @test_throws ErrorException Base.unsafe_setindex!(V, 0, 1, 1)
+    @test_throws Base.CanonicalIndexError setindex!(U, 0, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_setindex!(U, 0, 1)
+    @test_throws Base.CanonicalIndexError setindex!(V, 0, 1, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_setindex!(V, 0, 1, 1)
 end
 
 function test_get(::Type{TestAbstractArray})
@@ -1534,6 +1534,10 @@ using Base: typed_hvncat
     @test Int[] == typed_hvncat(Int, 1) isa Array{Int, 1}
     @test Array{Int, 2}(undef, 0, 0) == typed_hvncat(Int, 2) isa Array{Int, 2}
     @test Array{Int, 3}(undef, 0, 0, 0) == typed_hvncat(Int, 3) isa Array{Int, 3}
+
+    # Issue 43933 - semicolon precedence mistake should produce an error
+    @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
+    @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
 end
 
 @testset "keepat!" begin
@@ -1560,4 +1564,44 @@ end
 @testset "reshape methods for AbstractVectors" begin
     r = Base.IdentityUnitRange(3:4)
     @test reshape(r, :) === reshape(r, (:,)) === r
+end
+
+@testset "strides for ReshapedArray" begin
+    # Type-based contiguous check is tested in test/compiler/inline.jl
+    # General contiguous check
+    a = view(rand(10,10), 1:10, 1:10)
+    @test strides(vec(a)) == (1,)
+    b = view(parent(a), 1:9, 1:10)
+    @test_throws "Parent must be contiguous." strides(vec(b))
+    # StridedVector parent
+    for n in 1:3
+        a = view(collect(1:60n), 1:n:60n)
+        @test strides(reshape(a, 3, 4, 5)) == (n, 3n, 12n)
+        @test strides(reshape(a, 5, 6, 2)) == (n, 5n, 30n)
+        b = view(parent(a), 60n:-n:1)
+        @test strides(reshape(b, 3, 4, 5)) == (-n, -3n, -12n)
+        @test strides(reshape(b, 5, 6, 2)) == (-n, -5n, -30n)
+    end
+end
+
+@testset "stride for 0 dims array #44087" begin
+    struct Fill44087 <: AbstractArray{Int,0}
+        a::Int
+    end
+    # `stride` shouldn't work if `strides` is not defined.
+    @test_throws MethodError stride(Fill44087(1), 1)
+    # It is intentionally to only check the return type. (The value is somehow arbitrary)
+    @test stride(fill(1), 1) isa Int
+    @test stride(reinterpret(Float64, fill(Int64(1))), 1) isa Int
+    @test stride(reinterpret(reshape, Float64, fill(Int64(1))), 1) isa Int
+    @test stride(Base.ReshapedArray(fill(1), (), ()), 1) isa Int
+end
+
+@testset "to_indices inference (issue #42001 #44059)" begin
+    @test (@inferred to_indices([], ntuple(Returns(CartesianIndex(1)), 32))) == ntuple(Returns(1), 32)
+    @test (@inferred to_indices([], ntuple(Returns(CartesianIndices(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
+    @test (@inferred to_indices([], (CartesianIndex(),1,CartesianIndex(1,1,1)))) == ntuple(Returns(1), 4)
+    A = randn(2,2,2,2,2,2);
+    i = CartesianIndex((1,1))
+    @test (@inferred A[i,i,i]) === A[1]
 end

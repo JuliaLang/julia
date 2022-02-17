@@ -3419,10 +3419,10 @@ end
     # Recursive function
     @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
     timing = time_inference() do
-        @eval _Recursive.f(5)
+        @eval _Recursive.f(Base.inferencebarrier(5))
     end
-    @test depth(timing) == 3  # root -> f -> +
-    @test length(flatten_times(timing)) == 3  # root, f, +
+    @test 2 <= depth(timing) <= 3  # root -> f (-> +)
+    @test 2 <= length(flatten_times(timing)) <= 3  # root, f, +
 
     # Functions inferred with multiple constants
     @eval module C
@@ -3720,12 +3720,12 @@ let
     Core.Compiler.replace_code_newstyle!(ci, ir, 4)
     ci.ssavaluetypes = length(ci.code)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
-        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(b, 1.0)
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
 
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
-        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(true, 1.0)
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
 
@@ -4009,3 +4009,22 @@ end
         end |> only === Union{}
     end
 end
+
+# Test that purity modeling doesn't accidentally introduce new world age issues
+f_redefine_me(x) = x+1
+f_call_redefine() = f_redefine_me(0)
+f_mk_opaque() = @Base.Experimental.opaque ()->Base.inferencebarrier(f_call_redefine)()
+const op_capture_world = f_mk_opaque()
+f_redefine_me(x) = x+2
+@test op_capture_world() == 1
+@test f_mk_opaque()() == 2
+
+# Test that purity doesn't try to accidentally run unreachable code due to
+# boundscheck elimination
+function f_boundscheck_elim(n)
+    # Inbounds here assumes that this is only ever called with n==0, but of
+    # course the compiler has no way of knowing that, so it must not attempt
+    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    ntuple(x->(@inbounds getfield(sin, x)), n)
+end
+@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
