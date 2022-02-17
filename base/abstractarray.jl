@@ -2937,9 +2937,9 @@ Transform collection `c` by applying `f` to each element. For multiple collectio
 apply `f` elementwise, and stop when when any of them is exhausted.
 
 Note that `f` makes no guarantees about the order in which `f` is called on elements. In
-addition, `f` is assumed to be [pure](https://en.wikipedia.org/wiki/Pure_function) when
-working with data structures exhibiting sparsity, such as sparse or diagonal arrays, and 
-will only be called once on duplicated elements.
+addition, `f` is assumed to be [pure](https://en.wikipedia.org/wiki/Pure_function). Using
+an impure function together with `f` can cause bugs when working with some data structures,
+e.g. sparse or diagonal arrays, as `f` will only be called once on duplicated elements.
 
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
