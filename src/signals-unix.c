@@ -539,9 +539,13 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running)
+    if (running) {
         timer_delete(timerprof);
-    running = 0;
+        // Because SIGUSR1 is multipurpose, care must be taken for running = 0 to be set after the timer has fully stopped.
+        // There may be a pending signal emitted from the timer so wait a few timer cycles
+        sleep_ms((nsecprof / GIGA) * 1000 * 3);
+        running = 0;
+    }
 }
 
 #elif defined(HAVE_ITIMER)
@@ -556,18 +560,24 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     timerprof.it_interval.tv_usec = 0;
     timerprof.it_value.tv_sec = nsecprof / GIGA;
     timerprof.it_value.tv_usec = ((nsecprof % GIGA) + 999) / 1000;
-    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1)
-        return -3;
+    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
     running = 1;
+    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1) {
+        running = 0;
+        return -3;
+    }
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running) {
-        running = 0;
         memset(&timerprof, 0, sizeof(timerprof));
         setitimer(ITIMER_PROF, &timerprof, NULL);
+        // Because SIGUSR1 is multipurpose, care must be taken for running = 0 to be set after the timer has fully stopped.
+        // There may be a pending signal emitted from the timer so wait a few timer cycles
+        sleep_ms((nsecprof / GIGA) * 1000 * 3);
+        running = 0;
     }
 }
 
