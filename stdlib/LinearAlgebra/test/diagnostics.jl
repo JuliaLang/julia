@@ -1,3 +1,5 @@
+import LinearAlgebra
+
 @testset "__diagnostics__()" begin
     # check that `LinearAlgebra.__diagnostics__(io)` doesn't error, produces some output
     buf = PipeBuffer()
