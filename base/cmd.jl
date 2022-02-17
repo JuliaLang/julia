@@ -264,7 +264,7 @@ setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
 
 # split environment entry string into before and after first `=` (key and value)
 function splitenv(e::String)
-    i = findfirst('=', e, 2)
+    i = findnext('=', e, 2)
     if i === nothing
         throw(ArgumentError("malformed environment entry"))
     end
