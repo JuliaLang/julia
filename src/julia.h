@@ -232,6 +232,21 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
+typedef union __jl_purity_overrides_t {
+    struct {
+        uint8_t ipo_consistent  : 1;
+        uint8_t ipo_effect_free : 1;
+        uint8_t ipo_nothrow     : 1;
+        uint8_t ipo_terminates  : 1;
+        // Weaker form of `terminates` that asserts
+        // that any control flow syntactically in the method
+        // is guaranteed to terminate, but does not make
+        // assertions about any called functions.
+        uint8_t ipo_terminates_locally : 1;
+    } overrides;
+    uint8_t bits;
+} _jl_purity_overrides_t;
+
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
@@ -265,6 +280,7 @@ typedef struct _jl_code_info_t {
     uint8_t pure;
     // uint8 settings
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
+    _jl_purity_overrides_t purity;
 } jl_code_info_t;
 
 // This type describes a single method definition, and stores data
@@ -319,6 +335,10 @@ typedef struct _jl_method_t {
     // uint8 settings
     uint8_t constprop;     // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
 
+    // Override the conclusions of inter-procedural effect analysis,
+    // forcing the conclusion to always true.
+    _jl_purity_overrides_t purity;
+
 // hidden fields:
     // lock for modifications to the method
     jl_mutex_t writelock;
@@ -347,7 +367,6 @@ struct _jl_method_instance_t {
 typedef struct jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
-    uint8_t isva;
     size_t world;
     jl_method_t *source;
     jl_fptr_args_t invoke;
@@ -370,6 +389,27 @@ typedef struct _jl_code_instance_t {
     jl_value_t *inferred; // inferred jl_code_info_t, or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
     //TODO: uint8_t absolute_max; // whether true max world is unknown
+
+    // purity results
+    union {
+        uint8_t ipo_purity_bits;
+        struct {
+            uint8_t ipo_consistent:2;
+            uint8_t ipo_effect_free:2;
+            uint8_t ipo_nothrow:2;
+            uint8_t ipo_terminates:2;
+        } ipo_purity_flags;
+    };
+    union {
+        uint8_t purity_bits;
+        struct {
+            uint8_t consistent:2;
+            uint8_t effect_free:2;
+            uint8_t nothrow:2;
+            uint8_t terminates:2;
+        } purity_flags;
+    };
+    jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
@@ -509,6 +549,7 @@ typedef struct {
     _Atomic(jl_value_t*) value;
     _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
     struct _jl_module_t* owner;  // for individual imported bindings -- TODO: make _Atomic
+    _Atomic(jl_value_t*) ty;  // binding type
     uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
@@ -1552,6 +1593,7 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
@@ -1562,7 +1604,7 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);

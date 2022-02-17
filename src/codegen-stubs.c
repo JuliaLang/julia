@@ -113,6 +113,8 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
     return 0;
 }
 
+JL_DLLEXPORT void jl_add_optimization_passes_fallback(void *PM, int opt_level, int lower_intrinsics) UNAVAILABLE
+
 JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_fallback(void *PM) UNAVAILABLE

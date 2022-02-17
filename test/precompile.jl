@@ -241,7 +241,7 @@ precompile_test_harness(false) do dir
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
 
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
-              call_bottom() = show(stdout::IO, Union{})
+              call_bottom() = show(stdout, Union{})
               Core.Compiler.return_type(call_bottom, Tuple{})
 
               # check that @ccallable works from precompiled modules

@@ -205,8 +205,10 @@ JL_DLLEXPORT int jl_process_events(void)
     jl_gc_safepoint_(ct->ptls);
     if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+            JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
+            JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
             JL_UV_UNLOCK();
             return r;
         }

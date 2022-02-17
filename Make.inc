@@ -874,6 +874,10 @@ ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 DIST_ARCH:=ppc64le
 endif
 ifeq (1,$(ISX86))
+# on x86 make sure not to use 80 bit math when we want 64 bit math.
+ifeq (32,$(BINARY))
+JCFLAGS += -mfpmath=sse
+endif
 DIST_ARCH:=$(BINARY)
 endif
 ifneq (,$(findstring arm,$(ARCH)))

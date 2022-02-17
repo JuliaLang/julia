@@ -1204,6 +1204,14 @@ end
 @test [(0,0)... 1] == [0 0 1]
 @test Float32[(0,0)... 1] == Float32[0 0 1]
 
+# issue #43960, evaluation order of splatting in `ref`
+let a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test b[f(), g()...] == 3
+    @test a == [1,2]
+end
+
 @testset "raw_str macro" begin
     @test raw"$" == "\$"
     @test raw"\n" == "\\n"
@@ -3162,4 +3170,81 @@ end
     @test res == Foo44013(1, 2)
     @test x == 1
     @test f == 2
+end
+
+@testset "typed globals" begin
+    m = Module()
+    @eval m begin
+        x::Int = 1
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @eval m begin
+        global x::Int
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        function f()
+            global x
+            x::Int = 1
+            x = 2.
+        end
+        g() = x
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m function f()
+        global x
+        x::Int = 1
+        x::Float64 = 2.
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        x::Float64 = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        const x = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        const x = 1
+        x::Int = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Float64
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Int
+    end
+
+    m = Module()
+    @eval m module Foo
+        export bar
+        bar = 1
+    end
+    @eval m begin
+        using .Foo
+        bar::Float64 = 2
+    end
+    @test m.bar === 2.0
+    @test Core.get_binding_type(m, :bar) == Float64
+    @test m.Foo.bar === 1
+    @test Core.get_binding_type(m.Foo, :bar) == Any
 end

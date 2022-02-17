@@ -128,8 +128,12 @@ int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 // Returns time in nanosec
 JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT void jl_set_peek_cond(uintptr_t);
+JL_DLLEXPORT double jl_get_profile_peek_duration(void);
+JL_DLLEXPORT void jl_set_profile_peek_duration(double);
+
 // number of cycles since power-on
-static inline uint64_t cycleclock(void)
+static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
 #if defined(_CPU_X86_64_)
     uint64_t low, high;
@@ -231,7 +235,7 @@ JL_DLLEXPORT extern const char *jl_filename;
 
 jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset,
                                    int osize);
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
+jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize);
 extern uv_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
@@ -365,7 +369,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
-        v = jl_gc_big_alloc(ptls, allocsz);
+        v = jl_gc_big_alloc_noinline(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
     maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
@@ -618,6 +622,7 @@ JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOT
 jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
 
+void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
@@ -657,8 +662,9 @@ extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 int jl_compile_extern_c(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
-jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva, jl_value_t *rt_lb,
-    jl_value_t *rt_ub, jl_value_t *source,  jl_value_t **env, size_t nenv);
+jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_value_t *source,  jl_value_t **env, size_t nenv);
+JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 // Each tuple can exist in one of 4 Vararg states:
 //   NONE: no vararg                            Tuple{Int,Float32}
@@ -1432,6 +1438,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_propagate_inbounds_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_specialize_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_purity_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_colon_sym;
@@ -1542,6 +1549,21 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_GC_SWEEP_END() do ; while (0)
 #define JL_PROBE_GC_END() do ; while (0)
 #define JL_PROBE_GC_FINALIZER() do ; while (0)
+#define JL_PROBE_RT_RUN_TASK(task) do ; while (0)
+#define JL_PROBE_RT_PAUSE_TASK(task) do ; while (0)
+#define JL_PROBE_RT_NEW_TASK(parent, child) do ; while (0)
+#define JL_PROBE_RT_START_TASK(task) do ; while (0)
+#define JL_PROBE_RT_FINISH_TASK(task) do ; while (0)
+#define JL_PROBE_RT_START_PROCESS_EVENTS(task) do ; while (0)
+#define JL_PROBE_RT_FINISH_PROCESS_EVENTS(task) do ; while (0)
+#define JL_PROBE_RT_TASKQ_INSERT(ptls, task) do ; while (0)
+#define JL_PROBE_RT_TASKQ_GET(ptls, task) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKE(other, old_state) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKEUP(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls) do ; while (0)
+#define JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls) do ; while (0)
 
 #define JL_PROBE_GC_BEGIN_ENABLED() (0)
 #define JL_PROBE_GC_STOP_THE_WORLD_ENABLED() (0)
@@ -1551,6 +1573,21 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_GC_SWEEP_END_ENABLED()  (0)
 #define JL_PROBE_GC_END_ENABLED() (0)
 #define JL_PROBE_GC_FINALIZER_ENABLED() (0)
+#define JL_PROBE_RT_RUN_TASK_ENABLED() (0)
+#define JL_PROBE_RT_PAUSE_TASK_ENABLED() (0)
+#define JL_PROBE_RT_NEW_TASK_ENABLED() (0)
+#define JL_PROBE_RT_START_TASK_ENABLED() (0)
+#define JL_PROBE_RT_FINISH_TASK_ENABLED() (0)
+#define JL_PROBE_RT_START_PROCESS_EVENTS_ENABLED() (0)
+#define JL_PROBE_RT_FINISH_PROCESS_EVENTS_ENABLED() (0)
+#define JL_PROBE_RT_TASKQ_INSERT_ENABLED() (0)
+#define JL_PROBE_RT_TASKQ_GET_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKE_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_WAKEUP_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_SLEEP_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE_ENABLED() (0)
+#define JL_PROBE_RT_SLEEP_CHECK_UV_WAKE_ENABLED() (0)
 #endif
 
 #endif
