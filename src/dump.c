@@ -524,12 +524,14 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
         jl_serialize_value(s, codeinst->inferred);
         jl_serialize_value(s, codeinst->rettype_const);
         jl_serialize_value(s, codeinst->rettype);
+        jl_serialize_value(s, codeinst->argescapes);
     }
     else {
         // skip storing useless data
         jl_serialize_value(s, NULL);
         jl_serialize_value(s, NULL);
         jl_serialize_value(s, jl_any_type);
+        jl_serialize_value(s, jl_nothing);
     }
     write_uint8(s->s, codeinst->relocatability);
     jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque);
@@ -1667,6 +1669,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         jl_gc_wb(codeinst, codeinst->rettype_const);
     codeinst->rettype = jl_deserialize_value(s, &codeinst->rettype);
     jl_gc_wb(codeinst, codeinst->rettype);
+    codeinst->argescapes = jl_deserialize_value(s, &codeinst->argescapes);
+    jl_gc_wb(codeinst, codeinst->argescapes);
     if (constret)
         codeinst->invoke = jl_fptr_const_return;
     if ((flags >> 3) & 1)
