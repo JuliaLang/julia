@@ -4,6 +4,7 @@
 #define JL_PASSES_H
 
 #include <llvm/IR/PassManager.h>
+#include <llvm/Transforms/Scalar/LoopPassManager.h>
 
 using namespace llvm;
 
@@ -31,6 +32,12 @@ struct RemoveNI : PassInfoMixin<RemoveNI> {
 
 struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+};
+
+// Loop Passes
+struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
+    PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U);
 };
 
 #endif

@@ -911,6 +911,16 @@ static void registerCallbacks(PassBuilder &PB) {
             }
             return false;
         });
+
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, LoopPassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+            if (Name == "JuliaLICM") {
+                PM.addPass(JuliaLICMPass());
+                return true;
+            }
+            return false;
+        });
 }
 
 extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
