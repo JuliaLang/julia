@@ -7735,9 +7735,30 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         for (const auto &F: Mod->functions())
             if (!F.isDeclaration())
                 Exports.push_back(F.getName().str());
+        SmallVector<std::pair<std::string,GlobalVariable*>> Globals;
+        for (auto pair : ctx.global_targets)
+            if (pair.second->getParent() == &*Mod)
+                Globals.push_back({std::string(pair.second->getName()), pair.second});
         jl_merge_module(jl_Module, std::move(Mod));
         for (auto FN: Exports)
             jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
+        // Remove or refresh globals defined in `Mod`
+        auto &globals = ctx.global_targets;
+        for (auto it = globals.begin(); it != globals.end();) {
+            bool remove = false;
+            for (auto pair: Globals)
+                if (pair.second == it->second) {
+                    if (auto G = jl_Module->getNamedValue(pair.first))
+                        it->second = cast<GlobalVariable>(G);
+                    else
+                        remove = true;
+                    break;
+                }
+            if (remove)
+                it = globals.erase(it);
+            else
+                ++it;
+        }
     }
 
     JL_GC_POP();

@@ -221,6 +221,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
         if (gv->getParent() != M)
             gv = cast_or_null<GlobalVariable>(M->getNamedValue(localname));
     }
+    assert(localname != "");
     if (gv == nullptr)
         gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
                                 false, GlobalVariable::PrivateLinkage,
