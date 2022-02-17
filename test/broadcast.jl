@@ -863,6 +863,24 @@ let
     a1 = AD1(rand(2,3))
     bc1 = Broadcast.broadcasted(*, a1, 2)
     @test collect(Iterators.product(bc1, bc1)) == collect(Iterators.product(copy(bc1), copy(bc1)))
+
+    # using ndims of second arg
+    bc2 = Broadcast.broadcasted(*, 2, a1)
+    @test collect(Iterators.product(bc2, bc2)) == collect(Iterators.product(copy(bc2), copy(bc2)))
+
+    # >2 args
+    bc3 = Broadcast.broadcasted(*, a1, 3, a1)
+    @test collect(Iterators.product(bc3, bc3)) == collect(Iterators.product(copy(bc3), copy(bc3)))
+
+    # including a tuple and custom array type
+    bc4 = Broadcast.broadcasted(*, (1,2,3), AD1(rand(3)))
+    @test collect(Iterators.product(bc4, bc4)) == collect(Iterators.product(copy(bc4), copy(bc4)))
+
+    # testing ArrayConflict
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
+
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted((1,2,3),a1,zeros(3,3,3)))) === Base.HasShape{3}()
  end
 
 # issue #31295

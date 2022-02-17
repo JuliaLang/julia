@@ -261,9 +261,17 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
     return (bc[i], (s[1], newstate))
 end
 
-Base.IteratorSize(::Type{<:Broadcasted{<:Any,<:NTuple{N,Base.OneTo}}}) where {N} = Base.HasShape{N}()
-Base.IteratorSize(::Type{<:Broadcasted{<:AbstractArrayStyle{N}, Nothing}}) where {N} = Base.HasShape{N}()
-Base.IteratorSize(::Type{<:Broadcasted{<:ArrayStyle, Nothing, <:Any, <:Tuple{T, N}}}) where {T, N} = Base.HasShape{ndims(T)}()
+Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, 2))
+function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
+    N isa Integer && return N
+    _maxndims(fieldtype(BC, 2))
+end
+_maxndims(T) = mapfoldl(_ndims, max, _fieldtypes(T))
+_fieldtypes(T) = ntuple(Base.Fix1(fieldtype,T), Val(fieldcount(T))) # Base.fieldtypes is not stable.
+_ndims(x) = ndims(x)
+_ndims(::Type{<:Tuple}) = 1
+
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
