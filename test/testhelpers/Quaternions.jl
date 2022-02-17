@@ -37,6 +37,7 @@ Base.:(*)(q::Quaternion, b::Bool) = b * q # remove method ambiguity
 Base.:(/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
 Base.:(\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
 
+# adapted from https://github.com/JuliaGeometry/Quaternions.jl/pull/42
 function Base.rand(rng::AbstractRNG, ::Random.SamplerType{Quaternion{T}}) where {T<:Real}
     return Quaternion{T}(rand(rng, T), rand(rng, T), rand(rng, T), rand(rng, T))
 end
