@@ -246,12 +246,47 @@ static int type_recursively_external(jl_datatype_t *dt) JL_NOTSAFEPOINT
     return 1;
 }
 
+// When we infer external method instances, ensure they link back to the
+// package. Otherwise they might be, e.g., for external macros
+static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
+{
+    void **bp = ptrhash_bp(visited, mi);
+    // HT_NOTFOUND: not yet analyzed
+    // HT_NOTFOUND + 1: doesn't link back
+    // HT_NOTFOUND + 2: does link back
+    if (*bp != HT_NOTFOUND)
+        return (char*)*bp - (char*)HT_NOTFOUND - 1;
+    *bp = (void*)((char*)HT_NOTFOUND + 1);  // preliminarily mark as "not found"
+    jl_module_t *mod = mi->def.module;
+    if (jl_is_method(mod))
+        mod = ((jl_method_t*)mod)->module;
+    assert(jl_is_module(mod));
+    if (mi->precompiled || module_in_worklist(mod)) {
+        *bp = (void*)((char*)HT_NOTFOUND + 2);      // found
+        return 1;
+    }
+    if (!mi->backedges) {
+        return 0;
+    }
+    size_t i, n = jl_array_len(mi->backedges);
+    for (i = 0; i < n; i++) {
+        jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, i);
+        if (has_backedge_to_worklist(be, visited)) {
+            *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // given the list of MethodInstances that were inferred during the
 // build, select those that are external and have at least one
 // relocatable CodeInstance.
 static size_t queue_external_mis(jl_array_t *list)
 {
     size_t i, n = 0;
+    htable_t visited;
+    htable_new(&visited, 0);
     if (list) {
         assert(jl_is_array(list));
         size_t n0 = jl_array_len(list);
@@ -268,13 +303,16 @@ static size_t queue_external_mis(jl_array_t *list)
                         ci = ci->next;
                     }
                     if (relocatable && ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
-                        ptrhash_put(&external_mis, mi, mi);
-                        n++;
+                        if (has_backedge_to_worklist(mi, &visited)) {
+                            ptrhash_put(&external_mis, mi, mi);
+                            n++;
+                        }
                     }
                 }
             }
         }
     }
+    htable_free(&visited);
     return n;
 }
 

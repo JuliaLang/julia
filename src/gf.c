@@ -2248,6 +2248,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     if (mi == NULL)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
+    mi->precompiled = 1;
     if (jl_generating_output()) {
         jl_compile_now(mi);
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
@@ -2262,6 +2263,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
             types2 = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)mi->def.method->sig, &tpenv2);
             jl_method_instance_t *li2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
+            li2->precompiled = 1;
             if (jl_rettype_inferred(li2, world, world) == jl_nothing)
                 (void)jl_type_infer(li2, world, 1);
             if (jl_typeinf_func && mi->def.method->primary_world <= tworld) {
