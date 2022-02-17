@@ -680,14 +680,13 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
         uint8_t constp = 0;
         // if (jl_atomic_cmpswap(&bp->constp, &constp, 1)) {
         if (constp = bp->constp, bp->constp = 1, constp == 0) {
-            jl_value_t *old = NULL;
+            jl_value_t *old_ty = NULL, *old = NULL;
+            jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, jl_typeof(val));
             if (jl_atomic_cmpswap(&bp->value, &old, val)) {
                 jl_gc_wb_binding(bp, val);
                 return;
             }
         }
-	jl_value_t *old_ty = NULL;
-        jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
     }
     jl_errorf("invalid redefinition of constant %s",
               jl_symbol_name(bp->name));
@@ -807,11 +806,8 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
-        jl_errorf("cannot assign an incompatible value to the global %s.",
-                  jl_symbol_name(b->name));
-    }
     if (b->constp) {
+        jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, jl_typeof(rhs));
         jl_value_t *old = NULL;
         if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
             jl_gc_wb_binding(b, rhs);
@@ -827,6 +823,10 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         }
         jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
                        jl_symbol_name(b->name));
+    }
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
+        jl_errorf("cannot assign an incompatible value to the global %s.",
+                  jl_symbol_name(b->name));
     }
     jl_atomic_store_relaxed(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);

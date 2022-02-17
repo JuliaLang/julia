@@ -1109,3 +1109,6 @@ end
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 end
+
+const I_AM_A_CONSTANT_INT = 1
+@test Core.get_binding_type(@__MODULE__, :I_AM_A_CONSTANT_INT) == Int
