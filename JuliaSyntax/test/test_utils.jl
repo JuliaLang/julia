@@ -38,11 +38,30 @@ function remove_all_linenums!(ex)
     remove_macro_linenums!(ex)
 end
 
-function parsers_agree_on_file(path)
-    text = read(path, String)
-    ex = parseall(Expr, text, filename=path)
-    fl_ex = flisp_parse_all(text, filename=path)
-    JuliaSyntax.remove_linenums!(ex) == JuliaSyntax.remove_linenums!(fl_ex)
+function parsers_agree_on_file(filename)
+    text = try
+        read(filename, String)
+    catch
+        # Something went wrong reading the file. This isn't a parser failure so
+        # ignore this case.
+        return true
+    end
+    fl_ex = flisp_parse_all(text, filename=filename)
+    if Meta.isexpr(fl_ex, :toplevel) && !isempty(fl_ex.args) &&
+            Meta.isexpr(fl_ex.args[end], (:error, :incomplete))
+        # Reference parser failed. This generally indicates a broken file not a
+        # parser problem, so ignore this case.
+        return true
+    end
+    try
+        ex, diagnostics, _ = parse(Expr, text, filename=filename)
+        return !JuliaSyntax.any_error(diagnostics) &&
+            JuliaSyntax.remove_linenums!(ex) ==
+            JuliaSyntax.remove_linenums!(fl_ex)
+    catch exc
+        @error "Parsing failed" path exception=current_exceptions()
+        return false
+    end
 end
 
 function find_source_in_path(basedir)
@@ -155,7 +174,7 @@ function reduce_all_failures_in_path(basedir, outdir)
     rm(outdir, force=true, recursive=true)
     mkpath(outdir)
     for filename in find_source_in_path(basedir)
-        if !(try parsers_agree_on_file(filename) catch exc false end)
+        if !parsers_agree_on_file(filename)
             @info "Found failure" filename
             bn,_ = splitext(basename(filename))
             outname = joinpath(outdir, "$bn.jl")
