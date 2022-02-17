@@ -2936,6 +2936,11 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when when any of them is exhausted.
 
+Note that `f` makes no guarantees about the order in which `f` is called on elements. In
+addition, `f` is assumed to be [pure](https://en.wikipedia.org/wiki/Pure_function) when
+working with data structures exhibiting sparsity, such as sparse or diagonal arrays, and 
+will only be called once on duplicated elements.
+
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
 # Examples
