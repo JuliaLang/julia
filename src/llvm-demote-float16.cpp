@@ -19,6 +19,7 @@
 #include "support/dtypes.h"
 #include "passes.h"
 
+#include <llvm/Pass.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
