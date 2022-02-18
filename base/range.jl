@@ -1252,7 +1252,7 @@ AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
 AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
-OrdinalRange{T,S}(r::AbstractUnitRange) where {T, S} = StepRange{T,S}(r)
+OrdinalRange{T, S}(r::OrdinalRange) where {T, S} = StepRange{T, S}(r)
 OrdinalRange{T, T}(r::AbstractUnitRange) where {T} = AbstractUnitRange{T}(r)
 
 function promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b}
