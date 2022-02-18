@@ -71,7 +71,7 @@ extern "C" {  // Needed since these functions doesn't take any arguments.
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     // We only need to do this once, the first time this is called.
-    while (g_alloc_profile.per_thread_profiles.size() < jl_n_threads) {
+    while (g_alloc_profile.per_thread_profiles.size() < (size_t)jl_n_threads) {
         g_alloc_profile.per_thread_profiles.push_back(jl_per_thread_alloc_profile_t{});
     }
 
