@@ -523,12 +523,9 @@ function lex_string_chunk(l)
             c = readchar(l)
             if c == '\\'
                 n = 1
-                while true
+                while peekchar(l) == '\\'
                     readchar(l)
                     n += 1
-                    if peekchar(l) != '\\'
-                        break
-                    end
                 end
                 if peekchar(l) == state.delim && !iseven(n)
                     readchar(l)

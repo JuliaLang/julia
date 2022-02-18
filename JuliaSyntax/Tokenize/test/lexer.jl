@@ -349,22 +349,38 @@ end
 
 @testset "string escaped newline whitespace" begin
     ts = collect(tokenize("\"x\\\n \ty\""))
-    @test ts[1] ~ (T.DQUOTE , "\"")
+    @test ts[1] ~ (T.DQUOTE, "\"")
     @test ts[2] ~ (T.STRING, "x")
     @test ts[3] ~ (T.WHITESPACE, "\\\n \t")
     @test ts[4] ~ (T.STRING, "y")
-    @test ts[5] ~ (T.DQUOTE , "\"")
+    @test ts[5] ~ (T.DQUOTE, "\"")
+
+    # No newline escape for raw strings
+    ts = collect(tokenize("r\"x\\\ny\""))
+    @test ts[1] ~ (T.IDENTIFIER , "r")
+    @test ts[2] ~ (T.DQUOTE, "\"")
+    @test ts[3] ~ (T.STRING, "x\\\ny")
+    @test ts[4] ~ (T.DQUOTE , "\"")
 end
 
 @testset "triple quoted string line splitting" begin
     ts = collect(tokenize("\"\"\"\nx\r\ny\rz\n\r\"\"\""))
     @test ts[1] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
-    @test ts[2] ~ (T.STRING, "\n")
-    @test ts[3] ~ (T.STRING, "x\r\n")
-    @test ts[4] ~ (T.STRING, "y\r")
-    @test ts[5] ~ (T.STRING, "z\n")
-    @test ts[6] ~ (T.STRING, "\r")
-    @test ts[7] ~ (T.TRIPLE_DQUOTE, "\"\"\"")
+    @test ts[2] ~ (T.STRING        , "\n")
+    @test ts[3] ~ (T.STRING        , "x\r\n")
+    @test ts[4] ~ (T.STRING        , "y\r")
+    @test ts[5] ~ (T.STRING        , "z\n")
+    @test ts[6] ~ (T.STRING        , "\r")
+    @test ts[7] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
+
+    # Also for raw strings
+    ts = collect(tokenize("r\"\"\"\nx\ny\"\"\""))
+    @test ts[1] ~ (T.IDENTIFIER    , "r")
+    @test ts[2] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
+    @test ts[3] ~ (T.STRING        , "\n")
+    @test ts[4] ~ (T.STRING        , "x\n")
+    @test ts[5] ~ (T.STRING        , "y")
+    @test ts[6] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
 end
 
 @testset "interpolation" begin
