@@ -1195,8 +1195,8 @@ end
 ## sorting serialization to alow radix sorting primitives other than UInts ##
 module Serial
 using ...Order
-using ..Base: @inbounds, min, max, AbstractVector, nothing, something, signed, unsigned,
-    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Some, Type, eltype
+using ..Base: @inbounds, min, max, AbstractVector, nothing, signed, unsigned,
+    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype
 
 """
     Serializable(T::Type, order::Ordering)
