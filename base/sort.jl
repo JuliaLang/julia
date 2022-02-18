@@ -11,7 +11,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype,
-    UnitRange, max, min, Val
+    UnitRange, min, max, Val
 
 using .Base: >>>, !==
 
@@ -1195,6 +1195,7 @@ end
 ## sorting serialization to alow radix sorting primitives other than UInts ##
 module Serial
 using ...Order
+using ..Base: @inbounds, min, max
 
 """
     Serializable(T::Type, order::Ordering)
