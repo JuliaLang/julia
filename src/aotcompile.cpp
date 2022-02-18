@@ -909,6 +909,10 @@ static void registerCallbacks(PassBuilder &PB) {
               PM.addPass(LowerSIMDLoop());
               return true;
             }
+            if (Name == "FinalLowerGC") {
+                PM.addPass(FinalLowerGCPass());
+                return true;
+            }
             return false;
         });
 
