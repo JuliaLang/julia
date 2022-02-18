@@ -1332,13 +1332,17 @@ right(o::Perm) = Perm(right(o.order), o.data)
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
-for (float, int) in ((Float32, Int32), (Float64, Int64))
-    @eval Serial.serialize(x::$float, ::Left) = Serial.serialize(reinterpret($int, x), Reverse)
-    @eval Serial.deserialize(T::Type{$float}, u::unsigned($int), ::Left) = reinterpret($float, Serial.deserialize($int, u, Reverse))
-    @eval Serial.serialize(x::$float, ::Right) = Serial.serialize(reinterpret($int, x), Forward)
-    @eval Serial.deserialize(T::Type{$float}, u::unsigned($int), ::Right) = reinterpret($float, Serial.deserialize($int, u, Forward))
-    @eval Serial.Serializable(::Type{$float}, ::Union{Left, Right}) = unsigned($int)
-end
+Serial.serialize(x::Float32, ::Left) = Serial.serialize(reinterpret(Int32, x), Reverse)
+Serial.deserialize(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, Serial.deserialize(Int32, u, Reverse))
+Serial.serialize(x::Float32, ::Right) = Serial.serialize(reinterpret(Int32, x), Forward)
+Serial.deserialize(::Type{Float32}, u::UInt32, ::Right) = reinterpret(Float32, Serial.deserialize(Int32, u, Forward))
+Serial.Serializable(::Type{Float32}, ::Union{Left, Right}) = UInt32
+
+Serial.serialize(x::Float64, ::Left) = Serial.serialize(reinterpret(Int64, x), Reverse)
+Serial.deserialize(::Type{Float64}, u::UInt64, ::Left) = reinterpret(Float64, Serial.deserialize(Int64, u, Reverse))
+Serial.serialize(x::Float64, ::Right) = Serial.serialize(reinterpret(Int64, x), Forward)
+Serial.deserialize(::Type{Float64}, u::UInt64, ::Right) = reinterpret(Float64, Serial.deserialize(Int64, u, Forward))
+Serial.Serializable(::Type{Float64}, ::Union{Left, Right}) = UInt64
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::DirectOrdering, x::Missing) = false
