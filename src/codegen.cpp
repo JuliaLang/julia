@@ -4912,7 +4912,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_cgval_t world_age = mark_julia_type(ctx,
                                       tbaa_decorate(ctx.tbaa().tbaa_gcframe,
-                                      ctx.builder.CreateAlignedLoad(ctx.world_age_field, Align(sizeof(size_t)))),
+                                      ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ctx.world_age_field, Align(sizeof(size_t)))),
                         false,
                         jl_long_type);
                     jl_cgval_t fptr(ctx.builder.getContext());
