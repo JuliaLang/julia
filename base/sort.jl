@@ -1196,7 +1196,7 @@ end
 module Serial
 using ...Order
 using ..Base: @inbounds, min, max, AbstractVector, nothing, signed, unsigned,
-    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype, @eval
+    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype
 
 """
     Serializable(T::Type, order::Ordering)
@@ -1305,7 +1305,7 @@ module Float
 using ..Sort
 using ..Sort.Serial
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing
+using ..Base: @inbounds, @eval, AbstractVector, Vector, last, axes, Missing
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!
