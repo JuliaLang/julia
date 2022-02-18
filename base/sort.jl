@@ -11,7 +11,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype,
-    UnitRange, max, min
+    UnitRange, max, min, Val
 
 using .Base: >>>, !==
 
