@@ -1601,7 +1601,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # Triple quoted procesing for custom strings
             # r"""\nx""" ==> (macrocall @r_str "x")
             # r"""\n x\n y"""     ==> (macrocall @r_str (string-sr "x\n" "y"))
-
+            # r"""\n x\\n y"""    ==> (macrocall @r_str (string-sr "x\\\n" "y"))
+            #
             # Use a special token kind for string and cmd macro names so the
             # names can be expanded later as necessary.
             outk = is_string_delim(k) ? K"StringMacroName" : K"CmdMacroName"

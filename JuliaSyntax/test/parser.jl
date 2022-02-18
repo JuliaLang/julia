@@ -301,8 +301,9 @@ tests = [
         "x\"\""      => """(macrocall @x_str "")"""
         "x``"        => """(macrocall @x_cmd "")"""
         # Triple quoted procesing for custom strings
-        "r\"\"\"\nx\"\"\""      => raw"""(macrocall @r_str "x")"""
-        "r\"\"\"\n x\n y\"\"\"" => raw"""(macrocall @r_str (string-sr "x\n" "y"))"""
+        "r\"\"\"\nx\"\"\""        => raw"""(macrocall @r_str "x")"""
+        "r\"\"\"\n x\n y\"\"\""   => raw"""(macrocall @r_str (string-sr "x\n" "y"))"""
+        "r\"\"\"\n x\\\n y\"\"\"" => raw"""(macrocall @r_str (string-sr "x\\\n" "y"))"""
         # Macro sufficies can include keywords and numbers
         "x\"s\"y"    => """(macrocall @x_str "s" "y")"""
         "x\"s\"end"  => """(macrocall @x_str "s" "end")"""
