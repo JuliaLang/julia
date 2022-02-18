@@ -219,11 +219,24 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
 
     f_ex = JuliaSyntax.remove_linenums!(Meta.parse(code, raise=false))
     if JuliaSyntax.remove_linenums!(ex) != f_ex
-        println(stdout, "\n\n# AST dump")
-        dump(ex)
-
         printstyled(stdout, "\n\n# flisp Julia Expr:\n", color=:red)
         show(stdout, MIME"text/plain"(), f_ex)
+
+        printstyled(stdout, "\n\n# Diff of AST dump:\n", color=:red)
+        if Sys.isunix()
+            mktemp() do path1, io1
+                mktemp() do path2, io2
+                    dump(io1, ex);   close(io1)
+                    dump(io2, f_ex); close(io2)
+                    run(ignorestatus(`diff -U10 --color=always $path1 $path2`))
+                end
+            end
+        else
+            dump(ex)
+            println("------------------------------------")
+            dump(f_ex)
+        end
+        return (ex, f_ex)
         # return (code, stream, t, s, ex)
     end
     nothing
