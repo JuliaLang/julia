@@ -1078,6 +1078,6 @@ function f44200()
     end
     x
 end
-let src = code_typed1(m.f)
+let src = code_typed1(f44200)
     @test count(x -> isa(x, Core.PiNode), src.code) == 0
 end
