@@ -4,21 +4,29 @@
 #define JL_PASSES_H
 
 #include <llvm/IR/PassManager.h>
+#include <llvm/Transforms/Scalar/LoopPassManager.h>
 
 using namespace llvm;
 
 // Function Passes
 struct DemoteFloat16 : PassInfoMixin<DemoteFloat16> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    static bool isRequired() { return true; }
 };
 
 struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
+struct LateLowerGC : PassInfoMixin<LateLowerGC> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
 // Module Passes
 struct CPUFeatures : PassInfoMixin<CPUFeatures> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    static bool isRequired() { return true; }
 };
 
 struct RemoveNI : PassInfoMixin<RemoveNI> {
@@ -27,6 +35,17 @@ struct RemoveNI : PassInfoMixin<RemoveNI> {
 
 struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+};
+
+struct FinalLowerGCPass : PassInfoMixin<LateLowerGC> {
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
+// Loop Passes
+struct JuliaLICMPass : PassInfoMixin<JuliaLICMPass> {
+    PreservedAnalyses run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U);
 };
 
 #endif

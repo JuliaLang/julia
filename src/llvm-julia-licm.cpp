@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/LoopPass.h>
@@ -28,11 +29,27 @@ using namespace llvm;
 
 namespace {
 
-struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
+struct JuliaLICMPassLegacy : public LoopPass {
     static char ID;
-    JuliaLICMPass() : LoopPass(ID) {};
+    JuliaLICMPassLegacy() : LoopPass(ID) {};
 
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override
+    bool runOnLoop(Loop *L, LPPassManager &LPM) override;
+
+    protected:
+        void getAnalysisUsage(AnalysisUsage &AU) const override {
+            AU.addRequired<DominatorTreeWrapperPass>();
+            AU.addRequired<LoopInfoWrapperPass>();
+            AU.setPreservesAll();
+        }
+};
+
+struct JuliaLICM : public JuliaPassContext {
+    function_ref<DominatorTree &()> GetDT;
+    function_ref<LoopInfo &()> GetLI;
+    JuliaLICM(function_ref<DominatorTree &()> GetDT,
+              function_ref<LoopInfo &()> GetLI) : GetDT(GetDT), GetLI(GetLI) {}
+
+    bool runOnLoop(Loop *L)
     {
         // Get the preheader block to move instructions into,
         // required to run this pass.
@@ -48,8 +65,8 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
         if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
             return false;
-        auto LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-        auto DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+        auto LI = &GetLI();
+        auto DT = &GetDT();
 
         // Lazy initialization of exit blocks insertion points.
         bool exit_pts_init = false;
@@ -159,22 +176,42 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
         }
         return changed;
     }
-
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        getLoopAnalysisUsage(AU);
-    }
 };
 
-char JuliaLICMPass::ID = 0;
-static RegisterPass<JuliaLICMPass>
+bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
+    auto GetDT = [this]() -> DominatorTree & {
+        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+    };
+    auto GetLI = [this]() -> LoopInfo & {
+        return getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+    };
+    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    return juliaLICM.runOnLoop(L);
+}
+
+char JuliaLICMPassLegacy::ID = 0;
+static RegisterPass<JuliaLICMPassLegacy>
         Y("JuliaLICM", "LICM for julia specific intrinsics.",
           false, false);
+} //namespace
+
+PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U)
+{
+    auto GetDT = [&AR]() -> DominatorTree & {
+        return AR.DT;
+    };
+    auto GetLI = [&AR]() -> LoopInfo & {
+        return AR.LI;
+    };
+    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    juliaLICM.runOnLoop(&L);
+    return PreservedAnalyses::all();
 }
 
 Pass *createJuliaLICMPass()
 {
-    return new JuliaLICMPass();
+    return new JuliaLICMPassLegacy();
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraJuliaLICMPass_impl(LLVMPassManagerRef PM)
