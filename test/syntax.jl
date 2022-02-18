@@ -1212,6 +1212,17 @@ let a = [], b = [4,3,2,1]
     @test a == [1,2]
 end
 
+# issue #44239
+struct KWGetindex end
+Base.getindex(::KWGetindex, args...; kws...) = (args, NamedTuple(kws))
+let A = KWGetindex(), a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test A[f(), g()..., k = f()] === ((2,), (k = 2,))
+    @test a == [1, 2, 1]
+    @test A[var"end"=1] === ((), (var"end" = 1,))
+end
+
 @testset "raw_str macro" begin
     @test raw"$" == "\$"
     @test raw"\n" == "\\n"
