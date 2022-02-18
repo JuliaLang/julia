@@ -1196,7 +1196,7 @@ end
 module Serial
 using ...Order
 using ..Base: @inbounds, min, max, AbstractVector, nothing, signed, unsigned,
-    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype
+    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype, @eval
 
 """
     Serializable(T::Type, order::Ordering)
