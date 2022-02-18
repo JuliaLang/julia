@@ -83,7 +83,7 @@ The following is a complete list of command-line switches available when launchi
 |`--project[={<dir>\|@.}]`              |Set `<dir>` as the home project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
-|`--startup-file={yes*\|no}`            |Load `~/.julia/config/startup.jl`|
+|`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH` environment variable is unset, load `~/.julia/config/startup.jl`|
 |`--handle-signals={yes\*|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
 |`--compiled-modules={yes*\|no}`        |Enable or disable incremental precompilation of modules|
@@ -108,9 +108,9 @@ The following is a complete list of command-line switches available when launchi
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations|
 |`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
-|`--code-coverage={none*\|user\|all}`    |Count executions of source lines (omitting setting is equivalent to `user`)|
+|`--code-coverage=[{none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
 |`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
-|`--track-allocation={none*\|user\|all}` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
+|`--track-allocation=[{none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
 |`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and fallbacks to the latest compatible BugReporting.jl if not. For more nformation, see `--bug-report=help`.|
 
 

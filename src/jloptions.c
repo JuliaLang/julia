@@ -86,8 +86,9 @@ JL_DLLEXPORT void jl_init_options(void)
     jl_options_initialized = 1;
 }
 
-static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
+static const char usage[] = "\n    julia [switches] -- [programfile] [args...]\n\n";
 static const char opts[]  =
+    "Switches (a '*' marks the default value, if applicable):\n\n"
     " -v, --version              Display version information\n"
     " -h, --help                 Print this message (--help-hidden for more)\n"
     " --help-hidden              Uncommon options not shown by `-h`\n\n"
@@ -138,9 +139,9 @@ static const char opts[]  =
     " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level)\n"
     " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " -g {0,1,2*}                Set the level of debug info generation in the julia-debug build\n"
+        " -g [{0,1,2*}]              Set the level of debug info generation in the julia-debug build\n"
 #else
-        " -g {0,1*,2}                Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
+        " -g [{0,1*,2}]              Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
 #endif
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
@@ -151,12 +152,12 @@ static const char opts[]  =
     " --math-mode={ieee,fast}    Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // instrumentation options
-    " --code-coverage={none*|user|all}\n"
+    " --code-coverage[={none*|user|all}]\n"
     "                            Count executions of source lines (omitting setting is equivalent to `user`)\n"
     " --code-coverage=tracefile.info\n"
     "                            Append coverage information to the LCOV tracefile (filename supports format tokens)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
-    " --track-allocation={none*|user|all}\n"
+    " --track-allocation[={none*|user|all}]\n"
     "                            Count bytes allocated by each source line (omitting setting is equivalent to `user`)\n"
     " --bug-report=KIND          Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
@@ -165,15 +166,16 @@ static const char opts[]  =
 ;
 
 static const char opts_hidden[]  =
+    "Switches (a '*' marks the default value, if applicable):\n\n"
     // code generation options
     " --compile={yes*|no|all|min}\n"
-    "                          Enable or disable JIT compiler, or request exhaustive or minimal compilation\n"
+    "                          Enable or disable JIT compiler, or request exhaustive or minimal compilation\n\n"
 
     // compiler output options
     " --output-o <name>        Generate an object file (including system image data)\n"
     " --output-ji <name>       Generate a system image data file (.ji)\n"
     " --strip-metadata         Remove docstrings and source location info from system image\n"
-    " --strip-ir               Remove IR (intermediate representation) of compiled functions\n"
+    " --strip-ir               Remove IR (intermediate representation) of compiled functions\n\n"
 
     // compiler debugging (see the devdocs for tips on using these options)
     " --output-unopt-bc <name> Generate unoptimized LLVM bitcode (.bc)\n"
@@ -182,7 +184,7 @@ static const char opts_hidden[]  =
     " --output-incremental={yes|no*}\n"
     "                          Generate an incremental output file (rather than complete)\n"
     " --trace-compile={stderr,name}\n"
-    "                          Print precompile statements for methods compiled during execution or save to a path\n\n"
+    "                          Print precompile statements for methods compiled during execution or save to a path\n"
     " --image-codegen          Force generate code in imaging mode\n"
 ;
 
