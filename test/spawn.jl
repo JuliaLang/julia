@@ -733,6 +733,12 @@ end
         cmd2 = addenv(cmd, "FOO" => "foo2", "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo2 bar"
     end
+
+    @test addenv(``, ["a=b=c"], inherit=false).env == ["a=b=c"]
+    cmd = addenv(``, "a"=>"b=c", inherit=false)
+    @test cmd.env == ["a=b=c"]
+    cmd = addenv(cmd, "b"=>"b")
+    @test issetequal(cmd.env, ["b=b", "a=b=c"])
 end
 
 @testset "setenv with dir (with tests for #42131)" begin
