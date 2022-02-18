@@ -127,7 +127,7 @@ else
 ifeq ($(OS), Darwin)
 CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 else
-CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM-13jl
+CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM-$(LLVM_VER_MAJ)jl
 endif
 endif
 endif
