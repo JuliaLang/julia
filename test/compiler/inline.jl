@@ -1069,3 +1069,15 @@ end
 @test fully_eliminated() do
     issue41694(2)
 end
+
+global x44200::Int = 0
+function f44200()
+    global x = 0
+    while x < 10
+        x += 1
+    end
+    x
+end
+let src = code_typed1(f44200)
+    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+end
