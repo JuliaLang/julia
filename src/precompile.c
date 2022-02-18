@@ -260,7 +260,7 @@ static void _compile_all_deq(jl_array_t *found)
         jl_method_t *m = ml->func.method;
         if (m->source == NULL) // TODO: generic implementations of generated functions
             continue;
-        mi = jl_get_unspecialized(mi);
+        mi = jl_get_unspecialized(m);
         assert(mi == m->unspecialized); // make sure we didn't get tricked by a generated function, since we can't handle those
         jl_code_instance_t *ucache = jl_get_method_inferred(mi, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         if (ucache->invoke != NULL)
@@ -306,13 +306,24 @@ static void jl_compile_all_defs(void)
     // TypeMapEntries for Methods and MethodInstances that need to be compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
+    int _changes = -1;
+    int attempts = 0;
     while (1) {
         jl_foreach_reachable_mtable(compile_all_enq_, m);
         size_t changes = jl_array_len(m);
         if (!changes)
             break;
+        if (changes == _changes) {
+            if (++attempts > 5) {
+                jl_printf(JL_STDERR, "unable to compile %d methods for compile-all\n", (int)changes);
+                break;
+            }
+        } else {
+            attempts = 0;
+        }
         _compile_all_deq(m);
         jl_array_del_end(m, changes);
+        _changes = changes;
     }
     JL_GC_POP();
 }

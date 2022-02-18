@@ -226,8 +226,6 @@ if Sys.isbsd() || Sys.islinux()
             end
         end
     end
-else
-    @warn "Skipping \"SIGINFO/SIGUSR1 profile triggering\" test as it is not supported on this platform"
 end
 
 @testset "FlameGraphs" begin

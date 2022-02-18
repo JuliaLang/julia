@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
@@ -33,10 +34,6 @@ static bool removeNI(Module &M)
     return true;
 }
 }
-
-struct RemoveNI : PassInfoMixin<RemoveNI> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-};
 
 PreservedAnalyses RemoveNI::run(Module &M, ModuleAnalysisManager &AM)
 {
