@@ -4028,3 +4028,5 @@ function f_boundscheck_elim(n)
     ntuple(x->(@inbounds getfield(sin, x)), n)
 end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
