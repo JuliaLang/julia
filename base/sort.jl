@@ -1305,7 +1305,8 @@ module Float
 using ..Sort
 using ..Sort.Serial
 using ...Order
-using ..Base: @inbounds, @eval, AbstractVector, Vector, last, axes, Missing
+using ..Base: @inbounds, @eval, AbstractVector, Vector, last, axes, Missing, 
+    Type, reinterpret, unsigned
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!
