@@ -340,7 +340,11 @@ static unsigned julia_alignment(jl_value_t *jt)
 
 static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *jt)
 {
+#if JL_LLVM_VERSION >= 140000
+    AttrBuilder B(A->getContext());
+#else
     AttrBuilder B;
+#endif
     B.addAttribute(Attribute::NonNull);
     // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
     size_t size = dereferenceable_size(jt);

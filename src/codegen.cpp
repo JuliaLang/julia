@@ -1952,7 +1952,11 @@ static void jl_init_function(Function *F)
     // upon entry to any function. This achieves compatibility
     // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
     // i686 Windows (which uses a 4-byte-aligned stack)
+#if JL_LLVM_VERSION >= 140000
+    AttrBuilder attr(F->getContext());
+#else
     AttrBuilder attr;
+#endif
     attr.addStackAlignmentAttr(16);
     F->addAttributes(AttributeList::FunctionIndex, attr);
 #endif
@@ -5311,7 +5315,11 @@ static Function* gen_cfun_wrapper(
         }
 
         // Add the new nest attribute
+#if JL_LLVM_VERSION >= 140000
+        AttrBuilder attrBuilder(M->getContext());
+#else
         AttrBuilder attrBuilder;
+#endif
         attrBuilder.addAttribute(Attribute::Nest);
         newAttributes.emplace_back(it, AttributeSet::get(M->getContext(), attrBuilder));
 
