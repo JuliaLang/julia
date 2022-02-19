@@ -271,6 +271,17 @@ end
 
     @test Base.Unicode.isgraphemebreak('α', 'β')
     @test !Base.Unicode.isgraphemebreak('α', '\u0302')
+
+    @test graphemes("öü", 1,2)::SubString{String} == "öü"
+    @test graphemes("öüx", 1,2)::SubString{String} == "öü"
+    @test graphemes("äöü", 2,3)::SubString{String} == "öü"
+    @test graphemes("äöüx", 2,3)::SubString{String} == "öü"
+    @test graphemes("äöü", 2,2)::SubString{String} == "ö"
+    @test graphemes("äöüx", 6,5)::SubString{String} == ""
+
+    @test_throws BoundsError graphemes("äöüx", 2,5)
+    @test_throws BoundsError graphemes("äöüx", 5,5)
+    @test_throws ArgumentError graphemes("äöüx", 0,1)
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
