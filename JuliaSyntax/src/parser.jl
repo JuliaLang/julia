@@ -2781,9 +2781,10 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     end
     parse_eq_star(ps)
     k = peek(ps, skip_newlines=true)
-    if k == K"," || k == closer
+    if k == K"," || (is_closing_token(ps, k) && k != K";")
         if k == K","
             # [x,]  ==>  (vect x)
+            # [x    ==>  (vect x)
             bump(ps, TRIVIA_FLAG)
         end
         # [x]      ==>  (vect x)
