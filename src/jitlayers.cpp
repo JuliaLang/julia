@@ -470,60 +470,84 @@ static auto countBasicBlocks(const Function &F)
     return std::distance(F.begin(), F.end());
 }
 
-CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
-{
-    uint64_t start_time = 0;
-    if (dump_llvm_opt_stream != NULL) {
-        // Print LLVM function statistics _before_ optimization
-        // Print all the information about this invocation as a YAML object
-        jl_printf(dump_llvm_opt_stream, "- \n");
-        // We print the name and some statistics for each function in the module, both
-        // before optimization and again afterwards.
-        jl_printf(dump_llvm_opt_stream, "  before: \n");
-        for (auto &F : M.functions()) {
-            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                continue;
+OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
+    TSM.withModuleDo([&](Module &M){
+        uint64_t start_time = 0;
+        if (dump_llvm_opt_stream != NULL) {
+            // Print LLVM function statistics _before_ optimization
+            // Print all the information about this invocation as a YAML object
+            jl_printf(dump_llvm_opt_stream, "- \n");
+            // We print the name and some statistics for each function in the module, both
+            // before optimization and again afterwards.
+            jl_printf(dump_llvm_opt_stream, "  before: \n");
+            for (auto &F : M.functions()) {
+                if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                    continue;
+                }
+                // Each function is printed as a YAML object with several attributes
+                jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+                jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+                jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
             }
-            // Each function is printed as a YAML object with several attributes
-            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+
+            start_time = jl_hrtime();
         }
 
-        start_time = jl_hrtime();
-    }
+        JL_TIMING(LLVM_OPT);
 
-    JL_TIMING(LLVM_OPT);
-
-    int optlevel;
-    int optlevel_min;
-    if (jl_generating_output()) {
-        optlevel = 0;
-    }
-    else {
-        optlevel = jl_options.opt_level;
-        optlevel_min = jl_options.opt_level_min;
-        for (auto &F : M.functions()) {
-            if (!F.getBasicBlockList().empty()) {
-                Attribute attr = F.getFnAttribute("julia-optimization-level");
-                StringRef val = attr.getValueAsString();
-                if (val != "") {
-                    int ol = (int)val[0] - '0';
-                    if (ol >= 0 && ol < optlevel)
-                        optlevel = ol;
+        int optlevel;
+        int optlevel_min;
+        if (jl_generating_output()) {
+            optlevel = 0;
+        }
+        else {
+            optlevel = jl_options.opt_level;
+            optlevel_min = jl_options.opt_level_min;
+            for (auto &F : M.functions()) {
+                if (!F.getBasicBlockList().empty()) {
+                    Attribute attr = F.getFnAttribute("julia-optimization-level");
+                    StringRef val = attr.getValueAsString();
+                    if (val != "") {
+                        int ol = (int)val[0] - '0';
+                        if (ol >= 0 && ol < optlevel)
+                            optlevel = ol;
+                    }
                 }
             }
+            optlevel = std::max(optlevel, optlevel_min);
         }
-        optlevel = std::max(optlevel, optlevel_min);
-    }
-    if (optlevel == 0)
-        jit.PM0.run(M);
-    else if (optlevel == 1)
-        jit.PM1.run(M);
-    else if (optlevel == 2)
-        jit.PM2.run(M);
-    else if (optlevel >= 3)
-        jit.PM3.run(M);
+        if (optlevel == 0)
+            jit.PM0.run(M);
+        else if (optlevel == 1)
+            jit.PM1.run(M);
+        else if (optlevel == 2)
+            jit.PM2.run(M);
+        else if (optlevel >= 3)
+            jit.PM3.run(M);
+
+        uint64_t end_time = 0;
+        if (dump_llvm_opt_stream != NULL) {
+            end_time = jl_hrtime();
+            jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+            jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
+
+            // Print LLVM function statistics _after_ optimization
+            jl_printf(dump_llvm_opt_stream, "  after: \n");
+            for (auto &F : M.functions()) {
+                if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                    continue;
+                }
+                jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+                jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+                jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+            }
+        }
+    });
+    return Expected<orc::ThreadSafeModule>{std::move(TSM)};
+}
+
+CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
+{
 
     std::unique_ptr<MemoryBuffer> ObjBuffer(
         new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
@@ -537,24 +561,6 @@ CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
         OS.flush();
         llvm::report_fatal_error(llvm::Twine("FATAL: Unable to compile LLVM Module: '") + Buf + "'\n"
                                  "The module's content was printed above. Please file a bug report");
-    }
-
-    uint64_t end_time = 0;
-    if (dump_llvm_opt_stream != NULL) {
-        end_time = jl_hrtime();
-        jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
-        jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
-
-        // Print LLVM function statistics _after_ optimization
-        jl_printf(dump_llvm_opt_stream, "  after: \n");
-        for (auto &F : M.functions()) {
-            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                continue;
-            }
-            jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-            jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-            jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
-        }
     }
 
     return CompilerResultT(std::move(ObjBuffer));
@@ -837,7 +843,8 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
             }
         ),
 #endif
-    CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this))
+    CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this)),
+    OptimizeLayer(ES, CompileLayer, OptimizerT(this))
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -943,7 +950,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
     }
 #endif
     // TODO: what is the performance characteristics of this?
-    cantFail(CompileLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+    cantFail(OptimizeLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)

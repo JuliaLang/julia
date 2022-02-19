@@ -8,6 +8,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -176,6 +177,7 @@ typedef JITSymbol JL_JITSymbol;
 typedef JITSymbol JL_SymbolInfo;
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
+using OptimizerResultT = Expected<orc::ThreadSafeModule>;
 
 class JuliaOJIT {
     struct CompilerT : public orc::IRCompileLayer::IRCompiler {
@@ -183,6 +185,13 @@ class JuliaOJIT {
             : IRCompiler(orc::IRSymbolMapper::ManglingOptions{}),
               jit(*pjit) {}
         virtual CompilerResultT operator()(Module &M) override;
+    private:
+        JuliaOJIT &jit;
+    };
+    struct OptimizerT {
+        OptimizerT(JuliaOJIT *pjit) : jit(*pjit) {}
+
+        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
     private:
         JuliaOJIT &jit;
     };
@@ -197,6 +206,7 @@ public:
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
     JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
@@ -246,6 +256,7 @@ private:
 #endif
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
+    OptimizeLayerT OptimizeLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
