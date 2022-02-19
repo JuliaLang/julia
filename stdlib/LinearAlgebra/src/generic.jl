@@ -919,7 +919,9 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
-dot(x::Adjoint, y::Adjoint) = conj(dot(parent(x), parent(y)))
+function dot(x::Adjoint{<:Union{Real,Complex}}, y::Adjoint{<:Union{Real,Complex}})
+    return conj(dot(parent(x), parent(y)))
+end
 dot(x::Transpose, y::Transpose) = dot(parent(x), parent(y))
 
 """

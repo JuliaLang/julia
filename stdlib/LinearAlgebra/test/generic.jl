@@ -480,20 +480,21 @@ end
 end
 
 @testset "adjtrans dot" begin
-    for t in (transpose, adjoint)
-        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
+    for t in (transpose, adjoint), T in (ComplexF64, Quaternion{Float64})
+        x, y = t(rand(T, 10)), t(rand(T, 10))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        x, y = t(rand(T, 10, 5)), t(rand(T, 10, 5))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
-        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        x = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
     end
 end
 
