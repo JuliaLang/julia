@@ -29,6 +29,18 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
+"""
+    String <: AbstractString
+
+The default string type in Julia, used by e.g. string literals.
+
+`String`s are immutable sequences of `Char`s. A `String` is stored internally as
+a contiguous byte array, and while they are interpreted as being UTF-8 encoded,
+they can be composed of any byte sequence. Use [`isvalid`](@ref) to validate
+that the underlying byte sequence is valid as UTF-8.
+"""
+String
+
 ## constructors and conversions ##
 
 # String constructor docstring from boot.jl, workaround for #16730
@@ -36,9 +48,9 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 """
     String(v::AbstractVector{UInt8})
 
-Create a new `String` object from a byte vector `v` containing UTF-8 encoded
-characters. If `v` is `Vector{UInt8}` it will be truncated to zero length and
-future modification of `v` cannot affect the contents of the resulting string.
+Create a new `String` object using the data buffer from byte vector `v`.
+If `v` is a `Vector{UInt8}` it will be truncated to zero length and future
+modification of `v` cannot affect the contents of the resulting string.
 To avoid truncation of `Vector{UInt8}` data, use `String(copy(v))`; for other
 `AbstractVector` types, `String(v)` already makes a copy.
 
@@ -78,8 +90,7 @@ end
 """
     String(s::AbstractString)
 
-Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
-This representation is often appropriate for passing strings to C.
+Create a new `String` from an existing `AbstractString`.
 """
 String(s::AbstractString) = print_to_string(s)
 @pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
