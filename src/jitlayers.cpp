@@ -876,14 +876,6 @@ namespace {
         #endif
         return std::unique_ptr<TargetMachine>(TM);
     }
-
-    llvm::DataLayout createDataLayout(TargetMachine &TM) {
-        // Mark our address spaces as non-integral
-        auto jl_data_layout = TM.createDataLayout();
-        std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
-        jl_data_layout.reset(DL);
-        return jl_data_layout;
-    }
 } // namespace
 
 namespace {
@@ -898,9 +890,16 @@ namespace {
     }
 }
 
+llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
+    // Mark our address spaces as non-integral
+    auto jl_data_layout = TM.createDataLayout();
+    jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
+    return jl_data_layout;
+}
+
 JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
   : TM(createTargetMachine()),
-    DL(createDataLayout(*TM)),
+    DL(create_jl_data_layout(*TM)),
     TMs{
         cantFail(createJTMBFromTM(*TM, 0).createTargetMachine()),
         cantFail(createJTMBFromTM(*TM, 1).createTargetMachine()),

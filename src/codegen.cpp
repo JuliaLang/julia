@@ -1894,7 +1894,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params)
+Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
 {
     Module *m = new Module(name, context);
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
@@ -1911,8 +1911,8 @@ Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cg
     if (!m->getModuleFlag("Debug Info Version"))
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
-    m->setDataLayout(jl_ExecutionEngine->getDataLayout());
-    m->setTargetTriple(jl_ExecutionEngine->getTargetTriple().str());
+    m->setDataLayout(DL);
+    m->setTargetTriple(triple.str());
 
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 130000
     // tell Win32 to assume the stack is always 16-byte aligned,
@@ -1926,9 +1926,9 @@ Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cg
     return m;
 }
 
-Module *jl_create_llvm_module(StringRef name, LLVMContext &context)
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL, const Triple *triple)
 {
-    return _jl_create_llvm_module(name, context, &jl_default_cgparams);
+    return _jl_create_llvm_module(name, ctx, &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
 }
 
 static void jl_init_function(Function *F)
@@ -6438,7 +6438,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     declarations.specFunctionObject = funcName.str();
 
     // allocate Function declarations and wrapper objects
-    Module *M = _jl_create_llvm_module(ctx.name, ctx.builder.getContext(), ctx.params);
+    Module *M = _jl_create_llvm_module(ctx.name, ctx.builder.getContext(), ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
     jl_returninfo_t returninfo = {};
     Function *f = NULL;
     bool has_sret = false;
@@ -8294,7 +8294,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     jl_init_jit();
     init_jit_functions();
 
-    Module *m = _jl_create_llvm_module("julia", *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams);
+    Module *m = _jl_create_llvm_module("julia", *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
     init_julia_llvm_env(m);
 
     jl_init_intrinsic_functions_codegen();

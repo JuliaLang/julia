@@ -508,10 +508,8 @@ void jl_dump_native_impl(void *native_code,
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
-    data->M->setTargetTriple(jl_ExecutionEngine->getTargetTriple().str());
-    DataLayout DL = TM->createDataLayout();
-    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
-    data->M->setDataLayout(DL);
+    data->M->setTargetTriple(TM->getTargetTriple().str());
+    data->M->setDataLayout(create_jl_data_layout(*TM));
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);

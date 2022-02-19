@@ -55,8 +55,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lowe
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name, LLVMContext &ctxt);
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
+DataLayout create_jl_data_layout(TargetMachine &TM);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
