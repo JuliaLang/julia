@@ -391,16 +391,25 @@ process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
+    function waitkill(P::Process)
+        close(P)
+        # 0.1 seconds after we hope it dies (from closing stdio),
+        # we kill the process with SIGTERM (15)
+        local t = Timer(0.1) do t
+            process_running(P) && kill(P)
+        end
+        wait(P)
+        close(t)
+    end
     ret = try
         f(P)
     catch
-        kill(P)
-        close(P)
+        waitkill(P)
         rethrow()
     end
     close(P.in)
     if !eof(P.out)
-        close(P.out)
+        waitkill(P)
         throw(_UVError("open(do)", UV_EPIPE))
     end
     success(P) || pipeline_error(P)
