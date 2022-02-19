@@ -1,4 +1,5 @@
 @enum(Kind,
+    NONE,      # Placeholder; never emitted by lexer
     ENDMARKER, # EOF
     ERROR,
     COMMENT, # aadsdsa, #= fdsf #=
@@ -51,7 +52,7 @@
 
     begin_cstparser,
         INVISIBLE_BRACKETS,
-        NOTHING,
+        NOTHING,  # A literal `nothing`
         WS,
         SEMICOLON_WS,
         NEWLINE_WS,
@@ -835,7 +836,6 @@
     # width tokens to keep the parse tree more uniform.
     begin_parser_tokens,
         TOMBSTONE,           # Empty placeholder for kind to be filled later
-        NOTHING_LITERAL,     # A literal Julia `nothing` in the AST
 
         # Macro names are modelled as a special kind of identifier because the
         # @ may not be attached to the macro name in the source (or may not be

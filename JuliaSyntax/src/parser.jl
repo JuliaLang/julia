@@ -1779,7 +1779,7 @@ function parse_resword(ps::ParseState)
         if k == K"NewlineWs" || is_closing_token(ps, k)
             # return\nx   ==>  (return nothing)
             # return)     ==>  (return nothing)
-            bump_invisible(ps, K"NothingLiteral")
+            bump_invisible(ps, K"nothing")
         else
             # return x    ==>  (return x)
             # return x,y  ==>  (return (tuple x y))
@@ -1889,7 +1889,7 @@ function parse_const_local_global(ps)
     mark = position(ps)
     scope_mark = mark
     has_const = false
-    scope_k = K"Nothing"
+    scope_k = K"None"
     k = peek(ps)
     if k in KSet`global local`
         # global x  ==>  (global x)
@@ -1947,7 +1947,7 @@ function parse_const_local_global(ps)
         min_supported_version(v"1.8", ps, beforevar_mark,
                               "`const` struct field without assignment")
     end
-    if scope_k != K"Nothing"
+    if scope_k != K"None"
         emit(ps, scope_mark, scope_k)
     end
     if has_const

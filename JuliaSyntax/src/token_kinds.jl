@@ -5,6 +5,7 @@
 
 const _str_to_kind = let Ts = TzTokens
 Dict([
+"None"           =>  Ts.NONE
 "EndMarker"      =>  Ts.ENDMARKER
 "error"          =>  Ts.ERROR
 "Comment"        =>  Ts.COMMENT
@@ -53,9 +54,8 @@ Dict([
 "var"         =>  Ts.VAR
 "END_KEYWORDS" => Ts.end_keywords
 
-# FIXME: Define precisely what Nothing means; integrate better with other tokens.
 "BEGIN_CSTPARSER"    =>  Ts.begin_cstparser
-"Nothing"            =>  Ts.NOTHING
+"nothing"            =>  Ts.NOTHING
 "NewlineWs"          =>  Ts.NEWLINE_WS
 "END_CSTPARSER"      =>  Ts.end_cstparser
 
@@ -819,7 +819,6 @@ Dict([
 "BEGIN_PARSER_TOKENS" => Ts.begin_parser_tokens
 
 "TOMBSTONE"          =>  Ts.TOMBSTONE
-"NothingLiteral"     =>  Ts.NOTHING_LITERAL
 
 # Macro names are modelled as a special kind of identifier because the
 # @ may not be attached to the macro name in the source (or may not be
@@ -891,7 +890,7 @@ for kw in split("""
         vcat ncat typed_hcat typed_vcat typed_ncat row nrow generator
         filter flatten comprehension typed_comprehension
 
-        error Nothing
+        error nothing true false None
     """)
     _kind_to_str_unique[_str_to_kind[kw]] = kw
 end
