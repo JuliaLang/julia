@@ -172,8 +172,8 @@ because the grapheme `"é"` is actually *two* Unicode codepoints
 !!! compat "Julia 1.9"
     The `m:n` argument of `graphemes` requires Julia 1.9.
 """
-function graphemes(s::AbstractString, mn::AbstractUnitRange{<:Integer})
-    m, n = Int(first(mn)), Int(last(mn))
+function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
+    m, n = Int(first(r)), Int(last(r))
     m > 0 || throw(ArgumentError("starting index $m is not ≥ 1"))
     n < m && return @view s[1:0]
     c0 = eltype(s)(0x00000000)
