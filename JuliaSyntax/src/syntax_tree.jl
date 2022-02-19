@@ -150,7 +150,7 @@ end
 function _show_syntax_node_sexpr(io, node)
     if !haschildren(node)
         if is_error(node)
-            print(io, "(error)")
+            print(io, "(", untokenize(head(node)), ")")
         else
             print(io, node.val isa Symbol ? string(node.val) : repr(node.val))
         end

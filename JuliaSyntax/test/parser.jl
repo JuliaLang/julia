@@ -56,11 +56,11 @@ tests = [
         "a ? b :\nc"  => "(if a b c)"
         "a ? b : c:d" =>   "(if a b (call-i c : d))"
         # Following are errors but should recover
-        "a? b : c"    => "(if a (error) b c)"
-        "a ?b : c"    => "(if a (error) b c)"
-        "a ? b: c"    => "(if a b (error) c)"
-        "a ? b :c"    => "(if a b (error) c)"
-        "a ? b c"     => "(if a b (error) c)"
+        "a? b : c"    => "(if a (error-t) b c)"
+        "a ?b : c"    => "(if a (error-t) b c)"
+        "a ? b: c"    => "(if a b (error-t) c)"
+        "a ? b :c"    => "(if a b (error-t) c)"
+        "a ? b c"     => "(if a b (error-t) c)"
     ],
     JuliaSyntax.parse_arrow => [
         "x → y"     =>  "(call-i x → y)"
@@ -142,8 +142,8 @@ tests = [
         "(x-1)y"     => "(call-i (call-i x - 1) * y)"
         "0xenomorph" => "0x0e"  # ie, not juxtoposition
         # errors
-        "\"a\"\"b\"" => "(call-i \"a\" * (error) \"b\")"
-        "\"a\"x"     => "(call-i \"a\" * (error) x)"
+        "\"a\"\"b\"" => "(call-i \"a\" * (error-t) \"b\")"
+        "\"a\"x"     => "(call-i \"a\" * (error-t) x)"
     ],
     JuliaSyntax.parse_unary => [
         "+2"       => "2"
@@ -587,7 +587,7 @@ tests = [
         "[x \n\n for a in as]"  =>  "(comprehension (generator x (= a as)))"
         # parse_generator
         "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
-        "[(x)for x in xs]"  =>  "(comprehension (generator x (error) (= x xs)))"
+        "[(x)for x in xs]"  =>  "(comprehension (generator x (error-t) (= x xs)))"
         "(a for x in xs if cond)"  =>  "(generator a (filter (= x xs) cond))"
         "(xy for x in xs for y in ys)"  =>  "(flatten xy (= x xs) (= y ys))"
         "(xy for x in xs for y in ys for z in zs)"  =>  "(flatten xy (= x xs) (= y ys) (= z zs))"
@@ -700,7 +700,7 @@ tests = [
         "\"\""              =>  "\"\""
         "\"\"\"\n  \"\"\""  =>  "\"\""
         # Missing delimiter
-        "\"str"  =>  "\"str\" (error)"
+        "\"str"  =>  "\"str\" (error-t)"
         # String interpolations
         "\"\$x\$y\$z\""  =>  "(string x y z)"
         "\"\$(x)\""  =>  "(string x)"
