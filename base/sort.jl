@@ -512,8 +512,8 @@ Characteristics:
 """
 const MergeSort     = MergeSortAlg()
 
-const DEFAULT_UNSTABLE = RadixSort(QuickSort)
-const DEFAULT_STABLE   = RadixSort(MergeSort)
+const DEFAULT_UNSTABLE = QuickSort
+const DEFAULT_STABLE   = MergeSort
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
