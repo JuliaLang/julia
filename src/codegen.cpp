@@ -4593,10 +4593,10 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
         F = cast<Function>(V);
     } else {
-        F = Function::Create(get_func_sig(jl_LLVMContext),
+        F = Function::Create(get_func_sig(ctx.builder.getContext()),
                              Function::ExternalLinkage,
                              fname, jl_Module);
-        F->setAttributes(get_func_attrs(jl_LLVMContext));
+        F->setAttributes(get_func_attrs(ctx.builder.getContext()));
     }
     Function *specF = NULL;
     if (!isspecsig) {
