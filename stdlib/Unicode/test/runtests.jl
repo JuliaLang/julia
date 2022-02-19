@@ -277,6 +277,7 @@ end
         @test graphemes(pre * "öü" * post, (1:2) .+ prelen) == "öü"
         @test graphemes(pre * "ö" * post, (1:1) .+ prelen) == "ö"
     end
+    @test graphemes("äöüx", 6:5)::SubString{String} == ""
     @test_throws BoundsError graphemes("äöüx", 2:5)
     @test_throws BoundsError graphemes("äöüx", 5:5)
     @test_throws ArgumentError graphemes("äöüx", 0:1)
