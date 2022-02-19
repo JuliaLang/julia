@@ -393,8 +393,8 @@ function lift_leaves(compact::IncrementalCompact,
                     ocleaf = simple_walk(compact, ocleaf)
                 end
                 ocdef, _ = walk_to_def(compact, ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
-                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-4
+                    lift_arg!(compact, leaf, cache_key, ocdef, 4+field, lifted_leaves)
                     continue
                 end
                 return nothing

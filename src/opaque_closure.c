@@ -8,30 +8,38 @@ jl_value_t *jl_fptr_const_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **a
     return oc->captures;
 }
 
-// TODO: remove
-jl_value_t *jl_fptr_va_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+// determine whether `argt` is a valid argument type tuple for the given opaque closure method
+JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source)
 {
-    size_t defargs = oc->source->nargs;
-    jl_value_t **newargs;
-    JL_GC_PUSHARGS(newargs, defargs - 1);
-    for (size_t i = 0; i < defargs - 2; i++)
-        newargs[i] = args[i];
-    newargs[defargs - 2] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
-    jl_value_t *ans = ((jl_fptr_args_t)oc->specptr)((jl_value_t*)oc, newargs, defargs - 1);
-    JL_GC_POP();
-    return ans;
+    if (!source->isva) {
+        if (jl_is_va_tuple(argt))
+            return 0;
+        if (jl_nparams(argt)+1 > source->nargs)
+            return 0;
+    }
+    if (jl_nparams(argt) + 1 - jl_is_va_tuple(argt) < source->nargs - source->isva)
+        return 0;
+    return 1;
 }
 
-jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isva,
-    jl_value_t *rt_lb, jl_value_t *rt_ub, jl_value_t *source, jl_value_t **env, size_t nenv)
+jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_value_t *source_, jl_value_t **env, size_t nenv)
 {
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
     }
-    JL_TYPECHK(new_opaque_closure, bool, isva);
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
-    JL_TYPECHK(new_opaque_closure, method, source);
+    JL_TYPECHK(new_opaque_closure, method, source_);
+    jl_method_t *source = (jl_method_t*)source_;
+    if (!source->isva) {
+        if (jl_is_va_tuple(argt))
+            jl_error("Argument type tuple is vararg but method is not");
+        if (jl_nparams(argt)+1 > source->nargs)
+            jl_error("Argument type tuple has too many required arguments for method");
+    }
+    if (jl_nparams(argt) + 1 - jl_is_va_tuple(argt) < source->nargs - source->isva)
+        jl_error("Argument type tuple has too few required arguments for method");
     jl_task_t *ct = jl_current_task;
     jl_value_t *oc_type JL_ALWAYS_LEAFTYPE;
     oc_type = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, rt_ub);
@@ -48,23 +56,20 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
         jl_svecset(sig_args, 1+i, jl_tparam(argt, i));
     }
     sigtype = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
-    jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)source, sigtype, jl_emptysvec);
+    jl_method_instance_t *mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_code_instance_t *ci = jl_compile_method_internal(mi, world);
 
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);
     JL_GC_POP();
-    oc->source = (jl_method_t*)source;
-    oc->isva = jl_unbox_bool(isva);
+    oc->source = source;
     oc->captures = captures;
     oc->specptr = NULL;
-    int compiled = 0;
     if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_interpret_call) {
         oc->invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
     }
     else if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_args) {
         oc->invoke = jl_atomic_load_relaxed(&ci->specptr.fptr1);
-        compiled = 1;
     }
     else if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) {
         oc->invoke = (jl_fptr_args_t)jl_fptr_const_opaque_closure;
@@ -72,11 +77,6 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
     }
     else {
         oc->invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->invoke);
-        compiled = 1;
-    }
-    if (oc->isva && compiled) {
-        oc->specptr = (jl_fptr_args_t)oc->invoke;
-        oc->invoke = (jl_fptr_args_t)jl_fptr_va_opaque_closure;
     }
     oc->world = world;
     return oc;
@@ -84,10 +84,10 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *isv
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)
 {
-    if (nargs < 5)
+    if (nargs < 4)
         jl_error("new_opaque_closure: Not enough arguments");
     return (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)args[0],
-        args[1], args[2], args[3], args[4], &args[5], nargs-5);
+        args[1], args[2], args[3], &args[4], nargs-4);
 }
 
 

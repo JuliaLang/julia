@@ -402,16 +402,19 @@ julia> getindex(Int8, 1, 2, 3)
 """
 function getindex(::Type{T}, vals...) where T
     a = Vector{T}(undef, length(vals))
-    @inbounds for i = 1:length(vals)
-        a[i] = vals[i]
+    if vals isa NTuple
+        @inbounds for i in 1:length(vals)
+            a[i] = vals[i]
+        end
+    else
+        # use afoldl to avoid type instability inside loop
+        afoldl(1, vals...) do i, v
+            @inbounds a[i] = v
+            return i + 1
+        end
     end
     return a
 end
-
-getindex(::Type{T}) where {T} = (@inline; Vector{T}())
-getindex(::Type{T}, x) where {T} = (@inline; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
-getindex(::Type{T}, x, y) where {T} = (@inline; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(::Type{T}, x, y, z) where {T} = (@inline; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, @nospecialize vals...)
     a = Vector{Any}(undef, length(vals))

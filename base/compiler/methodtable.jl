@@ -84,9 +84,9 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         _min_val[] = typemin(UInt)
         _max_val[] = typemax(UInt)
         ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
-    end
-    if ms === false
-        return missing
+        if ms === false
+            return missing
+        end
     end
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
@@ -123,3 +123,8 @@ end
 
 # This query is not cached
 findsup(@nospecialize(sig::Type), table::CachedMethodTable) = findsup(sig, table.table)
+
+isoverlayed(::MethodTableView)     = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable)  = true
+isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)

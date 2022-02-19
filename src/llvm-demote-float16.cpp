@@ -17,6 +17,7 @@
 #define DEBUG_TYPE "demote_float16"
 
 #include "support/dtypes.h"
+#include "passes.h"
 
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -126,10 +127,6 @@ static bool demoteFloat16(Function &F)
 }
 
 } // end anonymous namespace
-
-struct DemoteFloat16 : PassInfoMixin<DemoteFloat16> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
-};
 
 PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
 {

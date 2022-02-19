@@ -149,6 +149,8 @@ StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
+    k ≤ ndims(A) ? strides(A)[k] : length(A)
 
 function strides(a::ReshapedReinterpretArray)
     ap = parent(a)

@@ -187,6 +187,47 @@ let cmd = Base.julia_cmd()
     @test parse(Int, s) > 100
 end
 
+if Sys.isbsd() || Sys.islinux()
+    @testset "SIGINFO/SIGUSR1 profile triggering" begin
+        let cmd = Base.julia_cmd()
+            script = """
+                x = rand(1000, 1000)
+                println("started")
+                while true
+                    x * x
+                    yield()
+                end
+                """
+            iob = Base.BufferStream()
+            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            t = Timer(60) do t # should be done in under 10 seconds
+                kill(p, Base.SIGKILL)
+                sleep(5)
+                close(iob)
+            end
+            try
+                s = readuntil(iob, "started", keep = true)
+                @assert occursin("started", s)
+                @assert process_running(p)
+                for _ in 1:2
+                    sleep(2)
+                    if Sys.isbsd()
+                        kill(p, 29) # SIGINFO
+                    elseif Sys.islinux()
+                        kill(p, 10) # SIGUSR1
+                    end
+                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    @test process_running(p)
+                    @test occursin("Overhead ╎", s)
+                end
+            finally
+                kill(p, Base.SIGKILL)
+                close(t)
+            end
+        end
+    end
+end
+
 @testset "FlameGraphs" begin
     # FlameGraphs makes use of some Profile's internals. Detect possible breakage by mimicking some of its tests.
     # Breakage is acceptable since these internals are not part of the stable API, but it's better to know, and ideally

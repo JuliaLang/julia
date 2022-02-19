@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #define DEBUG_TYPE "lower_simd_loop"
 
@@ -28,7 +29,7 @@
 
 #include "julia_assert.h"
 
-namespace llvm {
+using namespace llvm;
 
 namespace {
 
@@ -213,9 +214,6 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
 /// This pass should run after reduction variables have been converted to phi nodes,
 /// otherwise floating-point reductions might not be recognized as such and
 /// prevent SIMDization.
-struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-};
 
 
 PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
@@ -288,5 +286,3 @@ extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerR
 {
     unwrap(PM)->add(createLowerSimdLoopPass());
 }
-
-} // namespace llvm

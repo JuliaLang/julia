@@ -34,6 +34,51 @@ macro profile(ex)
     end
 end
 
+# triggers printing the report after a SIGINFO/SIGUSR1 profile request
+const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
+function profile_printing_listener()
+    try
+        while true
+            wait(PROFILE_PRINT_COND[])
+            peek_report[]()
+        end
+    catch ex
+        if !isa(ex, InterruptException)
+            @error "Profile printing listener crashed" exception=ex,catch_backtrace()
+        end
+    end
+end
+
+# An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
+function _peek_report()
+    iob = IOBuffer()
+    ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
+    print(ioc, groupby = [:thread, :task])
+    Base.print(stdout, String(take!(iob)))
+end
+# This is a ref so that it can be overridden by other profile info consumers.
+const peek_report = Ref{Function}(_peek_report)
+
+"""
+    get_peek_duration()
+
+Get the duration in seconds of the profile "peek" that is triggered via `SIGINFO` or `SIGUSR1`, depending on platform.
+"""
+get_peek_duration() = ccall(:jl_get_profile_peek_duration, Float64, ())
+"""
+    set_peek_duration(t::Float64)
+
+Set the duration in seconds of the profile "peek" that is triggered via `SIGINFO` or `SIGUSR1`, depending on platform.
+"""
+set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Float64,), t)
+
+precompile_script = """
+import Profile
+Profile.@profile while Profile.len_data() < 1000; rand(10,10) * rand(10,10); end
+Profile.peek_report[]()
+Profile.clear()
+"""
+
 ####
 #### User-level functions
 ####
@@ -81,15 +126,23 @@ function init(n::Integer, delay::Real; limitwarn::Bool = true)
     end
 end
 
-# init with default values
-# Use a max size of 10M profile samples, and fire timer every 1ms
-# (that should typically give around 100 seconds of record)
-if Sys.iswindows() && Sys.WORD_SIZE == 32
-    # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
-    # so we don't want to slow the program down by quite that much
-    __init__() = init(1_000_000, 0.01, limitwarn = false)
-else
-    __init__() = init(10_000_000, 0.001, limitwarn = false)
+function __init__()
+    # init with default values
+    # Use a max size of 10M profile samples, and fire timer every 1ms
+    # (that should typically give around 100 seconds of record)
+    @static if Sys.iswindows() && Sys.WORD_SIZE == 32
+        # The Win32 unwinder is 1000x slower than elsewhere (around 1ms/frame),
+        # so we don't want to slow the program down by quite that much
+        n = 1_000_000
+        delay = 0.01
+    else
+        n = 10_000_000
+        delay = 0.001
+    end
+    init(n, delay, limitwarn = false)
+    PROFILE_PRINT_COND[] = Base.AsyncCondition()
+    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
+    errormonitor(Threads.@spawn(profile_printing_listener()))
 end
 
 """
@@ -129,7 +182,7 @@ const META_OFFSET_TASKID = 4
 const META_OFFSET_THREADID = 5
 
 """
-    print([io::IO = stdout,] [data::Vector]; kwargs...)
+    print([io::IO = stdout,] [data::Vector = fetch()], [lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)]; kwargs...)
 
 Prints profiling results to `io` (by default, `stdout`). If you do not
 supply a `data` vector, the internal buffer of accumulated backtraces
@@ -170,7 +223,7 @@ The keyword arguments can be any combination of:
     does not control which tasks samples are collected within.
 """
 function print(io::IO,
-        data::Vector{<:Unsigned} = fetch(include_meta = true),
+        data::Vector{<:Unsigned} = fetch(),
         lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data)
         ;
         format = :tree,
@@ -206,7 +259,7 @@ function print(io::IO,
                     nl = length(threadids) > 1 ? "\n" : ""
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
-                        printstyled(io, " Thread $threadid\n"; bold=true, color=Base.info_color())
+                        printstyled(io, " Thread $threadid "; bold=true, color=Base.info_color())
                         nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
@@ -222,7 +275,7 @@ function print(io::IO,
                     nl = length(taskids) > 1 ? "\n" : ""
                     printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
-                        printstyled(io, " Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
+                        printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
                         nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
@@ -232,7 +285,7 @@ function print(io::IO,
         elseif groupby == :task
             threads = 1:typemax(Int)
             for taskid in intersect(get_task_ids(data), tasks)
-                printstyled(io, "Task $(Base.repr(taskid))\n"; bold=true, color=Base.debug_color())
+                printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
                 nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
@@ -240,7 +293,7 @@ function print(io::IO,
         elseif groupby == :thread
             tasks = 1:typemax(UInt)
             for threadid in intersect(get_thread_ids(data), threads)
-                printstyled(io, "Thread $threadid\n"; bold=true, color=Base.info_color())
+                printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
                 nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
@@ -250,6 +303,18 @@ function print(io::IO,
     end
     return
 end
+
+"""
+    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
+
+Prints profiling results to `io`. This variant is used to examine results exported by a
+previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
+a dictionary `lidict` of line information.
+
+See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
+"""
+print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
+    print(stdout, data, lidict; kwargs...)
 
 function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
                 format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
@@ -317,18 +382,6 @@ function has_meta(data)
     end
     return false
 end
-
-"""
-    print([io::IO = stdout,] data::Vector, lidict::LineInfoDict; kwargs...)
-
-Prints profiling results to `io`. This variant is used to examine results exported by a
-previous call to [`retrieve`](@ref). Supply the vector `data` of backtraces and
-a dictionary `lidict` of line information.
-
-See `Profile.print([io], data)` for an explanation of the valid keyword arguments.
-"""
-print(data::Vector{<:Unsigned} = fetch(include_meta = true), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
-    print(stdout, data, lidict; kwargs...)
 
 """
     retrieve(; kwargs...) -> data, lidict
@@ -541,10 +594,10 @@ depends on the exact memory addresses used in JIT-compiling. This function is pr
 internal use; [`retrieve`](@ref) may be a better choice for most users.
 By default metadata such as threadid and taskid is included. Set `include_meta` to `false` to strip metadata.
 """
-function fetch(;include_meta = true)
+function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
     len = len_data()
-    if is_buffer_full()
+    if limitwarn && is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
                  before your program finished. To profile for longer runs, call
                  `Profile.init()` with a larger buffer and/or larger delay."""
@@ -1058,22 +1111,24 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
     util_perc = (1 - (nsleeping / root.count)) * 100
+    !is_subsection && print_tree(io, root, cols, fmt, is_subsection)
     if isempty(root.down)
         if is_subsection
             Base.print(io, "Total snapshots: ")
             printstyled(io, "$(root.count)", color=Base.warn_color())
-            Base.println(io, " (", round(Int, util_perc), "% utilization)")
+            Base.println(io, ". Utilization: ", round(Int, util_perc), "%")
         else
             warning_empty()
         end
         return true
-    end
-    print_tree(io, root, cols, fmt, is_subsection)
-    Base.print(io, "Total snapshots: ", root.count, " (", round(Int, util_perc), "% utilization")
-    if is_subsection
-        println(io, ")")
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+        Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
+    end
+    if is_subsection
+        println(io)
+        print_tree(io, root, cols, fmt, is_subsection)
+    else
+        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task")
     end
     return false
 end

@@ -20,6 +20,7 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
@@ -31,6 +32,8 @@
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -51,11 +54,6 @@
 
 
 using namespace llvm;
-
-// our passes
-namespace llvm {
-    extern Pass *createLowerSimdLoopPass();
-}
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -870,6 +868,68 @@ static RegisterPass<JuliaPipeline<3>> Z("juliaO3", "Runs the entire julia pipeli
 extern "C" JL_DLLEXPORT
 void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
+}
+
+// new pass manager plugin
+
+// NOTE: Instead of exporting all the constructors in passes.h we could
+// forward the callbacks to the respective passes. LLVM seems to prefer this,
+// and when we add the full pass builder having them directly will be helpful.
+static void registerCallbacks(PassBuilder &PB) {
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, FunctionPassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+            if (Name == "DemoteFloat16") {
+                PM.addPass(DemoteFloat16());
+                return true;
+            }
+            if (Name == "CombineMulAdd") {
+              PM.addPass(CombineMulAdd());
+              return true;
+            }
+            if (Name == "LateLowerGCFrame") {
+                PM.addPass(LateLowerGC());
+                return true;
+            }
+            return false;
+        });
+
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, ModulePassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+            if (Name == "CPUFeatures") {
+              PM.addPass(CPUFeatures());
+              return true;
+            }
+            if (Name == "RemoveNI") {
+              PM.addPass(RemoveNI());
+              return true;
+            }
+            if (Name == "LowerSIMDLoop") {
+              PM.addPass(LowerSIMDLoop());
+              return true;
+            }
+            if (Name == "FinalLowerGC") {
+                PM.addPass(FinalLowerGCPass());
+                return true;
+            }
+            return false;
+        });
+
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, LoopPassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+            if (Name == "JuliaLICM") {
+                PM.addPass(JuliaLICMPass());
+                return true;
+            }
+            return false;
+        });
+}
+
+extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
+llvmGetPassPluginInfo() {
+      return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
 }
 
 // --- native code info, and dump function to IR and ASM ---
