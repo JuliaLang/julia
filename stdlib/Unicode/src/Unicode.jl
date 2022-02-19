@@ -169,6 +169,11 @@ This consists of the 3rd to *7th* codepoints ([`Char`](@ref)s) in `"exposé"`,
 because the grapheme `"é"` is actually *two* Unicode codepoints
 (an `'e'` followed by an acute-accent combining character U+0301).
 
+Because finding grapheme boundaries requires iteration over the
+string contents, the `graphemes(s, m:n)` function requires time
+proportional to the length of the string (number of codepoints)
+before the end of the substring.
+
 !!! compat "Julia 1.9"
     The `m:n` argument of `graphemes` requires Julia 1.9.
 """
