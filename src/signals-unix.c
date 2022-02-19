@@ -505,6 +505,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
 // Linux-style
 #include <time.h>
 #include <string.h>  // for memset
+#include <timefuncs.h> // for sleep_ms
 
 static timer_t timerprof;
 static struct itimerspec itsprof;
@@ -552,6 +553,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 // BSD-style timers
 #include <string.h>
 #include <sys/time.h>
+#include <timefuncs.h> // for sleep_ms
 struct itimerval timerprof;
 
 JL_DLLEXPORT int jl_profile_start_timer(void)
