@@ -4,6 +4,7 @@
 #include <errno.h>
 
 #include "julia.h"
+#include "julia_internal.h"
 
 #include <unistd.h>
 #include <getopt.h>
