@@ -512,8 +512,8 @@ Characteristics:
 """
 const MergeSort     = MergeSortAlg()
 
-const DEFAULT_UNSTABLE = QuickSort
-const DEFAULT_STABLE   = MergeSort
+const DEFAULT_UNSTABLE = RadixSort(QuickSort)
+const DEFAULT_STABLE   = RadixSort(MergeSort)
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
@@ -751,10 +751,10 @@ end
 
 ## generic sorting methods ##
 
-defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray) = MergeSort
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = QuickSort
+defalg(v::AbstractArray{Missing}) = QuickSort
+defalg(v::AbstractArray{Union{}}) = QuickSort
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
