@@ -581,6 +581,7 @@ tests = [
         "[]"        =>  "(vect)"
         "[x,]"      =>  "(vect x)"
         "[x]"       =>  "(vect x)"
+        "[x"        =>  "(vect x (error-t))"
         "[x \n ]"   =>  "(vect x)"
         "[x \n\n ]" =>  "(vect x)"
         "[x for a in as]"  =>  "(comprehension (generator x (= a as)))"
