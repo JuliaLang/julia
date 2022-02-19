@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "passes.h"
 
+#include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>

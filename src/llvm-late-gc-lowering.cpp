@@ -34,6 +34,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
+#include <map>
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
