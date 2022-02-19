@@ -891,6 +891,10 @@ static void registerCallbacks(PassBuilder &PB) {
                 PM.addPass(LateLowerGC());
                 return true;
             }
+            if (Name == "AllocOpt") {
+                PM.addPass(AllocOptPass());
+                return true;
+            }
             return false;
         });
 
