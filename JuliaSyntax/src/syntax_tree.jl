@@ -55,7 +55,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens
                 Symbol(normalize_identifier(val_str))
-        elseif k == K"NothingLiteral"
+        elseif k == K"nothing"
             nothing
         elseif k == K"error"
             ErrorVal()

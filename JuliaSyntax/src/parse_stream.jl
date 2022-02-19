@@ -121,7 +121,7 @@ TODO: Optimize this data structure?  It's very large at the moment.
 """
 struct TaggedRange
     head::SyntaxHead # Kind,flags
-    orig_kind::Kind  # Kind of the original token for leaf tokens, or K"Nothing"
+    orig_kind::Kind  # Kind of the original token for leaf tokens, or K"None"
     first_byte::UInt32  # First byte in the input text
     last_byte::UInt32   # Last byte in the input text
     start_mark::UInt32  # Index of first emitted range which this range covers
@@ -362,7 +362,7 @@ end
 
 # Bump the next `n` tokens
 # flags and remap_kind are applied to any non-trivia tokens
-function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
+function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
     if n <= 0
         return
     end
@@ -375,7 +375,7 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"Nothing")
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
         f = is_trivia ? TRIVIA_FLAG : flags
         is_dotted(tok) && (f |= DOTOP_FLAG)
-        outk = (is_trivia || remap_kind == K"Nothing") ? k : remap_kind
+        outk = (is_trivia || remap_kind == K"None") ? k : remap_kind
         range = TaggedRange(SyntaxHead(outk, f), k, first_byte(tok),
                             last_byte(tok), lastindex(stream.ranges)+1)
         push!(stream.ranges, range)
@@ -393,7 +393,7 @@ end
 Shift the current token from the input to the output, adding the given flags.
 """
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
-              error=nothing, remap_kind::Kind=K"Nothing")
+              error=nothing, remap_kind::Kind=K"None")
     emark = position(stream)
     _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
     if !isnothing(error)
@@ -438,7 +438,7 @@ lexing ambiguities. There's no special whitespace handling — bump any
 whitespace if necessary with bump_trivia.
 """
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
-    span = TaggedRange(SyntaxHead(kind, flags), K"Nothing",
+    span = TaggedRange(SyntaxHead(kind, flags), K"None",
                        first_byte(stream.lookahead[1]),
                        last_byte(stream.lookahead[num_tokens]),
                        lastindex(stream.ranges) + 1)
@@ -541,7 +541,7 @@ should be a previous return value of `position()`.
 """
 function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
-    range = TaggedRange(SyntaxHead(kind, flags), K"Nothing", mark.input_byte,
+    range = TaggedRange(SyntaxHead(kind, flags), K"None", mark.input_byte,
                         stream.next_byte-1, mark.output_index+1)
     if !isnothing(error)
         _emit_diagnostic(stream, first_byte(range), last_byte(range), error=error)
