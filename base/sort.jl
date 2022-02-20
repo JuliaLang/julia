@@ -736,7 +736,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::RadixSort, o::Ord
         # This overflows and returns incorrect results if the range is more than typemax(Int)
         # sourt_int_range! would need to allocate an array of more than typemax(Int) elements,
         # so policy should never dispatch to sort_int_range! in that case.
-        u = sort_int_range!(u, lo, hi, 1+mx-mn, mn) # 1 not one().
+        u = sort_int_range!(u, 1+mx-mn, mn, identity, lo, hi) # 1 not one().
         mn = zero(mn)
     elseif bits > 0
         u[lo:hi] .-= mn
@@ -811,11 +811,12 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!(x::AbstractVector{<:Integer}, lo, hi, rangelen, minval)
+# maybereverse is never used by Base.
+function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse=identity, lo=firstindex(x), hi=lastindex(x))
     offs = 1 - minval
 
     counts = fill(0, rangelen)
-    @inbounds for i = lo:hi
+    @inbounds for i = maybereverse(lo:hi)
         counts[x[i] + offs] += 1
     end
 
