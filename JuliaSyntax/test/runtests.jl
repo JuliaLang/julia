@@ -19,11 +19,10 @@ include("parse_stream.jl")
 include("parser.jl")
 include("parser_api.jl")
 include("syntax_tree.jl")
-
 @testset "Parsing values from strings" begin
     include("value_parsing.jl")
 end
-
+include("hooks.jl")
 include("parse_packages.jl")
 
 # Prototypes
