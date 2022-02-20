@@ -97,7 +97,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
                 effects = result.edge_effects
                 if const_result !== nothing
-                    (;rt, effects, const_result) = const_result
+                    (; rt, effects, const_result) = const_result
                 end
                 tristate_merge!(sv, effects)
                 push!(const_results, const_result)
@@ -589,14 +589,26 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     if edge === nothing
         edgecycle = edgelimited = true
     end
-    if edgecycle
+    if is_effect_overrided(sv, :terminates_globally)
+        # this frame is known to terminate
+        edge_effects = Effects(edge_effects, terminates=ALWAYS_TRUE)
+    elseif is_effect_overrided(method, :terminates_globally)
+        # this edge is known to terminate
+        edge_effects = Effects(edge_effects, terminates=ALWAYS_TRUE)
+    elseif edgecycle
         # Some sort of recursion was detected. Even if we did not limit types,
-        # we cannot guarantee that the call will terminate.
-        edge_effects = tristate_merge(edge_effects,
-            Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
+        # we cannot guarantee that the call will terminate
+        edge_effects = Effects(edge_effects, terminates=TRISTATE_UNKNOWN)
     end
     return MethodCallResult(rt, edgecycle, edgelimited, edge, edge_effects)
 end
+
+is_effect_overrided(sv::InferenceState, effect::Symbol) = is_effect_overrided(sv.linfo, effect)
+function is_effect_overrided(linfo::MethodInstance, effect::Symbol)
+    def = linfo.def
+    return isa(def, Method) && is_effect_overrided(def, effect)
+end
+is_effect_overrided(method::Method, effect::Symbol) = getfield(decode_effects_override(method.purity), effect)
 
 # keeps result and context information of abstract method call, will be used by succeeding constant-propagation
 struct MethodCallResult
@@ -2067,14 +2079,13 @@ end
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
-        def = frame.linfo.def
-        if isa(def, Method)
-            effects = decode_effects_override(def.purity)
-            if effects.terminates_globally || effects.terminates_locally
-                return nothing
-            end
+        if is_effect_overrided(frame, :terminates_globally)
+            # this frame is known to terminate
+        elseif is_effect_overrided(frame, :terminates_locally)
+            # this backedge is known to terminate
+        else
+            tristate_merge!(frame, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
         end
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
     end
     return nothing
 end
