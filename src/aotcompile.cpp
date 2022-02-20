@@ -45,6 +45,12 @@
 #endif
 #endif
 
+// NewPM needs to manually include all the pass headers
+#include <llvm/Transforms/IPO/ConstantMerge.h>
+#include "llvm/Transforms/Scalar/InstSimplifyPass.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
+
+
 // for outputting code
 #include <llvm/Bitcode/BitcodeWriter.h>
 #include <llvm/Bitcode/BitcodeWriterPass.h>
@@ -935,6 +941,284 @@ static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire
 extern "C" JL_DLLEXPORT
 void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
+}
+
+// new pass manager
+
+// FunctionAnalysisManager registerFunctionAnalysis(PassBuilder &PB, TargetMachine *TM)
+// {
+//     llvm::FunctionAnalysisManager FAM;
+//     FAM.registerPass([&] { return llvm::TargetIRAnalysis(TM->getTargetIRAnalysis()); });
+//     FAM.registerPass([&] { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM->getTargetTriple())); });
+
+//     return FAM;
+// }
+
+
+
+// LoopAnalysisManager registerLoopAnalysis()
+// {
+//     llvm::LoopAnalysisManager LAM;
+//     llvm::PassBuilder& PB;
+//     PB.registerLoopAnalyses(LAM);
+//     return LAM;
+// }
+
+
+void constructPipeline(TargetMachine *TM, int opt_level, bool lower_intrinsics, bool dump_native) {
+    // llvm::PassBuilder pb(targetMachine->LLVM, llvm::PipelineTuningOptions(), llvm::None, &passInstrumentationCallbacks);
+    PassBuilder PB;
+    // Create the analysis managers.
+    LoopAnalysisManager LAM;
+    PB.registerLoopAnalyses(LAM);
+
+    // do we need to do this manually?
+    // https://www.duskborn.com/posts/llvm-new-pass-manager/#porting-our-custom-pass-pipeline does
+    FunctionAnalysisManager FAM;
+    FAM.registerPass([&] { return llvm::TargetIRAnalysis(TM->getTargetIRAnalysis()); });
+    FAM.registerPass([&] { return llvm::TargetLibraryAnalysis(llvm::TargetLibraryInfoImpl(TM->getTargetTriple())); });
+
+    PB.registerFunctionAnalyses(FAM);
+
+    CGSCCAnalysisManager CGAM;
+    PB.registerCGSCCAnalyses(CGAM);
+
+    ModuleAnalysisManager MAM;
+    PB.registerModuleAnalyses(MAM);
+
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    ModulePassManager MPM;
+
+    // Construct a pipeline.
+    // TODO: CommonInstruction hoisting/sinking enables AllocOpt
+    //       to merge allocations and sometimes eliminate them,
+    //       since AllocOpt does not handle PhiNodes.
+    //       Enable this instruction hoisting because of this and Union benchmarks.
+    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
+
+// #ifdef JL_DEBUG_BUILD
+    {
+        FunctionPassManager FPM;
+        FPM.addPass(GCInvariantVerifierPass());
+        FPM.addPass(VerifierPass());
+
+        MPM.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(FPM)));
+    }
+// #endif
+
+    MPM.addPass(ConstantMergePass());
+    if (opt_level < 2) {
+        if (!dump_native) {
+            // we won't be multiversioning, so lower CPU feature checks early on
+            // so that we can avoid an additional CFG simplification pass at the end.
+            MPM.addPass(CPUFeatures());
+            if (opt_level == 1)
+                MPM.addPass(InstSimplifyPass());
+        }
+        MPM.addPass(SimplifyCFGPass(simplifyCFGOptions));
+        if (opt_level == 1) {
+//             PM->add(createSROAPass());
+//             PM->add(createInstructionCombiningPass());
+//             PM->add(createEarlyCSEPass());
+//             // maybe add GVN?
+//             // also try GVNHoist and GVNSink
+        }
+//         PM->add(createMemCpyOptPass());
+//         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+//         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
+        if (lower_intrinsics) {
+//             PM->add(createBarrierNoopPass());
+//             PM->add(createLowerExcHandlersPass());
+//             PM->add(createGCInvariantVerifierPass(false));
+//             PM->add(createRemoveNIPass());
+//             PM->add(createLateLowerGCFramePass());
+//             PM->add(createFinalLowerGCPass());
+//             PM->add(createLowerPTLSPass(dump_native));
+        }
+        else {
+//             PM->add(createRemoveNIPass());
+        }
+//         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
+        if (dump_native) {
+//             PM->add(createMultiVersioningPass());
+//             PM->add(createCPUFeaturesPass());
+//             // minimal clean-up to get rid of CPU feature checks
+            if (opt_level == 1) {
+//                 PM->add(createInstSimplifyLegacyPass());
+//                 PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+            }
+        }
+// #if defined(_COMPILER_ASAN_ENABLED_)
+//         PM->add(createAddressSanitizerFunctionPass());
+// #endif
+// #if defined(_COMPILER_MSAN_ENABLED_)
+//         PM->add(createMemorySanitizerPass(true));
+// #endif
+// #if defined(_COMPILER_TSAN_ENABLED_)
+//         PM->add(createThreadSanitizerLegacyPassPass());
+// #endif
+        return;
+    }
+//     PM->add(createPropagateJuliaAddrspaces());
+//     PM->add(createScopedNoAliasAAWrapperPass());
+//     PM->add(createTypeBasedAAWrapperPass());
+    if (opt_level >= 3) {
+//         PM->add(createBasicAAWrapperPass());
+    }
+
+//     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+//     PM->add(createDeadCodeEliminationPass());
+//     PM->add(createSROAPass());
+
+//     //PM->add(createMemCpyOptPass());
+
+//     PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
+
+//     // Running `memcpyopt` between this and `sroa` seems to give `sroa` a hard time
+//     // merging the `alloca` for the unboxed data and the `alloca` created by the `alloc_opt`
+//     // pass.
+//     PM->add(createAllocOptPass());
+//     // consider AggressiveInstCombinePass at optlevel > 2
+//     PM->add(createInstructionCombiningPass());
+//     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+//     if (dump_native)
+//         PM->add(createMultiVersioningPass());
+//     PM->add(createCPUFeaturesPass());
+//     PM->add(createSROAPass());
+//     PM->add(createInstSimplifyLegacyPass());
+//     PM->add(createJumpThreadingPass());
+//     PM->add(createCorrelatedValuePropagationPass());
+
+//     PM->add(createReassociatePass());
+
+//     PM->add(createEarlyCSEPass());
+
+//     // Load forwarding above can expose allocations that aren't actually used
+//     // remove those before optimizing loops.
+//     PM->add(createAllocOptPass());
+//     PM->add(createLoopRotatePass());
+//     // moving IndVarSimplify here prevented removing the loop in perf_sumcartesian(10:-1:1)
+// #ifdef USE_POLLY
+//     // LCSSA (which has already run at this point due to the dependencies of the
+//     // above passes) introduces redundant phis that hinder Polly. Therefore we
+//     // run InstCombine here to remove them.
+//     PM->add(createInstructionCombiningPass());
+//     PM->add(polly::createCodePreparationPass());
+//     polly::registerPollyPasses(*PM);
+//     PM->add(polly::createCodegenCleanupPass());
+// #endif
+//     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
+//     PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
+//     PM->add(createLICMPass());
+//     PM->add(createJuliaLICMPass());
+//     PM->add(createLoopUnswitchPass());
+//     PM->add(createLICMPass());
+//     PM->add(createJuliaLICMPass());
+//     PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
+//     // Subsequent passes not stripping metadata from terminator
+//     PM->add(createInstSimplifyLegacyPass());
+//     PM->add(createLoopIdiomPass());
+//     PM->add(createIndVarSimplifyPass());
+//     PM->add(createLoopDeletionPass());
+//     PM->add(createSimpleLoopUnrollPass());
+
+//     // Run our own SROA on heap objects before LLVM's
+//     PM->add(createAllocOptPass());
+//     // Re-run SROA after loop-unrolling (useful for small loops that operate,
+//     // over the structure of an aggregate)
+//     PM->add(createSROAPass());
+//     // might not be necessary:
+//     PM->add(createInstSimplifyLegacyPass());
+
+//     PM->add(createGVNPass());
+//     PM->add(createMemCpyOptPass());
+//     PM->add(createSCCPPass());
+
+//     //These next two passes must come before IRCE to eliminate the bounds check in #43308
+//     PM->add(createCorrelatedValuePropagationPass());
+//     PM->add(createDeadCodeEliminationPass());
+
+//     PM->add(createInductiveRangeCheckEliminationPass()); // Must come between the two GVN passes
+
+//     // Run instcombine after redundancy elimination to exploit opportunities
+//     // opened up by them.
+//     // This needs to be InstCombine instead of InstSimplify to allow
+//     // loops over Union-typed arrays to vectorize.
+//     PM->add(createInstructionCombiningPass());
+//     PM->add(createJumpThreadingPass());
+//     if (opt_level >= 3) {
+//         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
+//     }
+//     PM->add(createDeadStoreEliminationPass());
+
+//     // More dead allocation (store) deletion before loop optimization
+//     // consider removing this:
+//     PM->add(createAllocOptPass());
+//     // see if all of the constant folding has exposed more loops
+//     // to simplification and deletion
+//     // this helps significantly with cleaning up iteration
+//     PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
+//     PM->add(createLoopDeletionPass());
+//     PM->add(createInstructionCombiningPass());
+//     PM->add(createLoopVectorizePass());
+//     PM->add(createLoopLoadEliminationPass());
+//     // Cleanup after LV pass
+//     PM->add(createInstructionCombiningPass());
+//     PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
+//         SimplifyCFGOptions()
+//             .forwardSwitchCondToPhi(true)
+//             .convertSwitchToLookupTable(true)
+//             .needCanonicalLoops(false)
+//             .hoistCommonInsts(true)
+//             // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+//     ));
+//     PM->add(createSLPVectorizerPass());
+//     // might need this after LLVM 11:
+//     //PM->add(createVectorCombinePass());
+
+//     PM->add(createAggressiveDCEPass());
+
+//     if (lower_intrinsics) {
+//         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
+//         // LLVM's devirtualization heuristics, which would result in the entire
+//         // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+//         PM->add(createBarrierNoopPass());
+//         PM->add(createLowerExcHandlersPass());
+//         PM->add(createGCInvariantVerifierPass(false));
+//         // Needed **before** LateLowerGCFrame on LLVM < 12
+//         // due to bug in `CreateAlignmentAssumption`.
+//         PM->add(createRemoveNIPass());
+//         PM->add(createLateLowerGCFramePass());
+//         PM->add(createFinalLowerGCPass());
+//         // We need these two passes and the instcombine below
+//         // after GC lowering to let LLVM do some constant propagation on the tags.
+//         // and remove some unnecessary write barrier checks.
+//         PM->add(createGVNPass());
+//         PM->add(createSCCPPass());
+//         // Remove dead use of ptls
+//         PM->add(createDeadCodeEliminationPass());
+//         PM->add(createLowerPTLSPass(dump_native));
+//         PM->add(createInstructionCombiningPass());
+//         // Clean up write barrier and ptls lowering
+//         PM->add(createCFGSimplificationPass());
+//     }
+//     else {
+//         PM->add(createRemoveNIPass());
+//     }
+//     PM->add(createCombineMulAddPass());
+//     PM->add(createDivRemPairsPass());
+// #if defined(_COMPILER_ASAN_ENABLED_)
+//     PM->add(createAddressSanitizerFunctionPass());
+// #endif
+// #if defined(_COMPILER_MSAN_ENABLED_)
+//     PM->add(createMemorySanitizerPass(true));
+// #endif
+// #if defined(_COMPILER_TSAN_ENABLED_)
+//     PM->add(createThreadSanitizerLegacyPassPass());
+// #endif
+// }
+
 }
 
 // new pass manager plugin
