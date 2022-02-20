@@ -816,12 +816,12 @@ function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybere
     offs = 1 - minval
 
     counts = fill(0, rangelen)
-    @inbounds for i = maybereverse(lo:hi)
+    @inbounds for i = lo:hi
         counts[x[i] + offs] += 1
     end
 
     idx = lo
-    @inbounds for i = 1:rangelen
+    @inbounds for i = maybereverse(1:rangelen)
         lastidx = idx + counts[i] - 1
         val = i-offs
         for j = idx:lastidx
