@@ -94,10 +94,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
-                const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
+                const_call_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
                 effects = result.edge_effects
-                if const_result !== nothing
-                    (; rt, effects, const_result) = const_result
+                const_result = nothing
+                if const_call_result !== nothing
+                    if const_call_result.rt ⊑ rt
+                        (; rt, effects, const_result) = const_call_result
+                    end
                 end
                 tristate_merge!(sv, effects)
                 push!(const_results, const_result)
@@ -133,11 +136,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
             this_arginfo = ArgInfo(fargs, this_argtypes)
-            const_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
+            const_call_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
             effects = result.edge_effects
-            if const_result !== nothing
-                this_rt = const_result.rt
-                (; effects, const_result) = const_result
+            const_result = nothing
+            if const_call_result !== nothing
+                this_const_rt = const_call_result.rt
+                # return type of const-prop' inference can be wider than  that of non const-prop' inference
+                # e.g. in cases when there are cycles but cached result is still accurate
+                if this_const_rt ⊑ this_rt
+                    this_rt = this_const_rt
+                    (; effects, const_result) = const_call_result
+                end
             end
             tristate_merge!(sv, effects)
             push!(const_results, const_result)
@@ -1483,9 +1492,12 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     #     t, a = ti.parameters[i], argtypes′[i]
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
-    const_result = abstract_call_method_with_const_args(interp, result, singleton_type(ft′), arginfo, match, sv)
-    if const_result !== nothing
-        (;rt, const_result) = const_result
+    const_call_result = abstract_call_method_with_const_args(interp, result, singleton_type(ft′), arginfo, match, sv)
+    const_result = nothing
+    if const_call_result !== nothing
+        if const_call_result.rt ⊑ rt
+            (; rt, const_result) = const_call_result
+        end
     end
     return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result))
 end
@@ -1630,10 +1642,12 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
     const_result = nothing
     if !result.edgecycle
-        const_result = abstract_call_method_with_const_args(interp, result, nothing,
+        const_call_result = abstract_call_method_with_const_args(interp, result, nothing,
             arginfo, match, sv)
-        if const_result !== nothing
-            (;rt, const_result) = const_result
+        if const_call_result !== nothing
+            if const_call_result.rt ⊑ rt
+                (; rt, const_result) = const_call_result
+            end
         end
     end
     info = OpaqueClosureCallInfo(match, const_result)
