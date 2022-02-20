@@ -447,7 +447,7 @@ end
 
 @testset "advanced sorting" begin
     Random.seed!(0xdeadbeef)
-    for n in [0:10; 100; 101; 1000; 1001]
+    for n in [0:10; 100; 101; 1000; 1001; 3000; 3001]
         local r
         r = -5:5
         v = rand(r,n)
@@ -469,7 +469,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort]
+            for alg in [MergeSort, Base.Sort.RadixSort(MergeSort)]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -482,7 +482,7 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(1:n)]
+            for alg in [QuickSort, PartialQuickSort(1:n), Base.Sort.RadixSort(QuickSort)]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -514,8 +514,9 @@ end
 
         v = randn_with_nans(n,0.1)
         # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort],
+        for alg in [InsertionSort, QuickSort, MergeSort, Base.Sort.RadixSort(QuickSort), Base.Sort.RadixSort(MergeSort)],
             rev in [false,true]
+            alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
             s = sort(v, alg=alg, rev=rev)
             @test issorted(s, rev=rev)
@@ -575,7 +576,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort]
+    for alg in [InsertionSort, MergeSort, Base.Sort.RadixSort(MergeSort)]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
