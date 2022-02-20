@@ -26,7 +26,13 @@ struct LateLowerGC : PassInfoMixin<LateLowerGC> {
 struct AllocOptPass : PassInfoMixin<AllocOptPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
+
 struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
+struct LowerExcHandlers : PassInfoMixin<LowerExcHandlers> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }
 };

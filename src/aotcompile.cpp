@@ -899,6 +899,10 @@ static void registerCallbacks(PassBuilder &PB) {
                 PM.addPass(PropagateJuliaAddrspacesPass());
                 return true;
             }
+            if (Name == "LowerExcHandlers") {
+                PM.addPass(LowerExcHandlers());
+                return true;
+            }
             return false;
         });
 
