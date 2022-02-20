@@ -210,7 +210,7 @@ if Sys.isbsd() || Sys.islinux()
                 @assert occursin("started", s)
                 @assert process_running(p)
                 for _ in 1:2
-                    sleep(2)
+                    sleep(2.5)
                     if Sys.isbsd()
                         kill(p, 29) # SIGINFO
                     elseif Sys.islinux()
