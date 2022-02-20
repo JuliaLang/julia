@@ -20,7 +20,7 @@ struct jl_raw_alloc_t {
     jl_datatype_t *type_address;
     jl_raw_backtrace_t backtrace;
     size_t size;
-    jl_task_t *task;
+    void *task;
     uint64_t timestamp;
 };
 
@@ -135,7 +135,7 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
         type,
         get_raw_backtrace(),
         size,
-        jl_current_task,
+        (void *)jl_current_task,
         cycleclock()
     });
 }
