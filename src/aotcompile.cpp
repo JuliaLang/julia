@@ -934,6 +934,10 @@ static void registerCallbacks(PassBuilder &PB) {
                 PM.addPass(RemoveJuliaAddrspacesPass());
                 return true;
             }
+            if (Name == "MultiVersioning") {
+                PM.addPass(MultiVersioning());
+                return true;
+            }
             return false;
         });
 
