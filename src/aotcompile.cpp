@@ -895,6 +895,10 @@ static void registerCallbacks(PassBuilder &PB) {
                 PM.addPass(AllocOptPass());
                 return true;
             }
+            if (Name == "PropagateJuliaAddrspaces") {
+                PM.addPass(PropagateJuliaAddrspacesPass());
+                return true;
+            }
             return false;
         });
 
@@ -915,6 +919,10 @@ static void registerCallbacks(PassBuilder &PB) {
             }
             if (Name == "FinalLowerGC") {
                 PM.addPass(FinalLowerGCPass());
+                return true;
+            }
+            if (Name == "RemoveJuliaAddrspaces") {
+                PM.addPass(RemoveJuliaAddrspacesPass());
                 return true;
             }
             return false;
