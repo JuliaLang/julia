@@ -75,10 +75,17 @@ struct RemoveJuliaAddrspacesPass : PassInfoMixin<RemoveJuliaAddrspacesPass> {
 };
 
 struct RemoveAddrspacesPass : PassInfoMixin<RemoveAddrspacesPass> {
-
     std::function<unsigned(unsigned)> ASRemapper;
     RemoveAddrspacesPass();
     RemoveAddrspacesPass(std::function<unsigned(unsigned)> ASRemapper) : ASRemapper(std::move(ASRemapper)) {}
+
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
+struct LowerPTLSPass : PassInfoMixin<LowerPTLSPass> {
+    bool imaging_mode;
+    LowerPTLSPass(bool imaging_mode=false) : imaging_mode(imaging_mode) {}
 
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
