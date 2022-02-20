@@ -457,7 +457,7 @@ struct RemoveAddrspacesPassLegacy : public ModulePass {
 
 public:
     bool runOnModule(Module &M) override {
-        removeAddrspaces(M, ASRemapper);
+        return removeAddrspaces(M, ASRemapper);
     }
 };
 
