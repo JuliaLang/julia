@@ -275,9 +275,6 @@ include("weakkeydict.jl")
 
 include("env.jl")
 
-# BinaryPlatforms, used by Artifacts
-include("binaryplatforms.jl")
-
 # functions defined in Random
 function rand end
 function randn end
@@ -331,6 +328,9 @@ using .Order
 # Combinatorics
 include("sort.jl")
 using .Sort
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # Fast math
 include("fastmath.jl")
