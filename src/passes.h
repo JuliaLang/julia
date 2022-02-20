@@ -37,6 +37,14 @@ struct LowerExcHandlers : PassInfoMixin<LowerExcHandlers> {
     static bool isRequired() { return true; }
 };
 
+struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
+    bool Strong;
+    GCInvariantVerifierPass(bool Strong = false) : Strong(Strong) {}
+
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
 // Module Passes
 struct CPUFeatures : PassInfoMixin<CPUFeatures> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
