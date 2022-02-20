@@ -26,7 +26,21 @@ struct LateLowerGC : PassInfoMixin<LateLowerGC> {
 struct AllocOptPass : PassInfoMixin<AllocOptPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
+
 struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
+struct LowerExcHandlers : PassInfoMixin<LowerExcHandlers> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
+struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
+    bool Strong;
+    GCInvariantVerifierPass(bool Strong = false) : Strong(Strong) {}
+
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
     static bool isRequired() { return true; }
 };
@@ -50,16 +64,28 @@ struct FinalLowerGCPass : PassInfoMixin<LateLowerGC> {
     static bool isRequired() { return true; }
 };
 
+struct MultiVersioning : PassInfoMixin<MultiVersioning> {
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
 struct RemoveJuliaAddrspacesPass : PassInfoMixin<RemoveJuliaAddrspacesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
 };
 
 struct RemoveAddrspacesPass : PassInfoMixin<RemoveAddrspacesPass> {
-
     std::function<unsigned(unsigned)> ASRemapper;
     RemoveAddrspacesPass();
     RemoveAddrspacesPass(std::function<unsigned(unsigned)> ASRemapper) : ASRemapper(std::move(ASRemapper)) {}
+
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    static bool isRequired() { return true; }
+};
+
+struct LowerPTLSPass : PassInfoMixin<LowerPTLSPass> {
+    bool imaging_mode;
+    LowerPTLSPass(bool imaging_mode=false) : imaging_mode(imaging_mode) {}
 
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }

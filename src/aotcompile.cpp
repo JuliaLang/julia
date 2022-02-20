@@ -899,6 +899,15 @@ static void registerCallbacks(PassBuilder &PB) {
                 PM.addPass(PropagateJuliaAddrspacesPass());
                 return true;
             }
+            if (Name == "LowerExcHandlers") {
+                PM.addPass(LowerExcHandlers());
+                return true;
+            }
+            if (Name == "GCInvariantVerifier") {
+                // TODO: Parse option and allow users to set `Strong`
+                PM.addPass(GCInvariantVerifierPass());
+                return true;
+            }
             return false;
         });
 
@@ -923,6 +932,14 @@ static void registerCallbacks(PassBuilder &PB) {
             }
             if (Name == "RemoveJuliaAddrspaces") {
                 PM.addPass(RemoveJuliaAddrspacesPass());
+                return true;
+            }
+            if (Name == "MultiVersioning") {
+                PM.addPass(MultiVersioning());
+                return true;
+            }
+            if (Name == "LowerPTLS") {
+                PM.addPass(LowerPTLSPass());
                 return true;
             }
             return false;
