@@ -264,81 +264,86 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, 1, Forward) == 5
     @test searchsortedlast(r, UInt(1), Forward) == 5
 
-    a = rand(1:10000, 1000)
-    for alg in [InsertionSort, MergeSort]
-        b = sort(a, alg=alg)
-        @test issorted(b)
+    for a in [rand(1:10000, 1000), rand(1:10000, 3000)]
+        for alg in [InsertionSort, MergeSort, Base.Sort.RadixSort(MergeSort)]
+            alg === InsertionSort && legth(a) == 3000 && continue
 
-        ix = sortperm(a, alg=alg)
-        b = a[ix]
-        @test issorted(b)
-        @test a[ix] == b
+            b = sort(a, alg=alg)
+            @test issorted(b)
 
-        sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg)
-        b = a[ix][1:100]
-        @test issorted(b)
+            ix = sortperm(a, alg=alg)
+            b = a[ix]
+            @test issorted(b)
+            @test a[ix] == b
 
-        sortperm!(ix, a, alg=alg)
-        b = a[ix]
-        @test issorted(b)
-        @test a[ix] == b
+            sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg)
+            b = a[ix][1:100]
+            @test issorted(b)
 
-        b = sort(a, alg=alg, rev=true)
-        @test issorted(b, rev=true)
-        ix = sortperm(a, alg=alg, rev=true)
-        b = a[ix]
-        @test issorted(b, rev=true)
-        @test a[ix] == b
+            sortperm!(ix, a, alg=alg)
+            b = a[ix]
+            @test issorted(b)
+            @test a[ix] == b
 
-        sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg, rev=true)
-        b = a[ix][1:100]
-        @test issorted(b, rev=true)
+            b = sort(a, alg=alg, rev=true)
+            @test issorted(b, rev=true)
+            ix = sortperm(a, alg=alg, rev=true)
+            b = a[ix]
+            @test issorted(b, rev=true)
+            @test a[ix] == b
 
-        sortperm!(ix, a, alg=alg, rev=true)
-        b = a[ix]
-        @test issorted(b, rev=true)
-        @test a[ix] == b
+            sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg, rev=true)
+            b = a[ix][1:100]
+            @test issorted(b, rev=true)
 
-        b = sort(a, alg=alg, by=x->1/x)
-        @test issorted(b, by=x->1/x)
-        ix = sortperm(a, alg=alg, by=x->1/x)
-        b = a[ix]
-        @test issorted(b, by=x->1/x)
-        @test a[ix] == b
+            sortperm!(ix, a, alg=alg, rev=true)
+            b = a[ix]
+            @test issorted(b, rev=true)
+            @test a[ix] == b
 
-        sortperm!(view(ix, 1:100), view(a, 1:100), by=x->1/x)
-        b = a[ix][1:100]
-        @test issorted(b, by=x->1/x)
+            b = sort(a, alg=alg, by=x->1/x)
+            @test issorted(b, by=x->1/x)
+            ix = sortperm(a, alg=alg, by=x->1/x)
+            b = a[ix]
+            @test issorted(b, by=x->1/x)
+            @test a[ix] == b
 
-        sortperm!(ix, a, alg=alg, by=x->1/x)
-        b = a[ix]
-        @test issorted(b, by=x->1/x)
-        @test a[ix] == b
+            sortperm!(view(ix, 1:100), view(a, 1:100), by=x->1/x)
+            b = a[ix][1:100]
+            @test issorted(b, by=x->1/x)
 
-        c = copy(a)
-        permute!(c, ix)
-        @test c == b
+            sortperm!(ix, a, alg=alg, by=x->1/x)
+            b = a[ix]
+            @test issorted(b, by=x->1/x)
+            @test a[ix] == b
 
-        invpermute!(c, ix)
-        @test c == a
+            c = copy(a)
+            permute!(c, ix)
+            @test c == b
 
-        c = sort(a, alg=alg, lt=(>))
-        @test b == c
+            invpermute!(c, ix)
+            @test c == a
 
-        c = sort(a, alg=alg, by=x->1/x)
-        @test b == c
-    end
+            c = sort(a, alg=alg, lt=(>))
+            @test b == c
 
-    @testset "unstable algorithms" begin
-        b = sort(a, alg=QuickSort)
-        @test issorted(b)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
-        b = sort(a, alg=QuickSort, rev=true)
-        @test issorted(b, rev=true)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
-        b = sort(a, alg=QuickSort, by=x->1/x)
-        @test issorted(b, by=x->1/x)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
+            c = sort(a, alg=alg, by=x->1/x)
+            @test b == c
+        end
+
+        @testset "unstable algorithms" begin
+            for alg in [QuickSort, Base.Sort.RadixSort(QuickSort)]
+                b = sort(a, alg=alg)
+                @test issorted(b)
+                @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+                b = sort(a, alg=alg, rev=true)
+                @test issorted(b, rev=true)
+                @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+                b = sort(a, alg=alg, by=x->1/x)
+                @test issorted(b, by=x->1/x)
+                @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
+            end
+        end
     end
 end
 @testset "insorted" begin
