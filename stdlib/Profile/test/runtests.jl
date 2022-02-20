@@ -200,9 +200,12 @@ if Sys.isbsd() || Sys.islinux()
                 """
             iob = Base.BufferStream()
             p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
-            t = Timer(60) do t # should be done in under 10 seconds
+            t = Timer(120) do t
+                # should be under 10 seconds, so give it 2 minutes then report failure
+                println("KILLING BY PROFILE TEST WATCHDOG\n")
+                kill(p, Base.SIGTERM)
+                sleep(10)
                 kill(p, Base.SIGKILL)
-                sleep(5)
                 close(iob)
             end
             try
@@ -210,7 +213,7 @@ if Sys.isbsd() || Sys.islinux()
                 @assert occursin("started", s)
                 @assert process_running(p)
                 for _ in 1:2
-                    sleep(2)
+                    sleep(2.5)
                     if Sys.isbsd()
                         kill(p, 29) # SIGINFO
                     elseif Sys.islinux()
