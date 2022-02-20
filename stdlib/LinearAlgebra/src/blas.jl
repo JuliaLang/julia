@@ -161,12 +161,26 @@ end
 "Check that upper/lower (for special matrices) is correctly specified"
 function chkuplo(uplo::AbstractChar)
     if !(uplo == 'U' || uplo == 'L')
-        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
     uplo
 end
 
 # Level 1
+# A help function to pick the pointer and inc for 1d like inputs.
+@inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
+    isdense(x) && return pointer(x), 1 # simpify runtime check when possibe
+    ndims(x) == 1 || strides(x) == Base.size_to_strides(stride(x, 1), size(x)...) ||
+        throw(ArgumentError("only support vector like inputs"))
+    st = stride(x, 1)
+    isnothing(stride0check) || (st == 0 && throw(stride0check))
+    ptr = st > 0 ? pointer(x) : pointer(x, lastindex(x))
+    ptr, st
+end
+isdense(x) = x isa DenseArray
+isdense(x::Base.FastContiguousSubArray) = isdense(parent(x))
+isdense(x::Base.ReshapedArray) = isdense(parent(x))
+isdense(x::Base.ReinterpretArray) = isdense(parent(x))
 ## copy
 
 """
@@ -257,7 +271,11 @@ for (fname, elty) in ((:dscal_,:Float64),
             DX
         end
 
-        scal!(DA::$elty, DX::AbstractArray{$elty}) = scal!(length(DX),DA,DX,stride(DX,1))
+        function scal!(DA::$elty, DX::AbstractArray{$elty})
+            p, st = vec_pointer_stride(DX, ArgumentError("dest vector with 0 stride is not allowed"))
+            GC.@preserve DX scal!(length(DX), DA, p, abs(st))
+            DX
+        end
     end
 end
 scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
@@ -361,73 +379,16 @@ for (fname, elty) in ((:cblas_zdotu_sub,:ComplexF64),
     end
 end
 
-@inline function _dot_length_check(x,y)
-    n = length(x)
-    if n != length(y)
-        throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
-    end
-    n
-end
-
 for (elty, f) in ((Float32, :dot), (Float64, :dot),
                   (ComplexF32, :dotc), (ComplexF64, :dotc),
                   (ComplexF32, :dotu), (ComplexF64, :dotu))
     @eval begin
-        function $f(x::DenseArray{$elty}, y::DenseArray{$elty})
-            n = _dot_length_check(x,y)
-            $f(n, x, 1, y, 1)
-        end
-
-        function $f(x::StridedVector{$elty}, y::DenseArray{$elty})
-            n = _dot_length_check(x,y)
-            xstride = stride(x,1)
-            ystride = stride(y,1)
-            x_delta = xstride < 0 ? n : 1
-            GC.@preserve x $f(n, pointer(x, x_delta), xstride, y, ystride)
-        end
-
-        function $f(x::DenseArray{$elty}, y::StridedVector{$elty})
-            n = _dot_length_check(x,y)
-            xstride = stride(x,1)
-            ystride = stride(y,1)
-            y_delta = ystride < 0 ? n : 1
-            GC.@preserve y $f(n, x, xstride, pointer(y, y_delta), ystride)
-        end
-
-        function $f(x::StridedVector{$elty}, y::StridedVector{$elty})
-            n = _dot_length_check(x,y)
-            xstride = stride(x,1)
-            ystride = stride(y,1)
-            x_delta = xstride < 0 ? n : 1
-            y_delta = ystride < 0 ? n : 1
-            GC.@preserve x y $f(n, pointer(x, x_delta), xstride, pointer(y, y_delta), ystride)
+        function $f(x::AbstractArray{$elty}, y::AbstractArray{$elty})
+            n, m = length(x), length(y)
+            n == m || throw(DimensionMismatch(lazy"dot product arguments have lengths $n and $m"))
+            GC.@preserve x y $f(n, vec_pointer_stride(x)..., vec_pointer_stride(y)...)
         end
     end
-end
-
-function dot(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasReal
-    require_one_based_indexing(DX, DY)
-    n = length(DX)
-    if n != length(DY)
-        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
-    end
-    return dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
-end
-function dotc(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
-    require_one_based_indexing(DX, DY)
-    n = length(DX)
-    if n != length(DY)
-        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
-    end
-    return dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
-end
-function dotu(DX::Union{DenseArray{T},AbstractVector{T}}, DY::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasComplex
-    require_one_based_indexing(DX, DY)
-    n = length(DX)
-    if n != length(DY)
-        throw(DimensionMismatch(lazy"dot product arguments have lengths $(length(DX)) and $(length(DY))"))
-    end
-    return dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
 end
 
 ## nrm2
@@ -461,7 +422,11 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::Union{AbstractVector,DenseArray}) = nrm2(length(x), x, stride1(x))
+# openblas returns 0 for negative stride
+function nrm2(x::AbstractArray)
+    p, st = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+    GC.@preserve x nrm2(length(x), p, abs(st))
+end
 
 ## asum
 
@@ -498,7 +463,10 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::Union{AbstractVector,DenseArray}) = asum(length(x), x, stride1(x))
+function asum(x::AbstractArray)
+    p, st = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+    GC.@preserve x asum(length(x), p, abs(st))
+end
 
 ## axpy
 
@@ -542,15 +510,17 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
+function axpy!(alpha::Number, x::AbstractArray{T}, y::AbstractArray{T}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    return axpy!(length(x), convert(T,alpha), x, stride(x, 1), y, stride(y, 1))
+    GC.@preserve x y axpy!(length(x), T(alpha), vec_pointer_stride(x)...,
+        vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))...)
+    y
 end
 
-function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange{Ti}},
-               y::Array{T}, ry::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function axpy!(alpha::Number, x::Array{T}, rx::AbstractRange{Ti},
+               y::Array{T}, ry::AbstractRange{Ti}) where {T<:BlasFloat,Ti<:Integer}
     if length(rx) != length(ry)
         throw(DimensionMismatch("ranges of differing lengths"))
     end
@@ -562,10 +532,10 @@ function axpy!(alpha::Number, x::Array{T}, rx::Union{UnitRange{Ti},AbstractRange
     end
     GC.@preserve x y axpy!(
         length(rx),
-        convert(T, alpha),
-        pointer(x) + (first(rx) - 1)*sizeof(T),
+        T(alpha),
+        pointer(x, minimum(rx)),
         step(rx),
-        pointer(y) + (first(ry) - 1)*sizeof(T),
+        pointer(y, minimum(ry)),
         step(ry))
 
     return y
@@ -612,12 +582,14 @@ for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
     end
 end
 
-function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::Number, y::Union{DenseArray{T},AbstractVector{T}}) where T<:BlasFloat
+function axpby!(alpha::Number, x::AbstractArray{T}, beta::Number, y::AbstractArray{T}) where T<:BlasFloat
     require_one_based_indexing(x, y)
     if length(x) != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
-    return axpby!(length(x), convert(T, alpha), x, stride(x, 1), convert(T, beta), y, stride(y, 1))
+    GC.@preserve x y axpby!(length(x), T(alpha), vec_pointer_stride(x)..., T(beta),
+        vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))...)
+    y
 end
 
 ## iamax
@@ -633,7 +605,11 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::Union{AbstractVector,DenseArray}) = iamax(length(dx), dx, stride1(dx))
+function iamax(dx::AbstractArray)
+    p, st = vec_pointer_stride(dx)
+    st <= 0 && return BlasInt(0)
+    iamax(length(dx), p, st)
+end
 
 """
     iamax(n, dx, incx)
@@ -673,20 +649,16 @@ for (fname, elty) in ((:dgemv_,:Float64),
             end
             chkstride1(A)
             lda = stride(A,2)
-            sX = stride(X,1)
-            sY = stride(Y,1)
+            pX, sX = vec_pointer_stride(X, ArgumentError("input vector with 0 stride is not allowed"))
+            pY, sY = vec_pointer_stride(Y, ArgumentError("dest vector with 0 stride is not allowed"))
+            pA = pointer(A)
             if lda < 0
-                colindex = lastindex(A, 2)
+                pA += (size(A, 2) - 1) * lda * sizeof($elty)
                 lda = -lda
                 trans == 'N' ? (sX = -sX) : (sY = -sY)
-            else
-                colindex = firstindex(A, 2)
             end
             lda >= size(A,1) || size(A,2) <= 1 || error("when `size(A,2) > 1`, `abs(stride(A,2))` must be at least `size(A,1)`")
             lda = max(1, size(A,1), lda)
-            pA = pointer(A, Base._sub2ind(A, 1, colindex))
-            pX = pointer(X, stride(X,1) > 0 ? firstindex(X) : lastindex(X))
-            pY = pointer(Y, stride(Y,1) > 0 ? firstindex(Y) : lastindex(Y))
             GC.@preserve A X Y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
@@ -767,14 +739,16 @@ for (fname, elty) in ((:dgbmv_,:Float64),
                        y::AbstractVector{$elty})
             require_one_based_indexing(A, x, y)
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Clong),
                  trans, m, size(A,2), kl,
                  ku, alpha, A, max(1,stride(A,2)),
-                 x, stride(x,1), beta, y, stride(y,1), 1)
+                 px, stx, beta, py, sty, 1)
             y
         end
         function gbmv(trans::AbstractChar, m::Integer, kl::Integer, ku::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -828,13 +802,15 @@ for (fname, elty, lib) in ((:dsymv_,:Float64,libblastrampoline),
                 throw(DimensionMismatch(lazy"A has size $(size(A)), and y has length $(length(y))"))
             end
             chkstride1(A)
-            ccall((@blasfunc($fname), $lib), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, n, alpha, A,
-                 max(1,stride(A,2)), x, stride(x,1), beta,
-                 y, stride(y,1), 1)
+                 max(1,stride(A,2)), px, stx, beta,
+                 py, sty, 1)
             y
         end
         function symv(uplo::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -891,15 +867,15 @@ for (fname, elty) in ((:zhemv_,:ComplexF64),
             end
             chkstride1(A)
             lda = max(1, stride(A, 2))
-            incx = stride(x, 1)
-            incy = stride(y, 1)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Clong),
                 uplo, n, α, A,
-                lda, x, incx, β,
-                y, incy, 1)
+                lda, px, stx, β,
+                py, sty, 1)
             y
         end
         function hemv(uplo::AbstractChar, α::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -977,19 +953,21 @@ for (fname, elty) in ((:zhpmv_, :ComplexF64),
 end
 
 function hpmv!(uplo::AbstractChar,
-               α::Number, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
-               β::Number, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasComplex}
-    chkuplo(uplo)
+               α::Number, AP::AbstractArray{T}, x::AbstractArray{T},
+               β::Number, y::AbstractArray{T}) where {T <: BlasComplex}
     require_one_based_indexing(AP, x, y)
     N = length(x)
     if N != length(y)
-        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(N), but y has length $(length(y))"))
     end
     if 2*length(AP) < N*(N + 1)
-        throw(DimensionMismatch("Packed Hermitian matrix A has size smaller than length(x) =  $(N)."))
+        throw(DimensionMismatch(lazy"Packed hermitian matrix A has size smaller than length(x) = $(N)."))
     end
     chkstride1(AP)
-    return hpmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
+    px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+    py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+    GC.@preserve x y hpmv!(uplo, N, T(α), AP, px, stx, T(β), py, sty)
+    y
 end
 
 """
@@ -1031,13 +1009,15 @@ for (fname, elty) in ((:dsbmv_,:Float64),
             chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, size(A,2), k, alpha,
-                 A, max(1,stride(A,2)), x, stride(x,1),
-                 beta, y, stride(y,1), 1)
+                 A, max(1,stride(A,2)), px, stx,
+                 beta, py, sty, 1)
             y
         end
         function sbmv(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1130,19 +1110,21 @@ for (fname, elty) in ((:dspmv_, :Float64),
 end
 
 function spmv!(uplo::AbstractChar,
-               α::Real, AP::Union{DenseArray{T}, AbstractVector{T}}, x::Union{DenseArray{T}, AbstractVector{T}},
-               β::Real, y::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
-    chkuplo(uplo)
+               α::Real, AP::AbstractArray{T}, x::AbstractArray{T},
+               β::Real, y::AbstractArray{T}) where {T <: BlasReal}
     require_one_based_indexing(AP, x, y)
     N = length(x)
     if N != length(y)
-        throw(DimensionMismatch("x has length $(N), but y has length $(length(y))"))
+        throw(DimensionMismatch(lazy"x has length $(N), but y has length $(length(y))"))
     end
     if 2*length(AP) < N*(N + 1)
-        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+        throw(DimensionMismatch(lazy"Packed symmetric matrix A has size smaller than length(x) = $(N)."))
     end
     chkstride1(AP)
-    return spmv!(uplo, N, convert(T, α), AP, x, stride(x, 1), convert(T, β), y, stride(y, 1))
+    px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+    py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+    GC.@preserve x y spmv!(uplo, N, T(α), AP, px, stx, T(β), py, sty)
+    y
 end
 
 """
@@ -1201,16 +1183,17 @@ for (fname, elty) in ((:dspr_, :Float64),
 end
 
 function spr!(uplo::AbstractChar,
-              α::Real, x::Union{DenseArray{T}, AbstractVector{T}},
-              AP::Union{DenseArray{T}, AbstractVector{T}}) where {T <: BlasReal}
+              α::Real, x::AbstractArray{T},
+              AP::AbstractArray{T}) where {T <: BlasReal}
     chkuplo(uplo)
     require_one_based_indexing(AP, x)
     N = length(x)
     if 2*length(AP) < N*(N + 1)
-        throw(DimensionMismatch("Packed symmetric matrix A has size smaller than length(x) = $(N)."))
+        throw(DimensionMismatch(lazy"Packed symmetric matrix A has size smaller than length(x) = $(N)."))
     end
     chkstride1(AP)
-    return spr!(uplo, N, convert(T, α), x, stride(x, 1), AP)
+    px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+    return GC.@preserve x spr!(uplo, N, T(α), px, stx , AP)
 end
 
 """
@@ -1251,13 +1234,15 @@ for (fname, elty) in ((:zhbmv_,:ComplexF64),
             chkuplo(uplo)
             require_one_based_indexing(A, x, y)
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("dest vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Clong),
                  uplo, size(A,2), k, alpha,
-                 A, max(1,stride(A,2)), x, stride(x,1),
-                 beta, y, stride(y,1), 1)
+                 A, max(1,stride(A,2)), px, stx,
+                 beta, py, sty, 1)
             y
         end
         function hbmv(uplo::AbstractChar, k::Integer, alpha::($elty), A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1312,12 +1297,13 @@ for (fname, elty) in ((:dtrmv_,:Float64),
                 throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Clong, Clong, Clong),
                  uplo, trans, diag, n,
-                 A, max(1,stride(A,2)), x, max(1,stride(x, 1)), 1, 1, 1)
+                 A, max(1,stride(A,2)), px, stx, 1, 1, 1)
             x
         end
         function trmv(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1368,12 +1354,13 @@ for (fname, elty) in ((:dtrsv_,:Float64),
                 throw(DimensionMismatch(lazy"size of A is $n != length(x) = $(length(x))"))
             end
             chkstride1(A)
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Clong, Clong, Clong),
                  uplo, trans, diag, n,
-                 A, max(1,stride(A,2)), x, stride(x, 1), 1, 1, 1)
+                 A, max(1,stride(A,2)), px, stx, 1, 1, 1)
             x
         end
         function trsv(uplo::AbstractChar, trans::AbstractChar, diag::AbstractChar, A::AbstractMatrix{$elty}, x::AbstractVector{$elty})
@@ -1402,13 +1389,13 @@ for (fname, elty) in ((:dger_,:Float64),
             if m != length(x) || n != length(y)
                 throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
             end
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                  Ref{BlasInt}),
-                 m, n, α, x,
-                 stride(x, 1), y, stride(y, 1), A,
-                 max(1,stride(A,2)))
+                 m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
             A
         end
     end
@@ -1436,11 +1423,11 @@ for (fname, elty, lib) in ((:dsyr_,:Float64,libblastrampoline),
             if length(x) != n
                 throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall((@blasfunc($fname), $lib), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x ccall((@blasfunc($fname), $lib), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
-                 uplo, n, α, x,
-                 stride(x, 1), A, max(1,stride(A, 2)))
+                 uplo, n, α, px, stx, A, max(1,stride(A, 2)))
             A
         end
     end
@@ -1467,11 +1454,11 @@ for (fname, elty, relty) in ((:zher_,:ComplexF64, :Float64),
             if length(x) != n
                 throw(DimensionMismatch(lazy"A has size ($n,$n), x has length $(length(x))"))
             end
-            ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x ccall((@blasfunc($fname), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
-                 uplo, n, α, x,
-                 stride(x, 1), A, max(1,stride(A,2)), 1)
+                 uplo, n, α, px, stx, A, max(1,stride(A,2)), 1)
             A
         end
     end
@@ -2085,8 +2072,8 @@ end
 
 end # module
 
-function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
-                 src::Array{T}, rsrc::Union{UnitRange{Ti},AbstractRange{Ti}}) where {T<:BlasFloat,Ti<:Integer}
+function copyto!(dest::Array{T}, rdest::AbstractRange{Ti},
+                 src::Array{T}, rsrc::AbstractRange{Ti}) where {T<:BlasFloat,Ti<:Integer}
     if minimum(rdest) < 1 || maximum(rdest) > length(dest)
         throw(ArgumentError(lazy"range out of bounds for dest, of length $(length(dest))"))
     end
@@ -2098,9 +2085,9 @@ function copyto!(dest::Array{T}, rdest::Union{UnitRange{Ti},AbstractRange{Ti}},
     end
     GC.@preserve src dest BLAS.blascopy!(
         length(rsrc),
-        pointer(src) + (first(rsrc) - 1) * sizeof(T),
+        pointer(src, minimum(rsrc)),
         step(rsrc),
-        pointer(dest) + (first(rdest) - 1) * sizeof(T),
+        pointer(dest, minimum(rdest)),
         step(rdest))
 
     return dest
