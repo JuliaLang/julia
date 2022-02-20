@@ -1952,7 +1952,11 @@ static void jl_init_function(Function *F)
     // upon entry to any function. This achieves compatibility
     // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
     // i686 Windows (which uses a 4-byte-aligned stack)
+#if JL_LLVM_VERSION >= 140000
+    AttrBuilder attr(F->getContext());
+#else
     AttrBuilder attr;
+#endif
     attr.addStackAlignmentAttr(16);
     F->addAttributes(AttributeList::FunctionIndex, attr);
 #endif
@@ -4908,7 +4912,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_cgval_t world_age = mark_julia_type(ctx,
                                       tbaa_decorate(ctx.tbaa().tbaa_gcframe,
-                                      ctx.builder.CreateAlignedLoad(ctx.world_age_field, Align(sizeof(size_t)))),
+                                      ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ctx.world_age_field, Align(sizeof(size_t)))),
                         false,
                         jl_long_type);
                     jl_cgval_t fptr(ctx.builder.getContext());
@@ -5311,7 +5315,11 @@ static Function* gen_cfun_wrapper(
         }
 
         // Add the new nest attribute
+#if JL_LLVM_VERSION >= 140000
+        AttrBuilder attrBuilder(M->getContext());
+#else
         AttrBuilder attrBuilder;
+#endif
         attrBuilder.addAttribute(Attribute::Nest);
         newAttributes.emplace_back(it, AttributeSet::get(M->getContext(), attrBuilder));
 
