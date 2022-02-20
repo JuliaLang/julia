@@ -544,7 +544,8 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
         timer_delete(timerprof);
         // Because SIGUSR1 is multipurpose, care must be taken for running = 0 to be set after the timer has fully stopped.
         // There may be a pending signal emitted from the timer so wait a few timer cycles
-        sleep_ms((nsecprof / GIGA) * 1000 * 3);
+        // sleep_ms((nsecprof / GIGA) * 1000 * 3);
+        sleep_ms(500);
         running = 0;
     }
 }
@@ -578,7 +579,8 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
         setitimer(ITIMER_PROF, &timerprof, NULL);
         // Because SIGUSR1 is multipurpose, care must be taken for running = 0 to be set after the timer has fully stopped.
         // There may be a pending signal emitted from the timer so wait a few timer cycles
-        sleep_ms((nsecprof / GIGA) * 1000 * 3);
+        // sleep_ms((nsecprof / GIGA) * 1000 * 3);
+        sleep_ms(500);
         running = 0;
     }
 }
