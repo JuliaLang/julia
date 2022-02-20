@@ -266,7 +266,7 @@ Base.step(r::ConstantRange) = 0
 
     for a in [rand(1:10000, 1000), rand(1:10000, 3000)]
         for alg in [InsertionSort, MergeSort, Base.Sort.RadixSort(MergeSort)]
-            alg === InsertionSort && legth(a) == 3000 && continue
+            alg === InsertionSort && length(a) == 3000 && continue
 
             b = sort(a, alg=alg)
             @test issorted(b)
