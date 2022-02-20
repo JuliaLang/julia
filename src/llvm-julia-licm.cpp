@@ -205,7 +205,12 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
         return AR.LI;
     };
     auto juliaLICM = JuliaLICM(GetDT, GetLI);
-    juliaLICM.runOnLoop(&L);
+    if (juliaLICM.runOnLoop(&L)) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<LoopAnalysis>();
+        preserved.preserve<DominatorTreeAnalysis>();
+        return preserved;
+    }
     return PreservedAnalyses::all();
 }
 
