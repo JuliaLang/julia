@@ -156,6 +156,8 @@ tests = [
         ".+\n" =>  "(. +)"
         ".+ =" =>  "(. +)"
         ".+)"  =>  "(. +)"
+        ".&"   =>  "(. &)"
+        # Standalone non-dotted operators
         "+)"   =>  "+"
         # Call with type parameters or non-unary prefix call
         "+{T}(x::T)"  =>  "(call (curly + T) (:: x T))"
