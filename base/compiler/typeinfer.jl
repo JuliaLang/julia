@@ -255,7 +255,6 @@ end
 
 struct InfResultInfo
     caller::InferenceResult
-    edges::Vector{Any}
     cached::Bool
 end
 
@@ -263,7 +262,6 @@ end
 function infresult_iterator(_::AbstractInterpreter, frames::Vector{InferenceState})
     results = InfResultInfo[ InfResultInfo(
         frames[i].result,
-        frames[i].stmt_edges[1]::Vector{Any},
         frames[i].cached )
         for i in 1:length(frames) ]
     empty!(frames) # discard `InferenceState` now
@@ -289,12 +287,12 @@ function optimize_results!(interp::AbstractInterpreter, results::Vector{InfResul
 end
 
 function cache_results!(interp::AbstractInterpreter, results::Vector{InfResultInfo})
-    for (; caller, edges, cached) in results
+    for (; caller, cached) in results
         valid_worlds = caller.valid_worlds
         if last(valid_worlds) >= get_world_counter()
             # if we aren't cached, we don't need this edge
             # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
+            store_backedges(caller)
         end
         if cached
             cache_result!(interp, caller)
@@ -457,18 +455,14 @@ end
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
-    s_edges = me.stmt_edges[1]
-    if s_edges === nothing
-        s_edges = me.stmt_edges[1] = []
-    end
+    result_edges = me.result.edges
     for edges in me.stmt_edges
         edges === nothing && continue
-        edges === s_edges && continue
-        append!(s_edges, edges)
+        append!(result_edges, edges)
         empty!(edges)
     end
     if me.src.edges !== nothing
-        append!(s_edges, me.src.edges::Vector)
+        append!(result_edges, me.src.edges::Vector)
         me.src.edges = nothing
     end
     # inspect whether our inference had a limited result accuracy,
@@ -517,10 +511,10 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
 end
 
 # record the backedges
-function store_backedges(frame::InferenceResult, edges::Vector{Any})
-    toplevel = !isa(frame.linfo.def, Method)
+function store_backedges(result::InferenceResult)
+    toplevel = !isa(result.linfo.def, Method)
     if !toplevel
-        store_backedges(frame.linfo, edges)
+        store_backedges(result.linfo, result.edges)
     end
     nothing
 end
