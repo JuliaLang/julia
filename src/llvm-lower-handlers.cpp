@@ -222,7 +222,9 @@ static bool lowerExcHandlers(Function &F) {
 
 PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
 {
-    lowerExcHandlers(F);
+    if (lowerExcHandlers(F)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 
