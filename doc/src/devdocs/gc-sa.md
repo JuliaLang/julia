@@ -12,7 +12,7 @@ You may also want to use the prebuilt binaries using the
 Alternatively (or if these do not suffice), try
 
 ```sh
-make -C deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+make -C src install-analysis-deps
 ```
 
 from Julia's toplevel directory.
