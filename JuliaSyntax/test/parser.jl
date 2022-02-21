@@ -34,6 +34,7 @@ tests = [
         "a;;;b;;" => "(toplevel a b)"
         """ "x" a ; "y" b """ =>
             """(toplevel (macrocall :(Core.var"@doc") "x" a) (macrocall :(Core.var"@doc") "y" b))"""
+        "x y"  =>  "x (error-t y)"
     ],
     JuliaSyntax.parse_eq => [
         # parse_assignment
@@ -140,10 +141,16 @@ tests = [
         "2(x)"       => "(call-i 2 * x)"
         "(2)(3)x"    => "(call-i 2 * 3 x)"
         "(x-1)y"     => "(call-i (call-i x - 1) * y)"
-        "0xenomorph" => "0x0e"  # ie, not juxtoposition
+        "x'y"        => "(call-i (' x) * y)"
         # errors
         "\"a\"\"b\"" => "(call-i \"a\" * (error-t) \"b\")"
         "\"a\"x"     => "(call-i \"a\" * (error-t) x)"
+        # Not juxtaposition - parse_juxtapose will consume only the first token.
+        "x.3"       =>  "x"
+        "sqrt(2)2"  =>  "(call sqrt 2)"
+        "x' y"      =>  "(' x)"
+        "x 'y"      =>  "x"
+        "0xenomorph" => "0x0e"
     ],
     JuliaSyntax.parse_unary => [
         "+2"       => "2"
@@ -461,6 +468,7 @@ tests = [
         "try x catch ; y end"   =>  "(try (block x) false (block y) false false)"
         "try x catch \n y end"  =>  "(try (block x) false (block y) false false)"
         "try x catch e y end"   =>  "(try (block x) e (block y) false false)"
+        "try x catch \$e y end" =>  "(try (block x) (\$ e) (block y) false false)"
         "try x finally y end"   =>  "(try (block x) false false false (block y))"
         # v1.8 only
         ((v=v"1.8",), "try catch ; else end") => "(try (block) false (block) (block) false)"
@@ -549,7 +557,8 @@ tests = [
         "(x \n\n for a in as)"  =>  "(generator x (= a as))"
     ],
     JuliaSyntax.parse_atom => [
-        ":foo" => "(quote foo)"
+        ":foo"   => "(quote foo)"
+        ": foo"  => "(quote (error-t) foo)"
         # Literal colons
         ":)"   => ":"
         ": end"   => ":"
@@ -744,6 +753,10 @@ broken_tests = [
         "@S[a b]"  => "(macrocall S (hcat a b))"
         "@S[a; b]" => "(macrocall S (vcat a b))"
         "@S[a; b ;; c; d]" => "(macrocall S (ncat-2 (nrow-1 a b) (nrow-1 c d)))"
+        # Bad character literals
+        "'\\xff'"  => "(error '\\xff')"
+        "'\\x80'"  => "(error '\\x80')"
+        "'ab'"     => "(error 'ab')"
     ]
     JuliaSyntax.parse_call => [
         # kw's in ref

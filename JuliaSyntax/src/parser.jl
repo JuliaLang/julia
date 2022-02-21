@@ -465,7 +465,8 @@ function parse_stmts(ps::ParseState)
         bump(ps)
     end
     if junk_mark != position(ps)
-        emit(ps, junk_mark, K"error",
+        # x y  ==>  x (error-t y)
+        emit(ps, junk_mark, K"error", TRIVIA_FLAG,
              error="extra tokens after end of expression")
     end
     if do_emit
@@ -1016,6 +1017,12 @@ end
 function is_juxtapose(ps, prev_k, t)
     k = kind(t)
 
+    # Not juxtaposition - parse_juxtapose will consume only the first token.
+    # x.3       ==>  x
+    # sqrt(2)2  ==>  (call sqrt 2)
+    # x' y      ==>  x
+    # x 'y      ==>  x
+
     return !t.had_whitespace                         &&
     (is_number(prev_k) ||
         (!is_number(k) &&  # disallow "x.3" and "sqrt(2)2"
@@ -1037,6 +1044,7 @@ end
 # 2(x)     ==>  (call-i 2 * x)
 # (2)(3)x  ==>  (call-i 2 * 3 x)
 # (x-1)y   ==>  (call-i (call-i x - 1) * y)
+# x'y      ==>  x
 #
 # flisp: parse-juxtapose
 function parse_juxtapose(ps::ParseState)
@@ -2152,7 +2160,8 @@ function parse_catch(ps::ParseState)
         # try x catch \n y end ==>  (try (block x) false (block y) false false)
         bump_invisible(ps, K"false")
     else
-        # try x catch e y end  ==>  (try (block x) e (block y) false false)
+        # try x catch e y end   ==>  (try (block x) e (block y) false false)
+        # try x catch $e y end  ==>  (try (block x) ($ e) (block y) false false)
         parse_identifier_or_interpolate(ps)
     end
     parse_block(ps)
@@ -3238,7 +3247,8 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     # todo: Reorder to put most likely tokens first?
     if leading_kind == K":"
         # symbol/expression quote
-        # :foo  =>  (quote foo)
+        # :foo  ==>  (quote foo)
+        # : foo  ==>  (quote (error-t) foo)
         t = peek_token(ps, 2)
         k = kind(t)
         if is_closing_token(ps, k) && (!is_keyword(k) || t.had_whitespace)
