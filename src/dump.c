@@ -2280,6 +2280,23 @@ static void jl_insert_method_instances(jl_array_t *list)
                     }
                 }
             }
+            // TODO: re-enable this once the 32-bit errors can be identified
+            /* // Additionally, if we have CodeInstance(s) and the running CodeInstance is world-limited, transfer it */
+            /* if (mi->cache && jl_array_uint8_ref(valids, i)) { */
+            /*     if (!milive->cache || milive->cache->max_world < ~(size_t)0) { */
+            /*         jl_code_instance_t *cilive = milive->cache, *ci; */
+            /*         milive->cache = mi->cache; */
+            /*         jl_gc_wb(milive, milive->cache); */
+            /*         ci = mi->cache; */
+            /*         ci->def = milive; */
+            /*         while (ci->next) { */
+            /*             ci = ci->next; */
+            /*             ci->def = milive; */
+            /*         } */
+            /*         ci->next = cilive; */
+            /*         jl_gc_wb(ci, ci->next); */
+            /*     } */
+            /* } */
         }
     }
 }
