@@ -407,9 +407,24 @@ end
 
 ## generic project & manifest API ##
 
-const project_names = ("JuliaProject.toml", "Project.toml")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
-const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
+const project_names = ["JuliaProject.toml", "Project.toml"]
+const default_manifest_names = ["JuliaManifest.toml", "Manifest.toml"]
+const preferences_names = ["JuliaLocalPreferences.toml", "LocalPreferences.toml"]
+
+function manifest_names()
+    env_var_name = "JULIA_MANIFEST_NAME"
+    custom_def = strip(get(ENV, env_var_name, ""))
+    if !isempty(custom_def)
+        man_name = expand_version_placeholders(custom_def)
+        if endswith(custom_def, ":")
+            return String[man_name, default_manifest_names...]
+        else
+            return String[man_name]
+        end
+    else
+        return default_manifest_names
+    end
+end
 
 # classify the LOAD_PATH entry to be one of:
 #  - `false`: nonexistant / nothing to see here
@@ -525,7 +540,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         end
     end
     if manifest_path === nothing
-        for mfst in manifest_names
+        for mfst in manifest_names()
             manifest_file = joinpath(dir, mfst)
             if isfile_casesensitive(manifest_file)
                 manifest_path = manifest_file

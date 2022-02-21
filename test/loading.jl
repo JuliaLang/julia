@@ -765,8 +765,27 @@ end
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
-    @test length(Base.manifest_names) == n
+    @test length(Base.default_manifest_names) == n
     @test length(Base.preferences_names) == n
+
+    withenv("JULIA_MANIFEST_NAME" => nothing) do
+        @test Base.manifest_names() == Base.default_manifest_names
+    end
+
+    @test Base.expand_version_placeholders("Manifest.toml") == "Manifest.toml"
+    @test Base.expand_version_placeholders("Manifest.#.toml") == "Manifest.$(VERSION.major).toml"
+    @test Base.expand_version_placeholders("Manifest.#.#.toml") == "Manifest.$(VERSION.major).$(VERSION.minor).toml"
+    @test Base.expand_version_placeholders("Manifest.#.#.#.toml") == "Manifest.$(VERSION.major).$(VERSION.minor).$(VERSION.patch).toml"
+    @test Base.expand_version_placeholders("Manifest_#.toml") == "Manifest_$(VERSION.major).toml"
+    @test Base.expand_version_placeholders("Manifest_v#.toml") == "Manifest_v$(VERSION.major).toml"
+    @test Base.expand_version_placeholders("Manifest.v#.toml") == "Manifest.v$(VERSION.major).toml"
+
+    withenv("JULIA_MANIFEST_NAME" => "Manifest.#.toml") do
+        @test Base.manifest_names() == ["Manifest.$(VERSION.major).toml"]
+    end
+    withenv("JULIA_MANIFEST_NAME" => "Manifest.#.toml:") do
+        @test Base.manifest_names() == ["Manifest.$(VERSION.major).toml", Base.default_manifest_names...]
+    end
 end
 
 @testset "Manifest formats" begin

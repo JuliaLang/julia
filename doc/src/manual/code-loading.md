@@ -65,6 +65,14 @@ Each kind of environment defines these three maps differently, as detailed in th
 
 A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred.
 
+A custom manifest filename may also be provided via the environment variable `JULIA_MANIFEST_NAME`. If the provided name ends with a `:` it will be tried first before the default manifest names, otherwise that name alone will be allowed. The provided name may also have placeholder `#` characters which will be auto-populated sequentially with the julia `VERSION` fields. This approach enables providing dedicated manifests for multiple julia versions, such as in a package testing setup where checked-in manifests may be needed.
+
+For instance:
+
+- `$ JULIA_MANIFEST_NAME=ManifestA.toml: julia` will first look for a manifest named `ManifestA.toml` then use the default options.
+- `$ JULIA_MANIFEST_NAME=ManifestA.toml julia` will only look for/create a manifest named `ManifestA.toml`
+- `$ JULIA_MANIFEST_NAME=Manifest.#.#.toml julia` in julia 1.8.0 will only look for/create a manifest named `Manifest.1.8.toml`
+
 The roots, graph and paths maps of a project environment are defined as follows:
 
 **The roots map** of the environment is determined by the contents of the project file, specifically, its top-level `name` and `uuid` entries and its `[deps]` section (all optional). Consider the following example project file for the hypothetical application, `App`, as described earlier:

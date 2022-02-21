@@ -244,6 +244,13 @@ end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 
+function expand_version_placeholders(str::String)
+    str = replace(str, '#' => VERSION.major, count=1)
+    str = replace(str, '#' => VERSION.minor, count=1)
+    str = replace(str, '#' => VERSION.patch, count=1)
+    return str
+end
+
 function load_path_expand(env::AbstractString)::Union{String, Nothing}
     # named environment?
     if startswith(env, '@')
@@ -252,9 +259,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@" && return active_project(false)
         env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
-        env = replace(env, '#' => VERSION.major, count=1)
-        env = replace(env, '#' => VERSION.minor, count=1)
-        env = replace(env, '#' => VERSION.patch, count=1)
+        env = expand_version_placeholders(env)
         name = env[2:end]
         # look for named env in each depot
         for depot in DEPOT_PATH
