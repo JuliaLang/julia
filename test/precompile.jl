@@ -852,7 +852,7 @@ precompile_test_harness("code caching") do dir
     world = Base.get_world_counter()
     m = only(methods(MA.use_stale))
     mi = m.specializations[1]
-    @test_broken hasvalid(mi, world)   # it should have been re-inferred by StaleC
+    @test hasvalid(mi, world)   # it was re-inferred by StaleC
     m = only(methods(MA.build_stale))
     mis = filter(!isnothing, collect(m.specializations))
     @test length(mis) == 2
