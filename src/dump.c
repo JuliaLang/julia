@@ -1719,7 +1719,12 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
             // (which replaces pointers to `m` with ones to the "live" method).
             // Put them in separate storage so we can find them later.
             assert(ptrhash_get(&queued_method_roots, m) == HT_NOTFOUND);
-            ptrhash_put(&queued_method_roots, m, jl_svec2((void*)(uintptr_t)key, newroots));  // GC is disabled
+            // In storing the key, on 32-bit platforms we need two slots. Might as well do this for all platforms.
+            jl_svec_t *qmrval = jl_alloc_svec_uninit(3);    // GC is disabled
+            jl_svec_data(qmrval)[0] = (jl_value_t*)(uintptr_t)(key & ((((uint64_t)1) << 32) - 1));          // lo bits
+            jl_svec_data(qmrval)[1] = (jl_value_t*)(uintptr_t)((key >> 32) & ((((uint64_t)1) << 32) - 1));  // hi bits
+            jl_svec_data(qmrval)[2] = (jl_value_t*)newroots;
+            ptrhash_put(&queued_method_roots, m, qmrval);
         }
         return (jl_value_t*)m;
     }
@@ -2993,8 +2998,8 @@ static void jl_copy_roots(void)
         m = (jl_method_t*)ptrhash_get(&uniquing_table, m);
         jl_svec_t *keyroots = (jl_svec_t*)queued_method_roots.table[i+1];
         if (keyroots != HT_NOTFOUND) {
-            uint64_t key = (uint64_t)(uintptr_t)jl_svec_ref(keyroots, 0);
-            jl_array_t *roots = (jl_array_t*)jl_svec_ref(keyroots, 1);
+            uint64_t key = (uint64_t)(uintptr_t)jl_svec_ref(keyroots, 0) | ((uint64_t)(uintptr_t)jl_svec_ref(keyroots, 1) << 32);
+            jl_array_t *roots = (jl_array_t*)jl_svec_ref(keyroots, 2);
             assert(jl_is_array(roots));
             l = jl_array_len(roots);
             for (j = 0; j < l; j++) {
