@@ -1961,6 +1961,8 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     return NULL;
 }
 
+jl_mutex_t precomp_statement_out_lock;
+
 static void record_precompile_statement(jl_method_instance_t *mi)
 {
     static ios_t f_precompile;
@@ -1971,6 +1973,8 @@ static void record_precompile_statement(jl_method_instance_t *mi)
     if (!jl_is_method(def))
         return;
 
+    if (jl_n_threads > 1)
+        JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
         const char *t = jl_options.trace_compile;
         if (!strncmp(t, "stderr", 6)) {
@@ -1989,6 +1993,8 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
+    if (jl_n_threads > 1)
+        JL_UNLOCK(&precomp_statement_out_lock);
 }
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
