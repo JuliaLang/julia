@@ -44,11 +44,15 @@ public:
             return DstTy;
 
         DstTy = SrcTy;
-        if (auto Ty = dyn_cast<PointerType>(SrcTy))
-            DstTy = PointerType::get(
-                    remapType(Ty->getElementType()),
-                    ASRemapper(Ty->getAddressSpace()));
-        else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
+        if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
+            if (SrcTy->isOpaquePointerTy()) {
+                DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
+            } else {
+                DstTy = PointerType::get(
+                        remapType(Ty->getElementType()),
+                        ASRemapper(Ty->getAddressSpace()));
+            }
+        } else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
             SmallVector<Type *, 4> Params;
             for (unsigned Index = 0; Index < Ty->getNumParams(); ++Index)
                 Params.push_back(remapType(Ty->getParamType(Index)));

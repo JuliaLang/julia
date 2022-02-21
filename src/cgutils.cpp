@@ -24,7 +24,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (cast<PointerType>(T)->getAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
-    Type *NewT = PointerType::get(cast<PointerType>(T)->getElementType(), AddressSpace::Derived);
+    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -34,7 +34,7 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (cast<PointerType>(T)->getAddressSpace() != AddressSpace::Tracked)
         return V;
-    Type *NewT = PointerType::get(cast<PointerType>(T)->getElementType(), AddressSpace::Derived);
+    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -418,9 +418,7 @@ static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
-        Type *jl_value_addr =
-                PointerType::get(cast<PointerType>(jl_value)->getElementType(),
-                                 v->getType()->getPointerAddressSpace());
+        Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
         return ctx.builder.CreateBitCast(v, jl_value_addr);
     }
     else {

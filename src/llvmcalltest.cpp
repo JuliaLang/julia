@@ -31,7 +31,7 @@ DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
     PointerType *AnyTy = PointerType::get(StructType::get(Ctx), 0);
     // FIXME: get AnyTy via jl_type_to_llvm(Ctx, jl_AnyTy)
 
-    Type *TrackedTy = PointerType::get(AnyTy->getElementType(), AddressSpace::Tracked);
+    Type *TrackedTy = PointerType::get(StructType::get(Ctx), AddressSpace::Tracked);
     Module *M = new llvm::Module("shadow", Ctx);
     Function *F = Function::Create(
         FunctionType::get(
