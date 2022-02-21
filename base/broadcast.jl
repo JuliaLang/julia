@@ -244,7 +244,7 @@ Base.IndexStyle(::Type{<:Broadcasted{<:Any}}) = IndexCartesian()
 
 Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc))::LinearIndices{1}
 
-Base.ndims(::Broadcasted{<:Any,<:NTuple{N,Any}}) where {N} = N
+Base.ndims(bc::Broadcasted) = ndims(typeof(bc))
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
@@ -267,8 +267,7 @@ function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) wh
     N isa Integer && return N
     _maxndims(fieldtype(BC, 2))
 end
-_maxndims(T) = mapfoldl(_ndims, max, _fieldtypes(T))
-_fieldtypes(T) = ntuple(Base.Fix1(fieldtype,T), Val(fieldcount(T))) # Base.fieldtypes is not stable.
+Base.@pure _maxndims(T) = mapfoldl(_ndims, max, fieldtypes(T))
 _ndims(x) = ndims(x)
 _ndims(::Type{<:Tuple}) = 1
 
