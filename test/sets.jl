@@ -147,6 +147,9 @@ end
             @test s === copy!(s, BitSet(a)) == S(a)
         end
     end
+    s = Set([1, 2])
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "sizehint, empty" begin

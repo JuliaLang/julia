@@ -3,7 +3,10 @@
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
 sizehint!(s::AbstractSet, n) = nothing
 
-copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
+function copy!(dst::AbstractSet, src::AbstractSet)
+    dst === src && return dst
+    union!(empty!(dst), src)
+end
 
 ## set operations (union, intersection, symmetric difference)
 
