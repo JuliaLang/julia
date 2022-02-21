@@ -304,13 +304,13 @@ function is_both_unary_and_binary(t)
 end
 
 # operators handled by parse_unary at the start of an expression
-function is_initial_operator(k)
-    k = kind(k)
+function is_initial_operator(t)
+    k = kind(t)
     # TODO(jb): `?` should probably not be listed here except for the syntax hack in osutils.jl
     is_operator(k)             &&
     !is_word_operator(k)       &&
     !(k in KSet`: ' .' ?`)     &&
-    !is_syntactic_unary_op(k)  &&
+    !(is_syntactic_unary_op(k) && !is_dotted(t)) &&
     !is_syntactic_operator(k)
 end
 
@@ -1078,8 +1078,9 @@ end
 function parse_unary(ps::ParseState)
     mark = position(ps)
     bump_trivia(ps)
-    k = peek(ps)
-    if !is_initial_operator(k)
+    t = peek_token(ps)
+    k = kind(t)
+    if !is_initial_operator(t)
         # :T      ==>  (quote T)
         # in::T   ==>  (:: in T)
         # isa::T  ==>  (:: isa T)
@@ -1128,16 +1129,17 @@ function parse_unary_call(ps::ParseState)
     k2 = kind(t2)
     if is_closing_token(ps, k2) || k2 in KSet`NewlineWs =`
         if is_dotted(op_t)
-            # standalone dotted operators are parsed as (|.| op)
+            # Standalone dotted operators are parsed as (|.| op)
             # .+    ==>  (. +)
             # .+\n  ==>  (. +)
             # .+ =  ==>  (. +)
             # .+)   ==>  (. +)
+            # .&    ==>  (. &)
             bump_trivia(ps)
             bump_split(ps, (1, K".", TRIVIA_FLAG), (0, op_k, EMPTY_FLAGS))
             emit(ps, mark, K".")
         else
-            # return operator by itself, as in
+            # Standalone non-dotted operators
             # +)  ==>  +
             bump(ps)
         end
