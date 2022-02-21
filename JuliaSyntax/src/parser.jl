@@ -501,6 +501,8 @@ function parse_docstring(ps::ParseState, down=parse_eq)
         else
             # "doc" foo    ==> (macrocall core_@doc "doc" foo)
             # "doc $x" foo ==> (macrocall core_@doc (string "doc " x) foo)
+            # Allow docstrings with embedded trailing whitespace trivia
+            # """\n doc\n """ foo ==> (macrocall core_@doc "doc\n" foo)
         end
         if is_doc
             reset_node!(ps, atdoc_mark, kind=K"core_@doc")
