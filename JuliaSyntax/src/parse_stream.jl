@@ -341,7 +341,7 @@ function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
     if skip_trivia
         for i = length(stream.ranges):-1:1
             r = stream.ranges[i]
-            if !is_trivia(head(r))
+            if !is_trivia(head(r)) && kind(r) != K"TOMBSTONE"
                 return _peek_behind_fields(stream.ranges, i)
             end
         end

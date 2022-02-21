@@ -236,7 +236,7 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
             println("------------------------------------")
             dump(f_ex)
         end
-        return (ex, f_ex)
+        # return (ex, f_ex)
         # return (code, stream, t, s, ex)
     end
     nothing

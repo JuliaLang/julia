@@ -721,6 +721,8 @@ tests = [
         """ "doc" \n foo      """ => """(macrocall :(Core.var"@doc") "doc" foo)"""
         """ "doc" foo         """ => """(macrocall :(Core.var"@doc") "doc" foo)"""
         """ "doc \$x" foo     """ => """(macrocall :(Core.var"@doc") (string "doc " x) foo)"""
+        # Allow docstrings with embedded trailing whitespace trivia
+        "\"\"\"\n doc\n \"\"\" foo"  => """(macrocall :(Core.var"@doc") "doc\\n" foo)"""
     ],
 ]
 
