@@ -130,4 +130,5 @@ IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
 
 IteratorEltype(::Type{Any}) = EltypeUnknown()
 
+isempty(g::Generator) = isempty(g.iter)
 isdone(g::Generator, state...) = isdone(g.iter, state...)
