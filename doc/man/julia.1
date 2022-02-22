@@ -89,7 +89,7 @@ environment variable is unset, load `~/.julia/config/startup.jl`
 Enable or disable Julia's default signal handlers
 
 .TP
---sysimage-native-code={yes|no}
+--sysimage-native-code={yes*|no}
 Use native code from system image if available
 
 .TP
@@ -196,7 +196,7 @@ Count executions of source lines (omitting setting is equivalent to `user`)
  Append coverage information to the LCOV tracefile (filename supports format tokens)
 
 .TP
---track-allocation[={none|user|all}]
+--track-allocation[={none*|user|all}]
 Count bytes allocated by each source line (omitting setting is equivalent to `user`)
 
 .TP
