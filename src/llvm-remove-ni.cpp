@@ -38,7 +38,9 @@ static bool removeNI(Module &M)
 
 PreservedAnalyses RemoveNI::run(Module &M, ModuleAnalysisManager &AM)
 {
-    removeNI(M);
+    if (removeNI(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

@@ -356,13 +356,17 @@ bool FinalLowerGCLegacy::doFinalization(Module &M) {
 PreservedAnalyses FinalLowerGCPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     auto finalLowerGC = FinalLowerGC();
-    finalLowerGC.doInitialization(M);
+    bool modified = false;
+    modified |= finalLowerGC.doInitialization(M);
     for (auto &F : M.functions()) {
         if (F.isDeclaration())
             continue;
-        finalLowerGC.runOnFunction(F);
+        modified |= finalLowerGC.runOnFunction(F);
     }
-    finalLowerGC.doFinalization(M);
+    modified |= finalLowerGC.doFinalization(M);
+    if (modified) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 
