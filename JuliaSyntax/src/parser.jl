@@ -2123,7 +2123,7 @@ function parse_try(ps)
             emit(ps, else_mark, K"error", error="Expected `catch` before `else`")
         end
         #v1.7: try catch ; else end ==> (try (block) false (block) (error (block)) false)
-        min_supported_version(v"1.8", ps, else_mark, "`else` after `try`")
+        min_supported_version(v"1.8", ps, else_mark, "`else` after `catch`")
     else
         bump_invisible(ps, K"false")
     end
