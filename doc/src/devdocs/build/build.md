@@ -139,7 +139,7 @@ Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
 
-## Required Build Tools and External Libraries
+## [Required Build Tools and External Libraries](@id build-tools)
 
 Building Julia requires that the following software be installed:
 
@@ -282,3 +282,24 @@ LLVM_ASSERTIONS=1
 ```
 
 Please note that assert builds of Julia will be slower than regular (non-assert) builds.
+
+## Building 32-bit Julia on a 64-bit machine
+
+Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine.
+At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
+
+```sh
+$ docker pull i386/ubuntu
+$ docker run --platform i386 -i -t i386/ubuntu /bin/bash
+```
+
+At this point you should be in a 32-bit machine console (note that `uname` reports the host architecture, so will still say 64-bit, but this will not affect the Julia build). You can add packages and compile code; when you `exit`, all the changes will be lost, so be sure to finish your analysis in a single session or set up a copy/pastable script you can use to set up your environment.
+
+From this point, you should
+
+```sh
+# apt update
+```
+(Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
+
+Then add all the [build dependencies](@ref build-tools), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
