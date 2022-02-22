@@ -194,7 +194,7 @@ fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 Return a boolean indicating whether `T` has `name` as one of its own fields.
 
-See also [`fieldnames`](@ref), [`fieldcount`](@ref), [`hasproperty`](@ref)
+See also [`fieldnames`](@ref), [`fieldcount`](@ref), [`hasproperty`](@ref).
 
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
