@@ -45,9 +45,10 @@ public:
 
         DstTy = SrcTy;
         if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
-            if (SrcTy->isOpaquePointerTy()) {
+            if (Ty->isOpaque()) {
                 DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
             } else {
+                //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
                         remapType(Ty->getElementType()),
                         ASRemapper(Ty->getAddressSpace()));
@@ -156,10 +157,12 @@ public:
                     // GEP const exprs need to know the type of the source.
                     // asserts remapType(typeof arg0) == typeof mapValue(arg0).
                     Constant *Src = CE->getOperand(0);
-                    Type *SrcTy = remapType(
-                            cast<PointerType>(Src->getType()->getScalarType())
-                                    ->getElementType());
-                    DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
+                    auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
+                    //Remove once opaque pointer transition is complete
+                    if (!ptrty->isOpaque()) {
+                        Type *SrcTy = remapType(ptrty->getElementType());
+                        DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
+                    }
                 }
                 else
                     DstV = CE->getWithOperands(Ops, Ty);
