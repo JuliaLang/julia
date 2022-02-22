@@ -111,7 +111,7 @@ end
     unique(itr)
 
 Return an array containing only the unique elements of collection `itr`,
-as determined by [`isequal`](@ref), in the order that the first of each
+as determined by both [`isequal`](@ref) and [`hash`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
@@ -129,6 +129,38 @@ julia> unique(Real[1, 1.0, 2])
 2-element Vector{Real}:
  1
  2
+```
+
+The fallback `hash` implementation for custom structure of `hash` uses [`objectid`](@ref).
+Thus if a heap-allocated object has [`==`](@ref) or [`isequal`](@ref) defined, it should
+also define its own `hash` implementation to make `unique` and [`unique!`](@ref) work as
+expected. See also [`Set`](@ref).
+
+```julia-repl
+julia> struct MyType
+           a::Int
+           b::Vector # heap-allocated object because `Vector` is not a concrete type
+       end
+
+julia> Base.:(==)(x::MyType, y::MyType) = x.a == y.a && x.b == y.b
+
+julia> x = MyType(1, [2, 3])
+
+julia> y = MyType(1, [2, 3])
+
+julia> x == y, isequal(x, y), objectid(x) == objectid(y), hash(x) == hash(y)
+(true, true, false, false)
+
+julia> unique([x, y]) # unique doesn't work correctly because hash(x) != hash(y)
+2-element Vector{MyType}:
+ MyType(1, [2, 3])
+ MyType(1, [2, 3])
+
+julia> Base.hash(x::MyType) = hash(x.b, hash(x.a)) # provide custom hash implementation
+
+julia> unique([x, y])
+1-element Vector{MyType}:
+ MyType(1, [2, 3])
 ```
 """
 function unique(itr)
@@ -337,7 +369,7 @@ end
 """
     unique!(A::AbstractVector)
 
-Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
+Remove duplicate items as determined by both [`isequal`](@ref) and [`hash`](@ref), then return the modified `A`.
 `unique!` will return the elements of `A` in the order that they occur. If you do not care
 about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
 more efficient as long as the elements of `A` can be sorted.
