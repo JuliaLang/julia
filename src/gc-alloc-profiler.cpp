@@ -49,15 +49,24 @@ jl_combined_results g_combined_results; // Will live forever.
 // === stack stuff ===
 
 jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
-    // A single large buffer to record backtraces onto
-    static jl_bt_element_t static_bt_data[JL_MAX_BT_SIZE];
+    // We first record the backtrace onto a MAX-sized buffer, so that we don't have to
+    // allocate the buffer until we know the size. To ensure thread-safety, we use a
+    // per-thread backtrace buffer.
+    jl_ptls_t ptls = jl_current_task->ptls;
+    jl_bt_element_t *shared_bt_data_buffer = ptls->profiling_bt_buffer;
+    if (shared_bt_data_buffer == NULL) {
+        size_t size = sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1);
+        shared_bt_data_buffer = (jl_bt_element_t*) malloc_s(size);
+        ptls->profiling_bt_buffer = shared_bt_data_buffer;
+    }
 
-    size_t bt_size = rec_backtrace(static_bt_data, JL_MAX_BT_SIZE, 2);
+    size_t bt_size = rec_backtrace(shared_bt_data_buffer, JL_MAX_BT_SIZE, 2);
 
     // Then we copy only the needed bytes out of the buffer into our profile.
     size_t bt_bytes = bt_size * sizeof(jl_bt_element_t);
-    jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(bt_bytes);
-    memcpy(bt_data, static_bt_data, bt_bytes);
+    jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc_s(bt_bytes);
+    memcpy(bt_data, shared_bt_data_buffer, bt_bytes);
+
 
     return jl_raw_backtrace_t{
         bt_data,
