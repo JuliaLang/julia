@@ -204,6 +204,7 @@ See also [`fieldnames`](@ref), [`fieldcount`](@ref), [`hasproperty`](@ref)
 julia> struct Foo
             bar::Int
        end
+
 julia> hasfield(Foo, :bar)
 true
 
