@@ -7,6 +7,7 @@
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -34,13 +35,12 @@ typedef Instruction TerminatorInst;
 
 namespace {
 
-struct LowerPTLS: public ModulePass {
-    static char ID;
+struct LowerPTLS {
     LowerPTLS(bool imaging_mode=false)
-        : ModulePass(ID),
-          imaging_mode(imaging_mode)
+        : imaging_mode(imaging_mode)
     {}
 
+    bool runOnModule(Module &M);
 private:
     const bool imaging_mode;
     Module *M;
@@ -62,7 +62,6 @@ private:
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
     void fix_pgcstack_use(CallInst *pgcstack);
-    bool runOnModule(Module &M) override;
 };
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
@@ -291,17 +290,37 @@ bool LowerPTLS::runOnModule(Module &_M)
     return true;
 }
 
-char LowerPTLS::ID = 0;
+struct LowerPTLSLegacy: public ModulePass {
+    static char ID;
+    LowerPTLSLegacy(bool imaging_mode=false)
+        : ModulePass(ID),
+          imaging_mode(imaging_mode)
+    {}
 
-static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
+    bool imaging_mode;
+    bool runOnModule(Module &M) override {
+        LowerPTLS lower(imaging_mode);
+        return lower.runOnModule(M);
+    }
+};
+
+char LowerPTLSLegacy::ID = 0;
+
+static RegisterPass<LowerPTLSLegacy> X("LowerPTLS", "LowerPTLS Pass",
                                  false /* Only looks at CFG */,
                                  false /* Analysis Pass */);
 
 } // anonymous namespace
 
+PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
+    LowerPTLS lower(imaging_mode);
+    lower.runOnModule(M);
+    return PreservedAnalyses::all();
+}
+
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
-    return new LowerPTLS(imaging_mode);
+    return new LowerPTLSLegacy(imaging_mode);
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)

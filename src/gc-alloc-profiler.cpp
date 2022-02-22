@@ -20,7 +20,7 @@ struct jl_raw_alloc_t {
     jl_datatype_t *type_address;
     jl_raw_backtrace_t backtrace;
     size_t size;
-    jl_task_t *task;
+    void *task;
     uint64_t timestamp;
 };
 
@@ -71,7 +71,7 @@ extern "C" {  // Needed since these functions doesn't take any arguments.
 
 JL_DLLEXPORT void jl_start_alloc_profile(double sample_rate) {
     // We only need to do this once, the first time this is called.
-    while (g_alloc_profile.per_thread_profiles.size() < jl_n_threads) {
+    while (g_alloc_profile.per_thread_profiles.size() < (size_t)jl_n_threads) {
         g_alloc_profile.per_thread_profiles.push_back(jl_per_thread_alloc_profile_t{});
     }
 
@@ -135,7 +135,7 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
         type,
         get_raw_backtrace(),
         size,
-        jl_current_task,
+        (void *)jl_current_task,
         cycleclock()
     });
 }

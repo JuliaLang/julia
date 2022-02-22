@@ -1251,6 +1251,8 @@ JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
 JLIBLDFLAGS :=
 endif
+# Linker doesn't detect automatically that Julia doesn't need executable stack
+JLIBLDFLAGS += -Wl,-z,noexecstack
 else ifneq ($(OS), Darwin)
 JLIBLDFLAGS :=
 endif

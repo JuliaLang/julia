@@ -297,6 +297,15 @@ end
     end
 end
 
+@testset "matrix x vector with negative lda or 0 stride" for T in (Float32, Float64)
+    for TA in (T, complex(T)), TB in (T, complex(T))
+        A = view(randn(TA, 10, 10), 1:10, 10:-1:1) # negative lda
+        v = view([randn(TB)], 1 .+ 0(1:10)) # 0 stride
+        Ad, vd = copy(A), copy(v)
+        @test Ad * vd ≈ A * vd ≈ Ad * v ≈ A * v
+    end
+end
+
 @testset "issue #15286" begin
     A = reshape(map(Float64, 1:20), 5, 4)
     C = zeros(8, 8)

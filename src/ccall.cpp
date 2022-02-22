@@ -1020,18 +1020,22 @@ std::string generate_func_sig(const char *fname)
     else
         abi.reset(new DefaultAbiState());
     sret = 0;
-
+    LLVMContext &LLVMCtx = lrt->getContext();
     if (type_is_ghost(lrt)) {
-        prt = lrt = getVoidTy(lrt->getContext());
-        abi->use_sret(jl_nothing_type, lrt->getContext());
+        prt = lrt = getVoidTy(LLVMCtx);
+        abi->use_sret(jl_nothing_type, LLVMCtx);
     }
     else {
         if (retboxed || jl_is_cpointer_type(rt) || lrt->isPointerTy()) {
             prt = lrt; // passed as pointer
-            abi->use_sret(jl_voidpointer_type, lrt->getContext());
+            abi->use_sret(jl_voidpointer_type, LLVMCtx);
         }
-        else if (abi->use_sret((jl_datatype_t*)rt, lrt->getContext())) {
-            AttrBuilder retattrs = AttrBuilder();
+        else if (abi->use_sret((jl_datatype_t*)rt, LLVMCtx)) {
+#if JL_LLVM_VERSION >= 140000
+            AttrBuilder retattrs(LLVMCtx);
+#else
+            AttrBuilder retattrs;
+#endif
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
             retattrs.addStructRetAttr(lrt);
 #endif
@@ -1042,24 +1046,28 @@ std::string generate_func_sig(const char *fname)
             prt = lrt;
         }
         else {
-            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, lrt->getContext());
+            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, LLVMCtx);
             if (prt == NULL)
                 prt = lrt;
         }
     }
 
     for (size_t i = 0; i < nccallargs; ++i) {
+#if JL_LLVM_VERSION >= 140000
+        AttrBuilder ab(LLVMCtx);
+#else
         AttrBuilder ab;
+#endif
         jl_value_t *tti = jl_svecref(at, i);
         Type *t = NULL;
         bool isboxed;
         if (jl_is_abstract_ref_type(tti)) {
             tti = (jl_value_t*)jl_voidpointer_type;
-            t = getInt8PtrTy(lrt->getContext());
+            t = getInt8PtrTy(LLVMCtx);
             isboxed = false;
         }
         else if (llvmcall && jl_is_llvmpointer_type(tti)) {
-            t = bitstype_to_llvm(tti, lrt->getContext(), true);
+            t = bitstype_to_llvm(tti, LLVMCtx, true);
             tti = (jl_value_t*)jl_voidpointer_type;
             isboxed = false;
         }
@@ -1076,8 +1084,8 @@ std::string generate_func_sig(const char *fname)
                 }
             }
 
-            t = _julia_struct_to_llvm(ctx, lrt->getContext(), tti, &isboxed, llvmcall);
-            if (t == getVoidTy(lrt->getContext())) {
+            t = _julia_struct_to_llvm(ctx, LLVMCtx, tti, &isboxed, llvmcall);
+            if (t == getVoidTy(LLVMCtx)) {
                 return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
             }
         }
@@ -1088,7 +1096,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, lrt->getContext(), t);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
@@ -1097,7 +1105,7 @@ std::string generate_func_sig(const char *fname)
             pat = PointerType::get(t, AddressSpace::Derived);
         }
         else {
-            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, lrt->getContext());
+            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, LLVMCtx);
             if (pat == NULL)
                 pat = t;
         }
@@ -1120,20 +1128,24 @@ std::string generate_func_sig(const char *fname)
         fargt.push_back(t);
         fargt_isboxed.push_back(isboxed);
         fargt_sig.push_back(pat);
-        paramattrs.push_back(AttributeSet::get(lrt->getContext(), ab));
+#if JL_LLVM_VERSION >= 140000
+        paramattrs.push_back(AttrBuilder(LLVMCtx, AttributeSet::get(LLVMCtx, ab)));
+#else
+        paramattrs.push_back(AttributeSet::get(LLVMCtx, ab));
+#endif
     }
 
     for (size_t i = 0; i < nccallargs + sret; ++i) {
         const auto &as = paramattrs.at(i);
         if (!as.hasAttributes())
             continue;
-        attributes = addAttributesAtIndex(attributes, lrt->getContext(), i + 1, as);
+        attributes = addAttributesAtIndex(attributes, LLVMCtx, i + 1, as);
     }
     // If return value is boxed it must be non-null.
     if (retboxed)
-        attributes = addRetAttribute(attributes, lrt->getContext(), Attribute::NonNull);
+        attributes = addRetAttribute(attributes, LLVMCtx, Attribute::NonNull);
     if (rt == jl_bottom_type) {
-        attributes = addFnAttribute(attributes, lrt->getContext(), Attribute::NoReturn);
+        attributes = addFnAttribute(attributes, LLVMCtx, Attribute::NoReturn);
     }
     return "";
 }

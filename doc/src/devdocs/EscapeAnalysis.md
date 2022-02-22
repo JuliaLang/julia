@@ -1,3 +1,5 @@
+# `EscapeAnalysis`
+
 `Core.Compiler.EscapeAnalysis` is a compiler utility module that aims to analyze
 escape information of [Julia's SSA-form IR](@ref Julia-SSA-form-IR) a.k.a. `IRCode`.
 
@@ -18,8 +20,7 @@ This escape analysis aims to:
 You can give a try to the escape analysis by loading the `EAUtils.jl` utility script that
 define the convenience entries `code_escapes` and `@code_escapes` for testing and debugging purposes:
 ```@repl EAUtils
-include(normpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "EAUtils.jl"))
-using EAUtils
+include(normpath(Sys.BINDIR, "..", "share", "julia", "test", "compiler", "EscapeAnalysis", "EAUtils.jl")); using .EAUtils
 
 mutable struct SafeRef{T}
     x::T

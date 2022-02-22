@@ -16,6 +16,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
+  process affinity which is set typically in HPC and cloud environments ([#42340]).
 
 Multi-threading changes
 -----------------------
