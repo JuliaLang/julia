@@ -27,6 +27,37 @@ empty set. Should be used instead of [`BitSet`](@ref) for sparse integer sets, o
 for sets of arbitrary objects.
 
 See also: [`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref).
+
+Set internally compares objects using both [`isequal`](@ref) and [`hash`](@ref). Custom
+structures should follow the [`isequal`](@ref) convention to make `Set` working properly:
+`isequal(x, y)` implies `hash(x) == hash(y)`.
+
+```julia-repl
+julia> struct MyType
+           a::Int
+           b::Vector # heap-allocated object because `Vector` is not a concrete type
+       end
+
+julia> Base.:(==)(x::MyType, y::MyType) = x.a == y.a && x.b == y.b
+
+julia> x = MyType(1, [2, 3])
+
+julia> y = MyType(1, [2, 3])
+
+julia> x == y, isequal(x, y), objectid(x) == objectid(y), hash(x) == hash(y)
+(true, true, false, false)
+
+julia> Set([x, y])
+Set{MyType} with 2 elements:
+  MyType(1, [2, 3])
+  MyType(1, [2, 3])
+
+julia> Base.hash(x::MyType) = hash(x.b, hash(x.a)) # provide custom hash implementation
+
+julia> Set([x, y])
+Set{MyType} with 1 element:
+  MyType(1, [2, 3])
+```
 """
 Set(itr) = _Set(itr, IteratorEltype(itr))
 
