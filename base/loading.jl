@@ -415,7 +415,7 @@ function manifest_names()
     env_var_name = "JULIA_MANIFEST_NAME"
     custom_def = strip(get(ENV, env_var_name, ""))
     if !isempty(custom_def)
-        man_name = expand_version_placeholders(custom_def)
+        man_name = expand_version_placeholders(String(custom_def))
         if endswith(custom_def, ":")
             return String[man_name, default_manifest_names...]
         else
