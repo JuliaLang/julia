@@ -326,8 +326,8 @@ julia> BLAS.dotu(10, fill(1.0im, 10), 1, fill(1.0+im, 20), 2)
 """
 function dotu end
 
-for (fname, elty) in ((:ddot_,:Float64),
-                      (:sdot_,:Float32))
+for (fname, elty) in ((:cblas_ddot,:Float64),
+                      (:cblas_sdot,:Float32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -337,7 +337,7 @@ for (fname, elty) in ((:ddot_,:Float64),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dot(n::Integer, DX::Union{Ptr{$elty},AbstractArray{$elty}}, incx::Integer, DY::Union{Ptr{$elty},AbstractArray{$elty}}, incy::Integer)
             ccall((@blasfunc($fname), libblastrampoline), $elty,
-                (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}),
+                (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt),
                  n, DX, incx, DY, incy)
         end
     end
