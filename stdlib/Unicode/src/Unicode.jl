@@ -144,7 +144,7 @@ letter combined with an accent mark is a single grapheme.)
 graphemes(s::AbstractString) = Base.Unicode.GraphemeIterator{typeof(s)}(s)
 
 """
-    graphemes(s::AbstractString, m:n) -> `SubString`
+    graphemes(s::AbstractString, m:n) -> SubString
 
 Returns a [`SubString`](@ref) of `s` consisting of the `m`-th
 through `n`-th graphemes of the string `s`, where the second
