@@ -64,7 +64,7 @@ jl_raw_backtrace_t get_raw_backtrace() JL_NOTSAFEPOINT {
 
     // Then we copy only the needed bytes out of the buffer into our profile.
     size_t bt_bytes = bt_size * sizeof(jl_bt_element_t);
-    jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc(bt_bytes);
+    jl_bt_element_t *bt_data = (jl_bt_element_t*) malloc_s(bt_bytes);
     memcpy(bt_data, shared_bt_data_buffer, bt_bytes);
 
 
