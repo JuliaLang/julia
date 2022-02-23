@@ -1479,7 +1479,7 @@ fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
 
 sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
-sort!(v::AbstractVector{<:Union{Signed, Unsigned}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
+sort!(v::AbstractVector{<:Union{Signed, Unsigned}}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}) =
     fpsort!(v, a, o)
 
 end # module Sort.Float
