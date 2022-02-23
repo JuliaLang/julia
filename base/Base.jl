@@ -333,11 +333,6 @@ using .Order
 include("sort.jl")
 using .Sort
 
-Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
-Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
-
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
 
