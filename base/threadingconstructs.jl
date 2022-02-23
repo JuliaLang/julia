@@ -141,8 +141,9 @@ releases. Currently, `:dynamic` is used when the scheduler is not specified.
 
 ### `:dynamic` (default)
 
-`:dynamic` scheduler executes iterations dynamically to available worker threads, assuming
-that the workload for each iteration is uniform.
+`:dynamic` scheduler executes iterations dynamically to available worker threads. Current
+implementation assumes that the workload for each iteration is uniform. However, this
+assumption may be removed in the future.
 
 This scheduling option is merely a hint to the underlying execution mechanism. However, a
 few properties can be expected. The number of `Task`s used by `:dynamic` scheduler is
