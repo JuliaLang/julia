@@ -669,7 +669,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
     return v
 end
 
-function sort!(v::AbstractVector{<:Bool}, ::Algorith, o::Ordering)
+function sort!(v::AbstractVector{<:Bool}, ::Algorithm, o::Ordering)
     last = lt(o, false, true)
     j = firstindex(v)
     @inbounds for i in eachindex(v)
