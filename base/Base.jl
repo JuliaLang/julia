@@ -333,6 +333,11 @@ using .Order
 include("sort.jl")
 using .Sort
 
+Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
+Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
+Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
+Sort.defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
+
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
 
@@ -397,11 +402,6 @@ include("timing.jl")
 include("util.jl")
 
 include("asyncmap.jl")
-
-Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
-Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
 
 # deprecated functions
 include("deprecated.jl")
