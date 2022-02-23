@@ -37,6 +37,9 @@ end
     @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
     @test sort(OffsetVector([3,1,2], -2)) == OffsetVector([1,2,3], -2)
     @test sort(OffsetVector([3.0,1.0,2.0], 2), rev=true) == OffsetVector([3.0,2.0,1.0], 2)
+    @test sort([false, true, false]) == [false, false, true]
+    @test sort([false, true, false], by=x->0) == [false, true, false]
+    @test sort([false, true, false], rev=true) == [true, false, false]
 end
 
 @testset "sortperm" begin

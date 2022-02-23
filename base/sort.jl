@@ -670,12 +670,12 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
 end
 
 function sort!(v::AbstractVector{<:Bool}, ::Algorithm, o::Ordering)
-    last = lt(o, false, true)
+    first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     j = firstindex(v)
     @inbounds for i in eachindex(v)
-        if v[i] == last
-            v[i] = !last
-            v[j] = last
+        if v[i] == first
+            v[i] = !first
+            v[j] = first
             j += 1
         end
     end
