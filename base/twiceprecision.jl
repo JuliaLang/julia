@@ -474,6 +474,11 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     steprangelen_hp(T, a, st, 0, len, 1)
 end
 
+function range_step_stop_length(step::IEEEFloat, stop, len::Integer)
+    r = range_start_step_length(stop, negate(step), len)
+    reverse(r)
+end
+
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
