@@ -904,6 +904,6 @@ end
     itr = eachline(IOBuffer("foo\n"))
     gen = (x for x in itr)
     @test !isempty(gen)
-    @test !isdone(gen)
+    @test !Base.isdone(gen)
     @test collect(gen) == ["foo"]
 end
