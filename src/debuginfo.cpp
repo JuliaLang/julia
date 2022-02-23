@@ -227,7 +227,7 @@ public:
                     continue;
                 }
             }
-            uint64_t loadaddr = L.getSectionLoadAddress(section);
+            uint64_t loadaddr = getLoadAddress(section.getName().get());
             size_t seclen = section.getSize();
             if (istext) {
                 arm_text_addr = loadaddr;

@@ -1000,7 +1000,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, GotoNode) && compact.cfg_transforms_enabled
         result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
         result_idx += 1
-    elseif isa(stmt, GlobalRef) || isa(stmt, GotoNode)
+    elseif isa(stmt, GlobalRef)
+        result[result_idx][:inst] = stmt
+        result[result_idx][:type] = argextype(stmt, compact)
+        result_idx += 1
+    elseif isa(stmt, GotoNode)
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, GotoIfNot) && compact.cfg_transforms_enabled
