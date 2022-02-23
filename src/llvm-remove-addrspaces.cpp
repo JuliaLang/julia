@@ -47,13 +47,15 @@ public:
         if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
             if (Ty->isOpaque()) {
                 DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
-            } else {
+            }
+            else {
                 //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
                         remapType(Ty->getElementType()),
                         ASRemapper(Ty->getAddressSpace()));
             }
-        } else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
+        }
+        else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
             SmallVector<Type *, 4> Params;
             for (unsigned Index = 0; Index < Ty->getNumParams(); ++Index)
                 Params.push_back(remapType(Ty->getParamType(Index)));
