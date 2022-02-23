@@ -453,6 +453,9 @@ end
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
 
+range_start_step_length(a, st::IEEEFloat, len::Integer) =
+    range_start_step_length(oftype(st, a), st, len)
+
 function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     len = len + 0 # promote with Int
     start_n, start_d = rat(a)
