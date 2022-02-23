@@ -725,7 +725,7 @@ function radix_heuristic(mn, mx, length)
     mn == mx && return 0, 0, false
 
     #Dispatch to count sort
-    length + mn > mx && return 0, 0, true #TODO optimize
+    length > unsigned(mx - mn) && return 0, 0, true #TODO optimize
 
     bits = used_bits(mx-mn)
 
