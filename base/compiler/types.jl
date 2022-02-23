@@ -263,7 +263,6 @@ struct NativeInterpreter <: AbstractInterpreter
         # incorrect, fail out loudly.
         @assert world <= get_world_counter()
 
-
         return new(
             # Initially empty cache
             Vector{InferenceResult}(),
