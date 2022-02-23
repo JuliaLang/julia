@@ -2221,19 +2221,23 @@ static void jl_insert_method_instances(jl_array_t *list)
         if (jl_is_method(mi->def.method)) {
             // Is this still the method we'd be calling?
             jl_methtable_t *mt = jl_method_table_for(mi->specTypes);
-            jl_value_t *mworld = jl_methtable_lookup(mt, mi->specTypes, world);
-            if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld) {
-                jl_array_uint8_set(valids, i, 0);
-                invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
-                // The codeinst of this mi haven't yet been removed
-                jl_code_instance_t *codeinst = mi->cache;
-                while (codeinst) {
-                    remove_code_instance_from_validation(codeinst);
-                    codeinst = codeinst->next;
-                }
-                if (_jl_debug_method_invalidation) {
-                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, mworld);
-                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, jl_cstr_to_string("jl_method_table_insert")); // GC disabled
+            struct jl_typemap_assoc search = {(jl_value_t*)mi->specTypes, world, NULL, 0, ~(size_t)0};
+            jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
+            if (entry) {
+                jl_value_t *mworld = entry->func.value;
+                if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
+                    jl_array_uint8_set(valids, i, 0);
+                    invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
+                    // The codeinst of this mi haven't yet been removed
+                    jl_code_instance_t *codeinst = mi->cache;
+                    while (codeinst) {
+                        remove_code_instance_from_validation(codeinst);
+                        codeinst = codeinst->next;
+                    }
+                    if (_jl_debug_method_invalidation) {
+                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, mworld);
+                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, jl_cstr_to_string("jl_method_table_insert")); // GC disabled
+                    }
                 }
             }
         }
