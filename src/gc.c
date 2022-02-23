@@ -3156,8 +3156,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
       }
 
       if (gc_num.interval > max_collect_interval) {
-	if (not_freed_enough)
-	  sweep_full = 1;
+        sweep_full = 1;
 	gc_num.interval = max_collect_interval;
       }
     }
