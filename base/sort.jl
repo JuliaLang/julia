@@ -736,10 +736,27 @@ function radix_heuristic(mn, mx, length)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::RadixSort, o::Ordering)
+    # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
+    # so we skip straight to the fallback algorithm which is comparrison based.
     Serial.Serializable(eltype(v), o) === nothing && return sort!(v, lo, hi, a.fallback, o)
+
+    # to avoid introducing excessive detection costs for the trivial sorting problem,
+    # we check for small inputs before any other runtime checks
     hi <= lo && return v
     hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-    (hi - lo < 2000 || (hi - lo < 200_000 && sizeof(eltype(v)) == 16)) && return sort!(v, lo, hi, a.fallback, o)
+
+    # if sorting a large array of 8-bit integers, we already know that sort_int_range!
+    # is a good idea and shouldn't waste time serializing. For larger integers, it is
+    # worth the time to check the minimum and maximum values because that can let us
+    # allocate a smaller temporary vector in sort_intrange!
+    (eltype(v) === Int8 || eltype(v) === UInt8) && (o === Forward || o === Reverse) && length(v) > 256 &&
+        return sort_int_range!(v, 256, typemin(eltype(v)), o == Forward ? identity : reverse)
+
+    # radix sort is only faster than comparrison sorting for large arrays, and for
+    # 16 byte datatypes (Int128 and UInt128) this threshold is much higher because
+    # bit-shifting a 16 byte datatype is slower than bit-shifting a 8-byte datatype.
+    (hi - lo < 2000 || (hi - lo < 200_000 && sizeof(eltype(v)) == 16)) &&
+        return sort!(v, lo, hi, a.fallback, o)
 
     u, mn, mx = Serial.serialize!(v, lo, hi, o)
 
@@ -1285,7 +1302,9 @@ Serializable(T::Type, order::ReverseOrdering) = Serializable(T, order.fwd)
 
 
 ### Vectors
-"""docstring"""
+
+# Convert v to unsigned integers in place, maintaining sort order.
+# Also return the extrema of its output.
 function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
     u = reinterpret(something(Serializable(eltype(v), order)), v)
     @inbounds u[lo] = mn = mx = serialize(v[lo], order)
@@ -1301,7 +1320,6 @@ function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering
     u, mn, mx
 end
 
-"""docstring"""
 function deserialize!(v::AbstractVector, u::AbstractVector{U},
     lo::Integer, hi::Integer, order::Ordering, offset::U) where U <: Unsigned
     @inbounds for i in lo:hi
