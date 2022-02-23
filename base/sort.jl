@@ -1453,9 +1453,4 @@ sort!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPS
 
 end # module Sort.Float
 
-defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
-
 end # module Sort
