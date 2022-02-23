@@ -669,19 +669,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
     return v
 end
 
-function sort!(v::AbstractVector{<:Bool}, ::Algorithm, o::Ordering)
-    first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
-    j = firstindex(v)
-    @inbounds for i in eachindex(v)
-        if v[i] == first
-            v[i] = !first
-            v[j] = first
-            j += 1
-        end
-    end
-    v
-end
-
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
     MASK = UInt(1) << CHUNK_SIZE - 0x1
@@ -735,6 +722,10 @@ function radix_heuristic(mn, mx, length)
     bits, chunk, false
 end
 
+function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::RadixSort, o::Ordering)
+    maybereverse = lt(o, false, true) ? identity : lt(o, true, false) ? reverse : return v
+    sort_int_range!(v, 2, 0, maybereverse)
+end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::RadixSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparrison based.
