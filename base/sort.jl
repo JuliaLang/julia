@@ -669,6 +669,19 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
     return v
 end
 
+function sort!(v::AbstractVector{<:Bool}, ::Algorith, o::Ordering)
+    last = lt(o, false, true)
+    j = firstindex(v)
+    @inbounds for i in eachindex(v)
+        if v[i] == last
+            v[i] = !last
+            v[j] = last
+            j += 1
+        end
+    end
+    v
+end
+
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
     MASK = UInt(1) << CHUNK_SIZE - 0x1
