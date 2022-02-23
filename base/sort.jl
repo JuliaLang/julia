@@ -1426,6 +1426,9 @@ issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
+    length(v) <= SMALL_THRESHOLD &&
+        return sort!(v, first(axes(v,1)), last(axes(v,1)), SMALL_ALGORITHM, o)
+
     i, j = lo, hi = specials2end!(v,a,o)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
