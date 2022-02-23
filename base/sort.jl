@@ -445,11 +445,11 @@ struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
 end
 
 """
-    RadixSort(fallback)
+    AdaptiveSort(fallback)
 
-Indicate that a sorting function should use the radix sort
-algorithm for long vectors and `fallback` for short vectors.
-RadixSort is stable if the fallback is stable.
+Indicate that a sorting function should use the radix sort or counting
+sort algorithms where possible for long vectors and `fallback` for
+short vectors. AdaptiveSort is stable if the fallback is stable.
 
 Characteristics:
   * *stable*: preserves the ordering of elements which compare
@@ -458,7 +458,7 @@ Characteristics:
   * *not in-place* in memory.
   * *great performance* for very large collections.
 """
-struct RadixSort{Fallback <: Algorithm} <: Algorithm
+struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
     fallback::Fallback
 end
 
@@ -512,8 +512,8 @@ Characteristics:
 """
 const MergeSort     = MergeSortAlg()
 
-const DEFAULT_UNSTABLE = RadixSort(QuickSort)
-const DEFAULT_STABLE   = RadixSort(MergeSort)
+const DEFAULT_UNSTABLE = AdaptiveSort(QuickSort)
+const DEFAULT_STABLE   = AdaptiveSort(MergeSort)
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
@@ -722,11 +722,11 @@ function radix_heuristic(mn, mx, length)
     bits, chunk, false
 end
 
-function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::RadixSort, o::Ordering)
+function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     maybereverse = lt(o, false, true) ? identity : lt(o, true, false) ? reverse : return v
     sort_int_range!(v, 2, 0, maybereverse)
 end
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::RadixSort, o::Ordering)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparrison based.
     Serial.Serializable(eltype(v), o) === nothing && return sort!(v, lo, hi, a.fallback, o)
@@ -1276,7 +1276,7 @@ Serializable(T::Type{<:Union{Unsigned, Signed}}, ::ForwardOrdering) =
 
 # Booleans
 # serialize! fails on Vector{Bool} because the reinterpret is sketchy
-# try `sort!(collect(trues(501)), alg=Sort.RadixSort(QuickSort), rev=true)`
+# try `sort!(collect(trues(501)), alg=Sort.AdaptiveSort(QuickSort), rev=true)`
 # serialize(x::Bool, ::ForwardOrdering) = UInt8(x)
 # deserialize(::Type{Bool}, u::UInt8, ::ForwardOrdering) = Bool(u)
 # Serializable(::Type{Bool}, ::ForwardOrdering) = UInt8
