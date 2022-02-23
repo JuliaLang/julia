@@ -218,8 +218,9 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
         args.push_back(&*arg);
+    assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
     CallInst *ret = irbuilder.CreateCall(
-        cast<FunctionType>(ptr->getType()->getPointerElementType()),
+        functype,
         ptr, ArrayRef<Value*>(args));
     ret->setAttributes(attrs);
     if (cc != CallingConv::C)
