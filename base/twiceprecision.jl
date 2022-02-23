@@ -408,7 +408,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
     steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), len, oneunit(len))
 end
 
-function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
+function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
@@ -453,7 +453,7 @@ end
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
 
-function range_start_step_length(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     len = len + 0 # promote with Int
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
