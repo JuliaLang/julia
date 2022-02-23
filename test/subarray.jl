@@ -321,6 +321,7 @@ end
     sA = view(A, 2:2, 1:5, :)
     @test @inferred(strides(sA)) == (1, 3, 15)
     @test parent(sA) == A
+    @test parenttype(sA) <: typeof(A)
     @test parentindices(sA) == (2:2, 1:5, Base.Slice(1:8))
     @test size(sA) == (1, 5, 8)
     @test axes(sA) === (Base.OneTo(1), Base.OneTo(5), Base.OneTo(8))

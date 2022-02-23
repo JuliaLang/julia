@@ -288,6 +288,11 @@ end
     @test parent(Adjoint(intmat)) === intmat
     @test parent(Transpose(intvec)) === intvec
     @test parent(Transpose(intmat)) === intmat
+
+    @test parenttype(Adjoint(intvec)) <: typeof(intvec)
+    @test parenttype(Adjoint(intmat)) <: typeof(intmat)
+    @test parenttype(Transpose(intvec)) <: typeof(intvec)
+    @test parenttype(Transpose(intmat)) <: typeof(intmat)
 end
 
 @testset "Adjoint and Transpose vector vec methods" begin

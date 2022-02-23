@@ -207,6 +207,7 @@ end
 size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
+parenttype(::Type{<:Base.ReshapedArray{T,N,P}}) where {T,N,P} = P
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
