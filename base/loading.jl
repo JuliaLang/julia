@@ -1395,13 +1395,17 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         task_local_storage()[:SOURCE_PATH] = source
     end
 
+    Core.Compiler.track_newly_inferred.x = true
     try
         Base.include(Base.__toplevel__, input)
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
+    finally
+        Core.Compiler.track_newly_inferred.x = false
     end
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
@@ -2033,12 +2037,12 @@ end
 
 Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
 """
-function precompile(@nospecialize(f), args::Tuple)
+function precompile(@nospecialize(f), @nospecialize(args::Tuple))
     precompile(Tuple{Core.Typeof(f), args...})
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
-function precompile(argt::Type)
+function precompile(@nospecialize(argt::Type))
     ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
     if !ret && ENABLE_PRECOMPILE_WARNINGS[]
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
