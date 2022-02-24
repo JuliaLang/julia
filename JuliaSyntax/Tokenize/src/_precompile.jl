@@ -9,8 +9,6 @@ function _precompile_()
     precompile(Tokenize.Tokens.Token, ())
     precompile(Tokenize.Tokens.kind, (Tokenize.Tokens.Token,))
 
-    precompile(Tokenize.Lexers.is_cat_id_start, (Char, Int32,))
-    precompile(Tokenize.Lexers.is_identifier_char, (Char,))
     precompile(Tokenize.Lexers.is_identifier_start_char, (Char,))
     precompile(Tokenize.Lexers.readchar, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}}},))
     precompile(Tokenize.Lexers.next_token, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}}},))
@@ -68,5 +66,5 @@ function _precompile_()
     precompile(Tokenize.Lexers.accept_batch, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}}}, typeof(Tokenize.Lexers.isdigit),))
     precompile(Tokenize.Lexers.accept, (Tokenize.Lexers.Lexer{GenericIOBuffer{Array{UInt8, 1}}}, Char,))
 
-    precompile(Tokenize.Lexers.readchar, (GenericIOBuffer{Array{UInt8, 1}},))    
+    precompile(Tokenize.Lexers.readchar, (GenericIOBuffer{Array{UInt8, 1}},))
 end
