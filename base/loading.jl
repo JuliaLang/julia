@@ -1975,9 +1975,35 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        warn_if_already_loaded_different(uuidkey)
         newm = root_module(uuidkey)
     end
     return newm
+end
+
+const already_warned_path_change_pkgs = Set{UUID}()
+# warns if the loaded version of a module is different to the one that locate_package wants to load
+function warn_if_already_loaded_different(uuidkey::PkgId)
+    pkgorig = get(pkgorigins, uuidkey, nothing)
+    new_path = locate_package(uuidkey)
+    if pkgorig !== nothing && pkgorig.path !== nothing &&
+            !samefile(fixup_stdlib_path(pkgorig.path), new_path) && uuidkey.uuid ∉ already_warned_path_change_pkgs
+        cur_vstr = isnothing(pkgorig.version) ? "" : string(" (", pkgorig.version, ")")
+        new_v = get_pkgversion_from_path(new_path)
+        new_vstr = isnothing(new_v) ? "" : string(" (", new_v, ")")
+        warnstr = "Package $(uuidkey.name)$cur_vstr already loaded from path $(repr(pkgorig.path)), \
+            now attempted to be loaded from $(repr(new_path))$new_vstr. This might indicate a \
+            change of environment between package loads and can mean that incompatible \
+            packages have been loaded"
+        if JLOptions().startupfile == 1
+            warnstr *= ", perhaps from a startup.jl. Consider starting directly in the project \
+                via the `--project` arg."
+        else
+            warnstr *= "."
+        end
+        @warn warnstr
+        push!(already_warned_path_change_pkgs, uuidkey.uuid)
+    end
 end
 
 mutable struct PkgOrigin
