@@ -61,6 +61,8 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (dt->layout || dt->isconcretetype || !dt->name->mayinlinealloc)
             return 0;
+        if (dt->name == jl_namedtuple_typename)
+            return layout_uses_free_typevars(jl_tparam0(dt), env) || layout_uses_free_typevars(jl_tparam1(dt), env);
         jl_svec_t *types = jl_get_fieldtypes(dt);
         size_t i, l = jl_svec_len(types);
         for (i = 0; i < l; i++) {
