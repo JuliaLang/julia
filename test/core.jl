@@ -7324,6 +7324,12 @@ end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
 
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
