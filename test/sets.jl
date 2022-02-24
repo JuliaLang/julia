@@ -174,7 +174,7 @@ end
     @test length(k) == length(s.dict.pairs)
     for i in 1:length(k)
         if isassigned(k, i)
-            @test k[i] == s.dict.pairs[i].first
+            @test k[i].first == s.dict.pairs[i].first
         else
             @test !isassigned(s.dict.pairs, i)
         end
