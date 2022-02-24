@@ -1978,43 +1978,43 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
-    if (sz <= 64) {
-        // The size limit is arbitrary but since we mainly care about floating points and
-        // machine size vectors this should be enough.
-        const DataLayout &DL = jl_Module->getDataLayout();
-        auto srcty = cast<PointerType>(src->getType());
-        //TODO unsafe nonopaque pointer
-        auto srcel = srcty->getElementType();
-        auto dstty = cast<PointerType>(dst->getType());
-        //TODO unsafe nonopaque pointer
-        auto dstel = dstty->getElementType();
-        if (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
-            src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
-            srcel = srcel->getArrayElementType();
-            srcty = srcel->getPointerTo();
-        }
-        if (dstel->isArrayTy() && dstel->getArrayNumElements() == 1) {
-            dst = ctx.builder.CreateConstInBoundsGEP2_32(dstel, dst, 0, 0);
-            dstel = dstel->getArrayElementType();
-            dstty = dstel->getPointerTo();
-        }
+    // if (sz <= 64) {
+    //     // The size limit is arbitrary but since we mainly care about floating points and
+    //     // machine size vectors this should be enough.
+    //     const DataLayout &DL = jl_Module->getDataLayout();
+    //     auto srcty = cast<PointerType>(src->getType());
+    //     //TODO unsafe nonopaque pointer
+    //     auto srcel = srcty->getElementType();
+    //     auto dstty = cast<PointerType>(dst->getType());
+    //     //TODO unsafe nonopaque pointer
+    //     auto dstel = dstty->getElementType();
+    //     if (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
+    //         src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
+    //         srcel = srcel->getArrayElementType();
+    //         srcty = srcel->getPointerTo();
+    //     }
+    //     if (dstel->isArrayTy() && dstel->getArrayNumElements() == 1) {
+    //         dst = ctx.builder.CreateConstInBoundsGEP2_32(dstel, dst, 0, 0);
+    //         dstel = dstel->getArrayElementType();
+    //         dstty = dstel->getPointerTo();
+    //     }
 
-        llvm::Type *directel = nullptr;
-        if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
-            directel = srcel;
-            dst = emit_bitcast(ctx, dst, srcty);
-        }
-        else if (dstel->isSized() && dstel->isSingleValueType() &&
-                 DL.getTypeStoreSize(dstel) == sz) {
-            directel = dstel;
-            src = emit_bitcast(ctx, src, dstty);
-        }
-        if (directel) {
-            auto val = tbaa_decorate(tbaa_src, ctx.builder.CreateAlignedLoad(directel, src, Align(align), is_volatile));
-            tbaa_decorate(tbaa_dst, ctx.builder.CreateAlignedStore(val, dst, Align(align), is_volatile));
-            return;
-        }
-    }
+    //     llvm::Type *directel = nullptr;
+    //     if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
+    //         directel = srcel;
+    //         dst = emit_bitcast(ctx, dst, srcty);
+    //     }
+    //     else if (dstel->isSized() && dstel->isSingleValueType() &&
+    //              DL.getTypeStoreSize(dstel) == sz) {
+    //         directel = dstel;
+    //         src = emit_bitcast(ctx, src, dstty);
+    //     }
+    //     if (directel) {
+    //         auto val = tbaa_decorate(tbaa_src, ctx.builder.CreateAlignedLoad(directel, src, Align(align), is_volatile));
+    //         tbaa_decorate(tbaa_dst, ctx.builder.CreateAlignedStore(val, dst, Align(align), is_volatile));
+    //         return;
+    //     }
+    // }
     // the memcpy intrinsic does not allow to specify different alias tags
     // for the load part (x.tbaa) and the store part (ctx.tbaa().tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
