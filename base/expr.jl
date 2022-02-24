@@ -1013,11 +1013,11 @@ convenience macro for [`precompile`](@ref).
 
 # Example
 ```
-@precompile f(name::String, id::Int) = string(name, id);
+@precompile f(a::String, b::Int) = string(a, b)
 ```
 This is the same as
 ```
-f(name::String, id::Int) = string(name, id)
+f(a::String, b::Int) = string(a, b)
 precompile(f, (String, Int))
 ```
 

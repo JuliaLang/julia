@@ -1284,6 +1284,7 @@ end
 
     M = Module()
     @eval M begin
+        without_precompile() = 1
         @precompile f(a::Float64, b::Int) = a + b
         @precompile g() = 1
         @precompile h(a::Float64; b=3) = a + b
@@ -1291,6 +1292,7 @@ end
         @precompile withdoc() = 1
     end
     specialized_once(func) = !isempty(only(methods(func)).specializations)
+    @test !specialized_once(M.without_precompile)
     @test specialized_once(M.f)
     @test M.f(1.0, 2) == 3.0
     @test specialized_once(M.g)
