@@ -153,6 +153,8 @@ zero(::Type{<:AbstractIrrational}) = false
 one(::AbstractIrrational) = true
 one(::Type{<:AbstractIrrational}) = true
 
+sign(x::AbstractIrrational) = ifelse(x < zero(x), -1.0, 1.0)
+
 -(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
     @eval $op(x::AbstractIrrational, y::AbstractIrrational) = $op(Float64(x),Float64(y))
