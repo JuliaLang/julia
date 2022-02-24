@@ -14,9 +14,14 @@ Set() = Set{Any}()
 function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     d = s.dict
     slots = copy(d.slots)
-    keys = copy(d.keys)
-    vals = similar(d.vals, Nothing)
-    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+    n = length(d.pairs)
+    pairs = Vector{Pair{T,Nothing}}(undef, n)
+    for i in 1:n
+        if isslotfilled(d, i)
+            pairs[i] = d.pairs[i].first::T => nothing
+        end
+    end
+    _Set(Dict{T,Nothing}(slots, pairs, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
 end
 
 """
@@ -754,14 +759,12 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
     news = Pair{K,V}[]
     i = skip_deleted_floor!(t)
     @inbounds while i != 0
-        k1, v1 = t.keys[i], t.vals[i]
-        x1 = Pair{K,V}(k1, v1)
+        x1 = t.pairs[i]
         x2 = new(x1)
         if x1 !== x2
             k2, v2 = first(x2), last(x2)
             if isequal(k1, k2)
-                t.keys[i] = k2
-                t.vals[i] = v2
+                t.pairs[i] = k2::K => v2::V
                 t.age += 1
             else
                 _delete!(t, i)
