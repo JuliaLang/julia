@@ -1028,6 +1028,9 @@ macro precompile(ex)
     inner = unwrap_macrocalls(ex)
     is_function_def(inner) || error("@precompile can only be used on function definitions")
 
+    # Unsure how to handle methods with type parameters correctly without writing lots of custom logic.
+    inner.args[1].head == :where && error("@precompile is not implemented for methods with type parameters")
+
     sig = inner.args[1].args
     func_name = sig[1]::Symbol
     # Drop function name and kwargs.
