@@ -1030,18 +1030,18 @@ macro precompile(ex)
     is_function_def(inner) || error("@precompile can only be used on function definitions")
 
     sig = inner.args[1].args
+    func_name = sig[1]::Symbol
     # Drop function name and kwargs.
     args = filter(x -> x isa(Expr) && !isexpr(x, :parameters), sig)
     types = Tuple(eval(last(arg.args)) for arg in args)
     if !all(isconcretetype.(types))
         nonconcrete = filter(!isconcretetype, types)
         multiple = 1 < length(nonconcrete)
-        msg = "The type$(multiple ? 's' : "") $nonconcrete in the signature $(sig[1])$(types) $(multiple ? "are" : "is") not concrete."
+        msg = "The type$(multiple ? 's' : "") $nonconcrete in the signature $(func_name)$(types) $(multiple ? "are" : "is") not concrete."
         error(msg)
     end
 
-    f_name = sig[1]
-    precompile_ex = :(precompile($f_name, $types))
+    precompile_ex = :(precompile($func_name, $types))
 
     return esc(quote
         $inner

@@ -1280,13 +1280,17 @@ end
 end
 
 @testset "@precompile" begin
-    # This isn't caught properly.
-    # @test_throws LoadError @precompile nothing
+    @test_throws LoadError eval(:(@precompile nothing))
 
     M = Module()
     @eval M begin
         @precompile f(a::Float64, b::Int) = a + b
+        @precompile g() = 1
+        @precompile h(a::Float64; b=3) = a + b
     end
-    @test !isempty(only(methods(M.f)).specializations)
+    specialized_once(func) = !isempty(only(methods(func)).specializations)
+    @test specialized_once(M.f)
     @test M.f(1.0, 2) == 3.0
+    @test specialized_once(M.g)
+    @test specialized_once(M.h)
 end
