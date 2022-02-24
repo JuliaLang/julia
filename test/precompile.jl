@@ -1287,10 +1287,13 @@ end
         @precompile f(a::Float64, b::Int) = a + b
         @precompile g() = 1
         @precompile h(a::Float64; b=3) = a + b
+        "Some doc"
+        @precompile withdoc() = 1
     end
     specialized_once(func) = !isempty(only(methods(func)).specializations)
     @test specialized_once(M.f)
     @test M.f(1.0, 2) == 3.0
     @test specialized_once(M.g)
     @test specialized_once(M.h)
+    @test contains(string(@doc M.withdoc), "Some doc")
 end

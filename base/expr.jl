@@ -1009,14 +1009,13 @@ end
     @precompile
 
 Compile a given function with concrete arguments, but without executing it. This is a
-convenience macro for [`precompile`](@ref). For example, write
+convenience macro for [`precompile`](@ref).
 
+# Example
 ```
 @precompile f(name::String, id::Int) = string(name, id);
 ```
-
 This is the same as
-
 ```
 f(name::String, id::Int) = string(name, id)
 precompile(f, (String, Int))
@@ -1044,7 +1043,7 @@ macro precompile(ex)
     precompile_ex = :(precompile($func_name, $types))
 
     return esc(quote
-        $inner
+        Base.@__doc__($inner)
         $precompile_ex
     end)
 end
