@@ -179,10 +179,8 @@ end
     @test_throws InexactError y * 3//4
     @test (1:1:5)*Second(5) === Second(5)*(1:1:5) === Second(5):Second(5):Second(25) === (1:5)*Second(5)
     @test collect(1:1:5)*Second(5) == Second(5)*collect(1:1:5) == (1:5)*Second(5)
-    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0
-    @test collect(Second(2):Second(2):Second(10))/Second(2) == 1:1:5
-    @test (Second(2):Second(2):Second(10)) / 2 === Second(1):Second(1):Second(5)
-    @test collect(Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0 == collect(Second(2):Second(2):Second(10))/Second(2)
+    @test (Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5) == collect(Second(2):Second(2):Second(10)) / 2
     @test Dates.Year(4) / 2 == Dates.Year(2)
     @test Dates.Year(4) / 2f0 == Dates.Year(2)
     @test Dates.Year(4) / 0.5 == Dates.Year(8)
@@ -366,6 +364,7 @@ end
     @test isequal(d - h, 2d - 2h - 1d + 1h)
     @test sprint(show, y + m) == string(y + m)
     @test convert(Dates.CompoundPeriod, y) + m == y + m
+    @test Dates.periods(convert(Dates.CompoundPeriod, y)) == convert(Dates.CompoundPeriod, y).periods
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form
@@ -518,5 +517,18 @@ end
     #Test combined Fixed and Other Periods
     @test (1m + 1d < 1m + 1s) == false
 end
+
+@testset "Convert CompoundPeriod to Period" begin
+    @test convert(Month, Year(1) + Month(1)) === Month(13)
+    @test convert(Second, Minute(1) + Second(30)) === Second(90)
+    @test convert(Minute, Minute(1) + Second(60)) === Minute(2)
+    @test convert(Millisecond, Minute(1) + Second(30)) === Millisecond(90_000)
+    @test_throws InexactError convert(Minute, Minute(1) + Second(30))
+    @test_throws MethodError convert(Month, Minute(1) + Second(30))
+    @test_throws MethodError convert(Second, Month(1) + Second(30))
+    @test_throws MethodError convert(Period, Minute(1) + Second(30))
+    @test_throws MethodError convert(Dates.FixedPeriod, Minute(1) + Second(30))
+end
+
 end
 

@@ -18,6 +18,9 @@ if !@isdefined(testenv_defined)
         push!(test_exeflags.exec, "--startup-file=no")
         push!(test_exeflags.exec, "--depwarn=error")
     end
+    if haskey(ENV, "JULIA_TEST_EXTRA_EXEFLAGS")
+        append!(test_exeflags.exec, Base.shell_split(ENV["JULIA_TEST_EXTRA_EXEFLAGS"]))
+    end
 
     if haskey(ENV, "JULIA_TEST_EXENAME")
         popfirst!(test_exeflags.exec)
@@ -40,7 +43,7 @@ if !@isdefined(testenv_defined)
     const curmod = @__MODULE__
     const curmod_name = fullname(curmod)
     const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
-    const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+    const curmod_prefix = curmod === Main ? "" : "$(["$m." for m in curmod_name]...)"
 
     # platforms that support cfunction with closures
     # (requires LLVM back-end support for trampoline intrinsics)

@@ -10,8 +10,17 @@ using Base: Experimental
 include("choosetests.jl")
 include("testenv.jl")
 
-tests, net_on, exit_on_error, use_revise, seed = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
+
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    global running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
+else
+    global running_under_rr() = false
+end
 
 if use_revise
     using Revise
@@ -82,8 +91,26 @@ prepend!(tests, linalg_tests)
 
 import LinearAlgebra
 cd(@__DIR__) do
+    # `net_on` implies that we have access to the loopback interface which is
+    # necessary for Distributed multi-processing. There are some test
+    # environments that do not allow access to loopback, so we must disable
+    # addprocs when `net_on` is false. Note that there exist build environments,
+    # including Nix, where `net_on` is false but we still have access to the
+    # loopback interface. It would be great to make this check more specific to
+    # identify those situations somehow. See
+    #   * https://github.com/JuliaLang/julia/issues/6722
+    #   * https://github.com/JuliaLang/julia/pull/29384
+    #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
-    if net_on
+    JULIA_TEST_USE_MULTIPLE_WORKERS = get(ENV, "JULIA_TEST_USE_MULTIPLE_WORKERS", "") |>
+                                      strip |>
+                                      lowercase |>
+                                      s -> tryparse(Bool, s) |>
+                                      x -> x === true
+    # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
+    # multiple worker processes regardless of the value of `net_on`.
+    # Otherwise, we use multiple worker processes if and only if `net_on` is true.
+    if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
         n = min(Sys.CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
@@ -137,17 +164,22 @@ cd(@__DIR__) do
         finally
             unlock(print_lock)
         end
+        nothing
     end
 
     global print_testworker_started = (name, wrkr)->begin
+        pid = running_under_rr() ? remotecall_fetch(getpid, wrkr) : 0
+        at = lpad("($wrkr)", name_align - textwidth(name) + 1, " ")
         lock(print_lock)
         try
-            printstyled(name, color=:white)
-            printstyled(lpad("($wrkr)", name_align - textwidth(name) + 1, " "), " |",
-                " "^elapsed_align, "started at $(now())\n", color=:white)
+            printstyled(name, at, " |", " "^elapsed_align,
+                    "started at $(now())",
+                    (pid > 0 ? " on pid $pid" : ""),
+                    "\n", color=:white)
         finally
             unlock(print_lock)
         end
+        nothing
     end
 
     function print_testworker_errored(name, wrkr, @nospecialize(e))
@@ -175,6 +207,7 @@ cd(@__DIR__) do
 
     local stdin_monitor
     all_tasks = Task[]
+    o_ts_duration = 0.0
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
@@ -205,7 +238,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        @Experimental.sync begin
+        o_ts_duration = @elapsed @Experimental.sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())
@@ -213,14 +246,16 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
-                        resp = try
-                                remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                        before = time()
+                        resp, duration = try
+                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
-                                Any[CapturedException(e, catch_backtrace())]
+                                Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
-                        push!(results, (test, resp))
+                        push!(results, (test, resp, duration))
                         if length(resp) == 1
                             print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
                             if exit_on_error
@@ -271,18 +306,20 @@ cd(@__DIR__) do
             # to the overall aggregator
             isolate = true
             t == "SharedArrays" && (isolate = false)
-            resp = try
-                    Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+            before = time()
+            resp, duration = try
+                    r = Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
-                    Any[CapturedException(e, catch_backtrace())]
+                    Any[CapturedException(e, catch_backtrace())], time() - before
                 end
             if length(resp) == 1
                 print_testworker_errored(t, 1, resp[1])
             else
                 print_testworker_stats(t, 1, resp)
             end
-            push!(results, (t, resp))
+            push!(results, (t, resp, duration))
         end
     catch e
         isa(e, InterruptException) || rethrow()
@@ -328,18 +365,21 @@ cd(@__DIR__) do
     =#
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
+    o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
-    for (testname, (resp,)) in results
+    for (testname, (resp,), duration) in results
         push!(completed_tests, testname)
         if isa(resp, Test.DefaultTestSet)
+            resp.time_end = resp.time_start + duration
             Test.push_testset(resp)
             Test.record(o_ts, resp)
             Test.pop_testset()
         elseif isa(resp, Test.TestSetException)
             fake = Test.DefaultTestSet(testname)
+            fake.time_end = fake.time_start + duration
             for i in 1:resp.pass
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing))
+                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
             end
             for i in 1:resp.broken
                 Test.record(fake, Test.Broken(:test, nothing))
@@ -359,6 +399,7 @@ cd(@__DIR__) do
             # the test runner itself had some problem, so we may have hit a segfault,
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
+            fake.time_end = fake.time_start + duration
             Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
@@ -375,6 +416,7 @@ cd(@__DIR__) do
     end
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
+    # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
         println("    \033[32;1mSUCCESS\033[0m")

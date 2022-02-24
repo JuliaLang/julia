@@ -149,6 +149,9 @@ keypress(m::AbstractMenu, i::UInt32) = false
     numoptions(m::AbstractMenu) -> Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 numoptions(m::AbstractMenu) = length(options(m))
 
@@ -169,6 +172,9 @@ number used for the initial cursor position. `cursor` can be either an
 control of the cursor position from the outside.
 
 Returns `selected(m)`.
+
+!!! compat "Julia 1.6"
+    The `cursor` argument requires Julia 1.6 or later.
 """
 request(m::AbstractMenu; kwargs...) = request(terminal, m; kwargs...)
 
@@ -382,27 +388,27 @@ end
 scroll_wrap(m::ConfiguredMenu) = scroll_wrap(m.config)
 scroll_wrap(c::AbstractConfig) = scroll_wrap(c.config)
 scroll_wrap(c::Config) = c.scroll_wrap
-scroll_wrap(::AbstractMenu) = CONFIG[:scroll_wrap]
+scroll_wrap(::AbstractMenu) = CONFIG[:scroll_wrap]::Bool
 
 ctrl_c_interrupt(m::ConfiguredMenu) = ctrl_c_interrupt(m.config)
 ctrl_c_interrupt(c::AbstractConfig) = ctrl_c_interrupt(c.config)
 ctrl_c_interrupt(c::Config) = c.ctrl_c_interrupt
-ctrl_c_interrupt(::AbstractMenu) = CONFIG[:ctrl_c_interrupt]
+ctrl_c_interrupt(::AbstractMenu) = CONFIG[:ctrl_c_interrupt]::Bool
 
 up_arrow(m::ConfiguredMenu) = up_arrow(m.config)
 up_arrow(c::AbstractConfig) = up_arrow(c.config)
 up_arrow(c::Config) = c.up_arrow
-up_arrow(::AbstractMenu) = CONFIG[:up_arrow]
+up_arrow(::AbstractMenu) = CONFIG[:up_arrow]::Char
 
 down_arrow(m::ConfiguredMenu) = down_arrow(m.config)
 down_arrow(c::AbstractConfig) = down_arrow(c.config)
 down_arrow(c::Config) = c.down_arrow
-down_arrow(::AbstractMenu) = CONFIG[:down_arrow]
+down_arrow(::AbstractMenu) = CONFIG[:down_arrow]::Char
 
 updown_arrow(m::ConfiguredMenu) = updown_arrow(m.config)
 updown_arrow(c::AbstractConfig) = updown_arrow(c.config)
 updown_arrow(c::Config) = c.updown_arrow
-updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]
+updown_arrow(::AbstractMenu) = CONFIG[:updown_arrow]::Char
 
 printcursor(buf, m::ConfiguredMenu, iscursor::Bool) = print(buf, iscursor ? cursor(m.config) : ' ', ' ')
 cursor(c::AbstractConfig) = cursor(c.config)

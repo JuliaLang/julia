@@ -132,6 +132,39 @@ end
 testf(id_me)
 testf(id_other)
 
+function poll_while(f::Function; timeout_seconds::Integer = 120)
+    start_time = time_ns()
+    while f()
+        sleep(1)
+        if ( ( time_ns() - start_time )/1e9 ) > timeout_seconds
+            @error "Timed out" timeout_seconds
+            return false
+        end
+    end
+    return true
+end
+
+function _getenv_include_thread_unsafe()
+    environment_variable_name = "JULIA_TEST_INCLUDE_THREAD_UNSAFE"
+    default_value = "false"
+    environment_variable_value = strip(get(ENV, environment_variable_name, default_value))
+    b = parse(Bool, environment_variable_value)::Bool
+    return b
+end
+const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
+function include_thread_unsafe()
+    if Threads.nthreads() > 1
+        if _env_include_thread_unsafe
+            return true
+        end
+        msg = "Skipping a thread-unsafe test because `Threads.nthreads() > 1`"
+        @warn msg Threads.nthreads()
+        Test.@test_broken false
+        return false
+    end
+    return true
+end
+
 # Distributed GC tests for Futures
 function test_futures_dgc(id)
     f = remotecall(myid, id)
@@ -143,8 +176,7 @@ function test_futures_dgc(id)
     @test fetch(f) == id
     @test f.v !== nothing
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
-
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 
     # if unfetched, it should be deleted after a finalize
     f = remotecall(myid, id)
@@ -153,7 +185,7 @@ function test_futures_dgc(id)
     @test f.v === nothing
     finalize(f)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, fid))
 end
 
 test_futures_dgc(id_me)
@@ -243,7 +275,7 @@ function test_remoteref_dgc(id)
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
-    @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid))
 end
 test_remoteref_dgc(id_me)
 test_remoteref_dgc(id_other)
@@ -256,13 +288,17 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    if include_thread_unsafe()
+        @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
+    end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid))
 end
 
 # Tests for issue #23109 - should not hang.
@@ -314,6 +350,9 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
+        elseif fld == :lock
+            @test v isa ReentrantLock
+            @test !islocked(v)
         elseif v !== nothing
             error(string("Add test for field ", fld))
         end
@@ -802,6 +841,16 @@ v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(fetch, id_other, v15406)
 
+
+# issue #43396
+# Covers the remote fetch where the value returned is `nothing`
+# May be caused by attempting to unwrap a non-`Some` type with `something`
+# `call_on_owner` ref fetches return values not wrapped in `Some`
+# and have to be returned directly
+@test nothing === fetch(remotecall(() -> nothing, workers()[1]))
+@test 10 === fetch(remotecall(() -> 10, workers()[1]))
+
+
 # Test various forms of remotecall* invocations
 
 @everywhere f_args(v1, v2=0; kw1=0, kw2=0) = v1+v2+kw1+kw2
@@ -852,6 +901,13 @@ end
         end
         return :OK
     end, id_other, rc_unbuffered) == :OK
+
+# github issue 33972
+rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
+close(rc_unbuffered_other)
+try; take!(rc_unbuffered_other); catch; end
+@test !remotecall_fetch(rc -> islocked(Distributed.lookup_ref(remoteref_id(rc)).synctake),
+                        id_other, rc_unbuffered_other)
 
 # github PR #14456
 n = DoFullTest ? 6 : 5
@@ -1005,30 +1061,8 @@ end
 
 # Test addprocs enable_threaded_blas parameter
 
-const get_num_threads = function() # anonymous so it will be serialized when called
-    blas = LinearAlgebra.BLAS.vendor()
-    # Wrap in a try to catch unsupported blas versions
-    try
-        if blas == :openblas
-            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
-        elseif blas == :openblas64
-            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
-        elseif blas == :mkl
-            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
-        end
-
-        # OSX BLAS looks at an environment variable
-        if Sys.isapple()
-            return tryparse(Cint, get(ENV, "VECLIB_MAXIMUM_THREADS", "1"))
-        end
-    catch
-    end
-
-    return nothing
-end
-
 function get_remote_num_threads(processes_added)
-    return [remotecall_fetch(get_num_threads, proc_id) for proc_id in processes_added]
+    return [remotecall_fetch(BLAS.get_num_threads, proc_id) for proc_id in processes_added]
 end
 
 function test_blas_config(pid, expected)
@@ -1041,12 +1075,11 @@ function test_blas_config(pid, expected)
 end
 
 function test_add_procs_threaded_blas()
-    master_blas_thread_count = get_num_threads()
+    master_blas_thread_count = BLAS.get_num_threads()
     if master_blas_thread_count === nothing
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
@@ -1055,7 +1088,7 @@ function test_add_procs_threaded_blas()
     end
 
     # Master thread should not have changed
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
     # Threading disabled in children by default
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1069,9 +1102,9 @@ function test_add_procs_threaded_blas()
         test_blas_config(proc_id, true)
     end
 
-    @test get_num_threads() == master_blas_thread_count
+    @test BLAS.get_num_threads() == master_blas_thread_count
 
-    # BLAS.set_num_threads(`num`) doesn't  cause get_num_threads to return `num`
+    # BLAS.set_num_threads(`num`) doesn't  cause BLAS.get_num_threads to return `num`
     # depending on the machine, the BLAS version, and BLAS configuration, so
     # we need a very lenient test.
     thread_counts_by_process = get_remote_num_threads(processes_added)
@@ -1697,7 +1730,7 @@ let e = @test_throws RemoteException pmap(1) do _
     es = sprint(showerror, e.value)
     @test contains(es, ":\nTaskFailedException\nStacktrace:\n")
     @test contains(es, "\n\n    nested task error:")
-    @test_broken contains(es, "\n\n    nested task error: 42\n")
+    @test contains(es, "\n\n    nested task error: 42\n")
 end
 
 # issue #27429, propagate relative `include` path to workers

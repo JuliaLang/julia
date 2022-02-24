@@ -24,14 +24,14 @@
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
 
-#if JL_LLVM_VERSION >= 100000
 #include <llvm/InitializePasses.h>
-#endif
 
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
+#include "llvm-alloc-helpers.h"
+#include "passes.h"
 
 #include <map>
 #include <set>
@@ -39,6 +39,7 @@
 #include "julia_assert.h"
 
 using namespace llvm;
+using namespace jl_alloc;
 
 namespace {
 
@@ -46,7 +47,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
 {
     auto replace = Constant::getNullValue(val->getType());
     call->replaceUsesOfWith(val, replace);
-    for (auto &arg: call->arg_operands()) {
+    for (auto &arg: call->args()) {
         if (!isa<Constant>(arg.get())) {
             return;
         }
@@ -58,27 +59,6 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
         end->eraseFromParent();
     }
     call->eraseFromParent();
-}
-
-static bool hasObjref(Type *ty)
-{
-    if (auto ptrty = dyn_cast<PointerType>(ty))
-        return ptrty->getAddressSpace() == AddressSpace::Tracked;
-#if JL_LLVM_VERSION >= 110000
-    if (isa<ArrayType>(ty) || isa<VectorType>(ty))
-        return GetElementPtrInst::getTypeAtIndex(ty, (uint64_t)0);
-#else
-    if (auto seqty = dyn_cast<SequentialType>(ty))
-        return hasObjref(seqty->getElementType());
-#endif
-    if (auto structty = dyn_cast<StructType>(ty)) {
-        for (auto elty: structty->elements()) {
-            if (hasObjref(elty)) {
-                return true;
-            }
-        }
-    }
-    return false;
 }
 
 /**
@@ -106,13 +86,7 @@ static bool hasObjref(Type *ty)
  * * Handle jl_box*
  */
 
-struct AllocOpt : public FunctionPass, public JuliaPassContext {
-    static char ID;
-    AllocOpt()
-        : FunctionPass(ID)
-    {
-        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-    }
+struct AllocOpt : public JuliaPassContext {
 
     const DataLayout *DL;
 
@@ -121,22 +95,15 @@ struct AllocOpt : public FunctionPass, public JuliaPassContext {
 
     Type *T_int64;
 
-private:
-    bool doInitialization(Module &m) override;
-    bool runOnFunction(Function &F) override;
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.addRequired<DominatorTreeWrapperPass>();
-        AU.addPreserved<DominatorTreeWrapperPass>();
-        AU.setPreservesCFG();
-    }
+    bool doInitialization(Module &m);
+    bool runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT);
 };
 
 struct Optimizer {
-    Optimizer(Function &F, AllocOpt &pass)
+    Optimizer(Function &F, AllocOpt &pass, function_ref<DominatorTree&()> GetDT)
         : F(F),
-          pass(pass)
+          pass(pass),
+          GetDT(std::move(GetDT))
     {}
 
     void initialize();
@@ -164,23 +131,14 @@ private:
     Function &F;
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
+    function_ref<DominatorTree &()> GetDT;
 
     DominatorTree &getDomTree()
     {
         if (!_DT)
-            _DT = &pass.getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+            _DT = &GetDT();
         return *_DT;
     }
-
-    struct CheckInst {
-        struct Frame {
-            Instruction *parent;
-            uint32_t offset;
-            Instruction::use_iterator use_it;
-            Instruction::use_iterator use_end;
-        };
-        typedef SmallVector<Frame,4> Stack;
-    };
     struct Lifetime {
         struct Frame {
             BasicBlock *bb;
@@ -211,90 +169,6 @@ private:
             {}
         };
         typedef SmallVector<Frame,4> Stack;
-    };
-
-    struct MemOp {
-        Instruction *inst;
-        unsigned opno;
-        uint32_t offset = 0;
-        uint32_t size = 0;
-        bool isobjref:1;
-        bool isaggr:1;
-        MemOp(Instruction *inst, unsigned opno)
-            : inst(inst),
-              opno(opno),
-              isobjref(false),
-              isaggr(false)
-        {}
-    };
-    struct Field {
-        uint32_t size;
-        bool hasobjref:1;
-        bool hasaggr:1;
-        bool multiloc:1;
-        bool hasload:1;
-        Type *elty;
-        SmallVector<MemOp,4> accesses;
-        Field(uint32_t size, Type *elty)
-            : size(size),
-              hasobjref(false),
-              hasaggr(false),
-              multiloc(false),
-              hasload(false),
-              elty(elty)
-        {
-        }
-    };
-    struct AllocUseInfo {
-        SmallSet<Instruction*,16> uses;
-        SmallSet<CallInst*,4> preserves;
-        std::map<uint32_t,Field> memops;
-        // Completely unknown use
-        bool escaped:1;
-        // Address is leaked to functions that doesn't care where the object is allocated.
-        bool addrescaped:1;
-        // There are reader of the memory
-        bool hasload:1;
-        // There are uses in gc_preserve intrinsics or ccall roots
-        bool haspreserve:1;
-        // There are objects fields being loaded
-        bool refload:1;
-        // There are objects fields being stored
-        bool refstore:1;
-        // There are typeof call
-        // This can be optimized without optimizing out the allocation itself
-        bool hastypeof:1;
-        // There are store/load/memset on this object with offset or size (or value for memset)
-        // that cannot be statically computed.
-        // This is a weaker form of `addrescaped` since `hasload` can still be used
-        // to see if the memory is actually being used
-        bool hasunknownmem:1;
-        void reset()
-        {
-            escaped = false;
-            addrescaped = false;
-            hasload = false;
-            haspreserve = false;
-            refload = false;
-            refstore = false;
-            hastypeof = false;
-            hasunknownmem = false;
-            uses.clear();
-            preserves.clear();
-            memops.clear();
-        }
-        void dump();
-        bool addMemOp(Instruction *inst, unsigned opno, uint32_t offset, Type *elty,
-                      bool isstore, const DataLayout &DL);
-        std::pair<const uint32_t,Field> &getField(uint32_t offset, uint32_t size, Type *elty);
-        std::map<uint32_t,Field>::iterator findLowerField(uint32_t offset)
-        {
-            // Find the last field that starts no higher than `offset`.
-            auto it = memops.upper_bound(offset);
-            if (it != memops.begin())
-                return --it;
-            return memops.end();
-        }
     };
 
     SetVector<std::pair<CallInst*,size_t>> worklist;
@@ -335,6 +209,11 @@ void Optimizer::optimizeAll()
                 optimizeTag(orig);
             continue;
         }
+        if (use_info.haserror || use_info.returned) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
+        }
         if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
                                                            !use_info.refstore)) {
             // No one took the address, no one reads anything and there's no meaningful
@@ -350,7 +229,8 @@ void Optimizer::optimizeAll()
             if (field.hasobjref) {
                 has_ref = true;
                 // This can be relaxed a little based on hasload
-                if (field.hasaggr || field.multiloc) {
+                // TODO: add support for hasaggr load/store
+                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
                     has_refaggr = true;
                     break;
                 }
@@ -361,15 +241,12 @@ void Optimizer::optimizeAll()
             splitOnStack(orig);
             continue;
         }
-        if (has_ref) {
-            if (use_info.memops.size() != 1 || has_refaggr ||
-                use_info.memops.begin()->second.size != sz) {
-                if (use_info.hastypeof)
-                    optimizeTag(orig);
-                continue;
-            }
-            // The object only has a single field that's a reference with only one kind of access.
+        if (has_refaggr) {
+            if (use_info.hastypeof)
+                optimizeTag(orig);
+            continue;
         }
+        // The object has no fields with mix reference access
         moveToStack(orig, sz, has_ref);
     }
 }
@@ -425,262 +302,17 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
         return -1;
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
-    assert(call->getNumArgOperands() == 3);
+    assert(call->arg_size() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
     if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
         return sz;
     return -1;
 }
 
-std::pair<const uint32_t,Optimizer::Field>&
-Optimizer::AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
-{
-    auto it = findLowerField(offset);
-    auto end = memops.end();
-    auto lb = end; // first overlap
-    auto ub = end; // last overlap
-    if (it != end) {
-        // The slot found contains the current location
-        if (it->first + it->second.size >= offset + size) {
-            if (it->second.elty != elty)
-                it->second.elty = nullptr;
-            return *it;
-        }
-        if (it->first + it->second.size > offset) {
-            lb = it;
-            ub = it;
-        }
-    }
-    else {
-        it = memops.begin();
-    }
-    // Now fine the last slot that overlaps with the current memory location.
-    // Also set `lb` if we didn't find any above.
-    for (; it != end && it->first < offset + size; ++it) {
-        if (lb == end)
-            lb = it;
-        ub = it;
-    }
-    // no overlap found just create a new one.
-    if (lb == end)
-        return *memops.emplace(offset, Field(size, elty)).first;
-    // We find overlapping but not containing slot we need to merge slot/create new one
-    uint32_t new_offset = std::min(offset, lb->first);
-    uint32_t new_addrub = std::max(offset + uint32_t(size), ub->first + ub->second.size);
-    uint32_t new_size = new_addrub - new_offset;
-    Field field(new_size, nullptr);
-    field.multiloc = true;
-    ++ub;
-    for (it = lb; it != ub; ++it) {
-        field.hasobjref |= it->second.hasobjref;
-        field.hasload |= it->second.hasload;
-        field.hasaggr |= it->second.hasaggr;
-        field.accesses.append(it->second.accesses.begin(), it->second.accesses.end());
-    }
-    memops.erase(lb, ub);
-    return *memops.emplace(new_offset, std::move(field)).first;
-}
-
-bool Optimizer::AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
-                                       Type *elty, bool isstore, const DataLayout &DL)
-{
-    MemOp memop(inst, opno);
-    memop.offset = offset;
-    uint64_t size = DL.getTypeStoreSize(elty);
-    if (size >= UINT32_MAX - offset)
-        return false;
-    memop.size = size;
-    memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
-    memop.isobjref = hasObjref(elty);
-    auto &field = getField(offset, size, elty);
-    if (field.first != offset || field.second.size != size)
-        field.second.multiloc = true;
-    if (!isstore)
-        field.second.hasload = true;
-    if (memop.isobjref) {
-        if (isstore) {
-            refstore = true;
-        }
-        else {
-            refload = true;
-        }
-        if (memop.isaggr)
-            field.second.hasaggr = true;
-        field.second.hasobjref = true;
-    }
-    else if (memop.isaggr) {
-        field.second.hasaggr = true;
-    }
-    field.second.accesses.push_back(memop);
-    return true;
-}
-
-JL_USED_FUNC void Optimizer::AllocUseInfo::dump()
-{
-    jl_safe_printf("escaped: %d\n", escaped);
-    jl_safe_printf("addrescaped: %d\n", addrescaped);
-    jl_safe_printf("hasload: %d\n", hasload);
-    jl_safe_printf("haspreserve: %d\n", haspreserve);
-    jl_safe_printf("refload: %d\n", refload);
-    jl_safe_printf("refstore: %d\n", refstore);
-    jl_safe_printf("hasunknownmem: %d\n", hasunknownmem);
-    jl_safe_printf("Uses: %d\n", (unsigned)uses.size());
-    for (auto inst: uses)
-        llvm_dump(inst);
-    if (!preserves.empty()) {
-        jl_safe_printf("Preserves: %d\n", (unsigned)preserves.size());
-        for (auto inst: preserves) {
-            llvm_dump(inst);
-        }
-    }
-    if (!memops.empty()) {
-        jl_safe_printf("Memops: %d\n", (unsigned)memops.size());
-        for (auto &field: memops) {
-            jl_safe_printf("  Field %d @ %d\n", field.second.size, field.first);
-            jl_safe_printf("    Accesses:\n");
-            for (auto memop: field.second.accesses) {
-                jl_safe_printf("    ");
-                llvm_dump(memop.inst);
-            }
-        }
-    }
-}
-
 void Optimizer::checkInst(Instruction *I)
 {
-    use_info.reset();
-    if (I->use_empty())
-        return;
-    CheckInst::Frame cur{I, 0, I->use_begin(), I->use_end()};
-    check_stack.clear();
-
-    // Recursion
-    auto push_inst = [&] (Instruction *inst) {
-        if (cur.use_it != cur.use_end)
-            check_stack.push_back(cur);
-        cur.parent = inst;
-        cur.use_it = inst->use_begin();
-        cur.use_end = inst->use_end();
-    };
-
-    auto check_inst = [&] (Instruction *inst, Use *use) {
-        if (isa<LoadInst>(inst)) {
-            use_info.hasload = true;
-            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, 0, cur.offset,
-                                                               inst->getType(),
-                                                               false, *pass.DL))
-                use_info.hasunknownmem = true;
-            return true;
-        }
-        if (auto call = dyn_cast<CallInst>(inst)) {
-            // TODO handle `memcmp`
-            // None of the intrinsics should care if the memory is stack or heap allocated.
-            auto callee = call->getCalledOperand();
-            if (auto II = dyn_cast<IntrinsicInst>(call)) {
-                if (auto id = II->getIntrinsicID()) {
-                    if (id == Intrinsic::memset) {
-                        assert(call->getNumArgOperands() == 4);
-                        if (cur.offset == UINT32_MAX ||
-                            !isa<ConstantInt>(call->getArgOperand(2)) ||
-                            !isa<ConstantInt>(call->getArgOperand(1)) ||
-                            (cast<ConstantInt>(call->getArgOperand(2))->getLimitedValue() >=
-                             UINT32_MAX - cur.offset))
-                            use_info.hasunknownmem = true;
-                        return true;
-                    }
-                    if (id == Intrinsic::lifetime_start || id == Intrinsic::lifetime_end ||
-                        isa<DbgInfoIntrinsic>(II))
-                        return true;
-                    use_info.addrescaped = true;
-                    return true;
-                }
-                if (pass.gc_preserve_begin_func == callee) {
-                    for (auto user: call->users())
-                        use_info.uses.insert(cast<Instruction>(user));
-                    use_info.preserves.insert(call);
-                    use_info.haspreserve = true;
-                    return true;
-                }
-            }
-            if (pass.pointer_from_objref_func == callee) {
-                use_info.addrescaped = true;
-                return true;
-            }
-            if (pass.typeof_func == callee) {
-                use_info.hastypeof = true;
-                assert(use->get() == I);
-                return true;
-            }
-            if (pass.write_barrier_func == callee)
-                return true;
-            auto opno = use->getOperandNo();
-            // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
-            if (!call->isBundleOperand(opno) ||
-                call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
-                use_info.escaped = true;
-                return false;
-            }
-            use_info.haspreserve = true;
-            return true;
-        }
-        if (auto store = dyn_cast<StoreInst>(inst)) {
-            // Only store value count
-            if (use->getOperandNo() != StoreInst::getPointerOperandIndex()) {
-                use_info.escaped = true;
-                return false;
-            }
-            auto storev = store->getValueOperand();
-            if (cur.offset == UINT32_MAX || !use_info.addMemOp(inst, use->getOperandNo(),
-                                                               cur.offset, storev->getType(),
-                                                               true, *pass.DL))
-                use_info.hasunknownmem = true;
-            return true;
-        }
-        if (isa<AddrSpaceCastInst>(inst) || isa<BitCastInst>(inst)) {
-            push_inst(inst);
-            return true;
-        }
-        if (auto gep = dyn_cast<GetElementPtrInst>(inst)) {
-            uint64_t next_offset = cur.offset;
-            if (cur.offset != UINT32_MAX) {
-                APInt apoffset(sizeof(void*) * 8, cur.offset, true);
-                if (!gep->accumulateConstantOffset(*pass.DL, apoffset) || apoffset.isNegative()) {
-                    next_offset = UINT32_MAX;
-                }
-                else {
-                    next_offset = apoffset.getLimitedValue();
-                    if (next_offset > UINT32_MAX) {
-                        next_offset = UINT32_MAX;
-                    }
-                }
-            }
-            push_inst(inst);
-            cur.offset = (uint32_t)next_offset;
-            return true;
-        }
-        use_info.escaped = true;
-        return false;
-    };
-
-    while (true) {
-        assert(cur.use_it != cur.use_end);
-        auto use = &*cur.use_it;
-        auto inst = dyn_cast<Instruction>(use->getUser());
-        ++cur.use_it;
-        if (!inst) {
-            use_info.escaped = true;
-            return;
-        }
-        if (!check_inst(inst, use))
-            return;
-        use_info.uses.insert(inst);
-        if (cur.use_it == cur.use_end) {
-            if (check_stack.empty())
-                return;
-            cur = check_stack.back();
-            check_stack.pop_back();
-        }
-    }
+    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
+    jl_alloc::runEscapeAnalysis(I, required);
 }
 
 void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
@@ -863,7 +495,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                         Instruction *orig_i, Instruction *new_i)
 {
-    auto nargs = call->getNumArgOperands();
+    auto nargs = call->arg_size();
     SmallVector<Value*, 8> args(nargs);
     SmallVector<Type*, 8> argTys(nargs);
     for (unsigned i = 0; i < nargs; i++) {
@@ -897,8 +529,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newCall = CallInst::Create(newF, args, "", call);
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
-    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), old_attrs.getFnAttributes(),
-                                              old_attrs.getRetAttributes(), {}));
+    newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
+                                              getRetAttrs(old_attrs), {}));
     newCall->setDebugLoc(call->getDebugLoc());
     call->replaceAllUsesWith(newCall);
     call->eraseFromParent();
@@ -936,7 +568,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
     else {
-        buff = prolog_builder.CreateAlloca(Type::getIntNTy(pass.getLLVMContext(), sz * 8));
+        Type *buffty;
+        if (pass.DL->isLegalInteger(sz * 8))
+            buffty = Type::getIntNTy(pass.getLLVMContext(), sz * 8);
+        else
+            buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
+        buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
     }
@@ -1021,8 +658,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            auto cast_t = PointerType::get(cast<PointerType>(user->getType())->getElementType(),
-                                           0);
+            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), AddressSpace::Generic);
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
@@ -1152,6 +788,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
 {
     auto tag = orig_inst->getArgOperand(2);
     // `julia.typeof` is only legal on the original pointer, no need to scan recursively
+    size_t last_deleted = removed.size();
     for (auto user: orig_inst->users()) {
         if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
@@ -1164,6 +801,8 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
             }
         }
     }
+    while (last_deleted < removed.size())
+        removed[last_deleted++]->replaceUsesOfWith(orig_inst, UndefValue::get(orig_inst->getType()));
 }
 
 void Optimizer::splitOnStack(CallInst *orig_inst)
@@ -1193,8 +832,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else if (field.elty && !field.multiloc) {
             allocty = field.elty;
         }
-        else {
+        else if (pass.DL->isLegalInteger(field.size * 8)) {
             allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
+        } else {
+            allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, pass.T_pint8),
@@ -1283,11 +924,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 val = newload;
             }
             // TODO: should we use `load->clone()`, or manually copy any other metadata?
-#if JL_LLVM_VERSION >= 100000
             newload->setAlignment(load->getAlign());
-#else
-            newload->setAlignment(load->getAlignment());
-#endif
             // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
             newload->setOrdering(AtomicOrdering::NotAtomic);
             load->replaceAllUsesWith(val);
@@ -1315,8 +952,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     store_ty = pass.T_pjlvalue;
                 }
                 else {
-                    store_ty = cast<PointerType>(pass.T_pjlvalue)->getElementType()
-                        ->getPointerTo(cast<PointerType>(store_ty)->getAddressSpace());
+                    store_ty = PointerType::getWithSamePointeeType(pass.T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
@@ -1327,15 +963,27 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 newstore = builder.CreateStore(store_val, slot_gep(slot, offset, store_ty, builder));
             }
             // TODO: should we use `store->clone()`, or manually copy any other metadata?
-#if JL_LLVM_VERSION >= 100000
             newstore->setAlignment(store->getAlign());
-#else
-            newstore->setAlignment(store->getAlignment());
-#endif
             // since we're moving heap-to-stack, it is safe to downgrade the atomic level to NotAtomic
             newstore->setOrdering(AtomicOrdering::NotAtomic);
             store->eraseFromParent();
             return;
+        }
+        else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            auto slot_idx = find_slot(offset);
+            auto &slot = slots[slot_idx];
+            assert(slot.offset <= offset && slot.offset + slot.size >= offset);
+            IRBuilder<> builder(user);
+            Value *newptr;
+            if (slot.isref) {
+                assert(slot.offset == offset);
+                newptr = slot.slot;
+            }
+            else {
+                Value *Val = isa<AtomicCmpXchgInst>(user) ? cast<AtomicCmpXchgInst>(user)->getNewValOperand() : cast<AtomicRMWInst>(user)->getValOperand();
+                newptr = slot_gep(slot, offset, Val->getType(), builder);
+            }
+            *use = newptr;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
@@ -1377,11 +1025,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
                             // TODO: alignment computation
-#if JL_LLVM_VERSION >= 100000
                             builder.CreateMemSet(ptr8, val_arg, sub_size, MaybeAlign(0));
-#else
-                            builder.CreateMemSet(ptr8, val_arg, sub_size, 0);
-#endif
                         }
                         call->eraseFromParent();
                         return;
@@ -1401,7 +1045,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             }
             if (pass.gc_preserve_begin_func == callee) {
                 SmallVector<Value*,8> operands;
-                for (auto &arg: call->arg_operands()) {
+                for (auto &arg: call->args()) {
                     if (arg.get() == orig_i || isa<Constant>(arg.get()))
                         continue;
                     operands.push_back(arg.get());
@@ -1502,18 +1146,39 @@ bool AllocOpt::doInitialization(Module &M)
     return true;
 }
 
-bool AllocOpt::runOnFunction(Function &F)
+bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
     if (!alloc_obj_func)
         return false;
-    Optimizer optimizer(F, *this);
+    Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();
     optimizer.optimizeAll();
     return optimizer.finalize();
 }
 
-char AllocOpt::ID = 0;
-static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
+struct AllocOptLegacy : public FunctionPass {
+    static char ID;
+    AllocOpt opt;
+    AllocOptLegacy() : FunctionPass(ID) {
+        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
+    }
+    bool doInitialization(Module &m) override {
+        return opt.doInitialization(m);
+    }
+    bool runOnFunction(Function &F) override {
+        return opt.runOnFunction(F, [this]() -> DominatorTree & {return getAnalysis<DominatorTreeWrapperPass>().getDomTree();});
+    }
+    void getAnalysisUsage(AnalysisUsage &AU) const override
+    {
+        FunctionPass::getAnalysisUsage(AU);
+        AU.addRequired<DominatorTreeWrapperPass>();
+        AU.addPreserved<DominatorTreeWrapperPass>();
+        AU.setPreservesCFG();
+    }
+};
+
+char AllocOptLegacy::ID = 0;
+static RegisterPass<AllocOptLegacy> X("AllocOpt", "Promote heap allocation to stack",
                                 false /* Only looks at CFG */,
                                 false /* Analysis Pass */);
 
@@ -1521,10 +1186,25 @@ static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
 
 Pass *createAllocOptPass()
 {
-    return new AllocOpt();
+    return new AllocOptLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass(LLVMPassManagerRef PM)
+PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
+    AllocOpt opt;
+    bool modified = opt.doInitialization(*F.getParent());
+    if (opt.runOnFunction(F, [&]()->DominatorTree &{ return AM.getResult<DominatorTreeAnalysis>(F); })) {
+        modified = true;
+    }
+    if (modified) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<DominatorTreeAnalysis>();
+        return preserved;
+    } else {
+        return PreservedAnalyses::all();
+    }
+}
+
+extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createAllocOptPass());
 }

@@ -6,27 +6,29 @@ PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://ftp.pcre.org/pub/pcre/pcre2-$(PCRE_VER).tar.bz2
+	$(JLDOWNLOAD) $@ https://github.com/PhilipHazel/pcre2/releases/download/pcre2-$(PCRE_VER)/pcre2-$(PCRE_VER).tar.bz2
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
 	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
-	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -p1 -f < $(SRCDIR)/patches/pcre2-cet-flags.patch
-	# Fix some old targets modified by the patching
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.am
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/Makefile.in
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/aclocal.m4
-	touch -c $(SRCCACHE)/pcre2-$(PCRE_VER)/configure
-	echo $1 > $@
+	echo 1 > $@
 
-checksum-pcre2: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
+checksum-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
+$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
+	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -d src/sljit -p2 -f < $(SRCDIR)/patches/pcre2-sljit-apple-silicon-support.patch
+	echo 1 > $@
+
+$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied
+	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -d src/sljit -p2 -f < $(SRCDIR)/patches/pcre2-sljit-nomprotect.patch
+	echo 1 > $@
+
+$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS)" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
+	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS) -g -O0" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"
 	echo 1 > $@
 
 $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled: $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured

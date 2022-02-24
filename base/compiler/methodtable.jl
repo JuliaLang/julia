@@ -2,6 +2,27 @@
 
 abstract type MethodTableView; end
 
+"""
+    struct InternalMethodTable <: MethodTableView
+
+A struct representing the state of the internal method table at a
+particular world age.
+"""
+struct InternalMethodTable <: MethodTableView
+    world::UInt
+end
+
+"""
+    struct OverlayMethodTable <: MethodTableView
+
+Overlays the internal method table such that specific queries can be redirected to an
+external table, e.g., to override existing method.
+"""
+struct OverlayMethodTable <: MethodTableView
+    world::UInt
+    mt::Core.MethodTable
+end
+
 struct MethodLookupResult
     # Really Vector{Core.MethodMatch}, but it's easier to represent this as
     # and work with Vector{Any} on the C side.
@@ -19,57 +40,45 @@ end
 getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
 
 """
-    struct InternalMethodTable <: MethodTableView
-
-A struct representing the state of the internal method table at a
-particular world age.
-"""
-struct InternalMethodTable <: MethodTableView
-    world::UInt
-end
-
-"""
-    struct CachedMethodTable <: MethodTableView
-
-Overlays another method table view with an additional local fast path cache that
-can respond to repeated, identical queries faster than the original method table.
-"""
-struct CachedMethodTable{T} <: MethodTableView
-    cache::IdDict{Any, Union{Missing, MethodLookupResult}}
-    table::T
-end
-CachedMethodTable(table::T) where T =
-    CachedMethodTable{T}(IdDict{Any, Union{Missing, MethodLookupResult}}(),
-        table)
-
-"""
-    findall(sig::Type{<:Tuple}, view::MethodTableView; limit=typemax(Int))
+    findall(sig::Type, view::MethodTableView; limit=typemax(Int))
 
 Find all methods in the given method table `view` that are applicable to the
 given signature `sig`. If no applicable methods are found, an empty result is
-returned. If the number of applicable methods exeeded the specified limit,
+returned. If the number of applicable methods exceeded the specified limit,
 `missing` is returned.
 """
-function findall(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=typemax(Int))
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
-    ms = _methods_by_ftype(sig, limit, table.world, false, _min_val, _max_val, _ambig)
+    ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
     if ms === false
         return missing
     end
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type{<:Tuple}), table::CachedMethodTable; limit::Int=typemax(Int))
-    box = Core.Box(sig)
-    return get!(table.cache, sig) do
-        findall(box.contents, table.table; limit=limit)
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=typemax(Int))
+    _min_val = RefValue{UInt}(typemin(UInt))
+    _max_val = RefValue{UInt}(typemax(UInt))
+    _ambig = RefValue{Int32}(0)
+    ms = _methods_by_ftype(sig, table.mt, limit, table.world, false, _min_val, _max_val, _ambig)
+    if ms === false
+        return missing
+    elseif isempty(ms)
+        # fall back to the internal method table
+        _min_val[] = typemin(UInt)
+        _max_val[] = typemax(UInt)
+        ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
+        if ms === false
+            return missing
+        end
     end
+    return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
 """
-    findsup(sig::Type{<:Tuple}, view::MethodTableView)::Union{Tuple{MethodMatch, WorldRange}, Nothing}
+    findsup(sig::Type, view::MethodTableView)::Union{Tuple{MethodMatch, WorldRange}, Nothing}
 
 Find the (unique) method `m` such that `sig <: m.sig`, while being more
 specific than any other method with the same property. In other words, find
@@ -82,14 +91,15 @@ Such a method `m` need not exist. It is possible that no method is an
 upper bound of `sig`, or it is possible that among the upper bounds, there
 is no least element. In both cases `nothing` is returned.
 """
-function findsup(@nospecialize(sig::Type{<:Tuple}), table::InternalMethodTable)
+function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
     result = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-                   sig, table.world, min_valid, max_valid)::Union{Method, Nothing}
+                   sig, table.world, min_valid, max_valid)::Union{MethodMatch, Nothing}
     result === nothing && return nothing
-    (result, WorldRange(min_valid[], max_valid[]))
+    (result.method, WorldRange(min_valid[], max_valid[]))
 end
 
-# This query is not cached
-findsup(sig::Type{<:Tuple}, table::CachedMethodTable) = findsup(sig, table.table)
+isoverlayed(::MethodTableView)     = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable)  = true

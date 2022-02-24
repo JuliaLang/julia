@@ -95,9 +95,10 @@ end
 @enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED
 mutable struct Worker
     id::Int
-    del_msgs::Array{Any,1}
+    msg_lock::Threads.ReentrantLock # Lock for del_msgs, add_msgs, and gcflag
+    del_msgs::Array{Any,1} # XXX: Could del_msgs and add_msgs be Channels?
     add_msgs::Array{Any,1}
-    gcflag::Bool
+    @atomic gcflag::Bool
     state::WorkerState
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
@@ -133,7 +134,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w=new(id, Threads.ReentrantLock(), [], [], false, W_CREATED, Condition(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -160,17 +161,18 @@ function check_worker_state(w::Worker)
         else
             w.ct_time = time()
             if myid() > w.id
-                @async exec_conn_func(w)
+                t = @async exec_conn_func(w)
             else
                 # route request via node 1
-                @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
+                t = @async remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
             end
+            errormonitor(t)
             wait_for_conn(w)
         end
     end
 end
 
-exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id))
+exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id)::Worker)
 function exec_conn_func(w::Worker)
     try
         f = notnothing(w.conn_func)
@@ -242,10 +244,10 @@ function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_std
     else
         sock = listen(interface, LPROC.bind_port)
     end
-    @async while isopen(sock)
+    errormonitor(@async while isopen(sock)
         client = accept(sock)
         process_messages(client, client, true)
-    end
+    end)
     print(out, "julia_worker:")  # print header
     print(out, "$(string(LPROC.bind_port))#") # print port
     print(out, LPROC.bind_addr)
@@ -274,7 +276,7 @@ end
 
 
 function redirect_worker_output(ident, stream)
-    @async while !eof(stream)
+    t = @async while !eof(stream)
         line = readline(stream)
         if startswith(line, "      From worker ")
             # stdout's of "additional" workers started from an initial worker on a host are not available
@@ -284,6 +286,7 @@ function redirect_worker_output(ident, stream)
             println("      From worker $(ident):\t$line")
         end
     end
+    errormonitor(t)
 end
 
 struct LaunchWorkerError <: Exception
@@ -349,7 +352,7 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m !== nothing
-        (m.captures[2], parse(UInt16, m.captures[1]))
+        (String(m.captures[2]), parse(UInt16, m.captures[1]))
     else
         ("", UInt16(0))
     end
@@ -431,7 +434,7 @@ if istaskdone(t)   # Check if `addprocs` has completed to ensure `fetch` doesn't
     else
         fetch(t)
     end
-  end
+end
 ```
 """
 function addprocs(manager::ClusterManager; kwargs...)
@@ -469,6 +472,10 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # The `launch` method should add an object of type WorkerConfig for every
     # worker launched. It provides information required on how to connect
     # to it.
+
+    # FIXME: launched should be a Channel, launch_ntfy should be a Threads.Condition
+    # but both are part of the public interface. This means we currently can't use
+    # `Threads.@spawn` in the code below.
     launched = WorkerConfig[]
     launch_ntfy = Condition()
 
@@ -524,7 +531,7 @@ default_addprocs_params(::ClusterManager) = default_addprocs_params()
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
+    :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,
     :enable_threaded_blas => false,
     :lazy => true)
@@ -849,7 +856,7 @@ julia> nprocs()
 3
 
 julia> workers()
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  2
  3
 ```

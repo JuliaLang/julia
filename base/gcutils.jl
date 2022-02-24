@@ -50,8 +50,7 @@ function finalizer(@nospecialize(f), @nospecialize(o))
     return o
 end
 
-function finalizer(f::Ptr{Cvoid}, o::T) where T
-    @_inline_meta
+function finalizer(f::Ptr{Cvoid}, o::T) where T @inline
     if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
@@ -65,8 +64,8 @@ end
 
 Immediately run finalizers registered for object `x`.
 """
-finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Ptr{Cvoid}, Any,),
-                                   Core.getptls(), o)
+finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Cvoid, (Any, Any,),
+                                   current_task(), o)
 
 """
     Base.GC
@@ -114,7 +113,18 @@ the current Task. Finalizers will only run when the counter is at zero. (Set
 `true` for enabling, `false` for disabling). They may still run concurrently on
 another Task or thread.
 """
-enable_finalizers(on::Bool) = ccall(:jl_gc_enable_finalizers, Cvoid, (Ptr{Cvoid}, Int32,), C_NULL, on)
+enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
+
+function enable_finalizers() @inline
+    ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
+    if Core.Intrinsics.atomic_pointerref(cglobal(:jl_gc_have_pending_finalizers, Cint), :monotonic) != 0
+        ccall(:jl_gc_run_pending_finalizers, Cvoid, (Ptr{Cvoid},), C_NULL)
+    end
+end
+
+function disable_finalizers() @inline
+    ccall(:jl_gc_disable_finalizers_internal, Cvoid, ())
+end
 
 """
     GC.@preserve x1 x2 ... xn expr
@@ -186,5 +196,14 @@ collection to run.
     This function is available as of Julia 1.4.
 """
 safepoint() = ccall(:jl_gc_safepoint, Cvoid, ())
+
+"""
+    GC.enable_logging(on::Bool)
+
+When turned on, print statistics about each GC to stderr.
+"""
+function enable_logging(on::Bool=true)
+    ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
+end
 
 end # module GC

@@ -1,17 +1,7 @@
-#include "../../src/jl_exported_funcs.inc"
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// On macOS, we need to prepend underscores on symbols
-#if defined(__APPLE__) && defined(__MACH__)
-#define CNAME(x)    _##x
-#define PAGE(x)     x##@PAGE
-#define PAGEOFF(x)  x##@PAGEOFF
-#define SEP         %%
-#else
-#define CNAME(x)    x
-#define PAGE(x)     x
-#define PAGEOFF(x)  #:lo12:##x
-#define SEP         ;
-#endif
+#include "common.h"
+#include "../../src/jl_exported_funcs.inc"
 
 #define XX(name) \
 .global CNAME(name) SEP \
@@ -23,5 +13,9 @@ CNAME(name)##: SEP \
     br x16 SEP \
 .cfi_endproc SEP \
 
-JL_EXPORTED_FUNCS(XX)
+JL_RUNTIME_EXPORTED_FUNCS(XX)
+#ifdef _OS_WINDOWS_
+JL_RUNTIME_EXPORTED_FUNCS_WIN(XX)
+#endif
+JL_CODEGEN_EXPORTED_FUNCS(XX)
 #undef XX

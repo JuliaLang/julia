@@ -15,11 +15,12 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new [ex=true]
+    @deprecate old new [export_old=true]
 
-Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
-exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
-signature as `old`.
+Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
+with the specified signature in the process.
+
+To prevent `old` from being exported, set `export_old` to `false`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -34,14 +35,31 @@ old (generic function with 1 method)
 julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
+
+Calls to `@deprecate` without explicit type-annotations will define deprecated methods
+accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
+the arguments of `old`. For example,
+```jldoctest; filter = r"in Main at.*"
+julia> new(x::Int) = x;
+
+julia> new(x::Float64) = 2x;
+
+julia> @deprecate old(x::Int) new(x);
+
+julia> methods(old)
+# 1 method for generic function "old":
+[1] old(x::Int64) in Main at deprecated.jl:70
+```
+will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
+define nor deprecate the method `old(x::Float64)`.
 """
-macro deprecate(old, new, ex=true)
+macro deprecate(old, new, export_old=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
         Expr(:toplevel,
-            ex ? Expr(:export, esc(old)) : nothing,
+            export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
@@ -65,7 +83,7 @@ macro deprecate(old, new, ex=true)
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export, esc(oldsym)) : nothing,
+        export_old ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
@@ -117,12 +135,14 @@ function firstcaller(bt::Vector, funcsyms)
             end
             found = lkup.func in funcsyms
             # look for constructor type name
-            if !found && lkup.linfo isa Core.MethodInstance
+            if !found
                 li = lkup.linfo
-                ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
-                if isa(ft, DataType) && ft.name === Type.body.name
-                    ft = unwrap_unionall(ft.parameters[1])
-                    found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                if li isa Core.MethodInstance
+                    ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
+                    if isa(ft, DataType) && ft.name === Type.body.name
+                        ft = unwrap_unionall(ft.parameters[1])
+                        found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                    end
                 end
             end
         end
@@ -235,7 +255,37 @@ function parameter_upper_bound(t::UnionAll, idx)
 end
 
 # these were internal functions, but some packages seem to be relying on them
-@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes)
+@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
 cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
 
+@deprecate unsafe_indices(A) axes(A) false
+@deprecate unsafe_length(r) length(r) false
+
+# these were internal type aliases, but some pacakges seem to be relying on them
+const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                        Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+
 # END 1.6 deprecations
+
+# BEGIN 1.7 deprecations
+
+# the plan is to eventually overload getproperty to access entries of the dict
+@noinline function getproperty(x::Pairs, s::Symbol)
+    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    return getfield(x, s)
+end
+
+# This function was marked as experimental and not exported.
+@deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
+
+# END 1.7 deprecations
+
+# BEGIN 1.8 deprecations
+
+@deprecate var"@_inline_meta"   var"@inline"   false
+@deprecate var"@_noinline_meta" var"@noinline" false
+@deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
+
+# END 1.8 deprecations

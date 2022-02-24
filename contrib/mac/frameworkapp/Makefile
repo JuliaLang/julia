@@ -76,7 +76,7 @@ $(BUILDROOT)/framework-component.plist: $(JULIAHOME)/contrib/mac/frameworkapp/fr
 # important properties.  Together, the properties allow one "Julia.framework"
 # to exist at a location with multiple versions of Julia within.
 #
-# 1. The component's identifer is versioned to match the bundled framework.
+# 1. The component's identifier is versioned to match the bundled framework.
 # This allows multiple versions of the component to be installed with the
 # Julia.framework/Versions directory.
 # 2. The component-plist identifies the Versions/x.y directory as an upgradable
