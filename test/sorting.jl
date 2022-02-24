@@ -268,7 +268,7 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, UInt(1), Forward) == 5
 
     for a in [rand(1:10000, 1000), rand(1:10000, 3000)]
-        for alg in [InsertionSort, MergeSort, Base.Sort.RadixSort(MergeSort)]
+        for alg in [InsertionSort, MergeSort, Base.Sort.AdaptiveSort(MergeSort)]
             alg === InsertionSort && length(a) == 3000 && continue
 
             b = sort(a, alg=alg)
@@ -335,7 +335,7 @@ Base.step(r::ConstantRange) = 0
         end
 
         @testset "unstable algorithms" begin
-            for alg in [QuickSort, Base.Sort.RadixSort(QuickSort)]
+            for alg in [QuickSort, Base.Sort.AdaptiveSort(QuickSort)]
                 b = sort(a, alg=alg)
                 @test issorted(b)
                 @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
@@ -472,7 +472,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, Base.Sort.RadixSort(MergeSort)]
+            for alg in [MergeSort, Base.Sort.AdaptiveSort(MergeSort)]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -485,7 +485,7 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(1:n), Base.Sort.RadixSort(QuickSort)]
+            for alg in [QuickSort, PartialQuickSort(1:n), Base.Sort.AdaptiveSort(QuickSort)]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -517,7 +517,7 @@ end
 
         v = randn_with_nans(n,0.1)
         # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort, Base.Sort.RadixSort(QuickSort), Base.Sort.RadixSort(MergeSort)],
+        for alg in [InsertionSort, QuickSort, MergeSort, Base.Sort.AdaptiveSort(QuickSort), Base.Sort.AdaptiveSort(MergeSort)],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -579,7 +579,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort, Base.Sort.RadixSort(MergeSort)]
+    for alg in [InsertionSort, MergeSort, Base.Sort.AdaptiveSort(MergeSort)]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
