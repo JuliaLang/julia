@@ -1290,6 +1290,9 @@ end
         @precompile h(a::Float64; b=3) = a + b
         "Some doc"
         @precompile withdoc() = 1
+
+        k(a, b) = a + b
+        @precompile k(1, 2)
     end
     specialized_once(func) = !isempty(only(methods(func)).specializations)
     @test !specialized_once(M.without_precompile)
@@ -1298,4 +1301,8 @@ end
     @test specialized_once(M.g)
     @test specialized_once(M.h)
     @test contains(string(@doc M.withdoc), "Some doc")
+
+    @test specialized_once(M.k)
+    @test_throws UndefVarError eval(:(@precompile z(1, 2)))
+    @test_throws LoadError eval(:(@precompile M.k()))
 end

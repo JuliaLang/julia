@@ -1026,27 +1026,36 @@ precompile(f, (String, Int))
 """
 macro precompile(ex)
     inner = unwrap_macrocalls(ex)
-    is_function_def(inner) || error("@precompile can only be used on function definitions")
 
-    # Unsure how to handle methods with type parameters correctly without writing lots of custom logic.
-    inner.args[1].head == :where && error("@precompile is not implemented for methods with type parameters")
+    if is_function_def(inner)
+        # Unsure how to handle methods with type parameters correctly without writing lots of custom logic.
+        inner.args[1].head == :where && error("@precompile is not implemented for methods with type parameters")
 
-    sig = inner.args[1].args
-    func_name = sig[1]::Symbol
-    # Drop function name and kwargs.
-    args = filter(x -> x isa(Expr) && !isexpr(x, :parameters), sig)
-    types = Tuple(eval(last(arg.args)) for arg in args)
-    if !all(isconcretetype.(types))
-        nonconcrete = filter(!isconcretetype, types)
-        multiple = 1 < length(nonconcrete)
-        msg = "The type$(multiple ? 's' : "") $nonconcrete in the signature $(func_name)$(types) $(multiple ? "are" : "is") not concrete."
-        error(msg)
+        sig = inner.args[1].args
+        func_name = sig[1]::Symbol
+        # Drop function name and kwargs.
+        args = filter(x -> x isa(Expr) && !isexpr(x, :parameters), sig)
+        types = Tuple(eval(last(arg.args)) for arg in args)
+        if !all(isconcretetype.(types))
+            nonconcrete = filter(!isconcretetype, types)
+            multiple = 1 < length(nonconcrete)
+            msg = "The type$(multiple ? 's' : "") $nonconcrete in the signature $(func_name)$(types) $(multiple ? "are" : "is") not concrete."
+            error(msg)
+        end
+
+        precompile_ex = :(precompile($func_name, $types))
+
+        return esc(quote
+            Base.@__doc__($inner)
+            $precompile_ex
+        end)
+    elseif inner.head == :call
+        1 < length(inner.args) || error("Using @precompile with a function call requires at least one argument")
+        name = inner.args[1]::Symbol
+        args = inner.args[2:end]
+        types = Tuple(typeof.(args))
+        return esc(:(precompile($name, $types)))
+    else
+        error("@precompile is only defined for function definitions and function calls")
     end
-
-    precompile_ex = :(precompile($func_name, $types))
-
-    return esc(quote
-        Base.@__doc__($inner)
-        $precompile_ex
-    end)
 end
