@@ -51,19 +51,30 @@ end
 """
     addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
 
-Add processes on remote machines via SSH. See `exename` to set the path to the `julia` installation on remote machines.
+Add worker processes on remote machines via SSH. Configuration is done with keyword
+arguments (see below). In particular, the `exename` keyword can be used to specify
+the path to the `julia` binary on the remote machine(s).
 
-`machines` is a vector of machine specifications. Workers are started for each specification.
+`machines` is a vector of "machine specifications" which are given as strings of
+the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults to current user and `port`
+to the standard SSH port. If `[bind_addr[:port]]` is specified, other workers will connect
+to this worker at the specified `bind_addr` and `port`.
 
-A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
+It is possible to launch multiple processes on a remote host by using a tuple in the
+`machines` vector or the form `(machine_spec, count)`, where `count` is the number of
+workers to be launched on the specified host. Passing `:auto` as the worker count will
+launch as many workers as the number of CPU threads on the remote host.
 
-`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user`
-defaults to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is
-specified, other workers will connect to this worker at the specified `bind_addr` and
-`port`.
-
-`count` is the number of workers to be launched on the specified host. If specified as
-`:auto` it will launch as many workers as the number of CPU threads on the specific host.
+Examples:
+```julia
+addprocs([
+    "remote1",               # one worker on 'remote1' logging in with the current username
+    "user@remote2",          # one worker on 'remote2' logging in with the 'user' username
+    "user@remote3:2222",     # specifying SSH port to '2222' for 'remote3'
+    ("user@remote4", 4),     # launch 4 workers on 'remote4'
+    ("user@remote5", :auto), # launch as many workers as CPU threads on 'remote5'
+])
+```
 
 Keyword arguments:
 
@@ -430,26 +441,16 @@ struct LocalManager <: ClusterManager
 end
 
 """
-    addprocs(; kwargs...) -> List of process identifiers
+    addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)`
+Launch `np` workers on the local host using the in-built `LocalManager`.
 
-Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes.
+*Keyword arguments:*
+ - `restrict::Bool`: if `true` (default) binding is restricted to `127.0.0.1`.
+ - `dir`, `exename`, `exeflags`, `topology`, `lazy`, `enable_threaded_blas`: same effect
+   as for `SSHManager`, see documentation for [`addprocs(machines::AbstractVector)`](@ref).
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_THREADS; kwargs...)
-
-"""
-    addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
-
-Launches workers using the in-built `LocalManager` which only launches workers on the
-local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
-processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, `lazy` and
-`enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
-"""
-function addprocs(np::Integer; restrict=true, kwargs...)
+function addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...)
     manager = LocalManager(np, restrict)
     check_addprocs_args(manager, kwargs)
     addprocs(manager; kwargs...)
