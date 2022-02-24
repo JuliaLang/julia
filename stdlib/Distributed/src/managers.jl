@@ -65,7 +65,7 @@ It is possible to launch multiple processes on a remote host by using a tuple in
 workers to be launched on the specified host. Passing `:auto` as the worker count will
 launch as many workers as the number of CPU threads on the remote host.
 
-Examples:
+**Examples**:
 ```julia
 addprocs([
     "remote1",               # one worker on 'remote1' logging in with the current username
@@ -76,7 +76,7 @@ addprocs([
 ])
 ```
 
-Keyword arguments:
+**Keyword arguments**:
 
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
   master process. Default is `false`.
@@ -445,10 +445,17 @@ end
 
 Launch `np` workers on the local host using the in-built `LocalManager`.
 
-*Keyword arguments:*
+Local workers inherit the current package environment (i.e., active project,
+[`LOAD_PATH`](@ref), and [`DEPOT_PATH`](@ref)) from the main process.
+
+**Keyword arguments**:
  - `restrict::Bool`: if `true` (default) binding is restricted to `127.0.0.1`.
- - `dir`, `exename`, `exeflags`, `topology`, `lazy`, `enable_threaded_blas`: same effect
+ - `dir`, `exename`, `exeflags`, `env`, `topology`, `lazy`, `enable_threaded_blas`: same effect
    as for `SSHManager`, see documentation for [`addprocs(machines::AbstractVector)`](@ref).
+
+!!! compat "Julia 1.9"
+    The inheriting of the package environment and the `env` keyword argument were
+    added in Julia 1.9.
 """
 function addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...)
     manager = LocalManager(np, restrict)
@@ -463,10 +470,32 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     exename = params[:exename]
     exeflags = params[:exeflags]
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
+    env = Dict{String,String}(params[:env])
+
+    # TODO: Maybe this belongs in base/initdefs.jl as a package_environment() function
+    #       together with load_path() etc. Might be useful to have when spawning julia
+    #       processes outside of Distributed.jl too.
+    # JULIA_(LOAD|DEPOT)_PATH are used to populate (LOAD|DEPOT)_PATH on startup,
+    # but since (LOAD|DEPOT)_PATH might have changed they are re-serialized here.
+    # Users can opt-out of this by passing `env = ...` to addprocs(...).
+    pathsep = Sys.iswindows() ? ";" : ":"
+    if get(env, "JULIA_LOAD_PATH", nothing) === nothing
+        env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep)
+    end
+    if get(env, "JULIA_DEPOT_PATH", nothing) === nothing
+        env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
+    end
+    # Set the active project on workers using JULIA_PROJECT.
+    # Users can opt-out of this by (i) passing `env = ...` or (ii) passing
+    # `--project=...` as `exeflags` to addprocs(...).
+    project = Base.ACTIVE_PROJECT[]
+    if project !== nothing && get(env, "JULIA_PROJECT", nothing) === nothing
+        env["JULIA_PROJECT"] = project
+    end
 
     for i in 1:manager.np
         cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker`
-        io = open(detach(setenv(cmd, dir=dir)), "r+")
+        io = open(detach(setenv(addenv(cmd, env), dir=dir)), "r+")
         write_cookie(io)
 
         wconfig = WorkerConfig()
