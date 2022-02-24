@@ -383,8 +383,8 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     return h
 end
 
-function setindex!(h::Dict{K,Any}, v::Any, key::K) where K
-    #@nospecialize v
+function setindex!(h::Dict{K,Any}, v, key::K) where K
+    @nospecialize v
     index = ht_keyindex2!(h, key)
 
     if index > 0

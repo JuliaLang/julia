@@ -762,9 +762,8 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
         x1 = t.pairs[i]
         x2 = new(x1)
         if x1 !== x2
-            k2, v2 = first(x2), last(x2)
-            if isequal(k1, k2)
-                t.pairs[i] = k2::K => v2::V
+            if isequal(x1.first, x2.first)
+                t.pairs[i] = x2
                 t.age += 1
             else
                 _delete!(t, i)
