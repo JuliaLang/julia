@@ -427,6 +427,9 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
+# used for the hack within BoundsError constructor
+const _BASE_DEFINED_AGE = get_world_counter()
+
 # Precompiles for Revise
 # TODO: move these to contrib/generate_precompile.jl
 # The problem is they don't work there
