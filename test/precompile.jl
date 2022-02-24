@@ -1278,3 +1278,15 @@ end
     @test any(mi -> mi.specTypes.parameters[2] === Any, mis)
     @test all(mi -> isa(mi.cache, Core.CodeInstance), mis)
 end
+
+@testset "@precompile" begin
+    # This isn't caught properly.
+    # @test_throws LoadError @precompile nothing
+
+    M = Module()
+    @eval M begin
+        @precompile f(a::Float64, b::Int) = a + b
+    end
+    @test !isempty(only(methods(M.f)).specializations)
+    @test M.f(1.0, 2) == 3.0
+end

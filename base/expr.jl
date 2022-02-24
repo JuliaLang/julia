@@ -1004,3 +1004,47 @@ function make_atomicreplace(success_order, fail_order, ex, old_new)
         return :(replaceproperty!($ll, $lr, $old_new::Pair..., $success_order, $fail_order))
     end
 end
+
+"""
+    @precompile
+
+Compile a given function with concrete arguments, but without executing it. This is a
+convenience macro for [`precompile`](@ref). For example, write
+
+```
+@precompile f(name::String, id::Int) = string(name, id);
+```
+
+This is the same as
+
+```
+f(name::String, id::Int) = string(name, id)
+precompile(f, (String, Int))
+```
+
+!!! compat "Julia 1.9"
+    This functionality requires at least Julia 1.9.
+"""
+macro precompile(ex)
+    inner = unwrap_macrocalls(ex)
+    is_function_def(inner) || error("@precompile can only be used on function definitions")
+
+    sig = inner.args[1].args
+    # Drop function name and kwargs.
+    args = filter(x -> x isa(Expr) && !isexpr(x, :parameters), sig)
+    types = Tuple(eval(last(arg.args)) for arg in args)
+    if !all(isconcretetype.(types))
+        nonconcrete = filter(!isconcretetype, types)
+        multiple = 1 < length(nonconcrete)
+        msg = "The type$(multiple ? 's' : "") $nonconcrete in the signature $(sig[1])$(types) $(multiple ? "are" : "is") not concrete."
+        error(msg)
+    end
+
+    f_name = sig[1]
+    precompile_ex = :(precompile($f_name, $types))
+
+    return esc(quote
+        $inner
+        $precompile_ex
+    end)
+end

@@ -1039,4 +1039,5 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+    @precompile
