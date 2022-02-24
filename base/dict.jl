@@ -316,8 +316,11 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif key === pairs[index].first || isequal(key, pairs[index].first)
-            return index
+        else
+            p = pairs[index]
+            if key === p.first || isequal(key, p.first)
+                return index
+            end
         end
 
         index = (index & (sz-1)) + 1
@@ -343,9 +346,9 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     return ht_keyindex2!(h, key)
 end
 
-@propagate_inbounds function _setindex!(h::Dict, v, key, index)
+@propagate_inbounds function _setindex!(h::Dict{K,V}, v, key, index) where V where K
     h.slots[index] = 0x1
-    h.pairs[index] = key => v
+    h.pairs[index] = Pair{K,V}(key, v)
     h.count += 1
     h.age += 1
     if index < h.idxfloor
@@ -375,7 +378,7 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
 
     if index > 0
         h.age += 1
-        @inbounds h.pairs[index] = key => v
+        @inbounds h.pairs[index] = Pair{K,V}(key, v)
     else
         @inbounds _setindex!(h, v, key, -index)
     end
@@ -389,7 +392,7 @@ function setindex!(h::Dict{K,Any}, v, key::K) where K
 
     if index > 0
         h.age += 1
-        @inbounds h.pairs[index] = key => v
+        @inbounds h.pairs[index] = Pair{K,Any}(key, v)
     else
         @inbounds _setindex!(h, v, key, -index)
     end
@@ -473,7 +476,7 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     end
     if index > 0
         h.age += 1
-        @inbounds h.pairs[index] = key => v
+        @inbounds h.pairs[index] = Pair{K,V}(key, v)
     else
         @inbounds _setindex!(h, v, key, -index)
     end
@@ -721,13 +724,13 @@ function reduce(::typeof(merge), items::Vector{<:Dict})
     return reduce(merge!, items; init=Dict{K,V}())
 end
 
-function map!(f, iter::ValueIterator{<:Dict})
+function map!(f, iter::ValueIterator{<:Dict{K, V}}) where {K, V}
     dict = iter.dict
     pairs = dict.pairs
     # @inbounds is here so that it gets propagated to isslotfilled
     @inbounds for i = dict.idxfloor:lastindex(pairs)
         if isslotfilled(dict, i)
-            pairs[i] = pairs[i].first => f(pairs[i].second)
+            pairs[i] = Pair{K,V}(pairs[i].first, f(pairs[i].second))
         end
     end
     return iter
@@ -737,7 +740,7 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
     for (k, v) in d2
         i = ht_keyindex2!(d1, k)
         if i > 0
-            d1.pairs[i] = d1.pairs[i].first => combine(d1.pairs[i].second, v)
+            d1.pairs[i] = Pair{K,V}(d1.pairs[i].first, combine(d1.pairs[i].second, v))
         else
             if !isequal(k, convert(K, k))
                 throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
