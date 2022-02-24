@@ -38,7 +38,7 @@ macro KSet_cmd(str)
 end
 
 kind(k::Kind) = k
-kind(raw::TzTokens.RawToken) = TzTokens.exactkind(raw)
+kind(raw::TzTokens.Token) = TzTokens.exactkind(raw)
 
 # Some renaming for naming consistency
 is_literal(k) = TzTokens.isliteral(kind(k))
@@ -126,4 +126,3 @@ TODO: Replace `untokenize()` with `Base.string()`?
 function untokenize(k::Kind; unique=true)
     get(unique ? _kind_to_str_unique : _kind_to_str, k, nothing)
 end
-
