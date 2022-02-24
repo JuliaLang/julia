@@ -411,6 +411,16 @@ const project_names = ("JuliaProject.toml", "Project.toml")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
+function locate_project_file(env::String)
+    for proj in project_names
+        project_file = joinpath(env, proj)
+        if isfile_casesensitive(project_file)
+            return project_file
+        end
+    end
+    return true
+end
+
 # classify the LOAD_PATH entry to be one of:
 #  - `false`: nonexistant / nothing to see here
 #  - `true`: `env` is an implicit environment
@@ -423,14 +433,7 @@ function env_project_file(env::String)::Union{Bool,String}
         project_file === nothing || return project_file
     end
     if isdir(env)
-        for proj in project_names
-            maybe_project_file = joinpath(env, proj)
-            if isfile_casesensitive(maybe_project_file)
-                project_file = maybe_project_file
-                break
-            end
-        end
-        project_file =true
+        project_file = locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
     else
@@ -1076,11 +1079,11 @@ function require(into::Module, mod::Symbol)
 end
 
 mutable struct PkgOrigin
-    # version::VersionNumber
     path::Union{String,Nothing}
     cachepath::Union{String,Nothing}
+    version::Union{VersionNumber,Nothing}
 end
-PkgOrigin() = PkgOrigin(nothing, nothing)
+PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
@@ -1151,6 +1154,21 @@ function unreference_module(key::PkgId)
     end
 end
 
+function set_pkgorigin_version_path(pkg, path)
+    pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
+    if path !== nothing
+        project_file = locate_project_file(joinpath(dirname(path), ".."))
+        if project_file isa String
+            d = parsed_toml(project_file)
+            v = get(d, "version", nothing)
+            if v !== nothing
+                pkgorigin.version = VersionNumber(v)
+            end
+        end
+    end
+    pkgorigin.path = path
+end
+
 # Returns `nothing` or the name of the newly-created cachefile
 function _require(pkg::PkgId)
     # handle recursive calls to require
@@ -1167,7 +1185,7 @@ function _require(pkg::PkgId)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         path = locate_package(pkg)
-        get!(PkgOrigin, pkgorigins, pkg).path = path
+        set_pkgorigin_version_path(pkg, path)
         if path === nothing
             throw(ArgumentError("""
                 Package $pkg is required but does not seem to be installed:
@@ -1941,11 +1959,11 @@ get_compiletime_preferences(::Nothing) = String[]
             else
                 @label locate_branch
                 path = locate_package(req_key)
-                get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                     return true # Won't be able to fulfill dependency
                 end
+                set_pkgorigin_version_path(req_key, path)
                 depmods[i] = (path, req_key, req_build_id)
             end
         end
