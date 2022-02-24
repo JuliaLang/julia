@@ -30,9 +30,7 @@ end # testset
         token_strs = ["𝘋", " ", "=", "2", "β", ""]
         for (i, n) in enumerate(l)
             @test T.kind(n) == kinds[i]
-            @test untokenize(n)  == token_strs[i]
-            @test T.startpos(n) == (1, i)
-            @test T.endpos(n) == (1, i - 1 + length(token_strs[i]))
+            @test untokenize(n, str)  == token_strs[i]
         end
     end
 end # testset
@@ -124,18 +122,12 @@ end # testset
     for (i, n) in enumerate(tokenize(str))
         @test Tokens.kind(n) == kinds[i]
     end
-    for (i, n) in enumerate(tokenize(str, Tokens.RawToken))
-        @test Tokens.kind(n) == kinds[i]
-    end
 
     @testset "roundtrippability" begin
-        @test join(untokenize.(collect(tokenize(str)))) == str
-        @test untokenize(collect(tokenize(str))) == str
-        @test untokenize(tokenize(str)) == str
-        @test_throws ArgumentError untokenize("blabla")
+        @test join(untokenize.(collect(tokenize(str)), str)) == str
     end
 
-    @test all((t.endbyte - t.startbyte + 1)==sizeof(untokenize(t)) for t in tokenize(str))
+    @test all((t.endbyte - t.startbyte + 1)==sizeof(untokenize(t, str)) for t in tokenize(str))
 end # testset
 
 @testset "issue 5, '..'" begin
@@ -143,7 +135,8 @@ end # testset
 end
 
 @testset "issue 17, >>" begin
-    @test untokenize(tok(">> "))==">>"
+    str = ">> "
+    @test untokenize(tok(str), str)==">>"
 end
 
 
@@ -177,14 +170,21 @@ end
     @test tok("somtext falsething", 3).kind == T.IDENTIFIER
 end
 
+
+function test_roundtrip(str, kind, val)
+    T = tok(str)
+    @test T.kind == kind
+    @test untokenize(T, str) == val
+end
+
 @testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
-    @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .+1"))
-    @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0.+1"))
-    @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0 .+1"))
-    @test (t->t.val=="1234."   && t.kind == Tokens.FLOAT   )(tok("1234.f(a)"))
-    @test (t->t.val=="1234"    && t.kind == Tokens.INTEGER )(tok("1234 .f(a)"))
-    @test (t->t.val=="1234.0." && t.kind == Tokens.ERROR   )(tok("1234.0.f(a)"))
-    @test (t->t.val=="1234.0"  && t.kind == Tokens.FLOAT   )(tok("1234.0 .f(a)"))
+    test_roundtrip("1234 .+1",     Tokens.INTEGER, "1234")
+    test_roundtrip("1234.0+1",     Tokens.FLOAT,   "1234.0")
+    test_roundtrip("1234.0 .+1",   Tokens.FLOAT,   "1234.0")
+    test_roundtrip("1234.f(a)",    Tokens.FLOAT,   "1234.")
+    test_roundtrip("1234 .f(a)",   Tokens.INTEGER, "1234")
+    test_roundtrip("1234.0.f(a)",  Tokens.ERROR,   "1234.0.")
+    test_roundtrip("1234.0 .f(a)", Tokens.FLOAT,   "1234.0")
 end
 
 
@@ -210,18 +210,18 @@ end
 
 
 @testset "primes" begin
-    tokens = collect(tokenize(
-    """
+    str = """
     ImageMagick.save(fn, reinterpret(ARGB32, [0xf0884422]''))
     D = ImageMagick.load(fn)
-    """))
-    @test string(untokenize(tokens[16]))==string(untokenize(tokens[17]))=="'"
-    @test tok("'a'").val == "'a'"
-    @test tok("'a'").kind == Tokens.CHAR
-    @test tok("''").val == "''"
-    @test tok("''").kind == Tokens.CHAR
-    @test tok("'''").val == "'''"
-    @test tok("'''").kind == Tokens.CHAR
+    """
+    tokens = collect(tokenize(str))
+    @test string(untokenize(tokens[16], str))==string(untokenize(tokens[17], str))=="'"
+
+    test_roundtrip("'a'",  Tokens.CHAR, "'a'")
+    test_roundtrip("''",   Tokens.CHAR, "''")
+    test_roundtrip("'''",  Tokens.CHAR, "'''")
+    test_roundtrip("''''", Tokens.CHAR, "'''")
+
     @test tok("''''", 1).kind == Tokens.CHAR
     @test tok("''''", 2).kind == Tokens.PRIME
     @test tok("()'", 3).kind == Tokens.PRIME
@@ -296,204 +296,219 @@ end
 @testset "show" begin
     io = IOBuffer()
     show(io, collect(tokenize("\"abc\nd\"ef"))[2])
-    @test String(take!(io)) == "1,2-2,1          STRING         \"abc\\nd\""
+    @test String(take!(io)) == "1-5        STRING         "
 end
 
-~(tok::T.AbstractToken, t::Tuple) = tok.kind == t[1] && untokenize(tok) == t[2]
+~(tok::T.Token, t::Tuple) = tok.kind == t[1] && untokenize(tok, t[3]) == t[2]
 
 @testset "raw strings" begin
-    ts = collect(tokenize(raw""" str"x $ \ y" """))
-    @test ts[1] ~ (T.WHITESPACE , " "        )
-    @test ts[2] ~ (T.IDENTIFIER , "str"      )
-    @test ts[3] ~ (T.DQUOTE     , "\""       )
-    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
-    @test ts[5] ~ (T.DQUOTE     , "\""       )
-    @test ts[6] ~ (T.WHITESPACE , " "        )
-    @test ts[7] ~ (T.ENDMARKER  , ""         )
+    str = raw""" str"x $ \ y" """
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.WHITESPACE , " "        , str)
+    @test ts[2] ~ (T.IDENTIFIER , "str"      , str)
+    @test ts[3] ~ (T.DQUOTE     , "\""       , str)
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y", str)
+    @test ts[5] ~ (T.DQUOTE     , "\""       , str)
+    @test ts[6] ~ (T.WHITESPACE , " "        , str)
+    @test ts[7] ~ (T.ENDMARKER  , ""         , str)
 
-    ts = collect(tokenize(raw"""`x $ \ y`"""))
-    @test ts[1] ~ (T.BACKTICK  , "`"         )
-    @test ts[2] ~ (T.CMD       , "x \$ \\ y" )
-    @test ts[3] ~ (T.BACKTICK  , "`"         )
-    @test ts[4] ~ (T.ENDMARKER , ""          )
+    str = raw"""`x $ \ y`"""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.BACKTICK  , "`"         , str)
+    @test ts[2] ~ (T.CMD       , "x \$ \\ y" , str)
+    @test ts[3] ~ (T.BACKTICK  , "`"         , str)
+    @test ts[4] ~ (T.ENDMARKER , ""          , str)
 
     # str"\\"
-    ts = collect(tokenize("str\"\\\\\""))
-    @test ts[1] ~ (T.IDENTIFIER , "str"  )
-    @test ts[2] ~ (T.DQUOTE     , "\""   )
-    @test ts[3] ~ (T.STRING     , "\\\\" )
-    @test ts[4] ~ (T.DQUOTE     , "\""   )
-    @test ts[5] ~ (T.ENDMARKER  , ""     )
+    str = "str\"\\\\\""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.IDENTIFIER , "str"  , str)
+    @test ts[2] ~ (T.DQUOTE     , "\""   , str)
+    @test ts[3] ~ (T.STRING     , "\\\\" , str)
+    @test ts[4] ~ (T.DQUOTE     , "\""   , str)
+    @test ts[5] ~ (T.ENDMARKER  , ""     , str)
 
     # str"\\\""
-    ts = collect(tokenize("str\"\\\\\\\"\""))
-    @test ts[1] ~ (T.IDENTIFIER , "str"      )
-    @test ts[2] ~ (T.DQUOTE     , "\""       )
-    @test ts[3] ~ (T.STRING     , "\\\\\\\"" )
-    @test ts[4] ~ (T.DQUOTE     , "\""       )
-    @test ts[5] ~ (T.ENDMARKER  , ""         )
+    str = "str\"\\\\\\\"\""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.IDENTIFIER , "str"      , str)
+    @test ts[2] ~ (T.DQUOTE     , "\""       , str)
+    @test ts[3] ~ (T.STRING     , "\\\\\\\"" , str)
+    @test ts[4] ~ (T.DQUOTE     , "\""       , str)
+    @test ts[5] ~ (T.ENDMARKER  , ""         , str)
 
     # Contextual keywords and operators allowed as raw string prefixes
-    ts = collect(tokenize(raw""" var"x $ \ y" """))
-    @test ts[2] ~ (T.VAR        , "var")
-    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+    str = raw""" var"x $ \ y" """
+    ts = collect(tokenize(str))
+    @test ts[2] ~ (T.VAR        , "var", str)
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y", str)
 
-    ts = collect(tokenize(raw""" outer"x $ \ y" """))
-    @test ts[2] ~ (T.OUTER      , "outer")
-    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+    str = raw""" outer"x $ \ y" """
+    ts = collect(tokenize(str))
+    @test ts[2] ~ (T.OUTER      , "outer", str)
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y", str)
 
-    ts = collect(tokenize(raw""" isa"x $ \ y" """))
-    @test ts[2] ~ (T.ISA        , "isa")
-    @test ts[4] ~ (T.STRING     , "x \$ \\ y")
+    str = raw""" isa"x $ \ y" """
+    ts = collect(tokenize(str))
+    @test ts[2] ~ (T.ISA        , "isa", str)
+    @test ts[4] ~ (T.STRING     , "x \$ \\ y", str)
 end
 
 @testset "string escaped newline whitespace" begin
-    ts = collect(tokenize("\"x\\\n \ty\""))
-    @test ts[1] ~ (T.DQUOTE, "\"")
-    @test ts[2] ~ (T.STRING, "x")
-    @test ts[3] ~ (T.WHITESPACE, "\\\n \t")
-    @test ts[4] ~ (T.STRING, "y")
-    @test ts[5] ~ (T.DQUOTE, "\"")
+    str = "\"x\\\n \ty\""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.DQUOTE, "\"", str)
+    @test ts[2] ~ (T.STRING, "x", str)
+    @test ts[3] ~ (T.WHITESPACE, "\\\n \t", str)
+    @test ts[4] ~ (T.STRING, "y", str)
+    @test ts[5] ~ (T.DQUOTE, "\"", str)
 
     # No newline escape for raw strings
-    ts = collect(tokenize("r\"x\\\ny\""))
-    @test ts[1] ~ (T.IDENTIFIER , "r")
-    @test ts[2] ~ (T.DQUOTE, "\"")
-    @test ts[3] ~ (T.STRING, "x\\\ny")
-    @test ts[4] ~ (T.DQUOTE , "\"")
+    str = "r\"x\\\ny\""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.IDENTIFIER , "r", str)
+    @test ts[2] ~ (T.DQUOTE, "\"", str)
+    @test ts[3] ~ (T.STRING, "x\\\ny", str)
+    @test ts[4] ~ (T.DQUOTE , "\"", str)
 end
 
 @testset "triple quoted string line splitting" begin
-    ts = collect(tokenize("\"\"\"\nx\r\ny\rz\n\r\"\"\""))
-    @test ts[1] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
-    @test ts[2] ~ (T.STRING        , "\n")
-    @test ts[3] ~ (T.STRING        , "x\r\n")
-    @test ts[4] ~ (T.STRING        , "y\r")
-    @test ts[5] ~ (T.STRING        , "z\n")
-    @test ts[6] ~ (T.STRING        , "\r")
-    @test ts[7] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
+    str = "\"\"\"\nx\r\ny\rz\n\r\"\"\""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.TRIPLE_DQUOTE , "\"\"\"", str)
+    @test ts[2] ~ (T.STRING        , "\n", str)
+    @test ts[3] ~ (T.STRING        , "x\r\n", str)
+    @test ts[4] ~ (T.STRING        , "y\r", str)
+    @test ts[5] ~ (T.STRING        , "z\n", str)
+    @test ts[6] ~ (T.STRING        , "\r", str)
+    @test ts[7] ~ (T.TRIPLE_DQUOTE , "\"\"\"", str)
 
     # Also for raw strings
-    ts = collect(tokenize("r\"\"\"\nx\ny\"\"\""))
-    @test ts[1] ~ (T.IDENTIFIER    , "r")
-    @test ts[2] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
-    @test ts[3] ~ (T.STRING        , "\n")
-    @test ts[4] ~ (T.STRING        , "x\n")
-    @test ts[5] ~ (T.STRING        , "y")
-    @test ts[6] ~ (T.TRIPLE_DQUOTE , "\"\"\"")
+    str = "r\"\"\"\nx\ny\"\"\""
+    ts = collect(tokenize(str))
+    @test ts[1] ~ (T.IDENTIFIER    , "r", str)
+    @test ts[2] ~ (T.TRIPLE_DQUOTE , "\"\"\"", str)
+    @test ts[3] ~ (T.STRING        , "\n", str)
+    @test ts[4] ~ (T.STRING        , "x\n", str)
+    @test ts[5] ~ (T.STRING        , "y", str)
+    @test ts[6] ~ (T.TRIPLE_DQUOTE , "\"\"\"", str)
 end
 
 @testset "interpolation" begin
     @testset "basic" begin
-        ts = collect(tokenize("\"\$x \$y\""))
-        @test ts[1]  ~ (T.DQUOTE     , "\"")
-        @test ts[2]  ~ (T.EX_OR      , "\$")
-        @test ts[3]  ~ (T.IDENTIFIER , "x" )
-        @test ts[4]  ~ (T.STRING     , " " )
-        @test ts[5]  ~ (T.EX_OR      , "\$")
-        @test ts[6]  ~ (T.IDENTIFIER , "y" )
-        @test ts[7]  ~ (T.DQUOTE     , "\"")
-        @test ts[8]  ~ (T.ENDMARKER  , ""  )
+        str = "\"\$x \$y\""
+    ts = collect(tokenize(str))
+        @test ts[1]  ~ (T.DQUOTE     , "\"", str)
+        @test ts[2]  ~ (T.EX_OR      , "\$", str)
+        @test ts[3]  ~ (T.IDENTIFIER , "x" , str)
+        @test ts[4]  ~ (T.STRING     , " " , str)
+        @test ts[5]  ~ (T.EX_OR      , "\$", str)
+        @test ts[6]  ~ (T.IDENTIFIER , "y" , str)
+        @test ts[7]  ~ (T.DQUOTE     , "\"", str)
+        @test ts[8]  ~ (T.ENDMARKER  , ""  , str)
     end
 
     @testset "nested" begin
         str = """"str: \$(g("str: \$(h("str"))"))" """
         ts = collect(tokenize(str))
         @test length(ts) == 23
-        @test ts[1]  ~ (T.DQUOTE    , "\""   )
-        @test ts[2]  ~ (T.STRING    , "str: ")
-        @test ts[3]  ~ (T.EX_OR     , "\$"   )
-        @test ts[4]  ~ (T.LPAREN    , "("    )
-        @test ts[5]  ~ (T.IDENTIFIER, "g"    )
-        @test ts[6]  ~ (T.LPAREN    , "("    )
-        @test ts[7]  ~ (T.DQUOTE    , "\""   )
-        @test ts[8]  ~ (T.STRING    , "str: ")
-        @test ts[9]  ~ (T.EX_OR     , "\$"   )
-        @test ts[10] ~ (T.LPAREN    , "("    )
-        @test ts[11] ~ (T.IDENTIFIER, "h"    )
-        @test ts[12] ~ (T.LPAREN    , "("    )
-        @test ts[13] ~ (T.DQUOTE    , "\""   )
-        @test ts[14] ~ (T.STRING    , "str"  )
-        @test ts[15] ~ (T.DQUOTE    , "\""   )
-        @test ts[16] ~ (T.RPAREN    , ")"    )
-        @test ts[17] ~ (T.RPAREN    , ")"    )
-        @test ts[18] ~ (T.DQUOTE    , "\""   )
-        @test ts[19] ~ (T.RPAREN    , ")"    )
-        @test ts[20] ~ (T.RPAREN    , ")"    )
-        @test ts[21] ~ (T.DQUOTE    , "\""   )
-        @test ts[22] ~ (T.WHITESPACE, " "    )
-        @test ts[23] ~ (T.ENDMARKER , ""     )
+        @test ts[1]  ~ (T.DQUOTE    , "\""   , str)
+        @test ts[2]  ~ (T.STRING    , "str: ", str)
+        @test ts[3]  ~ (T.EX_OR     , "\$"   , str)
+        @test ts[4]  ~ (T.LPAREN    , "("    , str)
+        @test ts[5]  ~ (T.IDENTIFIER, "g"    , str)
+        @test ts[6]  ~ (T.LPAREN    , "("    , str)
+        @test ts[7]  ~ (T.DQUOTE    , "\""   , str)
+        @test ts[8]  ~ (T.STRING    , "str: ", str)
+        @test ts[9]  ~ (T.EX_OR     , "\$"   , str)
+        @test ts[10] ~ (T.LPAREN    , "("    , str)
+        @test ts[11] ~ (T.IDENTIFIER, "h"    , str)
+        @test ts[12] ~ (T.LPAREN    , "("    , str)
+        @test ts[13] ~ (T.DQUOTE    , "\""   , str)
+        @test ts[14] ~ (T.STRING    , "str"  , str)
+        @test ts[15] ~ (T.DQUOTE    , "\""   , str)
+        @test ts[16] ~ (T.RPAREN    , ")"    , str)
+        @test ts[17] ~ (T.RPAREN    , ")"    , str)
+        @test ts[18] ~ (T.DQUOTE    , "\""   , str)
+        @test ts[19] ~ (T.RPAREN    , ")"    , str)
+        @test ts[20] ~ (T.RPAREN    , ")"    , str)
+        @test ts[21] ~ (T.DQUOTE    , "\""   , str)
+        @test ts[22] ~ (T.WHITESPACE, " "    , str)
+        @test ts[23] ~ (T.ENDMARKER , ""     , str)
     end
 
     @testset "duplicate \$" begin
-        ts = collect(tokenize("\"\$\$\""))
-        @test ts[1]  ~ (T.DQUOTE     , "\"")
-        @test ts[2]  ~ (T.EX_OR      , "\$")
-        @test ts[3]  ~ (T.EX_OR      , "\$")
-        @test ts[4]  ~ (T.DQUOTE     , "\"")
-        @test ts[5]  ~ (T.ENDMARKER  , ""  )
+        str = "\"\$\$\""
+    ts = collect(tokenize(str))
+        @test ts[1]  ~ (T.DQUOTE     , "\"", str)
+        @test ts[2]  ~ (T.EX_OR      , "\$", str)
+        @test ts[3]  ~ (T.EX_OR      , "\$", str)
+        @test ts[4]  ~ (T.DQUOTE     , "\"", str)
+        @test ts[5]  ~ (T.ENDMARKER  , ""  , str)
     end
 
     @testset "Unmatched parens" begin
         # issue 73: https://github.com/JuliaLang/Tokenize.jl/issues/73
-        ts = collect(tokenize("\"\$(fdsf\""))
-        @test ts[1] ~ (T.DQUOTE     , "\""   )
-        @test ts[2] ~ (T.EX_OR      , "\$"   )
-        @test ts[3] ~ (T.LPAREN     , "("    )
-        @test ts[4] ~ (T.IDENTIFIER , "fdsf" )
-        @test ts[5] ~ (T.DQUOTE     , "\""   )
-        @test ts[6] ~ (T.ENDMARKER  , ""     )
+        str = "\"\$(fdsf\""
+    ts = collect(tokenize(str))
+        @test ts[1] ~ (T.DQUOTE     , "\""   , str)
+        @test ts[2] ~ (T.EX_OR      , "\$"   , str)
+        @test ts[3] ~ (T.LPAREN     , "("    , str)
+        @test ts[4] ~ (T.IDENTIFIER , "fdsf" , str)
+        @test ts[5] ~ (T.DQUOTE     , "\""   , str)
+        @test ts[6] ~ (T.ENDMARKER  , ""     , str)
     end
 
     @testset "Unicode" begin
         # issue 178: https://github.com/JuliaLang/Tokenize.jl/issues/178
-        ts = collect(tokenize(""" "\$uₕx \$(uₕx - ux)" """))
-        @test ts[ 1] ~ (T.WHITESPACE , " "   )
-        @test ts[ 2] ~ (T.DQUOTE     , "\""  )
-        @test ts[ 3] ~ (T.EX_OR      , "\$"  )
-        @test ts[ 4] ~ (T.IDENTIFIER , "uₕx" )
-        @test ts[ 5] ~ (T.STRING     , " "   )
-        @test ts[ 6] ~ (T.EX_OR      , "\$"  )
-        @test ts[ 7] ~ (T.LPAREN     , "("   )
-        @test ts[ 8] ~ (T.IDENTIFIER , "uₕx" )
-        @test ts[ 9] ~ (T.WHITESPACE , " "   )
-        @test ts[10] ~ (T.MINUS      , "-"   )
-        @test ts[11] ~ (T.WHITESPACE , " "   )
-        @test ts[12] ~ (T.IDENTIFIER , "ux"  )
-        @test ts[13] ~ (T.RPAREN     , ")"   )
-        @test ts[14] ~ (T.DQUOTE     , "\""  )
-        @test ts[15] ~ (T.WHITESPACE , " "   )
-        @test ts[16] ~ (T.ENDMARKER  , ""    )
+        str = """ "\$uₕx \$(uₕx - ux)" """
+    ts = collect(tokenize(str))
+        @test ts[ 1] ~ (T.WHITESPACE , " "   , str)
+        @test ts[ 2] ~ (T.DQUOTE     , "\""  , str)
+        @test ts[ 3] ~ (T.EX_OR      , "\$"  , str)
+        @test ts[ 4] ~ (T.IDENTIFIER , "uₕx" , str)
+        @test ts[ 5] ~ (T.STRING     , " "   , str)
+        @test ts[ 6] ~ (T.EX_OR      , "\$"  , str)
+        @test ts[ 7] ~ (T.LPAREN     , "("   , str)
+        @test ts[ 8] ~ (T.IDENTIFIER , "uₕx" , str)
+        @test ts[ 9] ~ (T.WHITESPACE , " "   , str)
+        @test ts[10] ~ (T.MINUS      , "-"   , str)
+        @test ts[11] ~ (T.WHITESPACE , " "   , str)
+        @test ts[12] ~ (T.IDENTIFIER , "ux"  , str)
+        @test ts[13] ~ (T.RPAREN     , ")"   , str)
+        @test ts[14] ~ (T.DQUOTE     , "\""  , str)
+        @test ts[15] ~ (T.WHITESPACE , " "   , str)
+        @test ts[16] ~ (T.ENDMARKER  , ""    , str)
     end
 
     @testset "var\"...\" disabled in interpolations" begin
-        ts = collect(tokenize(""" "\$var"x" " """))
-        @test ts[ 1] ~ (T.WHITESPACE , " "   )
-        @test ts[ 2] ~ (T.DQUOTE     , "\""  )
-        @test ts[ 3] ~ (T.EX_OR      , "\$"  )
-        @test ts[ 4] ~ (T.VAR        , "var" )
-        @test ts[ 5] ~ (T.DQUOTE     , "\""  )
-        @test ts[ 6] ~ (T.IDENTIFIER , "x"   )
-        @test ts[ 7] ~ (T.DQUOTE     , "\""  )
-        @test ts[ 8] ~ (T.STRING     , " "   )
-        @test ts[ 9] ~ (T.DQUOTE     , "\""  )
-        @test ts[10] ~ (T.WHITESPACE , " "   )
-        @test ts[11] ~ (T.ENDMARKER  , ""    )
+        str = """ "\$var"x" " """
+    ts = collect(tokenize(str))
+        @test ts[ 1] ~ (T.WHITESPACE , " "   , str)
+        @test ts[ 2] ~ (T.DQUOTE     , "\""  , str)
+        @test ts[ 3] ~ (T.EX_OR      , "\$"  , str)
+        @test ts[ 4] ~ (T.VAR        , "var" , str)
+        @test ts[ 5] ~ (T.DQUOTE     , "\""  , str)
+        @test ts[ 6] ~ (T.IDENTIFIER , "x"   , str)
+        @test ts[ 7] ~ (T.DQUOTE     , "\""  , str)
+        @test ts[ 8] ~ (T.STRING     , " "   , str)
+        @test ts[ 9] ~ (T.DQUOTE     , "\""  , str)
+        @test ts[10] ~ (T.WHITESPACE , " "   , str)
+        @test ts[11] ~ (T.ENDMARKER  , ""    , str)
     end
 
     @testset "invalid chars after identifier" begin
-        ts = collect(tokenize(""" "\$x෴" """))
-        @test ts[4] ~ (T.IDENTIFIER , "x" )
-        @test ts[5] ~ (T.ERROR      , ""  )
-        @test ts[6] ~ (T.STRING     , "෴" )
+        str = """ "\$x෴" """
+    ts = collect(tokenize(str))
+        @test ts[4] ~ (T.IDENTIFIER , "x" , str)
+        @test ts[5] ~ (T.ERROR      , ""  , str)
+        @test ts[6] ~ (T.STRING     , "෴" , str)
         @test ts[5].token_error == Tokens.INVALID_INTERPOLATION_TERMINATOR
     end
 end
 
 @testset "inferred" begin
     l = tokenize("abc")
-    @inferred Tokenize.Lexers.next_token(l)
-    l = tokenize("abc", Tokens.RawToken)
     @inferred Tokenize.Lexers.next_token(l)
 end
 
@@ -671,7 +686,7 @@ for op in ops
             if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
                 tokens = collect(tokenize(str))
                 exop = expr.head == :call ? expr.args[1] : expr.head
-                @test Symbol(Tokenize.Tokens.untokenize(tokens[arity == 1 ? 1 : 3])) == exop
+                @test Symbol(Tokenize.Tokens.untokenize(tokens[arity == 1 ? 1 : 3], str)) == exop
             else
                 break
             end
@@ -701,11 +716,6 @@ end
     @test tok("outer", 1).kind==T.OUTER
 end
 
-@testset "dot startpos" begin
-    @test Tokenize.Tokens.startpos(tok("./")) == (1,1)
-    @test Tokenize.Tokens.startbyte(tok(".≤")) == 0
-end
-
 @testset "token errors" begin
     @test tok("1.2e2.3",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
     @test tok("1.2.",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
@@ -719,20 +729,20 @@ end
 
 @testset "hat suffix" begin
     @test tok("ŝ", 1).kind==Tokens.IDENTIFIER
-    @test untokenize(collect(tokenize("ŝ", Tokens.RawToken))[1], "ŝ") == "ŝ"
+    @test untokenize(collect(tokenize("ŝ"))[1], "ŝ") == "ŝ"
 end
 
 @testset "suffixed op" begin
     s = "+¹"
     @test Tokens.isoperator(tok(s, 1).kind)
-    @test untokenize(collect(tokenize(s, Tokens.RawToken))[1], s) == s
+    @test untokenize(collect(tokenize(s))[1], s) == s
 end
 
 @testset "invalid float juxt" begin
     s = "1.+2"
     @test tok(s, 1).kind == Tokens.ERROR
     @test Tokens.isoperator(tok(s, 2).kind)
-    @test (t->t.val=="1234."    && t.kind == Tokens.ERROR )(tok("1234.+1")) # requires space before '.'
+    test_roundtrip("1234.+1", Tokens.ERROR, "1234.")
     @test tok("1.+ ").kind == Tokens.ERROR
     @test tok("1.⤋").kind  == Tokens.ERROR
     @test tok("1.?").kind == Tokens.ERROR
@@ -740,7 +750,7 @@ end
 
 @testset "comments" begin
     s = "#=# text=#"
-    @test length(collect(tokenize(s, Tokens.RawToken))) == 2
+    @test length(collect(tokenize(s))) == 2
 end
 
 @testset "invalid hexadecimal" begin
@@ -750,12 +760,12 @@ end
 
 @testset "circ arrow right op" begin
     s = "↻"
-    @test collect(tokenize(s, Tokens.RawToken))[1].kind == Tokens.CIRCLE_ARROW_RIGHT
+    @test collect(tokenize(s))[1].kind == Tokens.CIRCLE_ARROW_RIGHT
 end
 
 @testset "invalid float" begin
     s = ".0."
-    @test collect(tokenize(s, Tokens.RawToken))[1].kind == Tokens.ERROR
+    @test collect(tokenize(s))[1].kind == Tokens.ERROR
 end
 
 @testset "allow prime after end" begin

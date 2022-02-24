@@ -12,7 +12,7 @@ include("utils.jl")
 # TODO: Perhaps integrate these back into Tokenize? Or maybe JuliaSyntax would
 # be a sensible home for the Tokenize lexer in the future?
 include("../Tokenize/src/Tokenize.jl")
-using .Tokenize.Tokens: RawToken
+using .Tokenize.Tokens: Token
 const TzTokens = Tokenize.Tokens
 include("tokens.jl")
 

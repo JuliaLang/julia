@@ -88,7 +88,7 @@ struct SyntaxToken
     had_newline::Bool
 end
 
-function SyntaxToken(raw::RawToken, had_whitespace, had_newline)
+function SyntaxToken(raw::Token, had_whitespace, had_newline)
     SyntaxToken(raw.kind, raw.startbyte + 1, raw.endbyte + 1, raw.dotop, raw.suffix,
                 had_whitespace, had_newline)
 end
@@ -162,7 +162,7 @@ mutable struct ParseStream
     # the `textbuf` owner was unknown (eg, ptr,length was passed)
     text_root::Any
     # Lexer, transforming the input bytes into a token stream
-    lexer::Tokenize.Lexers.Lexer{IOBuffer,RawToken}
+    lexer::Tokenize.Lexers.Lexer{IOBuffer}
     # Lookahead buffer for already lexed tokens
     lookahead::Vector{SyntaxToken}
     # Parser output as an ordered sequence of ranges, parent nodes after children.
@@ -181,7 +181,7 @@ mutable struct ParseStream
                          version::VersionNumber)
         io = IOBuffer(text_buf)
         seek(io, next_byte-1)
-        lexer = Tokenize.Lexers.Lexer(io, RawToken)
+        lexer = Tokenize.Lexers.Lexer(io)
         # To avoid keeping track of the exact Julia development version where new
         # features were added or comparing prerelease strings, we treat prereleases
         # or dev versons as the release version using only major and minor version
@@ -640,7 +640,7 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
         #
         # We use start_mark rather than first_byte to determine node overlap.
         # This solve the following ambiguity between invisible nodes 1 and 2:
-        # 
+        #
         # [a][b]|[...]
         #       |--- invisible node 1
         #       `--- invisible node 2
@@ -705,4 +705,3 @@ textbuf(stream) = stream.textbuf
 first_byte(stream::ParseStream) = first_byte(first(stream.ranges))
 last_byte(stream::ParseStream) = last_byte(last(stream.ranges))
 any_error(stream::ParseStream) = any_error(stream.diagnostics)
-

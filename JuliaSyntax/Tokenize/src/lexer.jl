@@ -3,7 +3,7 @@ module Lexers
 include("utilities.jl")
 
 import ..Tokens
-import ..Tokens: AbstractToken, Token, RawToken, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
+import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF,
@@ -33,7 +33,7 @@ Ideally a lexer is stateless but some state is needed here for:
 * Disambiguating cases like x' (adjoint) vs 'x' (character literal)
 * Tokenizing code within string interpolations
 """
-mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
+mutable struct Lexer{IO_t <: IO}
     io::IO_t
     io_startpos::Int
 
@@ -54,7 +54,7 @@ mutable struct Lexer{IO_t <: IO, T <: AbstractToken}
     dotop::Bool
 end
 
-function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
+function Lexer(io::IO)
     c1 = ' '
     p1 = position(io)
     if eof(io)
@@ -78,29 +78,25 @@ function Lexer(io::IO_t, T::Type{TT} = Token) where {IO_t,TT <: AbstractToken}
             end
         end
     end
-    Lexer{IO_t,T}(io, position(io), 1, 1, position(io), 1, 1, position(io),
+    Lexer(io, position(io), 1, 1, position(io), 1, 1, position(io),
                   Tokens.ERROR, Vector{StringState}(), IOBuffer(),
                   (c1,c2,c3,c4), (p1,p2,p3,p4), false, false)
 end
-Lexer(str::AbstractString, T::Type{TT} = Token) where TT <: AbstractToken = Lexer(IOBuffer(str), T)
-
-@inline token_type(l::Lexer{IO_t, TT}) where {IO_t, TT} = TT
+Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
     tokenize(x, T = Token)
 
 Returns an `Iterable` containing the tokenized input. Can be reverted by e.g.
 `join(untokenize.(tokenize(x)))`. Setting `T` chooses the type of token
-produced by the lexer (`Token` or `RawToken`).
+produced by the lexer (`Token` or `Token`).
 """
-tokenize(x, ::Type{Token}) = Lexer(x, Token)
-tokenize(x, ::Type{RawToken}) = Lexer(x, RawToken)
-tokenize(x) = Lexer(x, Token)
+tokenize(x) = Lexer(x)
 
 # Iterator interface
-Base.IteratorSize(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.SizeUnknown()
-Base.IteratorEltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = Base.HasEltype()
-Base.eltype(::Type{Lexer{IO_t,T}}) where {IO_t,T} = T
+Base.IteratorSize(::Type{<:Lexer}) = Base.SizeUnknown()
+Base.IteratorEltype(::Type{<:Lexer}) = Base.HasEltype()
+Base.eltype(::Type{<:Lexer}) = Token
 
 
 function Base.iterate(l::Lexer)
@@ -205,41 +201,11 @@ Returns the next character and increments the current position.
 """
 function readchar end
 
-function readchar(l::Lexer{I}) where {I <: IO}
+
+function readchar(l::Lexer)
     c = readchar(l.io)
     l.chars = (l.chars[2], l.chars[3], l.chars[4], c)
     l.charspos = (l.charspos[2], l.charspos[3], l.charspos[4], position(l.io))
-    if l.doread
-        write(l.charstore, l.chars[1])
-    end
-    if l.chars[1] == '\n'
-        l.current_row += 1
-        l.current_col = 1
-    elseif !eof(l.chars[1])
-        l.current_col += 1
-    end
-    return l.chars[1]
-end
-
-function readchar(l::Lexer{I,RawToken}) where {I <: IO}
-    c = readchar(l.io)
-    l.chars = (l.chars[2], l.chars[3], l.chars[4], c)
-    l.charspos = (l.charspos[2], l.charspos[3], l.charspos[4], position(l.io))
-    return l.chars[1]
-end
-
-readon(l::Lexer{I,RawToken}) where {I <: IO} = l.chars[1]
-function readon(l::Lexer{I,Token}) where {I <: IO}
-    if l.charstore.size != 0
-        take!(l.charstore)
-    end
-    write(l.charstore, l.chars[1])
-    l.doread = true
-end
-
-readoff(l::Lexer{I,RawToken}) where {I <: IO} = l.chars[1]
-function readoff(l::Lexer{I,Token})  where {I <: IO}
-    l.doread = false
     return l.chars[1]
 end
 
@@ -281,32 +247,7 @@ end
 
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
-function emit(l::Lexer{IO_t,Token}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
-    suffix = false
-    if kind in (Tokens.ERROR, Tokens.STRING, Tokens.CMD)
-        str = String(l.io.data[(l.token_startpos + 1):position(l)])
-    elseif (kind == Tokens.IDENTIFIER || isliteral(kind) || kind == Tokens.COMMENT || kind == Tokens.WHITESPACE || kind == Tokens.NEWLINE_WS)
-        str = String(take!(l.charstore))
-    elseif optakessuffix(kind)
-        str = ""
-        while isopsuffix(peekchar(l))
-            str = string(str, readchar(l))
-            suffix = true
-        end
-    else
-        str = ""
-    end
-    tok = Token(kind, (l.token_start_row, l.token_start_col),
-            (l.current_row, l.current_col - 1),
-            startpos(l), position(l) - 1,
-            str, err, l.dotop, suffix)
-    l.dotop = false
-    l.last_token = kind
-    readoff(l)
-    return tok
-end
-
-function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_ERR) where IO_t
+function emit(l::Lexer, kind::Kind, err::TokenError = Tokens.NO_ERR)
     suffix = false
     if optakessuffix(kind)
         while isopsuffix(peekchar(l))
@@ -315,11 +256,10 @@ function emit(l::Lexer{IO_t,RawToken}, kind::Kind, err::TokenError = Tokens.NO_E
         end
     end
 
-    tok = RawToken(kind, startpos(l), position(l) - 1, err, l.dotop, suffix)
+    tok = Token(kind, startpos(l), position(l) - 1, err, l.dotop, suffix)
 
     l.dotop = false
     l.last_token = kind
-    readoff(l)
     return tok
 end
 
@@ -478,11 +418,10 @@ function lex_string_chunk(l)
         # Start interpolation
         readchar(l)
         return emit(l, Tokens.EX_OR)
-    elseif !state.raw && pc == '\\' && (pc2 = dpeekchar(l)[2]; 
+    elseif !state.raw && pc == '\\' && (pc2 = dpeekchar(l)[2];
                                         pc2 == '\r' || pc2 == '\n')
         # Process escaped newline as whitespace
         readchar(l)
-        readon(l)
         readchar(l)
         if pc2 == '\r' && peekchar(l) == '\n'
             readchar(l)
@@ -503,7 +442,6 @@ function lex_string_chunk(l)
             return emit(l, state.delim == '"' ? Tokens.DQUOTE : Tokens.BACKTICK)
         end
     end
-    readon(l)
     # Read a chunk of string characters
     if state.raw
         # Raw strings treat all characters as literals with the exception that
@@ -566,7 +504,6 @@ end
 
 # Lex whitespace, a whitespace char `c` has been consumed
 function lex_whitespace(l::Lexer, c)
-    readon(l)
     k = Tokens.WHITESPACE
     while true
         if c == '\n'
@@ -583,7 +520,6 @@ function lex_whitespace(l::Lexer, c)
 end
 
 function lex_comment(l::Lexer, doemit=true)
-    readon(l)
     if peekchar(l) != '='
         while true
             pc = peekchar(l)
@@ -799,7 +735,6 @@ end
 
 # A digit has been consumed
 function lex_digit(l::Lexer, kind)
-    readon(l)
     accept_number(l, isdigit)
     pc,ppc = dpeekchar(l)
     if pc == '.'
@@ -915,7 +850,6 @@ function lex_prime(l, doemit = true)
         l.last_token == Tokens.END || isliteral(l.last_token)
         return emit(l, Tokens.PRIME)
     else
-        readon(l)
         if accept(l, '\'')
             if accept(l, '\'')
                 return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
@@ -1118,10 +1052,7 @@ function lex_backtick(l::Lexer)
 end
 
 const MAX_KW_LENGTH = 10
-function lex_identifier(l::Lexer{IO_t,T}, c) where {IO_t,T}
-    if T == Token
-        readon(l)
-    end
+function lex_identifier(l::Lexer, c)
     h = simple_hash(c, UInt64(0))
     n = 1
     while true

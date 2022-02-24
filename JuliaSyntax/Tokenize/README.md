@@ -37,11 +37,9 @@ Each `Token` is represented by where it starts and ends, what string it contains
 The API for a `Token` (non exported from the `Tokenize.Tokens` module) is.
 
 ```julia
-startpos(t)::Tuple{Int, Int} # row and column where the token start
-endpos(t)::Tuple{Int, Int}   # row and column where the token ends
 startbyte(T)::Int            # byte offset where the token start
 endbyte(t)::Int              # byte offset where the token ends
-untokenize(t)::String        # string representation of the token
+untokenize(t, str)::String   # string representation of the token
 kind(t)::Token.Kind          # kind of the token
 exactkind(t)::Token.Kind     # exact kind of the token
 ```

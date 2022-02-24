@@ -1,6 +1,6 @@
 using Tokenize
 
-nt = @timed @eval(collect(Tokenize.tokenize("foo + bar", Tokens.RawToken)))
+nt = @timed @eval(collect(Tokenize.tokenize("foo + bar")))
 println("First run took $(nt.time) seconds with $(nt.bytes/1e6) MB allocated")
 
 srcdir = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "..")
@@ -17,7 +17,7 @@ end
 let time_taken = 0.0, allocated = 0.0
     for file in allfiles
         content = IOBuffer(read(file, String))
-        nt = @timed for t in Tokenize.tokenize(content, Tokens.RawToken) end
+        nt = @timed for t in Tokenize.tokenize(content) end
         time_taken += nt.time
         allocated += nt.bytes
     end
@@ -27,7 +27,7 @@ end
 let time_taken = 0.0, allocated = 0.0
     for file in allfiles
         content = IOBuffer(read(file, String))
-        nt = @timed for t in Tokenize.tokenize(content, Tokens.RawToken) end
+        nt = @timed for t in Tokenize.tokenize(content) end
         time_taken += nt.time
         allocated += nt.bytes
     end
@@ -40,13 +40,13 @@ using PProf, Profile
 
 # warm up profiler
 let content = read(first(allfiles), String)
-    @profile collect(Tokenize.tokenize(content, Tokens.RawToken))
+    @profile collect(Tokenize.tokenize(content))
 end
 
 Profile.clear()
 for file in allfiles
     content = read(file, String)
-    @profile collect(Tokenize.tokenize(content, Tokens.RawToken))
+    @profile collect(Tokenize.tokenize(content))
 end
 pprof()
 

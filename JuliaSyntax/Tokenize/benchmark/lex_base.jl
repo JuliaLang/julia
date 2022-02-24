@@ -2,7 +2,7 @@ using Tokenize
 using BenchmarkTools
 using Printf
 
-function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.AbstractToken
+function speed_test()
     tot_files = 0
     tot_tokens = 0
     tot_errors = 0
@@ -14,7 +14,7 @@ function speed_test(::Type{T}=Tokenize.Tokens.Token) where T <: Tokenize.Tokens.
                     tot_files += 1
                     file = joinpath(root, file)
                     str = read(file, String)::String
-                    l = tokenize(str, T)
+                    l = tokenize(str)
                     while !Tokenize.Lexers.eof(l)
                         t = Tokenize.Lexers.next_token(l)
                         tot_tokens += 1
@@ -31,8 +31,6 @@ end
 
 tot_files, tot_tokens, tot_errors = speed_test()
 tot_time_token = @belapsed speed_test()
-tot_time_rawtoken = @belapsed speed_test(Tokenize.Tokens.RawToken)
 println("Lexed ", tot_files, " files, with a total of ", tot_tokens,
         " tokens with ", tot_errors, " errors")
 println("Time Token: ", @sprintf("%3.4f", tot_time_token), " seconds")
-println("Time RawToken: ", @sprintf("%3.4f", tot_time_rawtoken), " seconds")
