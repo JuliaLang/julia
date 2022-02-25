@@ -11,14 +11,18 @@ Set{T}(s::Set{T}) where {T} = _Set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
-function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
+function Set{T}(s::KeySet{T, <:Dict{T,V}}) where {T,V}
     d = s.dict
     slots = copy(d.slots)
     n = length(d.pairs)
-    pairs = Vector{Pair{T,Nothing}}(undef, n)
-    for i in 1:n
-        if isslotfilled(d, i)
-            pairs[i] = d.pairs[i].first::T => nothing
+    if isbitstype(T) && isbitstype(V)
+        pairs = [Pair{T,Nothing}(d.pairs[i].first, nothing) for i in 1:n]
+    else
+        pairs = Vector{Pair{T,Nothing}}(undef, n)
+        for i in 1:n
+            if isslotfilled(d, i)
+                pairs[i] = Pair{T,Nothing}(d.pairs[i].first, nothing)
+            end
         end
     end
     _Set(Dict{T,Nothing}(slots, pairs, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
