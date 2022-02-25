@@ -477,9 +477,8 @@ module IteratorsMD
     simd_inner_length(iter::CartesianIndices, I::CartesianIndex) = Base.length(iter.indices[1])
 
     simd_index(iter::CartesianIndices{0}, ::CartesianIndex, I1::Int) = first(iter)
-    @propagate_inbounds function simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int)
-        CartesianIndex(getindex(iter.indices[1], I1+first(Base.axes1(iter.indices[1]))), Ilast.I...)
-    end
+    @propagate_inbounds simd_index(iter::CartesianIndices, Ilast::CartesianIndex, I1::Int) =
+        CartesianIndex(iter.indices[1][I1+firstindex(iter.indices[1])], Ilast)
 
     # Split out the first N elements of a tuple
     @inline function split(t, V::Val)
@@ -585,7 +584,7 @@ module IteratorsMD
         CartesianIndices(intersect.(a.indices, b.indices))
 
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
-    const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,Tuple{UnitRange{Int}},false}
+    const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,<:Tuple{AbstractUnitRange{Int}},false}
     eltype(::Type{PartitionIterator{T}}) where {T<:ReshapedArrayLF} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
     eltype(::Type{PartitionIterator{T}}) where {T<:ReshapedArray} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, false}
     Iterators.IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:ReshapedArray} = Iterators.IteratorEltype(T)
@@ -593,7 +592,6 @@ module IteratorsMD
     eltype(::Type{PartitionIterator{T}}) where {T<:OneTo} = UnitRange{eltype(T)}
     eltype(::Type{PartitionIterator{T}}) where {T<:Union{UnitRange, StepRange, StepRangeLen, LinRange}} = T
     Iterators.IteratorEltype(::Type{<:PartitionIterator{T}}) where {T<:Union{OneTo, UnitRange, StepRange, StepRangeLen, LinRange}} = Iterators.IteratorEltype(T)
-
 
     @inline function iterate(iter::CartesianPartition)
         isempty(iter) && return nothing
@@ -610,33 +608,45 @@ module IteratorsMD
         # In general, the Cartesian Partition might start and stop in the middle of the outer
         # dimensions — thus the outer range of a CartesianPartition is itself a
         # CartesianPartition.
-        t = tail(iter.parent.parent.indices)
-        ci = CartesianIndices(t)
-        li = LinearIndices(t)
-        return @inbounds view(ci, li[tail(iter[1].I)...]:li[tail(iter[end].I)...])
+        mi = iter.parent.mi
+        ci = iter.parent.parent
+        ax, ax1 = axes(ci), Base.axes1(ci)
+        subs = Base.ind2sub_rs(ax, mi, first(iter.indices[1]))
+        vl, fl = Base._sub2ind(tail(ax), tail(subs)...), subs[1]
+        vr, fr = divrem(last(iter.indices[1]) - 1, mi[end]) .+ (1, first(ax1))
+        oci = CartesianIndices(tail(ci.indices))
+        # A fake CartesianPartition to reuse the outer iterate fallback
+        outer = @inbounds view(ReshapedArray(oci, (length(oci),), mi), vl:vr)
+        init = @inbounds dec(oci[tail(subs)...].I, oci.indices) # real init state
+        # Use Generator to make inner loop branchless
+        @inline function skip_len_I(i::Int, I::CartesianIndex)
+            l = i == 1 ? fl : first(ax1)
+            r = i == length(outer) ? fr : last(ax1)
+            l - first(ax1), r - l + 1, I
+        end
+        (skip_len_I(i, I) for (i, I) in Iterators.enumerate(Iterators.rest(outer, (init, 0))))
     end
-    function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
+    @inline function simd_outer_range(iter::CartesianPartition{CartesianIndex{2}})
         # But for two-dimensional Partitions the above is just a simple one-dimensional range
         # over the second dimension; we don't need to worry about non-rectangular staggers in
         # higher dimensions.
-        return @inbounds CartesianIndices((iter[1][2]:iter[end][2],))
+        mi = iter.parent.mi
+        ci = iter.parent.parent
+        ax, ax1 = axes(ci), Base.axes1(ci)
+        fl, vl = Base.ind2sub_rs(ax, mi, first(iter.indices[1]))
+        fr, vr = Base.ind2sub_rs(ax, mi, last(iter.indices[1]))
+        outer = @inbounds CartesianIndices((ci.indices[2][vl:vr],))
+        # Use Generator to make inner loop branchless
+        @inline function skip_len_I(I::CartesianIndex{1})
+            l = I == first(outer) ? fl : first(ax1)
+            r = I == last(outer) ? fr : last(ax1)
+            l - first(ax1), r - l + 1, I
+        end
+        (skip_len_I(I) for I in outer)
     end
-    @inline function simd_inner_length(iter::CartesianPartition, I::CartesianIndex)
-        inner = iter.parent.parent.indices[1]
-        @inbounds fi = iter[1].I
-        @inbounds li = iter[end].I
-        inner_start = I.I == tail(fi) ? fi[1] : first(inner)
-        inner_end   = I.I == tail(li) ? li[1] : last(inner)
-        return inner_end - inner_start + 1
-    end
-    @inline function simd_index(iter::CartesianPartition, Ilast::CartesianIndex, I1::Int)
-        # I1 is the 0-based distance from the first dimension's offest
-        offset = first(iter.parent.parent.indices[1]) # (this is 1 for 1-based arrays)
-        # In the first column we need to also add in the iter's starting point (branchlessly)
-        f = @inbounds iter[1]
-        startoffset = (Ilast.I == tail(f.I))*(f[1] - 1)
-        CartesianIndex((I1 + offset + startoffset, Ilast.I...))
-    end
+    @inline simd_inner_length(iter::CartesianPartition, (_, len, _)::Tuple{Int,Int,CartesianIndex}) = len
+    @propagate_inbounds simd_index(iter::CartesianPartition, (skip, _, I)::Tuple{Int,Int,CartesianIndex}, n::Int) =
+        simd_index(iter.parent.parent, I, n + skip)
 end  # IteratorsMD
 
 
