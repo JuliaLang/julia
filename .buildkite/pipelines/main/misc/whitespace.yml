@@ -15,7 +15,7 @@ steps:
           rootfs_url: https://github.com/JuliaCI/rootfs-images/releases/download/v4.8/package_linux.x86_64.tar.gz
           rootfs_treehash: "2a058481b567f0e91b9aa3ce4ad4f09e6419355a"
           workspaces:
-            - "/cache/repos:/cache/repos"
+            - "/cache:/cache"
     timeout_in_minutes: 10
     commands: |
       julia --version
