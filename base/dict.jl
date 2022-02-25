@@ -318,8 +318,8 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
                 avail = -index
             end
         else
-            p = pairs[index]
-            if key === p.first || isequal(key, p.first)
+            k = pairs[index].first
+            if key === k || isequal(key, k)
                 return index
             end
         end
@@ -347,7 +347,7 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
     return ht_keyindex2!(h, key)
 end
 
-@propagate_inbounds function _setindex!(h::Dict{K,V}, v, key, index) where V where K
+@propagate_inbounds function _setindex!(h::Dict{K,V}, v, key, index) where {K, V}
     h.slots[index] = 0x1
     h.pairs[index] = Pair{K,V}(key, v)
     h.count += 1
