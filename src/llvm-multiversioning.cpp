@@ -1052,7 +1052,7 @@ void CloneCtx::emit_metadata()
                 idxs.push_back(baseidx);
                 for (uint32_t j = 0; j < nfvars; j++) {
                     auto base_f = grp->base_func(fvars[j]);
-                    if (shared_relocs.count(j)) {
+                    if (shared_relocs.count(j) || tgt->relocs.count(j)) {
                         count++;
                         idxs.push_back(jl_sysimg_tag_mask | j);
                         auto f = map_get(*tgt->vmap, base_f, base_f);
@@ -1060,7 +1060,7 @@ void CloneCtx::emit_metadata()
                     }
                     else if (auto f = map_get(*tgt->vmap, base_f)) {
                         count++;
-                        idxs.push_back(tgt->relocs.count(j) ? (jl_sysimg_tag_mask | j) : j);
+                        idxs.push_back(j);
                         offsets.push_back(get_ptrdiff32(cast<Function>(f), fbase));
                     }
                 }
