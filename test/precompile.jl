@@ -630,10 +630,10 @@ precompile_test_harness("code caching") do dir
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
-    @test M.X2 ∈ m.roots
+    @test_broken M.X2 ∈ m.roots
     groups = group_roots(m)
     @test_broken M.X ∈ groups[Mid]           # requires caching external compilation results
-    @test M.X2 ∈ groups[rootid(@__MODULE__)]
+    @test_broken M.X2 ∈ groups[rootid(@__MODULE__)]
     @test !isempty(groups[Bid])
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]
