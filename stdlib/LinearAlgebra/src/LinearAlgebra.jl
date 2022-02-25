@@ -531,10 +531,34 @@ end
 
 
 function versioninfo(io::IO=stdout)
+    indent = "  "
     config = BLAS.get_config()
-    println(io, "BLAS: $(BLAS.libblastrampoline) ($(join(string.(config.build_flags), ", ")))")
+    build_flags = join(string.(config.build_flags), ", ")
+    println(io, "BLAS: ", BLAS.libblastrampoline, " (", build_flags, ")")
     for lib in config.loaded_libs
-        println(io, " --> $(lib.libname) ($(uppercase(string(lib.interface))))")
+        interface = uppercase(string(lib.interface))
+        println(io, indent, "--> ", lib.libname, " (", interface, ")")
+    end
+    println(io, "Threading:")
+    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
+    println(io, "Relevant environment variables:")
+    env_var_names = [
+        "JULIA_NUM_THREADS",
+        "MKL_DYNAMIC",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+    ]
+    printed_at_least_one_env_var = false
+    for name in env_var_names
+        if haskey(ENV, name)
+            value = ENV[name]
+            println(io, indent, name, " = ", value)
+            printed_at_least_one_env_var = true
+        end
+    end
+    if !printed_at_least_one_env_var
+        println(io, indent, "[none]")
     end
     return nothing
 end
