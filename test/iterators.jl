@@ -899,3 +899,11 @@ end
     @test last(Iterators.map(identity, 1:3)) == 3
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end
+
+@testset "isempty and isdone for Generators" begin
+    itr = eachline(IOBuffer("foo\n"))
+    gen = (x for x in itr)
+    @test !isempty(gen)
+    @test !Base.isdone(gen)
+    @test collect(gen) == ["foo"]
+end

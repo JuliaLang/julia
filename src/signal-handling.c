@@ -114,6 +114,9 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
+    || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_ARM_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -128,6 +131,7 @@ static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
     jl_set_safe_restore(old_buf);
     return i;
 }
+#endif
 
 static double profile_autostop_time = -1.0;
 static double profile_peek_duration = 1.0; // seconds
