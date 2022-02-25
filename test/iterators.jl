@@ -550,12 +550,15 @@ end
                                                          (1,1), (8,8), (11, 13),
                                                          (1,1,1), (8, 4, 2), (11, 13, 17)),
                                                 part in (1, 7, 8, 11, 63, 64, 65, 142, 143, 144)
-    P = partition(CartesianIndices(dims), part)
-    for I in P
-        @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
-        @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+    for fun in (i -> 1:i, i -> 1:2:2i, i -> Base.IdentityUnitRange(-i:i))
+        iter = CartesianIndices(map(fun, dims))
+        P = partition(iter, part)
+        for I in P
+            @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
+            @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+        end
+        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
-    @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), CartesianIndices(dims)))
 end
 @testset "empty/invalid partitions" begin
     @test_throws ArgumentError partition(1:10, 0)
