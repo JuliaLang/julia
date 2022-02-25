@@ -490,6 +490,8 @@ end
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
     @test isa(sign(2//3 + 2//3im), ComplexF64)
+    @test sign(pi) === 1.0
+    @test sign(pi) === -sign(-pi)
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
