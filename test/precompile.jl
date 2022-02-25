@@ -651,7 +651,7 @@ precompile_test_harness("code caching") do dir
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
-    @test_broken M.X2 ∈ m.roots
+    @test M.X2 ∈ m.roots
     groups = group_roots(m)
     @test M.X ∈ groups[Mid]           # attributed to M
     @test M.X2 ∈ groups[0]            # activate module is not known
