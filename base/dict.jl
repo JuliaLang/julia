@@ -702,11 +702,8 @@ length(t::Dict) = t.count
     i == 0 && return nothing
     i = skip_deleted(v.dict, i)
     i == 0 && return nothing
-    if T <: KeySet
-        (@inbounds v.dict.pairs[i].first, i == typemax(Int) ? 0 : i+1)
-    else
-        (@inbounds v.dict.pairs[i].second, i == typemax(Int) ? 0 : i+1)
-    end
+    p = @inbounds v.dict.pairs[i]
+    return p[T <: KeySet ? 1 : 2], i == typemax(Int) ? 0 : i+1
 end
 
 function filter!(pred, h::Dict{K,V}) where {K,V}
