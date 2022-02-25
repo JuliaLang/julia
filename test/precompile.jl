@@ -586,7 +586,6 @@ end
 
 # method root provenance & external code caching
 precompile_test_harness("code caching") do dir
-    Bid = rootid(Base)
     Cache_module = :Cacheb8321416e8a3e2f1
     # Note: calling store(::DictOld{K,V}, ::Any, ::K) adds both compression and codegen roots
     write(joinpath(dir, "$Cache_module.jl"),
@@ -671,7 +670,7 @@ precompile_test_harness("code caching") do dir
     groups = group_roots(m)
     @test M.X ∈ groups[Mid]           # attributed to M
     @test M.X2 ∈ groups[0]            # activate module is not known
-    #@test !isempty(groups[Bid])
+    @test !isempty(groups[Mid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]
