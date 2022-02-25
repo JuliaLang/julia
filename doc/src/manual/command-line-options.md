@@ -72,20 +72,20 @@ There are various ways to run Julia code and provide options, similar to those a
 julia [switches] -- [programfile] [args...]
 ```
 
-The following is a complete list of command-line switches available when launching julia, e.g.
-
+The following is a complete list of command-line switches available when launching julia (a '*' marks the default value, if applicable):
 
 |Switch                                 |Description|
 |:---                                   |:---|
 |`-v`, `--version`                      |Display version information|
 |`-h`, `--help`                         |Print command-line options (this message).|
+|`--help-hidden`                        |Uncommon options not shown by `-h`|
 |`--project[={<dir>\|@.}]`              |Set `<dir>` as the home project/environment. The default `@.` option will search through parent directories until a `Project.toml` or `JuliaProject.toml` file is found.|
 |`-J`, `--sysimage <file>`              |Start up with the given system image file|
 |`-H`, `--home <dir>`                   |Set location of `julia` executable|
-|`--startup-file={yes\|no}`             |Load `~/.julia/config/startup.jl`|
-|`--handle-signals={yes\|no}`           |Enable or disable Julia's default signal handlers|
-|`--sysimage-native-code={yes\|no}`     |Use native code from system image if available|
-|`--compiled-modules={yes\|no}`         |Enable or disable incremental precompilation of modules|
+|`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH` environment variable is unset, load `~/.julia/config/startup.jl`|
+|`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
+|`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
+|`--compiled-modules={yes*\|no}`        |Enable or disable incremental precompilation of modules|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
@@ -94,22 +94,35 @@ The following is a complete list of command-line switches available when launchi
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
 |`-q`, `--quiet`                        |Quiet startup: no banner, suppress REPL warnings|
-|`--banner={yes\|no\|auto}`             |Enable or disable startup banner|
-|`--color={yes\|no\|auto}`              |Enable or disable color text|
-|`--history-file={yes\|no}`             |Load or save history|
-|`--depwarn={yes\|no\|error}`           |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
-|`--warn-overwrite={yes\|no}`           |Enable or disable method overwrite warnings|
+|`--banner={yes\|no\|auto*}`            |Enable or disable startup banner|
+|`--color={yes\|no\|auto*}`             |Enable or disable color text|
+|`--history-file={yes*\|no}`            |Load or save history|
+|`--depwarn={yes\|no*\|error}`          |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
+|`--warn-overwrite={yes\|no*}`          |Enable or disable method overwrite warnings|
+|`--warn-scope={yes*\|no}`              |Enable or disable warning for ambiguous top-level scope|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
-|`-O`, `--optimize={0,1,2,3}`           |Set the optimization level (default level is 2 if unspecified or 3 if used without a level)|
-|`--min-optlevel={0,1,2,3}`             |Set the lower bound on per-module optimization (default is 0)|
-|`-g`, `-g <level>`                     |Enable or set the level of debug info generation (default level is 1 if unspecified or 2 if used without a level)|
+|`-O`, `--optimize={0,1,2*,3}`          |Set the optimization level (level is 3 if `-O` is used without a level)|
+|`--min-optlevel={0*,1,2,3}`            |Set the lower bound on per-module optimization|
+|`-g {0,1*,2}`                          |Set the level of debug info generation (level is 2 if `-g` is used without a level)|
 |`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
-|`--check-bounds={yes\|no\|auto}`       |Emit bounds checks always, never, or respect `@inbounds` declarations|
+|`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations|
 |`--math-mode={ieee,fast}`              |Disallow or enable unsafe floating point optimizations (overrides `@fastmath` declaration)|
-|`--code-coverage={none\|user\|all}`    |Count executions of source lines|
-|`--code-coverage`                      |equivalent to `--code-coverage=user`|
-|`--track-allocation={none\|user\|all}` |Count bytes allocated by each source line|
-|`--track-allocation`                   |equivalent to `--track-allocation=user`|
+|`--code-coverage[={none*\|user\|all}]` |Count executions of source lines (omitting setting is equivalent to `user`)|
+|`--code-coverage=tracefile.info`       |Append coverage information to the LCOV tracefile (filename supports format tokens).|
+|`--track-allocation[={none*\|user\|all}]` |Count bytes allocated by each source line (omitting setting is equivalent to "user")|
+|`--bug-report=KIND`                    |Launch a bug report session. It can be used to start a REPL, run a script, or evaluate expressions. It first tries to use BugReporting.jl installed in current environment and fallbacks to the latest compatible BugReporting.jl if not. For more nformation, see `--bug-report=help`.|
+|`--compile={yes*\|no\|all\|min}`       |Enable or disable JIT compiler, or request exhaustive or minimal compilation|
+|`--output-o <name>`                    |Generate an object file (including system image data)|
+|`--output-ji <name>`                   |Generate a system image data file (.ji)|
+|`--strip-metadata`                     |Remove docstrings and source location info from system image|
+|`--strip-ir`                           |Remove IR (intermediate representation) of compiled functions|
+|`--output-unopt-bc <name>`             |Generate unoptimized LLVM bitcode (.bc)|
+|`--output-bc <name>`                   |Generate LLVM bitcode (.bc)|
+|`--output-asm <name>`                  |Generate an assembly file (.s)|
+|`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
+|`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
+|`--image-codegen`                      |Force generate code in imaging mode|
+
 
 !!! compat "Julia 1.1"
     In Julia 1.0, the default `--project=@.` option did not search up from the root
