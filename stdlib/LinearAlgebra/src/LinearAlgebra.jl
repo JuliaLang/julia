@@ -565,29 +565,6 @@ function versioninfo(io::IO=stdout)
     return nothing
 end
 
-function find_library_path(name)
-    shlib_ext = string(".", Libdl.dlext)
-    if !endswith(name, shlib_ext)
-        name_ext = string(name, shlib_ext)
-    end
-
-    # On windows, we look in `bin` and never in `lib`
-    @static if Sys.iswindows()
-        path = joinpath(Sys.BINDIR, name_ext)
-        isfile(path) && return path
-    else
-        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
-        isfile(path) && return path
-
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
-        isfile(path) && return path
-    end
-
-    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
-    return name
-end
-
 function __init__()
     try
         BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
