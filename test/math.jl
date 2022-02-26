@@ -1399,3 +1399,12 @@ end
 # the compiler ever gets good enough to figure
 # that out by itself, move this to inference).
 @test code_typed(x->Val{x^0.0}(), Tuple{Float64})[1][2] == Val{1.0}
+
+function f44336()
+    as = ntuple(_ -> rand(), Val(32))
+    @inline hypot(as...)
+end
+@testset "Issue #44336" begin
+    f44336()
+    @test (@allocated f44336()) == 0
+end
