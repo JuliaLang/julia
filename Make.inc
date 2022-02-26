@@ -353,6 +353,9 @@ USE_POLLY_ACC := 0     # Enable GPU code-generation
 # Options to use MLIR
 USE_MLIR := 0
 
+# Options to use Polygeist
+USE_POLYGEIST := 0
+
 # Options to use RegionVectorizer
 USE_RV := 0
 

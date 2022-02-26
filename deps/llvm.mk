@@ -4,6 +4,7 @@ include $(SRCDIR)/llvm-options.mk
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
 LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
+POLYGEIST_GIT_URL:=https://github.com/wsmoses/Polygeist.git
 LLVM_TAR_URL=https://api.github.com/repos/JuliaLang/llvm-project/tarball/$1
 $(eval $(call git-external,llvm,LLVM,CMakeLists.txt,,$(SRCCACHE)))
 
@@ -24,6 +25,13 @@ ifeq ($(USE_RV),1)
 BUILD_LLVM_CLANG := 1
 # because it's a build requirement
 endif
+
+ifeq ($(USE_POLYGEIST),1)
+BUILD_LLVM_CLANG := 1
+$(eval $(call git-external,llvm/polygeist,POLYGEIST,CMakeLists.txt,,$(SRCCACHE)))
+# because it's a build requirement
+endif
+
 
 # TODO: Add RV support back in
 # ifneq ($(USE_RV),)
@@ -49,6 +57,9 @@ endif
 ifeq ($(USE_MLIR), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);mlir
 endif
+ifeq ($(USE_POLYGEIST), 1)
+LLVM_EXTERNAL_PROJECTS := $(LLVM_EXTERNAL_PROJECTS);polygeist
+endif
 ifeq ($(USE_RV), 1)
 LLVM_EXTERNAL_PROJECTS := $(LLVM_EXTERNAL_PROJECTS);rv
 endif
@@ -73,6 +84,10 @@ LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
 LLVM_CMAKE += -DLLVM_EXTERNAL_PROJECTS="$(LLVM_EXTERNAL_PROJECTS)"
 LLVM_CMAKE += -DLLVM_ENABLE_RUNTIMES="$(LLVM_ENABLE_RUNTIMES)"
 
+ifeq ($(USE_POLYGEIST),1)
+LLVM_CMAKE += -DLLVM_EXTERNAL_POLYGEIST_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/polygeist
+LLVM_CMAKE += -DLLVM_CXX_STD=c++14
+endif
 ifeq ($(USE_RV),1)
 LLVM_CMAKE += -DLLVM_EXTERNAL_RV_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/rv
 LLVM_CMAKE += -DLLVM_CXX_STD=c++14
