@@ -1068,8 +1068,8 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
                     return cost
                 end
             end
-            # unknown/unhandled intrinsic
-            return params.inline_nonleaf_penalty
+            # unknown/unhandled intrinsic: hopefully the caller gets a slightly better answer after the inlining
+            return UNKNOWN_CALL_COST
         end
         if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
