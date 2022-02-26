@@ -14,10 +14,10 @@ Set() = Set{Any}()
 function Set{T}(s::KeySet{T, <:Dict{T,V}}) where {T,V}
     d = s.dict
     slots = copy(d.slots)
-    n = length(d.pairs)
-    if isbitstype(T) && isbitstype(V)
-        pairs = [Pair{T,Nothing}(d.pairs[i].first, nothing) for i in 1:n]
+    if isbitstype(Pair{T, V})
+        pairs = Pair{T, Nothing}[Pair{T, Nothing}(x.first, nothing) for x in d.pairs]
     else
+        n = length(d.pairs)
         pairs = Vector{Pair{T,Nothing}}(undef, n)
         for i in 1:n
             if isslotfilled(d, i)
