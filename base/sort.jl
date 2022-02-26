@@ -723,8 +723,16 @@ function radix_heuristic(mn, mx, length)
 end
 
 function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
-    maybereverse = lt(o, false, true) ? identity : lt(o, true, false) ? reverse : return v
-    sort_int_range!(v, 2, 0, maybereverse)
+    first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
+    count = 0
+    for i in lo:hi
+        if v == first
+            count += 1
+        end
+    end
+    v[lo:lo+count-1] .= first
+    v[lo+count:hi] .= !first
+    v
 end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
