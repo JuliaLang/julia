@@ -21,7 +21,7 @@ function Set{T}(s::KeySet{T, <:Dict{T,V}}) where {T,V}
         pairs = Vector{Pair{T,Nothing}}(undef, n)
         for i in 1:n
             if isslotfilled(d, i)
-                pairs[i] = Pair{T,Nothing}(d.pairs[i].first, nothing)
+                @inbounds pairs[i] = Pair{T,Nothing}(d.pairs[i].first, nothing)
             end
         end
     end
