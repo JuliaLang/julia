@@ -6977,15 +6977,20 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         return (!jl_is_submodule(mod, jl_base_module) &&
                 !jl_is_submodule(mod, jl_core_module));
     };
+    auto in_tracked_path = [] (StringRef file) {
+        return (jl_options.tracked_path != NULL && file.rfind(jl_options.tracked_path) == 0);
+    };
     bool mod_is_user_mod = in_user_mod(ctx.module);
+    bool mod_is_tracked = in_tracked_path(ctx.file);
     struct DebugLineTable {
         DebugLoc loc;
         StringRef file;
         ssize_t line;
         bool is_user_code;
+        bool is_tracked; // If file falls within an explicitly set directory
         unsigned inlined_at;
         bool operator ==(const DebugLineTable &other) const {
-            return other.loc == loc && other.file == file && other.line == line && other.is_user_code == is_user_code && other.inlined_at == inlined_at;
+            return other.loc == loc && other.file == file && other.line == line && other.is_user_code == is_user_code && other.is_tracked == is_tracked && other.inlined_at == inlined_at;
         }
     };
     std::vector<DebugLineTable> linetable;
@@ -6998,6 +7003,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         topinfo.file = ctx.file;
         topinfo.line = toplineno;
         topinfo.is_user_code = mod_is_user_mod;
+        topinfo.is_tracked = mod_is_tracked;
         topinfo.inlined_at = 0;
         topinfo.loc = topdebugloc;
         for (size_t i = 0; i < nlocs; i++) {
@@ -7011,13 +7017,16 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             info.line = jl_unbox_long(jl_fieldref(locinfo, 3));
             info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
             assert(info.inlined_at <= i);
-            if (module == ctx.module)
-                info.is_user_code = mod_is_user_mod;
-            else
-                info.is_user_code = in_user_mod(module);
             info.file = jl_symbol_name(filesym);
             if (info.file.empty())
                 info.file = "<missing>";
+            if (module == ctx.module) {
+                info.is_user_code = mod_is_user_mod;
+                info.is_tracked = mod_is_tracked;
+            } else {
+                info.is_user_code = in_user_mod(module);
+                info.is_tracked = in_tracked_path(info.file);
+            }
             if (ctx.debug_enabled) {
                 StringRef fname;
                 if (jl_is_method_instance(method))
@@ -7131,13 +7140,15 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         cursor = -1;
     };
 
-    auto do_coverage = [&] (bool in_user_code) {
+    auto do_coverage = [&] (bool in_user_code, bool is_tracked) {
         return (coverage_mode == JL_LOG_ALL ||
-                (coverage_mode == JL_LOG_USER && in_user_code));
+                (in_user_code && coverage_mode == JL_LOG_USER) ||
+                (is_tracked && coverage_mode == JL_LOG_PATH));
     };
-    auto do_malloc_log = [&] (bool in_user_code) {
+    auto do_malloc_log = [&] (bool in_user_code, bool is_tracked) {
         return (malloc_log_mode == JL_LOG_ALL ||
-                (malloc_log_mode == JL_LOG_USER && in_user_code));
+                (in_user_code && malloc_log_mode == JL_LOG_USER) ||
+                (is_tracked && malloc_log_mode == JL_LOG_PATH));
     };
     std::vector<unsigned> current_lineinfo, new_lineinfo;
     auto coverageVisitStmt = [&] (size_t dbg) {
@@ -7156,15 +7167,15 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (newdbg != current_lineinfo[dbg]) {
                 current_lineinfo[dbg] = newdbg;
                 const auto &info = linetable.at(newdbg);
-                if (do_coverage(info.is_user_code))
+                if (do_coverage(info.is_user_code, info.is_tracked))
                     coverageVisitLine(ctx, info.file, info.line);
             }
         }
         new_lineinfo.clear();
     };
     auto mallocVisitStmt = [&] (unsigned dbg, Value *sync) {
-        if (!do_malloc_log(mod_is_user_mod) || dbg == 0) {
-            if (do_malloc_log(true) && sync)
+        if (!do_malloc_log(mod_is_user_mod, mod_is_tracked) || dbg == 0) {
+            if (do_malloc_log(true, mod_is_tracked) && sync)
                 ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync});
             return;
         }
@@ -7175,7 +7186,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     if (coverage_mode != JL_LOG_NONE) {
         // record all lines that could be covered
         for (const auto &info : linetable)
-            if (do_coverage(info.is_user_code))
+            if (do_coverage(info.is_user_code, info.is_tracked))
                 jl_coverage_alloc_line(info.file, info.line);
     }
 
@@ -7230,7 +7241,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     }
 
     Value *sync_bytes = nullptr;
-    if (do_malloc_log(true))
+    if (do_malloc_log(true, mod_is_tracked))
         sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
     { // coverage for the function definition line number
         const auto &topinfo = linetable.at(0);
@@ -7238,7 +7249,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (topinfo == linetable.at(1))
                 current_lineinfo.push_back(1);
         }
-        if (do_coverage(topinfo.is_user_code))
+        if (do_coverage(topinfo.is_user_code, topinfo.is_tracked))
             coverageVisitLine(ctx, topinfo.file, topinfo.line);
     }
 

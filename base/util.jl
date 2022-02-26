@@ -196,6 +196,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
                 push!(addflags, "--code-coverage=user")
             elseif opts.code_coverage == 2
                 push!(addflags, "--code-coverage=all")
+            elseif opts.code_coverage == 3
+                push!(addflags, "--code-coverage=@$(opts.tracked_path)")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
@@ -204,6 +206,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
         push!(addflags, "--track-allocation=all")
+    elseif opts.malloc_log == 3
+        push!(addflags, "--track-allocation=@$(opts.tracked_path)")
     end
     if opts.color == 1
         push!(addflags, "--color=yes")
