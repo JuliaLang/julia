@@ -180,19 +180,13 @@ using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
 
 class JuliaOJIT {
-    struct CompilerT : public orc::IRCompileLayer::IRCompiler {
-        CompilerT(JuliaOJIT *pjit)
-            : IRCompiler(orc::IRSymbolMapper::ManglingOptions{}),
-              jit(*pjit) {}
-        virtual CompilerResultT operator()(Module &M) override;
-    private:
-        JuliaOJIT &jit;
-    };
     struct OptimizerT {
-        OptimizerT(JuliaOJIT *pjit) : jit(*pjit) {}
+        OptimizerT(JuliaOJIT *pjit, legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM), jit(*pjit) {}
 
         OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
     private:
+        int optlevel;
+        legacy::PassManager &PM;
         JuliaOJIT &jit;
     };
     // Custom object emission notification handler for the JuliaOJIT
@@ -237,14 +231,11 @@ private:
     const DataLayout DL;
     // Should be big enough that in the common case, The
     // object fits in its entirety
-    SmallVector<char, 4096> ObjBufferSV;
-    raw_svector_ostream ObjStream;
     legacy::PassManager PM0;  // per-optlevel pass managers
     legacy::PassManager PM1;
     legacy::PassManager PM2;
     legacy::PassManager PM3;
-    TargetMachine *TMs[4];
-    MCContext *Ctx;
+    std::unique_ptr<TargetMachine> TMs[4];
 
     orc::ThreadSafeContext TSCtx;
     orc::ExecutionSession ES;
@@ -255,8 +246,11 @@ private:
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    CompileLayerT CompileLayer;
-    OptimizeLayerT OptimizeLayer;
+    CompileLayerT CompileLayer0;
+    CompileLayerT CompileLayer1;
+    CompileLayerT CompileLayer2;
+    CompileLayerT CompileLayer3;
+    OptimizeLayerT OptimizeLayers[4];
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };

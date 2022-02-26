@@ -456,13 +456,11 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 #endif
 }
 
-static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, raw_svector_ostream &ObjStream, MCContext *Ctx, int optlevel)
+static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, int optlevel)
 {
     addTargetPasses(&PM, &TM);
     addOptimizationPasses(&PM, optlevel);
     addMachinePasses(&PM, &TM, optlevel);
-    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
-        llvm_unreachable("Target does not support MC emission.");
 }
 
 static auto countBasicBlocks(const Function &F)
@@ -494,36 +492,8 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
         }
 
         JL_TIMING(LLVM_OPT);
-
-        int optlevel;
-        int optlevel_min;
-        if (jl_generating_output()) {
-            optlevel = 0;
-        }
-        else {
-            optlevel = jl_options.opt_level;
-            optlevel_min = jl_options.opt_level_min;
-            for (auto &F : M.functions()) {
-                if (!F.getBasicBlockList().empty()) {
-                    Attribute attr = F.getFnAttribute("julia-optimization-level");
-                    StringRef val = attr.getValueAsString();
-                    if (val != "") {
-                        int ol = (int)val[0] - '0';
-                        if (ol >= 0 && ol < optlevel)
-                            optlevel = ol;
-                    }
-                }
-            }
-            optlevel = std::max(optlevel, optlevel_min);
-        }
-        if (optlevel == 0)
-            jit.PM0.run(M);
-        else if (optlevel == 1)
-            jit.PM1.run(M);
-        else if (optlevel == 2)
-            jit.PM2.run(M);
-        else if (optlevel >= 3)
-            jit.PM3.run(M);
+        
+        PM.run(M);
 
         uint64_t end_time = 0;
         if (dump_llvm_opt_stream != NULL) {
@@ -544,26 +514,6 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
         }
     });
     return Expected<orc::ThreadSafeModule>{std::move(TSM)};
-}
-
-CompilerResultT JuliaOJIT::CompilerT::operator()(Module &M)
-{
-
-    std::unique_ptr<MemoryBuffer> ObjBuffer(
-        new SmallVectorMemoryBuffer(std::move(jit.ObjBufferSV)));
-    auto Obj = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
-
-    if (!Obj) {
-        llvm_dump(&M);
-        std::string Buf;
-        raw_string_ostream OS(Buf);
-        logAllUnhandledErrors(Obj.takeError(), OS, "");
-        OS.flush();
-        llvm::report_fatal_error(llvm::Twine("FATAL: Unable to compile LLVM Module: '") + Buf + "'\n"
-                                 "The module's content was printed above. Please file a bug report");
-    }
-
-    return CompilerResultT(std::move(ObjBuffer));
 }
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
@@ -813,10 +763,27 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
 }
 #endif
 
+namespace {
+    orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
+        return orc::JITTargetMachineBuilder(TM.getTargetTriple())
+        .setCPU(TM.getTargetCPU().str())
+        .setFeatures(TM.getTargetFeatureString())
+        .setOptions(TM.Options)
+        .setRelocationModel(Reloc::Static)
+        .setCodeModel(TM.getCodeModel())
+        .setCodeGenOptLevel(CodeGenOptLevelFor(optlevel));
+    }
+}
+
 JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
   : TM(TM),
     DL(TM.createDataLayout()),
-    ObjStream(ObjBufferSV),
+    TMs{
+        cantFail(createJTMBFromTM(TM, 0).createTargetMachine()),
+        cantFail(createJTMBFromTM(TM, 1).createTargetMachine()),
+        cantFail(createJTMBFromTM(TM, 2).createTargetMachine()),
+        cantFail(createJTMBFromTM(TM, 3).createTargetMachine())
+    },
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
 #if JL_LLVM_VERSION >= 130000
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),
@@ -843,8 +810,16 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
             }
         ),
 #endif
-    CompileLayer(ES, ObjectLayer, std::make_unique<CompilerT>(this)),
-    OptimizeLayer(ES, CompileLayer, OptimizerT(this))
+    CompileLayer0(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 0))),
+    CompileLayer1(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 1))),
+    CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 2))),
+    CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 3))),
+    OptimizeLayers{
+        {ES, CompileLayer0, OptimizerT(this, PM0, 0)},
+        {ES, CompileLayer1, OptimizerT(this, PM1, 1)},
+        {ES, CompileLayer2, OptimizerT(this, PM2, 2)},
+        {ES, CompileLayer3, OptimizerT(this, PM3, 3)},
+    }
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -866,15 +841,10 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
-    for (int i = 0; i < 4; i++) {
-        TMs[i] = TM.getTarget().createTargetMachine(TM.getTargetTriple().getTriple(), TM.getTargetCPU(),
-                TM.getTargetFeatureString(), TM.Options, Reloc::Static, TM.getCodeModel(),
-                CodeGenOptLevelFor(i), true);
-    }
-    addPassesForOptLevel(PM0, *TMs[0], ObjStream, Ctx, 0);
-    addPassesForOptLevel(PM1, *TMs[1], ObjStream, Ctx, 1);
-    addPassesForOptLevel(PM2, *TMs[2], ObjStream, Ctx, 2);
-    addPassesForOptLevel(PM3, *TMs[3], ObjStream, Ctx, 3);
+    addPassesForOptLevel(PM0, *TMs[0], 0);
+    addPassesForOptLevel(PM1, *TMs[1], 1);
+    addPassesForOptLevel(PM2, *TMs[2], 2);
+    addPassesForOptLevel(PM3, *TMs[3], 3);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
@@ -949,8 +919,30 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
+
+    int optlevel;
+    int optlevel_min;
+    if (jl_generating_output()) {
+        optlevel = 0;
+    }
+    else {
+        optlevel = jl_options.opt_level;
+        optlevel_min = jl_options.opt_level_min;
+        for (auto &F : M->functions()) {
+            if (!F.getBasicBlockList().empty()) {
+                Attribute attr = F.getFnAttribute("julia-optimization-level");
+                StringRef val = attr.getValueAsString();
+                if (val != "") {
+                    int ol = (int)val[0] - '0';
+                    if (ol >= 0 && ol < optlevel)
+                        optlevel = ol;
+                }
+            }
+        }
+        optlevel = std::max(optlevel, optlevel_min);
+    }
     // TODO: what is the performance characteristics of this?
-    cantFail(OptimizeLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+    cantFail(OptimizeLayers[std::max(std::min(optlevel, 3), 0)].add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
