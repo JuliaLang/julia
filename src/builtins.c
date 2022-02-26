@@ -1963,7 +1963,6 @@ static unsigned intrinsic_nargs[num_intrinsics];
 
 JL_CALLABLE(jl_f_intrinsic_call)
 {
-    JL_TYPECHK(intrinsic_call, intrinsic, F);
     enum intrinsic f = (enum intrinsic)*(uint32_t*)jl_data_ptr(F);
     if (f == cglobal && nargs == 1)
         f = cglobal_auto;
