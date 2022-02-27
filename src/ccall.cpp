@@ -218,8 +218,9 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
         args.push_back(&*arg);
+    assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
     CallInst *ret = irbuilder.CreateCall(
-        cast<FunctionType>(ptr->getType()->getPointerElementType()),
+        functype,
         ptr, ArrayRef<Value*>(args));
     ret->setAttributes(attrs);
     if (cc != CallingConv::C)
@@ -233,10 +234,11 @@ static GlobalVariable *emit_plt_thunk(
     else {
         // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
         // Known failures includes vararg (not needed here) and sret.
-#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
-                        defined(_CPU_AARCH64_))
+
+#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || (defined(_CPU_AARCH64_) && !defined(_OS_DARWIN_)))
         // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
         // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
+        // Apple silicon macs give an LLVM ERROR if musttail is set here #44107.
         if (!attrs.hasAttrSomewhere(Attribute::ByVal))
             ret->setTailCallKind(CallInst::TCK_MustTail);
 #endif
@@ -1020,18 +1022,22 @@ std::string generate_func_sig(const char *fname)
     else
         abi.reset(new DefaultAbiState());
     sret = 0;
-
+    LLVMContext &LLVMCtx = lrt->getContext();
     if (type_is_ghost(lrt)) {
-        prt = lrt = getVoidTy(lrt->getContext());
-        abi->use_sret(jl_nothing_type, lrt->getContext());
+        prt = lrt = getVoidTy(LLVMCtx);
+        abi->use_sret(jl_nothing_type, LLVMCtx);
     }
     else {
         if (retboxed || jl_is_cpointer_type(rt) || lrt->isPointerTy()) {
             prt = lrt; // passed as pointer
-            abi->use_sret(jl_voidpointer_type, lrt->getContext());
+            abi->use_sret(jl_voidpointer_type, LLVMCtx);
         }
-        else if (abi->use_sret((jl_datatype_t*)rt, lrt->getContext())) {
-            AttrBuilder retattrs = AttrBuilder();
+        else if (abi->use_sret((jl_datatype_t*)rt, LLVMCtx)) {
+#if JL_LLVM_VERSION >= 140000
+            AttrBuilder retattrs(LLVMCtx);
+#else
+            AttrBuilder retattrs;
+#endif
 #if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
             retattrs.addStructRetAttr(lrt);
 #endif
@@ -1042,24 +1048,28 @@ std::string generate_func_sig(const char *fname)
             prt = lrt;
         }
         else {
-            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, lrt->getContext());
+            prt = abi->preferred_llvm_type((jl_datatype_t*)rt, true, LLVMCtx);
             if (prt == NULL)
                 prt = lrt;
         }
     }
 
     for (size_t i = 0; i < nccallargs; ++i) {
+#if JL_LLVM_VERSION >= 140000
+        AttrBuilder ab(LLVMCtx);
+#else
         AttrBuilder ab;
+#endif
         jl_value_t *tti = jl_svecref(at, i);
         Type *t = NULL;
         bool isboxed;
         if (jl_is_abstract_ref_type(tti)) {
             tti = (jl_value_t*)jl_voidpointer_type;
-            t = getInt8PtrTy(lrt->getContext());
+            t = getInt8PtrTy(LLVMCtx);
             isboxed = false;
         }
         else if (llvmcall && jl_is_llvmpointer_type(tti)) {
-            t = bitstype_to_llvm(tti, lrt->getContext(), true);
+            t = bitstype_to_llvm(tti, LLVMCtx, true);
             tti = (jl_value_t*)jl_voidpointer_type;
             isboxed = false;
         }
@@ -1076,8 +1086,8 @@ std::string generate_func_sig(const char *fname)
                 }
             }
 
-            t = _julia_struct_to_llvm(ctx, lrt->getContext(), tti, &isboxed, llvmcall);
-            if (t == getVoidTy(lrt->getContext())) {
+            t = _julia_struct_to_llvm(ctx, LLVMCtx, tti, &isboxed, llvmcall);
+            if (t == getVoidTy(LLVMCtx)) {
                 return make_errmsg(fname, i + 1, " type doesn't correspond to a C type");
             }
         }
@@ -1088,7 +1098,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, lrt->getContext(), t);
+        bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
             pat = t;
@@ -1097,7 +1107,7 @@ std::string generate_func_sig(const char *fname)
             pat = PointerType::get(t, AddressSpace::Derived);
         }
         else {
-            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, lrt->getContext());
+            pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false, LLVMCtx);
             if (pat == NULL)
                 pat = t;
         }
@@ -1120,20 +1130,24 @@ std::string generate_func_sig(const char *fname)
         fargt.push_back(t);
         fargt_isboxed.push_back(isboxed);
         fargt_sig.push_back(pat);
-        paramattrs.push_back(AttributeSet::get(lrt->getContext(), ab));
+#if JL_LLVM_VERSION >= 140000
+        paramattrs.push_back(AttrBuilder(LLVMCtx, AttributeSet::get(LLVMCtx, ab)));
+#else
+        paramattrs.push_back(AttributeSet::get(LLVMCtx, ab));
+#endif
     }
 
     for (size_t i = 0; i < nccallargs + sret; ++i) {
         const auto &as = paramattrs.at(i);
         if (!as.hasAttributes())
             continue;
-        attributes = addAttributesAtIndex(attributes, lrt->getContext(), i + 1, as);
+        attributes = addAttributesAtIndex(attributes, LLVMCtx, i + 1, as);
     }
     // If return value is boxed it must be non-null.
     if (retboxed)
-        attributes = addRetAttribute(attributes, lrt->getContext(), Attribute::NonNull);
+        attributes = addRetAttribute(attributes, LLVMCtx, Attribute::NonNull);
     if (rt == jl_bottom_type) {
-        attributes = addFnAttribute(attributes, lrt->getContext(), Attribute::NoReturn);
+        attributes = addFnAttribute(attributes, LLVMCtx, Attribute::NoReturn);
     }
     return "";
 }
@@ -1867,6 +1881,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
 
     Value *result = NULL;
+    //This is only needed if !retboxed && srt && !jlretboxed
+    Type *sretty = nullptr;
     // First, if the ABI requires us to provide the space for the return
     // argument, allocate the box and store that as the first argument type
     bool sretboxed = false;
@@ -1874,6 +1890,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
         if (jl_is_pointerfree(rt)) {
             result = emit_static_alloca(ctx, lrt);
+            sretty = lrt;
             argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
         else {
@@ -1883,6 +1900,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
             result = emit_allocobj(ctx, jl_datatype_size(rt),
                                    literal_pointer_val(ctx, (jl_value_t*)rt));
+            sretty = ctx.types().T_jlvalue;
             sretboxed = true;
             gc_uses.push_back(result);
             argvals[0] = ctx.builder.CreateBitCast(emit_pointer_from_objref(ctx, result), fargt_sig.at(0));
@@ -1971,7 +1989,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);
     if (!sret)
-        result = ret;
+        result = ret; // no need to update sretty here because we know !sret
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
         ctx.f->addFnAttr(Attribute::StackProtectReq);
     }
@@ -1996,7 +2014,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // something alloca'd above is SSA
             if (static_rt)
                 return mark_julia_slot(result, rt, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
-            result = ctx.builder.CreateLoad(cast<PointerType>(result->getType())->getElementType(), result);
+            result = ctx.builder.CreateLoad(sretty, result);
         }
     }
     else {

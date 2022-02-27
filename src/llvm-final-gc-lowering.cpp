@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
@@ -28,20 +29,17 @@ using namespace llvm;
 // This pass targets typical back-ends for which the standard Julia
 // runtime library is available. Atypical back-ends should supply
 // their own lowering pass.
-struct FinalLowerGC: public FunctionPass, private JuliaPassContext {
-    static char ID;
-    FinalLowerGC() : FunctionPass(ID)
-    { }
+
+struct FinalLowerGC: private JuliaPassContext {
+    bool runOnFunction(Function &F);
+    bool doInitialization(Module &M);
+    bool doFinalization(Module &M);
 
 private:
     Function *queueRootFunc;
     Function *poolAllocFunc;
     Function *bigAllocFunc;
     Instruction *pgcstack;
-
-    bool doInitialization(Module &M) override;
-    bool doFinalization(Module &M) override;
-    bool runOnFunction(Function &F) override;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
     Value *lowerNewGCFrame(CallInst *target, Function &F);
@@ -325,12 +323,59 @@ bool FinalLowerGC::runOnFunction(Function &F)
     return true;
 }
 
-char FinalLowerGC::ID = 0;
-static RegisterPass<FinalLowerGC> X("FinalLowerGC", "Final GC intrinsic lowering pass", false, false);
+struct FinalLowerGCLegacy: public FunctionPass {
+    static char ID;
+    FinalLowerGCLegacy() : FunctionPass(ID), finalLowerGC(FinalLowerGC()) {}
+
+protected:
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+        FunctionPass::getAnalysisUsage(AU);
+    }
+
+private:
+    bool runOnFunction(Function &F) override;
+    bool doInitialization(Module &M) override;
+    bool doFinalization(Module &M) override;
+
+    FinalLowerGC finalLowerGC;
+};
+
+bool FinalLowerGCLegacy::runOnFunction(Function &F) {
+    return finalLowerGC.runOnFunction(F);
+}
+
+bool FinalLowerGCLegacy::doInitialization(Module &M) {
+    return finalLowerGC.doInitialization(M);
+}
+
+bool FinalLowerGCLegacy::doFinalization(Module &M) {
+    return finalLowerGC.doFinalization(M);
+}
+
+
+PreservedAnalyses FinalLowerGCPass::run(Module &M, ModuleAnalysisManager &AM)
+{
+    auto finalLowerGC = FinalLowerGC();
+    bool modified = false;
+    modified |= finalLowerGC.doInitialization(M);
+    for (auto &F : M.functions()) {
+        if (F.isDeclaration())
+            continue;
+        modified |= finalLowerGC.runOnFunction(F);
+    }
+    modified |= finalLowerGC.doFinalization(M);
+    if (modified) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
+    return PreservedAnalyses::all();
+}
+
+char FinalLowerGCLegacy::ID = 0;
+static RegisterPass<FinalLowerGCLegacy> X("FinalLowerGC", "Final GC intrinsic lowering pass", false, false);
 
 Pass *createFinalLowerGCPass()
 {
-    return new FinalLowerGC();
+    return new FinalLowerGCLegacy();
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)

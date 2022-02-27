@@ -111,7 +111,9 @@ bool lowerCPUFeatures(Module &M)
 
 PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
 {
-    lowerCPUFeatures(M);
+    if (lowerCPUFeatures(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

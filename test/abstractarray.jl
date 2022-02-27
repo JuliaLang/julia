@@ -732,6 +732,7 @@ function test_cat(::Type{TestAbstractArray})
     @test @inferred(cat(As...; dims=Val(3))) == zeros(2, 2, 2)
     cat3v(As) = cat(As...; dims=Val(3))
     @test @inferred(cat3v(As)) == zeros(2, 2, 2)
+    @test @inferred(cat(As...; dims=Val((1,2)))) == zeros(4, 4)
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
