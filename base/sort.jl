@@ -737,31 +737,41 @@ end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparrison based.
-    Serial.Serializable(eltype(v), o) === nothing && return sort!(v, lo, hi, a.fallback, o)
+    U = Serial.Serializable(eltype(v), o)
+    U === nothing && return sort!(v, lo, hi, a.fallback, o)
 
     # to avoid introducing excessive detection costs for the trivial sorting problem,
     # we check for small inputs before any other runtime checks
     hi <= lo && return v
-    hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+    ln = unsigned(hi-lo)
+    ln <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+    ln <= 2*SMALL_THRESHOLD && return sort!(v, lo, hi, a.fallback, o)
 
-    # if sorting a large array of 8-bit integers, we already know that sort_int_range!
-    # is a good idea and shouldn't waste time serializing. For larger integers, it is
-    # worth the time to check the minimum and maximum values because that can let us
-    # allocate a smaller temporary vector in sort_intrange!
-    (eltype(v) === Int8 || eltype(v) === UInt8) && (o === Forward || o === Reverse) && length(v) > 256 &&
-        return sort_int_range!(v, 256, typemin(eltype(v)), o == Forward ? identity : reverse)
+    # Count sort
+    if eltype(v) <: Integer && o isa DirectOrdering
+        mn, mx = extrema(v)
+        rangeln = unsigned(mx-mn)
+        if rangeln < ln
+            return sort_int_range!(v, rangeln+1, mn, o === Forward ? identity : reverse, lo, hi)
+        end
+    end
 
-    # radix sort is only faster than comparrison sorting for large arrays, and for
-    # 16 byte datatypes (Int128 and UInt128) this threshold is much higher because
-    # bit-shifting a 16 byte datatype is slower than bit-shifting a 8-byte datatype.
-    (hi - lo < 2000 || (hi - lo < 200_000 && sizeof(eltype(v)) == 16)) &&
-        return sort!(v, lo, hi, a.fallback, o)
+    # Radix sort is only faster than comparrison sorting for large arrays. The more bits
+    # there are to radix over, the larger the array needs to be for radix sort to be
+    # advantagous. Emperically, we place this threshold at 500 for 16 bit datatypes,
+    # 1000 for 32 bits, and 2000 for 64 bits. For 128 bit datatypes, bit-shifting becomes
+    # proihbitively slow, and bit shifting is central to radix sorting. For 1 byte
+    # datatypes, when an input is long enough for radix sorting to be faster than
+    # comparison sorting, it always makes sense to sort in a single radix pass, which
+    # is simply counting sort with additional overhead, so we never consider radix sort
+    # for single byte types.
+    (U === UInt8 || U === UInt128 || ln < 250 * sizeof(U)) && return sort!(v, lo, hi, a.fallback, o)
 
+    # serialize and then choose between radix sort and counting sort
     u, mn, mx = Serial.serialize!(v, lo, hi, o)
-
     bits, chunk_size, count = radix_heuristic(mn, mx, hi-lo+1)
 
-    if count
+    if count # (we may be unnable to use count sort until after serializing)
         # This overflows and returns incorrect results if the range is more than typemax(Int)
         # sourt_int_range! would need to allocate an array of more than typemax(Int) elements,
         # so policy should never dispatch to sort_int_range! in that case.
@@ -1231,7 +1241,7 @@ using ..Base: @inbounds, min, max, AbstractVector, nothing, signed, unsigned,
 """
     Serializable(T::Type, order::Ordering)
 
-Return `Some(typeof(serialize(x::T, order)))` if [`serialize`](@ref) and
+Return `typeof(serialize(x::T, order))` if [`serialize`](@ref) and
 [`deserialize`](@ref) are implemented.
 
 If either is not implemented, return nothing.
@@ -1275,7 +1285,7 @@ deserialize(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
 Serializable(T::Type{<:Union{Unsigned, Signed}}, ::ForwardOrdering) =
-    isbitstype(T) ? Some(unsigned(T)) : nothing
+    isbitstype(T) ? unsigned(T) : nothing
 
 
 # Floats are not Serializable under regular orderings because they fail on NaN edge cases.
@@ -1305,7 +1315,7 @@ Serializable(T::Type, order::ReverseOrdering) = Serializable(T, order.fwd)
 # Convert v to unsigned integers in place, maintaining sort order.
 # Also return the extrema of its output.
 function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
-    u = reinterpret(something(Serializable(eltype(v), order)), v)
+    u = reinterpret(Serializable(eltype(v), order), v)
     @inbounds u[lo] = mn = mx = serialize(v[lo], order)
     i = lo # rename lo -> i for clarity only
     @inbounds while i < hi
