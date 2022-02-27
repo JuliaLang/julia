@@ -456,7 +456,7 @@ Characteristics:
     equal (e.g. "a" and "A" in a sort of letters which ignores
     case).
   * *not in-place* in memory.
-  * *great performance* for very large collections.
+  * *great performance* for very large collections and some easy special cases.
 """
 struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
     fallback::Fallback
@@ -736,7 +736,7 @@ function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveS
 end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
-    # so we skip straight to the fallback algorithm which is comparrison based.
+    # so we skip straight to the fallback algorithm which is comparison based.
     U = Serial.Serializable(eltype(v), o)
     U === nothing && return sort!(v, lo, hi, a.fallback, o)
 
@@ -756,11 +756,11 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         end
     end
 
-    # Radix sort is only faster than comparrison sorting for large arrays. The more bits
+    # Radix sort is only faster than comparison sorting for large arrays. The more bits
     # there are to radix over, the larger the array needs to be for radix sort to be
-    # advantagous. Emperically, we place this threshold at 500 for 16 bit datatypes,
+    # advantageous. Empirically, we place this threshold at 500 for 16 bit datatypes,
     # 1000 for 32 bits, and 2000 for 64 bits. For 128 bit datatypes, bit-shifting becomes
-    # proihbitively slow, and bit shifting is central to radix sorting. For 1 byte
+    # prohibitively slow, and bit shifting is central to radix sorting. For 1 byte
     # datatypes, when an input is long enough for radix sorting to be faster than
     # comparison sorting, it always makes sense to sort in a single radix pass, which
     # is simply counting sort with additional overhead, so we never consider radix sort
@@ -850,8 +850,7 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-# maybereverse is never used by Base.
-function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse=identity, lo=firstindex(x), hi=lastindex(x))
+function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse, lo=firstindex(x), hi=lastindex(x))
     offs = 1 - minval
 
     counts = fill(0, rangelen)
