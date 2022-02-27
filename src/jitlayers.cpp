@@ -666,7 +666,7 @@ public:
                     continue;
                 }
                 auto SecName = Sec.getName().substr(SepPos + 1);
-                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart();
+                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
             }
             return Error::success();
         });
@@ -677,19 +677,17 @@ public:
 # ifdef LLVM_SHLIB
 class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
 public:
-    Error registerEHFrames(JITTargetAddress EHFrameSectionAddr,
-                         size_t EHFrameSectionSize) override {
+    Error registerEHFrames(ExecutorAddrRange EHFrameSectionAddr) override {
         register_eh_frames(
-            jitTargetAddressToPointer<uint8_t *>(EHFrameSectionAddr),
-            EHFrameSectionSize);
+            EHFrameSectionAddr.Start.toPtr<uint8_t*>(),
+            EHFrameSectionAddr.size());
         return Error::success();
     }
 
-    Error deregisterEHFrames(JITTargetAddress EHFrameSectionAddr,
-                           size_t EHFrameSectionSize) override {
+    Error deregisterEHFrames(ExecutorAddrRange EHFrameSectionAddr) override {
         deregister_eh_frames(
-            jitTargetAddressToPointer<uint8_t *>(EHFrameSectionAddr),
-            EHFrameSectionSize);
+            EHFrameSectionAddr.Start.toPtr<uint8_t*>(),
+            EHFrameSectionAddr.size());
         return Error::success();
     }
 };
@@ -884,7 +882,7 @@ namespace {
         .setCPU(TM.getTargetCPU().str())
         .setFeatures(TM.getTargetFeatureString())
         .setOptions(TM.Options)
-        .setRelocationModel(Reloc::Static)
+        .setRelocationModel(Reloc::PIC_)
         .setCodeModel(TM.getCodeModel())
         .setCodeGenOptLevel(CodeGenOptLevelFor(optlevel));
     }

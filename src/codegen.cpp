@@ -8215,7 +8215,7 @@ extern "C" void jl_init_llvm(void)
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
 #ifdef JL_USE_JITLINK
-#error "JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink"
+#warning "JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink"
 #else
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 

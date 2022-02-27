@@ -14,6 +14,8 @@
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 
+#define FORCE_JITLINK
+
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
 // (used via orc::ObjectLinkingLayer).
@@ -30,7 +32,7 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64.
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(FORCE_JITLINK)
 # if JL_LLVM_VERSION < 130000
 #  warning "On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults"
 # endif
