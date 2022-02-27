@@ -516,6 +516,33 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
     return Expected<orc::ThreadSafeModule>{std::move(TSM)};
 }
 
+void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
+    size_t optlevel = ~0ull;
+    TSM.withModuleDo([&](Module &M) {
+        if (jl_generating_output()) {
+            optlevel = 0;
+        }
+        else {
+            optlevel = std::max(static_cast<int>(jl_options.opt_level), 0);
+            size_t optlevel_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
+            for (auto &F : M.functions()) {
+                if (!F.getBasicBlockList().empty()) {
+                    Attribute attr = F.getFnAttribute("julia-optimization-level");
+                    StringRef val = attr.getValueAsString();
+                    if (val != "") {
+                        size_t ol = (size_t)val[0] - '0';
+                        if (ol >= 0 && ol < optlevel)
+                            optlevel = ol;
+                    }
+                }
+            }
+            optlevel = std::min(std::max(optlevel, optlevel_min), this->count);
+        }
+    });
+    assert(optlevel != ~0ull && "Failed to select a valid optimization level!");
+    this->optimizers[optlevel].emit(std::move(R), std::move(TSM));
+}
+
 void jl_register_jit_object(const object::ObjectFile &debugObj,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             std::function<void *(void *)> lookupWriteAddress);
@@ -815,11 +842,12 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
     CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 2))),
     CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 3))),
     OptimizeLayers{
-        {ES, CompileLayer0, OptimizerT(this, PM0, 0)},
-        {ES, CompileLayer1, OptimizerT(this, PM1, 1)},
-        {ES, CompileLayer2, OptimizerT(this, PM2, 2)},
-        {ES, CompileLayer3, OptimizerT(this, PM3, 3)},
-    }
+        {ES, CompileLayer0, OptimizerT(PM0, 0)},
+        {ES, CompileLayer1, OptimizerT(PM1, 1)},
+        {ES, CompileLayer2, OptimizerT(PM2, 2)},
+        {ES, CompileLayer3, OptimizerT(PM3, 3)},
+    },
+    OptSelLayer(OptimizeLayers)
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -919,30 +947,8 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
         }
     }
 #endif
-
-    int optlevel;
-    int optlevel_min;
-    if (jl_generating_output()) {
-        optlevel = 0;
-    }
-    else {
-        optlevel = jl_options.opt_level;
-        optlevel_min = jl_options.opt_level_min;
-        for (auto &F : M->functions()) {
-            if (!F.getBasicBlockList().empty()) {
-                Attribute attr = F.getFnAttribute("julia-optimization-level");
-                StringRef val = attr.getValueAsString();
-                if (val != "") {
-                    int ol = (int)val[0] - '0';
-                    if (ol >= 0 && ol < optlevel)
-                        optlevel = ol;
-                }
-            }
-        }
-        optlevel = std::max(optlevel, optlevel_min);
-    }
     // TODO: what is the performance characteristics of this?
-    cantFail(OptimizeLayers[std::max(std::min(optlevel, 3), 0)].add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+    cantFail(OptSelLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)

@@ -180,19 +180,6 @@ using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
 
 class JuliaOJIT {
-    struct OptimizerT {
-        OptimizerT(JuliaOJIT *pjit, legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM), jit(*pjit) {}
-
-        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
-    private:
-        int optlevel;
-        legacy::PassManager &PM;
-        JuliaOJIT &jit;
-    };
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(const ObjT &Obj, const LoadResult &LO);
-
 public:
 #ifdef JL_USE_JITLINK
     typedef orc::ObjectLinkingLayer ObjLayerT;
@@ -202,6 +189,34 @@ public:
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
+private:
+    struct OptimizerT {
+        OptimizerT(legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM) {}
+
+        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
+    private:
+        int optlevel;
+        legacy::PassManager &PM;
+    };
+    // Custom object emission notification handler for the JuliaOJIT
+    template <typename ObjT, typename LoadResult>
+    void registerObject(const ObjT &Obj, const LoadResult &LO);
+
+    struct OptSelLayerT : orc::IRLayer {
+
+        template<size_t N>
+        OptSelLayerT(OptimizeLayerT (&optimizers)[N]) : orc::IRLayer(optimizers[0].getExecutionSession(), optimizers[0].getManglingOptions()), optimizers(optimizers), count(N) {
+            static_assert(N > 0, "Expected array with at least one optimizer!");
+        }
+
+        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
+
+        private:
+        OptimizeLayerT *optimizers;
+        size_t count;
+    };
+
+public:
 
     JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
 
@@ -251,6 +266,7 @@ private:
     CompileLayerT CompileLayer2;
     CompileLayerT CompileLayer3;
     OptimizeLayerT OptimizeLayers[4];
+    OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
