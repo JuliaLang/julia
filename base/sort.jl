@@ -9,8 +9,8 @@ using .Base: copymutable, LinearIndices, length, (:),
     eachindex, axes, first, last, similar, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
-    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing, keytype,
+    extrema, sub_with_overflow, add_with_overflow, oneunit, isprimitivetype, div, getindex,
+    setindex!, length, resize!, fill, Missing, require_one_based_indexing, keytype,
     UnitRange, min, max, Val
 
 using .Base: >>>, !==
@@ -726,7 +726,7 @@ function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveS
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
     for i in lo:hi
-        if v == first
+        if v[i] == first
             count += 1
         end
     end
@@ -734,6 +734,9 @@ function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveS
     v[lo+count:hi] .= !first
     v
 end
+
+maybe_unsigned(x::Integer) = x
+maybe_unsigned(x::Union{Int8, Int16, Int32, Int64, Int128}) = unsigned(x)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparison based.
@@ -743,14 +746,14 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # to avoid introducing excessive detection costs for the trivial sorting problem,
     # we check for small inputs before any other runtime checks
     hi <= lo && return v
-    ln = unsigned(hi-lo)
+    ln = maybe_unsigned(hi-lo)
     ln <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
     ln <= 2*SMALL_THRESHOLD && return sort!(v, lo, hi, a.fallback, o)
 
     # Count sort
     if eltype(v) <: Integer && o isa DirectOrdering
         mn, mx = extrema(v)
-        rangeln = unsigned(mx-mn)
+        rangeln = maybe_unsigned(hi-lo)
         if rangeln < ln
             return sort_int_range!(v, rangeln+1, mn, o === Forward ? identity : reverse, lo, hi)
         end
