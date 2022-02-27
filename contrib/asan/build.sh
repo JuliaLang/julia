@@ -34,25 +34,21 @@ JULIA_HOME="$HERE/../../"
 echo
 echo "Installing toolchain..."
 
-# Enable Julia assertions: FORCE_ASSERTIONS=1
-# Enable LLVM assertions:  LLVM_ASSERTIONS=1
-MAKE_ASSERT_FLAGS="FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1"
-
 TOOLCHAIN="$WORKSPACE/toolchain"
 if [ ! -d "$TOOLCHAIN" ]; then
-    make -C "$JULIA_HOME" configure O=$TOOLCHAIN ${MAKE_ASSERT_FLAGS:?}
+    make -C "$JULIA_HOME" configure O=$TOOLCHAIN
     cp "$HERE/Make.user.tools"  "$TOOLCHAIN/Make.user"
 fi
 
-make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools ${MAKE_ASSERT_FLAGS:?}
+make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools
 
 echo
 echo "Building Julia..."
 
 BUILD="$WORKSPACE/asan"
 if [ ! -d "$BUILD" ]; then
-    make -C "$JULIA_HOME" configure O="$BUILD" ${MAKE_ASSERT_FLAGS:?}
+    make -C "$JULIA_HOME" configure O="$BUILD"
     cp "$HERE/Make.user.asan"  "$BUILD/Make.user"
 fi
 
-make -C "$BUILD" "$@" ${MAKE_ASSERT_FLAGS:?}
+make -C "$BUILD" "$@"
