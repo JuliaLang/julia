@@ -11,7 +11,7 @@ FileWatching.unwatch_folder
 # Pidfile
 
 ```@meta
-CurrentModule = Pidfile
+CurrentModule = FileWatching.Pidfile
 ```
 
 A simple utility tool for creating advisory pidfiles (lock files).
@@ -20,7 +20,7 @@ A simple utility tool for creating advisory pidfiles (lock files).
 
 ```@docs
 mkpidlock
-close
+close(lock::LockMonitor)
 ```
 
 
