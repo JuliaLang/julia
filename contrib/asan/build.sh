@@ -36,7 +36,7 @@ echo "Installing toolchain..."
 
 # Enable Julia assertions: FORCE_ASSERTIONS=1
 # Enable LLVM assertions:  LLVM_ASSERTIONS=1
-export MAKE_ASSERT_FLAGS="FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1"
+MAKE_ASSERT_FLAGS="FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1"
 
 TOOLCHAIN="$WORKSPACE/toolchain"
 if [ ! -d "$TOOLCHAIN" ]; then
