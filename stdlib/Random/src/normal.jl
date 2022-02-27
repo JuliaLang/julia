@@ -213,10 +213,14 @@ function Sampler(::Type{<:AbstractRNG}, d::Union{Normal{BigFloat},Exponential{Bi
     return s
 end
 
-function rand(rng::AbstractRNG, s::GMPRandState)
+function rand(rng0::AbstractRNG, s::GMPRandState)
     z = BigFloat()
-    if !ismutable(rng)
-        rng = MutableRNG(rng)
+    if ismutable(rng)
+        rng = rng0
+    elseif rng0 isa TaskLocalRNG
+        rng = MutableRNG(copy(rng0)::Xoshiro)
+    else
+        rng = MutableRNG(rng0)
     end
     GC.@preserve rng begin
         s.seed = MPZ_t(zero(Cint), zero(Cint), pointer_from_objref(rng))
@@ -229,6 +233,9 @@ function rand(rng::AbstractRNG, s::GMPRandState)
                   (Ref{BigFloat}, Ref{GMPRandState}, Base.MPFR.MPFRRoundingMode),
                   z, s, Base.MPFR.ROUNDING_MODE[])
         end
+    end
+    if rng0 isa TaskLocalRNG
+        copy!(rng0, rng.rng)
     end
     z
 end
@@ -252,6 +259,12 @@ Sampler(::Type{MutableRNG{RNG}}, ::Type{X}, n::Repetition) where {RNG <: Abstrac
 
 rand(rng::MutableRNG, x::Sampler) = rand(rng.rng, x)
 
+# disambiguate
+Sampler(::Type{MutableRNG{RNG}},
+        x::Union{Exponential{BigFloat}, Normal{BigFloat}},
+        n::Repetition) where {RNG<:AbstractRNG} = Sampler(RNG, x, n)
+
+rand(rng::MutableRNG, st::GMPRandState) = rand(rng.rng, st)
 
 ## arrays & other scalar methods
 
