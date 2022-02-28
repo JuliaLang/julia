@@ -461,8 +461,10 @@ add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
 add_tfunc(applicable, 1, INT_INF, (@nospecialize(f), args...)->Bool, 100)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecialize(x)->Int, 4)
 
+const Arrayish = Union{Array,ImmutableArray}
+
 function arraysize_tfunc(@nospecialize(ary), @nospecialize(dim))
-    hasintersect(widenconst(ary), Array) || return Bottom
+    hasintersect(widenconst(ary), Arrayish) || return Bottom
     hasintersect(widenconst(dim), Int) || return Bottom
     return Int
 end
@@ -472,7 +474,7 @@ function arraysize_nothrow(argtypes::Vector{Any})
     length(argtypes) == 2 || return false
     ary = argtypes[1]
     dim = argtypes[2]
-    ary ⊑ Array || return false
+    widenconst(ary) <: Arrayish || return false
     if isa(dim, Const)
         dimval = dim.val
         return isa(dimval, Int) && dimval > 0
@@ -1535,27 +1537,27 @@ function tuple_tfunc(argtypes::Vector{Any})
 end
 
 arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize idxs...) =
-    _arrayref_tfunc(boundscheck, ary, idxs)
-function _arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary),
-    @nospecialize idxs::Tuple)
+    _arrayref_tfunc(Arrayish, boundscheck, ary, idxs)
+function _arrayref_tfunc(@nospecialize(Arytype), 
+    @nospecialize(boundscheck), @nospecialize(ary), @nospecialize idxs::Tuple)
     isempty(idxs) && return Bottom
-    array_builtin_common_errorcheck(boundscheck, ary, idxs) || return Bottom
-    return array_elmtype(ary)
+    array_builtin_common_errorcheck(Arytype, boundscheck, ary, idxs) || return Bottom
+    return array_elmtype(Arytype, ary)
 end
 add_tfunc(arrayref, 3, INT_INF, arrayref_tfunc, 20)
 add_tfunc(const_arrayref, 3, INT_INF, arrayref_tfunc, 20)
 
 function arrayset_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize(item),
     @nospecialize idxs...)
-    hasintersect(widenconst(item), _arrayref_tfunc(boundscheck, ary, idxs)) || return Bottom
+    hasintersect(widenconst(item), _arrayref_tfunc(Array, boundscheck, ary, idxs)) || return Bottom
     return ary
 end
 add_tfunc(arrayset, 4, INT_INF, arrayset_tfunc, 20)
 
-function array_builtin_common_errorcheck(@nospecialize(boundscheck), @nospecialize(ary),
-    @nospecialize idxs::Tuple)
+function array_builtin_common_errorcheck(@nospecialize(Arytype),
+    @nospecialize(boundscheck), @nospecialize(ary), @nospecialize idxs::Tuple)
     hasintersect(widenconst(boundscheck), Bool) || return false
-    hasintersect(widenconst(ary), Array) || return false
+    hasintersect(widenconst(ary), Arytype) || return false
     for i = 1:length(idxs)
         idx = getfield(idxs, i)
         idx = isvarargtype(idx) ? unwrapva(idx) : widenconst(idx)
@@ -1564,9 +1566,9 @@ function array_builtin_common_errorcheck(@nospecialize(boundscheck), @nospeciali
     return true
 end
 
-function array_elmtype(@nospecialize ary)
+function array_elmtype(@nospecialize(Arytype), @nospecialize ary)
     a = widenconst(ary)
-    if !has_free_typevars(a) && a <: Array
+    if !has_free_typevars(a) && a <: Arytype
         a0 = a
         if isa(a, UnionAll)
             a = unwrap_unionall(a0)
@@ -1578,6 +1580,32 @@ function array_elmtype(@nospecialize ary)
         end
     end
     return Any
+end
+
+# the ImmutableArray operations might involve copies and so their computation costs can be high,
+# nevertheless we assign smaller inlining costs to them here, since the escape analysis
+# at this moment isn't able to propagate array escapes interprocedurally
+# and it will fail to optimize most cases without inlining
+
+arrayfreeze_tfunc(@nospecialize a) = immutable_array_tfunc(Array, ImmutableArray, a)
+add_tfunc(Core.arrayfreeze, 1, 1, arrayfreeze_tfunc, 20)
+
+mutating_arrayfreeze_tfunc(@nospecialize a) = immutable_array_tfunc(Array, ImmutableArray, a)
+add_tfunc(Core.mutating_arrayfreeze, 1, 1, mutating_arrayfreeze_tfunc, 10)
+
+arraythaw_tfunc(@nospecialize a) = immutable_array_tfunc(ImmutableArray, Array, a)
+add_tfunc(Core.arraythaw, 1, 1, arraythaw_tfunc, 20)
+
+function immutable_array_tfunc(@nospecialize(at), @nospecialize(rt), @nospecialize(a))
+    a = widenconst(a)
+    hasintersect(a, at) || return Bottom
+    if a <: at
+        unw = unwrap_unionall(a)
+        if isa(unw, DataType)
+            return rewrap_unionall(rt{unw.parameters[1], unw.parameters[2]}, a)
+        end
+    end
+    return rt
 end
 
 function _opaque_closure_tfunc(@nospecialize(arg), @nospecialize(isva),
@@ -1613,11 +1641,12 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
+function array_builtin_common_nothrow(@nospecialize(Arytype),
+    argtypes::Vector{Any}, first_idx_idx::Int)
     length(argtypes) >= 4 || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
-    array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
+    array_builtin_common_typecheck(Arytype, boundscheck, arytype, argtypes, first_idx_idx) || return false
     # If we could potentially throw undef ref errors, bail out now.
     arytype = widenconst(arytype)
     array_type_undefable(arytype) && return false
@@ -1632,12 +1661,12 @@ function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
     return false
 end
 
-function array_builtin_common_typecheck(
+function array_builtin_common_typecheck(@nospecialize(Arytype),
     @nospecialize(boundscheck), @nospecialize(arytype),
     argtypes::Vector{Any}, first_idx_idx::Int)
-    (boundscheck ⊑ Bool && arytype ⊑ Array) || return false
+    (widenconst(boundscheck) <: Bool && widenconst(arytype) <: Arytype) || return false
     for i = first_idx_idx:length(argtypes)
-        argtypes[i] ⊑ Int || return false
+        widenconst(argtypes[i]) <: Int || return false
     end
     return true
 end
@@ -1656,11 +1685,11 @@ end
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4) || return true
+        array_builtin_common_nothrow(Array, argtypes, 4) || return true
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, 3)
+        return array_builtin_common_nothrow(Arrayish, argtypes, 3)
     elseif f === arraysize
         return arraysize_nothrow(argtypes)
     elseif f === Core._expr
@@ -1818,8 +1847,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
             end
         end
         return rt
-    end
-    if isa(f, IntrinsicFunction)
+    elseif isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
             try

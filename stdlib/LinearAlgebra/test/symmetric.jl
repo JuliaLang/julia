@@ -544,19 +544,19 @@ end
 end
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
-using .Main.ImmutableArrays
+isdefined(Main, :SimpleImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SimpleImmutableArrays.jl"))
+using .Main.SimpleImmutableArrays
 
 @testset "Conversion to AbstractArray" begin
     # tests corresponding to #34995
-    immutablemat = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
+    immutablemat = SimpleImmutableArray([1 2 3; 4 5 6; 7 8 9])
     for SymType in (Symmetric, Hermitian)
         S = Float64
         symmat = SymType(immutablemat)
-        @test convert(AbstractArray{S}, symmat).data isa ImmutableArray{S}
-        @test convert(AbstractMatrix{S}, symmat).data isa ImmutableArray{S}
-        @test AbstractArray{S}(symmat).data isa ImmutableArray{S}
-        @test AbstractMatrix{S}(symmat).data isa ImmutableArray{S}
+        @test convert(AbstractArray{S}, symmat).data isa SimpleImmutableArray{S}
+        @test convert(AbstractMatrix{S}, symmat).data isa SimpleImmutableArray{S}
+        @test AbstractArray{S}(symmat).data isa SimpleImmutableArray{S}
+        @test AbstractMatrix{S}(symmat).data isa SimpleImmutableArray{S}
         @test convert(AbstractArray{S}, symmat) == symmat
         @test convert(AbstractMatrix{S}, symmat) == symmat
     end

@@ -118,6 +118,36 @@ Union type of [`DenseVector{T}`](@ref) and [`DenseMatrix{T}`](@ref).
 """
 const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
+"""
+    ImmutableArray{T,N} <: AbstractArray{T,N}
+Dynamically allocated, immutable array.
+"""
+const ImmutableArray = Core.ImmutableArray
+
+"""
+    ImmutableVector{T} <: AbstractVector{T}
+Dynamically allocated, immutable vector.
+"""
+const ImmutableVector{T} = ImmutableArray{T,1}
+
+"""
+    IMArray{T,N}
+Union type of [`Array{T,N}`](@ref) and [`ImmutableArray{T,N}`](@ref)
+"""
+const IMArray{T,N} = Union{Array{T, N}, ImmutableArray{T,N}}
+
+"""
+    IMVector{T}
+One-dimensional [`ImmutableArray`](@ref) or [`Array`](@ref) with elements of type `T`. Alias for `IMArray{T, 1}`.
+"""
+const IMVector{T} = IMArray{T, 1}
+
+"""
+    IMMatrix{T}
+Two-dimensional [`ImmutableArray`](@ref) or [`Array`](@ref) with elements of type `T`. Alias for `IMArray{T,2}`.
+"""
+const IMMatrix{T} = IMArray{T, 2}
+
 ## Basic functions ##
 
 import Core: arraysize, arrayset, arrayref, const_arrayref
@@ -147,18 +177,13 @@ function vect(X...)
     return copyto!(Vector{T}(undef, length(X)), X)
 end
 
-const ImmutableArray = Core.ImmutableArray
-const IMArray{T,N} = Union{Array{T, N}, ImmutableArray{T,N}}
-const IMVector{T} = IMArray{T, 1}
-const IMMatrix{T} = IMArray{T, 2}
-
 ImmutableArray(a::Array) = Core.arrayfreeze(a)
 Array(a::ImmutableArray) = Core.arraythaw(a)
 
 size(a::IMArray, d::Integer) = arraysize(a, convert(Int, d))
 size(a::IMVector) = (arraysize(a,1),)
 size(a::IMMatrix) = (arraysize(a,1), arraysize(a,2))
-size(a::IMArray{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N))::Dims)
+size(a::IMArray{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::Dims)
 
 asize_from(a::IMArray, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -220,19 +245,12 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-length(a::Array) = arraylen(a)
+length(a::IMArray) = arraylen(a)
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
-sizeof(a::Array) = Core.sizeof(a)
+sizeof(a::IMArray) = Core.sizeof(a)
 
-function isassigned(a::Array, i::Int...)
+function isassigned(a::IMArray, i::Int...)
     @inline
-    ii = (_sub2ind(size(a), i...) % UInt) - 1
-    @boundscheck ii < length(a) % UInt || return false
-    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
-end
-
-function isassigned(a::ImmutableArray, i::Int...)
-    @_inline_meta
     ii = (_sub2ind(size(a), i...) % UInt) - 1
     @boundscheck ii < length(a) % UInt || return false
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
@@ -626,7 +644,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(T::Type{<:IMArray}, a::AbstractArray) = a isa T ? a : T(a)
 convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
@@ -637,6 +655,7 @@ if nameof(@__MODULE__) === :Base  # avoid method overwrite
 # constructors should make copies
 Array{T,N}(x::AbstractArray{S,N})         where {T,N,S} = copyto_axcheck!(Array{T,N}(undef, size(x)), x)
 AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(similar(A,T), A)
+ImmutableArray{T,N}(Ar::AbstractArray{S,N}) where {T,N,S} = Core.arrayfreeze(copyto_axcheck!(Array{T,N}(undef, size(Ar)), Ar))
 end
 
 ## copying iterators to containers
@@ -937,7 +956,7 @@ function getindex end
 @eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 @eval getindex(A::ImmutableArray, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::ImmutableArray, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
+@eval getindex(A::ImmutableArray, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for UnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})

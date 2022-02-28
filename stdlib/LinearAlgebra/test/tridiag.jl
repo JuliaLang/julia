@@ -667,21 +667,21 @@ end
     @test ishermitian(S)
 end
 
-isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
-using .Main.ImmutableArrays
+isdefined(Main, :SimpleImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SimpleImmutableArrays.jl"))
+using .Main.SimpleImmutableArrays
 
 @testset "Conversion to AbstractArray" begin
     # tests corresponding to #34995
-    v1 = ImmutableArray([1, 2])
-    v2 = ImmutableArray([3, 4, 5])
-    v3 = ImmutableArray([6, 7])
+    v1 = SimpleImmutableArray([1, 2])
+    v2 = SimpleImmutableArray([3, 4, 5])
+    v3 = SimpleImmutableArray([6, 7])
     T = Tridiagonal(v1, v2, v3)
     Tsym = SymTridiagonal(v2, v1)
 
-    @test convert(AbstractArray{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
-    @test convert(AbstractMatrix{Float64}, T)::Tridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == T
-    @test convert(AbstractArray{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
-    @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+    @test convert(AbstractArray{Float64}, T)::Tridiagonal{Float64,SimpleImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractMatrix{Float64}, T)::Tridiagonal{Float64,SimpleImmutableArray{Float64,1,Array{Float64,1}}} == T
+    @test convert(AbstractArray{Float64}, Tsym)::SymTridiagonal{Float64,SimpleImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
+    @test convert(AbstractMatrix{Float64}, Tsym)::SymTridiagonal{Float64,SimpleImmutableArray{Float64,1,Array{Float64,1}}} == Tsym
 end
 
 @testset "dot(x,A,y) for A::Tridiagonal or SymTridiagonal" begin

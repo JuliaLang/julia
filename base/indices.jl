@@ -95,6 +95,7 @@ IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
 IndexStyle(::Type{Union{}}) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
+IndexStyle(::Type{<:Core.ImmutableArray}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
 
 IndexStyle(A::AbstractArray, B::AbstractArray) = IndexStyle(IndexStyle(A), IndexStyle(B))

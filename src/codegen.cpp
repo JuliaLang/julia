@@ -1056,7 +1056,9 @@ static const auto pointer_from_objref_func = new JuliaFunction{
 };
 static const auto mutating_arrayfreeze_func = new JuliaFunction{
     "julia.mutating_arrayfreeze",
-    [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
+    [](LLVMContext &C) { 
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_prjlvalue,
                 {T_prjlvalue, T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::NoUnwind, Attribute::NoRecurse}),
@@ -8201,9 +8203,9 @@ extern "C" void jl_init_llvm(void)
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
           { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_func_sig, get_donotdelete_func_attrs} },
-          { jl_f_arrayfreeze_addr,             new JuliaFunction{XSTR(jl_f_arrayfreeze), get_func_sig, get_func_attrs} },
-          { jl_f_arraythaw_addr,               new JuliaFunction{XSTR(jl_f_arraythaw), get_func_sig, get_func_attrs} },
-          { jl_f_mutating_arrayfreeze_addr,    new JuliaFunction{XSTR(jl_f_mutating_arrayfreeze), get_func_sig, get_func_attrs} }
+          { jl_f_arrayfreeze_addr,          new JuliaFunction{XSTR(jl_f_arrayfreeze), get_func_sig, get_func_attrs} },
+          { jl_f_arraythaw_addr,            new JuliaFunction{XSTR(jl_f_arraythaw), get_func_sig, get_func_attrs} },
+          { jl_f_mutating_arrayfreeze_addr, new JuliaFunction{XSTR(jl_f_mutating_arrayfreeze), get_func_sig, get_func_attrs} },
         };
 
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;

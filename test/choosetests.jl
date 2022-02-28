@@ -23,7 +23,7 @@ const TESTNAMES = [
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs",
         "misc", "threads", "stress", "binaryplatforms", "atexit",
-        "enums", "cmdlineargs", "int", "interpreter",
+        "enums", "cmdlineargs", "immutablearray", "int", "interpreter",
         "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",

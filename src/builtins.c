@@ -1741,7 +1741,7 @@ JL_CALLABLE(jl_f_set_binding_type)
 
 JL_CALLABLE(jl_f_arrayfreeze)
 {
-    JL_NARGSV(arrayfreeze, 1);
+    JL_NARGS(arrayfreeze, 1, 1);
     JL_TYPECHK(arrayfreeze, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
     jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutable_array_type,
@@ -1760,7 +1760,7 @@ JL_CALLABLE(jl_f_mutating_arrayfreeze)
     // N.B.: These error checks pretend to be arrayfreeze since this is a drop
     // in replacement and we don't want to change the visible error type in the
     // optimizer
-    JL_NARGSV(arrayfreeze, 1);
+    JL_NARGS(arrayfreeze, 1, 1);
     JL_TYPECHK(arrayfreeze, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
     jl_datatype_t *it = (jl_datatype_t *)jl_apply_type2((jl_value_t*)jl_immutable_array_type,
@@ -1771,7 +1771,7 @@ JL_CALLABLE(jl_f_mutating_arrayfreeze)
 
 JL_CALLABLE(jl_f_arraythaw)
 {
-    JL_NARGSV(arraythaw, 1);
+    JL_NARGS(arraythaw, 1, 1);
     if (((jl_datatype_t*)jl_typeof(args[0]))->name != jl_immutable_array_typename) {
         jl_type_error("arraythaw", (jl_value_t*)jl_immutable_array_type, args[0]);
     }
