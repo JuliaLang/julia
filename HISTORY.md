@@ -17,7 +17,7 @@ New language features
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `Module(:name, false, false)` can be used to create a `module` that contains no names
-  (it does not import `Base` or `Core` and does not contain a reference to itself) ([#40110, #42154]).
+  (it does not import `Base` or `Core` and does not contain a reference to itself) ([#40110], [#42154]).
 
 Language changes
 ----------------
