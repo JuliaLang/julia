@@ -159,6 +159,14 @@ Standard library changes
     As a consequence, products of bi-, tri- and symmetric tridiagonal matrices with each
     other result in dense output. Moreover, constructing 3-arg similar matrices of special
     "sparse" matrices of (nonstatic) matrices now fails for the lack of `zero(::Type{Matrix{T}})`.
+* We are now wholly reliant on libblastrampoline (LBT) for calling
+  BLAS and LAPACK. OpenBLAS is shipped by default, but building the
+  system image with other BLAS/LAPACK libraries is not
+  supported. Instead, it is recommended that the LBT mechanism be used
+  for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+
+#### Markdown
+>>>>>>> e84b06c673... Simplification of libblastrampoline stuff in LinearAlgebra (#44360)
 
 #### Printf
 
