@@ -42,6 +42,12 @@ Standard library changes
 
 #### LinearAlgebra
 
+* We are now wholly reliant on libblastrampoline (LBT) for calling
+  BLAS and LAPACK. OpenBLAS is shipped by default, but building the
+  system image with other BLAS/LAPACK libraries is not
+  supported. Instead, it is recommended that the LBT mechanism be used
+  for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+
 #### Markdown
 
 #### Printf
