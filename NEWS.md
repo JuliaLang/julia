@@ -233,6 +233,7 @@ Tooling Improvements
   time it took and the amount of memory that was collected ([#43511]).
   
 <!-- manually added -->
+[Pkg#2284]: https://github.com/JuliaLang/Pkg.jl/issues/2284
 [Pkg#2689]: https://github.com/JuliaLang/Pkg.jl/issues/2689
 [Pkg#2702]: https://github.com/JuliaLang/Pkg.jl/issues/2702
 [Pkg#2815]: https://github.com/JuliaLang/Pkg.jl/issues/2815
