@@ -2297,6 +2297,9 @@ h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
+# issue #44343
+f44343(;kw...) = NamedTuple(kw)
+@test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
     # Test these evals shouldnt segfault
