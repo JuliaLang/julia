@@ -465,6 +465,18 @@ end
 
 Base.show(io::IO, manager::LocalManager) = print(io, "LocalManager()")
 
+function package_environment()
+    env = Dict{String,String}()
+    pathsep = Sys.iswindows() ? ";" : ":"
+    env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep)
+    env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
+    project = Base.ACTIVE_PROJECT[]
+    if project !== nothing
+        env["JULIA_PROJECT"] = project
+    end
+    return env
+end
+
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
     exename = params[:exename]
@@ -472,9 +484,6 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
     env = Dict{String,String}(params[:env])
 
-    # TODO: Maybe this belongs in base/initdefs.jl as a package_environment() function
-    #       together with load_path() etc. Might be useful to have when spawning julia
-    #       processes outside of Distributed.jl too.
     # JULIA_(LOAD|DEPOT)_PATH are used to populate (LOAD|DEPOT)_PATH on startup,
     # but since (LOAD|DEPOT)_PATH might have changed they are re-serialized here.
     # Users can opt-out of this by passing `env = ...` to addprocs(...).

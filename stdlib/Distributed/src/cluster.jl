@@ -438,6 +438,7 @@ end
 ```
 """
 function addprocs(manager::ClusterManager; kwargs...)
+    @info "in addprocs" manager kwargs
     init_multi()
 
     cluster_mgmt_from_master_check()
@@ -450,8 +451,71 @@ function addprocs(manager::ClusterManager; kwargs...)
     end
 end
 
+# TODO: Maybe this belongs in base/initdefs.jl as a package_environment() function
+#       together with load_path() etc. Might be useful to have when spawning julia
+#       processes outside of Distributed.jl too.
+function package_environment(; append_default=false)
+    env = Dict{String,String}()
+    pathsep = Sys.iswindows() ? ";" : ":"
+    env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep) * (append_default ? pathsep : "")
+    env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep) * (append_default ? pathsep : "")
+    project = Base.ACTIVE_PROJECT[]
+    if project !== nothing
+        env["JULIA_PROJECT"] = project # TODO: What do fall back to  here???
+    end
+    return env
+end
+
+# Assume workers share the FS such that we can propagate the package environment
+# but add fallback paths if this is not the case.
+function package_environment!(cluster::ClusterManager, env)
+    penv = package_environment(; append_default = !(cluster isa LocalManager))
+    pathsep = Sys.iswindows() ? ";" : ":"
+    if get(env, "JULIA_LOAD_PATH", nothing) === nothing &&
+        (x = get(penv, "JULIA_LOAD_PATH", nothing); x !== nothing)
+        env["JULIA_LOAD_PATH"] = x
+    end
+    if get(env, "JULIA_DEPOT_PATH", nothing) === nothing &&
+        (x = get(penv, "JULIA_DEPOT_PATH", nothing); x !== nothing)
+        env["JULIA_DEPOT_PATH"] = x
+    end
+    if get(env, "JULIA_PROJECT", nothing) === nothing &&
+        (x = get(penv, "JULIA_PROJECT", nothing); x !== nothing)
+        env["JULIA_PROJECT"] = x
+    end
+    return env
+end
+
+# # For LocalManager the processes should always share the FS
+# # so no need to add the fallback paths.
+# function package_environment!(_::LocalManager, env)
+#     penv = package_environment()
+#     if get(env, "JULIA_LOAD_PATH", nothing) === nothing &&
+#         (x = get(penv, "JULIA_LOAD_PATH", nothing); x !== nothing)
+#         env["JULIA_LOAD_PATH"] = x
+#     end
+#     if get(env, "JULIA_DEPOT_PATH", nothing) === nothing &&
+#         (x = get(penv, "JULIA_DEPOT_PATH", nothing); x !== nothing)
+#         env["JULIA_DEPOT_PATH"] = x
+#     end
+#     if get(env, "JULIA_PROJECT", nothing) === nothing &&
+#         (x = get(penv, "JULIA_PROJECT", nothing); x !== nothing)
+#         env["JULIA_PROJECT"] = x
+#     end
+#     return env
+# end
+
 function addprocs_locked(manager::ClusterManager; kwargs...)
+    @info "in addprocs_locked" manager kwargs
     params = merge(default_addprocs_params(manager), Dict{Symbol,Any}(kwargs))
+    @info "in addprocs_locked" params
+
+    # Propagate the package environment
+    env = Dict{String,String}(get(params, :env, []))
+    env = package_environment!(manager, env)
+    params[:env] = env
+    @info "in addprocs_locked" params
+
     topology(Symbol(params[:topology]))
 
     if PGRP.topology !== :all_to_all
