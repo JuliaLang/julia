@@ -207,7 +207,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     elseif opts.malloc_log == 2
         push!(addflags, "--track-allocation=all")
     elseif opts.malloc_log == 3
-        push!(addflags, "--track-allocation=@$(opts.tracked_path)")
+        push!(addflags, "--track-allocation=@$(unsafe_string(opts.tracked_path))")
     end
     if opts.color == 1
         push!(addflags, "--color=yes")
