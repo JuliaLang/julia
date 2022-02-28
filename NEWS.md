@@ -17,7 +17,7 @@ New language features
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `Module(:name, false, false)` can be used to create a `module` that contains no names
-  (it does not import `Base` or `Core` and does not contain a reference to itself) ([#40110, #42154]).
+  (it does not import `Base` or `Core` and does not contain a reference to itself) ([#40110], [#42154]).
 
 Language changes
 ----------------
@@ -220,6 +220,7 @@ Tooling Improvements
 [#38791]: https://github.com/JuliaLang/julia/issues/38791
 [#39241]: https://github.com/JuliaLang/julia/issues/39241
 [#39245]: https://github.com/JuliaLang/julia/issues/39245
+[#40110]: https://github.com/JuliaLang/julia/issues/40110
 [#40382]: https://github.com/JuliaLang/julia/issues/40382
 [#40642]: https://github.com/JuliaLang/julia/issues/40642
 [#40783]: https://github.com/JuliaLang/julia/issues/40783
@@ -238,6 +239,7 @@ Tooling Improvements
 [#41794]: https://github.com/JuliaLang/julia/issues/41794
 [#41888]: https://github.com/JuliaLang/julia/issues/41888
 [#41936]: https://github.com/JuliaLang/julia/issues/41936
+[#42154]: https://github.com/JuliaLang/julia/issues/42154
 [#42211]: https://github.com/JuliaLang/julia/issues/42211
 [#42225]: https://github.com/JuliaLang/julia/issues/42225
 [#42248]: https://github.com/JuliaLang/julia/issues/42248
