@@ -6978,7 +6978,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 !jl_is_submodule(mod, jl_core_module));
     };
     auto in_tracked_path = [] (StringRef file) {
-        return (jl_options.tracked_path != NULL && file.rfind(jl_options.tracked_path) == 0);
+        return jl_options.tracked_path != NULL && file.startsWith(jl_options.tracked_path);
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
