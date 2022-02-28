@@ -171,9 +171,20 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
     end
 end
 
+# In the event that users want to call `lbt_get_config()` multiple times (e.g. for
+# runtime checks of which BLAS vendor is providing a symbol), let's cache the value
+# and clear it only when someone calls something that would cause it to change.
+const _cached_config = Ref{Union{Nothing,LBTConfig}}(nothing)
 function lbt_get_config()
-    config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
-    return LBTConfig(unsafe_load(config_ptr))
+    global _cached_config
+    if _cached_config[] === nothing
+        config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
+        _cached_config[] = LBTConfig(unsafe_load(config_ptr))
+    end
+    return _cached_config[]
+end
+function _clear_cached_config()
+    global _cached_config[] = nothing
 end
 
 function lbt_get_num_threads()
@@ -185,10 +196,12 @@ function lbt_set_num_threads(nthreads)
 end
 
 function lbt_forward(path; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
-    ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring), path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
+    _clear_cached_config()
+    return ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring), path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
 end
 
 function lbt_set_default_func(addr)
+    _clear_cached_config()
     return ccall((:lbt_set_default_func, libblastrampoline), Cvoid, (Ptr{Cvoid},), addr)
 end
 
@@ -241,6 +254,7 @@ end
 function lbt_set_forward(symbol_name, addr, interface,
                          complex_retstyle = LBT_COMPLEX_RETSTYLE_NORMAL,
                          f2c = LBT_F2C_PLAIN; verbose::Bool = false)
+    _clear_cached_config()
     return ccall(
         (:lbt_set_forward, libblastrampoline),
         Int32,
