@@ -3862,7 +3862,7 @@ f(x) = yt(x)
                                            v)))
                                    cvs)))
                `(new_opaque_closure
-                 ,(cadr e) (top Bottom) (core Any)
+                 ,(cadr e) (call (core apply_type) (core Union)) (core Any)
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
                  ,@var-exprs))))
           ((method)
