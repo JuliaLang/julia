@@ -6978,7 +6978,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 !jl_is_submodule(mod, jl_core_module));
     };
     auto in_tracked_path = [] (StringRef file) {
-        return jl_options.tracked_path != NULL && file.startsWith(jl_options.tracked_path);
+        return jl_options.tracked_path != NULL && file.startswith(jl_options.tracked_path);
     };
     bool mod_is_user_mod = in_user_mod(ctx.module);
     bool mod_is_tracked = in_tracked_path(ctx.file);
@@ -7020,13 +7020,11 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             info.file = jl_symbol_name(filesym);
             if (info.file.empty())
                 info.file = "<missing>";
-            if (module == ctx.module) {
+            if (module == ctx.module)
                 info.is_user_code = mod_is_user_mod;
-                info.is_tracked = mod_is_tracked;
-            } else {
+            else
                 info.is_user_code = in_user_mod(module);
-                info.is_tracked = in_tracked_path(info.file);
-            }
+            info.is_tracked = in_tracked_path(info.file);
             if (ctx.debug_enabled) {
                 StringRef fname;
                 if (jl_is_method_instance(method))

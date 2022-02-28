@@ -155,14 +155,14 @@ static const char opts[]  =
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
     "                            Count executions of source lines (omitting setting is equivalent to `user`)\n"
-    " --code-coverage@/abspath\n"
+    " --code-coverage=@/abspath\n"
     "                            Count executions but only in files that fall under the given absolute file path/directory\n"
     " --code-coverage=tracefile.info\n"
     "                            Append coverage information to the LCOV tracefile (filename supports format tokens)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]\n"
     "                            Count bytes allocated by each source line (omitting setting is equivalent to `user`)\n"
-    " --track-allocation@/abspath\n"
+    " --track-allocation=@/abspath\n"
     "                            Count bytes but only in files that fall under the given absolute file path/directory\n"
     " --bug-report=KIND          Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
@@ -527,7 +527,7 @@ restart_switch:
                 }
                 else if (!strncmp(optarg, "@", 1)) {
                     codecov = JL_LOG_PATH;
-                    jl_options.tracked_path = memmove(optarg, optarg+1, strlen(optarg)); // remove `@`
+                    jl_options.tracked_path = optarg + 1; // skip `@`
                 }
                 else
                     jl_errorf("julia: invalid argument to --code-coverage (%s)", optarg);
@@ -547,7 +547,7 @@ restart_switch:
                     malloclog = JL_LOG_NONE;
                 else if (!strncmp(optarg, "@", 1)) {
                     malloclog = JL_LOG_PATH;
-                    jl_options.tracked_path = memmove(optarg, optarg+1, strlen(optarg)); // remove `@`
+                    jl_options.tracked_path = optarg + 1; // skip `@`
                 }
                 else
                     jl_errorf("julia: invalid argument to --track-allocation (%s)", optarg);

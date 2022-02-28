@@ -197,7 +197,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
             elseif opts.code_coverage == 2
                 push!(addflags, "--code-coverage=all")
             elseif opts.code_coverage == 3
-                push!(addflags, "--code-coverage=@$(opts.tracked_path)")
+                push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
