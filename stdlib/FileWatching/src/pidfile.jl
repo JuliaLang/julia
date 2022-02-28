@@ -1,4 +1,3 @@
-__precompile__()
 module Pidfile
 
 
@@ -42,13 +41,12 @@ Optional keyword arguments:
 """
 function mkpidlock end
 
-macro constfield(ex) esc(VERSION >= v"1.8-" ? Expr(:const, ex) : ex) end
 
 # mutable only because we want to add a finalizer
 mutable struct LockMonitor
-    @constfield path::String
-    @constfield fd::File
-    @constfield update::Union{Nothing,Timer}
+    const path::String
+    const fd::File
+    const update::Union{Nothing,Timer}
 
     global function mkpidlock(at::String, pid::Cint; stale_age::Real=0, refresh::Real=stale_age/2, kwopts...)
         local lock
@@ -87,7 +85,6 @@ function mkpidlock(f::Function, at::String, pid::Cint; kwopts...)
     end
 end
 
-if VERSION >= v"1.1" # getpid(::Proc) added
 function mkpidlock(at::String, proc::Process; kwopts...)
     lock = mkpidlock(at, getpid(proc); kwopts...)
     closer = @async begin
@@ -96,7 +93,6 @@ function mkpidlock(at::String, proc::Process; kwopts...)
     end
     isdefined(Base, :errormonitor) && Base.errormonitor(closer)
     return lock
-end
 end
 
 """
@@ -107,18 +103,6 @@ Update the `mtime` on the lock, to indicate it is still fresh.
 See also the `refresh` keyword in the [`mkpidlock`](@ref) constructor.
 """
 Base.touch(lock::LockMonitor) = (touch(lock.fd); lock)
-
-if hasmethod(Base, Tuple{File})
-    # added in Julia v1.9
-    const touch = Base.touch
-else
-    touch(f) = Base.touch(f)
-    function touch(f::File)
-        now = time()
-        Base.Filesystem.futime(f, now, now)
-        f
-    end
-end
 
 """
     write_pidfile(io, pid)

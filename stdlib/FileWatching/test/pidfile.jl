@@ -321,7 +321,6 @@ end
 
 @assert !ispath("pidfile")
 @testset "mkpidlock for child" begin
-if VERSION >= v"1.1"
     proc = open(`cat`, "w", devnull)
     lock = mkpidlock("pidfile", proc)
     @test isopen(lock.fd)
@@ -334,7 +333,6 @@ if VERSION >= v"1.1"
 
     error = @test_throws Base.IOError mkpidlock("pidfile", proc)
     @test error.value.code == Base.UV_ESRCH
-end
 end
 
 @assert !ispath("pidfile-2")
