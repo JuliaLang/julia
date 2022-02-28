@@ -111,7 +111,7 @@ Standard library changes
 * Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
 * Iterating an `Iterators.Reverse` now falls back on reversing the eachindex iterator, if possible ([#43110]).
 
-#### Pkg
+#### Package Manager
 
 * New `⌃` and `⌅` indicators beside packages in `pkg> status` that have new versions available.
   `⌅` indicates when new versions cannot be installed ([Pkg#2906]).
