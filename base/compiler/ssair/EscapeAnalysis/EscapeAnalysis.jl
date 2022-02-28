@@ -27,7 +27,7 @@ import ._TOP_MOD:     # Base definitions
     pop!, push!, pushfirst!, empty!, delete!, max, min, enumerate, unwrap_unionall,
     ismutabletype
 import Core.Compiler: # Core.Compiler specific definitions
-    Bottom, InferenceResult, IRCode, IR_FLAG_EFFECT_FREE,
+    Arrayish, Bottom, InferenceResult, IRCode, IR_FLAG_EFFECT_FREE,
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
@@ -1608,7 +1608,7 @@ function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, arg
     argtypes = Any[argextype(args[i], astate.ir) for i in 2:length(args)]
     boundcheckt = argtypes[1]
     aryt = argtypes[2]
-    if !array_builtin_common_typecheck(Array, boundcheckt, aryt, argtypes, 3)
+    if !array_builtin_common_typecheck(Arrayish, boundcheckt, aryt, argtypes, 3)
         add_thrown_escapes!(astate, pc, args, 2)
     end
     ary = args[3]

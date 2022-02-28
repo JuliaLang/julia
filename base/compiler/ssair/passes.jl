@@ -547,7 +547,11 @@ function linear_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     local memory_opt = false # whether or not to run the memory_opt_pass! pass later
+    local imarray_memory_opt = false
     for ((_, idx), stmt) in compact
+        # presence of arrayfreeze means possible copy elision opportunity, so run imarray_memoryopt_pass!
+        isa(stmt, GlobalRef) && stmt.name === :arrayfreeze && (imarray_memory_opt = true)
+
         isa(stmt, Expr) || continue
         field_ordering = :unspecified
         if isexpr(stmt, :new)
@@ -663,7 +667,7 @@ function linear_pass!(ir::IRCode)
     non_dce_finish!(compact)
     simple_dce!(compact)
     ir = complete(compact)
-    return ir, memory_opt
+    return ir, memory_opt, imarray_memory_opt
 end
 
 function form_new_preserves(origex::Expr, intermediates::Vector{Int}, new_preserves::Vector{Any})
@@ -1761,76 +1765,21 @@ function cfg_simplify!(ir::IRCode)
     return finish(compact)
 end
 
-function is_allocation(stmt)
-    isexpr(stmt, :foreigncall) || return false
-    s = stmt.args[1]
-    isa(s, QuoteNode) && (s = s.value)
-    return s === :jl_alloc_array_1d
-end
-
-function memory_opt!(ir::IRCode)
-    compact = IncrementalCompact(ir, false)
-    uses = IdDict{Int, Vector{Int}}()
-    relevant = IdSet{Int}()
-    revisit = Int[]
-    function mark_val(val)
-        isa(val, SSAValue) || return
-        val.id in relevant && pop!(relevant, val.id)
-    end
-    for ((_, idx), stmt) in compact
-        if isa(stmt, ReturnNode)
-            isdefined(stmt, :val) || continue
-            val = stmt.val
-            if isa(val, SSAValue) && val.id in relevant
-                (haskey(uses, val.id)) || (uses[val.id] = Int[])
-                push!(uses[val.id], idx)
-            end
-            continue
-        end
-        (isexpr(stmt, :call) || isexpr(stmt, :foreigncall)) || continue
-        if is_allocation(stmt)
-            push!(relevant, idx)
-            # TODO: Mark everything else here
-            continue
-        end
-        # TODO: Replace this by interprocedural escape analysis
-        if is_known_call(stmt, arrayset, compact)
-            # The value being set escapes, everything else doesn't
-            mark_val(stmt.args[4])
-            arr = stmt.args[3]
-            if isa(arr, SSAValue) && arr.id in relevant
-                (haskey(uses, arr.id)) || (uses[arr.id] = Int[])
-                push!(uses[arr.id], idx)
-            end
-        elseif is_known_call(stmt, Core.arrayfreeze, compact) && isa(stmt.args[2], SSAValue)
-            push!(revisit, idx)
-        else
-            # For now we assume everything escapes
-            # TODO: We could handle PhiNodes specially and improve this
-            for ur in userefs(stmt)
-                mark_val(ur[])
+function imarray_memoryopt_pass!(ir::IRCode, estate::EscapeState)
+    # mark statements that possibly can be optimized
+    for idx in 1:length(ir.stmts)
+        stmt = ir.stmts[idx][:inst]
+        isexpr(stmt, :call) || continue
+        if is_known_call(stmt, Core.arrayfreeze, ir)
+            # array as SSA value might have been initialized within this frame
+            # (thus potentially doesn't escape to anywhere)
+            ary = stmt.args[2]
+            if isa(ary, SSAValue)
+                # if array doesn't escape, we can just change the tag and avoid allocation
+                has_no_escape(estate[ary]) || continue
+                stmt.args[1] = GlobalRef(Core, :mutating_arrayfreeze)
             end
         end
-    end
-    ir = finish(compact)
-    isempty(revisit) && return ir
-    domtree = construct_domtree(ir.cfg.blocks)
-    for idx in revisit
-        # Make sure that the value we reference didn't escape
-        id = ir.stmts[idx][:inst].args[2].id
-        (id in relevant) || continue
-
-        # We're ok to steal the memory if we don't dominate any uses
-        ok = true
-        for use in uses[id]
-            if ssadominates(ir, domtree, idx, use)
-                ok = false
-                break
-            end
-        end
-        ok || continue
-
-        ir.stmts[idx][:inst].args[1] = Core.mutating_arrayfreeze
     end
     return ir
 end

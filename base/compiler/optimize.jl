@@ -551,12 +551,14 @@ function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult
     @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA" ir, memory_opt = linear_pass!(ir)
-    if memory_opt
-        @timeit "memory_opt_pass!" begin
-            @timeit "Local EA" estate = analyze_escapes(ir,
-                nargs, #=call_resolved=#true, null_escape_cache)
-            @timeit "memory_opt_pass!" ir = memory_opt_pass!(ir, estate)
+    @timeit "SROA" ir, memory_opt, imarray_memory_opt = linear_pass!(ir)
+    if memory_opt || imarray_memory_opt
+        @timeit "Local EA" estate = analyze_escapes(ir, nargs, #=call_resolved=#true, null_escape_cache)
+        if memory_opt
+            @timeit "Memory opt" ir = memory_opt_pass!(ir, estate)
+        end
+        if imarray_memory_opt
+            @timeit "imarray opt" ir = imarray_memoryopt_pass!(ir, estate)
         end
     end
     @timeit "ADCE"      ir = adce_pass!(ir)
