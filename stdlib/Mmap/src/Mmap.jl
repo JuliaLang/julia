@@ -211,9 +211,12 @@ function mmap(io::IO,
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        iswrite && grow && grow!(io, offset, len)
         szfile = convert(Csize_t, len + offset)
-        !iswrite && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        if iswrite && grow
+            grow!(io, offset, len)
+        elseif szfile > filesize(io)
+            throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
