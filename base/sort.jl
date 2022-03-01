@@ -1496,3 +1496,9 @@ sort!(v::AbstractVector{<:Union{Signed, Unsigned}}, a::Algorithm, o::Perm{<:Dire
 end # module Sort.Float
 
 end # module Sort
+
+# why are these here?
+Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
+Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
+Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
+Sort.defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE

@@ -332,12 +332,6 @@ using .Order
 # Combinatorics
 include("sort.jl")
 
-# why are these here?
-Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
-Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
-
 using .Sort
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
