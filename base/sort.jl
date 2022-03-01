@@ -793,10 +793,10 @@ end
 
 ## generic sorting methods ##
 
-defalg(v::AbstractArray) = MergeSort
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = QuickSort
-defalg(v::AbstractArray{Missing}) = QuickSort
-defalg(v::AbstractArray{Union{}}) = QuickSort
+defalg(v::AbstractArray) = DEFAULT_STABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
@@ -1496,9 +1496,3 @@ sort!(v::AbstractVector{<:Union{Signed, Unsigned}}, a::Algorithm, o::Perm{<:Dire
 end # module Sort.Float
 
 end # module Sort
-
-# why are these here?
-Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
-Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-Sort.defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
