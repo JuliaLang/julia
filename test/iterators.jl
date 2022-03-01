@@ -832,7 +832,7 @@ end
     @test length(collect(d)) == 0
 end
 
-@testset "only" begin
+@testset "only(x)" begin
     @test only([3]) === 3
     @test_throws ArgumentError only([])
     @test_throws ArgumentError only([3, 2])
@@ -863,6 +863,137 @@ end
     @test_throws ArgumentError only(1 for ii in 1:10)
     @test_throws ArgumentError only(1 for ii in 1:10 if ii > 2)
     @test_throws ArgumentError only(1 for ii in 1:10 if ii > 200)
+end
+
+@testset "only(f, x)" begin
+    my_exception = ErrorException("Hello world")
+    my_throw = () -> throw(my_exception)
+    @test 3 === only([3]) do
+        my_throw()
+    end
+    @test_throws my_exception only([]) do
+        my_throw()
+    end
+    @test 1 === only([]) do
+        1
+    end
+    @test_throws my_exception only([3, 2]) do
+        my_throw()
+    end
+    @test 1 === only([3, 2]) do
+        1
+    end
+
+    f = () -> only((3,)) do
+        my_throw()
+    end
+    @test 3 === @inferred(f())
+    @test_throws my_exception only(()) do
+        my_throw()
+    end
+    @test 1 === only(()) do
+        1
+    end
+    @test_throws my_exception only((3, 2)) do
+        my_throw()
+    end
+    @test 1 === only((3, 2)) do
+        1
+    end
+
+    @test (1=>3) === only(Dict(1=>3)) do
+        my_throw()
+    end
+    @test_throws my_exception only(Dict{Int,Int}()) do
+        my_throw()
+    end
+    @test 1 === only(Dict{Int,Int}()) do
+        1
+    end
+    @test_throws my_exception only(Dict(1=>3, 2=>2)) do
+        my_throw()
+    end
+    @test 1 === only(Dict(1=>3, 2=>2)) do
+        1
+    end
+
+    @test 3 === only(Set([3])) do
+        my_throw()
+    end
+    @test_throws my_exception only(Set(Int[])) do
+        my_throw()
+    end
+    @test 1 === only(Set(Int[])) do
+        1
+    end
+    @test_throws my_exception only(Set([3,2])) do
+        my_throw()
+    end
+    @test 1 === only(Set([3,2])) do
+        1
+    end
+
+    f = () -> only((;a=1)) do
+        my_throw()
+    end
+    @test 1 === @inferred(f())
+    @test_throws my_exception only(NamedTuple()) do
+        my_throw()
+    end
+    @test 1 === only(NamedTuple()) do
+        1
+    end
+    @test_throws my_exception only((a=3, b=2.0)) do
+        my_throw()
+    end
+    @test 1 === only((a=3, b=2.0)) do
+        1
+    end
+
+    f = () -> only(1) do
+        my_throw()
+    end
+    @test 1 === @inferred(f())
+    f = () -> only('a') do
+        my_throw()
+    end
+    @test 'a' === @inferred(f())
+    f = () -> only(Ref([1, 2])) do
+        my_throw()
+
+    end
+    @test [1, 2] == @inferred(f())
+    @test_throws my_exception only(Pair(10, 20)) do
+        my_throw()
+    end
+    @test 30 === only(Pair(10, 20)) do
+        30
+    end
+
+    @test 1 === only(1 for ii in 1:1) do
+        my_throw()
+    end
+    @test 1 === only(1 for ii in 1:10 if ii < 2) do
+        my_throw()
+    end
+    @test_throws my_exception only(1 for ii in 1:10) do
+        my_throw()
+    end
+    @test 0 === only(1 for ii in 1:10) do
+        0
+    end
+    @test_throws my_exception only(1 for ii in 1:10 if ii > 2) do
+        my_throw()
+    end
+    @test 0 === only(1 for ii in 1:10 if ii > 2) do
+        0
+    end
+    @test_throws my_exception only(1 for ii in 1:10 if ii > 200) do
+        my_throw()
+    end
+    @test 0 === only(1 for ii in 1:10 if ii > 200) do
+        0
+    end
 end
 
 @testset "flatten empty tuple" begin

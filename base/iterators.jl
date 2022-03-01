@@ -1413,19 +1413,68 @@ Stacktrace:
     return ret
 end
 
-# Collections of known size
+"""
+    only(f, x)
+
+Return the one and only element of collection `x`, or return `f()` if the collection has zero
+or multiple elements. `f()` will not be called if the collection has exactly one element.
+
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+
+# Examples
+```jldoctest
+julia> only(('a', 'b'))
+ERROR: ArgumentError: Tuple contains 2 elements, must contain exactly 1 element
+Stacktrace:
+[...]
+
+julia> only(('a', 'b')) do
+           'c'
+       end
+'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
+
+julia> only(('a', 'b')) do
+           throw(ErrorException("My custom error message"))
+       end
+ERROR: My custom error message
+```
+"""
+function only(f::F, x) where {F}
+    i = iterate(x)
+    if i === nothing
+        return f()
+    end
+    (ret, state) = i::NTuple{2,Any}
+    if iterate(x, state) !== nothing
+        return f()
+    end
+    return ret
+end
+
+# Collections of known size that have exactly one element
 only(x::Ref) = x[]
 only(x::Number) = x
 only(x::Char) = x
 only(x::Tuple{Any}) = x[1]
+only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(f::F, x::Ref) where {F} = only(x)
+only(f::F, x::Number) where {F} = only(x)
+only(f::F, x::Char) where {F} = only(x)
+only(f::F, x::Tuple{Any}) where {F} = only(x)
+only(f::F, a::AbstractArray{<:Any, 0}) where {F} = only(a)
+only(f::F, x::NamedTuple{<:Any, <:Tuple{Any}}) where {F} = only(x)
+
+# Collections of known size that either have zero elements or more than one element
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
-only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
-only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+only(f::F, x::Tuple) where {F} = f()
+only(f::F, x::NamedTuple) where {F} = f()
 
 
 Base.intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
