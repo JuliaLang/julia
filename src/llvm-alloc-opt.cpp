@@ -658,8 +658,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            auto cast_t = PointerType::get(cast<PointerType>(user->getType())->getElementType(),
-                                           0);
+            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), AddressSpace::Generic);
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
@@ -953,8 +952,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     store_ty = pass.T_pjlvalue;
                 }
                 else {
-                    store_ty = cast<PointerType>(pass.T_pjlvalue)->getElementType()
-                        ->getPointerTo(cast<PointerType>(store_ty)->getAddressSpace());
+                    store_ty = PointerType::getWithSamePointeeType(pass.T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)

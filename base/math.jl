@@ -671,7 +671,8 @@ true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...))...)
+hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
@@ -743,7 +744,7 @@ end
 end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
-function _hypot(x...)
+function _hypot(x::NTuple{N,<:Number}) where {N}
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
         return typeof(maxabs)(Inf)

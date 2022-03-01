@@ -218,8 +218,9 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
         args.push_back(&*arg);
+    assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
     CallInst *ret = irbuilder.CreateCall(
-        cast<FunctionType>(ptr->getType()->getPointerElementType()),
+        functype,
         ptr, ArrayRef<Value*>(args));
     ret->setAttributes(attrs);
     if (cc != CallingConv::C)
@@ -233,10 +234,11 @@ static GlobalVariable *emit_plt_thunk(
     else {
         // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
         // Known failures includes vararg (not needed here) and sret.
-#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
-                        defined(_CPU_AARCH64_))
+
+#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || (defined(_CPU_AARCH64_) && !defined(_OS_DARWIN_)))
         // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
         // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
+        // Apple silicon macs give an LLVM ERROR if musttail is set here #44107.
         if (!attrs.hasAttrSomewhere(Attribute::ByVal))
             ret->setTailCallKind(CallInst::TCK_MustTail);
 #endif
@@ -1879,6 +1881,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
 
     Value *result = NULL;
+    //This is only needed if !retboxed && srt && !jlretboxed
+    Type *sretty = nullptr;
     // First, if the ABI requires us to provide the space for the return
     // argument, allocate the box and store that as the first argument type
     bool sretboxed = false;
@@ -1886,6 +1890,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         assert(!retboxed && jl_is_datatype(rt) && "sret return type invalid");
         if (jl_is_pointerfree(rt)) {
             result = emit_static_alloca(ctx, lrt);
+            sretty = lrt;
             argvals[0] = ctx.builder.CreateBitCast(result, fargt_sig.at(0));
         }
         else {
@@ -1895,6 +1900,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             assert(jl_datatype_size(rt) > 0 && "sret shouldn't be a singleton instance");
             result = emit_allocobj(ctx, jl_datatype_size(rt),
                                    literal_pointer_val(ctx, (jl_value_t*)rt));
+            sretty = ctx.types().T_jlvalue;
             sretboxed = true;
             gc_uses.push_back(result);
             argvals[0] = ctx.builder.CreateBitCast(emit_pointer_from_objref(ctx, result), fargt_sig.at(0));
@@ -1983,7 +1989,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);
     if (!sret)
-        result = ret;
+        result = ret; // no need to update sretty here because we know !sret
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
         ctx.f->addFnAttr(Attribute::StackProtectReq);
     }
@@ -2008,7 +2014,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // something alloca'd above is SSA
             if (static_rt)
                 return mark_julia_slot(result, rt, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
-            result = ctx.builder.CreateLoad(cast<PointerType>(result->getType())->getElementType(), result);
+            result = ctx.builder.CreateLoad(sretty, result);
         }
     }
     else {

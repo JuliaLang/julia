@@ -61,6 +61,8 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (dt->layout || dt->isconcretetype || !dt->name->mayinlinealloc)
             return 0;
+        if (dt->name == jl_namedtuple_typename)
+            return layout_uses_free_typevars(jl_tparam0(dt), env) || layout_uses_free_typevars(jl_tparam1(dt), env);
         jl_svec_t *types = jl_get_fieldtypes(dt);
         size_t i, l = jl_svec_len(types);
         for (i = 0; i < l; i++) {
@@ -2466,7 +2468,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(8,
+                        jl_perm_symsvec(9,
                             "def",
                             "specTypes",
                             "sparam_vals",
@@ -2474,8 +2476,9 @@ void jl_init_types(void) JL_GC_DISABLED
                             "backedges",
                             "callbacks",
                             "cache",
-                            "inInference"),
-                        jl_svec(8,
+                            "inInference",
+                            "precompiled"),
+                        jl_svec(9,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
@@ -2483,6 +2486,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_bool_type,
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 3);

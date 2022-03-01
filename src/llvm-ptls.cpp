@@ -40,7 +40,7 @@ struct LowerPTLS {
         : imaging_mode(imaging_mode)
     {}
 
-    bool runOnModule(Module &M);
+    bool runOnModule(Module &M, bool *CFGModified);
 private:
     const bool imaging_mode;
     Module *M;
@@ -61,7 +61,7 @@ private:
     Instruction *emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
-    void fix_pgcstack_use(CallInst *pgcstack);
+    void fix_pgcstack_use(CallInst *pgcstack, bool *CFGModified);
 };
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
@@ -165,7 +165,7 @@ inline T *LowerPTLS::add_comdat(T *G) const
     return G;
 }
 
-void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
+void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, bool *CFGModified)
 {
     if (pgcstack->use_empty()) {
         pgcstack->eraseFromParent();
@@ -189,6 +189,8 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
             TerminatorInst *slowTerm;
             SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
                                           MDB.createBranchWeights(Weights));
+            if (CFGModified)
+            *CFGModified = true;
 
             auto fastTLS = emit_pgcstack_tp(offset, fastTerm);
             auto phi = PHINode::Create(T_pppjlvalue, 2, "", pgcstack);
@@ -252,7 +254,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
     }
 }
 
-bool LowerPTLS::runOnModule(Module &_M)
+bool LowerPTLS::runOnModule(Module &_M, bool *CFGModified)
 {
     M = &_M;
     pgcstack_getter = M->getFunction("julia.get_pgcstack");
@@ -283,7 +285,7 @@ bool LowerPTLS::runOnModule(Module &_M)
         auto call = cast<CallInst>(*it);
         ++it;
         assert(call->getCalledOperand() == pgcstack_getter);
-        fix_pgcstack_use(call);
+        fix_pgcstack_use(call, CFGModified);
     }
     assert(pgcstack_getter->use_empty());
     pgcstack_getter->eraseFromParent();
@@ -300,7 +302,7 @@ struct LowerPTLSLegacy: public ModulePass {
     bool imaging_mode;
     bool runOnModule(Module &M) override {
         LowerPTLS lower(imaging_mode);
-        return lower.runOnModule(M);
+        return lower.runOnModule(M, nullptr);
     }
 };
 
@@ -314,7 +316,14 @@ static RegisterPass<LowerPTLSLegacy> X("LowerPTLS", "LowerPTLS Pass",
 
 PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
     LowerPTLS lower(imaging_mode);
-    lower.runOnModule(M);
+    bool CFGModified = false;
+    if (lower.runOnModule(M, &CFGModified)) {
+        if (CFGModified) {
+            return PreservedAnalyses::none();
+        } else {
+            return PreservedAnalyses::allInSet<CFGAnalyses>();
+        }
+    }
     return PreservedAnalyses::all();
 }
 

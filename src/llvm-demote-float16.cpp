@@ -131,7 +131,9 @@ static bool demoteFloat16(Function &F)
 
 PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
 {
-    demoteFloat16(F);
+    if (demoteFloat16(F)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

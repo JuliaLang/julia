@@ -24,7 +24,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (cast<PointerType>(T)->getAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
-    Type *NewT = PointerType::get(cast<PointerType>(T)->getElementType(), AddressSpace::Derived);
+    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -34,7 +34,7 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (cast<PointerType>(T)->getAddressSpace() != AddressSpace::Tracked)
         return V;
-    Type *NewT = PointerType::get(cast<PointerType>(T)->getElementType(), AddressSpace::Derived);
+    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -418,9 +418,7 @@ static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
-        Type *jl_value_addr =
-                PointerType::get(cast<PointerType>(jl_value)->getElementType(),
-                                 v->getType()->getPointerAddressSpace());
+        Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
         return ctx.builder.CreateBitCast(v, jl_value_addr);
     }
     else {
@@ -1943,8 +1941,10 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         // machine size vectors this should be enough.
         const DataLayout &DL = jl_Module->getDataLayout();
         auto srcty = cast<PointerType>(src->getType());
+        //TODO unsafe nonopaque pointer
         auto srcel = srcty->getElementType();
         auto dstty = cast<PointerType>(dst->getType());
+        //TODO unsafe nonopaque pointer
         auto dstel = dstty->getElementType();
         if (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
             src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
@@ -2806,7 +2806,7 @@ static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
     auto jvar = ty == jl_int8_type ? jlboxed_int8_cache : jlboxed_uint8_cache;
     GlobalVariable *gv = prepare_global_in(jl_Module, jvar);
     Value *idx[] = {ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0), ctx.builder.CreateZExt(v, getInt32Ty(ctx.builder.getContext()))};
-    auto slot = ctx.builder.CreateInBoundsGEP(gv->getType()->getElementType(), gv, idx);
+    auto slot = ctx.builder.CreateInBoundsGEP(gv->getValueType(), gv, idx);
     return tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, slot, Align(sizeof(void*))), false,
             (jl_value_t*)ty));
@@ -3197,6 +3197,7 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 }
 
 // allocation for known size object
+// returns a prjlvalue
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
     Value *current_task = get_current_task(ctx);

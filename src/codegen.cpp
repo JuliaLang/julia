@@ -1436,7 +1436,7 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
         auto ptr = I->getOperand(0);
         if (ty->getPointerAddressSpace() == ptr->getType()->getPointerAddressSpace())
             return ctx.builder.CreateBitCast(ptr, ty);
-        else if (ty->getPointerElementType() == ptr->getType()->getPointerElementType())
+        else if (cast<PointerType>(ty)->hasSameElementTypeAs(cast<PointerType>(ptr->getType())))
             return ctx.builder.CreateAddrSpaceCast(ptr, ty);
     }
     return ctx.builder.CreateIntToPtr(v, ty);
@@ -3564,7 +3564,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     case jl_returninfo_t::Ghosts:
         break;
     case jl_returninfo_t::SRet:
-        result = emit_static_alloca(ctx, cft->getParamType(0)->getPointerElementType());
+        result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType());
+        assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
         argvals[idx] = result;
         idx++;
         break;
@@ -5123,6 +5124,14 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     return f;
 }
 
+static Type *get_returnroots_type(jl_codectx_t &ctx, unsigned rootcount) {
+    return ArrayType::get(ctx.types().T_prjlvalue, rootcount);
+}
+
+static Type *get_unionbytes_type(LLVMContext &C, unsigned unionbytes) {
+    return ArrayType::get(getInt8Ty(C), unionbytes);
+}
+
 static void emit_cfunc_invalidate(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype,
@@ -5195,7 +5204,8 @@ static void emit_cfunc_invalidate(
     case jl_returninfo_t::SRet: {
         if (return_roots) {
             Value *root1 = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
-            root1 = ctx.builder.CreateConstInBoundsGEP2_32(root1->getType()->getPointerElementType(), root1, 0, 0);
+            assert(cast<PointerType>(root1->getType())->isOpaqueOrPointeeTypeMatches(get_returnroots_type(ctx, return_roots)));
+            root1 = ctx.builder.CreateConstInBoundsGEP2_32(get_returnroots_type(ctx, return_roots), root1, 0, 0);
             ctx.builder.CreateStore(gf_ret, root1);
         }
         emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(rettype), julia_alignment(rettype));
@@ -5617,12 +5627,18 @@ static Function* gen_cfun_wrapper(
                 result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
             }
             else {
-                result = emit_static_alloca(ctx, cft->getParamType(0)->getPointerElementType());
+                if (jlfunc_sret) {
+                    result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType());
+                    assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+                } else {
+                    result = emit_static_alloca(ctx, get_unionbytes_type(ctx.builder.getContext(), returninfo.union_bytes));
+                    assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+                }
             }
             args.push_back(result);
         }
         if (returninfo.return_roots) {
-            AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(ctx.types().T_prjlvalue, returninfo.return_roots));
+            AllocaInst *return_roots = emit_static_alloca(ctx, get_returnroots_type(ctx, returninfo.return_roots));
             args.push_back(return_roots);
         }
         for (size_t i = 0; i < nargs + 1; i++) {
@@ -5670,8 +5686,9 @@ static Function* gen_cfun_wrapper(
             emit_cfunc_invalidate(gf_thunk, returninfo.cc, returninfo.return_roots, lam->specTypes, codeinst->rettype, nargs + 1, ctx.emission_context);
             theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
+        assert(cast<PointerType>(theFptr->getType())->isOpaqueOrPointeeTypeMatches(returninfo.decl->getFunctionType()));
         CallInst *call = ctx.builder.CreateCall(
-            cast<FunctionType>(theFptr->getType()->getPointerElementType()),
+            cast<FunctionType>(returninfo.decl->getFunctionType()),
             theFptr, ArrayRef<Value*>(args));
         call->setAttributes(returninfo.decl->getAttributes());
         switch (returninfo.cc) {
@@ -6028,7 +6045,8 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     case jl_returninfo_t::Ghosts:
         break;
     case jl_returninfo_t::SRet:
-        result = ctx.builder.CreateAlloca(ftype->getParamType(0)->getPointerElementType());
+        assert(cast<PointerType>(ftype->getParamType(0))->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(f.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
+        result = ctx.builder.CreateAlloca(getAttributeAtIndex(f.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType());
         args[idx] = result;
         idx++;
         break;
@@ -6174,13 +6192,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     if (props.cc == jl_returninfo_t::SRet) {
         assert(srt);
         unsigned argno = 1;
-#if JL_LLVM_VERSION < 120000
-        attributes = attributes.addAttribute(ctx.builder.getContext(), argno, Attribute::StructRet);
-        (void)srt; // silence unused variable error
-#else
         Attribute sret = Attribute::getWithStructRetType(ctx.builder.getContext(), srt);
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, sret);
-#endif
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoAlias);
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoCapture);
     }
@@ -6191,7 +6204,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     }
 
     if (props.return_roots) {
-        fsig.push_back(ArrayType::get(ctx.types().T_prjlvalue, props.return_roots)->getPointerTo(0));
+        fsig.push_back(get_returnroots_type(ctx, props.return_roots)->getPointerTo(0));
         unsigned argno = fsig.size();
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoAlias);
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoCapture);
@@ -6241,13 +6254,13 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     return props;
 }
 
-static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, unsigned count)
+static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, Type *ShadowT, unsigned count)
 {
     if (isptr)
         Src = maybe_decay_tracked(ctx, Src);
-    if (isptr && Src->getType()->getPointerElementType() != T)
+    if (isptr && !cast<PointerType>(Src->getType())->isOpaqueOrPointeeTypeMatches(T))
         Src = ctx.builder.CreateBitCast(Src, T->getPointerTo(Src->getType()->getPointerAddressSpace()));
-    unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ctx.builder);
+    unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ShadowT, ctx.builder); //This comes from Late-GC-Lowering??
     assert(emitted == count); (void)emitted; (void)count;
 }
 
@@ -7313,7 +7326,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 if (retvalinfo.ispointer()) {
                     if (returninfo.return_roots) {
                         Type *store_ty = julia_type_to_llvm(ctx, retvalinfo.typ);
-                        emit_sret_roots(ctx, true, data_pointer(ctx, retvalinfo), store_ty, f->arg_begin() + 1, returninfo.return_roots);
+                        emit_sret_roots(ctx, true, data_pointer(ctx, retvalinfo), store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
                     }
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
@@ -7330,7 +7343,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     Value *Val = retvalinfo.V;
                     if (returninfo.return_roots) {
                         assert(julia_type_to_llvm(ctx, retvalinfo.typ) == store_ty);
-                        emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, returninfo.return_roots);
+                        emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
                     }
                     if (dest_ty != sret->getType())
                         sret = emit_bitcast(ctx, sret, dest_ty);
@@ -7857,7 +7870,7 @@ jl_compile_result_t jl_emit_codeinst(
                      // don't delete inlineable code, unless it is constant
                      (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
-                     !imaging_mode) {
+                     !(imaging_mode || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
                 codeinst->inferred = jl_nothing;
             }

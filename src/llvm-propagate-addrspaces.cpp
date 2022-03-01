@@ -48,7 +48,7 @@ struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrsp
     std::vector<std::pair<Instruction *, Instruction *>> ToInsert;
 
 public:
-    Value *LiftPointer(Value *V, Type *LocTy = nullptr, Instruction *InsertPt=nullptr);
+    Value *LiftPointer(Value *V, Instruction *InsertPt=nullptr);
     void visitMemop(Instruction &I, Type *T, unsigned OpIndex);
     void visitLoadInst(LoadInst &LI);
     void visitStoreInst(StoreInst &SI);
@@ -82,7 +82,7 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklis
     }
 }
 
-Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Type *LocTy, Instruction *InsertPt) {
+Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
     std::vector<Value *> Worklist;
     std::set<Value *> LocalVisited;
@@ -165,7 +165,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Type *LocTy, Instr
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = cast<PointerType>(InstV->getType())->getElementType()->getPointerTo(0);
+            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), AddressSpace::Generic);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
@@ -173,7 +173,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Type *LocTy, Instr
     }
 
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = cast<PointerType>(CurrentV->getType())->getElementType()->getPointerTo(0);
+        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), AddressSpace::Generic);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -222,7 +222,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemop(Instruction &I, Type *T, unsign
     unsigned AS = Original->getType()->getPointerAddressSpace();
     if (!isSpecialAS(AS))
         return;
-    Value *Replacement = LiftPointer(Original, T, &I);
+    Value *Replacement = LiftPointer(Original, &I);
     if (!Replacement)
         return;
     I.setOperand(OpIndex, Replacement);
@@ -264,13 +264,13 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
         return;
     Value *Dest = MTI.getRawDest();
     if (isSpecialAS(DestAS)) {
-        Value *Replacement = LiftPointer(Dest, cast<PointerType>(Dest->getType())->getElementType(), &MTI);
+        Value *Replacement = LiftPointer(Dest, &MTI);
         if (Replacement)
             Dest = Replacement;
     }
     Value *Src = MTI.getRawSource();
     if (isSpecialAS(SrcAS)) {
-        Value *Replacement = LiftPointer(Src, cast<PointerType>(Src->getType())->getElementType(), &MTI);
+        Value *Replacement = LiftPointer(Src, &MTI);
         if (Replacement)
             Src = Replacement;
     }
