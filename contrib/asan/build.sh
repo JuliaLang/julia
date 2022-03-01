@@ -6,7 +6,7 @@
 #     contrib/asan/build.sh <path> [<make_targets>...]
 #
 # Build ASAN-enabled julia.  Given a workspace directory <path>, build
-# ASAN-enabled julia in <path>/asan.  Required toolss are install under
+# ASAN-enabled julia in <path>/asan.  Required tools are installed under
 # <path>/toolchain.  This scripts also takes optional <make_targets> arguments
 # which are passed to `make`.  The default make target is `debug`.
 
@@ -40,7 +40,7 @@ if [ ! -d "$TOOLCHAIN" ]; then
     cp "$HERE/Make.user.tools"  "$TOOLCHAIN/Make.user"
 fi
 
-make -C "$TOOLCHAIN/deps" install-clang install-llvm-tools
+make -C "$TOOLCHAIN/deps" SANITIZE_OPTS=-fsanitize-blacklist="$HERE/asan_ignores.txt" install-clang install-llvm-tools
 
 echo
 echo "Building Julia..."
@@ -51,4 +51,4 @@ if [ ! -d "$BUILD" ]; then
     cp "$HERE/Make.user.asan"  "$BUILD/Make.user"
 fi
 
-make -C "$BUILD" "$@"
+make VERBOSE=1 -C "$BUILD" SANITIZE_OPTS=-fsanitize-blacklist="$HERE/asan_ignores.txt" "$@"

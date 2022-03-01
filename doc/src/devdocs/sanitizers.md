@@ -1,5 +1,23 @@
 # Sanitizer support
 
+For detecting or debugging memory bugs, you can use Clang's [address sanitizer (ASAN)](https://clang.llvm.org/docs/AddressSanitizer.html).
+
+## Easy build
+
+From a source-checkout of Julia, you should be able to build a version
+supporting sanitization of addresses and LLVM as follows:
+
+```sh
+$ mkdir /tmp/julia
+$ contrib/asan/build.sh /tmp/julia/
+```
+
+Here we've chosen `/tmp/julia` as a build directory, but you can
+choose whatever you wish. Once built, run the workload you wish to
+test with `/tmp/julia/julia`. Memory bugs will result in errors.
+
+If you require customization or further detail, see the documentation below.
+
 ## General considerations
 
 Using Clang's sanitizers obviously requires you to use Clang (`USECLANG=1`), but there's another
@@ -35,7 +53,6 @@ look like this, plus one or more of the `SANITIZE_*` flags listed below:
 
 ## Address Sanitizer (ASAN)
 
-For detecting or debugging memory bugs, you can use Clang's [address sanitizer (ASAN)](https://clang.llvm.org/docs/AddressSanitizer.html).
 By compiling with `SANITIZE_ADDRESS=1` you enable ASAN for the Julia compiler and its generated code.
 In addition, you can specify `LLVM_SANITIZE=1` to sanitize the LLVM library as well. Note that
 these options incur a high performance and memory cost. For example, using ASAN for Julia and

@@ -1,0 +1,8 @@
+# LLVM code in julia_const_to_llvm does low-level operations on
+# `FloatXX`-casts that require disabling ASAN
+fun:*julia_const_to_llvm*
+fun:_ZN4llvm10ConstantFP3getERNS_11LLVMContextERKNS_7APFloatE
+fun:*llvm7APFloat*
+fun:*llvm11APFloat*
+fun:_ZNK4llvm4Type15getFltSemanticsEv
+fun:*getFloatingPointTy*
