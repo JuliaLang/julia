@@ -172,7 +172,9 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
 end
 
 mutable struct ConfigCache
-    @atomic config::Union{Nothing,LBTConfig}
+    # We only store `Union{Nothing,LBTConfig}`.  However, declare the field type
+    # to be `Any` (pointer indirection) for lock-free store and load.
+    @atomic config::Any
 end
 
 # In the event that users want to call `lbt_get_config()` multiple times (e.g. for
@@ -183,10 +185,10 @@ const _CONFIG_LOCK = ReentrantLock()
 
 function lbt_get_config()
     config = @atomic :acquire _CACHED_CONFIG.config
-    config === nothing || return config
+    config === nothing || return config::LBTConfig
     return lock(_CONFIG_LOCK) do
         local config = @atomic :monotonic _CACHED_CONFIG.config
-        config === nothing || return config
+        config === nothing || return config::LBTConfig
         config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
         @atomic :release _CACHED_CONFIG.config = LBTConfig(unsafe_load(config_ptr))
     end
