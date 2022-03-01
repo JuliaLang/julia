@@ -96,13 +96,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
     end
 end
 
-is_error(node::SyntaxNode) = is_error(node.raw)
-is_trivia(node::SyntaxNode) = is_trivia(node.raw)
-has_flags(node::SyntaxNode, f) = has_flags(head(node), f)
-
 head(node::SyntaxNode) = head(node.raw)
-kind(node::SyntaxNode)  = kind(node.raw)
-flags(node::SyntaxNode) = flags(node.raw)
 
 haschildren(node::SyntaxNode) = !node.is_leaf
 children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : ()
@@ -189,10 +183,6 @@ end
 
 #-------------------------------------------------------------------------------
 # Tree utilities
-
-kind(node)  = kind(head(node))
-flags(node) = flags(head(node))
-is_infix(node) = is_infix(head(node))
 
 """
     child(node, i1, i2, ...)

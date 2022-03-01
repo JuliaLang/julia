@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Flags hold auxilary information about tokens/nonterminals which the Kind
 # doesn't capture in a nice way.
-const RawFlags = UInt32
+#
+# TODO: Use `primitive type SyntaxFlags 16 end` rather than an alias?
+const RawFlags = UInt16
 const EMPTY_FLAGS = RawFlags(0)
 const TRIVIA_FLAG = RawFlags(1<<0)
 # Some of the following flags are head-specific and could probably be allowed
@@ -17,7 +19,11 @@ const RAW_STRING_FLAG = RawFlags(1<<4)
 const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
-# Todo ERROR_FLAG = 0x80000000 ?
+# Todo ERROR_FLAG = 0x8000 ?
+
+## Flags for tokens (may overlap with the flags allocated for syntax above)
+const SUFFIXED_FLAG        = RawFlags(1<<6)
+const PRECEDING_WHITESPACE_FLAG = RawFlags(1<<7)
 
 function set_numeric_flags(n::Integer)
     f = RawFlags((n << 8) & NUMERIC_FLAGS)
@@ -31,6 +37,10 @@ function numeric_flags(f::RawFlags)
     Int((f >> 8) % UInt8)
 end
 
+function remove_flags(n::RawFlags, fs...)
+    RawFlags(n & ~(RawFlags((|)(fs...))))
+end
+
 # Return true if any of `test_flags` are set
 has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
 
@@ -42,13 +52,6 @@ end
 
 kind(head::SyntaxHead) = head.kind
 flags(head::SyntaxHead) = head.flags
-has_flags(head::SyntaxHead, test_flags) = has_flags(flags(head), test_flags)
-
-is_trivia(head::SyntaxHead) = has_flags(head, TRIVIA_FLAG)
-is_infix(head::SyntaxHead)  = has_flags(head, INFIX_FLAG)
-is_dotted(head::SyntaxHead) = has_flags(head, DOTOP_FLAG)
-numeric_flags(head::SyntaxHead) = numeric_flags(flags(head))
-is_error(head::SyntaxHead)  = kind(head) == K"error"
 
 function Base.summary(head::SyntaxHead)
     untokenize(head, unique=false, include_flag_suff=false)
@@ -59,13 +62,20 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     if is_dotted(head)
         str = "."*str
     end
-    if include_flag_suff && flags(head) ∉ (EMPTY_FLAGS, DOTOP_FLAG)
+    f = flags(head)
+    # Ignore some flags:
+    # - DOTOP_FLAG is represented with . prefix
+    # - PRECEDING_WHITESPACE_FLAG relates to the environment of this token
+    f &= ~(DOTOP_FLAG | PRECEDING_WHITESPACE_FLAG)
+    suffix_flags = remove_flags(flags(head), DOTOP_FLAG, PRECEDING_WHITESPACE_FLAG)
+    if include_flag_suff && suffix_flags != EMPTY_FLAGS
         str = str*"-"
         is_trivia(head)  && (str = str*"t")
         is_infix(head)   && (str = str*"i")
         has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
         has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
         has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
+        is_suffixed(head) && (str = str*"S")
         n = numeric_flags(head)
         n != 0 && (str = str*string(n))
     end
@@ -73,41 +83,53 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
 end
 
 #-------------------------------------------------------------------------------
+# Generic interface for types `T` which have kind and flags:
+# 1. Define kind(::T) and flags(::T) directly
+# 2. Define head(::T) to return a type like `SyntaxKind` for which `kind` and
+#    `flags` are defined
+kind(x)  = kind(head(x))
+flags(x) = flags(head(x))
+
+# Predicates based on kind() / flags()
+is_error(x)  = kind(x) == K"error"
+has_flags(x, test_flags) = has_flags(flags(x), test_flags)
+is_trivia(x) = has_flags(x, TRIVIA_FLAG)
+is_infix(x)  = has_flags(x, INFIX_FLAG)
+is_dotted(x) = has_flags(x, DOTOP_FLAG)
+is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
+preceding_whitespace(x) = has_flags(x, PRECEDING_WHITESPACE_FLAG)
+numeric_flags(x) = numeric_flags(flags(x))
+
+#-------------------------------------------------------------------------------
 """
 `SyntaxToken` is a token covering a contiguous byte range in the input text.
 Information about preceding whitespace is added for use by the parser.
 """
 struct SyntaxToken
-    kind::Kind
+    head::SyntaxHead
     first_byte::UInt32
     last_byte::UInt32
-    # Flags for leading whitespace
-    is_dotted::Bool
-    is_suffixed::Bool
-    had_whitespace::Bool
 end
 
 function SyntaxToken(raw::Token, had_whitespace)
-    SyntaxToken(raw.kind, raw.startbyte + 1, raw.endbyte + 1, raw.dotop, raw.suffix,
-                had_whitespace)
+    f = EMPTY_FLAGS
+    had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
+    raw.dotop      && (f |= DOTOP_FLAG)
+    raw.suffix     && (f |= SUFFIXED_FLAG)
+    SyntaxToken(SyntaxHead(raw.kind, f), raw.startbyte + 1, raw.endbyte + 1)
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
-    range = string(lpad(first_byte(tok), 3), ":", rpad(last_byte(tok), 3))
-    print(io, rpad(range, 17, " "), rpad(kind(tok), 15, " "))
+    print(io, untokenize(tok.head, unique=false), " @", first_byte(tok))
 end
 
-kind(tok::SyntaxToken) = tok.kind
-flags(tok::SyntaxToken) = tok.is_dotted ? DOTOP_FLAG : EMPTY_FLAGS
+head(tok::SyntaxToken) = tok.head
 first_byte(tok::SyntaxToken) = tok.first_byte
 last_byte(tok::SyntaxToken) = tok.last_byte
 span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
 
-is_dotted(tok::SyntaxToken)    = tok.is_dotted
-is_suffixed(tok::SyntaxToken)  = tok.is_suffixed
 is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
 
-Base.:(==)(tok::SyntaxToken, k::Kind) = (kind(tok) == k && !is_decorated(tok))
 
 #-------------------------------------------------------------------------------
 
