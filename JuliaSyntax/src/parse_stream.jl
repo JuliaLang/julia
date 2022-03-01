@@ -294,15 +294,16 @@ function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
 end
 
 """
-    peek(stream [, n=1])
+    peek(stream [, n=1]; skip_newlines=false)
 
 Look ahead in the stream `n` tokens, returning the token kind. Comments and
 non-newline whitespace are skipped automatically. Whitespace containing a
 single newline is returned as kind `K"NewlineWs"` unless `skip_newlines` is
 true.
 """
-function Base.peek(stream::ParseStream, n::Integer=1; skip_newlines::Bool=false)
-    kind(peek_token(stream, n; skip_newlines=skip_newlines))
+function Base.peek(stream::ParseStream, n::Integer=1;
+                   skip_newlines::Bool=false, skip_whitespace=true)
+    kind(peek_token(stream, n; skip_newlines=skip_newlines, skip_whitespace=skip_whitespace))
 end
 
 """
@@ -310,12 +311,17 @@ end
 
 Like `peek`, but return the full token information rather than just the kind.
 """
-function peek_token(stream::ParseStream, n::Integer=1; skip_newlines=false)
+function peek_token(stream::ParseStream, n::Integer=1;
+                    skip_newlines=false, skip_whitespace=true)
     stream.peek_count += 1
     if stream.peek_count > 100_000
         error("The parser seems stuck at byte $(stream.next_byte)")
     end
-    stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
+    i = _lookahead_index(stream, n, skip_newlines)
+    if !skip_whitespace
+        i = 1
+    end
+    return stream.lookahead[i]
 end
 
 function _peek_behind_fields(ranges, i)
