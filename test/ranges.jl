@@ -860,7 +860,7 @@ function range_fuzztests(::Type{T}, niter, nrange) where {T}
         @test m == length(r)
         @test strt == first(r)
         @test Δ == step(r)
-        @test stop ≈ last(r) rtol = 0.001
+        @test stop ≈ last(r)
         l = range(strt, stop=stop, length=n)
         @test n == length(l)
         @test strt == first(l)
