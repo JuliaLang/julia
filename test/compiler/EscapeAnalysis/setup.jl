@@ -20,6 +20,8 @@ end
 isarrayalloc(@nospecialize x) = with_normalized_name(nn->!isnothing(Core.Compiler.alloc_array_ndims(nn)), x)
 isarrayresize(@nospecialize x) = with_normalized_name(nn->!isnothing(EA.array_resize_info(nn)), x)
 isarraycopy(@nospecialize x) = with_normalized_name(nn->EA.is_array_copy(nn), x)
+isfinalizer(@nospecialize x) = with_normalized_name(nn->EA.is_finalizer(nn), x)
+isfinalize(@nospecialize x) = with_normalized_name(nn->nn===:jl_finalize_th, x)
 import Core.Compiler: argextype, singleton_type
 iscall(y) = @nospecialize(x) -> iscall(y, x)
 function iscall((ir, f), @nospecialize(x))

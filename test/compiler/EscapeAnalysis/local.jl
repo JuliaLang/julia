@@ -2186,21 +2186,48 @@ end # @static if isdefined(Core, :ImmutableArray)
     end
 end
 
-# # TODO implement a finalizer elision pass
-# mutable struct WithFinalizer
-#     v
-#     function WithFinalizer(v)
-#         x = new(v)
-#         f(t) = @async println("Finalizing $t.")
-#         return finalizer(x, x)
-#     end
-# end
-# make_m(v = 10) = MyMutable(v)
-# function simple(cond)
-#     m = make_m()
-#     if cond
-#         # println(m.v)
-#         return nothing # <= insert `finalize` call here
-#     end
-#     return m
-# end
+mutable struct WithFinalizer
+    v
+    function WithFinalizer(v)
+        x = new(v)
+        f(t) = @async println("Finalizing $t.")
+        return finalizer(f, x)
+    end
+end
+function simple(cond)
+    m = WithFinalizer(42)
+    if cond
+        # Should have a `finalize` call
+        return nothing
+    end
+    # Should not have a `finalize` call
+    return m
+end
+@testset "early finalization" begin
+    let result = code_escapes(simple, (Bool,))
+        println(result)
+        alloc_idx = SSAValue(2)
+        @test isnew(result.ir.stmts.inst[2])
+        info = result.state[alloc_idx]
+        dump(info)
+        @test !has_all_escape(info)
+        @test has_return_escape(info)
+        @test has_finalizer_escape(info)
+
+        rs = findall(isreturn, result.ir.stmts.inst)
+        @test length(rs) == 2
+        @test !has_return_escape(info, rs[1])
+        @test has_return_escape(info, rs[2])
+        for r in rs
+            @test isreturn(result.ir.stmts.inst[r])
+        end
+
+        finalizer_idx = findfirst(isfinalizer, result.ir.stmts.inst)
+        @test finalizer_idx !== nothing
+
+        finalize_idx = findfirst(isfinalize, result.ir.stmts.inst)
+        @test finalize_idx !== nothing
+        # FIXME: Test that there is a `finalize` call dominating `rs[1]`,
+        # but not `rs[2]`
+    end
+end
