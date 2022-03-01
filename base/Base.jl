@@ -332,7 +332,9 @@ using .Order
 # Combinatorics
 include("sort.jl")
 
-# why are these here?
+# sort.jl defines defalg as MergeSort and QuickSort which are not adaptive because
+# compiler.jl includes sort.jl during bootstrapping and does not have the dependencies
+# AdaptiveSort requires. We redefine defalg to use adaptive sorting here
 Sort.defalg(v::AbstractArray) = DEFAULT_STABLE
 Sort.defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
 Sort.defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
