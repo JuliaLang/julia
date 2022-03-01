@@ -72,12 +72,20 @@ macro deprecate(old, new, export_old=true)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
         if callexpr.head === :call
-            if isa(callexpr.args[1], Symbol)
-                oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
-                oldsym = callexpr.args[1].args[1]::Symbol
-            else
-                error("invalid usage of @deprecate")
+            fnexpr = callexpr.args[1]
+            if fnexpr isa Expr && fnexpr.head === :curly
+                fnexpr = fnexpr.args[1]
+            end
+            if export_old
+                if fnexpr isa Symbol
+                    oldsym = fnexpr
+                else
+                    error(
+                        "if the third `export_old` argument is not specified or `true`,",
+                        " the first argument must be of form (1) `f(...)` where `f` is a",
+                        " symbol or (2) `T{...}(...)` where `T` is a symbol",
+                    )
+                end
             end
         else
             error("invalid usage of @deprecate")
@@ -86,7 +94,7 @@ macro deprecate(old, new, export_old=true)
         export_old ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
                   $(esc(new))
               end))
     else

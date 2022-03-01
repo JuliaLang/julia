@@ -26,6 +26,11 @@ module DeprecationTests # to test @deprecate
     struct A{T} end
     @deprecate A{T}(x::S) where {T, S} f()
 
+    module Sub
+    f() = true
+    end
+    @deprecate Sub.f() f() false
+
     # test that @deprecate_moved can be overridden by an import
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
@@ -72,6 +77,8 @@ end
 
     @test @test_warn "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead." A{Int}(1.)
 
+    @test @test_warn "`Sub.f()` is deprecated, use `f()` instead." DeprecationTests.Sub.f()
+
     redirect_stderr(devnull) do
         @test call(f1)
         @test call(DeprecationTests.f2)
@@ -79,6 +86,7 @@ end
         @test call(DeprecationTests.f4)
         @test call(f5, 1)
         @test call(A{Int}, 1.)
+        @test call(DeprecationTests.Sub.f)
     end
 
     @test @test_nowarn call(f1)
@@ -87,6 +95,7 @@ end
     @test @test_nowarn call(DeprecationTests.f4)
     @test @test_nowarn call(f5, 1)
     @test @test_nowarn call(A{Int}, 1.)
+    @test @test_nowarn call(DeprecationTests.Sub.f)
 
     # issue #21972
     @noinline function f21972()
@@ -139,4 +148,15 @@ end
     @test_throws Exception getindex((), 1.0)
     @test_throws Exception getindex((1,2), 0.0)
     @test_throws Exception getindex((1,2), -1.0)
+end
+
+@testset "@deprecated error message" begin
+    @test_throws(
+        "if the third `export_old` argument is not specified or `true`,",
+        @eval @deprecate M.f() g()
+    )
+    @test_throws(
+        "if the third `export_old` argument is not specified or `true`,",
+        @eval @deprecate M.f() g() true
+    )
 end
