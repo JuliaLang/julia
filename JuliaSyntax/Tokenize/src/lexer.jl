@@ -524,7 +524,7 @@ function lex_comment(l::Lexer, doemit=true)
         while true
             pc = peekchar(l)
             if pc == '\n' || eof(pc)
-                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
             end
             readchar(l)
         end
@@ -534,7 +534,7 @@ function lex_comment(l::Lexer, doemit=true)
         n_start, n_end = 1, 0
         while true
             if eof(c)
-                return doemit ? emit_error(l, Tokens.EOF_MULTICOMMENT) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit_error(l, Tokens.EOF_MULTICOMMENT) : EMPTY_TOKEN
             end
             nc = readchar(l)
             if c == '#' && nc == '='
@@ -543,7 +543,7 @@ function lex_comment(l::Lexer, doemit=true)
                 n_end += 1
             end
             if n_start == n_end
-                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
             end
             pc = c
             c = nc
@@ -852,25 +852,25 @@ function lex_prime(l, doemit = true)
     else
         if accept(l, '\'')
             if accept(l, '\'')
-                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN
             else
                 # Empty char literal
                 # Arguably this should be an error here, but we generally
                 # look at the contents of the char literal in the parser,
                 # so we defer erroring until there.
-                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN
             end
         end
         while true
             c = readchar(l)
             if eof(c)
-                return doemit ? emit_error(l, Tokens.EOF_CHAR) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit_error(l, Tokens.EOF_CHAR) : EMPTY_TOKEN
             elseif c == '\\'
                 if eof(readchar(l))
-                    return doemit ? emit_error(l, Tokens.EOF_CHAR) : EMPTY_TOKEN(token_type(l))
+                    return doemit ? emit_error(l, Tokens.EOF_CHAR) : EMPTY_TOKEN
                 end
             elseif c == '\''
-                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN(token_type(l))
+                return doemit ? emit(l, Tokens.CHAR) : EMPTY_TOKEN
             end
         end
     end
