@@ -158,6 +158,12 @@ end
         @test a.diag[2] ≈ 0.0
     end
 
+    @testset "hermitian matrices" begin
+        Q = ones(2,2)
+        C = pinv(Hermitian(Q))/0.25
+        @test C ≈ ones(2,2)
+    end
+
     if eltya <: LinearAlgebra.BlasReal
         @testset "sub-normal numbers/vectors/matrices" begin
             a = pinv(floatmin(eltya)/100)

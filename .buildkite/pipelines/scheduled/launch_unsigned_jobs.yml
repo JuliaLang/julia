@@ -1,0 +1,8 @@
+steps:
+  - label: ":buildkite: Launch unsigned jobs"
+    commands: |
+      # Launch all of the `USE_BINARYBUILDER=0` jobs.
+      bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/scheduled/no_bb/no_bb_package_linux.arches .buildkite/pipelines/main/platforms/package_linux.yml
+      bash .buildkite/utilities/platforms/platforms.sh .buildkite/pipelines/scheduled/no_bb/no_bb_tester_linux.arches .buildkite/pipelines/main/platforms/tester_linux.yml
+    agents:
+      queue: julia

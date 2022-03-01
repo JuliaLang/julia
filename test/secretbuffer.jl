@@ -11,6 +11,8 @@ using Test
         @test read(secret, String) == str
         seekstart(secret)
 
+        @test peek(secret) == 0x66
+
         @test shred!(secret) === secret
         @test read(secret, String) == ""
         @test str == "foobar"

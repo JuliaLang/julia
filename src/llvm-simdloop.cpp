@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #define DEBUG_TYPE "lower_simd_loop"
 
@@ -26,41 +27,11 @@
 #include <llvm/IR/Metadata.h>
 #include <llvm/Support/Debug.h>
 
-#include <cstdio>
-
 #include "julia_assert.h"
 
-namespace llvm {
+using namespace llvm;
 
-
-/// This pass should run after reduction variables have been converted to phi nodes,
-/// otherwise floating-point reductions might not be recognized as such and
-/// prevent SIMDization.
-struct LowerSIMDLoop : public ModulePass {
-    static char ID;
-    LowerSIMDLoop() : ModulePass(ID)
-    {
-    }
-
-    protected:
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        ModulePass::getAnalysisUsage(AU);
-        AU.addRequired<LoopInfoWrapperPass>();
-        AU.addPreserved<LoopInfoWrapperPass>();
-        AU.setPreservesCFG();
-    }
-
-    private:
-    bool runOnModule(Module &M) override;
-
-    bool markLoopInfo(Module &M, Function *marker);
-
-    /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
-    /// mark the ops as permitting reassociation/commuting.
-    /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-    void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const;
-};
+namespace {
 
 static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
 {
@@ -82,7 +53,10 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
     }
 }
 
-void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
+/// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
+/// mark the ops as permitting reassociation/commuting.
+/// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -132,18 +106,7 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
     }
 }
 
-bool LowerSIMDLoop::runOnModule(Module &M)
-{
-    Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
-
-    bool Changed = false;
-    if (loopinfo_marker)
-        Changed |= markLoopInfo(M, loopinfo_marker);
-
-    return Changed;
-}
-
-bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
+static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI)
 {
     bool Changed = false;
     std::vector<Instruction*> ToDelete;
@@ -151,7 +114,7 @@ bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
         Instruction *I = cast<Instruction>(U);
         ToDelete.push_back(I);
 
-        LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>(*I->getParent()->getParent()).getLoopInfo();
+        LoopInfo &LI = GetLI(*I->getParent()->getParent());
         Loop *L = LI.getLoopFor(I->getParent());
         I->removeFromParent();
         if (!L)
@@ -245,20 +208,85 @@ bool LowerSIMDLoop::markLoopInfo(Module &M, Function *marker)
     return Changed;
 }
 
-char LowerSIMDLoop::ID = 0;
+} // end anonymous namespace
 
-static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
+
+/// This pass should run after reduction variables have been converted to phi nodes,
+/// otherwise floating-point reductions might not be recognized as such and
+/// prevent SIMDization.
+
+
+PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
+{
+    Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
+
+    if (!loopinfo_marker)
+        return PreservedAnalyses::all();
+
+    FunctionAnalysisManager &FAM =
+      AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+
+    auto GetLI = [&FAM](Function &F) -> LoopInfo & {
+        return FAM.getResult<LoopAnalysis>(F);
+    };
+
+    if (markLoopInfo(M, loopinfo_marker, GetLI)) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<LoopAnalysis>();
+        return preserved;
+    }
+
+    return PreservedAnalyses::all();
+}
+
+namespace {
+class LowerSIMDLoopLegacy : public ModulePass {
+    //LowerSIMDLoop Impl;
+
+public:
+  static char ID;
+
+  LowerSIMDLoopLegacy() : ModulePass(ID) {
+  }
+
+  bool runOnModule(Module &M) override {
+    bool Changed = false;
+
+    Function *loopinfo_marker = M.getFunction("julia.loopinfo_marker");
+
+    auto GetLI = [this](Function &F) -> LoopInfo & {
+        return getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo();
+    };
+
+    if (loopinfo_marker)
+        Changed |= markLoopInfo(M, loopinfo_marker, GetLI);
+
+    return Changed;
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override
+  {
+      ModulePass::getAnalysisUsage(AU);
+      AU.addRequired<LoopInfoWrapperPass>();
+      AU.addPreserved<LoopInfoWrapperPass>();
+      AU.setPreservesCFG();
+  }
+};
+
+} // end anonymous namespace
+
+char LowerSIMDLoopLegacy::ID = 0;
+
+static RegisterPass<LowerSIMDLoopLegacy> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
                                      false /* Only looks at CFG */,
                                      false /* Analysis Pass */);
 
 JL_DLLEXPORT Pass *createLowerSimdLoopPass()
 {
-    return new LowerSIMDLoop();
+    return new LowerSIMDLoopLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createLowerSimdLoopPass());
 }
-
-} // namespace llvm

@@ -17,10 +17,10 @@ extern "C" {
 
 JL_DLLEXPORT int jl_generating_output(void)
 {
-    return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji;
+    return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
 }
 
-void *jl_precompile(int all);
+static void *jl_precompile(int all);
 
 void jl_write_compiler_output(void)
 {
@@ -46,13 +46,17 @@ void jl_write_compiler_output(void)
         jl_value_t *f = jl_get_global((jl_module_t*)m, jl_symbol("__init__"));
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
-            // TODO: this would be better handled if moved entirely to jl_precompile
-            // since it's a slightly duplication of effort
-            jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
-            JL_GC_PUSH1(&tt);
-            tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
-            jl_compile_hint((jl_tupletype_t*)tt);
-            JL_GC_POP();
+            int setting = jl_get_module_compile((jl_module_t*)m);
+            if (setting != JL_OPTIONS_COMPILE_OFF &&
+                setting != JL_OPTIONS_COMPILE_MIN) {
+                // TODO: this would be better handled if moved entirely to jl_precompile
+                // since it's a slightly duplication of effort
+                jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
+                JL_GC_PUSH1(&tt);
+                tt = (jl_value_t*)jl_apply_tuple_type_v(&tt, 1);
+                jl_compile_hint((jl_tupletype_t*)tt);
+                JL_GC_POP();
+            }
         }
     }
 
@@ -64,10 +68,12 @@ void jl_write_compiler_output(void)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
         if (jl_options.outputo)
             jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
+        if (jl_options.outputasm)
+            jl_printf(JL_STDERR, "WARNING: incremental output to a .s file is not implemented\n");
     }
     else {
         ios_t *s = NULL;
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc)
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm)
             s = jl_create_system_image(native_code);
 
         if (jl_options.outputji) {
@@ -83,12 +89,13 @@ void jl_write_compiler_output(void)
             }
         }
 
-        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc) {
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm) {
             assert(s);
             jl_dump_native(native_code,
                            jl_options.outputbc,
                            jl_options.outputunoptbc,
                            jl_options.outputo,
+                           jl_options.outputasm,
                            (const char*)s->buf, (size_t)s->size);
         }
     }
@@ -253,7 +260,7 @@ static void _compile_all_deq(jl_array_t *found)
         jl_method_t *m = ml->func.method;
         if (m->source == NULL) // TODO: generic implementations of generated functions
             continue;
-        mi = jl_get_unspecialized(mi);
+        mi = jl_get_unspecialized(m);
         assert(mi == m->unspecialized); // make sure we didn't get tricked by a generated function, since we can't handle those
         jl_code_instance_t *ucache = jl_get_method_inferred(mi, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         if (ucache->invoke != NULL)
@@ -261,7 +268,7 @@ static void _compile_all_deq(jl_array_t *found)
         src = m->source;
         assert(src);
         // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
-        //src = jl_type_infer(mi, jl_world_counter, 1);
+        //src = jl_type_infer(mi, jl_atomic_load_acquire(&jl_world_counter), 1);
         //if (ucache->invoke != NULL)
         //    continue;
 
@@ -287,12 +294,11 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
 }
 
 
-static void compile_all_enq_(jl_methtable_t *mt, void *env)
+static int compile_all_enq_(jl_methtable_t *mt, void *env)
 {
     jl_typemap_visitor(mt->defs, compile_all_enq__, env);
+    return 1;
 }
-
-void jl_foreach_reachable_mtable(void (*visit)(jl_methtable_t *mt, void *env), void *env);
 
 static void jl_compile_all_defs(void)
 {
@@ -300,21 +306,26 @@ static void jl_compile_all_defs(void)
     // TypeMapEntries for Methods and MethodInstances that need to be compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
+    int _changes = -1;
+    int attempts = 0;
     while (1) {
         jl_foreach_reachable_mtable(compile_all_enq_, m);
         size_t changes = jl_array_len(m);
         if (!changes)
             break;
+        if (changes == _changes) {
+            if (++attempts > 5) {
+                jl_printf(JL_STDERR, "unable to compile %d methods for compile-all\n", (int)changes);
+                break;
+            }
+        } else {
+            attempts = 0;
+        }
         _compile_all_deq(m);
         jl_array_del_end(m, changes);
+        _changes = changes;
     }
     JL_GC_POP();
-}
-
-static int precompile_enq_all_cache__(jl_typemap_entry_t *l, void *closure)
-{
-    jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)l->func.linfo);
-    return 1;
 }
 
 static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closure)
@@ -329,7 +340,7 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
                 !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) {
                 do_compile = 1;
             }
-            else if (codeinst->invoke != NULL) {
+            else if (codeinst->invoke != NULL || codeinst->precompile) {
                 do_compile = 1;
             }
         }
@@ -337,7 +348,7 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
             jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
             return 1;
         }
-        codeinst = codeinst->next;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     return 1;
 }
@@ -345,8 +356,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
     jl_method_t *m = def->func.method;
-    if (m->name == jl_symbol("__init__") && jl_is_dispatch_tupletype(m->sig)) {
-        // ensure `__init__()` gets strongly-hinted, specialized, and compiled
+    if ((m->name == jl_symbol("__init__") || m->ccallable) && jl_is_dispatch_tupletype(m->sig)) {
+        // ensure `__init__()` and @ccallables get strongly-hinted, specialized, and compiled
         jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
@@ -354,23 +365,22 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
         jl_svec_t *specializations = def->func.method->specializations;
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (mi != NULL)
-                precompile_enq_specialization_(mi, closure);
+            jl_value_t *mi = jl_svecref(specializations, i);
+            if (mi != jl_nothing)
+                precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
         }
     }
+    if (m->ccallable)
+        jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)m->ccallable);
     return 1;
 }
 
-static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
+static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
-    jl_typemap_visitor(mt->cache, precompile_enq_all_cache__, env);
+    return jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
 }
 
-void jl_compile_now(jl_method_instance_t *mi);
-
-void *jl_precompile(int all)
+static void *jl_precompile(int all)
 {
     if (all)
         jl_compile_all_defs();
@@ -383,16 +393,24 @@ void *jl_precompile(int all)
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     m2 = jl_alloc_vec_any(0);
     for (size_t i = 0; i < jl_array_len(m); i++) {
-        mi = (jl_method_instance_t*)jl_array_ptr_ref(m, i);
-        size_t min_world = 0;
-        size_t max_world = ~(size_t)0;
-        if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
-            mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_world_counter, &min_world, &max_world, 0);
-        if (mi)
-            jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+        jl_value_t *item = jl_array_ptr_ref(m, i);
+        if (jl_is_method_instance(item)) {
+            mi = (jl_method_instance_t*)item;
+            size_t min_world = 0;
+            size_t max_world = ~(size_t)0;
+            if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
+            if (mi)
+                jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
+        }
+        else {
+            assert(jl_is_simplevector(item));
+            assert(jl_svec_len(item) == 2);
+            jl_array_ptr_1d_push(m2, item);
+        }
     }
     m = NULL;
-    void *native_code = jl_create_native(m2, jl_default_cgparams);
+    void *native_code = jl_create_native(m2, NULL, 0);
     JL_GC_POP();
     return native_code;
 }

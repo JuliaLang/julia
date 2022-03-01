@@ -54,6 +54,19 @@ len_only_iterable = (1,2,3,4,5)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
 @test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
 
+# Check that we throw a `CapturedException` holding the stacktrace if `f` throws
+f42105(i) = i == 5 ? error("captured") :  i
+let
+    e = try
+        asyncmap(f42105, 1:5)
+    catch e
+        e
+    end
+    @test e isa CapturedException
+    @test e.ex == ErrorException("captured")
+    @test e.processed_bt[2][1].func == :f42105
+end
+
 include("generic_map_tests.jl")
 generic_map_tests(asyncmap, asyncmap!)
 

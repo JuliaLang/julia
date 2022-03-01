@@ -45,7 +45,6 @@
     ALIAS(lt_float_fast, lt_float) \
     ALIAS(le_float_fast, le_float) \
     ADD_I(fpiseq, 2) \
-    ADD_I(fpislt, 2) \
     /*  bitwise operators */ \
     ADD_I(and_int, 2) \
     ADD_I(or_int, 2) \
@@ -92,11 +91,20 @@
     /*  pointer access */ \
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
-    /* c interface */ \
+    /*  pointer atomics */ \
+    ADD_I(atomic_fence, 1) \
+    ADD_I(atomic_pointerref, 2) \
+    ADD_I(atomic_pointerset, 3) \
+    ADD_I(atomic_pointerswap, 3) \
+    ADD_I(atomic_pointermodify, 4) \
+    ADD_I(atomic_pointerreplace, 5) \
+    /*  c interface */ \
     ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
-    /* object access */ \
+    /*  object access */ \
     ADD_I(arraylen, 1) \
+    /*  cpu feature tests */ \
+    ADD_I(have_fma, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(cglobal_auto, 1)
 

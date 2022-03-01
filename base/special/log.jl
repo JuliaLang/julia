@@ -139,19 +139,24 @@ const t_log_Float32 = (0.0,0.007782140442054949,0.015504186535965254,0.023167059
     0.6773988235918061,0.6813592248079031,0.6853040030989194,0.689233281238809,
     0.6931471805599453)
 
-# determine if hardware FMA is available
-# should probably check with LLVM, see #9855.
-const FMA_NATIVE = muladd(nextfloat(1.0),nextfloat(1.0),-nextfloat(1.0,2)) != 0
-
 # truncate lower order bits (up to 26)
 # ideally, this should be able to use ANDPD instructions, see #9868.
 @inline function truncbits(x::Float64)
     reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
 end
 
+logb(::Type{Float32},::Val{2})  = 1.4426950408889634
+logb(::Type{Float32},::Val{:ℯ}) = 1.0
+logb(::Type{Float32},::Val{10}) = 0.4342944819032518
+logbU(::Type{Float64},::Val{2})  = 1.4426950408889634
+logbL(::Type{Float64},::Val{2})  = 2.0355273740931033e-17
+logbU(::Type{Float64},::Val{:ℯ}) = 1.0
+logbL(::Type{Float64},::Val{:ℯ}) = 0.0
+logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
+logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
 # Procedure 1
-@inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,jp::Int)
+@inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,jp::Int,base=Val(:ℯ))
     ## Steps 1 and 2
     @inbounds hi,lo = t_log_Float64[jp]
     l_hi = mf* 0.6931471805601177 + hi
@@ -175,11 +180,13 @@ end
                     0.012500053168098584)
 
     ## Step 4
-    l_hi + (u + (q + l_lo))
+    m_hi = logbU(Float64, base)
+    m_lo = logbL(Float64, base)
+    return fma(m_hi, l_hi, fma(m_hi, (u + (q + l_lo)), m_lo*l_hi))
 end
 
 # Procedure 2
-@inline function log_proc2(f::Float64)
+@inline function log_proc2(f::Float64,base=Val(:ℯ))
     ## Step 1
     g = 1.0/(2.0+f)
     u = 2.0*f*g
@@ -198,20 +205,14 @@ end
     #   2(f-u1-u2) - f*(u1+u2) = 0
     #   2(f-u1) - f*u1 = (2+f)u2
     #   u2 = (2(f-u1) - f*u1)/(2+f)
-    if FMA_NATIVE
-        return u + fma(fma(-u,f,2(f-u)), g, q)
-    else
-        u1 = truncbits(u) # round to 24 bits
-        f1 = truncbits(f)
-        f2 = f-f1
-        u2 = ((2.0*(f-u1)-u1*f1)-u1*f2)*g
-        ## Step 4
-        return u1 + (u2 + q)
-    end
+
+    m_hi = logbU(Float64, base)
+    m_lo = logbL(Float64, base)
+    return fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q)))
 end
 
 
-@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,jp::Int)
+@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,jp::Int,base=Val(:ℯ))
     ## Steps 1 and 2
     @inbounds hi = t_log_Float32[jp]
     l = mf*0.6931471805599453 + hi
@@ -228,10 +229,10 @@ end
     q = u*v*0.08333351f0
 
     ## Step 4
-    Float32(l + (u + q))
+    Float32(logb(Float32, base)*(l + (u + q)))
 end
 
-@inline function log_proc2(f::Float32)
+@inline function log_proc2(f::Float32,base=Val(:ℯ))
     ## Step 1
     # compute in higher precision
     u64 = Float64(2f0*f)/(2.0+f)
@@ -246,18 +247,24 @@ end
     ## Step 3: not required
 
     ## Step 4
-    Float32(u64 + q)
+    Float32(logb(Float32, base)*(u64 + q))
 end
 
+log2(x::Float32)  = _log(x, Val(2),  :log2)
+log(x::Float32)   = _log(x, Val(:ℯ), :log)
+log10(x::Float32) = _log(x, Val(10), :log10)
+log2(x::Float64)  = _log(x, Val(2),  :log2)
+log(x::Float64)   = _log(x, Val(:ℯ), :log)
+log10(x::Float64) = _log(x, Val(10), :log10)
 
-function log(x::Float64)
+function _log(x::Float64, base, func)
     if x > 0.0
         x == Inf && return x
 
         # Step 2
         if 0.9394130628134757 < x < 1.0644944589178595
             f = x-1.0
-            return log_proc2(f)
+            return log_proc2(f, base)
         end
 
         # Step 3
@@ -276,24 +283,24 @@ function log(x::Float64)
         f = y-F
         jp = unsafe_trunc(Int,128.0*F)-127
 
-        return log_proc1(y,mf,F,f,jp)
+        return log_proc1(y,mf,F,f,jp,base)
     elseif x == 0.0
         -Inf
     elseif isnan(x)
         NaN
     else
-        throw_complex_domainerror(:log, x)
+        throw_complex_domainerror(func, x)
     end
 end
 
-function log(x::Float32)
+function _log(x::Float32, base, func)
     if x > 0f0
         x == Inf32 && return x
 
         # Step 2
         if 0.939413f0 < x < 1.0644945f0
             f = x-1f0
-            return log_proc2(f)
+            return log_proc2(f, base)
         end
 
         # Step 3
@@ -312,13 +319,13 @@ function log(x::Float32)
         f = y-F
         jp = unsafe_trunc(Int,128.0f0*F)-127
 
-        log_proc1(y,mf,F,f,jp)
+        log_proc1(y,mf,F,f,jp,base)
     elseif x == 0f0
         -Inf32
     elseif isnan(x)
         NaN32
     else
-        throw_complex_domainerror(:log, x)
+        throw_complex_domainerror(func, x)
     end
 end
 
@@ -390,8 +397,51 @@ function log1p(x::Float32)
     end
 end
 
-for f in (:log,:log1p)
-    @eval begin
-        ($f)(x::Real) = ($f)(float(x))
+
+@inline function log_ext_kernel(x_hi::Float64, x_lo::Float64)
+    c1hi = 0.666666666666666629659233
+    hi_order =  evalpoly(x_hi, (0.400000000000000077715612, 0.285714285714249172087875,
+                                0.222222222230083560345903, 0.181818180850050775676507,
+                                0.153846227114512262845736, 0.13332981086846273921509,
+                                0.117754809412463995466069, 0.103239680901072952701192,
+                                0.116255524079935043668677))
+    res_hi, res_lo = two_mul(hi_order, x_hi)
+    res_lo = fma(x_lo, hi_order, res_lo)
+    ans_hi = c1hi + res_hi
+    ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
+    return ans_hi, ans_lo
+end
+
+# Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
+# Implimentation adapted from SLEEFPirates.jl
+# Does not normalize results.
+# Must be caused with positive finite arguments
+function _log_ext(d::Float64)
+    m, e = significand(d), exponent(d)
+    if m > 1.5
+        m *= 0.5
+        e += 1.0
     end
+    # x = (m-1)/(m+1)
+    mp1hi = m + 1.0
+    mp1lo = m + (1.0 - mp1hi)
+    invy = inv(mp1hi)
+    xhi = (m - 1.0) * invy
+    xlo = fma(-xhi, mp1lo, fma(-xhi, mp1hi, m - 1.0)) * invy
+    x2hi, x2lo = two_mul(xhi, xhi)
+    x2lo = muladd(xhi, xlo * 2.0, x2lo)
+    thi, tlo  = log_ext_kernel(x2hi, x2lo)
+
+    shi = 0.6931471805582987 * e
+    xhi2 = xhi * 2.0
+    shinew = muladd(xhi, 2.0, shi)
+    slo = muladd(1.6465949582897082e-12, e, muladd(xlo, 2.0, (((shi - shinew) + xhi2))))
+    shi = shinew
+    x3hi, x3lo = two_mul(x2hi, xhi)
+    x3lo = muladd(x2hi, xlo, muladd(xhi, x2lo,x3lo))
+    x3thi, x3tlo = two_mul(x3hi, thi)
+    x3tlo = muladd(x3hi, tlo, muladd(x3lo, thi, x3tlo))
+    anshi = x3thi + shi
+    anslo = slo + x3tlo - ((anshi - shi) - x3thi)
+    return anshi, anslo
 end

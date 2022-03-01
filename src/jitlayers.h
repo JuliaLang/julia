@@ -4,30 +4,59 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/PassManager.h>
 #include "llvm/IR/LegacyPassManager.h"
 
-#include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
-#include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
-#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#include "llvm/ExecutionEngine/JITEventListener.h"
+#include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 
-extern "C" {
-    extern int globalUnique;
-}
+// As of LLVM 13, there are two runtime JIT linker implementations, the older
+// RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
+// (used via orc::ObjectLinkingLayer).
+//
+// JITLink is not only more flexible (which isn't of great importance for us, as
+// we do only single-threaded in-process codegen), but crucially supports using
+// the Small code model, where the linker needs to fix up relocations between
+// object files that end up far apart in address space. RuntimeDyld can't do
+// that and relies on the Large code model instead, which is broken on
+// aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
+// (see https://bugs.llvm.org/show_bug.cgi?id=52029).
+//
+// However, JITLink is a relatively young library and lags behind in platform
+// and feature support (e.g. Windows, JITEventListeners for various profilers,
+// etc.). Thus, we currently only use JITLink where absolutely required, that is,
+// for Mac/aarch64.
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+# if JL_LLVM_VERSION < 130000
+#  warning "On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults"
+# endif
+# define JL_USE_JITLINK
+#endif
+
+#ifdef JL_USE_JITLINK
+# include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#else
+# include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
+# include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#endif
+
+using namespace llvm;
+
+extern "C" jl_cgparams_t jl_default_cgparams;
+
 extern TargetMachine *jl_TargetMachine;
-extern Module *shadow_output;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
+void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
+Module *jl_create_llvm_module(StringRef name);
+GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -52,12 +81,38 @@ struct jl_returninfo_t {
 typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool>> jl_codegen_call_targets_t;
 typedef std::tuple<std::unique_ptr<Module>, jl_llvm_functions_t> jl_compile_result_t;
 
-typedef struct {
+typedef struct _jl_codegen_params_t {
+    typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_codegen_call_targets_t workqueue;
     std::map<void*, GlobalVariable*> globals;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
+    DenseMap<Constant*, GlobalVariable*> mergedConstants;
+    // Map from symbol name (in a certain library) to its GV in sysimg and the
+    // DL handle address in the current session.
+    StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
+#ifdef _OS_WINDOWS_
+    SymMapGV symMapExe;
+    SymMapGV symMapDll;
+    SymMapGV symMapDlli;
+#endif
+    SymMapGV symMapDefault;
+    // Map from distinct callee's to its GOT entry.
+    // In principle the attribute, function type and calling convention
+    // don't need to be part of the key but it seems impossible to forward
+    // all the arguments without writing assembly directly.
+    // This doesn't matter too much in reality since a single function is usually
+    // not called with multiple signatures.
+    DenseMap<AttributeList, std::map<
+        std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
+        GlobalVariable*>> allPltMap;
+    Module *_shared_module = NULL;
+    Module *shared_module(LLVMContext &context) {
+        if (!_shared_module)
+            _shared_module = jl_create_llvm_module("globals");
+        return _shared_module;
+    }
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
@@ -75,48 +130,21 @@ jl_compile_result_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params);
 
+enum CompilationPolicy {
+    Default = 0,
+    Extern = 1,
+    ImagingMode = 2
+};
+
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params);
+    jl_codegen_params_t &params,
+    CompilationPolicy policy);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
 
-// Connect Modules via prototypes, each owned by module `M`
-static inline GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
-{
-    // Copy the GlobalVariable, but without the initializer, so it becomes a declaration
-    GlobalVariable *proto = new GlobalVariable(G->getType()->getElementType(),
-            G->isConstant(), GlobalVariable::ExternalLinkage,
-            NULL, G->getName(),  G->getThreadLocalMode());
-    proto->copyAttributesFrom(G);
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    proto->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-    if (M)
-        M->getGlobalList().push_back(proto);
-    return proto;
-}
-
-static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
-{
-    if (G->getParent() == M)
-        return G;
-    GlobalValue *local = M->getNamedValue(G->getName());
-    if (!local) {
-        local = global_proto(G, M);
-    }
-    return cast<GlobalVariable>(local);
-}
-
-void add_named_global(GlobalObject *gv, void *addr, bool dllimport);
-template<typename T>
-static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = true)
-{
-    // cast through integer to avoid c++ pedantic warning about casting between
-    // data and code pointers
-    add_named_global(gv, (void*)(uintptr_t)addr, dllimport);
-}
+void add_named_global(StringRef name, void *addr);
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T)
 {
@@ -144,64 +172,49 @@ typedef JITSymbol JL_JITSymbol;
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
 
-using RTDyldObjHandleT = orc::VModuleKey;
-#if JL_LLVM_VERSION >= 100000
-using CompilerResultT = Expected<orc::LegacyRTDyldObjectLinkingLayerBase::ObjectPtr>;
-#else
-using CompilerResultT = std::unique_ptr<llvm::MemoryBuffer>;
-#endif
+using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 
 class JuliaOJIT {
-    // Custom object emission notification handler for the JuliaOJIT
-    class DebugObjectRegistrar {
-    public:
-        DebugObjectRegistrar(JuliaOJIT &JIT);
-        template <typename ObjSetT, typename LoadResult>
-        void operator()(RTDyldObjHandleT H, const ObjSetT &Object, const LoadResult &LOS);
-    private:
-        template <typename ObjT, typename LoadResult>
-        void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
-        std::unique_ptr<JITEventListener> JuliaListener;
-        JuliaOJIT &JIT;
-    };
-
-    struct CompilerT {
+    struct CompilerT : public orc::IRCompileLayer::IRCompiler {
         CompilerT(JuliaOJIT *pjit)
-            : jit(*pjit)
-        {}
-        CompilerResultT operator()(Module &M);
+            : IRCompiler(orc::IRSymbolMapper::ManglingOptions{}),
+              jit(*pjit) {}
+        virtual CompilerResultT operator()(Module &M) override;
     private:
         JuliaOJIT &jit;
     };
+    // Custom object emission notification handler for the JuliaOJIT
+    template <typename ObjT, typename LoadResult>
+    void registerObject(const ObjT &Obj, const LoadResult &LO);
 
 public:
-    typedef orc::LegacyRTDyldObjectLinkingLayer ObjLayerT;
-    typedef orc::LegacyIRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
-    typedef orc::VModuleKey ModuleHandleT;
-    typedef StringMap<void*> SymbolTableT;
+#ifdef JL_USE_JITLINK
+    typedef orc::ObjectLinkingLayer ObjLayerT;
+#else
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+#endif
+    typedef orc::IRCompileLayer CompileLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
-    JuliaOJIT(TargetMachine &TM);
+    JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
 
+    void enableJITDebuggingSupport();
+#ifndef JL_USE_JITLINK
+    // JITLink doesn't support old JITEventListeners (yet).
     void RegisterJITEventListener(JITEventListener *L);
-    std::vector<JITEventListener *> EventListeners;
-    void NotifyFinalizer(RTDyldObjHandleT Key,
-                         const object::ObjectFile &Obj,
-                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
+#endif
+
     void addGlobalMapping(StringRef Name, uint64_t Addr);
-    void addGlobalMapping(const GlobalValue *GV, void *Addr);
-    void *getPointerToGlobalIfAvailable(StringRef S);
-    void *getPointerToGlobalIfAvailable(const GlobalValue *GV);
     void addModule(std::unique_ptr<Module> M);
-    void removeModule(ModuleHandleT H);
+
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
-    JL_JITSymbol resolveSymbol(StringRef Name);
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
+    size_t getTotalBytes() const;
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
@@ -218,18 +231,19 @@ private:
     legacy::PassManager PM3;
     TargetMachine *TMs[4];
     MCContext *Ctx;
+
+    orc::ThreadSafeContext TSCtx;
+    orc::ExecutionSession ES;
+    orc::JITDylib &GlobalJD;
+    orc::JITDylib &JD;
+
+#ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
-    DebugObjectRegistrar registrar;
-
-    llvm::orc::ExecutionSession ES;
-    std::shared_ptr<llvm::orc::SymbolResolver> SymbolResolver;
-
+#endif
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
 
-    SymbolTableT GlobalSymbolTable;
-    SymbolTableT LocalSymbolTable;
-    DenseMap<void*, StringRef> ReverseLocalSymbolTable;
+    DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 
@@ -240,8 +254,18 @@ Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
 Pass *createPropagateJuliaAddrspaces();
+Pass *createRemoveJuliaAddrspacesPass();
+Pass *createRemoveNIPass();
+Pass *createJuliaLICMPass();
 Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
+Pass *createDemoteFloat16Pass();
+Pass *createCPUFeaturesPass();
+Pass *createLowerSimdLoopPass();
+
+// NewPM
+#include "passes.h"
+
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {
