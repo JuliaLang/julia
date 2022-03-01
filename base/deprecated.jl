@@ -289,3 +289,13 @@ end
 @deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations
+
+# BEGIN 1.9 deprecations
+
+# Workaround that `@deprecate` does not handle `Threads.Atomic()`
+module _DeprecateThreads
+import Base.Threads: Atomic
+@deprecate Atomic() Atomic{Int}() false
+end
+
+# END 1.9 deprecations

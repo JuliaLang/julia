@@ -57,6 +57,15 @@ modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
 replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
+function asatomicref end
+atomicget(ref) = (@inline; atomicget(ref, :sequentially_consistent))
+atomicset!(ref, value) = (@inline; atomicset!(ref, value, :sequentially_consistent))
+atomicswap!(ref, value) = (@inline; atomicswap!(ref, value, :sequentially_consistent))
+atomicmodify!(ref, op::OP, value) where {OP} =
+    (@inline; atomicmodify!(ref, op, value, :sequentially_consistent))
+atomicreplace!(ref, expected, desired, order::Symbol = :sequentially_consistent) =
+    (@inline; atomicreplace!(ref, expected, desired, order, order))
+
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")

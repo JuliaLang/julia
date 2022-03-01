@@ -43,6 +43,91 @@ const ArithmeticTypes = Union{arithmetictypes...}
 const AtomicTypes = Union{atomictypes...}
 
 """
+    Base.asatomicref(indexable) -> references
+
+Create an indexable wrapper `references` of `indexable` such that elements of `references`
+are atomic references to the elements in `indexable`.
+
+If `indexable` supports non-atomic indexing and `I` is a supported index,
+
+```
+atomicget(asatomicref(indexable)[I...])
+```
+
+must be equivalent to `indexable[I...]` and
+
+```
+atomicset!(asatomicref(indexable)[I...], v)
+```
+
+must be equivalent to `indexable[I...] = v` in sequential programs if these operations are
+implementable.
+
+To support [`@atomic`](@ref), [`@atomicswap`](@ref), and [`@atomicreplace`](@ref), the
+element type of `references` can impelement [`atomicget`](@ref), [`atomicget!`](@ref),
+[`atomicswap!`](@ref), [`atomicreplace!`](@ref).
+"""
+Base.asatomicref
+
+"""
+    Base.atomicget(ref, order::Symbol = :sequentially_consistent) -> value
+
+Load the `value` atomically from the memory location specified by `ref` and establish the
+memory ordering `order`.
+
+The owner of `typeof(ref)` should define 2-arg method `atomicget(ref, order)`.
+"""
+Base.atomicget
+
+"""
+    Base.atomicset!(ref, value, order::Symbol = :sequentially_consistent)
+
+Store the `value` atomically to the memory location specified by `ref` and establish the
+memory ordering `order`.
+
+The owner of `typeof(ref)` should define 3-arg method `atomicset!(ref, value, order)`.
+"""
+Base.atomicset!
+
+"""
+    Base.atomicswap!(ref, new, order::Symbol) -> old
+
+Load the `old` value and store the `new` value atomically from/to the memory location
+specified by `ref` and establish the memory ordering `order`.
+
+The owner of `typeof(ref)` should define 3-arg method `atomicswap!(ref, new, order)`.
+"""
+Base.atomicswap!
+
+"""
+    Base.atomicmodify!(ref, op, value, order::Symbol) -> new
+
+Load the `old` value and replace it with the `new` value computed as `op(old, value)`
+atomically.  It establishes the memory ordering `order`.
+
+The owner of `typeof(ref)` should define 4-arg method
+`atomicmodify!(ref, op, value, order)`.
+"""
+Base.atomicmodify!
+
+"""
+    Base.atomicreplace!(
+        ref,
+        expected,
+        desired,
+        success_order::Symbol = :sequentially_consistent,
+        fail_order::Symbol = success_order,
+    ) -> (; old, success::Bool)
+
+Store the `new` value and load the `old` atomically to/from the memory location specified
+by `ref` and establish the memory ordering `order`.
+
+The owner of `typeof(ref)` should define 5-arg method
+`atomicreplace!(ref, expected, desired, success_order, fail_order)`.
+"""
+Base.atomicreplace!
+
+"""
     Threads.Atomic{T}
 
 Holds a reference to an object of type `T`, ensuring that it is only
@@ -72,13 +157,28 @@ julia> x[]
 Atomic operations use an `atomic_` prefix, such as [`atomic_add!`](@ref),
 [`atomic_xchg!`](@ref), etc.
 """
-mutable struct Atomic{T<:AtomicTypes}
-    value::T
+mutable struct Atomic{T}
+    @atomic value::T
     Atomic{T}() where {T<:AtomicTypes} = new(zero(T))
-    Atomic{T}(value) where {T<:AtomicTypes} = new(value)
+    Atomic{T}(value) where {T} = new{T}(value)
 end
 
-Atomic() = Atomic{Int}()
+Base.asatomicref(x::Atomic) = Ref(x)
+
+@inline Base.atomicget(ref::Atomic, order::Symbol) = getfield(ref, :value, order)
+@inline Base.atomicset!(ref::Atomic, value, order::Symbol) =
+    setfield!(ref, :value, value, order)
+@inline Base.atomicswap!(ref::Atomic, value, order::Symbol) =
+    swapfield!(ref, :value, value, order)
+@inline Base.atomicmodify!(ref::Atomic, op::OP, value, order::Symbol) where {OP} =
+    modifyfield!(ref, :value, op, value, order)
+@inline Base.atomicreplace!(
+    ref::Atomic,
+    op::OP,
+    value,
+    success_order::Symbol,
+    fail_order::Symbol,
+) where {OP} = replacefield!(ref, :value, op, value, success_order, fail_order)
 
 """
     Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T

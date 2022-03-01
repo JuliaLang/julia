@@ -6,6 +6,8 @@ import Base: copy
 
 const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 
+replaceresult(T, old, success) = ReplaceType{T}((old, success))
+
 mutable struct ARefxy{T}
     @atomic x::T
     y::T
@@ -381,3 +383,23 @@ ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, true)
 @test ans == 42
 ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, false)
 @test ans == 42
+
+@testset "indexing" begin
+    @testset for ref in [Threads.Atomic{Int}(0), Threads.Atomic{Any}(0)]
+        T, = typeof(ref).parameters
+        @test (@atomic ref[]) == 0
+        @test (@atomic :monotonic ref[]) == 0
+        @test (@atomic ref[] = 1) == 1
+        @test (@atomicreplace ref[] 1 => 2) == replaceresult(T, 1, true)
+        @test (@atomicreplace ref[] 1 => 2) == replaceresult(T, 2, false)
+        @test (@atomicreplace :monotonic ref[] 2 => 3) == replaceresult(T, 2, true)
+        @test (@atomicreplace :acquire_release :monotonic ref[] 3 => 4) ==
+              replaceresult(T, 3, true)
+        @test (@atomic ref[] += 1) == (@atomic ref[]) == 5
+        @test (@atomic :monotonic ref[] += 1) == (@atomic ref[]) == 6
+        @test (@atomic ref[] + 1) == (6 => 7)
+        @test (@atomic :monotonic ref[] + 1) == (7 => 8)
+        @test (@atomicswap ref[] = 9) == 8
+        @test (@atomicswap :monotonic ref[] = 10) == 9
+    end
+end
