@@ -78,7 +78,7 @@ macro deprecate(old, new, export_old=true)
             end
             if export_old
                 if fnexpr isa Symbol
-                    oldsym = fnexpr
+                    maybe_export = Expr(:export, esc(fnexpr))
                 else
                     error(
                         "if the third `export_old` argument is not specified or `true`,",
@@ -86,12 +86,14 @@ macro deprecate(old, new, export_old=true)
                         " symbol or (2) `T{...}(...)` where `T` is a symbol",
                     )
                 end
+            else
+                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-        export_old ? Expr(:export, esc(oldsym)) : nothing,
+            maybe_export,
             :($(esc(old)) = begin
                   $meta
                   depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
