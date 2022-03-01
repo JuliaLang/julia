@@ -781,7 +781,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         u = sort_int_range!(u, 1+mx-mn, mn, identity, lo, hi) # 1 not one().
         mn = zero(mn)
     elseif bits > 0
-        u[lo:hi] .-= mn
+        @inbounds for i in lo:hi u[i] -= mn end
         #Dynamic dispatch:
         u = radix_sort!(u, lo, hi, unsigned(bits), Val(UInt8(chunk_size)), similar(u))
     else
