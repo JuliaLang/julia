@@ -825,6 +825,7 @@ function parse_range(ps::ParseState)
             end
             n_colons += 1
             bump(ps, n_colons == 1 ? EMPTY_FLAGS : TRIVIA_FLAG)
+            had_newline = peek(ps, skip_newlines=false) == K"NewlineWs"
             t = peek_token(ps)
             if is_closing_token(ps, kind(t))
                 # 1: }    ==>  (call-i 1 : (error))
@@ -835,7 +836,7 @@ function parse_range(ps::ParseState)
                 emit_diagnostic(ps, error="found unexpected closing token")
                 return
             end
-            if t.had_newline
+            if had_newline
                 # Error message for people coming from python
                 # 1:\n2 ==> (call-i 1 : (error))
                 emit_diagnostic(ps, whitespace=true,

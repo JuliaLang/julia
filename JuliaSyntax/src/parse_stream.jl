@@ -85,12 +85,11 @@ struct SyntaxToken
     is_dotted::Bool
     is_suffixed::Bool
     had_whitespace::Bool
-    had_newline::Bool
 end
 
-function SyntaxToken(raw::Token, had_whitespace, had_newline)
+function SyntaxToken(raw::Token, had_whitespace)
     SyntaxToken(raw.kind, raw.startbyte + 1, raw.endbyte + 1, raw.dotop, raw.suffix,
-                had_whitespace, had_newline)
+                had_whitespace)
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
@@ -255,15 +254,12 @@ end
 # but this is not a big problem.
 function _buffer_lookahead_tokens(stream::ParseStream)
     had_whitespace = false
-    had_newline    = false
     while true
         raw = Tokenize.Lexers.next_token(stream.lexer)
         k = TzTokens.exactkind(raw)
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
-        was_newline    = k == K"NewlineWs"
         had_whitespace |= was_whitespace
-        had_newline    |= was_newline
-        push!(stream.lookahead, SyntaxToken(raw, had_whitespace, had_newline))
+        push!(stream.lookahead, SyntaxToken(raw, had_whitespace))
         if !was_whitespace
             break
         end
