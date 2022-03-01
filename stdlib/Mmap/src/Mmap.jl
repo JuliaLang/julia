@@ -208,14 +208,22 @@ function mmap(io::IO,
     mmaplen = (offset - offset_page) + len
 
     file_desc = gethandle(io)
+    szfile = convert(Csize_t, len + offset)
+    requestedSizeLarger = szfile > filesize(io)
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        szfile = convert(Csize_t, len + offset)
-        if iswrite && grow
-            grow!(io, offset, len)
-        elseif szfile > filesize(io)
-            throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        if requestedSizeLarger
+            if iswrite
+                if grow
+                    grow!(io, offset, len)
+                else
+                    throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+                end
+            end
+            if !iswrite
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            end
         end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
@@ -223,8 +231,14 @@ function mmap(io::IO,
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
         name, readonly, create = settings(io)
-        szfile = convert(Csize_t, len + offset)
-        readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        if requestedSizeLarger
+            if readonly
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            end
+            if !readonly && !grow
+                throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+            end
+        end
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
