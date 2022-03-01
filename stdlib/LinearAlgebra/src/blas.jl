@@ -77,6 +77,8 @@ Return an object representing the current `libblastrampoline` configuration.
 """
 get_config() = lbt_get_config()
 
+vendor() = error("`vendor()` is deprecated, use `BLAS.get_config()` instead")
+
 if USE_BLAS64
     macro blasfunc(x)
         return Expr(:quote, Symbol(x, "64_"))
