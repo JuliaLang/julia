@@ -138,19 +138,6 @@ include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
 
-# required for bootstrap
-# TODO: find why this is needed and remove it.
-function extrema(x::Array)
-    isempty(x) && throw(ArgumentError("collection must be non-empty"))
-    vmin = vmax = x[1]
-    for i in 2:length(x)
-        xi = x[i]
-        vmax = max(vmax, xi)
-        vmin = min(vmin, xi)
-    end
-    return vmin, vmax
-end
-
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 
