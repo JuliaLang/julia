@@ -9,7 +9,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     eachindex, axes, first, last, similar, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
-    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
+    sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype,
     UnitRange, max, min
 
@@ -712,17 +712,6 @@ function sort!(v::AbstractVector;
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
-    if (ordr === Forward || ordr === Reverse) && eltype(v)<:Integer
-        n = length(v)
-        if n > 1
-            min, max = extrema(v)
-            (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
-                return sort_int_range!(v, rangelen, min, ordr === Reverse ? reverse : identity)
-            end
-        end
-    end
     sort!(v, alg, ordr)
 end
 
@@ -912,17 +901,6 @@ function sortperm(v::AbstractVector;
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward)
     ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = length(v)
-        if n > 1
-            min, max = extrema(v)
-            (diff, o1) = sub_with_overflow(max, min)
-            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
-                return sortperm_int_range(v, rangelen, min)
-            end
-        end
-    end
     ax = axes(v, 1)
     p = similar(Vector{eltype(ax)}, ax)
     for (i,ind) in zip(eachindex(p), ax)
