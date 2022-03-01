@@ -62,11 +62,6 @@ mutable struct InferenceState
     # Inferred purity flags
     ipo_effects::Effects
 
-    # The place to look up methods while working on this function.
-    # In particular, we cache method lookup results for the same function to
-    # fast path repeated queries.
-    method_table::InternalMethodTable
-
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
     interp::AbstractInterpreter
@@ -85,9 +80,9 @@ mutable struct InferenceState
         src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         stmt_info = Any[ nothing for i = 1:length(code) ]
 
-        n = length(code)
-        s_types = Union{Nothing, VarTable}[ nothing for i = 1:n ]
-        s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:n ]
+        nstmts = length(code)
+        s_types = Union{Nothing, VarTable}[ nothing for i = 1:nstmts ]
+        s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
 
         # initial types
         nslots = length(src.slotflags)
@@ -129,19 +124,17 @@ mutable struct InferenceState
         @assert cache === :no || cache === :local || cache === :global
         frame = new(
             params, result, linfo,
-            sp, slottypes, mod, 0,
-            IdSet{InferenceState}(), IdSet{InferenceState}(),
+            sp, slottypes, mod, #=currpc=#0,
+            #=pclimitations=#IdSet{InferenceState}(), #=limitations=#IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
-            Union{}, ip, 1, n, handler_at,
-            ssavalue_uses,
-            Vector{Tuple{InferenceState,LineNum}}(), # cycle_backedges
-            Vector{InferenceState}(), # callers_in_cycle
+            #=bestguess=#Union{}, ip, #=pc´´=#1, nstmts, handler_at, ssavalue_uses,
+            #=cycle_backedges=#Vector{Tuple{InferenceState,LineNum}}(),
+            #=callers_in_cycle=#Vector{InferenceState}(),
             #=parent=#nothing,
-            cache === :global, false, false,
-            Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE,
-                   inbounds_taints_consistency),
-            method_table(interp),
+            #=cached=#cache === :global,
+            #=inferred=#false, #=dont_work_on_me=#false,
+            #=ipo_effects=#Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, inbounds_taints_consistency),
             interp)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)
@@ -266,8 +259,6 @@ function iterate(unw::InfStackUnwind, (infstate, cyclei)::Tuple{InferenceState, 
     infstate === nothing && return nothing
     (infstate::InferenceState, (infstate, cyclei))
 end
-
-method_table(interp::AbstractInterpreter, sv::InferenceState) = sv.method_table
 
 function InferenceState(result::InferenceResult, cache::Symbol, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
