@@ -8,6 +8,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -176,20 +177,9 @@ typedef JITSymbol JL_JITSymbol;
 typedef JITSymbol JL_SymbolInfo;
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
+using OptimizerResultT = Expected<orc::ThreadSafeModule>;
 
 class JuliaOJIT {
-    struct CompilerT : public orc::IRCompileLayer::IRCompiler {
-        CompilerT(JuliaOJIT *pjit)
-            : IRCompiler(orc::IRSymbolMapper::ManglingOptions{}),
-              jit(*pjit) {}
-        virtual CompilerResultT operator()(Module &M) override;
-    private:
-        JuliaOJIT &jit;
-    };
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(const ObjT &Obj, const LoadResult &LO);
-
 public:
 #ifdef JL_USE_JITLINK
     typedef orc::ObjectLinkingLayer ObjLayerT;
@@ -197,7 +187,36 @@ public:
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
+private:
+    struct OptimizerT {
+        OptimizerT(legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM) {}
+
+        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
+    private:
+        int optlevel;
+        legacy::PassManager &PM;
+    };
+    // Custom object emission notification handler for the JuliaOJIT
+    template <typename ObjT, typename LoadResult>
+    void registerObject(const ObjT &Obj, const LoadResult &LO);
+
+    struct OptSelLayerT : orc::IRLayer {
+
+        template<size_t N>
+        OptSelLayerT(OptimizeLayerT (&optimizers)[N]) : orc::IRLayer(optimizers[0].getExecutionSession(), optimizers[0].getManglingOptions()), optimizers(optimizers), count(N) {
+            static_assert(N > 0, "Expected array with at least one optimizer!");
+        }
+
+        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
+
+        private:
+        OptimizeLayerT *optimizers;
+        size_t count;
+    };
+
+public:
 
     JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
 
@@ -227,14 +246,11 @@ private:
     const DataLayout DL;
     // Should be big enough that in the common case, The
     // object fits in its entirety
-    SmallVector<char, 4096> ObjBufferSV;
-    raw_svector_ostream ObjStream;
     legacy::PassManager PM0;  // per-optlevel pass managers
     legacy::PassManager PM1;
     legacy::PassManager PM2;
     legacy::PassManager PM3;
-    TargetMachine *TMs[4];
-    MCContext *Ctx;
+    std::unique_ptr<TargetMachine> TMs[4];
 
     orc::ThreadSafeContext TSCtx;
     orc::ExecutionSession ES;
@@ -245,7 +261,12 @@ private:
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    CompileLayerT CompileLayer;
+    CompileLayerT CompileLayer0;
+    CompileLayerT CompileLayer1;
+    CompileLayerT CompileLayer2;
+    CompileLayerT CompileLayer3;
+    OptimizeLayerT OptimizeLayers[4];
+    OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
