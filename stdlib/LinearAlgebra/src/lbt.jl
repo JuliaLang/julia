@@ -138,8 +138,8 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTLibraryInfo
     summary(io, lbt); println(io)
     println(io, "├ Library: ", basename(lbt.libname))
     println(io, "├ Interface: ", lbt.interface)
-      print(io, "├ Complex return style: ", lbt.complex_retstyle)
-      print(io, "├ F2C: ", lbt.f2c)
+    println(io, "├ Complex return style: ", lbt.complex_retstyle)
+    println(io, "├ F2C: ", lbt.f2c)
       print(io, "└ CBLAS: ", lbt.cblas)
 end
 

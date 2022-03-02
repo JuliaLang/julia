@@ -668,10 +668,6 @@ end
     @test BLAS.get_num_threads() === default
 end
 
-# https://github.com/JuliaLang/julia/pull/39845
-@test LinearAlgebra.BLAS.libblas == "libblastrampoline"
-@test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
-
 @testset "test for 0-strides" for elty in (Float32, Float64, ComplexF32, ComplexF64)
     A = randn(elty, 10, 10);
     a = view([randn(elty)], 1 .+ 0(1:10))

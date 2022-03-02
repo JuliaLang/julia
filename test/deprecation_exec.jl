@@ -43,6 +43,9 @@ struct T21972
     end
 end
 
+# Create a consistent call frame for nowarn tests
+@noinline call(f, args...) = @noinline f(args...)
+
 @testset "@deprecate" begin
     using .DeprecationTests
     using .Foo1234
@@ -55,26 +58,35 @@ end
     @test_warn "importing deprecated binding" eval(ex)
     @test @test_nowarn(DeprecationTests.bar(4)) == 7
 
-    # enable when issue #22043 is fixed
-    # @test @test_warn "f1 is deprecated, use f instead." f1()
-    # @test @test_nowarn f1()
+    @test @test_warn "`f1` is deprecated, use `f` instead." f1()
 
-    # @test_throws UndefVarError f2() # not exported
-    # @test @test_warn "f2 is deprecated, use f instead." DeprecationTests.f2()
-    # @test @test_nowarn DeprecationTests.f2()
+    @test_throws UndefVarError f2() # not exported
+    @test @test_warn "`f2` is deprecated, use `f` instead." DeprecationTests.f2()
 
-    # @test @test_warn "f3() is deprecated, use f() instead." f3()
-    # @test @test_nowarn f3()
+    @test @test_warn "`f3()` is deprecated, use `f()` instead." f3()
 
-    # @test_throws UndefVarError f4() # not exported
-    # @test @test_warn "f4() is deprecated, use f() instead." DeprecationTests.f4()
-    # @test @test_nowarn DeprecationTests.f4()
+    @test_throws UndefVarError f4() # not exported
+    @test @test_warn "`f4()` is deprecated, use `f()` instead." DeprecationTests.f4()
 
-    # @test @test_warn "f5(x::T) where T is deprecated, use f() instead." f5(1)
-    # @test @test_nowarn f5(1)
+    @test @test_warn "`f5(x::T) where T` is deprecated, use `f()` instead." f5(1)
 
-    # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
-    # @test @test_nowarn A{Int}(1.)
+    @test @test_warn "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead." A{Int}(1.)
+
+    redirect_stderr(devnull) do
+        @test call(f1)
+        @test call(DeprecationTests.f2)
+        @test call(f3)
+        @test call(DeprecationTests.f4)
+        @test call(f5, 1)
+        @test call(A{Int}, 1.)
+    end
+
+    @test @test_nowarn call(f1)
+    @test @test_nowarn call(DeprecationTests.f2)
+    @test @test_nowarn call(f3)
+    @test @test_nowarn call(DeprecationTests.f4)
+    @test @test_nowarn call(f5, 1)
+    @test @test_nowarn call(A{Int}, 1.)
 
     # issue #21972
     @noinline function f21972()

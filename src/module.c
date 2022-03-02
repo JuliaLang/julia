@@ -528,7 +528,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_s
             }
         }
         else {
-            jl_binding_t *nb = new_binding(s);
+            jl_binding_t *nb = new_binding(b->name);
             nb->owner = b->owner;
             nb->imported = (explici!=0);
             nb->deprecated = b->deprecated;

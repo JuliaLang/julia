@@ -63,19 +63,7 @@ export
     trsm!,
     trsm
 
-# Eventually this will be replaced with `libblastrampoline_jll.libblastrampoline`
-const libblastrampoline = "libblastrampoline"
-libblastrampoline_handle = C_NULL
-
-# Legacy bindings that some packages (such as NNlib.jl) use.
-# We maintain these for backwards-compatibility but new packages
-# should not look at these, instead preferring to parse the output
-# of BLAS.get_config()
-const libblas = libblastrampoline
-const liblapack = libblastrampoline
-
-import LinearAlgebra
-using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
+using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
 
 include("lbt.jl")
 
