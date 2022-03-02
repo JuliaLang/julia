@@ -3,6 +3,7 @@
 #define DEBUG_TYPE "combine_muladd"
 #undef DEBUG
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -82,13 +83,11 @@ static bool combineMulAdd(Function &F)
     return true;
 }
 
-struct CombineMulAdd : PassInfoMixin<CombineMulAdd> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
-};
-
 PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM)
 {
-    combineMulAdd(F);
+    if (combineMulAdd(F)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

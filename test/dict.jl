@@ -1179,6 +1179,8 @@ end
             @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
         end
     end
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "map!(f, values(dict))" begin

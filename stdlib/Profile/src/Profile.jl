@@ -54,7 +54,7 @@ function _peek_report()
     iob = IOBuffer()
     ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stdout, String(resize!(iob.data, iob.size)))
+    Base.print(stdout, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -73,7 +73,8 @@ Set the duration in seconds of the profile "peek" that is triggered via `SIGINFO
 set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Float64,), t)
 
 precompile_script = """
-Profile.@profile sleep(0.5)
+import Profile
+Profile.@profile while Profile.len_data() < 1000; rand(10,10) * rand(10,10); end
 Profile.peek_report[]()
 Profile.clear()
 """

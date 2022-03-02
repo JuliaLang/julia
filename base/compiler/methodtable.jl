@@ -2,22 +2,6 @@
 
 abstract type MethodTableView; end
 
-struct MethodLookupResult
-    # Really Vector{Core.MethodMatch}, but it's easier to represent this as
-    # and work with Vector{Any} on the C side.
-    matches::Vector{Any}
-    valid_worlds::WorldRange
-    ambig::Bool
-end
-length(result::MethodLookupResult) = length(result.matches)
-function iterate(result::MethodLookupResult, args...)
-    r = iterate(result.matches, args...)
-    r === nothing && return nothing
-    match, state = r
-    return (match::MethodMatch, state)
-end
-getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
-
 """
     struct InternalMethodTable <: MethodTableView
 
@@ -39,19 +23,21 @@ struct OverlayMethodTable <: MethodTableView
     mt::Core.MethodTable
 end
 
-"""
-    struct CachedMethodTable <: MethodTableView
-
-Overlays another method table view with an additional local fast path cache that
-can respond to repeated, identical queries faster than the original method table.
-"""
-struct CachedMethodTable{T} <: MethodTableView
-    cache::IdDict{Any, Union{Missing, MethodLookupResult}}
-    table::T
+struct MethodLookupResult
+    # Really Vector{Core.MethodMatch}, but it's easier to represent this as
+    # and work with Vector{Any} on the C side.
+    matches::Vector{Any}
+    valid_worlds::WorldRange
+    ambig::Bool
 end
-CachedMethodTable(table::T) where T =
-    CachedMethodTable{T}(IdDict{Any, Union{Missing, MethodLookupResult}}(),
-        table)
+length(result::MethodLookupResult) = length(result.matches)
+function iterate(result::MethodLookupResult, args...)
+    r = iterate(result.matches, args...)
+    r === nothing && return nothing
+    match, state = r
+    return (match::MethodMatch, state)
+end
+getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
 
 """
     findall(sig::Type, view::MethodTableView; limit=typemax(Int))
@@ -84,18 +70,11 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         _min_val[] = typemin(UInt)
         _max_val[] = typemax(UInt)
         ms = _methods_by_ftype(sig, nothing, limit, table.world, false, _min_val, _max_val, _ambig)
-    end
-    if ms === false
-        return missing
+        if ms === false
+            return missing
+        end
     end
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
-end
-
-function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=typemax(Int))
-    box = Core.Box(sig)
-    return get!(table.cache, sig) do
-        findall(box.contents, table.table; limit=limit)
-    end
 end
 
 """
@@ -121,5 +100,6 @@ function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
     (result.method, WorldRange(min_valid[], max_valid[]))
 end
 
-# This query is not cached
-findsup(@nospecialize(sig::Type), table::CachedMethodTable) = findsup(sig, table.table)
+isoverlayed(::MethodTableView)     = error("unsatisfied MethodTableView interface")
+isoverlayed(::InternalMethodTable) = false
+isoverlayed(::OverlayMethodTable)  = true

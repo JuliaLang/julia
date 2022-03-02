@@ -7,6 +7,7 @@
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -34,13 +35,12 @@ typedef Instruction TerminatorInst;
 
 namespace {
 
-struct LowerPTLS: public ModulePass {
-    static char ID;
+struct LowerPTLS {
     LowerPTLS(bool imaging_mode=false)
-        : ModulePass(ID),
-          imaging_mode(imaging_mode)
+        : imaging_mode(imaging_mode)
     {}
 
+    bool runOnModule(Module &M, bool *CFGModified);
 private:
     const bool imaging_mode;
     Module *M;
@@ -61,8 +61,7 @@ private:
     Instruction *emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
-    void fix_pgcstack_use(CallInst *pgcstack);
-    bool runOnModule(Module &M) override;
+    void fix_pgcstack_use(CallInst *pgcstack, bool *CFGModified);
 };
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
@@ -166,7 +165,7 @@ inline T *LowerPTLS::add_comdat(T *G) const
     return G;
 }
 
-void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
+void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, bool *CFGModified)
 {
     if (pgcstack->use_empty()) {
         pgcstack->eraseFromParent();
@@ -190,6 +189,8 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
             TerminatorInst *slowTerm;
             SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
                                           MDB.createBranchWeights(Weights));
+            if (CFGModified)
+            *CFGModified = true;
 
             auto fastTLS = emit_pgcstack_tp(offset, fastTerm);
             auto phi = PHINode::Create(T_pppjlvalue, 2, "", pgcstack);
@@ -253,7 +254,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
     }
 }
 
-bool LowerPTLS::runOnModule(Module &_M)
+bool LowerPTLS::runOnModule(Module &_M, bool *CFGModified)
 {
     M = &_M;
     pgcstack_getter = M->getFunction("julia.get_pgcstack");
@@ -284,24 +285,51 @@ bool LowerPTLS::runOnModule(Module &_M)
         auto call = cast<CallInst>(*it);
         ++it;
         assert(call->getCalledOperand() == pgcstack_getter);
-        fix_pgcstack_use(call);
+        fix_pgcstack_use(call, CFGModified);
     }
     assert(pgcstack_getter->use_empty());
     pgcstack_getter->eraseFromParent();
     return true;
 }
 
-char LowerPTLS::ID = 0;
+struct LowerPTLSLegacy: public ModulePass {
+    static char ID;
+    LowerPTLSLegacy(bool imaging_mode=false)
+        : ModulePass(ID),
+          imaging_mode(imaging_mode)
+    {}
 
-static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
+    bool imaging_mode;
+    bool runOnModule(Module &M) override {
+        LowerPTLS lower(imaging_mode);
+        return lower.runOnModule(M, nullptr);
+    }
+};
+
+char LowerPTLSLegacy::ID = 0;
+
+static RegisterPass<LowerPTLSLegacy> X("LowerPTLS", "LowerPTLS Pass",
                                  false /* Only looks at CFG */,
                                  false /* Analysis Pass */);
 
 } // anonymous namespace
 
+PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
+    LowerPTLS lower(imaging_mode);
+    bool CFGModified = false;
+    if (lower.runOnModule(M, &CFGModified)) {
+        if (CFGModified) {
+            return PreservedAnalyses::none();
+        } else {
+            return PreservedAnalyses::allInSet<CFGAnalyses>();
+        }
+    }
+    return PreservedAnalyses::all();
+}
+
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
-    return new LowerPTLS(imaging_mode);
+    return new LowerPTLSLegacy(imaging_mode);
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)

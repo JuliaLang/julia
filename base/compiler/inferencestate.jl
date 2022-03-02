@@ -65,7 +65,7 @@ mutable struct InferenceState
     # The place to look up methods while working on this function.
     # In particular, we cache method lookup results for the same function to
     # fast path repeated queries.
-    method_table::CachedMethodTable{InternalMethodTable}
+    method_table::InternalMethodTable
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
@@ -141,7 +141,7 @@ mutable struct InferenceState
             cache === :global, false, false,
             Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE,
                    inbounds_taints_consistency),
-            CachedMethodTable(method_table(interp)),
+            method_table(interp),
             interp)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)

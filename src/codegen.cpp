@@ -211,7 +211,6 @@ extern void _chkstk(void);
 bool imaging_mode = false;
 
 // shared llvm state
-static LLVMContext &jl_LLVMContext = *(new LLVMContext());
 TargetMachine *jl_TargetMachine;
 static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
@@ -248,7 +247,7 @@ struct jl_typecache_t {
         }
         initialized = true;
         T_ppint8 = PointerType::get(getInt8PtrTy(context), 0);
-        T_sigatomic = Type::getIntNTy(jl_LLVMContext, sizeof(sig_atomic_t) * 8);
+        T_sigatomic = Type::getIntNTy(context, sizeof(sig_atomic_t) * 8);
         T_jlvalue = JuliaType::get_jlvalue_ty(context);
         T_pjlvalue = PointerType::get(T_jlvalue, 0);
         T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
@@ -1436,7 +1435,7 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
         auto ptr = I->getOperand(0);
         if (ty->getPointerAddressSpace() == ptr->getType()->getPointerAddressSpace())
             return ctx.builder.CreateBitCast(ptr, ty);
-        else if (ty->getPointerElementType() == ptr->getType()->getPointerElementType())
+        else if (cast<PointerType>(ty)->hasSameElementTypeAs(cast<PointerType>(ptr->getType())))
             return ctx.builder.CreateAddrSpaceCast(ptr, ty);
     }
     return ctx.builder.CreateIntToPtr(v, ty);
@@ -1939,9 +1938,9 @@ Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cg
     return M;
 }
 
-Module *jl_create_llvm_module(StringRef name)
+Module *jl_create_llvm_module(StringRef name, LLVMContext &context)
 {
-    return _jl_create_llvm_module(name, jl_LLVMContext, &jl_default_cgparams);
+    return _jl_create_llvm_module(name, context, &jl_default_cgparams);
 }
 
 static void jl_init_function(Function *F)
@@ -1952,7 +1951,11 @@ static void jl_init_function(Function *F)
     // upon entry to any function. This achieves compatibility
     // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
     // i686 Windows (which uses a 4-byte-aligned stack)
+#if JL_LLVM_VERSION >= 140000
+    AttrBuilder attr(F->getContext());
+#else
     AttrBuilder attr;
+#endif
     attr.addStackAlignmentAttr(16);
     F->addAttributes(AttributeList::FunctionIndex, attr);
 #endif
@@ -3560,7 +3563,8 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     case jl_returninfo_t::Ghosts:
         break;
     case jl_returninfo_t::SRet:
-        result = emit_static_alloca(ctx, cft->getParamType(0)->getPointerElementType());
+        result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType());
+        assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
         argvals[idx] = result;
         idx++;
         break;
@@ -4594,10 +4598,10 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
         F = cast<Function>(V);
     } else {
-        F = Function::Create(get_func_sig(jl_LLVMContext),
+        F = Function::Create(get_func_sig(ctx.builder.getContext()),
                              Function::ExternalLinkage,
                              fname, jl_Module);
-        F->setAttributes(get_func_attrs(jl_LLVMContext));
+        F->setAttributes(get_func_attrs(ctx.builder.getContext()));
     }
     Function *specF = NULL;
     if (!isspecsig) {
@@ -4908,7 +4912,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_cgval_t world_age = mark_julia_type(ctx,
                                       tbaa_decorate(ctx.tbaa().tbaa_gcframe,
-                                      ctx.builder.CreateAlignedLoad(ctx.world_age_field, Align(sizeof(size_t)))),
+                                      ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), ctx.world_age_field, Align(sizeof(size_t)))),
                         false,
                         jl_long_type);
                     jl_cgval_t fptr(ctx.builder.getContext());
@@ -5119,6 +5123,14 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     return f;
 }
 
+static Type *get_returnroots_type(jl_codectx_t &ctx, unsigned rootcount) {
+    return ArrayType::get(ctx.types().T_prjlvalue, rootcount);
+}
+
+static Type *get_unionbytes_type(LLVMContext &C, unsigned unionbytes) {
+    return ArrayType::get(getInt8Ty(C), unionbytes);
+}
+
 static void emit_cfunc_invalidate(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc, unsigned return_roots,
         jl_value_t *calltype, jl_value_t *rettype,
@@ -5191,7 +5203,8 @@ static void emit_cfunc_invalidate(
     case jl_returninfo_t::SRet: {
         if (return_roots) {
             Value *root1 = gf_thunk->arg_begin() + 1; // root1 has type [n x {}*]*
-            root1 = ctx.builder.CreateConstInBoundsGEP2_32(root1->getType()->getPointerElementType(), root1, 0, 0);
+            assert(cast<PointerType>(root1->getType())->isOpaqueOrPointeeTypeMatches(get_returnroots_type(ctx, return_roots)));
+            root1 = ctx.builder.CreateConstInBoundsGEP2_32(get_returnroots_type(ctx, return_roots), root1, 0, 0);
             ctx.builder.CreateStore(gf_ret, root1);
         }
         emit_memcpy(ctx, &*gf_thunk->arg_begin(), nullptr, gf_ret, nullptr, jl_datatype_size(rettype), julia_alignment(rettype));
@@ -5311,7 +5324,11 @@ static Function* gen_cfun_wrapper(
         }
 
         // Add the new nest attribute
+#if JL_LLVM_VERSION >= 140000
+        AttrBuilder attrBuilder(M->getContext());
+#else
         AttrBuilder attrBuilder;
+#endif
         attrBuilder.addAttribute(Attribute::Nest);
         newAttributes.emplace_back(it, AttributeSet::get(M->getContext(), attrBuilder));
 
@@ -5609,12 +5626,18 @@ static Function* gen_cfun_wrapper(
                 result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
             }
             else {
-                result = emit_static_alloca(ctx, cft->getParamType(0)->getPointerElementType());
+                if (jlfunc_sret) {
+                    result = emit_static_alloca(ctx, getAttributeAtIndex(returninfo.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType());
+                    assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+                } else {
+                    result = emit_static_alloca(ctx, get_unionbytes_type(ctx.builder.getContext(), returninfo.union_bytes));
+                    assert(cast<PointerType>(result->getType())->hasSameElementTypeAs(cast<PointerType>(cft->getParamType(0))));
+                }
             }
             args.push_back(result);
         }
         if (returninfo.return_roots) {
-            AllocaInst *return_roots = emit_static_alloca(ctx, ArrayType::get(ctx.types().T_prjlvalue, returninfo.return_roots));
+            AllocaInst *return_roots = emit_static_alloca(ctx, get_returnroots_type(ctx, returninfo.return_roots));
             args.push_back(return_roots);
         }
         for (size_t i = 0; i < nargs + 1; i++) {
@@ -5662,8 +5685,9 @@ static Function* gen_cfun_wrapper(
             emit_cfunc_invalidate(gf_thunk, returninfo.cc, returninfo.return_roots, lam->specTypes, codeinst->rettype, nargs + 1, ctx.emission_context);
             theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
+        assert(cast<PointerType>(theFptr->getType())->isOpaqueOrPointeeTypeMatches(returninfo.decl->getFunctionType()));
         CallInst *call = ctx.builder.CreateCall(
-            cast<FunctionType>(theFptr->getType()->getPointerElementType()),
+            cast<FunctionType>(returninfo.decl->getFunctionType()),
             theFptr, ArrayRef<Value*>(args));
         call->setAttributes(returninfo.decl->getAttributes());
         switch (returninfo.cc) {
@@ -6020,7 +6044,8 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     case jl_returninfo_t::Ghosts:
         break;
     case jl_returninfo_t::SRet:
-        result = ctx.builder.CreateAlloca(ftype->getParamType(0)->getPointerElementType());
+        assert(cast<PointerType>(ftype->getParamType(0))->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(f.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
+        result = ctx.builder.CreateAlloca(getAttributeAtIndex(f.decl->getAttributes(), 1, Attribute::StructRet).getValueAsType());
         args[idx] = result;
         idx++;
         break;
@@ -6166,13 +6191,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     if (props.cc == jl_returninfo_t::SRet) {
         assert(srt);
         unsigned argno = 1;
-#if JL_LLVM_VERSION < 120000
-        attributes = attributes.addAttribute(ctx.builder.getContext(), argno, Attribute::StructRet);
-        (void)srt; // silence unused variable error
-#else
         Attribute sret = Attribute::getWithStructRetType(ctx.builder.getContext(), srt);
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, sret);
-#endif
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoAlias);
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoCapture);
     }
@@ -6183,7 +6203,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     }
 
     if (props.return_roots) {
-        fsig.push_back(ArrayType::get(ctx.types().T_prjlvalue, props.return_roots)->getPointerTo(0));
+        fsig.push_back(get_returnroots_type(ctx, props.return_roots)->getPointerTo(0));
         unsigned argno = fsig.size();
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoAlias);
         attributes = addAttributeAtIndex(attributes, ctx.builder.getContext(), argno, Attribute::NoCapture);
@@ -6233,13 +6253,13 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     return props;
 }
 
-static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, unsigned count)
+static void emit_sret_roots(jl_codectx_t &ctx, bool isptr, Value *Src, Type *T, Value *Shadow, Type *ShadowT, unsigned count)
 {
     if (isptr)
         Src = maybe_decay_tracked(ctx, Src);
-    if (isptr && Src->getType()->getPointerElementType() != T)
+    if (isptr && !cast<PointerType>(Src->getType())->isOpaqueOrPointeeTypeMatches(T))
         Src = ctx.builder.CreateBitCast(Src, T->getPointerTo(Src->getType()->getPointerAddressSpace()));
-    unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ctx.builder);
+    unsigned emitted = TrackWithShadow(Src, T, isptr, Shadow, ShadowT, ctx.builder); //This comes from Late-GC-Lowering??
     assert(emitted == count); (void)emitted; (void)count;
 }
 
@@ -7305,7 +7325,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 if (retvalinfo.ispointer()) {
                     if (returninfo.return_roots) {
                         Type *store_ty = julia_type_to_llvm(ctx, retvalinfo.typ);
-                        emit_sret_roots(ctx, true, data_pointer(ctx, retvalinfo), store_ty, f->arg_begin() + 1, returninfo.return_roots);
+                        emit_sret_roots(ctx, true, data_pointer(ctx, retvalinfo), store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
                     }
                     if (returninfo.cc == jl_returninfo_t::SRet) {
                         assert(jl_is_concrete_type(jlrettype));
@@ -7322,7 +7342,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     Value *Val = retvalinfo.V;
                     if (returninfo.return_roots) {
                         assert(julia_type_to_llvm(ctx, retvalinfo.typ) == store_ty);
-                        emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, returninfo.return_roots);
+                        emit_sret_roots(ctx, false, Val, store_ty, f->arg_begin() + 1, get_returnroots_type(ctx, returninfo.return_roots), returninfo.return_roots);
                     }
                     if (dest_ty != sret->getType())
                         sret = emit_bitcast(ctx, sret, dest_ty);
@@ -7745,7 +7765,8 @@ jl_compile_result_t jl_emit_code(
         jl_method_instance_t *li,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params)
+        jl_codegen_params_t &params,
+        LLVMContext &context)
 {
     JL_TIMING(CODEGEN);
     // caller must hold codegen_lock
@@ -7755,7 +7776,7 @@ jl_compile_result_t jl_emit_code(
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        std::tie(m, decls) = emit_function(li, src, jlrettype, params, jl_LLVMContext);
+        std::tie(m, decls) = emit_function(li, src, jlrettype, params, context);
         if (dump_emitted_mi_name_stream != NULL) {
             jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
@@ -7786,7 +7807,8 @@ jl_compile_result_t jl_emit_code(
 jl_compile_result_t jl_emit_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        jl_codegen_params_t &params)
+        jl_codegen_params_t &params,
+        LLVMContext &context)
 {
     JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
@@ -7800,7 +7822,7 @@ jl_compile_result_t jl_emit_codeinst(
             return jl_compile_result_t(); // failed
         }
     }
-    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params);
+    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params, context);
 
     const jl_llvm_functions_t &decls = std::get<1>(result);
     const std::string &specf = decls.specFunctionObject;
@@ -7849,7 +7871,7 @@ jl_compile_result_t jl_emit_codeinst(
                      // don't delete inlineable code, unless it is constant
                      (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
-                     !imaging_mode) {
+                     !(imaging_mode || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
                 codeinst->inferred = jl_nothing;
             }
@@ -7862,7 +7884,7 @@ jl_compile_result_t jl_emit_codeinst(
 
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params, CompilationPolicy policy)
+    jl_codegen_params_t &params, CompilationPolicy policy, LLVMContext &context)
 {
     JL_TIMING(CODEGEN);
     jl_code_info_t *src = NULL;
@@ -7904,10 +7926,10 @@ void jl_compile_workqueue(
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src)
-                        result = jl_emit_code(codeinst->def, src, src->rettype, params);
+                        result = jl_emit_code(codeinst->def, src, src->rettype, params, context);
                 }
                 else {
-                    result = jl_emit_codeinst(codeinst, NULL, params);
+                    result = jl_emit_codeinst(codeinst, NULL, params, context);
                 }
                 if (std::get<0>(result))
                     decls = &std::get<1>(result);
@@ -8293,7 +8315,7 @@ extern "C" void jl_init_llvm(void)
         jl_TargetMachine->setFastISel(true);
     #endif
 
-    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, &jl_LLVMContext);
+    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, new LLVMContext());
 
     // Mark our address spaces as non-integral
     jl_data_layout = jl_ExecutionEngine->getDataLayout();
@@ -8365,7 +8387,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     jl_init_jit();
     init_jit_functions();
 
-    Module *m = _jl_create_llvm_module("julia", jl_LLVMContext, &jl_default_cgparams);
+    Module *m = _jl_create_llvm_module("julia", *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams);
     init_julia_llvm_env(m);
 
     jl_init_intrinsic_functions_codegen();

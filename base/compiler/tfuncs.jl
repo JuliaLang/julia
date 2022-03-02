@@ -1705,7 +1705,8 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         end
         return false
     elseif f === Core.get_binding_type
-        return length(argtypes) == 2
+        length(argtypes) == 2 || return false
+        return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
     elseif f === donotdelete
         return true
     end

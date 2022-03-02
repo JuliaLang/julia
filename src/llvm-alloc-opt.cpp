@@ -31,6 +31,7 @@
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
 #include "llvm-alloc-helpers.h"
+#include "passes.h"
 
 #include <map>
 #include <set>
@@ -85,13 +86,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  * * Handle jl_box*
  */
 
-struct AllocOpt : public FunctionPass, public JuliaPassContext {
-    static char ID;
-    AllocOpt()
-        : FunctionPass(ID)
-    {
-        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-    }
+struct AllocOpt : public JuliaPassContext {
 
     const DataLayout *DL;
 
@@ -100,22 +95,15 @@ struct AllocOpt : public FunctionPass, public JuliaPassContext {
 
     Type *T_int64;
 
-private:
-    bool doInitialization(Module &m) override;
-    bool runOnFunction(Function &F) override;
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.addRequired<DominatorTreeWrapperPass>();
-        AU.addPreserved<DominatorTreeWrapperPass>();
-        AU.setPreservesCFG();
-    }
+    bool doInitialization(Module &m);
+    bool runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT);
 };
 
 struct Optimizer {
-    Optimizer(Function &F, AllocOpt &pass)
+    Optimizer(Function &F, AllocOpt &pass, function_ref<DominatorTree&()> GetDT)
         : F(F),
-          pass(pass)
+          pass(pass),
+          GetDT(std::move(GetDT))
     {}
 
     void initialize();
@@ -143,11 +131,12 @@ private:
     Function &F;
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
+    function_ref<DominatorTree &()> GetDT;
 
     DominatorTree &getDomTree()
     {
         if (!_DT)
-            _DT = &pass.getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+            _DT = &GetDT();
         return *_DT;
     }
     struct Lifetime {
@@ -669,8 +658,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            auto cast_t = PointerType::get(cast<PointerType>(user->getType())->getElementType(),
-                                           0);
+            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), AddressSpace::Generic);
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
@@ -964,8 +952,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     store_ty = pass.T_pjlvalue;
                 }
                 else {
-                    store_ty = cast<PointerType>(pass.T_pjlvalue)->getElementType()
-                        ->getPointerTo(cast<PointerType>(store_ty)->getAddressSpace());
+                    store_ty = PointerType::getWithSamePointeeType(pass.T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
@@ -1159,18 +1146,39 @@ bool AllocOpt::doInitialization(Module &M)
     return true;
 }
 
-bool AllocOpt::runOnFunction(Function &F)
+bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
     if (!alloc_obj_func)
         return false;
-    Optimizer optimizer(F, *this);
+    Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();
     optimizer.optimizeAll();
     return optimizer.finalize();
 }
 
-char AllocOpt::ID = 0;
-static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
+struct AllocOptLegacy : public FunctionPass {
+    static char ID;
+    AllocOpt opt;
+    AllocOptLegacy() : FunctionPass(ID) {
+        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
+    }
+    bool doInitialization(Module &m) override {
+        return opt.doInitialization(m);
+    }
+    bool runOnFunction(Function &F) override {
+        return opt.runOnFunction(F, [this]() -> DominatorTree & {return getAnalysis<DominatorTreeWrapperPass>().getDomTree();});
+    }
+    void getAnalysisUsage(AnalysisUsage &AU) const override
+    {
+        FunctionPass::getAnalysisUsage(AU);
+        AU.addRequired<DominatorTreeWrapperPass>();
+        AU.addPreserved<DominatorTreeWrapperPass>();
+        AU.setPreservesCFG();
+    }
+};
+
+char AllocOptLegacy::ID = 0;
+static RegisterPass<AllocOptLegacy> X("AllocOpt", "Promote heap allocation to stack",
                                 false /* Only looks at CFG */,
                                 false /* Analysis Pass */);
 
@@ -1178,7 +1186,22 @@ static RegisterPass<AllocOpt> X("AllocOpt", "Promote heap allocation to stack",
 
 Pass *createAllocOptPass()
 {
-    return new AllocOpt();
+    return new AllocOptLegacy();
+}
+
+PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
+    AllocOpt opt;
+    bool modified = opt.doInitialization(*F.getParent());
+    if (opt.runOnFunction(F, [&]()->DominatorTree &{ return AM.getResult<DominatorTreeAnalysis>(F); })) {
+        modified = true;
+    }
+    if (modified) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<DominatorTreeAnalysis>();
+        return preserved;
+    } else {
+        return PreservedAnalyses::all();
+    }
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddAllocOptPass_impl(LLVMPassManagerRef PM)

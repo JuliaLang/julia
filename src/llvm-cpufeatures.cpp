@@ -14,6 +14,7 @@
 //      instead of using the global target machine?
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
@@ -108,13 +109,11 @@ bool lowerCPUFeatures(Module &M)
     }
 }
 
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-};
-
 PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
 {
-    lowerCPUFeatures(M);
+    if (lowerCPUFeatures(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

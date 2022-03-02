@@ -1843,20 +1843,20 @@ extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
 
 #ifdef _CPU_AARCH64_
 // FPCR FZ, bit [24]
-static constexpr uint32_t fpcr_fz_mask = 1 << 24;
+static constexpr uint64_t fpcr_fz_mask = 1 << 24;
 // FPCR FZ16, bit [19]
-static constexpr uint32_t fpcr_fz16_mask = 1 << 19;
+static constexpr uint64_t fpcr_fz16_mask = 1 << 19;
 // FPCR DN, bit [25]
-static constexpr uint32_t fpcr_dn_mask = 1 << 25;
+static constexpr uint64_t fpcr_dn_mask = 1 << 25;
 
-static inline uint32_t get_fpcr_aarch64(void)
+static inline uint64_t get_fpcr_aarch64(void)
 {
-    uint32_t fpcr;
+    uint64_t fpcr;
     asm volatile("mrs %0, fpcr" : "=r"(fpcr));
     return fpcr;
 }
 
-static inline void set_fpcr_aarch64(uint32_t fpcr)
+static inline void set_fpcr_aarch64(uint64_t fpcr)
 {
     asm volatile("msr fpcr, %0" :: "r"(fpcr));
 }
@@ -1868,8 +1868,8 @@ extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 
 extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 {
-    uint32_t fpcr = get_fpcr_aarch64();
-    static uint32_t mask = fpcr_fz_mask | (jl_test_cpu_feature(JL_AArch64_fullfp16) ? fpcr_fz16_mask : 0);
+    uint64_t fpcr = get_fpcr_aarch64();
+    static uint64_t mask = fpcr_fz_mask | (jl_test_cpu_feature(JL_AArch64_fullfp16) ? fpcr_fz16_mask : 0);
     fpcr = isZero ? (fpcr | mask) : (fpcr & ~mask);
     set_fpcr_aarch64(fpcr);
     return 0;
@@ -1882,7 +1882,7 @@ extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
 
 extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
 {
-    uint32_t fpcr = get_fpcr_aarch64();
+    uint64_t fpcr = get_fpcr_aarch64();
     fpcr = isDefault ? (fpcr | fpcr_dn_mask) : (fpcr & ~fpcr_dn_mask);
     set_fpcr_aarch64(fpcr);
     return 0;

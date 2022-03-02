@@ -1069,3 +1069,33 @@ end
 @test fully_eliminated() do
     issue41694(2)
 end
+
+Base.@assume_effects :terminates_globally function recur_termination1(x)
+    x == 1 && return 1
+    1 < x < 20 || throw("bad")
+    return x * recur_termination1(x-1)
+end
+@test fully_eliminated() do
+    recur_termination1(12)
+end
+Base.@assume_effects :terminates_globally function recur_termination21(x)
+    x == 1 && return 1
+    1 < x < 20 || throw("bad")
+    return recur_termination22(x)
+end
+recur_termination22(x) = x * recur_termination21(x-1)
+@test fully_eliminated() do
+    recur_termination21(12) + recur_termination22(12)
+end
+
+global x44200::Int = 0
+function f44200()
+    global x = 0
+    while x < 10
+        x += 1
+    end
+    x
+end
+let src = code_typed1(f44200)
+    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+end
