@@ -2940,8 +2940,8 @@ function parse_brackets(after_parse::Function,
                     space_sensitive=false,
                     where_enabled=true,
                     whitespace_newline=true)
-    params_marks = ParseStreamPosition[]
-    eq_positions = ParseStreamPosition[]
+    params_marks = acquire_positions(ps.stream)
+    eq_positions = acquire_positions(ps.stream)
     last_eq_before_semi = 0
     num_subexprs = 0
     num_semis = 0
@@ -3021,6 +3021,8 @@ function parse_brackets(after_parse::Function,
             emit(ps, mark, K"parameters")
         end
     end
+    release_positions(ps.stream, params_marks)
+    release_positions(ps.stream, eq_positions)
 end
 
 is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))
@@ -3036,9 +3038,7 @@ function parse_string(ps::ParseState, raw::Bool)
     string_chunk_kind = delim_k in KSet`" """` ? K"String" : K"CmdString"
     indent_ref_i = 0
     indent_ref_len = typemax(Int)
-    if triplestr
-        indent_chunks = Vector{ParseStreamPosition}()
-    end
+    indent_chunks = acquire_positions(ps.stream)
     buf = textbuf(ps)
     str_flags = (triplestr ? TRIPLE_STRING_FLAG : EMPTY_FLAGS) |
                 (raw       ? RAW_STRING_FLAG : EMPTY_FLAGS)
@@ -3191,6 +3191,7 @@ function parse_string(ps::ParseState, raw::Bool)
             end
         end
     end
+    release_positions(ps.stream, indent_chunks)
     if had_end_delim
         if n_valid_chunks == 0
             # Empty strings, or empty after triple quoted processing
