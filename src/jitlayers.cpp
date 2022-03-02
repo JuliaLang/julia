@@ -492,7 +492,7 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
         }
 
         JL_TIMING(LLVM_OPT);
-        
+
         PM.run(M);
 
         uint64_t end_time = 0;
