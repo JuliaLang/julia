@@ -298,9 +298,55 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    t = ignorelimited(t)
     return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+end
+
+# A simplified type_more_complex query over the extended lattice
+# (assumes typeb ⊑ typea)
+function issimplertype(@nospecialize(typea), @nospecialize(typeb))
+    typea = ignorelimited(typea)
+    typeb = ignorelimited(typeb)
+    typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
+    typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
+    typea === typeb && return true
+    if typea isa PartialStruct
+        aty = widenconst(typea)
+        for i = 1:length(typea.fields)
+            ai = typea.fields[i]
+            bi = fieldtype(aty, i)
+            is_lattice_equal(ai, bi) && continue
+            tni = _typename(widenconst(ai))
+            if tni isa Const
+                bi = (tni.val::Core.TypeName).wrapper
+                is_lattice_equal(ai, bi) && continue
+            end
+            bi = getfield_tfunc(typeb, Const(i))
+            is_lattice_equal(ai, bi) && continue
+            # It is not enough for ai to be simpler than bi: it must exactly equal
+            # (for this, an invariant struct field, by contrast to
+            # type_more_complex above which handles covariant tuples).
+            return false
+        end
+    elseif typea isa Type
+        return issimpleenoughtype(typea)
+    # elseif typea isa Const # fall-through good
+    elseif typea isa Conditional # follow issubconditional query
+      typeb isa Const && return true
+      typeb isa Conditional || return false
+      is_same_conditionals(typea, typeb) || return false
+      issimplertype(typea.vtype, typeb.vtype) || return false
+      issimplertype(typea.elsetype, typeb.elsetype) || return false
+    elseif typea isa InterConditional # ibid
+      typeb isa Const && return true
+      typeb isa InterConditional || return false
+      is_same_conditionals(typea, typeb) || return false
+      issimplertype(typea.vtype, typeb.vtype) || return false
+      issimplertype(typea.elsetype, typeb.elsetype) || return false
+    elseif typea isa PartialOpaque
+        # TODO
+    end
+    return true
 end
 
 # pick a wider type that contains both typea and typeb,
@@ -310,11 +356,13 @@ end
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea === Union{} && return typeb
     typeb === Union{} && return typea
+    typea === typeb && return typea
+
     suba = typea ⊑ typeb
-    suba && issimpleenoughtype(typeb) && return typeb
+    suba && issimplertype(typeb, typea) && return typeb
     subb = typeb ⊑ typea
     suba && subb && return typea
-    subb && issimpleenoughtype(typea) && return typea
+    subb && issimplertype(typea, typeb) && return typea
 
     # type-lattice for LimitedAccuracy wrapper
     # the merge create a slightly narrower type than needed, but we can't
