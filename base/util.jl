@@ -479,14 +479,18 @@ macro kwdef(expr)
     end
 
     params_ex = Expr(:parameters)
+    body_args = Any[]
     call_args = Any[]
 
-    _kwdef!(expr.args[3], params_ex.args, call_args)
+    _kwdef!(expr.args[3], body_args, call_args)
+    #display((expr.args[3], params_ex.args, call_args))
+    display(body_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
-    if !isempty(params_ex.args)
+    if !isempty(body_args)
         if T isa Symbol
-            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
+            #kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
+            kwdefs = :(($(esc(T)))(;kwargs...) = ($(body_args...);($(esc(T)))($(call_args...))))
         elseif T isa Expr && T.head === :curly
             T = T::Expr
             # if T == S{A<:AA,B<:BB}, define two methods
@@ -497,9 +501,9 @@ macro kwdef(expr)
             Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             kwdefs = quote
-                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
-                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
-                    ($(esc(SQ)))($(call_args...))
+                ($(esc(S)))(;$kwargs...) = ($(body_args...);($(esc(S)))($(call_args...)))
+                ($(esc(SQ)))(;$kwargs...) where {$(esc.(P)...)} =
+                    ($(body_args...);($(esc(SQ)))($(call_args...)))
             end
         else
             error("Invalid usage of @kwdef")
@@ -515,14 +519,16 @@ end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_args, call_args)
+function _kwdef!(blk, body_args, call_args)
     for i in eachindex(blk.args)
         ei = blk.args[i]
         if ei isa Symbol
+            @show ei
             #  var
-            push!(params_args, ei)
+            #push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
+            @show ei
             if ei.head === :(=)
                 lhs = ei.args[1]
                 if lhs isa Symbol
@@ -536,18 +542,21 @@ function _kwdef!(blk, params_args, call_args)
                     #   F(...) = ...
                     continue
                 end
+                @show var
                 defexpr = ei.args[2]  # defexpr
-                push!(params_args, Expr(:kw, var, esc(defexpr)))
+                #push!(params_args, Expr(:kw, var, esc(defexpr)))
+                push!(body_args, :($(esc(var)) = get(kwargs, Symbol($(esc(var))), $(esc(defexpr)))))
                 push!(call_args, var)
                 blk.args[i] = lhs
             elseif ei.head === :(::) && ei.args[1] isa Symbol
                 # var::Typ
                 var = ei.args[1]
-                push!(params_args, var)
+                #push!(params_args, var)
+                push!(body_args, :($(esc(var)) = kwargs[Symbol($(esc(var)))]))
                 push!(call_args, var)
             elseif ei.head === :block
                 # can arise with use of @static inside type decl
-                _kwdef!(ei, params_args, call_args)
+                _kwdef!(ei, body_args, call_args)
             end
         end
     end
