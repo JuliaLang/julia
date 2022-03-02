@@ -186,6 +186,8 @@ mutable struct ParseStream
     lexer::Tokenize.Lexers.Lexer{IOBuffer}
     # Lookahead buffer for already lexed tokens
     lookahead::Vector{SyntaxToken}
+    # Pool of stream positions for use as working space in parsing
+    position_pool::Vector{Vector{ParseStreamPosition}}
     # Parser output as an ordered sequence of ranges, parent nodes after children.
     ranges::Vector{TaggedRange}
     # Parsing diagnostics (errors/warnings etc)
@@ -210,6 +212,7 @@ mutable struct ParseStream
         # like an acceptable tradeoff.
         ver = (version.major, version.minor)
         new(text_buf, text_root, lexer,
+            Vector{Vector{ParseStreamPosition}}(),
             Vector{SyntaxToken}(),
             Vector{TaggedRange}(),
             Vector{Diagnostic}(),
@@ -268,6 +271,19 @@ function show_diagnostics(io::IO, stream::ParseStream, code)
     show_diagnostics(io, stream.diagnostics, code)
 end
 
+# We manage a pool of stream positions as parser working space
+function acquire_positions(stream)
+    if isempty(stream.position_pool)
+        return Vector{ParseStreamPosition}()
+    end
+    pop!(stream.position_pool)
+end
+
+function release_positions(stream, positions)
+    empty!(positions)
+    push!(stream.position_pool, positions)
+end
+
 #-------------------------------------------------------------------------------
 # Stream input interface - the peek_* family of functions
 
@@ -311,6 +327,11 @@ function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
     end
 end
 
+@noinline function _parser_stuck_error(stream)
+    # Optimization: emit unlikely errors in a separate function
+    error("The parser seems stuck at byte $(stream.next_byte)")
+end
+
 """
     peek(stream [, n=1]; skip_newlines=false)
 
@@ -333,7 +354,7 @@ function peek_token(stream::ParseStream, n::Integer=1;
                     skip_newlines=false, skip_whitespace=true)
     stream.peek_count += 1
     if stream.peek_count > 100_000
-        error("The parser seems stuck at byte $(stream.next_byte)")
+        _parser_stuck_error(stream)
     end
     i = _lookahead_index(stream, n, skip_newlines)
     if !skip_whitespace
