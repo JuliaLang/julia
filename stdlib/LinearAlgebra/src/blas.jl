@@ -67,6 +67,8 @@ using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, Blas
 
 include("lbt.jl")
 
+vendor() = :lbt
+
 """
     get_config()
 
