@@ -250,9 +250,9 @@ using Base.Threads
 end
 end
 
-# Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{ComplexF64}
+# Ensure only LLVM-supported types support nullary constructor
+@test_throws MethodError Atomic{BigInt}()
+@test_throws MethodError Atomic{ComplexF64}()
 
 if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
