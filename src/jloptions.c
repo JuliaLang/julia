@@ -155,15 +155,18 @@ static const char opts[]  =
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
     "                            Count executions of source lines (omitting setting is equivalent to `user`)\n"
-    " --code-coverage=@/abspath\n"
+    " --code-coverage=@/abs/path\n"
     "                            Count executions but only in files that fall under the given absolute file path/directory\n"
+    "                            The `@` prefix is required to select this option.\n"
+
     " --code-coverage=tracefile.info\n"
     "                            Append coverage information to the LCOV tracefile (filename supports format tokens)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
     " --track-allocation[={none*|user|all}]\n"
     "                            Count bytes allocated by each source line (omitting setting is equivalent to `user`)\n"
-    " --track-allocation=@/abspath\n"
+    " --track-allocation=@/abs/path\n"
     "                            Count bytes but only in files that fall under the given absolute file path/directory\n"
+    "                            The `@` prefix is required to select this option.\n"
     " --bug-report=KIND          Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"

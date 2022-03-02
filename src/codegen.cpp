@@ -6987,7 +6987,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         StringRef file;
         ssize_t line;
         bool is_user_code;
-        bool is_tracked; // If file falls within an explicitly set directory
+        bool is_tracked; // falls within an explicitly set file or directory
         unsigned inlined_at;
         bool operator ==(const DebugLineTable &other) const {
             return other.loc == loc && other.file == file && other.line == line && other.is_user_code == is_user_code && other.is_tracked == is_tracked && other.inlined_at == inlined_at;
