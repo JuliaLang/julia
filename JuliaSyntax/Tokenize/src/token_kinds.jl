@@ -1,4 +1,4 @@
-@enum(Kind,
+@enum(Kind::UInt16,
     NONE,      # Placeholder; never emitted by lexer
     ENDMARKER, # EOF
     ERROR,
