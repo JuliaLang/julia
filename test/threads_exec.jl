@@ -79,7 +79,7 @@ end
 function test_threaded_loop_and_atomic_add()
     for r in [1:10000, collect(1:10000), Base.IdentityUnitRange(-500:500), (1,2,3,4,5,6,7,8,9,10)]
         n = length(r)
-        x = Atomic()
+        x = Atomic{Int}()
         a = zeros(Int, n)
         threaded_loop(a,r,x)
         found = zeros(Bool,n)
@@ -140,7 +140,7 @@ function threaded_add_locked(::Type{LockT}, x, n) where LockT
     end
     @test !islocked(critical)
     nentered = 0
-    nfailed = Atomic()
+    nfailed = Atomic{Int}()
     @threads for i = 1:n
         if trylock(critical)
             @test islocked(critical)
@@ -562,7 +562,7 @@ end
 test_nested_loops()
 
 function test_thread_too_few_iters()
-    x = Atomic()
+    x = Atomic{Int}()
     a = zeros(Int, nthreads()+2)
     threaded_loop(a, 1:nthreads()-1, x)
     found = zeros(Bool, nthreads()+2)
