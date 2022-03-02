@@ -272,6 +272,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     for (i = 0; i < n; i++) {
         jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, i);
         if (has_backedge_to_worklist(be, visited)) {
+            bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
             *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
             return 1;
         }
