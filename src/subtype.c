@@ -458,7 +458,7 @@ static jl_value_t *simple_join(jl_value_t *a, jl_value_t *b)
         if (jl_subtype(a, b)) return b;
         if (jl_subtype(b, a)) return a;
     }
-    return jl_new_struct(jl_uniontype_type, a, b);
+    return (jl_value_t *)jl_new_uniontype(a, b);
 }
 
 // compute a greatest lower bound of `a` and `b`
@@ -498,7 +498,7 @@ static jl_unionall_t *rename_unionall(jl_unionall_t *u)
     jl_value_t *t = NULL;
     JL_GC_PUSH2(&v, &t);
     t = jl_instantiate_unionall(u, (jl_value_t*)v);
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = (jl_value_t*)jl_new_unionall(v, t);
     JL_GC_POP();
     return (jl_unionall_t*)t;
 }
@@ -2474,7 +2474,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                 continue;
             }
             else
-                btemp->lb = jl_new_struct(jl_unionall_type, vb->var, btemp->lb);
+                btemp->lb = (jl_value_t*)jl_new_unionall(vb->var, btemp->lb);
             assert((jl_value_t*)btemp->var != btemp->lb);
         }
         if (jl_has_typevar(btemp->ub, vb->var)) {
@@ -2493,7 +2493,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             else if (btemp->ub == (jl_value_t*)vb->var)
                 btemp->ub = vb->ub;
             else
-                btemp->ub = jl_new_struct(jl_unionall_type, vb->var, btemp->ub);
+                btemp->ub = (jl_value_t*)jl_new_unionall(vb->var, btemp->ub);
             assert((jl_value_t*)btemp->var != btemp->ub);
         }
         btemp = btemp->prev;

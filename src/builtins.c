@@ -235,6 +235,9 @@ int jl_egal__special(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b 
             return 0;
         return !memcmp(jl_string_data(a), jl_string_data(b), l);
     }
+    if (dt == jl_uniontype_type || dt == jl_unionall_type) {
+        assert(0 && "TODO");
+    }
     assert(0 && "unreachable");
     return 0;
 }
@@ -360,7 +363,7 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         // they don't affect egal comparison
         return bits_hash(v, sz) ^ h;
     }
-    if (dt == jl_unionall_type)
+    if (dt == jl_unionall_type || dt == jl_uniontype_type || dt == jl_datatype_type)
         return type_object_id_(v, NULL);
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
@@ -1241,6 +1244,9 @@ JL_CALLABLE(jl_f_apply_type)
                                  (jl_value_t*)jl_long_type : (jl_value_t*)jl_type_type,
                                  pi);
             }
+        }
+        if (args[0] == (jl_value_t*)jl_type_type && nargs == 2) {
+            return (jl_value_t*)jl_wrap_Type(args[1]);
         }
         return jl_apply_type(args[0], &args[1], nargs-1);
     }

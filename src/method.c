@@ -910,7 +910,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_value_t *tv = jl_svecref(tvars, i - 1);
         if (!jl_is_typevar(tv))
             jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+        argtype = jl_new_unionall(tv, argtype);
     }
 
     jl_methtable_t *external_mt = mt;

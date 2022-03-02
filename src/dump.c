@@ -757,6 +757,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_serialize_value(s, ((jl_unionall_t*)v)->body);
         }
     }
+    else if (jl_is_uniontype(v)) {
+        write_uint8(s->s, TAG_UNIONTYPE);
+        jl_serialize_value(s, ((jl_uniontype_t*)v)->a);
+        jl_serialize_value(s, ((jl_uniontype_t*)v)->b);
+    }
     else if (jl_is_typevar(v)) {
         write_uint8(s->s, TAG_TVAR);
         jl_serialize_value(s, ((jl_tvar_t*)v)->name);
@@ -2108,11 +2113,21 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
             return v;
         }
         v = jl_gc_alloc(s->ptls, sizeof(jl_unionall_t), jl_unionall_type);
+        ((jl_unionall_t*)v)->Typeof = NULL; // lazily initialized
         backref_list.items[pos] = v;
         ((jl_unionall_t*)v)->var = (jl_tvar_t*)jl_deserialize_value(s, (jl_value_t**)&((jl_unionall_t*)v)->var);
         jl_gc_wb(v, ((jl_unionall_t*)v)->var);
         ((jl_unionall_t*)v)->body = jl_deserialize_value(s, &((jl_unionall_t*)v)->body);
         jl_gc_wb(v, ((jl_unionall_t*)v)->body);
+        return v;
+    case TAG_UNIONTYPE:
+        v = jl_gc_alloc(s->ptls, sizeof(jl_uniontype_t), jl_uniontype_type);
+        ((jl_uniontype_t*)v)->Typeof = NULL; // lazily initialized
+        arraylist_push(&backref_list, &v);
+        ((jl_uniontype_t*)v)->a = jl_deserialize_value(s, &((jl_uniontype_t*)v)->a);
+        jl_gc_wb(v, ((jl_uniontype_t*)v)->a);
+        ((jl_uniontype_t*)v)->b = jl_deserialize_value(s, &((jl_uniontype_t*)v)->b);
+        jl_gc_wb(v, ((jl_uniontype_t*)v)->b);
         return v;
     case TAG_TVAR:
         v = jl_gc_alloc(s->ptls, sizeof(jl_tvar_t), jl_tvar_type);
@@ -3184,7 +3199,7 @@ void jl_init_serializer(void)
                      jl_box_int32(9), jl_box_int32(10), jl_box_int32(11),
                      jl_box_int32(12), jl_box_int32(13), jl_box_int32(14),
                      jl_box_int32(15), jl_box_int32(16), jl_box_int32(17),
-                     jl_box_int32(18), jl_box_int32(19), jl_box_int32(20),
+                     jl_box_int32(18), jl_box_int32(19),
 
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -3247,6 +3262,7 @@ void jl_init_serializer(void)
     deser_tag[TAG_GOTOIFNOT] = (jl_value_t*)jl_gotoifnot_type;
     deser_tag[TAG_RETURNNODE] = (jl_value_t*)jl_returnnode_type;
     deser_tag[TAG_ARGUMENT] = (jl_value_t*)jl_argument_type;
+    deser_tag[TAG_UNIONTYPE] = (jl_value_t*)jl_uniontype_type;
 
     intptr_t i = 0;
     while (vals[i] != NULL) {

@@ -83,6 +83,24 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     return tn;
 }
 
+jl_uniontype_t *(jl_new_uniontype)(jl_value_t *a, jl_value_t *b)
+{
+    jl_uniontype_t *u = (jl_uniontype_t *)jl_new_struct_uninit(jl_uniontype_type);
+    u->a = a;
+    u->b = b;
+    u->Typeof = NULL;
+    return u;
+}
+
+jl_unionall_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body)
+{
+    jl_unionall_t *u = (jl_unionall_t *)jl_new_struct_uninit(jl_unionall_type);
+    u->var = var;
+    u->body = body;
+    u->Typeof = NULL;
+    return u;
+}
+
 // allocating DataTypes -----------------------------------------------------------
 
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module, jl_datatype_t *super, jl_svec_t *parameters)
@@ -107,6 +125,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     t->layout = NULL;
     t->types = NULL;
     t->instance = NULL;
+    t->Typeof = NULL;
     return t;
 }
 
@@ -673,7 +692,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_gc_wb(t->name, t);
         int i, np = jl_svec_len(parameters);
         for (i = np - 1; i >= 0; i--) {
-            t->name->wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), t->name->wrapper);
+            t->name->wrapper = (jl_value_t*)jl_new_unionall(
+                (jl_tvar_t*)jl_svecref(parameters, i),
+                t->name->wrapper);
             jl_gc_wb(t->name, t->name->wrapper);
         }
         if (!mutabl && !abstract && ftypes != NULL)

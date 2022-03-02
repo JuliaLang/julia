@@ -607,6 +607,9 @@ int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module,
                                    jl_datatype_t *super, jl_svec_t *parameters);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
+jl_uniontype_t *jl_new_uniontype(jl_value_t *a, jl_value_t *b);
+#define jl_new_uniontype(a, b) (jl_new_uniontype)((jl_value_t*)a, (jl_value_t*)b)
+jl_unionall_t *jl_new_unionall(jl_tvar_t *var, jl_value_t *body);
 void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable);
 JL_DLLEXPORT jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);

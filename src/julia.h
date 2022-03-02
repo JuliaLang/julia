@@ -436,14 +436,6 @@ typedef struct {
     jl_value_t *ub;   // upper bound
 } jl_tvar_t;
 
-// UnionAll type (iterated union over all values of a variable in certain bounds)
-// written `body where lb<:var<:ub`
-typedef struct {
-    JL_DATA_TYPE
-    jl_tvar_t *var;
-    jl_value_t *body;
-} jl_unionall_t;
-
 // represents the "name" part of a DataType, describing the syntactic structure
 // of a type and storing all data common to different instantiations of the type,
 // including a cache for hash-consed allocation of DataType objects.
@@ -468,12 +460,6 @@ typedef struct {
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
 } jl_typename_t;
-
-typedef struct {
-    JL_DATA_TYPE
-    jl_value_t *a;
-    jl_value_t *b;
-} jl_uniontype_t;
 
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
@@ -517,6 +503,7 @@ typedef struct _jl_datatype_t {
     JL_DATA_TYPE
     jl_typename_t *name;
     struct _jl_datatype_t *super;
+    struct _jl_datatype_t *Typeof; // Type{...} of this dt, lazily initialized
     jl_svec_t *parameters;
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
@@ -532,6 +519,24 @@ typedef struct _jl_datatype_t {
     uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
     uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
 } jl_datatype_t;
+
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *a;
+    jl_value_t *b;
+    // Type{...} of this union, lazily initialized
+    jl_datatype_t *Typeof;
+} jl_uniontype_t;
+
+// UnionAll type (iterated union over all values of a variable in certain bounds)
+// written `body where lb<:var<:ub`
+typedef struct {
+    JL_DATA_TYPE
+    jl_tvar_t *var;
+    jl_value_t *body;
+    // Type{...} of this UnionAll, lazily initialized
+    jl_datatype_t *Typeof;
+} jl_unionall_t;
 
 typedef struct _jl_vararg_t {
     JL_DATA_TYPE
@@ -1359,7 +1364,7 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT;
 STATIC_INLINE int jl_egal__unboxed_(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t *b JL_MAYBE_UNROOTED, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
     if (dt->name->mutabl) {
-        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type)
+        if (dt == jl_simplevector_type || dt == jl_string_type || dt == jl_datatype_type || dt == jl_unionall_type || dt == jl_uniontype_type)
             return jl_egal__special(a, b, dt);
         return 0;
     }
