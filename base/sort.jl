@@ -685,7 +685,7 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
         end
 
         sum = lo-1
-        for i in 1:(MASK+1)
+        for i in 1:MASK+1
             sum += counts[i]
             counts[i] = sum
         end
