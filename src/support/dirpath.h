@@ -6,7 +6,11 @@
 #ifdef _OS_WINDOWS_
 #define PATHSEPSTRING "\\"
 #define PATHLISTSEPSTRING ";"
+#if defined(PATH_MAX)
 #define JL_PATH_MAX PATH_MAX
+#else // _COMPILER_CLANG_ may have the name reversed
+#define JL_PATH_MAX MAX_PATH
+#endif
 #else
 #define PATHSEPSTRING "/"
 #define PATHLISTSEPSTRING ":"
