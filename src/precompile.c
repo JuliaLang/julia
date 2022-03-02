@@ -410,7 +410,7 @@ static void *jl_precompile(int all)
         }
     }
     m = NULL;
-    void *native_code = jl_create_native(m2, NULL, 0);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0);
     JL_GC_POP();
     return native_code;
 }

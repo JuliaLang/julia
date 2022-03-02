@@ -96,7 +96,8 @@ void jl_jit_globals(std::map<void *, GlobalVariable*> &globals)
 static jl_callptr_t _jl_compile_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        size_t world)
+        size_t world,
+        LLVMContext &context)
 {
     // caller must hold codegen_lock
     // and have disabled finalizers
@@ -116,10 +117,10 @@ static jl_callptr_t _jl_compile_codeinst(
     params.world = world;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     {
-        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
+        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params, context);
         if (std::get<0>(result))
             emitted[codeinst] = std::move(result);
-        jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
+        jl_compile_workqueue(emitted, params, CompilationPolicy::Default, context);
 
         if (params._shared_module)
             jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
@@ -204,7 +205,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
-int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
@@ -215,9 +216,9 @@ int jl_compile_extern_c_impl(void *llvmmod, void *p, void *sysimg, jl_value_t *d
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
         pparams = &params;
-    Module *into = (Module*)llvmmod;
+    Module *into = unwrap(llvmmod);
     if (into == NULL)
-        into = jl_create_llvm_module("cextern");
+        into = jl_create_llvm_module("cextern", *jl_ExecutionEngine->getContext().getContext());
     const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams, into->getContext());
     bool success = true;
     if (!sysimg) {
@@ -289,6 +290,7 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    auto &context = *jl_ExecutionEngine->getContext().getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -324,7 +326,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             if (src->inferred && !codeinst->inferred)
                 codeinst->inferred = jl_nothing;
         }
-        _jl_compile_codeinst(codeinst, src, world);
+        _jl_compile_codeinst(codeinst, src, world, context);
         if (codeinst->invoke == NULL)
             codeinst = NULL;
     }
@@ -345,6 +347,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
+    auto &context = *jl_ExecutionEngine->getContext().getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -368,7 +371,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             src = (jl_code_info_t*)unspec->def->uninferred;
         }
         assert(src && jl_is_code_info(src));
-        _jl_compile_codeinst(unspec, src, unspec->min_world);
+        _jl_compile_codeinst(unspec, src, unspec->min_world, context);
         if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
             jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
@@ -398,6 +401,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            auto &context = *jl_ExecutionEngine->getContext().getContext();
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -419,7 +423,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world);
+                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, context);
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
@@ -434,7 +438,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     }
 
     // whatever, that didn't work - use the assembler output instead
-    void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
+    // just make a new context for this one operation
+    void *F = jl_get_llvmf_defn(mi, wrap(jl_ExecutionEngine->getContext().getContext()), world, getwrapper, true, jl_default_cgparams);
     if (!F)
         return jl_an_empty_string;
     return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
@@ -1044,6 +1049,10 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 }
 #endif
 
+orc::ThreadSafeContext &JuliaOJIT::getContext() {
+    return TSCtx;
+}
+
 const DataLayout& JuliaOJIT::getDataLayout() const
 {
     return DL;
@@ -1323,4 +1332,9 @@ extern "C" JL_DLLEXPORT
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+extern "C" JL_DLLEXPORT
+LLVMContextRef jl_get_ee_context_impl(void) {
+    return wrap(jl_ExecutionEngine->getContext().getContext());
 }
