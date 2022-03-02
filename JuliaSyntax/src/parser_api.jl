@@ -152,7 +152,7 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
     end
     parse(stream; rule=rule)
     if (ignore_trivia  && peek(stream, skip_newlines=true) != K"EndMarker") ||
-       (!ignore_trivia && (peek(stream); kind(first(stream.lookahead)) != K"EndMarker"))
+       (!ignore_trivia && (peek(stream, skip_newlines=false, skip_whitespace=false) != K"EndMarker"))
         emit_diagnostic(stream, error="unexpected text after parsing $rule")
     end
     if any_error(stream.diagnostics)
