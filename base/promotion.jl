@@ -33,7 +33,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters, b.parameters
+        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -77,7 +77,8 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    a, b = a::DataType, b::DataType
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
