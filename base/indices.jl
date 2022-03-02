@@ -351,6 +351,8 @@ struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 Slice(S::Slice) = S
+Slice{T}(S::Slice) where {T<:AbstractUnitRange} = Slice{T}(T(S.indices))
+
 axes(S::Slice) = (IdentityUnitRange(S.indices),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
 axes(S::Slice{<:OneTo}) = (S.indices,)
@@ -366,7 +368,6 @@ getindex(S::Slice, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
 
-
 """
     IdentityUnitRange(range::AbstractUnitRange)
 
@@ -378,6 +379,8 @@ struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 IdentityUnitRange(S::IdentityUnitRange) = S
+IdentityUnitRange{T}(S::IdentityUnitRange) where {T<:AbstractUnitRange} = IdentityUnitRange{T}(T(S.indices))
+
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S
@@ -448,6 +451,8 @@ julia> linear[1,2]
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
     indices::R
 end
+convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R<:NTuple{N,AbstractUnitRange{Int}}} =
+    LinearIndices{N,R}(convert(R, inds.indices))
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
@@ -459,16 +464,17 @@ LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 _convert2ind(i::Integer) = Base.OneTo(i)
 _convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
 
-promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
-    LinearIndices{N,indices_promote_type(R1,R2)}
-
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
     R = promote_type(R1, R2)
-    Tuple{R,Vararg{R,N}}
+    return Tuple{R, Vararg{R, N}}
 end
 
-convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R} =
-    LinearIndices(convert(R, inds.indices))
+promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
+    LinearIndices{N,indices_promote_type(R1,R2)}
+promote_rule(a::Type{Slice{T1}}, b::Type{Slice{T2}}) where {T1,T2} =
+    el_same(promote_type(T1, T2), a, b)
+promote_rule(a::Type{IdentityUnitRange{T1}}, b::Type{IdentityUnitRange{T2}}) where {T1,T2} =
+    el_same(promote_type(T1, T2), a, b)
 
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()

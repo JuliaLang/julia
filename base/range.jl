@@ -1263,12 +1263,16 @@ function -(r::LinRange)
     LinRange{typeof(start)}(start, -r.stop, length(r))
 end
 
-
 # promote eltype if at least one container wouldn't change, otherwise join container types.
-el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
+el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a # we assume a === b
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
 el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
 el_same(::Type, a, b) = promote_typejoin(a, b)
+
+promote_result(::Type{<:AbstractArray}, ::Type{<:AbstractArray}, ::Type{T}, ::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+promote_result(::Type{T}, ::Type{S}, ::Type{Bottom}, ::Type{Bottom}) where {T<:AbstractArray,S<:AbstractArray} = (@inline; promote_typejoin(T,S))
+# If no promote_rule is defined, both directions give Bottom. In that case use typejoin on the eltypes instead and give Array as the container.
+promote_result(::Type{<:AbstractArray{T,n}}, ::Type{<:AbstractArray{S,n}}, ::Type{Bottom}, ::Type{Bottom}) where {T,S,n} = (@inline; Array{promote_type(T,S),n})
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1, T2), a, b)
