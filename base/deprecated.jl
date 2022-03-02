@@ -54,18 +54,17 @@ will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but 
 define nor deprecate the method `old(x::Float64)`.
 """
 macro deprecate(old, new, export_old=true)
+    function cannot_export_nonsymbol()
+        error(
+            "if the third `export_old` argument is not specified or `true`, the first",
+            " argument must be of form",
+            " (1) `f(...)` where `f` is a symbol,",
+            " (2) `T{...}(...)` where `T` is a symbol, or",
+            " (3) a symbol.",
+        )
+    end
     meta = Expr(:meta, :noinline)
-    if isa(old, Symbol)
-        oldname = Expr(:quote, old)
-        newname = Expr(:quote, new)
-        Expr(:toplevel,
-            export_old ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...)
-                  $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
-                  $(esc(new))(args...)
-              end))
-    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
+    if isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
@@ -80,11 +79,7 @@ macro deprecate(old, new, export_old=true)
                 if fnexpr isa Symbol
                     maybe_export = Expr(:export, esc(fnexpr))
                 else
-                    error(
-                        "if the third `export_old` argument is not specified or `true`,",
-                        " the first argument must be of form (1) `f(...)` where `f` is a",
-                        " symbol or (2) `T{...}(...)` where `T` is a symbol",
-                    )
+                    cannot_export_nonsymbol()
                 end
             else
                 maybe_export = nothing
@@ -100,7 +95,16 @@ macro deprecate(old, new, export_old=true)
                   $(esc(new))
               end))
     else
-        error("invalid usage of @deprecate")
+        if export_old && !(old isa Symbol)
+            cannot_export_nonsymbol()
+        end
+        Expr(:toplevel,
+            export_old ? Expr(:export, esc(old)) : nothing,
+            :(function $(esc(old))(args...)
+                  $meta
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
+                  $(esc(new))(args...)
+              end))
     end
 end
 

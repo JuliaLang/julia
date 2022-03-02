@@ -27,9 +27,11 @@ module DeprecationTests # to test @deprecate
     @deprecate A{T}(x::S) where {T, S} f()
 
     module Sub
-    f() = true
+    f1() = true
+    function f2 end
     end
-    @deprecate Sub.f() f() false
+    @deprecate Sub.f1() f() false
+    @deprecate Sub.f2 f false
 
     # test that @deprecate_moved can be overridden by an import
     Base.@deprecate_moved foo1234 "Foo"
@@ -77,7 +79,7 @@ end
 
     @test @test_warn "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead." A{Int}(1.)
 
-    @test @test_warn "`Sub.f()` is deprecated, use `f()` instead." DeprecationTests.Sub.f()
+    @test @test_warn "`Sub.f1()` is deprecated, use `f()` instead." DeprecationTests.Sub.f1()
 
     redirect_stderr(devnull) do
         @test call(f1)
@@ -86,7 +88,8 @@ end
         @test call(DeprecationTests.f4)
         @test call(f5, 1)
         @test call(A{Int}, 1.)
-        @test call(DeprecationTests.Sub.f)
+        @test call(DeprecationTests.Sub.f1)
+        @test call(DeprecationTests.Sub.f2)
     end
 
     @test @test_nowarn call(f1)
@@ -95,7 +98,8 @@ end
     @test @test_nowarn call(DeprecationTests.f4)
     @test @test_nowarn call(f5, 1)
     @test @test_nowarn call(A{Int}, 1.)
-    @test @test_nowarn call(DeprecationTests.Sub.f)
+    @test @test_nowarn call(DeprecationTests.Sub.f1)
+    @test @test_nowarn call(DeprecationTests.Sub.f2)
 
     # issue #21972
     @noinline function f21972()
