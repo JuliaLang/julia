@@ -2020,7 +2020,26 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
-function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, slottypes::Vector{Any}, changes::VarTable)
+function compute_interconditional_slot(@nospecialize(bestguess), nslots::Int, slottypes::Vector{Any}, changes::VarTable)
+    if isa(bestguess, InterConditional)
+        # if the bestguess so far is already `InterConditional`, try to convert
+        # this `rt` into `InterConditional` on the slot to avoid overapproximation
+        # due to conflict of different slots
+        return bestguess.slot
+    else
+        # pick up the first "interesting" slot, convert `rt` to its `Conditional`
+        # TODO: ideally we want `Conditional` and `InterConditional` to convey
+        # constraints on multiple slots
+        for slot_id in 1:nslots
+            if is_interesting_interconditional_slot(slottypes, changes, slot_id)
+                return slot_id
+            end
+        end
+    end
+    return -1
+end
+
+function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, slottypes::Vector{Any}, changes::VarTable, interconditional_slot::RefValue{Int} = RefValue{Int}(0))
     if !(bestguess ⊑ Bool) || bestguess === Bool
         # give up inter-procedural constraint back-propagation
         # when tmerge would widen the result anyways (as an optimization)
@@ -2047,19 +2066,11 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         if isa(rt, Conditional)
             rt = InterConditional(slot_id(rt.var), rt.vtype, rt.elsetype)
         elseif is_lattice_bool(rt)
-            if isa(bestguess, InterConditional)
-                # if the bestguess so far is already `Conditional`, try to convert
-                # this `rt` into `Conditional` on the slot to avoid overapproximation
-                # due to conflict of different slots
-                rt = bool_rt_to_conditional(rt, slottypes, changes, bestguess.slot)
-            else
-                # pick up the first "interesting" slot, convert `rt` to its `Conditional`
-                # TODO: ideally we want `Conditional` and `InterConditional` to convey
-                # constraints on multiple slots
-                for slot_id in 1:nslots
-                    rt = bool_rt_to_conditional(rt, slottypes, changes, slot_id)
-                    rt isa InterConditional && break
-                end
+            if interconditional_slot[] == 0
+                interconditional_slot[] = compute_interconditional_slot(bestguess, nslots, slottypes, changes)
+            end
+            if interconditional_slot[] != -1
+                rt = bool_rt_to_interconditional(rt, slottypes, changes, interconditional_slot[])
             end
         end
     end
@@ -2075,7 +2086,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         local anyrefine = false
         for i in 1:length(fields)
             a = fields[i]
-            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
+            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes, interconditional_slot)
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
                 anyrefine = has_const_info(a) ||
@@ -2349,22 +2360,30 @@ function conditional_changes(changes::VarTable, @nospecialize(typ), var::SlotNum
     return changes
 end
 
-function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
+function is_interesting_interconditional_slot(slottypes::Vector{Any}, state::VarTable, slot_id::Int)
     old = slottypes[slot_id]
     new = widenconditional(state[slot_id].typ) # avoid nested conditional
     if new ⊑ old && !(old ⊑ new)
-        if isa(rt, Const)
-            val = rt.val
-            if val === true
-                return InterConditional(slot_id, new, Bottom)
-            elseif val === false
-                return InterConditional(slot_id, Bottom, new)
-            end
-        elseif rt === Bool
-            return InterConditional(slot_id, new, new)
-        end
+        return true
     end
-    return rt
+    return false
+end
+
+function bool_rt_to_interconditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
+    old = slottypes[slot_id]
+    new = widenconditional(state[slot_id].typ) # avoid nested conditional
+    if isa(rt, Const)
+        val = rt.val
+        if val === true
+            return InterConditional(slot_id, new, Bottom)
+        elseif val === false
+            return InterConditional(slot_id, Bottom, new)
+        end
+    elseif rt === Bool
+        return InterConditional(slot_id, new, new)
+    else
+        @assert false && "Should not be reachable"
+    end
 end
 
 # make as much progress on `frame` as possible (by handling cycles)
