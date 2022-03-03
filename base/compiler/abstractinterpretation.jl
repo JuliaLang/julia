@@ -21,6 +21,14 @@ function get_max_methods(mod::Module, interp::AbstractInterpreter)
     max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
 end
 
+function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpreter)
+    if f !== nothing
+        fmm = typeof(f).name.max_methods
+        fmm !== UInt8(0) && return Int(fmm)
+    end
+    return get_max_methods(mod, interp)
+end
+
 const empty_bitset = BitSet()
 
 function should_infer_for_effects(sv::InferenceState)
@@ -30,7 +38,7 @@ end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
-                                  sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
+                                  sv::InferenceState, max_methods::Int)
     if !should_infer_for_effects(sv) &&
             sv.params.unoptimize_throw_blocks &&
             is_stmt_throw_block(get_curr_ssaflag(sv))
@@ -1512,7 +1520,7 @@ end
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, sv::InferenceState,
-        max_methods::Int = get_max_methods(sv.mod, interp))
+        max_methods::Int = get_max_methods(f, sv.mod, interp))
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
 
@@ -1621,8 +1629,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
     elseif la == 2 && istopfunction(f, :typename)
         return CallMeta(typename_static(argtypes[2]), MethodResultPure())
-    elseif max_methods > 1 && istopfunction(f, :copyto!)
-        max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         if is_all_const_arg(arginfo)
             val = _pure_eval_call(f, arginfo)
@@ -1666,7 +1672,7 @@ end
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
-                       sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
+                       sv::InferenceState, max_methods::Union{Int, Nothing} = nothing)
     argtypes = arginfo.argtypes
     ft = argtypes[1]
     f = singleton_type(ft)
@@ -1686,8 +1692,10 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
+        max_methods = max_methods === nothing ? get_max_methods(sv.mod, interp) : max_methods
         return abstract_call_gf_by_type(interp, nothing, arginfo, argtypes_to_type(argtypes), sv, max_methods)
     end
+    max_methods = max_methods === nothing ? get_max_methods(f, sv.mod, interp) : max_methods
     return abstract_call_known(interp, f, arginfo, sv, max_methods)
 end
 
