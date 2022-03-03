@@ -1099,3 +1099,12 @@ end
 let src = code_typed1(f44200)
     @test count(x -> isa(x, Core.PiNode), src.code) == 0
 end
+
+# Test that peeling off one case from (::Any) doesn't introduce
+# a dynamic dispatch.
+@noinline f_peel(x::Int) = Base.inferencebarrier(1)
+@noinline f_peel(@nospecialize(x::Any)) = Base.inferencebarrier(2)
+g_call_peel(x) = f_peel(x)
+let src = code_typed1(g_call_peel, Tuple{Any})
+    @test count(isinvoke(:f_peel), src.code) == 2
+end
