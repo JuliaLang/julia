@@ -47,7 +47,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(argtypes, atype, method_table(interp, sv), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+    matches = find_matching_methods(argtypes, atype, method_table(interp), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         tristate_merge!(sv, Effects())
@@ -637,7 +637,7 @@ end
 
 function pure_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo, sv::InferenceState)
-    return !isoverlayed(method_table(interp, sv)) &&
+    return !isoverlayed(method_table(interp)) &&
            f !== nothing &&
            length(applicable) == 1 &&
            is_method_pure(applicable[1]::MethodMatch) &&
@@ -674,7 +674,7 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
-    return !isoverlayed(method_table(interp, sv)) &&
+    return !isoverlayed(method_table(interp)) &&
            f !== nothing &&
            result.edge !== nothing &&
            is_total_or_error(result.edge_effects) &&
@@ -2110,14 +2110,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     states = frame.stmt_types
-    n = frame.nstmts
+    nstmts = frame.nstmts
     nargs = frame.nargs
     def = frame.linfo.def
     isva = isa(def, Method) && def.isva
     nslots = nargs - isva
     slottypes = frame.slottypes
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
-    while frame.pc´´ <= n
+    while frame.pc´´ <= nstmts
         # make progress on the active ip set
         local pc::Int = frame.pc´´
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
@@ -2189,7 +2189,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                 end
             elseif isa(stmt, ReturnNode)
-                pc´ = n + 1
+                pc´ = nstmts + 1
                 bestguess = frame.bestguess
                 rt = abstract_eval_value(interp, stmt.val, changes, frame)
                 rt = widenreturn(rt, bestguess, nslots, slottypes, changes)
@@ -2310,7 +2310,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 ssavaluetypes[pc] = Any
             end
 
-            pc´ > n && break # can't proceed with the fast-path fall-through
+            pc´ > nstmts && break # can't proceed with the fast-path fall-through
             newstate = stupdate!(states[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,
