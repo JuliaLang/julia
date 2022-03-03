@@ -79,6 +79,8 @@ using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatc
 
 include("lbt.jl")
 
+vendor() = :lbt
+
 """
     get_config()
 
@@ -88,17 +90,6 @@ Return an object representing the current `libblastrampoline` configuration.
     `get_config()` requires at least Julia 1.7.
 """
 get_config() = lbt_get_config()
-
-# We hard-lock `vendor()` to `openblas(64)` here to satisfy older code, but all new code should use
-# `get_config()` since it is now possible to have multiple vendors loaded at once.
-function vendor()
-    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor; force=true)
-    if USE_BLAS64
-        return :openblas64
-    else
-        return :openblas
-    end
-end
 
 if USE_BLAS64
     macro blasfunc(x)
