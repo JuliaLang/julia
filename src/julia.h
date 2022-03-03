@@ -7,6 +7,7 @@
 #include "jl_internal_funcs.inc"
 #undef jl_setjmp
 #undef jl_longjmp
+#undef jl_egal
 #endif
 
 #include "julia_fasttls.h"
@@ -925,6 +926,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
+JL_DLLEXPORT void jl_gc_safepoint(void);
 
 // object accessors -----------------------------------------------------------
 
@@ -2075,6 +2077,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_LOG_NONE 0
 #define JL_LOG_USER 1
 #define JL_LOG_ALL  2
+#define JL_LOG_PATH 3
 
 #define JL_OPTIONS_CHECK_BOUNDS_DEFAULT 0
 #define JL_OPTIONS_CHECK_BOUNDS_ON 1

@@ -192,12 +192,22 @@ Disallow or enable unsafe floating point optimizations (overrides @fastmath decl
 Count executions of source lines (omitting setting is equivalent to `user`)
 
 .TP
+--code-coverage=@<path>
+Count executions of source lines in a file or files under a given directory. A `@` must
+be placed before the path to indicate this option. A `@` with no path will track the current directory.
+
+.TP
  --code-coverage=tracefile.info
  Append coverage information to the LCOV tracefile (filename supports format tokens)
 
 .TP
 --track-allocation[={none*|user|all}]
 Count bytes allocated by each source line (omitting setting is equivalent to `user`)
+
+.TP
+--track-allocation=@<path>
+Count bytes allocated by each source line in a file or files under a given directory. A `@`
+must be placed before the path to indicate this option. A `@` with no path will track the current directory.
 
 .TP
 --bug-report=KIND

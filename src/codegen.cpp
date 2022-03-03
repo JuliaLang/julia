@@ -2,11 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#if defined(_OS_WINDOWS_)
-// use ELF because RuntimeDyld COFF i686 support didn't exist
-// use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
-#define FORCE_ELF
-#endif
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
@@ -211,8 +206,6 @@ extern void _chkstk(void);
 bool imaging_mode = false;
 
 // shared llvm state
-TargetMachine *jl_TargetMachine;
-static DataLayout &jl_data_layout = *(new DataLayout(""));
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
 #define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
@@ -1901,8 +1894,9 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default_cgparams)
+Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
 {
+    Module *m = new Module(name, context);
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
@@ -1917,8 +1911,8 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
     if (!m->getModuleFlag("Debug Info Version"))
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
-    m->setDataLayout(jl_data_layout);
-    m->setTargetTriple(jl_TargetMachine->getTargetTriple().str());
+    m->setDataLayout(DL);
+    m->setTargetTriple(triple.str());
 
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 130000
     // tell Win32 to assume the stack is always 16-byte aligned,
@@ -1929,18 +1923,12 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
     m->setStackProtectorGuard("global");
 #endif
+    return m;
 }
 
-Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params)
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL, const Triple *triple)
 {
-    Module *M = new Module(name, context);
-    jl_setup_module(M, params);
-    return M;
-}
-
-Module *jl_create_llvm_module(StringRef name, LLVMContext &context)
-{
-    return _jl_create_llvm_module(name, context, &jl_default_cgparams);
+    return _jl_create_llvm_module(name, ctx, &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
 }
 
 static void jl_init_function(Function *F)
@@ -6450,7 +6438,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     declarations.specFunctionObject = funcName.str();
 
     // allocate Function declarations and wrapper objects
-    Module *M = _jl_create_llvm_module(ctx.name, ctx.builder.getContext(), ctx.params);
+    Module *M = _jl_create_llvm_module(ctx.name, ctx.builder.getContext(), ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
     jl_returninfo_t returninfo = {};
     Function *f = NULL;
     bool has_sret = false;
@@ -6976,15 +6964,20 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         return (!jl_is_submodule(mod, jl_base_module) &&
                 !jl_is_submodule(mod, jl_core_module));
     };
+    auto in_tracked_path = [] (StringRef file) {
+        return jl_options.tracked_path != NULL && file.startswith(jl_options.tracked_path);
+    };
     bool mod_is_user_mod = in_user_mod(ctx.module);
+    bool mod_is_tracked = in_tracked_path(ctx.file);
     struct DebugLineTable {
         DebugLoc loc;
         StringRef file;
         ssize_t line;
         bool is_user_code;
+        bool is_tracked; // falls within an explicitly set file or directory
         unsigned inlined_at;
         bool operator ==(const DebugLineTable &other) const {
-            return other.loc == loc && other.file == file && other.line == line && other.is_user_code == is_user_code && other.inlined_at == inlined_at;
+            return other.loc == loc && other.file == file && other.line == line && other.is_user_code == is_user_code && other.is_tracked == is_tracked && other.inlined_at == inlined_at;
         }
     };
     std::vector<DebugLineTable> linetable;
@@ -6997,6 +6990,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         topinfo.file = ctx.file;
         topinfo.line = toplineno;
         topinfo.is_user_code = mod_is_user_mod;
+        topinfo.is_tracked = mod_is_tracked;
         topinfo.inlined_at = 0;
         topinfo.loc = topdebugloc;
         for (size_t i = 0; i < nlocs; i++) {
@@ -7010,13 +7004,14 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             info.line = jl_unbox_long(jl_fieldref(locinfo, 3));
             info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
             assert(info.inlined_at <= i);
+            info.file = jl_symbol_name(filesym);
+            if (info.file.empty())
+                info.file = "<missing>";
             if (module == ctx.module)
                 info.is_user_code = mod_is_user_mod;
             else
                 info.is_user_code = in_user_mod(module);
-            info.file = jl_symbol_name(filesym);
-            if (info.file.empty())
-                info.file = "<missing>";
+            info.is_tracked = in_tracked_path(info.file);
             if (ctx.debug_enabled) {
                 StringRef fname;
                 if (jl_is_method_instance(method))
@@ -7130,13 +7125,15 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         cursor = -1;
     };
 
-    auto do_coverage = [&] (bool in_user_code) {
+    auto do_coverage = [&] (bool in_user_code, bool is_tracked) {
         return (coverage_mode == JL_LOG_ALL ||
-                (coverage_mode == JL_LOG_USER && in_user_code));
+                (in_user_code && coverage_mode == JL_LOG_USER) ||
+                (is_tracked && coverage_mode == JL_LOG_PATH));
     };
-    auto do_malloc_log = [&] (bool in_user_code) {
+    auto do_malloc_log = [&] (bool in_user_code, bool is_tracked) {
         return (malloc_log_mode == JL_LOG_ALL ||
-                (malloc_log_mode == JL_LOG_USER && in_user_code));
+                (in_user_code && malloc_log_mode == JL_LOG_USER) ||
+                (is_tracked && malloc_log_mode == JL_LOG_PATH));
     };
     std::vector<unsigned> current_lineinfo, new_lineinfo;
     auto coverageVisitStmt = [&] (size_t dbg) {
@@ -7155,15 +7152,15 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (newdbg != current_lineinfo[dbg]) {
                 current_lineinfo[dbg] = newdbg;
                 const auto &info = linetable.at(newdbg);
-                if (do_coverage(info.is_user_code))
+                if (do_coverage(info.is_user_code, info.is_tracked))
                     coverageVisitLine(ctx, info.file, info.line);
             }
         }
         new_lineinfo.clear();
     };
     auto mallocVisitStmt = [&] (unsigned dbg, Value *sync) {
-        if (!do_malloc_log(mod_is_user_mod) || dbg == 0) {
-            if (do_malloc_log(true) && sync)
+        if (!do_malloc_log(mod_is_user_mod, mod_is_tracked) || dbg == 0) {
+            if (do_malloc_log(true, mod_is_tracked) && sync)
                 ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync});
             return;
         }
@@ -7174,7 +7171,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     if (coverage_mode != JL_LOG_NONE) {
         // record all lines that could be covered
         for (const auto &info : linetable)
-            if (do_coverage(info.is_user_code))
+            if (do_coverage(info.is_user_code, info.is_tracked))
                 jl_coverage_alloc_line(info.file, info.line);
     }
 
@@ -7229,7 +7226,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     }
 
     Value *sync_bytes = nullptr;
-    if (do_malloc_log(true))
+    if (do_malloc_log(true, mod_is_tracked))
         sync_bytes = ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
     { // coverage for the function definition line number
         const auto &topinfo = linetable.at(0);
@@ -7237,7 +7234,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             if (topinfo == linetable.at(1))
                 current_lineinfo.push_back(1);
         }
-        if (do_coverage(topinfo.is_user_code))
+        if (do_coverage(topinfo.is_user_code, topinfo.is_tracked))
             coverageVisitLine(ctx, topinfo.file, topinfo.line);
     }
 
@@ -8239,88 +8236,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-    TargetOptions options = TargetOptions();
-    //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
-    // tell Win32 to assume the stack is always 16-byte aligned,
-    // and to ensure that it is 16-byte aligned for out-going calls,
-    // to ensure compatibility with GCC codes
-    // In LLVM 13 and onwards this has turned into a module option
-    options.StackAlignmentOverride = 16;
-#endif
-#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
-    // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
-    options.StackProtectorGuard = StackProtectorGuards::Global;
-#endif
-    Triple TheTriple(sys::getProcessTriple());
-#if defined(FORCE_ELF)
-    TheTriple.setObjectFormat(Triple::ELF);
-#endif
-    uint32_t target_flags = 0;
-    auto target = jl_get_llvm_target(imaging_mode, target_flags);
-    auto &TheCPU = target.first;
-    SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
-    std::string errorstr;
-    const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
-    if (!TheTarget)
-        jl_errorf("%s", errorstr.c_str());
-    if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
-        std::unique_ptr<MCSubtargetInfo> MSTI(
-            TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
-        if (!MSTI->isCPUStringValid(TheCPU))
-            jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
-        if (jl_processor_print_help) {
-            // This is the only way I can find to print the help message once.
-            // It'll be nice if we can iterate through the features and print our own help
-            // message...
-            MSTI->setDefaultFeatures("help", "", "");
-        }
-    }
-    // Package up features to be passed to target/subtarget
-    std::string FeaturesStr;
-    if (!targetFeatures.empty()) {
-        SubtargetFeatures Features;
-        for (unsigned i = 0; i != targetFeatures.size(); ++i)
-            Features.AddFeature(targetFeatures[i]);
-        FeaturesStr = Features.getString();
-    }
-    // Allocate a target...
-    Optional<CodeModel::Model> codemodel =
-#if defined(JL_USE_JITLINK)
-        // JITLink can patch up relocations between far objects so we can use the
-        // small code model – which is good, as the large code model is unmaintained
-        // on MachO/AArch64.
-        CodeModel::Small;
-#elif defined(_P64)
-        // Make sure we are using the large code model on 64bit
-        // Let LLVM pick a default suitable for jitting on 32bit
-        CodeModel::Large;
-#else
-        None;
-#endif
-    auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
-    jl_TargetMachine = TheTarget->createTargetMachine(
-            TheTriple.getTriple(), TheCPU, FeaturesStr,
-            options,
-            Reloc::Static, // Generate simpler code for JIT
-            codemodel,
-            optlevel,
-            true // JIT
-            );
-    assert(jl_TargetMachine && "Failed to select target machine -"
-                               " Is the LLVM backend for this CPU enabled?");
-    #if (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
-    // FastISel seems to be buggy for ARM. Ref #13321
-    if (jl_options.opt_level < 2)
-        jl_TargetMachine->setFastISel(true);
-    #endif
-
-    jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine, new LLVMContext());
-
-    // Mark our address spaces as non-integral
-    jl_data_layout = jl_ExecutionEngine->getDataLayout();
-    std::string DL = jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13";
-    jl_data_layout.reset(DL);
+    jl_ExecutionEngine = new JuliaOJIT(new LLVMContext());
 
     // Register GDB event listener
 #if defined(JL_DEBUG_BUILD)
@@ -8387,7 +8303,7 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     jl_init_jit();
     init_jit_functions();
 
-    Module *m = _jl_create_llvm_module("julia", *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams);
+    Module *m = _jl_create_llvm_module("julia", *jl_ExecutionEngine->getContext().getContext(), &jl_default_cgparams, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
     init_julia_llvm_env(m);
 
     jl_init_intrinsic_functions_codegen();

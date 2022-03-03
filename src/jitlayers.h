@@ -48,7 +48,6 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
@@ -56,8 +55,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lowe
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name, LLVMContext &ctxt);
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
+DataLayout create_jl_data_layout(TargetMachine &TM);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -218,7 +218,7 @@ private:
 
 public:
 
-    JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
+    JuliaOJIT(LLVMContext *Ctx);
 
     void enableJITDebuggingSupport();
 #ifndef JL_USE_JITLINK
@@ -236,14 +236,15 @@ public:
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     orc::ThreadSafeContext &getContext();
     const DataLayout& getDataLayout() const;
+    TargetMachine &getTargetMachine();
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
 
-    TargetMachine &TM;
-    const DataLayout DL;
+    std::unique_ptr<TargetMachine> TM;
+    DataLayout DL;
     // Should be big enough that in the common case, The
     // object fits in its entirety
     legacy::PassManager PM0;  // per-optlevel pass managers
