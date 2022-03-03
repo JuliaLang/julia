@@ -821,7 +821,6 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
                          flag::UInt8, state::InliningState)
     method = match.method
     spec_types = match.spec_types
-    methsig = method.sig
 
     # Check that we have the correct number of arguments
     na = Int(method.nargs)
