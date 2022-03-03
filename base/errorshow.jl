@@ -508,7 +508,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 print(iob, ")")
                 show_method_params(iob0, tv)
-                file, line = functionloc(method)
+                file, line = updated_methodloc(method)
                 if file === nothing
                     file = string(method.file)
                 end
