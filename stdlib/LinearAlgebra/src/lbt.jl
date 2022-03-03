@@ -173,18 +173,18 @@ end
 
 mutable struct ConfigCache
     @atomic config::Union{Nothing,LBTConfig}
+    lock::ReentrantLock
 end
 
 # In the event that users want to call `lbt_get_config()` multiple times (e.g. for
 # runtime checks of which BLAS vendor is providing a symbol), let's cache the value
 # and clear it only when someone calls something that would cause it to change.
-const _CACHED_CONFIG = ConfigCache(nothing)
-const _CONFIG_LOCK = ReentrantLock()
+const _CACHED_CONFIG = ConfigCache(nothing, ReentrantLock())
 
 function lbt_get_config()
     config = @atomic :acquire _CACHED_CONFIG.config
     config === nothing || return config
-    return lock(_CONFIG_LOCK) do
+    return lock(_CACHED_CONFIG.lock) do
         local config = @atomic :monotonic _CACHED_CONFIG.config
         config === nothing || return config
         config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
@@ -193,7 +193,7 @@ function lbt_get_config()
 end
 
 function _clear_config_with(f)
-    lock(_CONFIG_LOCK) do
+    lock(_CACHED_CONFIG.lock) do
         @atomic :release _CACHED_CONFIG.config = nothing
         f()
     end
