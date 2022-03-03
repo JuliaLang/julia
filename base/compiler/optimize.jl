@@ -94,9 +94,8 @@ mutable struct OptimizationState
     slottypes::Vector{Any}
     inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
-        s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
-            EdgeTracker(s_edges, frame.valid_worlds),
+            EdgeTracker(frame.result.edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
             interp)
         return new(frame.linfo,
