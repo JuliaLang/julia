@@ -64,7 +64,7 @@ end
     iobuf = IOBuffer()
     with_logger(NullLogger()) do
         @testset for format in [:flat, :tree]
-            @testset for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
+            @testset for threads in Any[1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
                 @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
                     Profile.print(iobuf; groupby, threads, format)
                     @test !isempty(String(take!(iobuf)))
