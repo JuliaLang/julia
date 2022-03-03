@@ -2352,16 +2352,20 @@ end
 function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
     old = slottypes[slot_id]
     new = widenconditional(state[slot_id].typ) # avoid nested conditional
-    if new ⊑ old && !(old ⊑ new)
-        if isa(rt, Const)
-            val = rt.val
-            if val === true
-                return InterConditional(slot_id, new, Bottom)
-            elseif val === false
-                return InterConditional(slot_id, Bottom, new)
+    if (isa(rt, Const) && isa(rt.val, Bool)) || rt === Bool
+        # N.B.: These lattice queries can be expensive. Guard them by the
+        #       conditions above to avoid useless computation.
+        if new ⊑ old && !(old ⊑ new)
+            if isa(rt, Const)
+                val = rt.val
+                if val === true
+                    return InterConditional(slot_id, new, Bottom)
+                elseif val === false
+                    return InterConditional(slot_id, Bottom, new)
+                end
+            elseif rt === Bool
+                return InterConditional(slot_id, new, new)
             end
-        elseif rt === Bool
-            return InterConditional(slot_id, new, new)
         end
     end
     return rt
