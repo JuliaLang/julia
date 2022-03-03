@@ -671,6 +671,7 @@ end
 
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
+    # bits is unsigned and CHUNK_SIZE is a compile time constant for performance reasons.
     MASK = UInt(1) << CHUNK_SIZE - 0x1
     counts = Vector{unsigned(typeof(hi-lo))}(undef, MASK+2)
 
@@ -706,22 +707,6 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
     v
 end
 
-used_bits(x::Union{Signed, Unsigned}) = sizeof(x)*8 - leading_zeros(x)
-function radix_heuristic(mn, mx, length)
-    #Skip sorting
-    mn == mx && return 0, 0, false
-
-    #Dispatch to count sort
-    length > unsigned(mx - mn) && return 0, 0, true #TODO optimize
-
-    bits = used_bits(mx-mn)
-
-    guess = log(length)*3/4+3
-    chunk = Int(cld(bits, cld(bits, guess)))
-
-    bits, chunk, false
-end
-
 function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
@@ -735,7 +720,7 @@ function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveS
     v
 end
 
-maybe_unsigned(x::Integer) = x
+maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::Union{Int8, Int16, Int32, Int64, Int128}) = unsigned(x)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
@@ -743,52 +728,105 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     U = Serial.Serializable(eltype(v), o)
     U === nothing && return sort!(v, lo, hi, a.fallback, o)
 
-    # to avoid introducing excessive detection costs for the trivial sorting problem,
-    # we check for small inputs before any other runtime checks
+    # to avoid introducing excessive detection costs for the trivial sorting problem
+    # and to avoid overflow, we check for small inputs before any other runtime checks
     hi <= lo && return v
-    ln = maybe_unsigned(hi-lo)
-    ln <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-    ln <= 2*SMALL_THRESHOLD && return sort!(v, lo, hi, a.fallback, o)
-
-    # Count sort
-    if eltype(v) <: Integer && o isa DirectOrdering
+    ln = maybe_unsigned(hi-lo) # ln == length(v[lo:hi])-1. Lower number = fewer letters :)
+    # only count sort on a short range can compete with insertion sort fo ln < 30
+    # and the optimization is not worth the detection cost, so we use inserstion sort.
+    ln < 30 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+    if (eltype(v) == Int128 || eltype(v) == UInt128) && o isa DirectOrdering
+        # This avoids an unneccessary serialization which can have a 0–50% runtime impact.
         mn, mx = extrema(v)
-        rangeln = maybe_unsigned(hi-lo)
-        if rangeln < ln
-            return sort_int_range!(v, rangeln+1, mn, o === Forward ? identity : reverse, lo, hi)
+        rln = maybe_unsigned(mx-mn)
+         # the range can be big and count sort will still outperform comparison sort
+        if rln < 5ln-100
+            return sort_int_range!(v, rln+1, mn, o === Forward ? identity : reverse, lo, hi)
+        else
+            return sort!(v, lo, hi, a.fallback, o)
         end
     end
-
-    # Radix sort is only faster than comparison sorting for large arrays. The more bits
-    # there are to radix over, the larger the array needs to be for radix sort to be
-    # advantageous. Empirically, we place this threshold at 500 for 16 bit datatypes,
-    # 1000 for 32 bits, and 2000 for 64 bits. For 128 bit datatypes, bit-shifting becomes
-    # prohibitively slow, and bit shifting is central to radix sorting. For 1 byte
-    # datatypes, when an input is long enough for radix sorting to be faster than
-    # comparison sorting, it always makes sense to sort in a single radix pass, which
-    # is simply counting sort with additional overhead, so we never consider radix sort
-    # for single byte types.
-    (U === UInt8 || U === UInt128 || ln < 250 * sizeof(U)) && return sort!(v, lo, hi, a.fallback, o)
-
-    # serialize and then choose between radix sort and counting sort
     u, mn, mx = Serial.serialize!(v, lo, hi, o)
-    bits, chunk_size, count = radix_heuristic(mn, mx, hi-lo+1)
 
-    if count # (we may be unnable to use count sort until after serializing)
-        # This overflows and returns incorrect results if the range is more than typemax(Int)
-        # sourt_int_range! would need to allocate an array of more than typemax(Int) elements,
-        # so policy should never dispatch to sort_int_range! in that case.
-        u = sort_int_range!(u, 1+mx-mn, mn, identity, lo, hi) # 1 not one().
-        mn = zero(mn)
-    elseif bits > 0
-        @inbounds for i in lo:hi u[i] -= mn end
-        #Dynamic dispatch:
-        u = radix_sort!(u, lo, hi, unsigned(bits), Val(UInt8(chunk_size)), similar(u))
-    else
-        mn = zero(mn)
+    # Arbitrary types and orders may serialize to UInt128 (i.e. those not caught in the
+    # special case above), but should still never dispatch to radix sort because bit
+    # shifting 128 bits is too slow to be competitive with comparrison based sorting
+    # even if only some of the bits are actually used.
+    should_radix = sizeof(U) <= 8
+
+    # rln is an abbrevation for range_ln. Like ln, rln == length(mn:mx)-1
+    rln = maybe_unsigned(mx-mn)
+    # rln has to be small for cout sort to outperform radix sort
+    if rln < (should_radix ? ln÷2 : 5ln-100)
+        sort_int_range!(u, rln+1, mn, identity, lo, hi)
+        return Serial.deserialize!(v, u, lo, hi, o)
+    end
+    if !should_radix
+        sort!(u, lo, hi, ln < 70 ? SMALL_ALGORITHM : a.fallback, Forward)
+        return Serial.deserialize!(v, u, lo, hi, o)
     end
 
-    Serial.deserialize!(v, u, lo, hi, o, mn)
+    # if rln is small, then once we subtract out mn, we'll get a vector like
+    # UInt16[0x001a, 0x0015, 0x0006, 0x001b, 0x0008, 0x000c, 0x0001, 0x000e, 0x001c, 0x0009]
+    # where we only need to radix over the last few bits (bits = 5, in the example).
+    bits = unsigned(8sizeof(rln) - leading_zeros(rln))
+
+    # radix sort runs in O(bits * ln), insertion sort runs in O(ln^2). Radix sort has a
+    # constant factor that is three times higher, so radix runtime is 3bits * ln and
+    # insertion runtime is ln^2. Emperically, insertion is faster than radix iff ln < 3bits.
+    if ln < 3bits
+        # at ln = 64*3-1, QuickSort is about 20% faster than InsertionSort. The window
+        # where QuickSort is superior is the triangle contained by (ln=128, bits=43),
+        # (ln=191, bits=64), and (ln=128, bits=64). This is a small window, spanning only
+        # .015 square orders of magnitude, and the 20% performance gap is only present at
+        # the apex. At the centroid, the gap is about 6%. On the other hand there are
+        # theoretical/compilation benefits to avoiding the fallback entierly for small
+        # serializable types and orderings, so we unconditionaly use InsertionSort.
+        sort!(u, lo, hi, SMALL_ALGORITHM, Forward)
+        return Serial.deserialize!(v, u, lo, hi, o)
+    end
+
+    # At this point, we are comitted to radix sort.
+
+    # chunk_size is the number of bits to radix over at once.
+    # We need to allocate an array of size 2^chunk size, and on the other hand the hihger
+    # the chunk size the fewer passess we need. Theoretically, chunk size shoud be based on
+    # the Lambert W function applied to length. Emperically, we use this heuristic:
+    guess = log(ln)*3/4+3
+    # We need iterations * chunk size ≥ bits, and these cld's
+    # make an effort to get itterations * chunk size ≈ bits
+    chunk_size = UInt8(cld(bits, cld(bits, guess)))
+
+    # we subtract mn to avoid radixing over unnecessary bits. For example,
+    # Int32[3, -1, 2] serializes to UInt32[0x80000003, 0x7fffffff, 0x80000002]
+    # which uses all 32 bits, but once we subtract mn = 0x7fffffff, we are left with
+    # UInt32[0x00000004, 0x00000000, 0x00000003] which uses only 3 bits, and
+    # Float32[2.012, 400.0, 12.345] serializes to UInt32[0x3fff3b63, 0x3c37ffff, 0x414570a4]
+    # which is reduced to UInt32[0x03c73b64, 0x00000000, 0x050d70a5] using only 26 bits.
+    # the overhead for this subtraction is small enough that it is worthwhile in many cases.
+    @inbounds for i in lo:hi u[i] -= mn end # this line is faster than u[lo:hi] .-= mn
+
+    t = similar(u)
+    # This if else chain is to avoid dynamic dispatch for small cases.
+    # Chunk sizes less than 3 should never occur, and chunk sizes greater than 8
+    # only occur for arrays of length greater than 950, and tend to occur only for arrays
+    # of length greater than about 4000 where a single dynamic dispatch is less costly
+    u2 = if chunk_size == 3
+        radix_sort!(u, lo, hi, bits, Val(0x3), t)
+    elseif chunk_size == 4
+        radix_sort!(u, lo, hi, bits, Val(0x4), t)
+    elseif chunk_size == 5
+        radix_sort!(u, lo, hi, bits, Val(0x5), t)
+    elseif chunk_size == 6 # 9% to 15% savings over dynamic dispatch
+        radix_sort!(u, lo, hi, bits, Val(0x6), t)
+    elseif chunk_size == 7 # 2% to 7% savings over dynamic dispatch
+        radix_sort!(u, lo, hi, bits, Val(0x7), t)
+    elseif chunk_size == 8 # -1% to 10% savings and common for lengths between 300 and 3000
+        radix_sort!(u, lo, hi, bits, Val(0x8), t)
+    else
+        radix_sort!(u, lo, hi, bits, Val(chunk_size), t)
+    end
+    Serial.deserialize!(v, u2, lo, hi, o, mn)
 end
 
 ## generic sorting methods ##
@@ -1332,7 +1370,7 @@ function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering
 end
 
 function deserialize!(v::AbstractVector, u::AbstractVector{U},
-    lo::Integer, hi::Integer, order::Ordering, offset::U) where U <: Unsigned
+    lo::Integer, hi::Integer, order::Ordering, offset::U=zero(U)) where U <: Unsigned
     @inbounds for i in lo:hi
         v[i] = deserialize(eltype(v), u[i]+offset, order)
     end
@@ -1468,8 +1506,7 @@ issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
-    length(v) <= SMALL_THRESHOLD &&
-        return sort!(v, first(axes(v,1)), last(axes(v,1)), SMALL_ALGORITHM, o)
+    length(v) < 10 && return sort!(v, first(axes(v,1)), last(axes(v,1)), SMALL_ALGORITHM, o)
 
     i, j = lo, hi = specials2end!(v,a,o)
     @inbounds while true
