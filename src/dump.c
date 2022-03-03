@@ -272,6 +272,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     for (i = 0; i < n; i++) {
         jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, i);
         if (has_backedge_to_worklist(be, visited)) {
+            bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
             *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
             return 1;
         }
@@ -286,10 +287,10 @@ static size_t queue_external_mis(jl_array_t *list)
 {
     size_t i, n = 0;
     htable_t visited;
-    htable_new(&visited, 0);
     if (list) {
         assert(jl_is_array(list));
         size_t n0 = jl_array_len(list);
+        htable_new(&visited, n0);
         for (i = 0; i < n0; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
             assert(jl_is_method_instance(mi));
@@ -2640,7 +2641,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     arraylist_new(&reinit_list, 0);
     htable_new(&edges_map, 0);
     htable_new(&backref_table, 5000);
-    htable_new(&external_mis, 0);
+    htable_new(&external_mis, newly_inferred ? jl_array_len(newly_inferred) : 0);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
     backref_table_numel = 1;
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
