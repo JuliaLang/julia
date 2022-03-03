@@ -15,15 +15,21 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
+
+// target machine computation
+#include <llvm/CodeGen/TargetSubtargetInfo.h>
 #if JL_LLVM_VERSION >= 140000
 #include <llvm/MC/TargetRegistry.h>
 #else
 #include <llvm/Support/TargetRegistry.h>
 #endif
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Target/TargetMachine.h>
-#include <llvm/Transforms/Utils/Cloning.h>
-#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Object/SymbolSize.h>
 
 using namespace llvm;
 
@@ -32,6 +38,7 @@ using namespace llvm;
 #include "codegen_shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION >= 140000
@@ -789,6 +796,87 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
     );
 }
 #endif
+namespace {
+    std::unique_ptr<TargetMachine> createTargetMachine() {
+
+        TargetOptions options = TargetOptions();
+#if defined(_OS_WINDOWS_)
+        // use ELF because RuntimeDyld COFF i686 support didn't exist
+        // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
+#define FORCE_ELF
+#endif
+        //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
+        // tell Win32 to assume the stack is always 16-byte aligned,
+        // and to ensure that it is 16-byte aligned for out-going calls,
+        // to ensure compatibility with GCC codes
+        // In LLVM 13 and onwards this has turned into a module option
+        options.StackAlignmentOverride = 16;
+#endif
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
+        // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
+        options.StackProtectorGuard = StackProtectorGuards::Global;
+#endif
+        Triple TheTriple(sys::getProcessTriple());
+#if defined(FORCE_ELF)
+        TheTriple.setObjectFormat(Triple::ELF);
+#endif
+        uint32_t target_flags = 0;
+        auto target = jl_get_llvm_target(imaging_mode, target_flags);
+        auto &TheCPU = target.first;
+        SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
+        std::string errorstr;
+        const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
+        if (!TheTarget)
+            jl_errorf("%s", errorstr.c_str());
+        if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
+            std::unique_ptr<MCSubtargetInfo> MSTI(
+                TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
+            if (!MSTI->isCPUStringValid(TheCPU))
+                jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
+            if (jl_processor_print_help) {
+                // This is the only way I can find to print the help message once.
+                // It'll be nice if we can iterate through the features and print our own help
+                // message...
+                MSTI->setDefaultFeatures("help", "", "");
+            }
+        }
+        // Package up features to be passed to target/subtarget
+        std::string FeaturesStr;
+        if (!targetFeatures.empty()) {
+            SubtargetFeatures Features;
+            for (unsigned i = 0; i != targetFeatures.size(); ++i)
+                Features.AddFeature(targetFeatures[i]);
+            FeaturesStr = Features.getString();
+        }
+        // Allocate a target...
+        Optional<CodeModel::Model> codemodel =
+#ifdef _P64
+            // Make sure we are using the large code model on 64bit
+            // Let LLVM pick a default suitable for jitting on 32bit
+            CodeModel::Large;
+#else
+            None;
+#endif
+        auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
+        auto TM = TheTarget->createTargetMachine(
+                TheTriple.getTriple(), TheCPU, FeaturesStr,
+                options,
+                Reloc::Static, // Generate simpler code for JIT
+                codemodel,
+                optlevel,
+                true // JIT
+                );
+        assert(TM && "Failed to select target machine -"
+                                " Is the LLVM backend for this CPU enabled?");
+        #if (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
+        // FastISel seems to be buggy for ARM. Ref #13321
+        if (jl_options.opt_level < 2)
+            TM->setFastISel(true);
+        #endif
+        return std::unique_ptr<TargetMachine>(TM);
+    }
+} // namespace
 
 namespace {
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
@@ -802,14 +890,21 @@ namespace {
     }
 }
 
-JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
-  : TM(TM),
-    DL(TM.createDataLayout()),
+llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
+    // Mark our address spaces as non-integral
+    auto jl_data_layout = TM.createDataLayout();
+    jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
+    return jl_data_layout;
+}
+
+JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
+  : TM(createTargetMachine()),
+    DL(create_jl_data_layout(*TM)),
     TMs{
-        cantFail(createJTMBFromTM(TM, 0).createTargetMachine()),
-        cantFail(createJTMBFromTM(TM, 1).createTargetMachine()),
-        cantFail(createJTMBFromTM(TM, 2).createTargetMachine()),
-        cantFail(createJTMBFromTM(TM, 3).createTargetMachine())
+        cantFail(createJTMBFromTM(*TM, 0).createTargetMachine()),
+        cantFail(createJTMBFromTM(*TM, 1).createTargetMachine()),
+        cantFail(createJTMBFromTM(*TM, 2).createTargetMachine()),
+        cantFail(createJTMBFromTM(*TM, 3).createTargetMachine())
     },
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
 #if JL_LLVM_VERSION >= 130000
@@ -837,10 +932,10 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
             }
         ),
 #endif
-    CompileLayer0(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 0))),
-    CompileLayer1(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 1))),
-    CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 2))),
-    CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 3))),
+    CompileLayer0(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 0))),
+    CompileLayer1(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 1))),
+    CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 2))),
+    CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 3))),
     OptimizeLayers{
         {ES, CompileLayer0, OptimizerT(PM0, 0)},
         {ES, CompileLayer1, OptimizerT(PM1, 1)},
@@ -1063,9 +1158,14 @@ const DataLayout& JuliaOJIT::getDataLayout() const
     return DL;
 }
 
+TargetMachine &JuliaOJIT::getTargetMachine()
+{
+    return *TM;
+}
+
 const Triple& JuliaOJIT::getTargetTriple() const
 {
-    return TM.getTargetTriple();
+    return TM->getTargetTriple();
 }
 
 std::string JuliaOJIT::getMangledName(StringRef Name)

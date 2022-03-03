@@ -1201,7 +1201,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
             if (f != &f2 && !f->isDeclaration())
                 f2.deleteBody();
         }
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(jl_TargetMachine);
+        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(&jl_ExecutionEngine->getTargetMachine());
         legacy::PassManager PM;
         addTargetPasses(&PM, TM);
         if (raw_mc) {
@@ -1226,7 +1226,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
             if (!strcmp(asm_variant, "intel"))
                 OutputAsmDialect = 1;
             MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
+                jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
