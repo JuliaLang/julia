@@ -29,11 +29,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif a <: Tuple
+    end
+    # a and b are DataTypes
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
+    if a <: Tuple
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        ap, bp = a.parameters, b.parameters
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -77,8 +81,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    # We have to hide Constant info from inference, see #44390
-    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
