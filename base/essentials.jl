@@ -766,7 +766,7 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
 end
 
 # TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
 
 """
     isempty(collection) -> Bool
