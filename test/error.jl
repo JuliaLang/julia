@@ -86,3 +86,13 @@ end
     e = SystemError("fail")
     @test e.extrainfo === nothing
 end
+
+@testset "MethodError for methods without line numbers" begin
+    try
+        eval(Expr(:function, :(f()),0))
+        f(1)
+    catch e
+        s =  sprint(showerror, e)
+        @test s == "MethodError: no method matching f(::Int64)\nClosest candidates are:\n  f() at none:0"
+    end
+end
