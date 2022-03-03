@@ -89,10 +89,10 @@ end
 
 @testset "MethodError for methods without line numbers" begin
     try
-        eval(Expr(:function, :(f()),0))
-        f(1)
+        eval(Expr(:function, :(f44319()), 0))
+        f44319(1)
     catch e
-        s =  sprint(showerror, e)
-        @test s == "MethodError: no method matching f(::Int64)\nClosest candidates are:\n  f() at none:0"
+        s = sprint(showerror, e)
+        @test s == "MethodError: no method matching f44319(::Int64)\nClosest candidates are:\n  f44319() at none:0"
     end
 end
