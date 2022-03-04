@@ -685,12 +685,8 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
             counts[idx] += one(eltype(counts))
         end
 
-        sum = lo-1
-        for i in 1:MASK+1
-            sum += counts[i]
-            counts[i] = sum
-        end
-        # could be replaced by `accumulate!(+, counts, counts)`
+        counts[1] = lo-1
+        cumsum!(counts, counts)
 
         for k in lo:hi # Is this iteration slower than it could be?
             x = v[k]
