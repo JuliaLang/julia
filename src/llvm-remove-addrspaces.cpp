@@ -116,7 +116,6 @@ private:
     DenseMap<Type *, Type *> MappedTypes;
 };
 
-DenseMap<Type *, Type *> AddrspaceRemoveTypeRemapper::MappedTypes;
 
 class AddrspaceRemoveValueMaterializer : public ValueMaterializer {
     ValueToValueMapTy &VM;
