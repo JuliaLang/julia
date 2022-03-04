@@ -67,9 +67,7 @@ function Token(kind::Kind, startbyte::Int, endbyte::Int)
 end
 Token() = Token(ERROR, 0, 0, UNKNOWN, false, false)
 
-
-const _EMPTY_RAWTOKEN = Token()
-EMPTY_TOKEN(::Type{Token}) = _EMPTY_RAWTOKEN
+const EMPTY_TOKEN = Token()
 
 function kind(t::Token)
     isoperator(t.kind) && return OP

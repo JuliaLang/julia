@@ -1,7 +1,9 @@
 #-------------------------------------------------------------------------------
 # Flags hold auxilary information about tokens/nonterminals which the Kind
 # doesn't capture in a nice way.
-const RawFlags = UInt32
+#
+# TODO: Use `primitive type SyntaxFlags 16 end` rather than an alias?
+const RawFlags = UInt16
 const EMPTY_FLAGS = RawFlags(0)
 const TRIVIA_FLAG = RawFlags(1<<0)
 # Some of the following flags are head-specific and could probably be allowed
@@ -17,7 +19,11 @@ const RAW_STRING_FLAG = RawFlags(1<<4)
 const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
-# Todo ERROR_FLAG = 0x80000000 ?
+# Todo ERROR_FLAG = 0x8000 ?
+
+## Flags for tokens (may overlap with the flags allocated for syntax above)
+const SUFFIXED_FLAG        = RawFlags(1<<6)
+const PRECEDING_WHITESPACE_FLAG = RawFlags(1<<7)
 
 function set_numeric_flags(n::Integer)
     f = RawFlags((n << 8) & NUMERIC_FLAGS)
@@ -31,6 +37,10 @@ function numeric_flags(f::RawFlags)
     Int((f >> 8) % UInt8)
 end
 
+function remove_flags(n::RawFlags, fs...)
+    RawFlags(n & ~(RawFlags((|)(fs...))))
+end
+
 # Return true if any of `test_flags` are set
 has_flags(flags::RawFlags, test_flags) = (flags & test_flags) != 0
 
@@ -42,13 +52,6 @@ end
 
 kind(head::SyntaxHead) = head.kind
 flags(head::SyntaxHead) = head.flags
-has_flags(head::SyntaxHead, test_flags) = has_flags(flags(head), test_flags)
-
-is_trivia(head::SyntaxHead) = has_flags(head, TRIVIA_FLAG)
-is_infix(head::SyntaxHead)  = has_flags(head, INFIX_FLAG)
-is_dotted(head::SyntaxHead) = has_flags(head, DOTOP_FLAG)
-numeric_flags(head::SyntaxHead) = numeric_flags(flags(head))
-is_error(head::SyntaxHead)  = kind(head) == K"error"
 
 function Base.summary(head::SyntaxHead)
     untokenize(head, unique=false, include_flag_suff=false)
@@ -59,13 +62,20 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     if is_dotted(head)
         str = "."*str
     end
-    if include_flag_suff && flags(head) ∉ (EMPTY_FLAGS, DOTOP_FLAG)
+    f = flags(head)
+    # Ignore some flags:
+    # - DOTOP_FLAG is represented with . prefix
+    # - PRECEDING_WHITESPACE_FLAG relates to the environment of this token
+    f &= ~(DOTOP_FLAG | PRECEDING_WHITESPACE_FLAG)
+    suffix_flags = remove_flags(flags(head), DOTOP_FLAG, PRECEDING_WHITESPACE_FLAG)
+    if include_flag_suff && suffix_flags != EMPTY_FLAGS
         str = str*"-"
         is_trivia(head)  && (str = str*"t")
         is_infix(head)   && (str = str*"i")
         has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
         has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
         has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
+        is_suffixed(head) && (str = str*"S")
         n = numeric_flags(head)
         n != 0 && (str = str*string(n))
     end
@@ -73,42 +83,45 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
 end
 
 #-------------------------------------------------------------------------------
+# Generic interface for types `T` which have kind and flags:
+# 1. Define kind(::T) and flags(::T) directly
+# 2. Define head(::T) to return a type like `SyntaxKind` for which `kind` and
+#    `flags` are defined
+kind(x)  = kind(head(x))
+flags(x) = flags(head(x))
+
+# Predicates based on kind() / flags()
+is_error(x)  = kind(x) == K"error"
+has_flags(x, test_flags) = has_flags(flags(x), test_flags)
+is_trivia(x) = has_flags(x, TRIVIA_FLAG)
+is_infix(x)  = has_flags(x, INFIX_FLAG)
+is_dotted(x) = has_flags(x, DOTOP_FLAG)
+is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
+preceding_whitespace(x) = has_flags(x, PRECEDING_WHITESPACE_FLAG)
+numeric_flags(x) = numeric_flags(flags(x))
+
+#-------------------------------------------------------------------------------
 """
 `SyntaxToken` is a token covering a contiguous byte range in the input text.
 Information about preceding whitespace is added for use by the parser.
 """
 struct SyntaxToken
-    kind::Kind
+    head::SyntaxHead
     first_byte::UInt32
-    last_byte::UInt32
-    # Flags for leading whitespace
-    is_dotted::Bool
-    is_suffixed::Bool
-    had_whitespace::Bool
-    had_newline::Bool
-end
-
-function SyntaxToken(raw::Token, had_whitespace, had_newline)
-    SyntaxToken(raw.kind, raw.startbyte + 1, raw.endbyte + 1, raw.dotop, raw.suffix,
-                had_whitespace, had_newline)
+    last_byte::UInt32 # TODO: Remove this?
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
-    range = string(lpad(first_byte(tok), 3), ":", rpad(last_byte(tok), 3))
-    print(io, rpad(range, 17, " "), rpad(kind(tok), 15, " "))
+    print(io, untokenize(tok.head, unique=false), " @", first_byte(tok))
 end
 
-kind(tok::SyntaxToken) = tok.kind
-flags(tok::SyntaxToken) = tok.is_dotted ? DOTOP_FLAG : EMPTY_FLAGS
+head(tok::SyntaxToken) = tok.head
 first_byte(tok::SyntaxToken) = tok.first_byte
 last_byte(tok::SyntaxToken) = tok.last_byte
 span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
 
-is_dotted(tok::SyntaxToken)    = tok.is_dotted
-is_suffixed(tok::SyntaxToken)  = tok.is_suffixed
 is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
 
-Base.:(==)(tok::SyntaxToken, k::Kind) = (kind(tok) == k && !is_decorated(tok))
 
 #-------------------------------------------------------------------------------
 
@@ -116,8 +129,6 @@ Base.:(==)(tok::SyntaxToken, k::Kind) = (kind(tok) == k && !is_decorated(tok))
 Range in the source text which will become a node in the tree. Can be either a
 token (leaf node of the tree) or an interior node, depending on how the
 start_mark compares to previous nodes.
-
-TODO: Optimize this data structure?  It's very large at the moment.
 """
 struct TaggedRange
     head::SyntaxHead # Kind,flags
@@ -125,6 +136,12 @@ struct TaggedRange
     first_byte::UInt32  # First byte in the input text
     last_byte::UInt32   # Last byte in the input text
     start_mark::UInt32  # Index of first emitted range which this range covers
+    # TODO: Remove the three fields above & replace with:
+    # is_leaf::Bool
+    # # The following field is used for one of two things:
+    # # - For leaf nodes it points to the last byte of the token in the input text
+    # # - For non-leaf nodes it points to the index of the first child
+    # last_byte_or_first_child::UInt32
 end
 
 head(range::TaggedRange)       = range.head
@@ -165,6 +182,9 @@ mutable struct ParseStream
     lexer::Tokenize.Lexers.Lexer{IOBuffer}
     # Lookahead buffer for already lexed tokens
     lookahead::Vector{SyntaxToken}
+    lookahead_index::Int
+    # Pool of stream positions for use as working space in parsing
+    position_pool::Vector{Vector{ParseStreamPosition}}
     # Parser output as an ordered sequence of ranges, parent nodes after children.
     ranges::Vector{TaggedRange}
     # Parsing diagnostics (errors/warnings etc)
@@ -188,8 +208,12 @@ mutable struct ParseStream
         # numbers. This means we're inexact for old dev versions but that seems
         # like an acceptable tradeoff.
         ver = (version.major, version.minor)
-        new(text_buf, text_root, lexer,
+        new(text_buf,
+            text_root,
+            lexer,
             Vector{SyntaxToken}(),
+            1,
+            Vector{Vector{ParseStreamPosition}}(),
             Vector{TaggedRange}(),
             Vector{Diagnostic}(),
             next_byte,
@@ -247,43 +271,102 @@ function show_diagnostics(io::IO, stream::ParseStream, code)
     show_diagnostics(io, stream.diagnostics, code)
 end
 
+# We manage a pool of stream positions as parser working space
+function acquire_positions(stream)
+    if isempty(stream.position_pool)
+        return Vector{ParseStreamPosition}()
+    end
+    pop!(stream.position_pool)
+end
+
+function release_positions(stream, positions)
+    empty!(positions)
+    push!(stream.position_pool, positions)
+end
+
 #-------------------------------------------------------------------------------
 # Stream input interface - the peek_* family of functions
 
-# Buffer up until the next non-whitespace token.
-# This can buffer more than strictly necessary when newlines are significant,
-# but this is not a big problem.
-function _buffer_lookahead_tokens(stream::ParseStream)
+# Buffer several tokens ahead
+function _buffer_lookahead_tokens(lexer, lookahead)
     had_whitespace = false
-    had_newline    = false
+    token_count = 0
     while true
-        raw = Tokenize.Lexers.next_token(stream.lexer)
+        raw = Tokenize.Lexers.next_token(lexer)
         k = TzTokens.exactkind(raw)
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
-        was_newline    = k == K"NewlineWs"
         had_whitespace |= was_whitespace
-        had_newline    |= was_newline
-        push!(stream.lookahead, SyntaxToken(raw, had_whitespace, had_newline))
-        if !was_whitespace
+        f = EMPTY_FLAGS
+        had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
+        raw.dotop      && (f |= DOTOP_FLAG)
+        raw.suffix     && (f |= SUFFIXED_FLAG)
+        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1, raw.endbyte + 1))
+        token_count += 1
+        if k == K"EndMarker"
             break
+        end
+        if !was_whitespace
+            # Buffer tokens in batches for lookahead. Generally we want a
+            # moderate-size buffer to make sure we hit the fast path of peek(),
+            # but not too large to avoid (a) polluting the processor cache and
+            # (b) doing unnecessary work when not parsing the whole input.
+            had_whitespace = false
+            if token_count > 100
+                break
+            end
         end
     end
 end
 
-# Find the index of the first nontrivia token in the lookahead buffer.
-#
-# TODO: Store this as part of _buffer_lookahead_tokens to avoid redoing this
-# work all the time!
-function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
-    i = 1
+# Find the index of the next nontrivia token
+@inline function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
+    # Much of the time we'll be peeking ahead a single token and have one or
+    # zero whitespace tokens before the next token. The following code is an
+    # unrolled optimized version for that fast path. Empirically it seems we
+    # only hit the slow path about 5% of the time here.
+    i = stream.lookahead_index
+    @inbounds if n == 1 && i+1 <= length(stream.lookahead)
+        if skip_newlines
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs")
+                return i
+            end
+            i += 1
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs")
+                return i
+            end
+        else
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment")
+                return i
+            end
+            i += 1
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment")
+                return i
+            end
+        end
+    end
+    # Fall through to the general case
+    return __lookahead_index(stream, n, skip_newlines)
+end
+
+@noinline function __lookahead_index(stream, n, skip_newlines)
+    i = stream.lookahead_index
     while true
         if i > length(stream.lookahead)
-            _buffer_lookahead_tokens(stream)
+            n_to_delete = stream.lookahead_index-1
+            if n_to_delete > 0.9*length(stream.lookahead)
+                Base._deletebeg!(stream.lookahead, n_to_delete)
+                i -= n_to_delete
+                stream.lookahead_index = 1
+            end
+            _buffer_lookahead_tokens(stream.lexer, stream.lookahead)
         end
-        k = kind(stream.lookahead[i])
-        is_skipped =  k ∈ (K"Whitespace", K"Comment") ||
-                     (k == K"NewlineWs" && skip_newlines)
-        if !is_skipped
+        k = @inbounds kind(stream.lookahead[i])
+        if !((k == K"Whitespace" || k == K"Comment") ||
+             (k == K"NewlineWs" && skip_newlines))
             if n == 1
                 return i
             end
@@ -293,16 +376,22 @@ function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
     end
 end
 
+@noinline function _parser_stuck_error(stream)
+    # Optimization: emit unlikely errors in a separate function
+    error("The parser seems stuck at byte $(stream.next_byte)")
+end
+
 """
-    peek(stream [, n=1])
+    peek(stream [, n=1]; skip_newlines=false)
 
 Look ahead in the stream `n` tokens, returning the token kind. Comments and
 non-newline whitespace are skipped automatically. Whitespace containing a
 single newline is returned as kind `K"NewlineWs"` unless `skip_newlines` is
 true.
 """
-function Base.peek(stream::ParseStream, n::Integer=1; skip_newlines::Bool=false)
-    kind(peek_token(stream, n; skip_newlines=skip_newlines))
+function Base.peek(stream::ParseStream, n::Integer=1;
+                   skip_newlines::Bool=false, skip_whitespace=true)
+    kind(peek_token(stream, n; skip_newlines=skip_newlines, skip_whitespace=skip_whitespace))
 end
 
 """
@@ -310,12 +399,17 @@ end
 
 Like `peek`, but return the full token information rather than just the kind.
 """
-function peek_token(stream::ParseStream, n::Integer=1; skip_newlines=false)
+function peek_token(stream::ParseStream, n::Integer=1;
+                    skip_newlines=false, skip_whitespace=true)
     stream.peek_count += 1
     if stream.peek_count > 100_000
-        error("The parser seems stuck at byte $(stream.next_byte)")
+        _parser_stuck_error(stream)
     end
-    stream.lookahead[_lookahead_index(stream, n, skip_newlines)]
+    i = _lookahead_index(stream, n, skip_newlines)
+    if !skip_whitespace
+        i = stream.lookahead_index
+    end
+    return @inbounds stream.lookahead[i]
 end
 
 function _peek_behind_fields(ranges, i)
@@ -360,13 +454,13 @@ end
 #
 # Though note bump() really does both input and output
 
-# Bump the next `n` tokens
+# Bump up until the `n`th token
 # flags and remap_kind are applied to any non-trivia tokens
-function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
-    if n <= 0
+function _bump_until_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
+    if n < stream.lookahead_index
         return
     end
-    for i = 1:n
+    for i in stream.lookahead_index:n
         tok = stream.lookahead[i]
         k = kind(tok)
         if k == K"EndMarker"
@@ -380,7 +474,7 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
                             last_byte(tok), lastindex(stream.ranges)+1)
         push!(stream.ranges, range)
     end
-    Base._deletebeg!(stream.lookahead, n)
+    stream.lookahead_index = n + 1
     stream.next_byte = last_byte(last(stream.ranges)) + 1
     # Defuse the time bomb
     stream.peek_count = 0
@@ -395,7 +489,7 @@ Shift the current token from the input to the output, adding the given flags.
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
               error=nothing, remap_kind::Kind=K"None")
     emark = position(stream)
-    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
+    _bump_until_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
     if !isnothing(error)
         emit(stream, emark, K"error", flags, error=error)
     end
@@ -411,7 +505,7 @@ Bump comments and whitespace tokens preceding the next token
 function bump_trivia(stream::ParseStream, flags=EMPTY_FLAGS;
                      skip_newlines=true, error=nothing)
     emark = position(stream)
-    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
+    _bump_until_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
     if !isnothing(error)
         emit(stream, emark, K"error", flags, error=error)
     end
@@ -438,11 +532,12 @@ lexing ambiguities. There's no special whitespace handling — bump any
 whitespace if necessary with bump_trivia.
 """
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
+    i = stream.lookahead_index
     span = TaggedRange(SyntaxHead(kind, flags), K"None",
-                       first_byte(stream.lookahead[1]),
-                       last_byte(stream.lookahead[num_tokens]),
+                       first_byte(stream.lookahead[i]),
+                       last_byte(stream.lookahead[i-1+num_tokens]),
                        lastindex(stream.ranges) + 1)
-    Base._deletebeg!(stream.lookahead, num_tokens)
+    stream.lookahead_index += num_tokens
     push!(stream.ranges, span)
     stream.next_byte = last_byte(last(stream.ranges)) + 1
     stream.peek_count = 0
@@ -468,7 +563,8 @@ TODO: Are these the only cases?  Can we replace this general utility with a
 simpler one which only splits preceding dots?
 """
 function bump_split(stream::ParseStream, split_spec...)
-    tok = popfirst!(stream.lookahead)
+    tok = stream.lookahead[stream.lookahead_index]
+    stream.lookahead_index += 1
     fbyte = first_byte(tok)
     for (i, (nbyte, k, f)) in enumerate(split_spec)
         lbyte = (i == length(split_spec)) ? last_byte(tok) : fbyte + nbyte - 1
@@ -570,8 +666,9 @@ function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
     if whitespace
         # It's the whitespace which is the error. Find the range of the current
         # whitespace.
-        begin_tok_i = 1
-        end_tok_i = is_whitespace(stream.lookahead[i]) ? i : max(1, i-1)
+        begin_tok_i = stream.lookahead_index
+        end_tok_i = is_whitespace(stream.lookahead[i]) ?
+                    i : max(stream.lookahead_index, i-1)
     end
     fbyte = first_byte(stream.lookahead[begin_tok_i])
     lbyte = last_byte(stream.lookahead[end_tok_i])
