@@ -490,6 +490,8 @@ end
     @test eltype(unique!([i for i in ["1"] if i isa Int])) <: Union{}
 end
 
+
+
 @testset "allunique" begin
     @test allunique([])
     @test allunique(Set())
@@ -507,12 +509,14 @@ end
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
     @test allunique(('a':1:'c')[1:2]) == true
     for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
-             1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
-             StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
-             StepRangeLen(1.0, 0.0, 0), StepRangeLen(1.0, -0.0, 1), StepRangeLen(1.0, 0.0, 2),
-             LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
+                1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
+                StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
+                StepRangeLen(1.0, 0.0, 0), StepRangeLen(1.0, -0.0, 1), StepRangeLen(1.0, 0.0, 2),
+                LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    @test allunique([1:2000;])
+    @test !allunique([1:2000; 500])
 end
 
 @testset "allequal" begin
@@ -542,6 +546,18 @@ end
     @test allequal(LinRange(1, 1, 2))
     @test !allequal(LinRange(1, 2, 2))
 end
+
+@testset "alldisjoint" begin
+    S(N=10^3) = [3i:(3i+2) for i in 1:N]
+   
+    @test alldisjoint([1:3, 4:6])
+    @test alldisjoint([[1,2,3], [4,5,6]])
+    @test alldisjoint([1:3, 4:6, 7:9, 10:12])
+
+    @test alldisjoint(S(10^3))
+    @test alldisjoint([S(10^3)..., 600:600]) == false
+end
+
 
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
