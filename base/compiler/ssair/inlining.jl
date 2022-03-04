@@ -820,9 +820,9 @@ end
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
                          flag::UInt8, state::InliningState)
     method = match.method
-    methsig = method.sig
+    spec_types = match.spec_types
 
-    # Check that we habe the correct number of arguments
+    # Check that we have the correct number of arguments
     na = Int(method.nargs)
     npassedargs = length(argtypes)
     if na != npassedargs && !(na > 0 && method.isva)
@@ -831,6 +831,13 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
         # though we have too many arguments to actually
         # call this function
         return nothing
+    end
+    if !match.fully_covers
+        # type-intersection was not able to give us a simple list of types, so
+        # ir_inline_unionsplit won't be able to deal with inlining this
+        if !(spec_types isa DataType && length(spec_types.parameters) == length(argtypes) && !isvarargtype(spec_types.parameters[end]))
+            return nothing
+        end
     end
 
     # Bail out if any static parameters are left as TypeVar
