@@ -182,6 +182,7 @@ mutable struct ParseStream
     lexer::Tokenize.Lexers.Lexer{IOBuffer}
     # Lookahead buffer for already lexed tokens
     lookahead::Vector{SyntaxToken}
+    lookahead_index::Int
     # Pool of stream positions for use as working space in parsing
     position_pool::Vector{Vector{ParseStreamPosition}}
     # Parser output as an ordered sequence of ranges, parent nodes after children.
@@ -207,9 +208,12 @@ mutable struct ParseStream
         # numbers. This means we're inexact for old dev versions but that seems
         # like an acceptable tradeoff.
         ver = (version.major, version.minor)
-        new(text_buf, text_root, lexer,
-            Vector{Vector{ParseStreamPosition}}(),
+        new(text_buf,
+            text_root,
+            lexer,
             Vector{SyntaxToken}(),
+            1,
+            Vector{Vector{ParseStreamPosition}}(),
             Vector{TaggedRange}(),
             Vector{Diagnostic}(),
             next_byte,
@@ -284,11 +288,11 @@ end
 # Stream input interface - the peek_* family of functions
 
 # Buffer several tokens ahead
-function _buffer_lookahead_tokens(stream::ParseStream)
+function _buffer_lookahead_tokens(lexer, lookahead)
     had_whitespace = false
     token_count = 0
     while true
-        raw = Tokenize.Lexers.next_token(stream.lexer)
+        raw = Tokenize.Lexers.next_token(lexer)
         k = TzTokens.exactkind(raw)
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
         had_whitespace |= was_whitespace
@@ -296,7 +300,7 @@ function _buffer_lookahead_tokens(stream::ParseStream)
         had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
         raw.dotop      && (f |= DOTOP_FLAG)
         raw.suffix     && (f |= SUFFIXED_FLAG)
-        push!(stream.lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1, raw.endbyte + 1))
+        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1, raw.endbyte + 1))
         token_count += 1
         if k == K"EndMarker"
             break
@@ -320,7 +324,7 @@ end
     # zero whitespace tokens before the next token. The following code is an
     # unrolled optimized version for that fast path. Empirically it seems we
     # only hit the slow path about 5% of the time here.
-    i = 1
+    i = stream.lookahead_index
     if n == 1 && i+1 <= length(stream.lookahead)
         if skip_newlines
             k = kind(stream.lookahead[i])
@@ -349,15 +353,20 @@ end
 end
 
 @noinline function __lookahead_index(stream, n, skip_newlines)
-    i = 1
+    i = stream.lookahead_index
     while true
         if i > length(stream.lookahead)
-            _buffer_lookahead_tokens(stream)
+            n_to_delete = stream.lookahead_index-1
+            if n_to_delete > 0.9*length(stream.lookahead)
+                Base._deletebeg!(stream.lookahead, n_to_delete)
+                i -= n_to_delete
+                stream.lookahead_index = 1
+            end
+            _buffer_lookahead_tokens(stream.lexer, stream.lookahead)
         end
         k = kind(stream.lookahead[i])
-        is_skipped =  k ∈ (K"Whitespace", K"Comment") ||
-                     (k == K"NewlineWs" && skip_newlines)
-        if !is_skipped
+        if !((k == K"Whitespace" || k == K"Comment") ||
+             (k == K"NewlineWs" && skip_newlines))
             if n == 1
                 return i
             end
@@ -398,7 +407,7 @@ function peek_token(stream::ParseStream, n::Integer=1;
     end
     i = _lookahead_index(stream, n, skip_newlines)
     if !skip_whitespace
-        i = 1
+        i = stream.lookahead_index
     end
     return stream.lookahead[i]
 end
@@ -445,13 +454,13 @@ end
 #
 # Though note bump() really does both input and output
 
-# Bump the next `n` tokens
+# Bump up until the `n`th token
 # flags and remap_kind are applied to any non-trivia tokens
-function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
-    if n <= 0
+function _bump_until_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
+    if n < stream.lookahead_index
         return
     end
-    for i = 1:n
+    for i in stream.lookahead_index:n
         tok = stream.lookahead[i]
         k = kind(tok)
         if k == K"EndMarker"
@@ -465,7 +474,7 @@ function _bump_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None")
                             last_byte(tok), lastindex(stream.ranges)+1)
         push!(stream.ranges, range)
     end
-    Base._deletebeg!(stream.lookahead, n)
+    stream.lookahead_index = n + 1
     stream.next_byte = last_byte(last(stream.ranges)) + 1
     # Defuse the time bomb
     stream.peek_count = 0
@@ -480,7 +489,7 @@ Shift the current token from the input to the output, adding the given flags.
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
               error=nothing, remap_kind::Kind=K"None")
     emark = position(stream)
-    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
+    _bump_until_n(stream, _lookahead_index(stream, 1, skip_newlines), flags, remap_kind)
     if !isnothing(error)
         emit(stream, emark, K"error", flags, error=error)
     end
@@ -496,7 +505,7 @@ Bump comments and whitespace tokens preceding the next token
 function bump_trivia(stream::ParseStream, flags=EMPTY_FLAGS;
                      skip_newlines=true, error=nothing)
     emark = position(stream)
-    _bump_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
+    _bump_until_n(stream, _lookahead_index(stream, 1, skip_newlines) - 1, EMPTY_FLAGS)
     if !isnothing(error)
         emit(stream, emark, K"error", flags, error=error)
     end
@@ -523,11 +532,12 @@ lexing ambiguities. There's no special whitespace handling — bump any
 whitespace if necessary with bump_trivia.
 """
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
+    i = stream.lookahead_index
     span = TaggedRange(SyntaxHead(kind, flags), K"None",
-                       first_byte(stream.lookahead[1]),
-                       last_byte(stream.lookahead[num_tokens]),
+                       first_byte(stream.lookahead[i]),
+                       last_byte(stream.lookahead[i-1+num_tokens]),
                        lastindex(stream.ranges) + 1)
-    Base._deletebeg!(stream.lookahead, num_tokens)
+    stream.lookahead_index += num_tokens
     push!(stream.ranges, span)
     stream.next_byte = last_byte(last(stream.ranges)) + 1
     stream.peek_count = 0
@@ -553,7 +563,8 @@ TODO: Are these the only cases?  Can we replace this general utility with a
 simpler one which only splits preceding dots?
 """
 function bump_split(stream::ParseStream, split_spec...)
-    tok = popfirst!(stream.lookahead)
+    tok = stream.lookahead[stream.lookahead_index]
+    stream.lookahead_index += 1
     fbyte = first_byte(tok)
     for (i, (nbyte, k, f)) in enumerate(split_spec)
         lbyte = (i == length(split_spec)) ? last_byte(tok) : fbyte + nbyte - 1
@@ -655,8 +666,9 @@ function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
     if whitespace
         # It's the whitespace which is the error. Find the range of the current
         # whitespace.
-        begin_tok_i = 1
-        end_tok_i = is_whitespace(stream.lookahead[i]) ? i : max(1, i-1)
+        begin_tok_i = stream.lookahead_index
+        end_tok_i = is_whitespace(stream.lookahead[i]) ?
+                    i : max(stream.lookahead_index, i-1)
     end
     fbyte = first_byte(stream.lookahead[begin_tok_i])
     lbyte = last_byte(stream.lookahead[end_tok_i])
