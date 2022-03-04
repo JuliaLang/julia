@@ -312,8 +312,8 @@ static size_t queue_external_mis(jl_array_t *list)
                 }
             }
         }
+        htable_free(&visited);
     }
-    htable_free(&visited);
     return n;
 }
 
