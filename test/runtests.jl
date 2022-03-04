@@ -77,6 +77,8 @@ move_to_node1("threads")
 move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
+# Try running this locally to investigate failure
+move_to_node1("read")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
