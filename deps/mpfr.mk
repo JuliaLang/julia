@@ -60,7 +60,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libmpfr.$$(SHLIB_EXT) $$(build_shlibdir)/libmpfr.$$(SHLIB_EXT)))
 
 clean-mpfr:
-	-rm $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
+	-rm -f $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
 
 distclean-mpfr:

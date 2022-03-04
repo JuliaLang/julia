@@ -44,8 +44,8 @@ $(eval $(call staged-install, \
 	P7ZIP_INSTALL,,,))
 
 clean-p7zip:
-	-rm $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
-	-rm $(build_bindir)/7za
+	-rm -f $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
+	-rm -f $(build_bindir)/7za
 	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) clean
 
 distclean-p7zip:

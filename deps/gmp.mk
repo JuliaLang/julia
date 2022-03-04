@@ -72,7 +72,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
 
 clean-gmp:
-	-rm $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
+	-rm -f $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
 
 distclean-gmp:

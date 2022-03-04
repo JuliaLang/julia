@@ -63,7 +63,7 @@ $$($2_SRC_FILE): | $$(SRCCACHE)
 	$$(JLDOWNLOAD) $$@ $$(call $2_TAR_URL,$$($2_SHA1))
 $5/$$($2_SRC_DIR)/source-extracted: $$($2_SRC_FILE)
 	$$(JLCHECKSUM) $$<
-	-[ ! \( -e $$(dir $$@) -o -h $$(dir $$@) \) ] || rm -r $$(dir $$@)
+	-[ ! \( -e $$(dir $$@) -o -h $$(dir $$@) \) ] || rm -rf $$(dir $$@)
 	mkdir -p $$(dir $$@)
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	echo 1 > $$@
