@@ -165,9 +165,6 @@ Standard library changes
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
 
-#### Markdown
->>>>>>> e84b06c673... Simplification of libblastrampoline stuff in LinearAlgebra (#44360)
-
 #### Printf
 
 * Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
