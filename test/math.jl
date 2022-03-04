@@ -155,6 +155,8 @@ end
             @test x^y === T(big(x)^big(y))
             @test x^1 === x
             @test x^yi === T(big(x)^yi)
+            # test that (-1)^x == 1 for x larger than typemax(Int)
+            @test T(-1)^floatmax(T) === T(1)
             # test for large negative exponent where error compensation matters
             @test 0.9999999955206014^-1.0e8 == 1.565084574870928
             @test (-x)^yi == x^yi
