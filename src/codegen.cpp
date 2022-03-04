@@ -1287,7 +1287,7 @@ public:
     std::vector<jl_cgval_t> SAvalues;
     std::vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
-    std::vector<std::unique_ptr<Module>> oc_modules;
+    std::vector<orc::ThreadSafeModule> oc_modules;
     jl_module_t *module = NULL;
     jl_typecache_t type_cache;
     jl_tbaacache_t tbaa_cache;
@@ -1318,7 +1318,7 @@ public:
     bool use_cache = false;
     const jl_cgparams_t *params = NULL;
 
-    std::vector<std::unique_ptr<llvm::Module>> llvmcall_modules;
+    std::vector<orc::ThreadSafeModule> llvmcall_modules;
 
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
       : builder(llvmctx),
@@ -1931,9 +1931,11 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
+orc::ThreadSafeModule _jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
 {
-    Module *m = new Module(name, context);
+    auto lock = context.getLock();
+    Module *m = new Module(name, *context.getContext());
+    orc::ThreadSafeModule TSM(std::unique_ptr<Module>(m), std::move(context));
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
@@ -1960,12 +1962,12 @@ Module *_jl_create_llvm_module(StringRef name, LLVMContext &context, const jl_cg
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
     m->setStackProtectorGuard("global");
 #endif
-    return m;
+    return TSM;
 }
 
-Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL, const Triple *triple)
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout *DL, const Triple *triple)
 {
-    return _jl_create_llvm_module(name, ctx, &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
+    return _jl_create_llvm_module(name, std::move(ctx), &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
 }
 
 static void jl_init_function(Function *F)
@@ -2804,13 +2806,12 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     return false;
 }
 
-static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+static jl_compile_result_t
     emit_function(
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        LLVMContext &ctxt);
+        jl_codegen_params_t &params);
 
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               const jl_cgval_t *argv, size_t nargs, jl_value_t *rt,
@@ -4608,10 +4609,9 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)ci->inferred);
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
-    std::unique_ptr<Module> closure_m;
+    orc::ThreadSafeModule closure_m;
     jl_llvm_functions_t closure_decls;
-    std::tie(closure_m, closure_decls) = emit_function(mi, ir, rettype, ctx.emission_context,
-                                                       ctx.builder.getContext());
+    std::tie(closure_m, closure_decls) = emit_function(mi, ir, rettype, ctx.emission_context);
 
     assert(closure_decls.functionObject != "jl_fptr_sparam");
     bool isspecsig = closure_decls.functionObject != "jl_fptr_args";
@@ -4632,7 +4632,8 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     if (!isspecsig) {
         specF = F;
     } else {
-        specF = closure_m->getFunction(closure_decls.specFunctionObject);
+        //emission context holds context lock so can get module
+        specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
         if (specF) {
             jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module,
                 closure_decls.specFunctionObject, sigtype, rettype, true);
@@ -5314,7 +5315,7 @@ static Function* gen_cfun_wrapper(
     std::string funcName;
     raw_string_ostream(funcName) << "jlcapi_" << name << "_" << globalUniqueGeneratedNames++;
 
-    Module *M = into;
+    Module *M = into; // Safe because ctx lock is held by params
     AttributeList attributes = sig.attributes;
     FunctionType *functype;
     if (nest) {
@@ -5981,7 +5982,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params, LLVMContext &ctxt)
+const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
@@ -5993,7 +5994,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
         crt = (jl_value_t*)jl_any_type;
     }
     bool toboxed;
-    Type *lcrt = _julia_struct_to_llvm(&params, ctxt, crt, &toboxed);
+    Type *lcrt = _julia_struct_to_llvm(&params, *params.tsctx.getContext(), crt, &toboxed);
     if (toboxed)
         lcrt = JuliaType::get_prjlvalue_ty(lcrt->getContext());
     size_t nargs = jl_nparams(sigt)-1;
@@ -6020,7 +6021,8 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
             }
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
-                gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
+                //Safe b/c params holds context lock
+                gen_cfun_wrapper(reinterpret_cast<orc::ThreadSafeModule*>(llvmmod)->getModuleUnlocked(), params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
             }
             JL_GC_POP();
             return name;
@@ -6316,17 +6318,17 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
 }
 
 // Compile to LLVM IR, using a specialized signature if applicable.
-static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+static jl_compile_result_t
     emit_function(
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        LLVMContext &ctxt)
+        jl_codegen_params_t &params)
 {
     // step 1. unpack AST and allocate codegen context for this function
     jl_llvm_functions_t declarations;
-    jl_codectx_t ctx(ctxt, params);
+    //Safe b/c params holds ctx lock
+    jl_codectx_t ctx(*params.tsctx.getContext(), params);
     JL_GC_PUSH2(&ctx.code, &ctx.roots);
     ctx.code = src->code;
 
@@ -6475,7 +6477,9 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     declarations.specFunctionObject = funcName.str();
 
     // allocate Function declarations and wrapper objects
-    Module *M = _jl_create_llvm_module(ctx.name, ctx.builder.getContext(), ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
+    auto TSM = _jl_create_llvm_module(ctx.name, ctx.emission_context.tsctx, ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
+    //Safe because params holds ctx lock
+    Module *M = TSM.getModuleUnlocked();
     jl_debugcache_t debuginfo;
     debuginfo.initialize(M);
     jl_returninfo_t returninfo = {};
@@ -7765,31 +7769,33 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     // link the dependent llvmcall modules, but switch their function's linkage to internal
     // so that they don't conflict when they show up in the execution engine.
-    for (auto &Mod : ctx.llvmcall_modules) {
+    for (auto &TSMod : ctx.llvmcall_modules) {
         SmallVector<std::string, 1> Exports;
-        for (const auto &F: Mod->functions())
+        TSMod.withModuleDo([&](Module &Mod) { //TODO fix indentation after review
+        for (const auto &F: Mod.functions())
             if (!F.isDeclaration())
                 Exports.push_back(F.getName().str());
-        if (Linker::linkModules(*jl_Module, std::move(Mod))) {
-            jl_error("Failed to link LLVM bitcode");
-        }
+        });
+        jl_merge_module(TSM, std::move(TSMod));
         for (auto FN: Exports)
             jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     // link in opaque closure modules
-    for (auto &Mod : ctx.oc_modules) {
+    for (auto &TSMod : ctx.oc_modules) {
         SmallVector<std::string, 1> Exports;
-        for (const auto &F: Mod->functions())
+        TSMod.withModuleDo([&](Module &Mod) { //TODO fix indentation after review
+        for (const auto &F: Mod.functions())
             if (!F.isDeclaration())
                 Exports.push_back(F.getName().str());
-        jl_merge_module(jl_Module, std::move(Mod));
+        });
+        jl_merge_module(TSM, std::move(TSMod));
         for (auto FN: Exports)
             jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     JL_GC_POP();
-    return std::make_pair(std::unique_ptr<Module>(M), declarations);
+    return std::make_tuple(std::move(TSM), declarations);
 }
 
 // --- entry point ---
@@ -7801,18 +7807,17 @@ jl_compile_result_t jl_emit_code(
         jl_method_instance_t *li,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        LLVMContext &context)
+        jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
-    std::unique_ptr<Module> m;
+    orc::ThreadSafeModule m;
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        std::tie(m, decls) = emit_function(li, src, jlrettype, params, context);
+        std::tie(m, decls) = emit_function(li, src, jlrettype, params);
         if (dump_emitted_mi_name_stream != NULL) {
             jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
@@ -7827,7 +7832,7 @@ jl_compile_result_t jl_emit_code(
     JL_CATCH {
         // Something failed! This is very, very bad.
         // Try to pretend that it isn't and attempt to recover.
-        m.reset();
+        m = orc::ThreadSafeModule();
         decls.functionObject = "";
         decls.specFunctionObject = "";
         const char *mname = name_from_method_instance(li);
@@ -7843,8 +7848,7 @@ jl_compile_result_t jl_emit_code(
 jl_compile_result_t jl_emit_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        jl_codegen_params_t &params,
-        LLVMContext &context)
+        jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
@@ -7858,19 +7862,20 @@ jl_compile_result_t jl_emit_codeinst(
             return jl_compile_result_t(); // failed
         }
     }
-    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params, context);
+    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params);
 
     const jl_llvm_functions_t &decls = std::get<1>(result);
     const std::string &specf = decls.specFunctionObject;
     const std::string &f = decls.functionObject;
     if (params.cache && !f.empty()) {
-        const Module *m = std::get<0>(result).get();
+        const auto &m = std::get<0>(result);
         // Prepare debug info to receive this function
         // record that this function name came from this linfo,
         // so we can build a reverse mapping for debug-info.
         bool toplevel = !jl_is_method(codeinst->def->def.method);
         if (!toplevel) {
-            const DataLayout &DL = m->getDataLayout();
+            //Safe b/c params holds context lock
+            const DataLayout &DL = m.getModuleUnlocked()->getDataLayout();
             // but don't remember toplevel thunks because
             // they may not be rooted in the gc for the life of the program,
             // and the runtime doesn't notify us when the code becomes unreachable :(
@@ -7920,7 +7925,7 @@ jl_compile_result_t jl_emit_codeinst(
 
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
-    jl_codegen_params_t &params, CompilationPolicy policy, LLVMContext &context)
+    jl_codegen_params_t &params, CompilationPolicy policy)
 {
     JL_TIMING(CODEGEN);
     jl_code_info_t *src = NULL;
@@ -7962,10 +7967,10 @@ void jl_compile_workqueue(
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src)
-                        result = jl_emit_code(codeinst->def, src, src->rettype, params, context);
+                        result = jl_emit_code(codeinst->def, src, src->rettype, params);
                 }
                 else {
-                    result = jl_emit_codeinst(codeinst, NULL, params, context);
+                    result = jl_emit_codeinst(codeinst, NULL, params);
                 }
                 if (std::get<0>(result))
                     decls = &std::get<1>(result);
