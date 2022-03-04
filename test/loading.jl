@@ -737,9 +737,9 @@ Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
 
 # issue #28190
-module Foo; import Libdl; end
-import .Foo.Libdl; import Libdl
-@test Foo.Libdl === Libdl
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
 
 @testset "include with mapexpr" begin
     let exprs = Any[]
