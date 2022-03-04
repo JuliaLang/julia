@@ -113,7 +113,7 @@ public:
     }
 
 private:
-    static DenseMap<Type *, Type *> MappedTypes;
+    DenseMap<Type *, Type *> MappedTypes;
 };
 
 DenseMap<Type *, Type *> AddrspaceRemoveTypeRemapper::MappedTypes;
