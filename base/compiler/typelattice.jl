@@ -19,11 +19,13 @@
 import Core: Const, PartialStruct
 
 # Like `Const`, but `widencost` widens to Type{...} rather than typeof
-struct ConstType
-    val # ::Type
+mutable struct ConstType
+    const val # ::Type
     Typeof::DataType
+    ConstType(@nospecialize(val)) = new(val)
+    ConstType(@nospecialize(val), Typeof::DataType) = new(val, Typeof)
 end
-ConstType(@nospecialize(val)) = ConstType(val, Type{val})
+==(a::ConstType, b::ConstType) = a.val === b.val
 
 function mkConst(@nospecialize(v))
     if isa(v, Type)
@@ -308,7 +310,12 @@ end
 
 widenconst(c::AnyConditional) = Bool
 widenconst((; val)::Const) = typeof(val)
-widenconst(c::ConstType) = c.Typeof
+function widenconst(c::ConstType)
+    if !isdefined(c, :Typeof)
+        c.Typeof = Type{c.val}
+    end
+    return c.Typeof
+end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
