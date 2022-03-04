@@ -93,6 +93,6 @@ end
         f44319(1)
     catch e
         s = sprint(showerror, e)
-        @test s == "MethodError: no method matching f44319(::Int64)\nClosest candidates are:\n  f44319() at none:0"
+        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\nClosest candidates are:\n  f44319() at none:0"
     end
 end
