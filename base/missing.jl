@@ -452,5 +452,5 @@ macro coalesce(args...)
     for arg in reverse(args)
         expr = :(!ismissing((val = $(esc(arg));)) ? val : $expr)
     end
-    return :(local val; $expr; end)
+    return :(let val; $expr; end)
 end
