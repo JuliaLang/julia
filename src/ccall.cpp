@@ -11,10 +11,12 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
 // The `lib` and `sym` GV returned may not be in the current module.
-static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, LLVMContext &ctxt, const char *f_lib, const char *f_name,
+static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    Module *M = emission_context.shared_module(ctxt);
+    auto &TSM = emission_context.shared_module(emission_context.tsctx);
+    //Safe b/c emission context holds context lock
+    auto M = TSM.getModuleUnlocked();
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
@@ -175,7 +177,7 @@ static Value *runtime_sym_lookup(
                                     Constant::getNullValue(T_pvoidfunc), gvname);
     }
     else {
-        runtime_lib = runtime_sym_gvs(ctx.emission_context, ctx.builder.getContext(), f_lib, f_name, libptrgv, llvmgv);
+        runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
         libptrgv = prepare_global_in(jl_Module, libptrgv);
     }
     llvmgv = prepare_global_in(jl_Module, llvmgv);
@@ -191,7 +193,8 @@ static GlobalVariable *emit_plt_thunk(
         GlobalVariable *libptrgv, GlobalVariable *llvmgv,
         bool runtime_lib)
 {
-    Module *M = emission_context.shared_module(functype->getContext());
+    auto &TSM = emission_context.shared_module(emission_context.tsctx);
+    Module *M = TSM.getModuleUnlocked();
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
@@ -266,7 +269,7 @@ static Value *emit_plt(
     assert(!functype->isVarArg());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
-    bool runtime_lib = runtime_sym_gvs(ctx.emission_context, ctx.builder.getContext(), f_lib, f_name, libptrgv, llvmgv);
+    bool runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
     PointerType *funcptype = PointerType::get(functype, 0);
 
     auto &pltMap = ctx.emission_context.allPltMap[attrs];
@@ -921,7 +924,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // save the module to be linked later.
     // we cannot do this right now, because linking mutates the destination module,
     // which might invalidate LLVM values cached in cgval_t's (specifically constant arrays)
-    ctx.llvmcall_modules.push_back(std::move(Mod));
+    ctx.llvmcall_modules.push_back(orc::ThreadSafeModule(std::move(Mod), ctx.emission_context.tsctx));
 
     JL_GC_POP();
 

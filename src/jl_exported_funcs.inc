@@ -525,7 +525,6 @@
     YY(jl_dump_method_asm) \
     YY(jl_extern_c) \
     YY(jl_get_ee_context) \
-    YY(jl_get_llvm_context) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
