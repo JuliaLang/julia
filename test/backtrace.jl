@@ -183,7 +183,7 @@ let bt, found = false
 end
 
 # issue 28618
-Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+@test_logs (:info, "") begin
 let bt, found = false
     @info ""
     bt = backtrace()
@@ -194,7 +194,7 @@ let bt, found = false
     end
     @test found
 end
-end # with_logger
+end # @test_logs
 
 # Syntax error locations appear in backtraces
 let trace = try
