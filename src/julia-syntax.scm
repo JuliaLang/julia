@@ -983,7 +983,10 @@
                                '()))
                   ;; otherwise do an assignment to trigger an error
                   (= (outerref ,name) ,name)))
-             (= (outerref ,name) ,name))
+             (block
+              (call (core set_binding_type!) (thismodule) (inert ,name) (call (core apply_type) (core Type) ,name))
+              (= (outerref ,name) ,name)))
+         ;; Set the binding type to Type{...} to speed up inference
          (call (core _typebody!) ,name (call (core svec) ,@field-types))
          (null)))
        ;; "inner" constructors

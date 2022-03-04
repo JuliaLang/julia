@@ -1991,7 +1991,19 @@ end
 function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s)
         if isconst(M,s)
-            return mkConst(getfield(M,s))
+            val = getfield(M,s)
+            if isa(val, Type)
+                ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+                if ty !== nothing && isa(ty, DataType) && ty.name === Type.body.name
+                    # Make sure this is actually a Type{...}. The frontend inserts
+                    # that, but in theory nothing prevents the user from creating
+                    # their own constant binding with arbitrary binding type.
+                    return ConstType(val, ty)
+                end
+                return ConstType(val)
+            else
+                return Const(val)
+            end
         end
     end
     ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
