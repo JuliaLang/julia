@@ -53,10 +53,10 @@ function normal_context(ps::ParseState)
                whitespace_newline=false)
 end
 
-function with_space_sensitive(f::Function, ps::ParseState)
-    f(ParseState(ps,
-                 space_sensitive=true,
-                 whitespace_newline=false))
+function with_space_sensitive(ps::ParseState)
+    ParseState(ps,
+               space_sensitive=true,
+               whitespace_newline=false)
 end
 
 # Convenient wrappers for ParseStream
@@ -184,7 +184,7 @@ end
 
 # flisp: disallow-space
 function bump_disallowed_space(ps)
-    if peek_token(ps).had_whitespace
+    if preceding_whitespace(peek_token(ps))
         bump_trivia(ps, TRIVIA_FLAG, skip_newlines=false,
                     error="whitespace is not allowed here")
     end
@@ -561,7 +561,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down, equals_is_
         return NO_POSITION
     end
     if k == K"~"
-        if ps.space_sensitive && !peek_token(ps, 2).had_whitespace
+        if ps.space_sensitive && !preceding_whitespace(peek_token(ps, 2))
             # Unary ~ in space sensitive context is not assignment precedence
             # [a ~b]  ==>  (hcat a (call ~ b))
             return NO_POSITION
@@ -626,21 +626,21 @@ function parse_cond(ps::ParseState)
     if kind(t) != K"?"
         return
     end
-    if !t.had_whitespace
+    if !preceding_whitespace(t)
         # a? b : c  => (if a (error-t) b c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required before `?` operator")
     end
     bump(ps, TRIVIA_FLAG) # ?
     t = peek_token(ps)
-    if !t.had_whitespace
+    if !preceding_whitespace(t)
         # a ?b : c
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required after `?` operator")
     end
     parse_eq_star(ParseState(ps, range_colon_enabled=false))
     t = peek_token(ps)
-    if !t.had_whitespace
+    if !preceding_whitespace(t)
         # a ? b: c  ==>  (if a [ ] [?] [ ] b (error-t) [:] [ ] c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required before `:` in `?` expression")
@@ -652,7 +652,7 @@ function parse_cond(ps::ParseState)
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="`:` expected in `?` expression")
     end
     t = peek_token(ps)
-    if !t.had_whitespace
+    if !preceding_whitespace(t)
         # a ? b :c  ==>  (if a [ ] [?] [ ] b [ ] [:] (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required after `:` in `?` expression")
@@ -799,15 +799,15 @@ function parse_range(ps::ParseState)
         n_colons = 0
         while peek(ps) == K":"
             if ps.space_sensitive &&
-                    peek_token(ps).had_whitespace &&
-                    !peek_token(ps, 2).had_whitespace
+                    preceding_whitespace(peek_token(ps)) &&
+                    !preceding_whitespace(peek_token(ps, 2))
                 # Tricky cases in space sensitive mode
                 # [1 :a]      ==>  (hcat 1 (quote a))
                 # [1 2:3 :a]  ==>  (hcat 1 (call-i 2 : 3) (quote a))
                 break
             end
             t2 = peek_token(ps,2)
-            if kind(t2) in KSet`< >` && !t2.had_whitespace
+            if kind(t2) in KSet`< >` && !preceding_whitespace(t2)
                 # Error heuristic: we found `:>` or `:<` which are invalid lookalikes
                 # for `<:` and `>:`. Attempt to recover by treating them as a
                 # comparison operator.
@@ -825,6 +825,7 @@ function parse_range(ps::ParseState)
             end
             n_colons += 1
             bump(ps, n_colons == 1 ? EMPTY_FLAGS : TRIVIA_FLAG)
+            had_newline = peek(ps, skip_newlines=false) == K"NewlineWs"
             t = peek_token(ps)
             if is_closing_token(ps, kind(t))
                 # 1: }    ==>  (call-i 1 : (error))
@@ -835,7 +836,7 @@ function parse_range(ps::ParseState)
                 emit_diagnostic(ps, error="found unexpected closing token")
                 return
             end
-            if t.had_newline
+            if had_newline
                 # Error message for people coming from python
                 # 1:\n2 ==> (call-i 1 : (error))
                 emit_diagnostic(ps, whitespace=true,
@@ -886,9 +887,9 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
     mark = position(ps)
     down(ps)
     while (t = peek_token(ps); is_op(kind(t)))
-        if ps.space_sensitive && t.had_whitespace &&
+        if ps.space_sensitive && preceding_whitespace(t) &&
                 is_both_unary_and_binary(t) &&
-                !peek_token(ps, 2).had_whitespace
+                !preceding_whitespace(peek_token(ps, 2))
             # The following is two elements of a hcat
             # [x +y]     ==>  (hcat x (call + y))
             # [x+y +z]   ==>  (hcat (call-i x + y) (call + z))
@@ -916,9 +917,9 @@ end
 # flisp: parse-chain
 function parse_chain(ps::ParseState, down, op_kind)
     while (t = peek_token(ps); kind(t) == op_kind && !is_decorated(t))
-        if ps.space_sensitive && t.had_whitespace &&
+        if ps.space_sensitive && preceding_whitespace(t) &&
             is_both_unary_and_binary(t) &&
-            !peek_token(ps, 2).had_whitespace
+            !preceding_whitespace(peek_token(ps, 2))
             # [x +y]  ==>  (hcat x (call + y))
             break
         end
@@ -1023,7 +1024,7 @@ function is_juxtapose(ps, prev_k, t)
     # x' y      ==>  x
     # x 'y      ==>  x
 
-    return !t.had_whitespace                         &&
+    return !preceding_whitespace(t)                         &&
     (is_number(prev_k) ||
         (!is_number(k) &&  # disallow "x.3" and "sqrt(2)2"
          k != K"@"     &&  # disallow "x@time"
@@ -1097,7 +1098,7 @@ function parse_unary(ps::ParseState)
     end
     if k in KSet`- +`
         t2 = peek_token(ps, 2)
-        if !t2.had_whitespace && kind(t2) in KSet`Integer Float`
+        if !preceding_whitespace(t2) && kind(t2) in KSet`Integer Float`
             k3 = peek(ps, 3)
             if is_prec_power(k3) || k3 in KSet`[ {`
                 # `[`, `{` (issue #18851) and `^` have higher precedence than
@@ -1175,21 +1176,21 @@ function parse_unary_call(ps::ParseState)
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
         initial_semi = peek(ps) == K";"
-        is_call = false
-        is_block = false
+        is_call = Ref(false)
+        is_block = Ref(false)
         parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_call = had_commas || had_splat || initial_semi
-            is_block = !is_call && num_semis > 0
+            is_call[] = had_commas || had_splat || initial_semi
+            is_block[] = !is_call[] && num_semis > 0
             bump_closing_token(ps, K")")
-            return (needs_parameters=is_call,
-                    eq_is_kw_before_semi=is_call,
-                    eq_is_kw_after_semi=is_call)
+            return (needs_parameters=is_call[],
+                    eq_is_kw_before_semi=is_call[],
+                    eq_is_kw_after_semi=is_call[])
         end
 
         # The precedence between unary + and any following infix ^ depends on
         # whether the parens are a function call or not
-        if is_call
-            if t2.had_whitespace
+        if is_call[]
+            if preceding_whitespace(t2)
                 # Whitespace not allowed before prefix function call bracket
                 # + (a,b)   ==> (call + (error) a b)
                 reset_node!(ps, ws_error_pos, kind=K"error")
@@ -1210,7 +1211,7 @@ function parse_unary_call(ps::ParseState)
             parse_factor_with_initial_ex(ps, mark)
         else
             # Unary function calls with brackets as grouping, not an arglist
-            if is_block
+            if is_block[]
                 # +(a;b)   ==>  (call + (block a b))
                 emit(ps, mark_before_paren, K"block")
             end
@@ -1391,7 +1392,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         this_iter_valid_macroname = false
         t = peek_token(ps)
         k = kind(t)
-        if is_macrocall && (t.had_whitespace || is_closing_token(ps, k))
+        if is_macrocall && (preceding_whitespace(t) || is_closing_token(ps, k))
             # Macro calls with space-separated arguments
             # @foo a b    ==> (macrocall @foo a b)
             # @foo (x)    ==> (macrocall @foo x)
@@ -1399,12 +1400,11 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # a().@x y    ==> (macrocall (error (. (call a) (quote x))) y)
             # [@foo "x"]  ==> (vect (macrocall @foo "x"))
             finish_macroname(ps, mark, valid_macroname, macro_name_position)
-            with_space_sensitive(ps) do ps
+            let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
                 # A.@foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 # @A.foo a b    ==> (macrocall (. A (quote @foo)) a b)
                 n_args = parse_space_separated_exprs(ps)
-                # TODO: Introduce K"doc" to make this hack less awful.
                 is_doc_macro = peek_behind(ps, macro_name_position).orig_kind == K"doc"
                 if is_doc_macro && n_args == 1
                     # Parse extended @doc args on next line
@@ -1426,7 +1426,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, mark, K"macrocall")
             end
             break
-        elseif (ps.space_sensitive && t.had_whitespace &&
+        elseif (ps.space_sensitive && preceding_whitespace(t) &&
                 k in KSet`( [ { \ Char " """ \` \`\`\``)
             # [f (x)]  ==>  (hcat f x)
             # [f "x"]  ==>  (hcat f "x")
@@ -1604,7 +1604,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, mark, K"curly")
             end
         elseif k in KSet` " """ \` \`\`\` ` &&
-                !t.had_whitespace && valid_macroname
+                !preceding_whitespace(t) && valid_macroname
             # Custom string and command literals
             # x"str" ==> (macrocall @x_str "str")
             # x`str` ==> (macrocall @x_cmd "str")
@@ -1622,7 +1622,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             parse_string(ps, true)
             t = peek_token(ps)
             k = kind(t)
-            if !t.had_whitespace && (k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k))
+            if !preceding_whitespace(t) && (k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k))
                 # Macro sufficies can include keywords and numbers
                 # x"s"y    ==> (macrocall @x_str "s" "y")
                 # x"s"end  ==> (macrocall @x_str "s" "end")
@@ -1778,8 +1778,10 @@ function parse_resword(ps::ParseState)
         bump(ps, TRIVIA_FLAG)
         @check peek(ps) == K"type"
         bump(ps, TRIVIA_FLAG)
-        with_space_sensitive(parse_subtype_spec, ps)
-        with_space_sensitive(parse_cond, ps)
+        let ps = with_space_sensitive(ps)
+            parse_subtype_spec(ps)
+            parse_cond(ps)
+        end
         bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
@@ -1974,7 +1976,7 @@ function parse_function(ps::ParseState)
     word = peek(ps)
     @check word in KSet`macro function`
     is_function = word == K"function"
-    is_anon_func::Bool = false
+    is_anon_func = false
     bump(ps, TRIVIA_FLAG)
     bump_trivia(ps)
 
@@ -2004,13 +2006,15 @@ function parse_function(ps::ParseState)
             #
             # The flisp parser disambiguates this case quite differently,
             # producing less consistent syntax for anonymous functions.
+            is_anon_func_ = Ref(is_anon_func)
             parse_brackets(ps, K")") do _, _, _, _
                 bump_closing_token(ps, K")")
-                is_anon_func = peek(ps) != K"("
-                return (needs_parameters     = is_anon_func,
-                        eq_is_kw_before_semi = is_anon_func,
-                        eq_is_kw_after_semi  = is_anon_func)
+                is_anon_func_[] = peek(ps) != K"("
+                return (needs_parameters     = is_anon_func_[],
+                        eq_is_kw_before_semi = is_anon_func_[],
+                        eq_is_kw_after_semi  = is_anon_func_[])
             end
+            is_anon_func = is_anon_func_[]
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
                 # function (x,y) end    ==>  (function (tuple x y) (block))
@@ -2208,8 +2212,8 @@ function parse_macro_name(ps::ParseState)
         # @! x   ==>  (macrocall @! x)
         # @.. x  ==>  (macrocall @.. x)
         # @$ x   ==>  (macrocall @$ x)
-        with_space_sensitive(ps) do ps1
-            parse_atom(ps1, false)
+        let ps = with_space_sensitive(ps)
+            parse_atom(ps, false)
         end
     end
 end
@@ -2247,7 +2251,7 @@ function parse_imports(ps::ParseState)
     k = kind(t)
     has_import_prefix = false  # true if we have `prefix:` in `import prefix: stuff`
     has_comma = false
-    if k == K":" && !t.had_whitespace
+    if k == K":" && !preceding_whitespace(t)
         bump(ps, TRIVIA_FLAG)
         has_import_prefix = true
         if initial_as
@@ -2262,13 +2266,14 @@ function parse_imports(ps::ParseState)
         # import A, y      ==>  (import (. A) (. y))
         # import A: x, y   ==>  (import (: (. A) (. x) (. y)))
         # import A: +, ==  ==>  (import (: (. A) (. +) (. ==)))
-        parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix))
+        has_import_prefix_ = has_import_prefix
+        parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix_))
         if peek(ps) == K":"
             # Error recovery
             # import A: x, B: y ==> (import (: (. A) (. x) (. B) (error-t (. y))))
             emark = position(ps)
             bump(ps, TRIVIA_FLAG)
-            parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix))
+            parse_comma_separated(ps, ps1->parse_import(ps1, word, has_import_prefix_))
             emit(ps, emark, K"error", TRIVIA_FLAG,
                  error="`:` can only be used when importing a single module. Split imports into multiple lines")
         end
@@ -2367,7 +2372,7 @@ function parse_import_path(ps::ParseState)
             # path, not operators
             # import A.==   ==>  (import (. A ==))
             # import A.⋆.f  ==>  (import (. A ⋆ f))
-            if t.had_whitespace
+            if preceding_whitespace(t)
                 # Whitespace in import path allowed but discouraged
                 # import A .==  ==>  (import (. A ==))
                 emit_diagnostic(ps, whitespace=true,
@@ -2435,7 +2440,7 @@ function parse_iteration_spec(ps::ParseState)
     mark = position(ps)
     k = peek(ps)
     # Handle `outer` contextual keyword
-    with_space_sensitive(parse_pipe_lt, ps)
+    parse_pipe_lt(with_space_sensitive(ps))
     if peek_behind(ps).orig_kind == K"outer"
         if peek_skip_newline_in_gen(ps) in KSet`= in ∈`
             # Not outer keyword
@@ -2464,19 +2469,18 @@ end
 
 # flisp: parse-space-separated-exprs
 function parse_space_separated_exprs(ps::ParseState)
-    with_space_sensitive(ps) do ps
-        n_sep = 0
-        while true
-            k = peek(ps)
-            if is_closing_token(ps, k) || k == K"NewlineWs" ||
-                    (ps.for_generator && k == K"for")
-                break
-            end
-            parse_eq(ps)
-            n_sep += 1
+    ps = with_space_sensitive(ps)
+    n_sep = 0
+    while true
+        k = peek(ps)
+        if is_closing_token(ps, k) || k == K"NewlineWs" ||
+                (ps.for_generator && k == K"for")
+            break
         end
-        return n_sep
+        parse_eq(ps)
+        n_sep += 1
     end
+    return n_sep
 end
 
 # like parse-arglist, but with `for` parsed as a generator
@@ -2536,7 +2540,7 @@ end
 # flisp: parse-generator
 function parse_generator(ps::ParseState, mark, flatten=false)
     t = peek_token(ps)
-    if !t.had_whitespace
+    if !preceding_whitespace(t)
         # [(x)for x in xs]  ==>  (comprehension (generator x (error) (= x xs)))
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="Expected space before `for` in generator")
@@ -2706,7 +2710,7 @@ function parse_array_separator(ps, array_order)
             if kind(t) != K";"
                 break
             end
-            if t.had_whitespace
+            if preceding_whitespace(t)
                 bump_disallowed_space(ps)
             end
             n_semis += 1
@@ -2750,7 +2754,7 @@ function parse_array_separator(ps, array_order)
         bump(ps, TRIVIA_FLAG, error="unexpected comma in array expression")
         return (1, -1)
     else
-        if t.had_whitespace && !is_closing_token(ps, k)
+        if preceding_whitespace(t) && !is_closing_token(ps, k)
             if array_order[] === :column_major
                 # Can't mix multiple ;'s and spaces
                 #v1.7:  [a ;; b c]  ==>  (ncat-2 a (row b (error-t) c))
@@ -2857,18 +2861,18 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         # Deal with all other cases of tuple or block syntax via the generic
         # parse_brackets
         initial_semi = peek(ps) == K";"
-        is_tuple = false
-        is_block = false
+        is_tuple = Ref(false)
+        is_block = Ref(false)
         parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_tuple = had_commas || (had_splat && num_semis >= 1) ||
+            is_tuple[] = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0))
-            is_block = num_semis > 0
+            is_block[] = num_semis > 0
             bump_closing_token(ps, K")")
-            return (needs_parameters=is_tuple,
+            return (needs_parameters=is_tuple[],
                     eq_is_kw_before_semi=false,
-                    eq_is_kw_after_semi=is_tuple)
+                    eq_is_kw_after_semi=is_tuple[])
         end
-        if is_tuple
+        if is_tuple[]
             # Tuple syntax with commas
             # (x,)        ==>  (tuple x)
             # (x,y)       ==>  (tuple x y)
@@ -2885,7 +2889,7 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             # (a; b; c,d)     ==> (tuple a (parameters b (parameters c d)))
             # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (kw c 3)))
             emit(ps, mark, K"tuple")
-        elseif is_block
+        elseif is_block[]
             # Blocks
             # (;;)        ==>  (block)
             # (a=1;)      ==>  (block (= a 1))
@@ -2935,8 +2939,8 @@ function parse_brackets(after_parse::Function,
                     space_sensitive=false,
                     where_enabled=true,
                     whitespace_newline=true)
-    params_marks = ParseStreamPosition[]
-    eq_positions = ParseStreamPosition[]
+    params_marks = acquire_positions(ps.stream)
+    eq_positions = acquire_positions(ps.stream)
     last_eq_before_semi = 0
     num_subexprs = 0
     num_semis = 0
@@ -3016,6 +3020,8 @@ function parse_brackets(after_parse::Function,
             emit(ps, mark, K"parameters")
         end
     end
+    release_positions(ps.stream, params_marks)
+    release_positions(ps.stream, eq_positions)
 end
 
 is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))
@@ -3031,9 +3037,7 @@ function parse_string(ps::ParseState, raw::Bool)
     string_chunk_kind = delim_k in KSet`" """` ? K"String" : K"CmdString"
     indent_ref_i = 0
     indent_ref_len = typemax(Int)
-    if triplestr
-        indent_chunks = Vector{ParseStreamPosition}()
-    end
+    indent_chunks = acquire_positions(ps.stream)
     buf = textbuf(ps)
     str_flags = (triplestr ? TRIPLE_STRING_FLAG : EMPTY_FLAGS) |
                 (raw       ? RAW_STRING_FLAG : EMPTY_FLAGS)
@@ -3186,6 +3190,7 @@ function parse_string(ps::ParseState, raw::Bool)
             end
         end
     end
+    release_positions(ps.stream, indent_chunks)
     if had_end_delim
         if n_valid_chunks == 0
             # Empty strings, or empty after triple quoted processing
@@ -3251,7 +3256,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # : foo  ==>  (quote (error-t) foo)
         t = peek_token(ps, 2)
         k = kind(t)
-        if is_closing_token(ps, k) && (!is_keyword(k) || t.had_whitespace)
+        if is_closing_token(ps, k) && (!is_keyword(k) || preceding_whitespace(t))
             # : is a literal colon in some circumstances
             # :)     ==>  :
             # : end  ==>  :
@@ -3259,7 +3264,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             return
         end
         bump(ps, TRIVIA_FLAG) # K":"
-        if t.had_whitespace
+        if preceding_whitespace(t)
             # : a  ==> (quote (error-t) a))
             # ===
             # :
@@ -3305,7 +3310,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         end
     elseif is_keyword(leading_kind)
         if leading_kind == K"var" && (t = peek_token(ps,2);
-                                      kind(t) == K"\"" && !t.had_whitespace)
+                                      kind(t) == K"\"" && !preceding_whitespace(t))
             # var"x"     ==> x
             # Raw mode unescaping
             # var""     ==>
@@ -3332,7 +3337,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             end
             t = peek_token(ps)
             k = kind(t)
-            if t.had_whitespace || is_operator(k) ||
+            if preceding_whitespace(t) || is_operator(k) ||
                     k in KSet`( ) [ ] { } , ; @ EndMarker`
                 # var"x"+  ==>  x
                 # var"x")  ==>  x

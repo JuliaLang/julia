@@ -6,7 +6,7 @@
 using JuliaSyntax: ParseStream,
     peek, peek_token,
     bump, bump_trivia, bump_invisible,
-    emit, emit_diagnostic
+    emit, emit_diagnostic, TRIVIA_FLAG, INFIX_FLAG
 
 code = """
 for i = 1:10

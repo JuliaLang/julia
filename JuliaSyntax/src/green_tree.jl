@@ -63,10 +63,6 @@ children(node::GreenNode)    = node.args
 span(node::GreenNode)        = node.span
 head(node::GreenNode)        = node.head
 
-# Predicates
-is_trivia(node::GreenNode) = is_trivia(node.head)
-is_error(node::GreenNode)  = is_error(node.head)
-
 Base.summary(node::GreenNode) = summary(node.head)
 
 # Pretty printing
