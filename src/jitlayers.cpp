@@ -66,7 +66,7 @@ void jl_dump_llvm_opt_impl(void *s)
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
 
-static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
+static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports);
 static void jl_decorate_module(Module &M);
 static uint64_t getAddressForFunction(StringRef fname);
 
@@ -102,7 +102,7 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
         size_t world,
-        LLVMContext &context)
+        orc::ThreadSafeContext context)
 {
     // caller must hold codegen_lock
     // and have disabled finalizers
@@ -117,28 +117,30 @@ static jl_callptr_t _jl_compile_codeinst(
 
     jl_callptr_t fptr = NULL;
     // emit the code in LLVM IR form
-    jl_codegen_params_t params;
+    jl_codegen_params_t params(std::move(context)); // Locks the context
     params.cache = true;
     params.world = world;
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     {
-        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params, context);
+        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
         if (std::get<0>(result))
             emitted[codeinst] = std::move(result);
-        jl_compile_workqueue(emitted, params, CompilationPolicy::Default, context);
+        jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
         if (params._shared_module)
-            jl_ExecutionEngine->addModule(std::unique_ptr<Module>(params._shared_module));
-        StringMap<std::unique_ptr<Module>*> NewExports;
+            jl_ExecutionEngine->addModule(std::move(params._shared_module));
+        StringMap<orc::ThreadSafeModule*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
             NewGlobals[global.second->getName()] = global.first;
         }
         for (auto &def : emitted) {
-            std::unique_ptr<Module> &M = std::get<0>(def.second);
+            orc::ThreadSafeModule &TSM = std::get<0>(def.second);
+            //The underlying context object is still locked because params is not destroyed yet
+            auto M = TSM.getModuleUnlocked();
             for (auto &F : M->global_objects()) {
                 if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                    NewExports[F.getName()] = &M;
+                    NewExports[F.getName()] = &TSM;
                 }
             }
             // Let's link all globals here also (for now)
@@ -151,7 +153,7 @@ static jl_callptr_t _jl_compile_codeinst(
         }
         for (auto &def : emitted) {
             // Add the results to the execution engine now
-            std::unique_ptr<Module> &M = std::get<0>(def.second);
+            orc::ThreadSafeModule &M = std::get<0>(def.second);
             jl_add_to_ee(M, NewExports);
         }
     }
@@ -206,25 +208,28 @@ static jl_callptr_t _jl_compile_codeinst(
     return fptr;
 }
 
-const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params, LLVMContext &ctxt);
+const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT
-int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
-    jl_codegen_params_t params;
+    auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
+    orc::ThreadSafeModule backing;
+    if (into == NULL) {
+        backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext());
+        into = &backing;
+    }
+    jl_codegen_params_t params(into->getContext());
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
         pparams = &params;
-    Module *into = unwrap(llvmmod);
-    if (into == NULL)
-        into = jl_create_llvm_module("cextern", *jl_ExecutionEngine->getContext().getContext());
-    const char *name = jl_generate_ccallable(into, sysimg, declrt, sigt, *pparams, into->getContext());
+    const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
     bool success = true;
     if (!sysimg) {
         if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
@@ -234,10 +239,10 @@ int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, void *p, void *sysimg, jl_va
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
             if (params._shared_module)
-                jl_ExecutionEngine->addModule(std::unique_ptr<Module>(params._shared_module));
+                jl_ExecutionEngine->addModule(std::move(params._shared_module));
         }
         if (success && llvmmod == NULL)
-            jl_ExecutionEngine->addModule(std::unique_ptr<Module>(into));
+            jl_ExecutionEngine->addModule(std::move(*into));
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
@@ -295,7 +300,7 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    auto &context = *jl_ExecutionEngine->getContext().getContext();
+    auto &context = jl_ExecutionEngine->getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -352,7 +357,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto &context = *jl_ExecutionEngine->getContext().getContext();
+    auto &context = jl_ExecutionEngine->getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -406,7 +411,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            auto &context = *jl_ExecutionEngine->getContext().getContext();
+            auto &context = jl_ExecutionEngine->getContext();
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -444,7 +449,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
 
     // whatever, that didn't work - use the assembler output instead
     // just make a new context for this one operation
-    void *F = jl_get_llvmf_defn(mi, wrap(jl_ExecutionEngine->getContext().getContext()), world, getwrapper, true, jl_default_cgparams);
+    void *F = jl_get_llvmf_defn(mi, reinterpret_cast<LLVMOrcThreadSafeContextRef>(&jl_ExecutionEngine->getContext()), world, getwrapper, true, jl_default_cgparams);
     if (!F)
         return jl_an_empty_string;
     return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
@@ -1015,39 +1020,41 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
     cantFail(JD.define(orc::absoluteSymbols({{ES.intern(MangleName), JITEvaluatedSymbol::fromPointer((void*)Addr)}})));
 }
 
-void JuliaOJIT::addModule(std::unique_ptr<Module> M)
+void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_MODULE_FINISH);
-    jl_decorate_module(*M);
-    shareStrings(*M);
     std::vector<std::string> NewExports;
-    for (auto &F : M->global_values()) {
-        if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-            NewExports.push_back(getMangledName(F.getName()));
-        }
-    }
-#if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
-    // validate the relocations for M (not implemented for the JITLink memory manager yet)
-    for (Module::global_object_iterator I = M->global_objects().begin(), E = M->global_objects().end(); I != E; ) {
-        GlobalObject *F = &*I;
-        ++I;
-        if (F->isDeclaration()) {
-            if (F->use_empty())
-                F->eraseFromParent();
-            else if (!((isa<Function>(F) && isIntrinsicFunction(cast<Function>(F))) ||
-                       findUnmangledSymbol(F->getName()) ||
-                       SectionMemoryManager::getSymbolAddressInProcess(
-                           getMangledName(F->getName())))) {
-                llvm::errs() << "FATAL ERROR: "
-                             << "Symbol \"" << F->getName().str() << "\""
-                             << "not found";
-                abort();
+    TSM.withModuleDo([&](Module &M) {
+        jl_decorate_module(M);
+        shareStrings(M);
+        for (auto &F : M.global_values()) {
+            if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                NewExports.push_back(getMangledName(F.getName()));
             }
         }
-    }
+#if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
+        // validate the relocations for M (not implemented for the JITLink memory manager yet)
+        for (Module::global_object_iterator I = M.global_objects().begin(), E = M.global_objects().end(); I != E; ) {
+            GlobalObject *F = &*I;
+            ++I;
+            if (F->isDeclaration()) {
+                if (F->use_empty())
+                    F->eraseFromParent();
+                else if (!((isa<Function>(F) && isIntrinsicFunction(cast<Function>(F))) ||
+                        findUnmangledSymbol(F->getName()) ||
+                        SectionMemoryManager::getSymbolAddressInProcess(
+                            getMangledName(F->getName())))) {
+                    llvm::errs() << "FATAL ERROR: "
+                                << "Symbol \"" << F->getName().str() << "\""
+                                << "not found";
+                    abort();
+                }
+            }
+        }
 #endif
+    });
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+    cantFail(OptSelLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
@@ -1206,12 +1213,15 @@ JuliaOJIT *jl_ExecutionEngine;
 // including the DataLayout and ModuleFlags (for example)
 // and that there is no module-level assembly
 // Comdat is also removed, since the JIT doesn't need it
-void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
+void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTSM)
 {
-    assert(dest != src.get());
-    for (Module::global_iterator I = src->global_begin(), E = src->global_end(); I != E;) {
+    destTSM.withModuleDo([&](Module &dest) {
+        srcTSM.withModuleDo([&](Module &src) {
+    //TODO fix indentation after review
+    assert(&dest != &src);
+    for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
         GlobalVariable *sG = &*I;
-        GlobalVariable *dG = cast_or_null<GlobalVariable>(dest->getNamedValue(sG->getName()));
+        GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(sG->getName()));
         ++I;
         // Replace a declaration with the definition:
         if (dG) {
@@ -1250,14 +1260,14 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
         }
         // Reparent the global variable:
         sG->removeFromParent();
-        dest->getGlobalList().push_back(sG);
+        dest.getGlobalList().push_back(sG);
         // Comdat is owned by the Module
         sG->setComdat(nullptr);
     }
 
-    for (Module::iterator I = src->begin(), E = src->end(); I != E;) {
+    for (Module::iterator I = src.begin(), E = src.end(); I != E;) {
         Function *sG = &*I;
-        Function *dG = cast_or_null<Function>(dest->getNamedValue(sG->getName()));
+        Function *dG = cast_or_null<Function>(dest.getNamedValue(sG->getName()));
         ++I;
         // Replace a declaration with the definition:
         if (dG) {
@@ -1274,14 +1284,14 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
         }
         // Reparent the global variable:
         sG->removeFromParent();
-        dest->getFunctionList().push_back(sG);
+        dest.getFunctionList().push_back(sG);
         // Comdat is owned by the Module
         sG->setComdat(nullptr);
     }
 
-    for (Module::alias_iterator I = src->alias_begin(), E = src->alias_end(); I != E;) {
+    for (Module::alias_iterator I = src.alias_begin(), E = src.alias_end(); I != E;) {
         GlobalAlias *sG = &*I;
-        GlobalAlias *dG = cast_or_null<GlobalAlias>(dest->getNamedValue(sG->getName()));
+        GlobalAlias *dG = cast_or_null<GlobalAlias>(dest.getNamedValue(sG->getName()));
         ++I;
         if (dG) {
             if (!dG->isDeclaration()) { // aliases are always definitions, so this test is reversed from the above two
@@ -1295,18 +1305,20 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
             }
         }
         sG->removeFromParent();
-        dest->getAliasList().push_back(sG);
+        dest.getAliasList().push_back(sG);
     }
 
     // metadata nodes need to be explicitly merged not just copied
     // so there are special passes here for each known type of metadata
-    NamedMDNode *sNMD = src->getNamedMetadata("llvm.dbg.cu");
+    NamedMDNode *sNMD = src.getNamedMetadata("llvm.dbg.cu");
     if (sNMD) {
-        NamedMDNode *dNMD = dest->getOrInsertNamedMetadata("llvm.dbg.cu");
+        NamedMDNode *dNMD = dest.getOrInsertNamedMetadata("llvm.dbg.cu");
         for (NamedMDNode::op_iterator I = sNMD->op_begin(), E = sNMD->op_end(); I != E; ++I) {
             dNMD->addOperand(*I);
         }
     }
+        });
+    });
 }
 
 // optimize memory by turning long strings into memoized copies, instead of
@@ -1352,10 +1364,10 @@ static void jl_decorate_module(Module &M) {
 }
 
 static int jl_add_to_ee(
-        std::unique_ptr<Module> &M,
-        StringMap<std::unique_ptr<Module>*> &NewExports,
-        DenseMap<Module*, int> &Queued,
-        std::vector<std::vector<std::unique_ptr<Module>*>> &ToMerge,
+        orc::ThreadSafeModule &M,
+        StringMap<orc::ThreadSafeModule*> &NewExports,
+        DenseMap<orc::ThreadSafeModule*, int> &Queued,
+        std::vector<std::vector<orc::ThreadSafeModule*>> &ToMerge,
         int depth)
 {
     // DAG-sort (post-dominator) the compile to compute the minimum
@@ -1364,7 +1376,7 @@ static int jl_add_to_ee(
         return 0;
     // First check and record if it's on the stack somewhere
     {
-        auto &Cycle = Queued[M.get()];
+        auto &Cycle = Queued[&M];
         if (Cycle)
             return Cycle;
         ToMerge.push_back({});
@@ -1372,7 +1384,8 @@ static int jl_add_to_ee(
     }
     int MergeUp = depth;
     // Compute the cycle-id
-    for (auto &F : M->global_objects()) {
+    M.withModuleDo([&](Module &m) {//TODO fix indentation
+    for (auto &F : m.global_objects()) {
         if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
             auto Callee = NewExports.find(F.getName());
             if (Callee != NewExports.end()) {
@@ -1384,25 +1397,26 @@ static int jl_add_to_ee(
             }
         }
     }
+    });
     if (MergeUp == depth) {
         // Not in a cycle (or at the top of it)
-        Queued.erase(M.get());
+        Queued.erase(&M);
         for (auto &CM : ToMerge.at(depth - 1)) {
-            assert(Queued.find(CM->get())->second == depth);
-            Queued.erase(CM->get());
-            jl_merge_module(M.get(), std::move(*CM));
+            assert(Queued.find(CM)->second == depth);
+            Queued.erase(CM);
+            jl_merge_module(M, std::move(*CM));
         }
         jl_ExecutionEngine->addModule(std::move(M));
         MergeUp = 0;
     }
     else {
         // Add our frame(s) to the top of the cycle
-        Queued[M.get()] = MergeUp;
+        Queued[&M] = MergeUp;
         auto &Top = ToMerge.at(MergeUp - 1);
         Top.push_back(&M);
         for (auto &CM : ToMerge.at(depth - 1)) {
-            assert(Queued.find(CM->get())->second == depth);
-            Queued[CM->get()] = MergeUp;
+            assert(Queued.find(CM)->second == depth);
+            Queued[CM] = MergeUp;
             Top.push_back(CM);
         }
     }
@@ -1410,10 +1424,10 @@ static int jl_add_to_ee(
     return MergeUp;
 }
 
-static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports)
+static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports)
 {
-    DenseMap<Module*, int> Queued;
-    std::vector<std::vector<std::unique_ptr<Module>*>> ToMerge;
+    DenseMap<orc::ThreadSafeModule*, int> Queued;
+    std::vector<std::vector<orc::ThreadSafeModule*>> ToMerge;
     jl_add_to_ee(M, NewExports, Queued, ToMerge, 1);
     assert(!M);
 }
@@ -1439,6 +1453,6 @@ size_t jl_jit_total_bytes_impl(void)
 }
 
 extern "C" JL_DLLEXPORT
-LLVMContextRef jl_get_ee_context_impl(void) {
-    return wrap(jl_ExecutionEngine->getContext().getContext());
+LLVMOrcThreadSafeContextRef jl_get_ee_context_impl(void) {
+    return reinterpret_cast<LLVMOrcThreadSafeContextRef>(&jl_ExecutionEngine->getContext());
 }
