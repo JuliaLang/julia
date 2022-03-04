@@ -108,15 +108,7 @@ Information about preceding whitespace is added for use by the parser.
 struct SyntaxToken
     head::SyntaxHead
     first_byte::UInt32
-    last_byte::UInt32
-end
-
-function SyntaxToken(raw::Token, had_whitespace)
-    f = EMPTY_FLAGS
-    had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
-    raw.dotop      && (f |= DOTOP_FLAG)
-    raw.suffix     && (f |= SUFFIXED_FLAG)
-    SyntaxToken(SyntaxHead(raw.kind, f), raw.startbyte + 1, raw.endbyte + 1)
+    last_byte::UInt32 # TODO: Remove this?
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
@@ -137,8 +129,6 @@ is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
 Range in the source text which will become a node in the tree. Can be either a
 token (leaf node of the tree) or an interior node, depending on how the
 start_mark compares to previous nodes.
-
-TODO: Optimize this data structure?  It's very large at the moment.
 """
 struct TaggedRange
     head::SyntaxHead # Kind,flags
@@ -146,6 +136,12 @@ struct TaggedRange
     first_byte::UInt32  # First byte in the input text
     last_byte::UInt32   # Last byte in the input text
     start_mark::UInt32  # Index of first emitted range which this range covers
+    # TODO: Remove the three fields above & replace with:
+    # is_leaf::Bool
+    # # The following field is used for one of two things:
+    # # - For leaf nodes it points to the last byte of the token in the input text
+    # # - For non-leaf nodes it points to the index of the first child
+    # last_byte_or_first_child::UInt32
 end
 
 head(range::TaggedRange)       = range.head
@@ -287,28 +283,72 @@ end
 #-------------------------------------------------------------------------------
 # Stream input interface - the peek_* family of functions
 
-# Buffer up until the next non-whitespace token.
-# This can buffer more than strictly necessary when newlines are significant,
-# but this is not a big problem.
+# Buffer several tokens ahead
 function _buffer_lookahead_tokens(stream::ParseStream)
     had_whitespace = false
+    token_count = 0
     while true
         raw = Tokenize.Lexers.next_token(stream.lexer)
         k = TzTokens.exactkind(raw)
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
         had_whitespace |= was_whitespace
-        push!(stream.lookahead, SyntaxToken(raw, had_whitespace))
-        if !was_whitespace
+        f = EMPTY_FLAGS
+        had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
+        raw.dotop      && (f |= DOTOP_FLAG)
+        raw.suffix     && (f |= SUFFIXED_FLAG)
+        push!(stream.lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1, raw.endbyte + 1))
+        token_count += 1
+        if k == K"EndMarker"
             break
+        end
+        if !was_whitespace
+            # Buffer tokens in batches for lookahead. Generally we want a
+            # moderate-size buffer to make sure we hit the fast path of peek(),
+            # but not too large to avoid (a) polluting the processor cache and
+            # (b) doing unnecessary work when not parsing the whole input.
+            had_whitespace = false
+            if token_count > 100
+                break
+            end
         end
     end
 end
 
-# Find the index of the first nontrivia token in the lookahead buffer.
-#
-# TODO: Store this as part of _buffer_lookahead_tokens to avoid redoing this
-# work all the time!
-function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
+# Find the index of the next nontrivia token
+@inline function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
+    # Much of the time we'll be peeking ahead a single token and have one or
+    # zero whitespace tokens before the next token. The following code is an
+    # unrolled optimized version for that fast path. Empirically it seems we
+    # only hit the slow path about 5% of the time here.
+    i = 1
+    if n == 1 && i+1 <= length(stream.lookahead)
+        if skip_newlines
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs")
+                return i
+            end
+            i += 1
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs")
+                return i
+            end
+        else
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment")
+                return i
+            end
+            i += 1
+            k = kind(stream.lookahead[i])
+            if !(k == K"Whitespace" || k == K"Comment")
+                return i
+            end
+        end
+    end
+    # Fall through to the general case
+    return __lookahead_index(stream, n, skip_newlines)
+end
+
+@noinline function __lookahead_index(stream, n, skip_newlines)
     i = 1
     while true
         if i > length(stream.lookahead)
