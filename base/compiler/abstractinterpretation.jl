@@ -666,7 +666,7 @@ function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
     args = collect_const_args(arginfo)
     try
         value = Core._apply_pure(f, args)
-        return Const(value)
+        return mkConst(value)
     catch
         return nothing
     end
@@ -684,7 +684,7 @@ end
 function is_all_const_arg((; argtypes)::ArgInfo)
     for i = 2:length(argtypes)
         a = widenconditional(argtypes[i])
-        isa(a, Const) || isconstType(a) || issingletontype(a) || return false
+        isa(a, Const) || isa(a, ConstType) || isconstType(a) || issingletontype(a) || return false
     end
     return true
 end
@@ -692,6 +692,7 @@ end
 function collect_const_args((; argtypes)::ArgInfo)
     return Any[ let a = widenconditional(argtypes[i])
                     isa(a, Const) ? a.val :
+                    isa(a, ConstType) ? a.val :
                     isconstType(a) ? (a::DataType).parameters[1] :
                     (a::DataType).instance
                 end for i in 2:length(argtypes) ]
@@ -707,7 +708,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
             # If the constant is not inlineable, still do the const-prop, since the
             # code that led to the creation of the Const may be inlineable in the same
             # circumstance and may be optimizable.
-            return ConstCallResults(Const(value), ConstResult(result.edge, value), EFFECTS_TOTAL)
+            return ConstCallResults(mkConst(value), ConstResult(result.edge, value), EFFECTS_TOTAL)
         end
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
@@ -877,6 +878,7 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
         end
     end
     isa(arg, PartialOpaque) && return true
+    isa(arg, ConstType) && return true
     isa(arg, Const) || return true
     val = arg.val
     # don't consider mutable values or Strings useful constants
@@ -1044,7 +1046,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
-            return Any[ Const(val[i]) for i in 1:length(val) ], nothing # avoid making a tuple Generator here!
+            return Any[ mkConst(val[i]) for i in 1:length(val) ], nothing # avoid making a tuple Generator here!
         end
     end
 
@@ -1102,7 +1104,7 @@ end
 
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype), sv::InferenceState)
-    if isa(itft, Const)
+    if isConst(itft)
         iteratef = itft.val
     else
         return Any[Vararg{Any}], nothing
@@ -1142,7 +1144,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         valtype = getfield_tfunc(stateordonet, Const(1))
         push!(ret, valtype)
         statetype = nstatetype
-        call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), sv)
+        call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[mkConst(iteratef), itertype, statetype]), sv)
         stateordonet = call.rt
         stateordonet_widened = widenconst(stateordonet)
         push!(calls, call)
@@ -1177,7 +1179,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         end
         valtype = tmerge(valtype, nounion.parameters[1])
         statetype = tmerge(statetype, nounion.parameters[2])
-        stateordonet = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), sv).rt
+        stateordonet = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[mkConst(iteratef), itertype, statetype]), sv).rt
         stateordonet_widened = widenconst(stateordonet)
     end
     if valtype !== Union{}
@@ -1194,7 +1196,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
     (itft === Bottom || aft === Bottom) && return CallMeta(Bottom, false)
     aargtypes = argtype_tail(argtypes, 4)
     aftw = widenconst(aft)
-    if !isa(aft, Const) && !isa(aft, PartialOpaque) && (!isType(aftw) || has_free_typevars(aftw))
+    if !isConst(aft) && !isa(aft, PartialOpaque) && (!isType(aftw) || has_free_typevars(aftw))
         if !isconcretetype(aftw) || (aftw <: Builtin)
             add_remark!(interp, sv, "Core._apply_iterate called on a function of a non-concrete type")
             tristate_merge!(sv, Effects())
@@ -1357,7 +1359,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             aty = argtypes[2]
             bty = argtypes[3]
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
-            if isa(aty, Const) && isa(b, SlotNumber)
+            if isConst(aty) && isa(b, SlotNumber)
                 if rt === Const(false)
                     aty = Union{}
                 elseif rt === Const(true)
@@ -1367,7 +1369,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 end
                 return Conditional(b, aty, bty)
             end
-            if isa(bty, Const) && isa(a, SlotNumber)
+            if isConst(bty) && isa(a, SlotNumber)
                 if rt === Const(false)
                     bty = Union{}
                 elseif rt === Const(true)
@@ -1428,7 +1430,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
         a3 = argtypes[3]
-        if isa(a3, Const)
+        if isConst(a3)
             body = a3.val
         elseif isType(a3)
             body = a3.parameters[1]
@@ -1452,7 +1454,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
             !isa(tv, TypeVar) && return Any
             body = UnionAll(tv, body)
         end
-        ret = canconst ? Const(body) : Type{body}
+        ret = canconst ? ConstType(body) : Type{body}
         return ret
     end
     return Any
@@ -1558,8 +1560,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         tristate_merge!(sv, Effects()) # TODO
         (la < 2 || la > 4) && return CallMeta(Union{}, false)
         n = argtypes[2]
-        ub_var = Const(Any)
-        lb_var = Const(Union{})
+        ub_var = ConstType(Any, Type{Any})
+        lb_var = ConstType(Union{}, Type{Union{}})
         if la == 4
             ub_var = argtypes[4]
             lb_var = argtypes[3]
@@ -1617,7 +1619,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
            istopfunction(f, :getindex)
         # mark getindex(::SimpleVector, i::Int) as @pure
         if 1 <= idx <= length(svecval) && isassigned(svecval, idx)
-            return CallMeta(Const(getindex(svecval, idx)), MethodResultPure())
+            return CallMeta(mkConst(getindex(svecval, idx)), MethodResultPure())
         end
     elseif la == 2 && istopfunction(f, :typename)
         return CallMeta(typename_static(argtypes[2]), MethodResultPure())
@@ -1756,7 +1758,7 @@ end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if isa(e, QuoteNode)
-        return Const(e.value)
+        return mkConst(e.value)
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber) || isa(e, Argument)
@@ -1765,7 +1767,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         return abstract_eval_global(e.mod, e.name, sv)
     end
 
-    return Const(e)
+    return mkConst(e)
 end
 
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
@@ -1834,7 +1836,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                         ALWAYS_TRUE, # N.B depends on !ismutabletype(t) above
                         ALWAYS_TRUE, ALWAYS_FALSE, ALWAYS_TRUE))
                     @goto t_computed
-                elseif !isa(at, Const)
+                elseif !isConst(at)
                     allconst = false
                 end
                 if !anyrefine
@@ -1850,7 +1852,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 if allconst
                     argvals = Vector{Any}(undef, nargs)
                     for j in 1:nargs
-                        argvals[j] = (ats[j]::Const).val
+                        argvals[j] = (ats[j]::Union{Const, ConstType}).val
                     end
                     t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
                 elseif anyrefine
@@ -1964,7 +1966,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
                 spty = sv.sptypes[n]
-                if isa(spty, Const)
+                if isConst(spty)
                     t = Const(true)
                 end
             end
@@ -1974,12 +1976,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     end
     @label t_computed
     @assert !isa(t, TypeVar) "unhandled TypeVar"
-    if isa(t, DataType) && isdefined(t, :instance)
-        # replace singleton types with their equivalent Const object
-        t = Const(t.instance)
-    end
+    t = maybe_singleton_const(t)
     if !isempty(sv.pclimitations)
-        if t isa Const || t === Union{}
+        if t isa Const || t isa ConstType || t === Union{}
             empty!(sv.pclimitations)
         else
             t = LimitedAccuracy(t, sv.pclimitations)
@@ -1992,7 +1991,7 @@ end
 function abstract_eval_global(M::Module, s::Symbol)
     if isdefined(M,s)
         if isconst(M,s)
-            return Const(getfield(M,s))
+            return mkConst(getfield(M,s))
         end
     end
     ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
@@ -2002,7 +2001,7 @@ end
 
 function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     ty = abstract_eval_global(M, s)
-    isa(ty, Const) && return ty
+    isConst(ty) && return ty
     if isdefined(M,s)
         tristate_merge!(frame, Effects(EFFECTS_TOTAL, consistent=ALWAYS_FALSE))
     else
@@ -2072,6 +2071,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
 end
 
 function widenreturn_noconditional(@nospecialize(rt))
+    isa(rt, ConstType) && return rt
     isa(rt, Const) && return rt
     isa(rt, Type) && return rt
     if isa(rt, PartialStruct)

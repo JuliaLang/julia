@@ -331,7 +331,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
         elseif isvarargtype(v)
             ty = Int
         else
-            ty = Const(v)
+            ty = mkConst(v)
         end
         sp[i] = ty
     end

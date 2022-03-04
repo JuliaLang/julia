@@ -11,6 +11,7 @@ end
 
 function is_forwardable_argtype(@nospecialize x)
     return isa(x, Const) ||
+           isa(x, ConstType) ||
            isa(x, Conditional) ||
            isa(x, PartialStruct) ||
            isa(x, PartialOpaque)
@@ -130,13 +131,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                     push!(vargtype_elements, elim_free_typevars(rewrap_unionall(p, specTypes)))
                 end
                 for i in 1:length(vargtype_elements)
-                    atyp = vargtype_elements[i]
-                    if isa(atyp, DataType) && isdefined(atyp, :instance)
-                        # replace singleton types with their equivalent Const object
-                        vargtype_elements[i] = Const(atyp.instance)
-                    elseif isconstType(atyp)
-                        vargtype_elements[i] = Const(atyp.parameters[1])
-                    end
+                    vargtype_elements[i] = maybe_singleton_const(vargtype_elements[i])
                 end
                 vargtype = tuple_tfunc(vargtype_elements)
             end
@@ -161,10 +156,13 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
             end
             atyp = unwraptv(atyp)
             if isa(atyp, DataType) && isdefined(atyp, :instance)
-                # replace singleton types with their equivalent Const object
-                atyp = Const(atyp.instance)
+                if atyp === typeof(Bottom)
+                    atyp = ConstType(Bottom)
+                else
+                    atyp = Const(atyp.instance)
+                end
             elseif isconstType(atyp)
-                atyp = Const(atyp.parameters[1])
+                atyp = ConstType(atyp.parameters[1], atyp)
             else
                 atyp = elim_free_typevars(rewrap_unionall(atyp, specTypes))
             end
