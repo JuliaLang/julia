@@ -669,34 +669,55 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
     return v
 end
 
+# This is a stable least significant bit first radix sort.
+#
+# That is, it first sorts the entire list by the last CHUNK_SIZE bits, then by the second to
+# last CHUNK_SIZE bits, and so on. Stability means that it will not reorder two elements
+# that compare equal. This is essential so that the order introduced by earlier,
+# less significant passes is preserved by later passes.
+#
+# Each pass divides the input into 2^CHUNK_SIZE == MASK+1 buckets. To do this, it
+#  * counts the number of entries that fall into each bucket
+#  * uses those counts to compute the indices to move elements of those buckets into
+#  * moves elements into the computed indices in the swap array
+#  * switches the swap and working array
+#
+# In the case of an odd number of passes, the returned list will === the input list t,
+# not v. This is one of the many reasons radix_sort! is not exported.
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
     # bits is unsigned and CHUNK_SIZE is a compile time constant for performance reasons.
     MASK = UInt(1) << CHUNK_SIZE - 0x1
-    counts = Vector{unsigned(typeof(hi-lo))}(undef, MASK+2)
+    counts = Vector{UInt}(undef, MASK+2)
 
     @inbounds for shift in 0:CHUNK_SIZE:bits-1
 
         counts .= zero(eltype(counts))
 
+        # counts[2:MASK+2] will store the number of elements that fall into each bucket.
+        # if CHUNK_SIZE = 8, counts[2] is bucket 0x00 and counts[257] is bucket 0xff.
         for k in lo:hi
-            x = v[k]
-            idx = (x >> shift)&MASK + 2
-            counts[idx] += one(eltype(counts))
+            x = v[k]                         # lookup the element
+            i = (x >> shift)&MASK + 2        # compute its bucket's index for this pass
+            counts[i] += one(eltype(counts)) # increment that bucket's count
         end
 
-        counts[1] = lo-1
-        cumsum!(counts, counts)
+        counts[1] = lo          # set target index for the first bucket
+        cumsum!(counts, counts) # set target indices for subsequent buckets
+        # counts[1:MASK+1] now stores indices where the first member of each bucket
+        # belongs, not the number of elements in each bucket. We will put the first element
+        # of bucket 0x00 in t[counts[1]], the next element of bucket 0x00 in t[counts[1]+1],
+        # and the last element of bucket 0x00 in t[counts[2]-1].
 
         for k in lo:hi # Is this iteration slower than it could be?
-            x = v[k]
-            i = (x >> shift)&MASK + 1
-            j = counts[i] += 1
-            t[j] = x
-            # consider adding sortperm here
-        end
+            x = v[k]                  # lookup the element
+            i = (x >> shift)&MASK + 1 # compute its bucket's index for this pass
+            j = counts[i]             # lookup the target index
+            t[j] = x                  # put the element where it belongs
+            counts[i] = j + 1         # increment the target index for the next
+        end                           #  ↳ element in this bucket
 
-        v, t = t, v
+        v, t = t, v # swap the now sorted destination list t back into the primary list v
 
     end
 
