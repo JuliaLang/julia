@@ -136,7 +136,8 @@ end
 @testset "tuple indexed by float deprecation" begin
     @test_deprecated getindex((1,), 1.0) === 1
     @test_deprecated getindex((1,2), 2.0) === 2
-    @test_throws Exception getindex((), 1.0)
-    @test_throws Exception getindex((1,2), 0.0)
-    @test_throws Exception getindex((1,2), -1.0)
+    @test Base.JLOptions().depwarn == 1
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((), 1.0)
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), 0.0)
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
 end
