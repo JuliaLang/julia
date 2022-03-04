@@ -443,25 +443,23 @@ Characteristics:
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
 end
-
 """
     AdaptiveSort(fallback)
 
-Indicate that a sorting function should use the radix sort or counting
-sort algorithms where possible for long vectors and `fallback` for
-short vectors. AdaptiveSort is stable if the fallback is stable.
+Indicate that a sorting function should pick the fastest availible algorithm for the
+given element type, order, length, and contents. If no alternatives are viable, uses
+the `fallback` algorithm. AdaptiveSort is stable if `fallback` is stable.
 
-Characteristics:
-  * *stable*: preserves the ordering of elements which compare
-    equal (e.g. "a" and "A" in a sort of letters which ignores
-    case).
-  * *not in-place* in memory.
-  * *great performance* for very large collections and some easy special cases.
+Algoritms currently in use:
+  * Inseretion sort for short lists
+  * Radix sort for long lists
+  * Counting sort for lists of integers spanning a short range
+  * Fallback agorithm when the input cannot be efficiently
+    converted into a list of integers maintaining sort order
 """
 struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
     fallback::Fallback
 end
-
 """
     InsertionSort
 
@@ -1378,7 +1376,6 @@ Serializable(T::Type, order::ReverseOrdering) = Serializable(T, order.fwd)
 ### Vectors
 
 # Convert v to unsigned integers in place, maintaining sort order.
-# Also return the extrema of its output.
 function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
     u = reinterpret(Serializable(eltype(v), order), v)
     @inbounds for i in lo:hi
