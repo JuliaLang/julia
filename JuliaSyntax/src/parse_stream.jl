@@ -325,7 +325,7 @@ end
     # unrolled optimized version for that fast path. Empirically it seems we
     # only hit the slow path about 5% of the time here.
     i = stream.lookahead_index
-    if n == 1 && i+1 <= length(stream.lookahead)
+    @inbounds if n == 1 && i+1 <= length(stream.lookahead)
         if skip_newlines
             k = kind(stream.lookahead[i])
             if !(k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs")
@@ -364,7 +364,7 @@ end
             end
             _buffer_lookahead_tokens(stream.lexer, stream.lookahead)
         end
-        k = kind(stream.lookahead[i])
+        k = @inbounds kind(stream.lookahead[i])
         if !((k == K"Whitespace" || k == K"Comment") ||
              (k == K"NewlineWs" && skip_newlines))
             if n == 1
@@ -409,7 +409,7 @@ function peek_token(stream::ParseStream, n::Integer=1;
     if !skip_whitespace
         i = stream.lookahead_index
     end
-    return stream.lookahead[i]
+    return @inbounds stream.lookahead[i]
 end
 
 function _peek_behind_fields(ranges, i)
