@@ -1069,9 +1069,16 @@ end
 
     GC.safepoint()
 
-    GC.enable_logging(true)
-    GC.gc()
-    GC.enable_logging(false)
+    mktemp() do tmppath, _
+        open(tmppath, "w") do tmpio
+            redirect_stderr(tmpio) do
+                GC.enable_logging(true)
+                GC.gc()
+                GC.enable_logging(false)
+            end
+        end
+        @test occursin("GC: pause", read(open(tmppath), String))
+    end
 end
 
 @testset "fieldtypes Module" begin
