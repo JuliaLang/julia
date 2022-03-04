@@ -450,7 +450,7 @@ ERROR: `b` is still missing
 macro coalesce(args...)
     expr = :(missing)
     for arg in reverse(args)
-        expr = :(!ismissing((val = $arg;)) ? val : $expr)
+        expr = :(!ismissing((val = $(esc(arg));)) ? val : $expr)
     end
-    return esc(:(let val; $expr; end))
+    return :(local val; $expr; end)
 end
