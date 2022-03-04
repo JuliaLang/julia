@@ -690,10 +690,9 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
 
     @inbounds for shift in 0:CHUNK_SIZE:bits-1
 
-        counts .= 0
-
         # counts[2:MASK+2] will store the number of elements that fall into each bucket.
         # if CHUNK_SIZE = 8, counts[2] is bucket 0x00 and counts[257] is bucket 0xff.
+        counts .= 0
         for k in lo:hi
             x = v[k]                  # lookup the element
             i = (x >> shift)&MASK + 2 # compute its bucket's index for this pass
