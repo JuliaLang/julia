@@ -161,10 +161,6 @@ end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
-# These used to be in build_h.jl and are retained for backwards compatibility
-const libblas_name = "libblastrampoline"
-const liblapack_name = "libblastrampoline"
-
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
