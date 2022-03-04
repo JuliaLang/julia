@@ -690,18 +690,18 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
 
     @inbounds for shift in 0:CHUNK_SIZE:bits-1
 
-        counts .= zero(eltype(counts))
+        counts .= 0
 
         # counts[2:MASK+2] will store the number of elements that fall into each bucket.
         # if CHUNK_SIZE = 8, counts[2] is bucket 0x00 and counts[257] is bucket 0xff.
         for k in lo:hi
-            x = v[k]                         # lookup the element
-            i = (x >> shift)&MASK + 2        # compute its bucket's index for this pass
-            counts[i] += one(eltype(counts)) # increment that bucket's count
+            x = v[k]                  # lookup the element
+            i = (x >> shift)&MASK + 2 # compute its bucket's index for this pass
+            counts[i] += 1            # increment that bucket's count
         end
 
-        counts[1] = lo          # set target index for the first bucket
-        cumsum!(counts, counts) # set target indices for subsequent buckets
+        counts[1] = lo                # set target index for the first bucket
+        cumsum!(counts, counts)       # set target indices for subsequent buckets
         # counts[1:MASK+1] now stores indices where the first member of each bucket
         # belongs, not the number of elements in each bucket. We will put the first element
         # of bucket 0x00 in t[counts[1]], the next element of bucket 0x00 in t[counts[1]+1],
