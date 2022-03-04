@@ -37,9 +37,7 @@ struct JuliaLICMPassLegacy : public LoopPass {
 
     protected:
         void getAnalysisUsage(AnalysisUsage &AU) const override {
-            AU.addRequired<DominatorTreeWrapperPass>();
-            AU.addRequired<LoopInfoWrapperPass>();
-            AU.setPreservesAll();
+            getLoopAnalysisUsage(AU);
         }
 };
 
