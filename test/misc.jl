@@ -283,6 +283,7 @@ v11801, t11801 = @timed sin(1)
 
 @test names(@__MODULE__, all = true) == names_before_timing
 
+redirect_stdout(devnull) do # suppress time prints
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
@@ -348,6 +349,9 @@ end
 
 after = Base.cumulative_compile_time_ns_after();
 @test after >= before;
+wait(t1)
+wait(t2)
+end # redirect_stdout
 
 # interactive utilities
 
