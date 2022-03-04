@@ -722,6 +722,16 @@ end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::Union{Int8, Int16, Int32, Int64, Int128}) = unsigned(x)
+function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
+    mn = mx = v[lo]
+    while lo < hi
+        lo += 1
+        vi = v[lo]
+        lt(o, vi, mn) && (mn = vi)
+        lt(o, mx, vi) && (mx = vi)
+    end
+    mn, mx
+end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparison based.
@@ -735,57 +745,55 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # only count sort on a short range can compete with insertion sort fo ln < 30
     # and the optimization is not worth the detection cost, so we use inserstion sort.
     ln < 30 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-    if (eltype(v) == Int128 || eltype(v) == UInt128) && o isa DirectOrdering
-        # This avoids an unneccessary serialization which can have a 0–50% runtime impact.
-        mn, mx = extrema(v)
-        rln = maybe_unsigned(mx-mn)
-         # the range can be big and count sort will still outperform comparison sort
-        if rln < 5ln-100
-            return sort_int_range!(v, rln+1, mn, o === Forward ? identity : reverse, lo, hi)
-        else
-            return sort!(v, lo, hi, a.fallback, o)
+
+    # UInt128 does not support fast bitshifting so we never
+    # dipsatch to radix sort but we may still perform countsort
+    if sizeof(U) > 8
+        if eltype(v) <: Integer && o isa DirectOrdering
+            mn, mx = _extrema(v, lo, hi, Forward)
+            rln = maybe_unsigned(mx-mn)
+            rln < 5ln-100 && # count sort will outperform comparison sort if rln is small
+                return sort_int_range!(v, rln+1, mn, o === Forward ? identity : reverse, lo, hi)
+        end
+        return sort!(v, lo, hi, a.fallback, o)
+    end
+
+    mn, mx = _extrema(v, lo, hi, o)
+    if eltype(v) <: Integer && o isa DirectOrdering
+        F = o === Forward
+        rln = maybe_unsigned(F ? mx-mn : mn-mx)
+        if rln < ln÷2 # count sort will be superior if rln is very small
+            return sort_int_range!(v, rln+1, F ? mn : mx, F ? identity : reverse, lo, hi)
         end
     end
-    u, mn, mx = Serial.serialize!(v, lo, hi, o)
 
-    # Arbitrary types and orders may serialize to UInt128 (i.e. those not caught in the
-    # special case above), but should still never dispatch to radix sort because bit
-    # shifting 128 bits is too slow to be competitive with comparrison based sorting
-    # even if only some of the bits are actually used.
-    should_radix = sizeof(U) <= 8
-
-    # rln is an abbrevation for range_ln. Like ln, rln == length(mn:mx)-1
-    rln = maybe_unsigned(mx-mn)
-    # rln has to be small for cout sort to outperform radix sort
-    if rln < (should_radix ? ln÷2 : 5ln-100)
-        sort_int_range!(u, rln+1, mn, identity, lo, hi)
-        return Serial.deserialize!(v, u, lo, hi, o)
-    end
-    if !should_radix
-        sort!(u, lo, hi, ln < 70 ? SMALL_ALGORITHM : a.fallback, Forward)
-        return Serial.deserialize!(v, u, lo, hi, o)
-    end
+    umn, umx = Serial.serialize(mn, o), Serial.serialize(mx, o)
+    #umn, umx = umx < umn ? (umx, umn) : (umn, umx)
+    urln = maybe_unsigned(umx-umn)
 
     # if rln is small, then once we subtract out mn, we'll get a vector like
     # UInt16[0x001a, 0x0015, 0x0006, 0x001b, 0x0008, 0x000c, 0x0001, 0x000e, 0x001c, 0x0009]
     # where we only need to radix over the last few bits (bits = 5, in the example).
-    bits = unsigned(8sizeof(rln) - leading_zeros(rln))
+    bits = unsigned(8sizeof(urln) - leading_zeros(urln))
 
     # radix sort runs in O(bits * ln), insertion sort runs in O(ln^2). Radix sort has a
     # constant factor that is three times higher, so radix runtime is 3bits * ln and
     # insertion runtime is ln^2. Emperically, insertion is faster than radix iff ln < 3bits.
-    if ln < 3bits
-        # at ln = 64*3-1, QuickSort is about 20% faster than InsertionSort. The window
-        # where QuickSort is superior is the triangle contained by (ln=128, bits=43),
-        # (ln=191, bits=64), and (ln=128, bits=64). This is a small window, spanning only
-        # .015 square orders of magnitude, and the 20% performance gap is only present at
-        # the apex. At the centroid, the gap is about 6%. On the other hand there are
-        # theoretical/compilation benefits to avoiding the fallback entierly for small
-        # serializable types and orderings, so we unconditionaly use InsertionSort.
-        sort!(u, lo, hi, SMALL_ALGORITHM, Forward)
+    ln < 3bits && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+    # at ln = 64*3-1, QuickSort is about 20% faster than InsertionSort. The window
+    # where QuickSort is superior is the triangle contained by (ln=128, bits=43),
+    # (ln=191, bits=64), and (ln=128, bits=64). This is a small window, spanning only
+    # .015 square orders of magnitude, and the 20% performance gap is only present at
+    # the apex. At the centroid, the gap is about 6%. On the other hand there are
+    # theoretical/compilation benefits to avoiding the fallback entierly for small
+    # serializable types and orderings, so we unconditionaly use InsertionSort.
+
+    u = Serial.serialize!(v, lo, hi, o)
+
+    if urln < ln÷2 # count sort will be superior if rln is very small
+        sort_int_range!(u, urln+1, umn, identity, lo, hi)
         return Serial.deserialize!(v, u, lo, hi, o)
     end
-
     # At this point, we are comitted to radix sort.
 
     # chunk_size is the number of bits to radix over at once.
@@ -804,7 +812,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # Float32[2.012, 400.0, 12.345] serializes to UInt32[0x3fff3b63, 0x3c37ffff, 0x414570a4]
     # which is reduced to UInt32[0x03c73b64, 0x00000000, 0x050d70a5] using only 26 bits.
     # the overhead for this subtraction is small enough that it is worthwhile in many cases.
-    @inbounds for i in lo:hi u[i] -= mn end # this line is faster than u[lo:hi] .-= mn
+    @inbounds for i in lo:hi u[i] -= umn end # this line is faster than u[lo:hi] .-= mn
 
     t = similar(u)
     # This if else chain is to avoid dynamic dispatch for small cases.
@@ -826,7 +834,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     else
         radix_sort!(u, lo, hi, bits, Val(chunk_size), t)
     end
-    Serial.deserialize!(v, u2, lo, hi, o, mn)
+    Serial.deserialize!(v, u2, lo, hi, o, umn)
 end
 
 ## generic sorting methods ##
@@ -1356,17 +1364,10 @@ Serializable(T::Type, order::ReverseOrdering) = Serializable(T, order.fwd)
 # Also return the extrema of its output.
 function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
     u = reinterpret(Serializable(eltype(v), order), v)
-    @inbounds u[lo] = mn = mx = serialize(v[lo], order)
-    i = lo # rename lo -> i for clarity only
-    @inbounds while i < hi
-        i += 1
-
-        ui = u[i] = serialize(v[i], order)
-
-        mx = max(ui, mx)
-        mn = min(ui, mn)
+    @inbounds for i in lo:hi
+        u[i] = serialize(v[i], order)
     end
-    u, mn, mx
+    u
 end
 
 function deserialize!(v::AbstractVector, u::AbstractVector{U},
