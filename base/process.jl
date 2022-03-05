@@ -38,9 +38,13 @@ pipe_writer(p::ProcessChain) = p.in
 # release ownership of the libuv handle
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
-        disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
-        proc.handle = C_NULL
+        iolock_begin()
+        if proc.handle != C_NULL
+            disassociate_julia_struct(proc.handle)
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
+            proc.handle = C_NULL
+        end
+        iolock_end()
     end
     nothing
 end
@@ -52,6 +56,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
+    disassociate_julia_struct(proc) # ensure that data field is set to C_NULL
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
     lock(proc.exitnotify)
