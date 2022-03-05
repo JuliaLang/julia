@@ -267,85 +267,83 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, 1, Forward) == 5
     @test searchsortedlast(r, UInt(1), Forward) == 5
 
-    for a in [rand(1:10000, 1000), rand(1:10000, 3000)]
-        for alg in [InsertionSort, MergeSort, Base.Sort.AdaptiveSort(MergeSort)]
-            alg === InsertionSort && length(a) == 3000 && continue
+    a = rand(1:10000, 1000)
+    for alg in [InsertionSort, MergeSort, DEFAULT_STABLE]
 
+        b = sort(a, alg=alg)
+        @test issorted(b)
+
+        ix = sortperm(a, alg=alg)
+        b = a[ix]
+        @test issorted(b)
+        @test a[ix] == b
+
+        sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg)
+        b = a[ix][1:100]
+        @test issorted(b)
+
+        sortperm!(ix, a, alg=alg)
+        b = a[ix]
+        @test issorted(b)
+        @test a[ix] == b
+
+        b = sort(a, alg=alg, rev=true)
+        @test issorted(b, rev=true)
+        ix = sortperm(a, alg=alg, rev=true)
+        b = a[ix]
+        @test issorted(b, rev=true)
+        @test a[ix] == b
+
+        sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg, rev=true)
+        b = a[ix][1:100]
+        @test issorted(b, rev=true)
+
+        sortperm!(ix, a, alg=alg, rev=true)
+        b = a[ix]
+        @test issorted(b, rev=true)
+        @test a[ix] == b
+
+        b = sort(a, alg=alg, by=x->1/x)
+        @test issorted(b, by=x->1/x)
+        ix = sortperm(a, alg=alg, by=x->1/x)
+        b = a[ix]
+        @test issorted(b, by=x->1/x)
+        @test a[ix] == b
+
+        sortperm!(view(ix, 1:100), view(a, 1:100), by=x->1/x)
+        b = a[ix][1:100]
+        @test issorted(b, by=x->1/x)
+
+        sortperm!(ix, a, alg=alg, by=x->1/x)
+        b = a[ix]
+        @test issorted(b, by=x->1/x)
+        @test a[ix] == b
+
+        c = copy(a)
+        permute!(c, ix)
+        @test c == b
+
+        invpermute!(c, ix)
+        @test c == a
+
+        c = sort(a, alg=alg, lt=(>))
+        @test b == c
+
+        c = sort(a, alg=alg, by=x->1/x)
+        @test b == c
+    end
+
+    @testset "unstable algorithms" begin
+        for alg in [QuickSort, DEFAULT_UNSTABLE]
             b = sort(a, alg=alg)
             @test issorted(b)
-
-            ix = sortperm(a, alg=alg)
-            b = a[ix]
-            @test issorted(b)
-            @test a[ix] == b
-
-            sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg)
-            b = a[ix][1:100]
-            @test issorted(b)
-
-            sortperm!(ix, a, alg=alg)
-            b = a[ix]
-            @test issorted(b)
-            @test a[ix] == b
-
+            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
             b = sort(a, alg=alg, rev=true)
             @test issorted(b, rev=true)
-            ix = sortperm(a, alg=alg, rev=true)
-            b = a[ix]
-            @test issorted(b, rev=true)
-            @test a[ix] == b
-
-            sortperm!(view(ix, 1:100), view(a, 1:100), alg=alg, rev=true)
-            b = a[ix][1:100]
-            @test issorted(b, rev=true)
-
-            sortperm!(ix, a, alg=alg, rev=true)
-            b = a[ix]
-            @test issorted(b, rev=true)
-            @test a[ix] == b
-
+            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
             b = sort(a, alg=alg, by=x->1/x)
             @test issorted(b, by=x->1/x)
-            ix = sortperm(a, alg=alg, by=x->1/x)
-            b = a[ix]
-            @test issorted(b, by=x->1/x)
-            @test a[ix] == b
-
-            sortperm!(view(ix, 1:100), view(a, 1:100), by=x->1/x)
-            b = a[ix][1:100]
-            @test issorted(b, by=x->1/x)
-
-            sortperm!(ix, a, alg=alg, by=x->1/x)
-            b = a[ix]
-            @test issorted(b, by=x->1/x)
-            @test a[ix] == b
-
-            c = copy(a)
-            permute!(c, ix)
-            @test c == b
-
-            invpermute!(c, ix)
-            @test c == a
-
-            c = sort(a, alg=alg, lt=(>))
-            @test b == c
-
-            c = sort(a, alg=alg, by=x->1/x)
-            @test b == c
-        end
-
-        @testset "unstable algorithms" begin
-            for alg in [QuickSort, Base.Sort.AdaptiveSort(QuickSort)]
-                b = sort(a, alg=alg)
-                @test issorted(b)
-                @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
-                b = sort(a, alg=alg, rev=true)
-                @test issorted(b, rev=true)
-                @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
-                b = sort(a, alg=alg, by=x->1/x)
-                @test issorted(b, by=x->1/x)
-                @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
-            end
+            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
         end
     end
 end
@@ -450,7 +448,7 @@ end
 
 @testset "advanced sorting" begin
     Random.seed!(0xdeadbeef)
-    for n in [0:10; 100; 101; 1000; 1001; 3000; 3001]
+    for n in [0:10; 100; 101; 1000; 1001]
         local r
         r = -5:5
         v = rand(r,n)
@@ -472,7 +470,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, Base.Sort.AdaptiveSort(MergeSort)]
+            for alg in [MergeSort, DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -485,7 +483,7 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(1:n), Base.Sort.AdaptiveSort(QuickSort)]
+            for alg in [QuickSort, PartialQuickSort(1:n), DEFAULT_UNSTABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -517,7 +515,7 @@ end
 
         v = randn_with_nans(n,0.1)
         # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort, Base.Sort.AdaptiveSort(QuickSort), Base.Sort.AdaptiveSort(MergeSort)],
+        for alg in [InsertionSort, QuickSort, MergeSort, DEFAULT_UNSTABLE, DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -579,7 +577,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort, Base.Sort.AdaptiveSort(MergeSort)]
+    for alg in [InsertionSort, MergeSort, DEFAULT_STABLE]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end

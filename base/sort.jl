@@ -9,8 +9,8 @@ using .Base: copymutable, LinearIndices, length, (:),
     eachindex, axes, first, last, similar, zip, OrdinalRange,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
-    extrema, sub_with_overflow, add_with_overflow, oneunit, isprimitivetype, div, getindex,
-    setindex!, length, resize!, fill, Missing, require_one_based_indexing, keytype,
+    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
+    length, resize!, fill, Missing, require_one_based_indexing, keytype,
     UnitRange, min, max, Val, unsigned
 
 using .Base: >>>, !==
@@ -427,23 +427,6 @@ struct QuickSortAlg     <: Algorithm end
 struct MergeSortAlg     <: Algorithm end
 
 """
-    PartialQuickSort{T <: Union{Integer,OrdinalRange}}
-
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
-
-Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
-    ignores case).
-  * *in-place* in memory.
-  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
-"""
-struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
-    k::T
-end
-"""
     AdaptiveSort(fallback)
 
 Indicate that a sorting function should pick the fastest availible algorithm for the
@@ -460,6 +443,25 @@ Algoritms currently in use:
 struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
     fallback::Fallback
 end
+"""
+    PartialQuickSort{T <: Union{Integer,OrdinalRange}}
+
+Indicate that a sorting function should use the partial quick sort
+algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
+to largest, finding them and sorting them using [`QuickSort`](@ref).
+
+Characteristics:
+  * *not stable*: does not preserve the ordering of elements which
+    compare equal (e.g. "a" and "A" in a sort of letters which
+    ignores case).
+  * *in-place* in memory.
+  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+"""
+struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
+    k::T
+end
+
+
 """
     InsertionSort
 
@@ -776,7 +778,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     if eltype(v) <: Integer && o isa DirectOrdering
         F = o === Forward
         rln = maybe_unsigned(F ? mx-mn : mn-mx)
-        if rln < ln÷2 # count sort will be superior if rln is very small
+        if rln < div(ln, 2) # count sort will be superior if rln is very small
             return sort_int_range!(v, rln+1, F ? mn : mx, F ? identity : reverse, lo, hi)
         end
     end
@@ -803,7 +805,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
 
     u = Serial.serialize!(v, lo, hi, o)
 
-    if urln < ln÷2 # count sort will be superior if rln is very small
+    if urln < div(ln, 2) # count sort will be superior if rln is very small
         sort_int_range!(u, urln+1, umn, identity, lo, hi)
         return Serial.deserialize!(v, u, lo, hi, o)
     end
@@ -1283,6 +1285,7 @@ function sort!(A::AbstractArray;
     ordr = ord(lt, by, rev, order)
     nd = ndims(A)
     k = dims
+
     1 <= k <= nd || throw(ArgumentError("dimension out of range"))
 
     remdims = ntuple(i -> i == k ? 1 : axes(A, i), nd)
@@ -1296,8 +1299,8 @@ end
 ## sorting serialization to alow radix sorting primitives other than UInts ##
 module Serial
 using ...Order
-using ..Base: @inbounds, @eval, min, max, AbstractVector, nothing, signed, unsigned,
-    typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype
+using ..Base: @inbounds, @eval, AbstractVector, nothing, signed, unsigned,
+    typemin, xor, reinterpret, Signed, Unsigned, Type, eltype
 
 """
     Serializable(T::Type, order::Ordering)
@@ -1400,8 +1403,7 @@ module Float
 using ..Sort
 using ..Sort.Serial
 using ...Order
-using ..Base: @inbounds, @eval, AbstractVector, Vector, last, axes, Missing,
-    Type, reinterpret, unsigned
+using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing, Type, reinterpret
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!
