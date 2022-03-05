@@ -44,10 +44,6 @@ struct JuliaPassContext {
     // Types derived from 'jl_value_t'.
     llvm::PointerType *T_prjlvalue;
 
-    // TBAA metadata nodes.
-    llvm::MDNode *tbaa_gcframe;
-    llvm::MDNode *tbaa_tag;
-
     // Intrinsics.
     llvm::Function *pgcstack_getter;
     llvm::Function *gc_flush_func;

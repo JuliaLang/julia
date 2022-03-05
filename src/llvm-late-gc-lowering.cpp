@@ -330,6 +330,7 @@ public:
 
 private:
     CallInst *pgcstack;
+    MDNode *tbaa_tag;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -2305,7 +2306,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
                 // `julia.gc_alloc_obj` except it doesn't set the tag.
                 auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
-                auto ptlsLoad = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_gcframe);
+                auto ptlsLoad = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_make_child_with_context(builder.getContext(), "jtbaa_gcframe").first);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
                 auto newI = builder.CreateCall(
                     allocBytesIntrinsic,
@@ -2694,6 +2695,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
+    MDNode *tbaa_data_scalar = tbaa_make_child_with_context(F.getContext(), "jtbaa_data").second;
+    tbaa_tag = tbaa_make_child_with_context(F.getContext(), "jtbaa_tag", tbaa_data_scalar).first;
     if (!pgcstack_getter)
         return CleanupIR(F, nullptr, CFGModified);
 
