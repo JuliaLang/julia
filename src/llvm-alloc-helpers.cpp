@@ -191,7 +191,7 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                     required.use_info.addrescaped = true;
                     return true;
                 }
-                if (required.pass.gc_preserve_begin_func == callee) {
+                if (required.gcfuncs.gc_preserve_begin_func == callee) {
                     for (auto user: call->users())
                         required.use_info.uses.insert(cast<Instruction>(user));
                     required.use_info.preserves.insert(call);
@@ -199,16 +199,16 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                     return true;
                 }
             }
-            if (required.pass.pointer_from_objref_func == callee) {
+            if (required.gcfuncs.pointer_from_objref_func == callee) {
                 required.use_info.addrescaped = true;
                 return true;
             }
-            if (required.pass.typeof_func == callee) {
+            if (required.gcfuncs.typeof_func == callee) {
                 required.use_info.hastypeof = true;
                 assert(use->get() == I);
                 return true;
             }
-            if (required.pass.write_barrier_func == callee)
+            if (required.gcfuncs.write_barrier_func == callee)
                 return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.

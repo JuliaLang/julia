@@ -120,7 +120,7 @@ namespace jl_alloc {
     struct EscapeAnalysisRequiredArgs {
         AllocUseInfo &use_info; // The returned escape analysis data
         CheckInst::Stack &check_stack; // A preallocated stack to be used for escape analysis
-        JuliaPassContext &pass; // The current optimization pass (for accessing intrinsic functions)
+        JuliaCommonGCFunctions &gcfuncs; // Known garbage collection related functions
         const llvm::DataLayout &DL; // The module's data layout (for handling GEPs/memory operations)
     };
 

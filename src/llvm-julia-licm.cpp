@@ -46,8 +46,9 @@ struct JuliaLICMPassLegacy : public LoopPass {
 struct JuliaLICM : public JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
+    JuliaCommonGCFunctions gcfuncs;
     JuliaLICM(function_ref<DominatorTree &()> GetDT,
-              function_ref<LoopInfo &()> GetLI) : GetDT(GetDT), GetLI(GetLI) {}
+              function_ref<LoopInfo &()> GetLI, JuliaCommonGCFunctions gcfuncs) : GetDT(GetDT), GetLI(GetLI), gcfuncs(std::move(gcfuncs)) {}
 
     bool runOnLoop(Loop *L)
     {
@@ -63,7 +64,7 @@ struct JuliaLICM : public JuliaPassContext {
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func && !alloc_obj_func)
+        if (!gcfuncs.gc_preserve_begin_func && !gcfuncs.write_barrier_func && !gcfuncs.alloc_obj_func)
             return false;
         auto LI = &GetLI();
         auto DT = &GetDT();
@@ -101,7 +102,7 @@ struct JuliaLICM : public JuliaPassContext {
                 // If all the input arguments dominates the whole loop we can
                 // hoist the `begin` and if a `begin` dominates the loop the
                 // corresponding `end` can be moved to the loop exit.
-                if (callee == gc_preserve_begin_func) {
+                if (callee == gcfuncs.gc_preserve_begin_func) {
                     bool canhoist = true;
                     for (Use &U : call->args()) {
                         // Check if all arguments are generated outside the loop
@@ -118,7 +119,7 @@ struct JuliaLICM : public JuliaPassContext {
                     call->moveBefore(preheader->getTerminator());
                     changed = true;
                 }
-                else if (callee == gc_preserve_end_func) {
+                else if (callee == gcfuncs.gc_preserve_end_func) {
                     auto begin = cast<Instruction>(call->getArgOperand(0));
                     if (!DT->properlyDominates(begin->getParent(), header))
                         continue;
@@ -134,7 +135,7 @@ struct JuliaLICM : public JuliaPassContext {
                         CallInst::Create(call, {}, exit_pts[i]);
                     }
                 }
-                else if (callee == write_barrier_func) {
+                else if (callee == gcfuncs.write_barrier_func) {
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
@@ -147,10 +148,10 @@ struct JuliaLICM : public JuliaPassContext {
                         changed = true;
                     }
                 }
-                else if (callee == alloc_obj_func) {
+                else if (callee == gcfuncs.alloc_obj_func) {
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
-                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, gcfuncs, DL};
                     jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
                     if (use_info.escaped || use_info.addrescaped) {
                         continue;
@@ -185,7 +186,9 @@ bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
     auto GetLI = [this]() -> LoopInfo & {
         return getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    JuliaCommonGCFunctions gcfuncs;
+    gcfuncs.initialize(*L->getBlocks()[0]->getModule());
+    auto juliaLICM = JuliaLICM(GetDT, GetLI, gcfuncs);
     return juliaLICM.runOnLoop(L);
 }
 
@@ -204,7 +207,9 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
     auto GetLI = [&AR]() -> LoopInfo & {
         return AR.LI;
     };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    JuliaCommonGCFunctions gcfuncs;
+    gcfuncs.initialize(*L.getBlocks()[0]->getModule());
+    auto juliaLICM = JuliaLICM(GetDT, GetLI, gcfuncs);
     if (juliaLICM.runOnLoop(&L)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<LoopAnalysis>();

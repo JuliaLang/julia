@@ -93,6 +93,8 @@ struct AllocOpt : public JuliaPassContext {
     Function *lifetime_start;
     Function *lifetime_end;
 
+    JuliaCommonGCFunctions gcfuncs;
+
     bool doInitialization(Module &m);
     bool runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT);
 };
@@ -267,7 +269,7 @@ bool Optimizer::isSafepoint(Instruction *inst)
         return false;
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
-        if (callee == pass.pointer_from_objref_func || callee->getName() == "memcmp") {
+        if (callee == pass.gcfuncs.pointer_from_objref_func || callee->getName() == "memcmp") {
             return false;
         }
     }
@@ -298,7 +300,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledOperand() != pass.alloc_obj_func)
+    if (call->getCalledOperand() != pass.gcfuncs.alloc_obj_func)
         return -1;
     assert(call->arg_size() == 3);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
@@ -309,7 +311,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
 
 void Optimizer::checkInst(Instruction *I)
 {
-    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
+    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass.gcfuncs, *pass.DL};
     jl_alloc::runEscapeAnalysis(I, required);
 }
 
@@ -620,18 +622,18 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
-            if (pass.pointer_from_objref_func == callee) {
+            if (pass.gcfuncs.pointer_from_objref_func == callee) {
                 call->replaceAllUsesWith(new_i);
                 call->eraseFromParent();
                 return;
             }
-            if (pass.typeof_func == callee) {
+            if (pass.gcfuncs.typeof_func == callee) {
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
             // Also remove the preserve intrinsics so that it can be better optimized.
-            if (pass.gc_preserve_begin_func == callee) {
+            if (pass.gcfuncs.gc_preserve_begin_func == callee) {
                 if (has_ref) {
                     call->replaceUsesOfWith(orig_i, buff);
                 }
@@ -640,7 +642,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.gcfuncs.write_barrier_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -735,16 +737,16 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
-            if (pass.gc_preserve_begin_func == callee) {
+            if (pass.gcfuncs.gc_preserve_begin_func == callee) {
                 removeGCPreserve(call, orig_i);
                 return;
             }
-            if (pass.typeof_func == callee) {
+            if (pass.gcfuncs.typeof_func == callee) {
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.gcfuncs.write_barrier_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -789,7 +791,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
     for (auto user: orig_inst->users()) {
         if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
-            if (pass.typeof_func == callee) {
+            if (pass.gcfuncs.typeof_func == callee) {
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to
                 // return the correct result.
@@ -1032,16 +1034,16 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     return;
                 }
             }
-            if (pass.typeof_func == callee) {
+            if (pass.gcfuncs.typeof_func == callee) {
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.gcfuncs.write_barrier_func == callee) {
                 call->eraseFromParent();
                 return;
             }
-            if (pass.gc_preserve_begin_func == callee) {
+            if (pass.gcfuncs.gc_preserve_begin_func == callee) {
                 SmallVector<Value*,8> operands;
                 for (auto &arg: call->args()) {
                     if (arg.get() == orig_i || isa<Constant>(arg.get()))
@@ -1057,7 +1059,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                     ref->setOrdering(AtomicOrdering::NotAtomic);
                     operands.push_back(ref);
                 }
-                auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
+                auto new_call = builder.CreateCall(pass.gcfuncs.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
                 new_call->setAttributes(call->getAttributes());
                 call->replaceAllUsesWith(new_call);
@@ -1131,7 +1133,8 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
+    gcfuncs.initialize(M);
+    if (!gcfuncs.alloc_obj_func)
         return false;
 
     DL = &M.getDataLayout();
@@ -1144,7 +1147,7 @@ bool AllocOpt::doInitialization(Module &M)
 
 bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 {
-    if (!alloc_obj_func)
+    if (!gcfuncs.alloc_obj_func)
         return false;
     Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();

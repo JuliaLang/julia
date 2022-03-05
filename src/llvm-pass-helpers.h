@@ -36,6 +36,17 @@ namespace jl_intrinsics {
     };
 }
 
+struct JuliaCommonGCFunctions {
+    llvm::Function *gc_preserve_begin_func = nullptr;
+    llvm::Function *gc_preserve_end_func = nullptr;
+    llvm::Function *alloc_obj_func = nullptr;
+    llvm::Function *write_barrier_func = nullptr;
+    llvm::Function *pointer_from_objref_func = nullptr;
+    llvm::Function *typeof_func = nullptr;
+
+    void initialize(llvm::Module &M);
+};
+
 // A data structure that can read Julia-specific intrinsics
 // from modules or add them if they're not available yet.
 // Mainly useful for building Julia-specific LLVM passes.
@@ -46,13 +57,6 @@ struct JuliaPassContext {
 
     // Intrinsics.
     llvm::Function *pgcstack_getter;
-    llvm::Function *gc_flush_func;
-    llvm::Function *gc_preserve_begin_func;
-    llvm::Function *gc_preserve_end_func;
-    llvm::Function *pointer_from_objref_func;
-    llvm::Function *alloc_obj_func;
-    llvm::Function *typeof_func;
-    llvm::Function *write_barrier_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.

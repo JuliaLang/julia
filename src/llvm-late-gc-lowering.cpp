@@ -331,6 +331,8 @@ public:
 private:
     CallInst *pgcstack;
     MDNode *tbaa_tag;
+    JuliaCommonGCFunctions gcfuncs;
+    llvm::Function *gc_flush_func;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -1467,7 +1469,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 auto callee = CI->getCalledFunction();
-                if (callee && callee == typeof_func) {
+                if (callee && callee == gcfuncs.typeof_func) {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints, SmallVector<int, 1>{-2});
                 }
                 else {
@@ -1528,7 +1530,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     S.ReturnsTwice.push_back(CI);
                 }
                 if (callee) {
-                    if (callee == gc_preserve_begin_func) {
+                    if (callee == gcfuncs.gc_preserve_begin_func) {
                         std::vector<int> args;
                         for (Use &U : CI->args()) {
                             Value *V = U;
@@ -1553,11 +1555,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
                     // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
-                        callee == gc_preserve_end_func || callee == typeof_func ||
+                    if (callee == gcfuncs.pointer_from_objref_func || callee == gcfuncs.gc_preserve_begin_func ||
+                        callee == gcfuncs.gc_preserve_end_func || callee == gcfuncs.typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee == write_barrier_func || callee->getName() == "memcmp") {
+                        callee == gcfuncs.write_barrier_func || callee->getName() == "memcmp") {
                         continue;
                     }
                     if (callee->hasFnAttribute(Attribute::ReadNone) ||
@@ -2288,16 +2290,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
             CallingConv::ID CC = CI->getCallingConv();
             Value *callee = CI->getCalledOperand();
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
-                        || callee == gc_preserve_end_func)) {
+            if (callee && (callee == gc_flush_func || callee == gcfuncs.gc_preserve_begin_func
+                        || callee == gcfuncs.gc_preserve_end_func)) {
                 /* No replacement */
-            } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
+            } else if (gcfuncs.pointer_from_objref_func != nullptr && callee == gcfuncs.pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
                 auto *ASCI = new AddrSpaceCastInst(obj, JuliaType::get_pjlvalue_ty(obj->getContext()), "", CI);
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
-            } else if (alloc_obj_func && callee == alloc_obj_func) {
+            } else if (gcfuncs.alloc_obj_func && callee == gcfuncs.alloc_obj_func) {
                 assert(CI->arg_size() == 3);
 
                 // Initialize an IR builder.
@@ -2370,7 +2372,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
-            } else if (typeof_func && callee == typeof_func) {
+            } else if (gcfuncs.typeof_func && callee == gcfuncs.typeof_func) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
@@ -2381,7 +2383,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
+            } else if (gcfuncs.write_barrier_func && callee == gcfuncs.write_barrier_func) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
                 assert(CI->arg_size() >= 1);
@@ -2686,9 +2688,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
+    gcfuncs.initialize(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     MDNode *tbaa_data_scalar = tbaa_make_child_with_context(F.getContext(), "jtbaa_data").second;
     tbaa_tag = tbaa_make_child_with_context(F.getContext(), "jtbaa_tag", tbaa_data_scalar).first;
+    gc_flush_func = F.getParent()->getFunction("julia.gcroot_flush");
     if (!pgcstack_getter)
         return CleanupIR(F, nullptr, CFGModified);
 
