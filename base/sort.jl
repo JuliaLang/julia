@@ -429,15 +429,15 @@ struct MergeSortAlg     <: Algorithm end
 """
     AdaptiveSort(fallback)
 
-Indicate that a sorting function should pick the fastest availible algorithm for the
+Indicate that a sorting function should pick the fastest available algorithm for the
 given element type, order, length, and contents. If no alternatives are viable, uses
 the `fallback` algorithm. AdaptiveSort is stable if `fallback` is stable.
 
-Algoritms currently in use:
-  * Inseretion sort for short lists
+Algorithms currently in use:
+  * Insertion sort for short lists
   * Radix sort for long lists
   * Counting sort for lists of integers spanning a short range
-  * Fallback agorithm when the input cannot be efficiently
+  * Fallback algorithm when the input cannot be efficiently
     converted into a list of integers maintaining sort order
 """
 struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
@@ -759,11 +759,11 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     hi <= lo && return v
     ln = maybe_unsigned(hi-lo) # ln == length(v[lo:hi])-1. Lower number = fewer letters :)
     # only count sort on a short range can compete with insertion sort fo ln < 30
-    # and the optimization is not worth the detection cost, so we use inserstion sort.
+    # and the optimization is not worth the detection cost, so we use insertion sort.
     ln < 30 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
-    # UInt128 does not support fast bitshifting so we never
-    # dipsatch to radix sort but we may still perform countsort
+    # UInt128 does not support fast bit shifting so we never
+    # dispatch to radix sort but we may still perform count sort
     if sizeof(U) > 8
         if eltype(v) <: Integer && o isa DirectOrdering
             mn, mx = _extrema(v, lo, hi, Forward)
@@ -793,15 +793,15 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
 
     # radix sort runs in O(bits * ln), insertion sort runs in O(ln^2). Radix sort has a
     # constant factor that is three times higher, so radix runtime is 3bits * ln and
-    # insertion runtime is ln^2. Emperically, insertion is faster than radix iff ln < 3bits.
+    # insertion runtime is ln^2. Empirically, insertion is faster than radix iff ln < 3bits.
     ln < 3bits && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
     # at ln = 64*3-1, QuickSort is about 20% faster than InsertionSort. The window
-    # where QuickSort is superior is the triangle contained by (ln=128, bits=43),
+    # where QuickSort is superior is the triangle defined by (ln=128, bits=43),
     # (ln=191, bits=64), and (ln=128, bits=64). This is a small window, spanning only
     # .015 square orders of magnitude, and the 20% performance gap is only present at
-    # the apex. At the centroid, the gap is about 6%. On the other hand there are
-    # theoretical/compilation benefits to avoiding the fallback entierly for small
-    # serializable types and orderings, so we unconditionaly use InsertionSort.
+    # the apex. At the centroid, the gap is about 6%. On the other hand, there are
+    # theoretical/compilation benefits to avoiding the fallback entirely for small
+    # serializable types and orderings, so we unconditionally use InsertionSort.
 
     u = Serial.serialize!(v, lo, hi, o)
 
@@ -821,9 +821,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     @inbounds for i in lo:hi u[i] -= umn end # this line is faster than u[lo:hi] .-= mn
 
     # chunk_size is the number of bits to radix over at once.
-    # We need to allocate an array of size 2^chunk size, and on the other hand the hihger
-    # the chunk size the fewer passess we need. Theoretically, chunk size shoud be based on
-    # the Lambert W function applied to length. Emperically, we use this heuristic:
+    # We need to allocate an array of size 2^chunk size, and on the other hand the higher
+    # the chunk size the fewer passes we need. Theoretically, chunk size should be based on
+    # the Lambert W function applied to length. Empirically, we use this heuristic:
     guess = log(ln)*3/4+3
     # We need iterations * chunk size ≥ bits, and these cld's
     # make an effort to get itterations * chunk size ≈ bits
@@ -1354,7 +1354,7 @@ for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64),
 end
 
 # Floats are not Serializable under regular orderings because they fail on NaN edge cases.
-# Float serialization is defined in ..Float, where the Left and Right orderings guarante
+# Float serialization is defined in ..Float, where the Left and Right orderings guarantee
 # that there are no NaN values
 
 # Booleans
