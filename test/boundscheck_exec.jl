@@ -259,7 +259,7 @@ if bc_opt == bc_default || bc_opt == bc_off
     @test !occursin("arrayref(true", typed_40281)
 end
 
-@testset "pass inbounds meta to getindex on CartesianIndices (#42115)" begin
+begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
     @inline getindex_42115(r, i) = @inbounds getindex(r, i)
     @inline getindex_42115(r, i, j) = @inbounds getindex(r, i, j)
 
