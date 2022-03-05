@@ -19,9 +19,7 @@
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
-    : T_jlvalue(nullptr), T_prjlvalue(nullptr),
-        T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
-        T_ppjlvalue_der(nullptr),
+    : T_prjlvalue(nullptr),
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
@@ -64,13 +62,7 @@ void JuliaPassContext::initAll(Module &M)
     auto &ctx = M.getContext();
 
     // Construct derived types.
-    T_jlvalue = StructType::get(ctx);
-    T_pjlvalue = PointerType::get(T_jlvalue, 0);
-    T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-    T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-    T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-    T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-    T_pppjlvalue = PointerType::get(T_ppjlvalue, 0);
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
 llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const

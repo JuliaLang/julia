@@ -575,7 +575,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
-    auto new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, pass.T_pjlvalue));
+    auto new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext())));
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -945,13 +945,14 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             StoreInst *newstore;
             if (slot.isref) {
                 assert(slot.offset == offset);
+                auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
                 if (!isa<PointerType>(store_ty)) {
                     store_val = builder.CreateBitCast(store_val, getSizeTy(builder.getContext()));
-                    store_val = builder.CreateIntToPtr(store_val, pass.T_pjlvalue);
-                    store_ty = pass.T_pjlvalue;
+                    store_val = builder.CreateIntToPtr(store_val, T_pjlvalue);
+                    store_ty = T_pjlvalue;
                 }
                 else {
-                    store_ty = PointerType::getWithSamePointeeType(pass.T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
+                    store_ty = PointerType::getWithSamePointeeType(T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
@@ -1010,7 +1011,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                     uint64_t intval;
                                     memset(&intval, val, 8);
                                     Constant *val = ConstantInt::get(getSizeTy(builder.getContext()), intval);
-                                    val = ConstantExpr::getIntToPtr(val, pass.T_pjlvalue);
+                                    val = ConstantExpr::getIntToPtr(val, JuliaType::get_pjlvalue_ty(builder.getContext()));
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
                                 StoreInst *store = builder.CreateAlignedStore(ptr, slot.slot, Align(sizeof(void*)));
