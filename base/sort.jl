@@ -11,7 +11,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, isprimitivetype, div, getindex,
     setindex!, length, resize!, fill, Missing, require_one_based_indexing, keytype,
-    UnitRange, min, max, Val
+    UnitRange, min, max, Val, unsigned
 
 using .Base: >>>, !==
 
@@ -853,10 +853,10 @@ end
 
 ## generic sorting methods ##
 
-defalg(v::AbstractArray) = MergeSort
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = QuickSort
-defalg(v::AbstractArray{Missing}) = QuickSort
-defalg(v::AbstractArray{Union{}}) = QuickSort
+defalg(v::AbstractArray) = DEFAULT_STABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
@@ -1297,7 +1297,7 @@ end
 ## sorting serialization to alow radix sorting primitives other than UInts ##
 module Serial
 using ...Order
-using ..Base: @inbounds, min, max, AbstractVector, nothing, signed, unsigned,
+using ..Base: @inbounds, @eval, min, max, AbstractVector, nothing, signed, unsigned,
     typemin, xor, reinterpret, isbitstype, Signed, Unsigned, Type, eltype
 
 """
@@ -1346,9 +1346,10 @@ serialize(x::Signed, ::ForwardOrdering) =
 deserialize(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
-Serializable(T::Type{<:Union{Unsigned, Signed}}, ::ForwardOrdering) =
-    isbitstype(T) ? unsigned(T) : nothing
-
+# unsigned(Int) is not available during bootstrapping.
+for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
+    @eval Serializable(::Type{<:Union{$U, $S}}, ::ForwardOrdering) = $U
+end
 
 # Floats are not Serializable under regular orderings because they fail on NaN edge cases.
 # Float serialization is defined in ..Float, where the Left and Right orderings guarante
