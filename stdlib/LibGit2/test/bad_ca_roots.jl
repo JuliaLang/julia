@@ -9,6 +9,8 @@ using Test, LibGit2, NetworkOptions
 # if that changes, this may need to be adjusted
 const CAN_SET_CA_ROOTS_PATH = !Sys.isapple() && !Sys.iswindows()
 
+# Given this is a sub-processed file, not using @testsets avoids
+# leaking the report print into the Base test runnner report
 begin # empty CA roots file
     # these fail for different reasons on different platforms:
     # - on Apple & Windows you cannot set the CA roots path location
