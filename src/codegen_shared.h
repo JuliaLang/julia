@@ -21,7 +21,7 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
-auto getSizeTy(llvm::LLVMContext &ctxt) {
+static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
     if (sizeof(size_t) > sizeof(uint32_t)) {
         return llvm::Type::getInt64Ty(ctxt);
     } else {
