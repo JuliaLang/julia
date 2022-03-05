@@ -99,6 +99,7 @@ using Test
         @test position(sb) == 0
         skip(sb, sb.size)
         @test position(sb) == sb.size
+        shred!(sb)
     end
     @testset "seekend" begin
         sb = SecretBuffer("hello")
@@ -120,5 +121,6 @@ using Test
         sb1 = SecretBuffer("hello")
         sb2 = SecretBuffer("juliaisawesome")
         @test hash(sb1, UInt(5)) === hash(sb2, UInt(5))
+        shred!(sb1); shred!(sb2)
     end
 end
