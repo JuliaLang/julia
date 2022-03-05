@@ -551,13 +551,13 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     extra_liveins = BitSet()
     worklist = Int[]
     for bb in bb_uses
-        append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[bb].preds))
+        append!(worklist, Iterators.filter(p->p != 0 && !(p in bb_defs), cfg.blocks[bb].preds))
     end
     while !isempty(worklist)
         elem = pop!(worklist)
         (elem in bb_uses || elem in extra_liveins) && continue
         push!(extra_liveins, elem)
-        append!(worklist, filter(p->p != 0 && !(p in bb_defs), cfg.blocks[elem].preds))
+        append!(worklist, Iterators.filter(p->p != 0 && !(p in bb_defs), cfg.blocks[elem].preds))
     end
     append!(bb_uses, extra_liveins)
     BlockLiveness(bb_defs, bb_uses)
