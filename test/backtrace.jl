@@ -183,9 +183,8 @@ let bt, found = false
 end
 
 # issue 28618
-@test_logs (:info, "") begin
 let bt, found = false
-    @info ""
+    @debug ""
     bt = backtrace()
     for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
@@ -194,7 +193,6 @@ let bt, found = false
     end
     @test found
 end
-end # @test_logs
 
 # Syntax error locations appear in backtraces
 let trace = try
