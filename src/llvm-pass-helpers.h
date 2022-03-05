@@ -42,13 +42,7 @@ namespace jl_intrinsics {
 struct JuliaPassContext {
 
     // Types derived from 'jl_value_t'.
-    llvm::Type *T_jlvalue;
     llvm::PointerType *T_prjlvalue;
-    llvm::PointerType *T_pppjlvalue;
-    llvm::PointerType *T_ppjlvalue;
-    llvm::PointerType *T_pjlvalue;
-    llvm::PointerType *T_pjlvalue_der;
-    llvm::PointerType *T_ppjlvalue_der;
 
     // TBAA metadata nodes.
     llvm::MDNode *tbaa_gcframe;
