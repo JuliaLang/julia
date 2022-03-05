@@ -122,13 +122,6 @@ auto getVoidTy(LLVMContext &ctxt) {
 auto getCharTy(LLVMContext &ctxt) {
     return getInt32Ty(ctxt);
 }
-auto getSizeTy(LLVMContext &ctxt) {
-    if (sizeof(size_t) > sizeof(uint32_t)) {
-        return getInt64Ty(ctxt);
-    } else {
-        return getInt32Ty(ctxt);
-    }
-}
 auto getInt8PtrTy(LLVMContext &ctxt) {
     return Type::getInt8PtrTy(ctxt);
 }

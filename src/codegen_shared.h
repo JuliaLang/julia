@@ -21,6 +21,14 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
+static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
+    if (sizeof(size_t) > sizeof(uint32_t)) {
+        return llvm::Type::getInt64Ty(ctxt);
+    } else {
+        return llvm::Type::getInt32Ty(ctxt);
+    }
+}
+
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
         return llvm::StructType::get(C);
