@@ -109,7 +109,6 @@ using Test
     end
     @testset "position" begin
         sb = SecretBuffer("Julia")
-        println("testing position")
         initial_pos = (position(sb))
         seek(sb,2)
         mid_pos = position(sb)
