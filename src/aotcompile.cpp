@@ -59,6 +59,7 @@ using namespace llvm;
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+#include "codegen_shared.h"
 
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
@@ -284,8 +285,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
             // to compile, or an svec(rettype, sig) describing a C-callable alias to create.
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
-                if (worlds == 1)
+                if (worlds == 1) {
                     jl_compile_extern_c(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    assert(verify_module_contexts(clone, ctxt));
+                }
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -301,8 +304,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params);
-                    if (std::get<0>(result))
+                    if (std::get<0>(result)) {
                         emitted[codeinst] = std::move(result);
+                        assert(verify_module_contexts(std::get<0>(emitted[codeinst]), ctxt));
+                    }
                 }
             }
         }
@@ -324,6 +329,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     // while examining and recording what kind of function pointer we have
     for (auto &def : emitted) {
         jl_merge_module(clone, std::move(std::get<0>(def.second)));
+        assert(verify_module_contexts(clone, ctxt));
         jl_code_instance_t *this_code = def.first;
         jl_llvm_functions_t decls = std::get<1>(def.second);
         StringRef func = decls.functionObject;

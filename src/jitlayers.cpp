@@ -123,12 +123,16 @@ static jl_callptr_t _jl_compile_codeinst(
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     {
         jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
-        if (std::get<0>(result))
+        if (std::get<0>(result)) {
             emitted[codeinst] = std::move(result);
+            assert(verify_module_contexts(std::get<0>(emitted[codeinst]), params.tsctx));
+        }
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
-        if (params._shared_module)
+        if (params._shared_module) {
+            assert(verify_module_contexts(params._shared_module, params.tsctx));
             jl_add_to_ee(std::move(params._shared_module));
+        }
         StringMap<orc::ThreadSafeModule*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -300,7 +304,7 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    auto &context = jl_ExecutionEngine->getContext();
+    auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -357,7 +361,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto &context = jl_ExecutionEngine->getContext();
+    auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)

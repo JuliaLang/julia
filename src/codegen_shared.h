@@ -7,6 +7,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include "julia.h"
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 
 #define STR(csym)           #csym
 #define XSTR(csym)          STR(csym)
@@ -187,6 +188,34 @@ static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder
     auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
     builder.Insert(ptls);
     return ptls;
+}
+
+static inline bool verify_module_contexts(llvm::Module &M, llvm::LLVMContext &C) {
+    assert(&C == &M.getContext());
+    for (auto &F : M) {
+        assert(&C == &F.getContext());
+        // for (auto &BB : F) {
+        //     assert(&C == &BB.getContext());
+        //     for (auto &I : F) {
+        //         assert(&C == &I.getContext());
+        //     }
+        // }
+        assert(F.getAttributes().isEmpty() || F.getAttributes().hasParentContext(C));
+        // for (auto &attrset : F.getAttributes()) {
+        //     assert(!attrset.hasAttributes() || attrset.hasParentContext(C));
+        //     for (auto &attr : attrset) {
+        //         assert(attr.hasParentContext(C));
+        //     }
+        // }
+        // for (auto &arg : F.args()) {
+        //     assert(&C == &arg.getContext());
+        // }
+    }
+    return true;
+}
+
+static inline bool verify_module_contexts(llvm::orc::ThreadSafeModule &M, llvm::orc::ThreadSafeContext &C) {
+    return verify_module_contexts(*M.getModuleUnlocked(), *C.getContext());
 }
 
 // Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.

@@ -427,6 +427,14 @@ public:
                          name, m);
         if (_attrs)
             F->setAttributes(_attrs(m->getContext()));
+        assert([&](){
+            for (auto &attrset : F->getAttributes()) {
+                for (auto &attr : attrset) {
+                    assert(attr.hasParentContext(m->getContext()));
+                }
+            }
+            return true;
+        }());
         return F;
     }
 };
@@ -7795,6 +7803,7 @@ static jl_compile_result_t
     }
 
     JL_GC_POP();
+    assert(verify_module_contexts(TSM, params.tsctx));
     return std::make_tuple(std::move(TSM), declarations);
 }
 
