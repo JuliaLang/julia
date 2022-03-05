@@ -158,7 +158,7 @@ end
             # test (-x)^y for y larger than typemax(Int)
             @test T(-1)^floatmax(T) === T(1)
             @test prevfloat(T(-1))^floatmax(T) === T(-Inf)
-            @test nextfloat(T(-1))^floatmax(T) === T(-0.0)
+            @test nextfloat(T(-1))^floatmax(T) === T(0.0)
             # test for large negative exponent where error compensation matters
             @test 0.9999999955206014^-1.0e8 == 1.565084574870928
             @test (-x)^yi == x^yi
