@@ -9,7 +9,7 @@ using Test, LibGit2, NetworkOptions
 # if that changes, this may need to be adjusted
 const CAN_SET_CA_ROOTS_PATH = !Sys.isapple() && !Sys.iswindows()
 
-@testset "empty CA roots file" begin
+begin # empty CA roots file
     # these fail for different reasons on different platforms:
     # - on Apple & Windows you cannot set the CA roots path location
     # - on Linux & FreeBSD you you can but these are invalid files
@@ -29,14 +29,14 @@ const CAN_SET_CA_ROOTS_PATH = !Sys.isapple() && !Sys.iswindows()
 end
 
 if CAN_SET_CA_ROOTS_PATH
-    @testset "non-empty but bad CA roots file" begin
+    begin # non-empty but bad CA roots file
         # should still be possible to initialize
         ENV["JULIA_SSL_CA_ROOTS_PATH"] = joinpath(@__DIR__, "bad_ca_roots.pem")
         @test LibGit2.ensure_initialized() === nothing
     end
     mktempdir() do dir
         repo_url = "https://github.com/JuliaLang/Example.jl"
-        @testset "HTTPS clone with bad CA roots fails" begin
+        begin # HTTPS clone with bad CA roots fails
             repo_path = joinpath(dir, "Example.HTTPS")
             c = LibGit2.CredentialPayload(allow_prompt=false, allow_git_helpers=false)
             redirect_stderr(devnull)
