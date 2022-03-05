@@ -782,7 +782,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     end
 
     umn, umx = Serial.serialize(mn, o), Serial.serialize(mx, o)
-    #umn, umx = umx < umn ? (umx, umn) : (umn, umx)
     urln = maybe_unsigned(umx-umn)
 
     # if rln is small, then once we subtract out mn, we'll get a vector like
