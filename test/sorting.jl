@@ -268,7 +268,7 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, UInt(1), Forward) == 5
 
     a = rand(1:10000, 1000)
-    for alg in [InsertionSort, MergeSort, DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
 
         b = sort(a, alg=alg)
         @test issorted(b)
@@ -334,7 +334,7 @@ Base.step(r::ConstantRange) = 0
     end
 
     @testset "unstable algorithms" begin
-        for alg in [QuickSort, DEFAULT_UNSTABLE]
+        for alg in [QuickSort, Base.DEFAULT_UNSTABLE]
             b = sort(a, alg=alg)
             @test issorted(b)
             @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
@@ -470,7 +470,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, DEFAULT_STABLE]
+            for alg in [MergeSort, Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -483,7 +483,7 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(1:n), DEFAULT_UNSTABLE]
+            for alg in [QuickSort, PartialQuickSort(1:n), Base.DEFAULT_UNSTABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -515,7 +515,7 @@ end
 
         v = randn_with_nans(n,0.1)
         # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort, DEFAULT_UNSTABLE, DEFAULT_STABLE],
+        for alg in [InsertionSort, QuickSort, MergeSort, Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -577,7 +577,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort, DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
