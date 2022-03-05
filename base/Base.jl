@@ -331,7 +331,6 @@ using .Order
 
 # Combinatorics
 include("sort.jl")
-
 using .Sort
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
