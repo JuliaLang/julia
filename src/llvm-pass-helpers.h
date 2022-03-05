@@ -19,7 +19,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&);
+        typedef llvm::Function *(*DeclarationFunction)(llvm::LLVMContext&);
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
@@ -55,47 +55,31 @@ struct JuliaPassContext {
     // Types derived from 'jl_value_t'.
     llvm::PointerType *T_prjlvalue;
 
-    // Intrinsics.
-    llvm::Function *pgcstack_getter;
-
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
     JuliaPassContext();
 
     // Populates a pass context by inspecting a module.
     // Also sets the current module to the given module.
-    void initAll(llvm::Module &M);
-
-    // Initializes a pass context's functions only.
-    // Also sets the current module to the given module.
-    void initFunctions(llvm::Module &M);
-
-    // Gets the LLVM context for this pass context.
-    llvm::LLVMContext &getLLVMContext() const
-    {
-        return module->getContext();
-    }
+    void initAll(llvm::LLVMContext &ctx);
 
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
     // Otherwise, `nullptr` is returned.
-    llvm::CallInst *getPGCstack(llvm::Function &F) const;
+    static llvm::CallInst *getPGCstack(llvm::Function *pgcstack_getter, llvm::Function &F);
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
     // `nullptr` is returned.
-    llvm::Function *getOrNull(
-        const jl_intrinsics::IntrinsicDescription &desc) const;
+    static llvm::Function *getOrNull(llvm::Module &M,
+        const jl_intrinsics::IntrinsicDescription &desc);
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
     // declares the intrinsic or well-known function and adds it
     // to the module.
-    llvm::Function *getOrDeclare(
+    static llvm::Function *getOrDeclare(llvm::Module &M,
         const jl_intrinsics::IntrinsicDescription &desc);
-
-private:
-    llvm::Module *module;
 };
 
 namespace jl_intrinsics {

@@ -195,12 +195,12 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 bool FinalLowerGC::doInitialization(Module &M) {
     // Initialize platform-agnostic references.
-    initAll(M);
+    initAll(M.getContext());
 
     // Initialize platform-specific references.
-    queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
-    poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
-    bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
+    queueRootFunc = getOrDeclare(M, jl_well_known::GCQueueRoot);
+    poolAllocFunc = getOrDeclare(M, jl_well_known::GCPoolAlloc);
+    bigAllocFunc = getOrDeclare(M, jl_well_known::GCBigAlloc);
     tbaa_gcframe = tbaa_make_child_with_context(M.getContext(), "jtbaa_gcframe").first;
 
     GlobalValue *functionList[] = {queueRootFunc, poolAllocFunc, bigAllocFunc};
@@ -269,22 +269,22 @@ bool FinalLowerGC::runOnFunction(Function &F)
 {
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
-    initFunctions(*F.getParent());
+    auto pgcstack_getter = F.getParent()->getFunction("julia.get_pgcstack");
     if (!pgcstack_getter)
         return false;
 
     // Look for a call to 'julia.get_pgcstack'.
-    pgcstack = getPGCstack(F);
+    pgcstack = JuliaPassContext::getPGCstack(pgcstack_getter, F);
     if (!pgcstack)
         return false;
 
     // Acquire intrinsic functions.
-    auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);
-    auto pushGCFrameFunc = getOrNull(jl_intrinsics::pushGCFrame);
-    auto popGCFrameFunc = getOrNull(jl_intrinsics::popGCFrame);
-    auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
-    auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
-    auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
+    auto newGCFrameFunc = getOrNull(*F.getParent(), jl_intrinsics::newGCFrame);
+    auto pushGCFrameFunc = getOrNull(*F.getParent(), jl_intrinsics::pushGCFrame);
+    auto popGCFrameFunc = getOrNull(*F.getParent(), jl_intrinsics::popGCFrame);
+    auto getGCFrameSlotFunc = getOrNull(*F.getParent(), jl_intrinsics::getGCFrameSlot);
+    auto GCAllocBytesFunc = getOrNull(*F.getParent(), jl_intrinsics::GCAllocBytes);
+    auto queueGCRootFunc = getOrNull(*F.getParent(), jl_intrinsics::queueGCRoot);
 
     // Lower all calls to supported intrinsics.
     for (BasicBlock &BB : F) {

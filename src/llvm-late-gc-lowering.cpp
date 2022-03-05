@@ -1557,7 +1557,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // Known functions emitted in codegen that are not safepoints
                     if (callee == gcfuncs.pointer_from_objref_func || callee == gcfuncs.gc_preserve_begin_func ||
                         callee == gcfuncs.gc_preserve_end_func || callee == gcfuncs.typeof_func ||
-                        callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
+                        CI == pgcstack || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                         callee == gcfuncs.write_barrier_func || callee->getName() == "memcmp") {
                         continue;
@@ -2308,7 +2308,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Create a call to the `julia.gc_alloc_bytes` intrinsic, which is like
                 // `julia.gc_alloc_obj` except it doesn't set the tag.
-                auto allocBytesIntrinsic = getOrDeclare(jl_intrinsics::GCAllocBytes);
+                auto allocBytesIntrinsic = getOrDeclare(*CI->getModule(), jl_intrinsics::GCAllocBytes);
                 auto ptlsLoad = get_current_ptls_from_task(builder, CI->getArgOperand(0), tbaa_make_child_with_context(builder.getContext(), "jtbaa_gcframe").first);
                 auto ptls = builder.CreateBitCast(ptlsLoad, Type::getInt8PtrTy(builder.getContext()));
                 auto newI = builder.CreateCall(
@@ -2489,7 +2489,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        builder.CreateCall(getOrDeclare(*trigTerm->getModule(), jl_intrinsics::queueGCRoot), parent);
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
@@ -2541,7 +2541,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
                                          Instruction *InsertBefore) {
     // Get the slot address.
     auto slotAddress = CallInst::Create(
-        getOrDeclare(jl_intrinsics::getGCFrameSlot),
+        getOrDeclare(*InsertBefore->getModule(), jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
         "", InsertBefore);
 
@@ -2591,26 +2591,26 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     if (MaxColor != -1 || !S.Allocas.empty() || !S.ArrayAllocas.empty() || !S.TrackedStores.empty()) {
         // Create and push a GC frame.
         auto gcframe = CallInst::Create(
-            getOrDeclare(jl_intrinsics::newGCFrame),
+            getOrDeclare(*F->getParent(), jl_intrinsics::newGCFrame),
             {ConstantInt::get(T_int32, 0)},
             "gcframe");
         gcframe->insertBefore(&*F->getEntryBlock().begin());
 
         auto pushGcframe = CallInst::Create(
-            getOrDeclare(jl_intrinsics::pushGCFrame),
+            getOrDeclare(*F->getParent(), jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
         pushGcframe->insertAfter(pgcstack);
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
-        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
+        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32, F](AllocaInst *&AI) {
             // Pick a slot for the alloca.
             unsigned align = AI->getAlignment() / sizeof(void*); // TODO: use DataLayout pointer size
             assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
             Instruction *slotAddress = CallInst::Create(
-                getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                getOrDeclare(*F->getParent(), jl_intrinsics::getGCFrameSlot),
                 {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
             slotAddress->insertAfter(gcframe);
             slotAddress->takeName(AI);
@@ -2653,7 +2653,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
             //auto Tracked = TrackCompositeType(Base->getType());
             for (unsigned i = 0; i < Store.second; ++i) {
                 auto slotAddress = CallInst::Create(
-                    getOrDeclare(jl_intrinsics::getGCFrameSlot),
+                    getOrDeclare(*F->getParent(), jl_intrinsics::getGCFrameSlot),
                     {gcframe, ConstantInt::get(T_int32, AllocaSlot - 2)});
                 slotAddress->insertAfter(gcframe);
                 auto ValExpr = std::make_pair(Base, isa<PointerType>(Base->getType()) ? -1 : i);
@@ -2678,7 +2678,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
                 auto popGcframe = CallInst::Create(
-                    getOrDeclare(jl_intrinsics::popGCFrame),
+                    getOrDeclare(*F->getParent(), jl_intrinsics::popGCFrame),
                     {gcframe});
                 popGcframe->insertBefore(I->getTerminator());
             }
@@ -2687,16 +2687,17 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
-    initAll(*F.getParent());
+    initAll(F.getContext());
     gcfuncs.initialize(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     MDNode *tbaa_data_scalar = tbaa_make_child_with_context(F.getContext(), "jtbaa_data").second;
     tbaa_tag = tbaa_make_child_with_context(F.getContext(), "jtbaa_tag", tbaa_data_scalar).first;
     gc_flush_func = F.getParent()->getFunction("julia.gcroot_flush");
+    llvm::Function *pgcstack_getter = F.getParent()->getFunction("julia.get_pgcstack");
     if (!pgcstack_getter)
         return CleanupIR(F, nullptr, CFGModified);
 
-    pgcstack = getPGCstack(F);
+    pgcstack = JuliaPassContext::getPGCstack(pgcstack_getter, F);
     if (!pgcstack)
         return CleanupIR(F, nullptr, CFGModified);
 

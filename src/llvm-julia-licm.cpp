@@ -59,7 +59,7 @@ struct JuliaLICM : public JuliaPassContext {
             return false;
         BasicBlock *header = L->getHeader();
         const llvm::DataLayout &DL = header->getModule()->getDataLayout();
-        initFunctions(*header->getModule());
+        initAll(header->getContext());
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
