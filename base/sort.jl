@@ -810,15 +810,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     end
     # At this point, we are comitted to radix sort.
 
-    # chunk_size is the number of bits to radix over at once.
-    # We need to allocate an array of size 2^chunk size, and on the other hand the hihger
-    # the chunk size the fewer passess we need. Theoretically, chunk size shoud be based on
-    # the Lambert W function applied to length. Emperically, we use this heuristic:
-    guess = log(ln)*3/4+3
-    # We need iterations * chunk size ≥ bits, and these cld's
-    # make an effort to get itterations * chunk size ≈ bits
-    chunk_size = UInt8(cld(bits, cld(bits, guess)))
-
     # we subtract mn to avoid radixing over unnecessary bits. For example,
     # Int32[3, -1, 2] serializes to UInt32[0x80000003, 0x7fffffff, 0x80000002]
     # which uses all 32 bits, but once we subtract mn = 0x7fffffff, we are left with
@@ -827,6 +818,15 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # which is reduced to UInt32[0x03c73b64, 0x00000000, 0x050d70a5] using only 26 bits.
     # the overhead for this subtraction is small enough that it is worthwhile in many cases.
     @inbounds for i in lo:hi u[i] -= umn end # this line is faster than u[lo:hi] .-= mn
+
+    # chunk_size is the number of bits to radix over at once.
+    # We need to allocate an array of size 2^chunk size, and on the other hand the hihger
+    # the chunk size the fewer passess we need. Theoretically, chunk size shoud be based on
+    # the Lambert W function applied to length. Emperically, we use this heuristic:
+    guess = log(ln)*3/4+3
+    # We need iterations * chunk size ≥ bits, and these cld's
+    # make an effort to get itterations * chunk size ≈ bits
+    chunk_size = UInt8(cld(bits, cld(bits, guess)))
 
     t = similar(u)
     # This if else chain is to avoid dynamic dispatch for small cases.
