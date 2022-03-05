@@ -768,25 +768,30 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         if eltype(v) <: Integer && o isa DirectOrdering
             mn, mx = _extrema(v, lo, hi, Forward)
             rln = maybe_unsigned(mx-mn)
-            rln < 5ln-100 && # count sort will outperform comparison sort if rln is small
+
+            # we know ln ≥ 30, so this will never underflow.
+            # if ln > 3.7e18 (59 exabytes), then this may incorrectly dispatch to fallback
+            if rln < 5ln-100 # count sort will outperform comparison sort if rln is small
                 return sort_int_range!(v, rln+1, mn, o === Forward ? identity : reverse, lo, hi)
+            end
         end
         return sort!(v, lo, hi, a.fallback, o)
     end
 
     mn, mx = _extrema(v, lo, hi, o)
     if eltype(v) <: Integer && o isa DirectOrdering
-        F = o === Forward
-        rln = maybe_unsigned(F ? mx-mn : mn-mx)
+        R = o === Reverse
+        rln = maybe_unsigned(R ? mn-mx : mx-mn)
         if rln < div(ln, 2) # count sort will be superior if rln is very small
-            return sort_int_range!(v, rln+1, F ? mn : mx, F ? identity : reverse, lo, hi)
+            return sort_int_range!(v, rln+1, R ? mx : mn, R ? reverse : identity, lo, hi)
         end
     end
 
     umn, umx = Serial.serialize(mn, o), Serial.serialize(mx, o)
     urln = maybe_unsigned(umx-umn)
 
-    # if rln is small, then once we subtract out mn, we'll get a vector like
+    # if urln (i.e. the difference between the maximum and minimum serialized value) is
+    # small, then once we subtract out mn, we'll get a vector like
     # UInt16[0x001a, 0x0015, 0x0006, 0x001b, 0x0008, 0x000c, 0x0001, 0x000e, 0x001c, 0x0009]
     # where we only need to radix over the last few bits (bits = 5, in the example).
     bits = unsigned(8sizeof(urln) - leading_zeros(urln))
@@ -794,6 +799,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # radix sort runs in O(bits * ln), insertion sort runs in O(ln^2). Radix sort has a
     # constant factor that is three times higher, so radix runtime is 3bits * ln and
     # insertion runtime is ln^2. Empirically, insertion is faster than radix iff ln < 3bits.
+    # Insertion < Radix
+    #      ln^2 < 3 * bits * ln
+    #        ln < 3bits
     ln < 3bits && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
     # at ln = 64*3-1, QuickSort is about 20% faster than InsertionSort. The window
     # where QuickSort is superior is the triangle defined by (ln=128, bits=43),
@@ -805,7 +813,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
 
     u = Serial.serialize!(v, lo, hi, o)
 
-    if urln < div(ln, 2) # count sort will be superior if rln is very small
+    if urln < div(ln, 2) # count sort will be superior if urln is very small
         sort_int_range!(u, urln+1, umn, identity, lo, hi)
         return Serial.deserialize!(v, u, lo, hi, o)
     end
@@ -826,7 +834,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # the Lambert W function applied to length. Empirically, we use this heuristic:
     guess = log(ln)*3/4+3
     # We need iterations * chunk size ≥ bits, and these cld's
-    # make an effort to get itterations * chunk size ≈ bits
+    # make an effort to get iterations * chunk size ≈ bits
     chunk_size = UInt8(cld(bits, cld(bits, guess)))
 
     t = similar(u)
@@ -847,7 +855,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     elseif chunk_size == 8 # -1% to 10% savings and common for lengths between 300 and 3000
         radix_sort!(u, lo, hi, bits, Val(0x8), t)
     else
-        radix_sort!(u, lo, hi, bits, Val(chunk_size), t)
+        radix_sort!(u, lo, hi, bits, Val(chunk_size), t) # dynamic dispatch
     end
     Serial.deserialize!(v, u2, lo, hi, o, umn)
 end
@@ -856,8 +864,8 @@ end
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
+defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
     inds = axes(v,1)
@@ -1358,8 +1366,8 @@ end
 # that there are no NaN values
 
 # Booleans
-# serialize! fails on Vector{Bool} because the reinterpret is sketchy
-# try `sort!(collect(trues(501)), alg=Sort.AdaptiveSort(QuickSort), rev=true)`
+# serialize! fails on AbstractVector{Bool} because the reinterpret is sketchy. try:
+#     u = reinterpret(UInt8, trues(10)); u[3] = 0x17; print(u)
 # serialize(x::Bool, ::ForwardOrdering) = UInt8(x)
 # deserialize(::Type{Bool}, u::UInt8, ::ForwardOrdering) = Bool(u)
 # Serializable(::Type{Bool}, ::ForwardOrdering) = UInt8
