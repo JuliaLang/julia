@@ -2017,18 +2017,20 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->name->mt = jl_nonfunction_mt;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
-    jl_typename_type->name->n_uninitialized = 13 - 2;
-    jl_typename_type->name->names = jl_perm_symsvec(13, "name", "module",
+    jl_typename_type->name->n_uninitialized = 14 - 2;
+    jl_typename_type->name->names = jl_perm_symsvec(14, "name", "module",
                                                     "names", "atomicfields", "constfields",
                                                     "wrapper", "cache", "linearcache",
                                                     "mt", "partial",
                                                     "hash", "n_uninitialized",
-                                                    "flags"); // "abstract", "mutable", "mayinlinealloc",
-    jl_typename_type->types = jl_svec(13, jl_symbol_type, jl_any_type /*jl_module_type*/,
+                                                    "flags", // "abstract", "mutable", "mayinlinealloc",
+                                                    "max_methods");
+    jl_typename_type->types = jl_svec(14, jl_symbol_type, jl_any_type /*jl_module_type*/,
                                       jl_simplevector_type, jl_any_type/*jl_voidpointer_type*/, jl_any_type/*jl_voidpointer_type*/,
                                       jl_type_type, jl_simplevector_type, jl_simplevector_type,
                                       jl_methtable_type, jl_any_type,
                                       jl_any_type /*jl_long_type*/, jl_any_type /*jl_int32_type*/,
+                                      jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/);
     const static uint32_t typename_constfields[1] = { 0x00001d3f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<8)|(1<<10)|(1<<11)|(1<<12)
     jl_typename_type->name->constfields = typename_constfields;
@@ -2665,6 +2667,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_typename_type->types, 10, jl_long_type);
     jl_svecset(jl_typename_type->types, 11, jl_int32_type);
     jl_svecset(jl_typename_type->types, 12, jl_uint8_type);
+    jl_svecset(jl_typename_type->types, 13, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
     jl_svecset(jl_methtable_type->types, 6, jl_module_type);
     jl_svecset(jl_methtable_type->types, 7, jl_array_any_type);

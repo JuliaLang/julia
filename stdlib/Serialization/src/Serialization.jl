@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 17 # do not make changes without bumping the version #!
+const ser_version = 18 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -514,6 +514,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, t.max_methods)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -1299,6 +1300,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
+    maxm = format_version(s) >= 18 ? deserialize(s)::UInt8 : UInt8(0)
 
     if makenew
         # TODO: there's an unhanded cycle in the dependency graph at this point:
@@ -1310,6 +1312,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
+        tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
             if !isdefined(ty, :instance)
