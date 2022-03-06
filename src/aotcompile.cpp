@@ -512,8 +512,8 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
-    legacy::PassManager PM;
-    addTargetPasses(&PM, TM.get());
+    // legacy::PassManager PM;
+    // addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -530,20 +530,39 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
-    if (unopt_bc_fname)
-        PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname) {
-        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
-    }
-    if (bc_fname)
-        PM.add(createBitcodeWriterPass(bc_OS));
-    if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
-    if (asm_fname)
-        if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
+    auto optimize = [&](Module &M) {
+        if (unopt_bc_fname) {
+            legacy::PassManager PM;
+            PM.add(createBitcodeWriterPass(unopt_bc_OS));
+            PM.run(M);
+        }
+        optimizeModule(M, TM.get(), jl_options.opt_level, true, true);
+        legacy::PassManager PM;
+        if (bc_fname)
+            PM.add(createBitcodeWriterPass(bc_OS));
+        if (obj_fname)
+            if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+                jl_safe_printf("ERROR: target does not support generation of object files\n");
+        if (asm_fname)
+            if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
+                jl_safe_printf("ERROR: target does not support generation of object files\n");
+        PM.run(M);
+    };
+
+    // if (unopt_bc_fname)
+    //     PM.add(createBitcodeWriterPass(unopt_bc_OS));
+    // if (bc_fname || obj_fname || asm_fname) {
+    //     addOptimizationPasses(&PM, jl_options.opt_level, true, true);
+    //     addMachinePasses(&PM, TM.get(), jl_options.opt_level);
+    // }
+    // if (bc_fname)
+    //     PM.add(createBitcodeWriterPass(bc_OS));
+    // if (obj_fname)
+    //     if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+    //         jl_safe_printf("ERROR: target does not support generation of object files\n");
+    // if (asm_fname)
+    //     if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
+    //         jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
     data->M->setTargetTriple(TM->getTargetTriple().str());
@@ -573,7 +592,7 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        PM.run(M);
+        optimize(M);
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -1397,7 +1416,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMContextRef ctxt, size
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize)
                 // PM->run(*m.get());
-                optimizeModule(*m, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level, true, false);
+                optimizeModule(*m, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level);
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;

@@ -501,7 +501,7 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
         JL_TIMING(LLVM_OPT);
 
         // PM.run(M);
-        optimizeModule(M, &TM, optlevel, true, false);
+        optimizeModule(M, &TM, optlevel);
 
         uint64_t end_time = 0;
         if (dump_llvm_opt_stream != NULL) {
