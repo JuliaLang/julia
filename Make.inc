@@ -1,4 +1,4 @@
-# -*- mode: makefile-gmake -*-
+# -*- mode: makefile -*-
 # vi:syntax=make
 
 ## Note:
@@ -1474,7 +1474,7 @@ endif
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(ARCH),aarch64)
-LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
 else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
 endif
