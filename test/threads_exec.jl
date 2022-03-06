@@ -70,19 +70,31 @@ end
 
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
-    counter = Threads.Atomic{Int}(Threads.nthreads())
+    p = 10 * Threads.nthreads() / length(r)
+    counter = Threads.Atomic{Int}(min(Threads.nthreads(), length(r)))
     @threads for i in r
         # synchronize the start given that each partition is started sequentially,
         # meaning that without the wait, if the loop is too fast the iteration can happen in order
         if counter[] != 0
             Threads.atomic_sub!(counter, 1)
+            spins = 0
             while counter[] != 0
                 GC.safepoint()
                 ccall(:jl_cpu_pause, Cvoid, ())
+                spins += 1
+                if spins > 500_000_000  # about 10 seconds
+                    @warn "Failed wait for all workers. Unfinished rogue tasks occupying worker threads?"
+                    break
+                end
             end
         end
         j = i - firstindex(r) + 1
         a[j] = 1 + atomic_add!(x, 1)
+        if rand() < p
+            for _ in 1:100
+                ccall(:jl_cpu_pause, Cvoid, ())
+            end
+        end
     end
 end
 
