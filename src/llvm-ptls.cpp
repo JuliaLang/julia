@@ -211,7 +211,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, bool *CFGModified)
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
 #if defined(_OS_DARWIN_)
-        auto key = new LoadInst(T_size, pgcstack_key_slot, "", false, pgcstack);
+        auto key = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_key_slot, "", false, pgcstack);
         key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
         auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, getter, {key}, "", pgcstack);
