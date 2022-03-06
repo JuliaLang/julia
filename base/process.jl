@@ -69,7 +69,8 @@ function _uv_hook_close(proc::Process)
     nothing
 end
 
-const SpawnIOs = Vector{Any} # convenience name for readability
+const SpawnIO  = Redirectable
+const SpawnIOs = Vector{SpawnIO} # convenience name for readability
 
 function as_cpumask(cpus::Vector{UInt16})
     n = max(Int(maximum(cpus)), Int(ccall(:uv_cpumask_size, Cint, ())))
@@ -119,7 +120,7 @@ end
     return pp
 end
 
-_spawn(cmds::AbstractCmd) = _spawn(cmds, Any[])
+_spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIO[])
 
 # optimization: we can spawn `Cmd` directly without allocating the ProcessChain
 function _spawn(cmd::Cmd, stdios::SpawnIOs)
@@ -203,7 +204,7 @@ end
 # open the child end of each element of `stdios`, and initialize the parent end
 function setup_stdios(f, stdios::SpawnIOs)
     nstdio = length(stdios)
-    open_io = Vector{Any}(undef, nstdio)
+    open_io = SpawnIOs(undef, nstdio)
     close_io = falses(nstdio)
     try
         for i in 1:nstdio
@@ -314,19 +315,19 @@ close_stdio(stdio) = close(stdio)
 #   - An Filesystem.File or IOStream object to redirect the output to
 #   - A FileRedirect, containing a string specifying a filename to be opened for the child
 
-spawn_opts_swallow(stdios::StdIOSet) = Any[stdios...]
-spawn_opts_inherit(stdios::StdIOSet) = Any[stdios...]
+spawn_opts_swallow(stdios::StdIOSet) = SpawnIO[stdios...]
+spawn_opts_inherit(stdios::StdIOSet) = SpawnIO[stdios...]
 spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull) =
-    Any[in, out, err]
+    SpawnIO[in, out, err]
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # ref issue #8529
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2)) =
-    Any[in, out, err]
+    SpawnIO[in, out, err]
 
 function eachline(cmd::AbstractCmd; keep::Bool=false)
     out = PipeEndpoint()
-    processes = _spawn(cmd, Any[devnull, out, stderr])
+    processes = _spawn(cmd, SpawnIO[devnull, out, stderr])
     # if the user consumes all the data, also check process exit status for success
     ondone = () -> (success(processes) || pipeline_error(processes); nothing)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
@@ -374,20 +375,20 @@ function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false,
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, out, stderr])
+        processes = _spawn(cmds, SpawnIO[in, out, stderr])
         processes.in = in
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[stdio, out, stderr])
+        processes = _spawn(cmds, SpawnIO[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, stdio, stderr])
+        processes = _spawn(cmds, SpawnIO[in, stdio, stderr])
         processes.in = in
     else
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
-        processes = _spawn(cmds, Any[devnull, devnull, stderr])
+        processes = _spawn(cmds, SpawnIO[devnull, devnull, stderr])
     end
     return processes
 end
