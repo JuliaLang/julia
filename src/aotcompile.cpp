@@ -1396,7 +1396,8 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMContextRef ctxt, size
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize)
-                PM->run(*m.get());
+                // PM->run(*m.get());
+                optimizeModule(*m, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level, true, false);
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;
