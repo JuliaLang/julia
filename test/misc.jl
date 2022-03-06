@@ -349,8 +349,10 @@ end
 
 after = Base.cumulative_compile_time_ns_after();
 @test after >= before;
-wait(t1)
-wait(t2)
+
+# wait for completion of these tasks before restoring stdout, to suppress their @time prints.
+wait(t1); wait(t2)
+
 end # redirect_stdout
 
 # interactive utilities

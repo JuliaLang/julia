@@ -21,7 +21,7 @@ Base.Filesystem.mtime(io::MemoryFile) = io.mtime
 # and create a test environment temp directory
 umask(new_mask) = ccall((@static iswindows() ? :_umask : :umask), Cint, (Cint,), new_mask)
 
-# TODO: Use targetted @test_log tests instead of suppressing all logs to hide the expected warnings
+# TODO: Use targeted @test_log tests instead of suppressing all logs to hide the expected warnings
 Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
 
 @testset "Pidfile.jl" begin

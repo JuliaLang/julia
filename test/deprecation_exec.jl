@@ -47,7 +47,7 @@ end
 @noinline call(f, args...) = @noinline f(args...)
 
 # Given this is a sub-processed test file, not using @testsets avoids
-# leaking the report print into the Base test runnner report
+# leaking the report print into the Base test runner report
 begin # @deprecate
     using .DeprecationTests
     using .Foo1234
