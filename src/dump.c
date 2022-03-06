@@ -1002,6 +1002,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
                 write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->mayinlinealloc << 2));
+                write_uint8(s->s, tn->max_methods);
                 if (!tn->abstract)
                     write_uint16(s->s, tn->n_uninitialized);
                 size_t nb = tn->atomicfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
@@ -2014,6 +2015,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             tn->abstract = flags & 1;
             tn->mutabl = (flags>>1) & 1;
             tn->mayinlinealloc = (flags>>2) & 1;
+            tn->max_methods = read_uint8(s->s);
             if (tn->abstract)
                 tn->n_uninitialized = 0;
             else

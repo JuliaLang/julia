@@ -46,7 +46,9 @@ end
 # Create a consistent call frame for nowarn tests
 @noinline call(f, args...) = @noinline f(args...)
 
-@testset "@deprecate" begin
+# Given this is a sub-processed test file, not using @testsets avoids
+# leaking the report print into the Base test runner report
+begin # @deprecate
     using .DeprecationTests
     using .Foo1234
     @test foo1234(3) == 4
@@ -99,7 +101,7 @@ f24658() = depwarn24658()
 
 depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
 
-@testset "firstcaller" begin
+begin # firstcaller
     # issue #24658
     @test eval(:(if true; f24658(); end)) == (Ptr{Cvoid}(0),StackTraces.UNKNOWN)
 end
@@ -125,7 +127,7 @@ global_logger(prev_logger)
 #-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations
 
-@testset "parser syntax deprecations" begin
+begin # parser syntax deprecations
     # #15524
     # @test (@test_deprecated Meta.parse("for a=b f() end")) == :(for a=b; f() end)
     @test_broken length(Test.collect_test_logs(()->Meta.parse("for a=b f() end"))[1]) > 0
@@ -133,10 +135,11 @@ end
 
 # END 0.7 deprecations
 
-@testset "tuple indexed by float deprecation" begin
+begin # tuple indexed by float deprecation
     @test_deprecated getindex((1,), 1.0) === 1
     @test_deprecated getindex((1,2), 2.0) === 2
-    @test_throws Exception getindex((), 1.0)
-    @test_throws Exception getindex((1,2), 0.0)
-    @test_throws Exception getindex((1,2), -1.0)
+    @test Base.JLOptions().depwarn == 1
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((), 1.0)
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), 0.0)
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
 end

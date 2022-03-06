@@ -468,6 +468,7 @@ typedef struct {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
+    uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
 } jl_typename_t;
 
 typedef struct {
