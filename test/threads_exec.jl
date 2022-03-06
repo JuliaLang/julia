@@ -70,7 +70,17 @@ end
 
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
+    counter = Threads.Atomic{Int}(Threads.nthreads())
     @threads for i in r
+        # synchronize the start given that each partition is started sequentially,
+        # meaning that without the wait, if the loop is too fast the iteration can happen in order
+        if counter[] != 0
+            Threads.atomic_sub!(counter, 1)
+            while counter[] != 0
+                GC.safepoint()
+                ccall(:jl_cpu_pause, Cvoid, ())
+            end
+        end
         j = i - firstindex(r) + 1
         a[j] = 1 + atomic_add!(x, 1)
     end
@@ -93,7 +103,7 @@ function test_threaded_loop_and_atomic_add()
         # and were unique (via pigeon-hole principle).
         @test !(false in found)
         if was_inorder && nthreads() > 1
-            println(stderr, "Warning: threaded loop executed in order")
+            @warn "threaded loop executed in order" nthreads() r
         end
     end
 end
