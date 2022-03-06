@@ -2972,15 +2972,15 @@ end
 end
 
 @testset "slurping into function def" begin
-    x, f()... = [1, 2, 3]
+    x, f1()... = [1, 2, 3]
     @test x == 1
-    @test f() == [2, 3]
+    @test f1() == [2, 3]
     # test that call to `Base.rest` is outside the definition of `f`
-    @test f() === f()
+    @test f1() === f1()
 
-    x, f()... = 1, 2, 3
+    x, f2()... = 1, 2, 3
     @test x == 1
-    @test f() == (2, 3)
+    @test f2() == (2, 3)
 end
 
 @testset "long function bodies" begin
