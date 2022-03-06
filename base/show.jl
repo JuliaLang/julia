@@ -1919,7 +1919,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             na = length(func_args)
             if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " $func "
+                sep = func === :(:) ? "$func" : " " * repr(func) * " "   # if func::Any, avoid string interpolation (invalidation)
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
@@ -2289,7 +2289,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :meta && nargs == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
     elseif head === :meta && nargs == 2 && args[1] === :pop_loc
-        print(io, "# meta: pop locations ($(args[2]))")
+        loc = args[2]::Int
+        print(io, "# meta: pop locations ($loc)")
     # print anything else as "Expr(head, args...)"
     else
         unhandled = true

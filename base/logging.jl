@@ -457,7 +457,7 @@ end
     msg = try
               "Exception while generating log record in module $_module at $filepath:$line"
           catch ex
-              "Exception handling log message: $ex"
+              "Exception handling log message: $(ex::Exception)"
           end
     bt = real ? catch_backtrace() : backtrace()
     handle_message(
