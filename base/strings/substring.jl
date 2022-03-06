@@ -229,7 +229,13 @@ function string(a::Union{Char, String, SubString{String}, Symbol}...)
     out = _string_n(n)
     offs = 1
     for v in a
-        offs += __unsafe_string!(out, v, offs)
+        if v isa Char
+            offs += __unsafe_string!(out, v, offs)
+        elseif v isa String || v isa SubString{String}
+            offs += __unsafe_string!(out, v, offs)
+        else
+            offs += __unsafe_string!(out, v::Symbol, offs)
+        end
     end
     return out
 end
