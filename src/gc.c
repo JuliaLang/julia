@@ -3147,18 +3147,16 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // update heuristics only if this GC was automatically triggered
     if (collection == JL_GC_AUTO) {
-      if (not_freed_enough) {
-	gc_num.interval = gc_num.interval * 2;
-      }
-
-      if (large_frontier) {
-	sweep_full = 1;
-      }
-
-      if (gc_num.interval > max_collect_interval) {
-        sweep_full = 1;
-	gc_num.interval = max_collect_interval;
-      }
+        if (not_freed_enough) {
+            gc_num.interval = gc_num.interval * 2;
+        }
+        if (large_frontier) {
+            sweep_full = 1;
+        }
+        if (gc_num.interval > max_collect_interval) {
+            sweep_full = 1;
+            gc_num.interval = max_collect_interval;
+        }
     }
     if (gc_sweep_always_full) {
         sweep_full = 1;
