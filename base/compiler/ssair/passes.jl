@@ -440,6 +440,9 @@ function lift_arg!(
     lifted = stmt.args[argidx]
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
+        if already_inserted(compact, lifted)
+            lifted = compact.ssa_rename[lifted.id]
+        end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
         lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
@@ -1031,12 +1034,12 @@ function canonicalize_typeassert!(compact::IncrementalCompact, idx::Int, stmt::E
     compact.ssa_rename[compact.idx-1] = pi
 end
 
-function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
+function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
     end
 end
 
@@ -1189,10 +1192,10 @@ function adce_pass!(ir::IRCode)
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx)
+        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1211,7 +1214,7 @@ function adce_pass!(ir::IRCode)
             end
         end
         while !isempty(extra_worklist)
-            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
             end
         end
