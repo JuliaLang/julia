@@ -1800,7 +1800,7 @@ function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecializ
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
-                           sv::Union{InferenceState,Nothing})
+                           sv::Union{InferenceState,IRCode,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
     end
