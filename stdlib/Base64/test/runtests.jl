@@ -87,6 +87,9 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
 
     # issue #32397
     @test String(base64decode(longEncodedText)) == longDecodedText;
+    
+    @test base64decode("AQ==") == base64decode("AQ")
+    @test base64decode("AQI=") == base64decode("AQI")
 end
 
 @testset "Random data" begin
