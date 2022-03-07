@@ -18,6 +18,25 @@
 # end
 import Core: Const, PartialStruct
 
+# Like `Const`, but `widencost` widens to Type{...} rather than typeof
+mutable struct ConstType
+    const val # ::Type
+    Typeof::DataType
+    ConstType(@nospecialize(val)) = new(val)
+    ConstType(@nospecialize(val), Typeof::DataType) = new(val, Typeof)
+end
+==(a::ConstType, b::ConstType) = a.val === b.val
+
+function mkConst(@nospecialize(v))
+    if isa(v, Type)
+        return ConstType(v)
+    else
+        return Const(v)
+    end
+end
+
+isConst(@nospecialize(v)) = isa(v, Union{Const, ConstType})
+
 # The type of this value might be Bool.
 # However, to enable a limited amount of back-propagation,
 # we also keep some information about how this Bool value was created.
@@ -105,7 +124,7 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStruct}
+const CompilerTypes = Union{MaybeUndef, Const, ConstType, Conditional, NotFound, PartialStruct}
 ==(x::CompilerTypes, y::CompilerTypes) = x === y
 ==(x::Type, y::CompilerTypes) = false
 ==(x::CompilerTypes, y::Type) = false
@@ -190,7 +209,7 @@ The non-strict partial order over the type inference lattice.
         end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
-        if isa(a, Const)
+        if isConst(a)
             nfields(a.val) == length(b.fields) || return false
             widenconst(b).name === widenconst(a).name || return false
             # We can skip the subtype check if b is a Tuple, since in that
@@ -201,7 +220,7 @@ The non-strict partial order over the type inference lattice.
             for i in 1:nfields(a.val)
                 # XXX: let's handle varargs later
                 isdefined(a.val, i) || return false
-                ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
+                ⊑(mkConst(getfield(a.val, i)), b.fields[i]) || return false
             end
             return true
         end
@@ -215,15 +234,15 @@ The non-strict partial order over the type inference lattice.
         end
         return widenconst(a) ⊑ b
     end
-    if isa(a, Const)
-        if isa(b, Const)
+    if isConst(a)
+        if isConst(b)
             return a.val === b.val
         end
         # TODO: `b` could potentially be a `PartialTypeVar` here, in which case we might be
         # able to return `true` in more cases; in the meantime, just returning this is the
         # most conservative option.
         return isa(b, Type) && isa(a.val, b)
-    elseif isa(b, Const)
+    elseif isConst(b)
         if isa(a, DataType) && isdefined(a, :instance)
             return a.instance === b.val
         end
@@ -267,13 +286,13 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
         return true
     end
     isa(b, PartialStruct) && return false
-    if a isa Const
+    if isConst(a)
         if issingletontype(b)
             return a.val === b.instance
         end
         return false
     end
-    if b isa Const
+    if isConst(b)
         if issingletontype(a)
             return a.instance === b.val
         end
@@ -290,7 +309,13 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
 end
 
 widenconst(c::AnyConditional) = Bool
-widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
+widenconst((; val)::Const) = typeof(val)
+function widenconst(c::ConstType)
+    if !isdefined(c, :Typeof)
+        c.Typeof = Type{c.val}
+    end
+    return c.Typeof
+end
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ

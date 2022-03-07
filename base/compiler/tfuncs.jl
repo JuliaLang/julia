@@ -54,7 +54,7 @@ add_tfunc(throw, 1, 1, (@nospecialize(x)) -> Bottom, 0)
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
 function instanceof_tfunc(@nospecialize(t))
-    if isa(t, Const)
+    if isConst(t)
         if isa(t.val, Type) && valid_as_lattice(t.val)
             return t.val, true, isconcretetype(t.val), true
         end
@@ -200,7 +200,8 @@ add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF,
           (@nospecialize(fptr), @nospecialize(rt), @nospecialize(at), a...) -> instanceof_tfunc(rt)[1], 10)
 cglobal_tfunc(@nospecialize(fptr)) = Ptr{Cvoid}
 cglobal_tfunc(@nospecialize(fptr), @nospecialize(t)) = (isType(t) ? Ptr{t.parameters[1]} : Ptr)
-cglobal_tfunc(@nospecialize(fptr), t::Const) = (isa(t.val, Type) ? Ptr{t.val} : Ptr)
+cglobal_tfunc(@nospecialize(fptr), t::ConstType) = Ptr{t.val}
+cglobal_tfunc(@nospecialize(fptr), t::Const) = Ptr
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecialize(x)->Bool, 1)
 
@@ -225,20 +226,20 @@ add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 function egal_tfunc(@nospecialize(x), @nospecialize(y))
     xx = widenconditional(x)
     yy = widenconditional(y)
-    if isa(x, Conditional) && isa(yy, Const)
+    if isa(x, Conditional) && isConst(yy)
         yy.val === false && return Conditional(x.var, x.elsetype, x.vtype)
         yy.val === true && return x
         return Const(false)
-    elseif isa(y, Conditional) && isa(xx, Const)
+    elseif isa(y, Conditional) && isConst(xx)
         xx.val === false && return Conditional(y.var, y.elsetype, y.vtype)
         xx.val === true && return y
         return Const(false)
-    elseif isa(xx, Const) && isa(yy, Const)
+    elseif isConst(xx) && isConst(yy)
         return Const(xx.val === yy.val)
     elseif !hasintersect(widenconst(xx), widenconst(yy))
         return Const(false)
-    elseif (isa(xx, Const) && y === typeof(xx.val) && isdefined(y, :instance)) ||
-           (isa(yy, Const) && x === typeof(yy.val) && isdefined(x, :instance))
+    elseif (isConst(xx) && y === typeof(xx.val) && isdefined(y, :instance)) ||
+           (isConst(yy) && x === typeof(yy.val) && isdefined(x, :instance))
         return Const(true)
     end
     return Bool
@@ -253,7 +254,7 @@ function isdefined_nothrow(argtypes::Array{Any, 1})
 end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
-    if isa(arg1, Const)
+    if isConst(arg1)
         a1 = typeof(arg1.val)
     else
         a1 = widenconst(arg1)
@@ -291,8 +292,8 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
                 end
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
-            elseif isa(arg1, Const)
-                arg1v = (arg1::Const).val
+            elseif isConst(arg1)
+                arg1v = arg1.val
                 if !ismutable(arg1v) || isdefined(arg1v, idx) || isconst(typeof(arg1v), idx)
                     return Const(isdefined(arg1v, idx))
                 end
@@ -312,7 +313,7 @@ end
 add_tfunc(isdefined, 2, 3, isdefined_tfunc, 1)
 
 function sizeof_nothrow(@nospecialize(x))
-    if isa(x, Const)
+    if isConst(x)
         if !isa(x.val, Type) || x.val === DataType
             return true
         end
@@ -365,7 +366,7 @@ function _const_sizeof(@nospecialize(x))
     return Const(size)
 end
 function sizeof_tfunc(@nospecialize(x),)
-    isa(x, Const) && return _const_sizeof(x.val)
+    isConst(x) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
     xu = unwrap_unionall(x)
@@ -395,7 +396,7 @@ function sizeof_tfunc(@nospecialize(x),)
 end
 add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 function nfields_tfunc(@nospecialize(x))
-    isa(x, Const) && return Const(nfields(x.val))
+    isConst(x) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
     x = unwrap_unionall(widenconst(x))
     isconstType(x) && return Const(nfields(x.parameters[1]))
@@ -422,7 +423,7 @@ function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub
     if isa(n, Const)
         nval = n.val
         isa(nval, Symbol) || return Union{}
-        if isa(lb_arg, Const)
+        if isConst(lb_arg)
             lb = lb_arg.val
         elseif isType(lb_arg)
             lb = lb_arg.parameters[1]
@@ -430,7 +431,7 @@ function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub
         else
             return TypeVar
         end
-        if isa(ub_arg, Const)
+        if isConst(ub_arg)
             ub = ub_arg.val
         elseif isType(ub_arg)
             ub = ub_arg.parameters[1]
@@ -546,16 +547,16 @@ function typeof_concrete_vararg(t::DataType)
 end
 
 function typeof_tfunc(@nospecialize(t))
-    isa(t, Const) && return Const(typeof(t.val))
+    isConst(t) && return ConstType(typeof(t.val))
     t = widenconst(t)
     if isType(t)
         tp = t.parameters[1]
         if hasuniquerep(tp)
-            return Const(typeof(tp))
+            return ConstType(typeof(tp))
         end
     elseif isa(t, DataType)
         if isconcretetype(t)
-            return Const(t)
+            return ConstType(t)
         elseif t === Any
             return DataType
         else
@@ -615,7 +616,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
                 return Const(true)
             end
         else
-            if isa(v, Const) || isa(v, Conditional)
+            if isConst(v) || isa(v, Conditional)
                 # this and the `isdispatchelem` below test for knowledge of a
                 # leaftype appearing on the LHS (ensuring the isa is precise)
                 return Const(false)
@@ -735,8 +736,8 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     end
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
-    if isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
+    if isConst(s00) || isconstType(s00)
+        if !isConst(s00)
             sv = s00.parameters[1]
         else
             sv = s00.val
@@ -808,8 +809,8 @@ getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, n
 function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
     if isa(s00, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
+    elseif isConst(s00) || isconstType(s00)
+        if !isConst(s00)
             sv = s00.parameters[1]
         else
             sv = s00.val
@@ -830,11 +831,11 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
                 return Bottom
             end
             if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
-                return Const(getfield(sv, nv))
+                return mkConst(getfield(sv, nv))
             end
             if isconst(typeof(sv), nv)
                 if isdefined(sv, nv)
-                    return Const(getfield(sv, nv))
+                    return mkConst(getfield(sv, nv))
                 end
                 return Union{}
             end
@@ -1004,7 +1005,7 @@ function modifyfield!_tfunc(o, f, op, v)
     @nospecialize
     T = _fieldtype_tfunc(o, isconcretetype(o), f)
     T === Bottom && return Bottom
-    PT = Const(Pair)
+    PT = ConstType(Pair)
     return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
 end
 function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
@@ -1044,7 +1045,7 @@ function replacefield!_tfunc(o, f, x, v)
     @nospecialize
     T = _fieldtype_tfunc(o, isconcretetype(o), f)
     T === Bottom && return Bottom
-    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
+    PT = mkConst(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
     return instanceof_tfunc(apply_type_tfunc(PT, T))[1]
 end
 
@@ -1125,7 +1126,7 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
         return Any
     end
     # fieldtype only accepts Types
-    if isa(s0, Const) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
+    if isConst(s0) && !(isa(s0.val, DataType) || isa(s0.val, UnionAll) || isa(s0.val, Union))
         return Bottom
     end
     if (s0 isa Type && s0 == Type{Union{}}) || isa(s0, Conditional)
@@ -1154,7 +1155,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         ta, exacta, _, istypea = instanceof_tfunc(ta0)
         tb, exactb, _, istypeb = instanceof_tfunc(tb0)
         if exact && exacta && exactb
-            return Const(Union{ta, tb})
+            return mkConst(Union{ta, tb})
         end
         if istypea && istypeb
             return Type{<:Union{ta, tb}}
@@ -1191,7 +1192,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
                 if hasuniquerep(ft1)
-                    ft1 = Const(ft1) # ft unique via type cache
+                    ft1 = ConstType(ft1) # ft unique via type cache
                 else
                     ft1 = Type{ft1}
                 end
@@ -1234,7 +1235,7 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
     ft = rewrap_unionall(ft, s)
     if exactft
         if hasuniquerep(ft)
-            return Const(ft) # ft unique via type cache
+            return ConstType(ft) # ft unique via type cache
         end
         return Type{ft}
     end
@@ -1266,7 +1267,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Type && return false
     length(argtypes) >= 1 || return false
     headtypetype = argtypes[1]
-    if isa(headtypetype, Const)
+    if isConst(headtypetype)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
         headtype = headtypetype.parameters[1]
@@ -1276,7 +1277,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     # We know the apply_type is well formed. Otherwise our rt would have been
     # Bottom (or Type).
     (headtype === Union) && return true
-    isa(rt, Const) && return true
+    isConst(rt) && return true
     u = headtype
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
@@ -1287,8 +1288,8 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
             if !(u.var.lb === Union{} && u.var.ub === Any)
                 return false
             end
-        elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
+        elseif (isConst(ai) && isa(ai.val, Type)) || isconstType(ai)
+            ai = isConst(ai) ? ai.val : (ai::DataType).parameters[1]
             if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
                 return false
             end
@@ -1324,7 +1325,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
 
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
 function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
-    if isa(headtypetype, Const)
+    if isConst(headtypetype)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
         headtype = headtypetype.parameters[1]
@@ -1336,11 +1337,11 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     end
     largs = length(args)
     if headtype === Union
-        largs == 0 && return Const(Bottom)
+        largs == 0 && return ConstType(Bottom)
         hasnonType = false
         for i = 1:largs
             ai = args[i]
-            if isa(ai, Const)
+            if isConst(ai)
                 if !isa(ai.val, Type)
                     if isa(ai.val, TypeVar)
                         hasnonType = true
@@ -1372,11 +1373,11 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
                 aty = ai.parameters[1]
                 allconst &= hasuniquerep(aty)
             else
-                aty = (ai::Const).val
+                aty = (ai::Union{Const, ConstType}).val
             end
             ty = Union{ty, aty}
         end
-        return allconst ? Const(ty) : Type{ty}
+        return allconst ? ConstType(ty) : Type{ty}
     end
     istuple = isa(headtype, Type) && (headtype == Tuple)
     if !istuple && !isa(headtype, UnionAll) && !isvarargtype(headtype)
@@ -1395,7 +1396,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
-        elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
+        elseif isConst(ai) && (isa(ai.val, Type) || isa(ai.val, TypeVar) ||
                                   valid_tparam(ai.val) || (istuple && isvarargtype(ai.val)))
             push!(tparams, ai.val)
         elseif isa(ai, PartialTypeVar)
@@ -1464,7 +1465,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
         # doesn't match, which could happen if a type estimate is too coarse
         return isvarargtype(headtype) ? TypeofVararg : Type{<:headtype}
     end
-    !uncertain && canconst && return Const(appl)
+    !uncertain && canconst && return isvarargtype(appl) ? Const(appl) : ConstType(appl)
     if isvarargtype(appl)
         return TypeofVararg
     end
@@ -1491,7 +1492,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     argtypes = anymap(widenconditional, argtypes)
     all_are_const = true
     for i in 1:length(argtypes)
-        if !isa(argtypes[i], Const)
+        if !isConst(argtypes[i])
             all_are_const = false
             break
         end
@@ -1511,7 +1512,7 @@ function tuple_tfunc(argtypes::Vector{Any})
             end
             argtypes[i] = x
         end
-        if isa(x, Const)
+        if isConst(x)
             params[i] = typeof(x.val)
         else
             x = isvarargtype(x) ? x : widenconst(x)
@@ -1692,7 +1693,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return sizeof_nothrow(argtypes[1])
     elseif f === Core.kwfunc
         length(argtypes) == 1 || return false
-        return isa(rt, Const)
+        return isConst(rt)
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ Bool
@@ -1700,7 +1701,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         length(argtypes) == 2 || return false
         a3 = argtypes[2]
         if (isType(a3) && !has_free_typevars(a3) && argtypes[1] ⊑ a3.parameters[1]) ||
-            (isa(a3, Const) && isa(a3.val, Type) && argtypes[1] ⊑ a3.val)
+            (isConst(a3) && isa(a3.val, Type) && argtypes[1] ⊑ a3.val)
             return true
         end
         return false
@@ -1804,8 +1805,8 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         return tuple_tfunc(argtypes)
     end
     if isa(f, IntrinsicFunction)
-        if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
-            argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
+        if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isConst(a), argtypes)
+            argvals = anymap(@nospecialize(a) -> (a::Union{Const, ConstType}).val, argtypes)
             try
                 return Const(f(argvals...))
             catch
@@ -1979,37 +1980,37 @@ end
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     if length(argtypes) == 3
         tt = argtypes[3]
-        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
+        if isConst(tt) || (isType(tt) && !has_free_typevars(tt))
             aft = argtypes[2]
-            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
+            if isConst(aft) || (isType(aft) && !has_free_typevars(aft)) ||
                    (isconcretetype(aft) && !(aft <: Builtin))
-                af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+                af_argtype = isConst(tt) ? tt.val : (tt::DataType).parameters[1]
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), false)
+                        return CallMeta(ConstType(Union{}), false)
                     end
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
                     info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
-                    if isa(rt, Const)
+                    if isConst(rt)
                         # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), info)
+                        return CallMeta(ConstType(typeof(rt.val)), info)
                     end
                     rt = widenconst(rt)
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), info)
+                        return CallMeta(ConstType(rt), info)
                     elseif !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
                         return CallMeta(Type{<:rt}, info)
-                    elseif (isa(tt, Const) || isconstType(tt)) &&
-                        (isa(aft, Const) || isconstType(aft))
+                    elseif (isConst(tt) || isconstType(tt)) &&
+                        (isConst(aft) || isconstType(aft))
                         # input arguments were known for certain
                         # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), info)
+                        return CallMeta(ConstType(rt), info)
                     elseif isType(rt)
                         return CallMeta(Type{rt}, info)
                     else
@@ -2040,7 +2041,7 @@ end
 function get_binding_type_tfunc(@nospecialize(M), @nospecialize(s))
     if get_binding_type_effect_free(M, s)
         @assert M isa Const && s isa Const
-        return Const(Core.get_binding_type(M.val, s.val))
+        return ConstType(Core.get_binding_type(M.val, s.val))
     end
     return Type
 end

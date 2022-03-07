@@ -220,7 +220,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     opt = caller.src
     if opt isa OptimizationState # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
+            # Already done in the cache
             caller.src = ir_to_codeinf!(opt)
+        else
+            caller.src = opt.src
         end
     end
     return caller.src
@@ -292,7 +295,7 @@ function CodeInstance(
         const_flags = 0x3
         inferred_result = nothing
     else
-        if isa(result_type, Const)
+        if isConst(result_type)
             rettype_const = result_type.val
             const_flags = 0x2
         elseif isa(result_type, PartialOpaque)
@@ -831,7 +834,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 elseif isa(rettype_const, InterConditional) && !(InterConditional <: rettype)
                     return rettype_const, mi, effects
                 else
-                    return Const(rettype_const), mi, effects
+                    return mkConst(rettype_const), mi, effects
                 end
             else
                 return rettype, mi, effects

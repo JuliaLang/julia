@@ -196,7 +196,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
         if head === :static_parameter
             etyp = (isa(src, IRCode) ? src.sptypes : src.ir.sptypes)[args[1]::Int]
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(etyp, Const)
+            return isConst(etyp)
         end
         if head === :call
             f = argextype(args[1], src)
@@ -361,7 +361,7 @@ function argextype(
     elseif isa(x, Argument)
         return slottypes[x.n]
     elseif isa(x, QuoteNode)
-        return Const(x.value)
+        return mkConst(x.value)
     elseif isa(x, GlobalRef)
         return abstract_eval_global(x.mod, x.name)
     elseif isa(x, PhiNode)
@@ -369,7 +369,7 @@ function argextype(
     elseif isa(x, PiNode)
         return x.typ
     else
-        return Const(x)
+        return mkConst(x)
     end
 end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
@@ -402,7 +402,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     result = caller.result
     @assert !(result isa LimitedAccuracy)
     result = isa(result, InterConditional) ? widenconditional(result) : result
-    if (isa(result, Const) || isconstType(result))
+    if (isConst(result) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
@@ -436,7 +436,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             # Still set pure flag to make sure `inference` tests pass
             # and to possibly enable more optimization in the future
             src.pure = true
-            if isa(result, Const)
+            if isConst(result)
                 val = result.val
                 if is_inlineable_constant(val)
                     analyzed = ConstAPI(val)
@@ -644,7 +644,7 @@ end
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 
 # known return type
-isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
+isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isa(T, ConstType) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
                         union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)

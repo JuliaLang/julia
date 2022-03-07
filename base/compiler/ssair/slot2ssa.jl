@@ -221,9 +221,9 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::
     isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
-    isa(x, QuoteNode) && return Const(x.value)
+    isa(x, QuoteNode) && return mkConst(x.value)
     isa(x, Union{Symbol, PiNode, PhiNode, SlotNumber, TypedSlot}) && error("unexpected val type")
-    return Const(x)
+    return mkConst(x)
 end
 
 struct BlockLiveness

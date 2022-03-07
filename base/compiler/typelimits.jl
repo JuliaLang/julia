@@ -399,8 +399,8 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return Bool
     end
     # type-lattice for Const and PartialStruct wrappers
-    if ((isa(typea, PartialStruct) || isa(typea, Const)) &&
-        (isa(typeb, PartialStruct) || isa(typeb, Const)))
+    if ((isa(typea, PartialStruct) || isConst(typea)) &&
+        (isa(typeb, PartialStruct) || isConst(typeb)))
         aty = widenconst(typea)
         bty = widenconst(typeb)
         if aty === bty
@@ -614,7 +614,7 @@ end
 # compute typeintersect over the extended inference lattice
 # where v is in the extended lattice, and t is a Type
 function tmeet(@nospecialize(v), @nospecialize(t))
-    if isa(v, Const)
+    if isConst(v)
         if !has_free_typevars(t) && !isa(v.val, t)
             return Bottom
         end

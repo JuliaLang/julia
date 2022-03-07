@@ -230,7 +230,7 @@ end
 #########
 
 function singleton_type(@nospecialize(ft))
-    if isa(ft, Const)
+    if isConst(ft)
         return ft.val
     elseif isconstType(ft)
         return ft.parameters[1]
@@ -238,6 +238,19 @@ function singleton_type(@nospecialize(ft))
         return ft.instance
     end
     return nothing
+end
+
+function maybe_singleton_const(@nospecialize(t))
+    if isa(t, DataType) && isdefined(t, :instance)
+        if t === typeof(Bottom)
+            return ConstType(Bottom)
+        else
+            return Const(t.instance)
+        end
+    elseif isconstType(t)
+        return ConstType(t.parameters[1], t)
+    end
+    return t
 end
 
 ###################

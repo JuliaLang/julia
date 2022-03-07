@@ -41,7 +41,7 @@ function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(f
     else
         # try to resolve other constants, e.g. global reference
         field = argextype(field, ir)
-        if isa(field, Const)
+        if isConst(field)
             field = field.val
         else
             return nothing
@@ -400,7 +400,7 @@ function lift_leaves(compact::IncrementalCompact,
                 return nothing
             else
                 typ = argextype(leaf, compact)
-                if !isa(typ, Const)
+                if !isConst(typ)
                     # TODO: (disabled since #27126)
                     # If the leaf is an old ssa value, insert a getfield here
                     # We will revisit this getfield later when compaction gets
@@ -495,11 +495,11 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     lhs, rhs = args[2], args[3]
     vl = argextype(lhs, compact)
     vr = argextype(rhs, compact)
-    if isa(vl, Const)
-        isa(vr, Const) && return
+    if isConst(vl)
+        isConst(vr) && return
         val = rhs
         cmp = vl
-    elseif isa(vr, Const)
+    elseif isConst(vr)
         val = lhs
         cmp = vr
     else
@@ -522,7 +522,7 @@ function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
-    isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
+    isConst(cmp) || return # `isdefined_tfunc` won't return Const
     val = args[2]
     lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx)
 end
@@ -543,7 +543,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     for i = 1:length(leaves)
         leaf = leaves[i]
         result = tfunc(argextype(leaf, compact), cmp)
-        if isa(result, Const)
+        if isConst(result)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
             end

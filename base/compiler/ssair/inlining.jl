@@ -660,7 +660,7 @@ function rewrite_apply_exprargs!(
                 def_argtypes = Any[]
                 if isa(def_type, Const) # && isa(def_type.val, Union{Tuple, SimpleVector}) is implied
                     for p in def_type.val
-                        push!(def_argtypes, Const(p))
+                        push!(def_argtypes, mkConst(p))
                     end
                 else
                     ti = widenconst(def_type)::DataType # checked by `is_valid_type_for_apply_rewrite`
@@ -668,20 +668,14 @@ function rewrite_apply_exprargs!(
                         ti = ti.parameters[2]::DataType # checked by `is_valid_type_for_apply_rewrite`
                     end
                     for p in ti.parameters
-                        if isa(p, DataType) && isdefined(p, :instance)
-                            # replace singleton types with their equivalent Const object
-                            p = Const(p.instance)
-                        elseif isconstType(p)
-                            p = Const(p.parameters[1])
-                        end
-                        push!(def_argtypes, p)
+                        push!(def_argtypes, maybe_singleton_const(p))
                     end
                 end
             end
             # now push flattened types into new_argtypes and getfield exprs into new_argexprs
             for j in 1:length(def_argtypes)
                 def_atype = def_argtypes[j]
-                if isa(def_atype, Const) && is_inlineable_constant(def_atype.val)
+                if isConst(def_atype) && is_inlineable_constant(def_atype.val)
                     new_argexpr = quoted(def_atype.val)
                 else
                     new_call = Expr(:call, GlobalRef(Core, :getfield), def, j)
@@ -1368,7 +1362,7 @@ end
 
 function inline_const_if_inlineable!(inst::Instruction)
     rt = inst[:type]
-    if rt isa Const && is_inlineable_constant(rt.val)
+    if isConst(rt) && is_inlineable_constant(rt.val)
         inst[:inst] = quoted(rt.val)
         return true
     end
@@ -1470,7 +1464,7 @@ function early_inline_special_case(
     params.inlining || return nothing
     (; f, ft, argtypes) = sig
 
-    if isa(type, Const) # || isconstType(type)
+    if isConst(type) # || isconstType(type)
         val = type.val
         is_inlineable_constant(val) || return nothing
         if isa(f, IntrinsicFunction)
@@ -1504,7 +1498,7 @@ function late_inline_special_case!(
     if length(argtypes) == 3 && istopfunction(f, :!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method
-        if isa(type, Const)
+        if isConst(type)
             return SomeCase(quoted(type.val))
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
@@ -1514,7 +1508,7 @@ function late_inline_special_case!(
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(type, Const) && _builtin_nothrow(<:, Any[argtypes[3], argtypes[2]], type)
+        if isConst(type) && _builtin_nothrow(<:, Any[argtypes[3], argtypes[2]], type)
             return SomeCase(quoted(type.val))
         end
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])
@@ -1531,7 +1525,7 @@ function late_inline_special_case!(
     elseif is_return_type(f)
         if isconstType(type)
             return SomeCase(quoted(type.parameters[1]))
-        elseif isa(type, Const)
+        elseif isConst(type)
             return SomeCase(quoted(type.val))
         end
     end

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Compiler correctness and precision
-import Core.Compiler: Const, Conditional, ⊑, ReturnNode, GotoIfNot
+import Core.Compiler: Const, ConstType, Conditional, ⊑, ReturnNode, GotoIfNot
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(x)
 
 using Random, Core.IR
@@ -722,8 +722,8 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Array}}, Type{Int32}}, Const(:x)) == Type{Array}
-    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
-    @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
+    @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == ConstType(Real)
+    @test fieldtype_tfunc(ConstType(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == ConstType(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
     @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
@@ -731,11 +731,11 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Int32}, Const(:x))
-    @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Int32}), Const(:x))
+    @test fieldtype_nothrow(ConstType(Union{Base.RefValue{<:Real}, Int32}), Const(:x))
     @test !fieldtype_nothrow(Type{Union{Base.RefValue{T}, Int32}} where {T<:Real}, Const(:x)) # improvable?
     @test fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Type{Base.RefValue{Any}}} where {T<:Real}, Const(:x))
     @test fieldtype_nothrow(Union{Type{Base.RefValue{<:Real}}, Type{Base.RefValue{Any}}}, Const(:x))
-    @test fieldtype_nothrow(Const(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
+    @test fieldtype_nothrow(ConstType(Union{Base.RefValue{<:Real}, Base.RefValue{Any}}), Const(:x))
     @test fieldtype_nothrow(Type{Union{Base.RefValue{T}, Base.RefValue{Any}}} where {T<:Real}, Const(:x))
     @test !fieldtype_nothrow(Type{Tuple{}}, Const(1))
     @test fieldtype_nothrow(Type{Tuple{Int}}, Const(1))
@@ -1329,37 +1329,37 @@ isdefined_f3(x) = isdefined(x, 3)
 @test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]), isdefined, 3)
 
 let isa_tfunc = Core.Compiler.isa_tfunc
-    @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
+    @test isa_tfunc(Array, ConstType(AbstractArray)) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
     @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
     @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Const(false)
-    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
-    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
+    @test isa_tfunc(Array{Real, 2}, ConstType(AbstractArray{Real, 2})) === Const(true)
+    @test isa_tfunc(Array{Real, 2}, ConstType(AbstractArray{Int, 2})) === Const(false)
     @test isa_tfunc(DataType, Int) === Union{}
-    @test isa_tfunc(DataType, Const(Type{Int})) === Bool
-    @test isa_tfunc(DataType, Const(Type{Array})) === Bool
-    @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
-    @test isa_tfunc(UnionAll, Const(Type{Array})) === Bool
-    @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Bool
+    @test isa_tfunc(DataType, ConstType(Type{Int})) === Bool
+    @test isa_tfunc(DataType, ConstType(Type{Array})) === Bool
+    @test isa_tfunc(UnionAll, ConstType(Type{Int})) === Bool # could be improved
+    @test isa_tfunc(UnionAll, ConstType(Type{Array})) === Bool
+    @test isa_tfunc(Union, ConstType(Union{Float32, Float64})) === Bool
     @test isa_tfunc(Union, Type{Union}) === Const(true)
-    @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false)
-    @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
+    @test isa_tfunc(typeof(Union{}), ConstType(Int)) === Const(false)
+    @test isa_tfunc(typeof(Union{}), ConstType(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Const(false)
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
-    @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
-        @test isa_tfunc(c, Const(Bool)) === Const(true)
+    @test isa_tfunc(typeof(Union{}), ConstType(typeof(Union{}))) === Const(true)
+    let c = Conditional(Core.SlotNumber(0), ConstType(Union{}), ConstType(Union{}))
+        @test isa_tfunc(c, ConstType(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
-        @test isa_tfunc(c, Const(Real)) === Const(true)
+        @test isa_tfunc(c, ConstType(Real)) === Const(true)
         @test isa_tfunc(c, Type{Real}) === Const(true)
-        @test isa_tfunc(c, Const(Signed)) === Const(false)
+        @test isa_tfunc(c, ConstType(Signed)) === Const(false)
         @test isa_tfunc(c, Type{Complex}) === Const(false)
         @test isa_tfunc(c, Type{Complex{T}} where T) === Const(false)
     end
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
-    @test isa_tfunc(Any, Const(Any)) === Const(true)
+    @test isa_tfunc(Any, ConstType(Any)) === Const(true)
     @test isa_tfunc(Any, Union{}) === Union{} # any result is ok
     @test isa_tfunc(Any, Type{Union{}}) === Const(false)
     @test isa_tfunc(Union{Int64, Float64}, Type{Real}) === Const(true)
@@ -1368,46 +1368,46 @@ let isa_tfunc = Core.Compiler.isa_tfunc
 end
 
 let subtype_tfunc = Core.Compiler.subtype_tfunc
-    @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
+    @test subtype_tfunc(Type{<:Array}, ConstType(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
     @test subtype_tfunc(Type{<:Array{Real}}, Type{AbstractArray{Int}}) === Const(false)
-    @test subtype_tfunc(Type{<:Array{Real, 2}}, Const(AbstractArray{Real, 2})) === Const(true)
-    @test subtype_tfunc(Type{Array{Real, 2}}, Const(AbstractArray{Int, 2})) === Const(false)
+    @test subtype_tfunc(Type{<:Array{Real, 2}}, ConstType(AbstractArray{Real, 2})) === Const(true)
+    @test subtype_tfunc(Type{Array{Real, 2}}, ConstType(AbstractArray{Int, 2})) === Const(false)
     @test subtype_tfunc(DataType, Int) === Bool
-    @test subtype_tfunc(DataType, Const(Type{Int})) === Bool
-    @test subtype_tfunc(DataType, Const(Type{Array})) === Bool
-    @test subtype_tfunc(UnionAll, Const(Type{Int})) === Bool
-    @test subtype_tfunc(UnionAll, Const(Type{Array})) === Bool
-    @test subtype_tfunc(Union, Const(Union{Float32, Float64})) === Bool
+    @test subtype_tfunc(DataType, ConstType(Type{Int})) === Bool
+    @test subtype_tfunc(DataType, ConstType(Type{Array})) === Bool
+    @test subtype_tfunc(UnionAll, ConstType(Type{Int})) === Bool
+    @test subtype_tfunc(UnionAll, ConstType(Type{Array})) === Bool
+    @test subtype_tfunc(Union, ConstType(Union{Float32, Float64})) === Bool
     @test subtype_tfunc(Union, Type{Union}) === Bool
-    @test subtype_tfunc(Union{}, Const(Int)) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, Const(Union{})) === Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, ConstType(Int)) === Const(true) # any result is ok
+    @test subtype_tfunc(Union{}, ConstType(Union{})) === Const(true) # any result is ok
     @test subtype_tfunc(Union{}, typeof(Union{})) === Const(true) # any result is ok
     @test subtype_tfunc(Union{}, Union{}) === Const(true) # any result is ok
     @test subtype_tfunc(Union{}, Type{typeof(Union{})}) === Const(true) # any result is ok
-    @test subtype_tfunc(Union{}, Const(typeof(Union{}))) === Const(true) # any result is ok
-    @test subtype_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true) # Union{} <: typeof(Union{})
-    @test subtype_tfunc(typeof(Union{}), Const(Int)) === Const(true) # Union{} <: Int
-    @test subtype_tfunc(typeof(Union{}), Const(Union{})) === Const(true) # Union{} <: Union{}
+    @test subtype_tfunc(Union{}, ConstType(typeof(Union{}))) === Const(true) # any result is ok
+    @test subtype_tfunc(typeof(Union{}), ConstType(typeof(Union{}))) === Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(typeof(Union{}), ConstType(Int)) === Const(true) # Union{} <: Int
+    @test subtype_tfunc(typeof(Union{}), ConstType(Union{})) === Const(true) # Union{} <: Union{}
     @test subtype_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true) # Union{} <: Union{}
     @test subtype_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true) # Union{} <: typeof(Union{})
     @test subtype_tfunc(typeof(Union{}), Type{Union{}}) === Const(true) # Union{} <: Union{}
     @test subtype_tfunc(Type{Union{}}, typeof(Union{})) === Const(true) # Union{} <: Union{}
-    @test subtype_tfunc(Type{Union{}}, Const(typeof(Union{}))) === Const(true) # Union{} <: typeof(Union{})
-    @test subtype_tfunc(Type{Union{}}, Const(Int)) === Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(Type{Union{}}, ConstType(typeof(Union{}))) === Const(true) # Union{} <: typeof(Union{})
+    @test subtype_tfunc(Type{Union{}}, ConstType(Int)) === Const(true) # Union{} <: typeof(Union{})
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
-        @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
+    let c = Conditional(Core.SlotNumber(0), ConstType(Union{}), ConstType(Union{}))
+        @test subtype_tfunc(c, ConstType(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
     @test subtype_tfunc(Type{Val{1}}, DataType) === Bool
     @test subtype_tfunc(Type, Type{Val{T}} where T) === Bool
     @test subtype_tfunc(Type{Val{T}} where T, Type) === Bool
-    @test subtype_tfunc(Any, Const(Any)) === Const(true)
-    @test subtype_tfunc(Type{Any}, Const(Any)) === Const(true)
+    @test subtype_tfunc(Any, ConstType(Any)) === Const(true)
+    @test subtype_tfunc(Type{Any}, ConstType(Any)) === Const(true)
     @test subtype_tfunc(Any, Union{}) === Bool # any result is ok
     @test subtype_tfunc(Type{Any}, Union{}) === Const(false) # any result is ok
     @test subtype_tfunc(Type, Union{}) === Bool # any result is ok
@@ -1424,7 +1424,7 @@ let egal_tfunc
         return r
     end
     @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)
-    @test egal_tfunc(Array, Const(Array)) === Const(false)
+    @test egal_tfunc(Array, ConstType(Array)) === Const(false)
     @test egal_tfunc(Array, Type{Array}) === Const(false)
     @test egal_tfunc(Int, Int) == Bool
     @test egal_tfunc(Array, Array) == Bool
@@ -1433,27 +1433,27 @@ let egal_tfunc
     @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
     @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
     @test egal_tfunc(DataType, Int) === Const(false)
-    @test egal_tfunc(DataType, Const(Int)) === Bool
-    @test egal_tfunc(DataType, Const(Array)) === Const(false)
-    @test egal_tfunc(UnionAll, Const(Int)) === Const(false)
-    @test egal_tfunc(UnionAll, Const(Array)) === Bool
-    @test egal_tfunc(Union, Const(Union{Float32, Float64})) === Bool
-    @test egal_tfunc(Const(Union{Float32, Float64}), Const(Union{Float32, Float64})) === Const(true)
+    @test egal_tfunc(DataType, ConstType(Int)) === Bool
+    @test egal_tfunc(DataType, ConstType(Array)) === Const(false)
+    @test egal_tfunc(UnionAll, ConstType(Int)) === Const(false)
+    @test egal_tfunc(UnionAll, ConstType(Array)) === Bool
+    @test egal_tfunc(Union, ConstType(Union{Float32, Float64})) === Bool
+    @test egal_tfunc(ConstType(Union{Float32, Float64}), ConstType(Union{Float32, Float64})) === Const(true)
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
-    @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
-        @test egal_tfunc(c, Const(Bool)) === Const(false)
+    @test egal_tfunc(ConstType(typeof(Union{})), ConstType(typeof(Union{}))) === Const(true)
+    let c = Conditional(Core.SlotNumber(0), ConstType(Union{}), ConstType(Union{}))
+        @test egal_tfunc(c, ConstType(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
-        @test egal_tfunc(c, Const(Real)) === Const(false)
+        @test egal_tfunc(c, ConstType(Real)) === Const(false)
         @test egal_tfunc(c, Type{Real}) === Const(false)
-        @test egal_tfunc(c, Const(Signed)) === Const(false)
+        @test egal_tfunc(c, ConstType(Signed)) === Const(false)
         @test egal_tfunc(c, Type{Complex}) === Const(false)
         @test egal_tfunc(c, Type{Complex{T}} where T) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Union{}, Const(Union{})) # === Const(false)
+    let c = Conditional(Core.SlotNumber(0), Union{}, ConstType(Union{})) # === Const(false)
         @test egal_tfunc(c, Const(false)) === Conditional(c.var, c.elsetype, Union{})
         @test egal_tfunc(c, Const(true)) === Conditional(c.var, Union{}, c.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
@@ -1461,7 +1461,7 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Union{}) # === Const(true)
+    let c = Conditional(Core.SlotNumber(0), ConstType(Union{}), Union{}) # === Const(true)
         @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.vtype)
         @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.vtype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
@@ -1471,7 +1471,7 @@ let egal_tfunc
     end
     @test egal_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
     @test egal_tfunc(Type{Val{1}}, DataType) === Bool
-    @test egal_tfunc(Const(Any), Const(Any)) === Const(true)
+    @test egal_tfunc(ConstType(Any), ConstType(Any)) === Const(true)
     @test egal_tfunc(Any, Union{}) === Const(false) # any result is ok
     @test egal_tfunc(Type{Any}, Type{Union{}}) === Const(false)
     @test egal_tfunc(Union{Int64, Float64}, Real) === Bool
@@ -1489,13 +1489,13 @@ egal_conditional_lattice3(x, y) = x === y + y ? "" : 1
 @test Base.return_types(egal_conditional_lattice3, (Int32, Int64)) == Any[Int]
 
 using Core.Compiler: PartialStruct, nfields_tfunc, sizeof_tfunc, sizeof_nothrow
-@test sizeof_tfunc(Const(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
+@test sizeof_tfunc(ConstType(Ptr)) === sizeof_tfunc(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}}) === Const(Sys.WORD_SIZE ÷ 8)
 @test sizeof_tfunc(Type{Ptr}) === Const(sizeof(Ptr))
 @test sizeof_nothrow(Union{Ptr, Int, Type{Ptr{Int8}}, Type{Int}})
-@test sizeof_nothrow(Const(Ptr))
+@test sizeof_nothrow(ConstType(Ptr))
 @test sizeof_nothrow(Type{Ptr})
 @test sizeof_nothrow(Type{Union{Ptr{Int}, Int}})
-@test !sizeof_nothrow(Const(Tuple))
+@test !sizeof_nothrow(ConstType(Tuple))
 @test !sizeof_nothrow(Type{Vector{Int}})
 @test !sizeof_nothrow(Type{Union{Int, String}})
 @test sizeof_nothrow(String)
@@ -3012,9 +3012,9 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+    @test Core.Compiler.apply_type_nothrow([Core.Compiler.ConstType(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
-        Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
+        Core.Compiler.ConstType(Any)], Type{Tuple{Vararg{Any,N}}})
 end
 
 # issue #33768
