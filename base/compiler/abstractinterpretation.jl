@@ -1484,7 +1484,8 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     argtype = Tuple{ft, argtype.parameters...}
     result = findsup(types, method_table(interp))
     result === nothing && return CallMeta(Any, false)
-    method, valid_worlds = result
+    match, valid_worlds = result
+    method = match.method
     update_valid_age!(sv, valid_worlds)
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
