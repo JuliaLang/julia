@@ -100,8 +100,9 @@ end
             end
             for io in stdio]
         handle = Libc.malloc(_sizeof_uv_process)
-        disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
+        disassociate_julia_struct(handle)
         (; exec, flags, env, dir) = cmd
+        iolock_begin()
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
@@ -114,13 +115,17 @@ end
             cpumask === nothing ? C_NULL : cpumask,
             cpumask === nothing ? 0 : length(cpumask),
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+        if err == 0
+            pp = Process(cmd, handle)
+            associate_julia_struct(handle, pp)
+        else
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
+        end
+        iolock_end()
     end
     if err != 0
-        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), err))
     end
-    pp = Process(cmd, handle)
-    associate_julia_struct(handle, pp)
     return pp
 end
 
