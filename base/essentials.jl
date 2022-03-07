@@ -688,6 +688,12 @@ struct Colon <: Function
 end
 const (:) = Colon()
 
+# TODO: Change lowering to do this automatically
+@eval struct Val{x}
+    (T::Type{Val{x}} where x)() = $(Expr(:new, :T))
+end
+
+
 """
     Val(c)
 
@@ -708,8 +714,7 @@ julia> f(Val(true))
 "Good"
 ```
 """
-struct Val{x}
-end
+Val
 
 Val(x) = Val{x}()
 

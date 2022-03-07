@@ -45,6 +45,8 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
     return mi_info
 end
 
+_typeinf_identifier(frame::InferenceFrameInfo) = frame
+
 """
     Core.Compiler.Timing(mi_info, start_time, ...)
 
@@ -330,13 +332,15 @@ already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) =
 already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
     false
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
+function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo, ipo_effects::Effects)
     def = linfo.def
     toplevel = !isa(def, Method)
     if toplevel
         return ci
     end
     if may_discard_trees(interp)
+        # TODO: We may want to check is_total_or_error(ipo_effects) here, but at the moment,
+        #       inlineable is also required for semi-concrete constprop.
         cache_the_tree = ci.inferred && (ci.inlineable || isa_compileable_sig(linfo.specTypes, def))
     else
         cache_the_tree = true
@@ -356,7 +360,8 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result))
+                                    valid_worlds::WorldRange, @nospecialize(inferred_result),
+                                    ipo_effects::Effects)
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
@@ -365,7 +370,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodIn
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
         inferred_result.max_world = last(valid_worlds)
-        inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
+        inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result, ipo_effects)
     end
     # The global cache can only handle objects that codegen understands
     if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}, ConstAPI})
@@ -391,7 +396,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def

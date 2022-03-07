@@ -1281,6 +1281,8 @@ function handle_const_call!(
                 push!(cases, InliningCase(result.mi.specTypes, case))
             elseif isa(result, InferenceResult)
                 handled_all_cases &= handle_inf_result!(result, argtypes, flag, state, cases)
+            elseif isa(result, SemiConcreteResult)
+                handled_all_cases &= handle_semi_concrete_result!(result, cases)
             else
                 @assert result === nothing
                 handled_all_cases &= handle_match!(match, argtypes, flag, state, cases)
@@ -1294,8 +1296,13 @@ function handle_const_call!(
     if length(cases) == 0
         length(results) == 1 || return nothing
         result = results[1]
-        isa(result, InferenceResult) || return nothing
-        handle_inf_result!(result, argtypes, flag, state, cases, true) || return nothing
+        if isa(result, InferenceResult)
+            handle_inf_result!(result, argtypes, flag, state, cases, true) || return nothing
+        elseif isa(result, SemiConcreteResult)
+            handle_semi_concrete_result!(result, cases) || return nothing
+        else
+            return nothing
+        end
         spec_types = cases[1].sig
         any_covers_full = handled_all_cases = atype <: spec_types
     end
@@ -1325,6 +1332,15 @@ function handle_inf_result!(
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
+    return true
+end
+
+function handle_semi_concrete_result!(result::SemiConcreteResult, cases::Vector{InliningCase}, allow_abstract::Bool = false)
+    mi = result.mi
+    spec_types = mi.specTypes
+    allow_abstract || isdispatchtuple(spec_types) || return false
+    validate_sparams(mi.sparam_vals) || return false
+    push!(cases, InliningCase(spec_types, InliningTodo(mi, result.ir, result.effects)))
     return true
 end
 

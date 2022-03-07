@@ -131,6 +131,10 @@ include("compiler/methodtable.jl")
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
 
+include("compiler/ssair/basicblock.jl")
+include("compiler/ssair/domtree.jl")
+include("compiler/ssair/ir.jl")
+
 include("compiler/typeutils.jl")
 include("compiler/typelimits.jl")
 include("compiler/typelattice.jl")
@@ -139,7 +143,7 @@ include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
-include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+include("compiler/optimize.jl")
 
 # required for bootstrap
 # TODO: find why this is needed and remove it.

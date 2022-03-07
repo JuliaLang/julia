@@ -82,6 +82,12 @@ function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
     return idx in bsbmp.elems
 end
 
+function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
+    for val in itr
+        push!(bsbmp, val)
+    end
+end
+
 mutable struct InferenceState
     params::InferenceParams
     result::InferenceResult # remember where to put the result

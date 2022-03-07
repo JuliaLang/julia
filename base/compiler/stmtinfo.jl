@@ -11,6 +11,7 @@ and any additional information (`call.info`) for a given generic call.
 struct CallMeta
     rt::Any
     info::Any
+    effects::Effects
 end
 
 """
@@ -54,6 +55,12 @@ struct ConstResult
     ConstResult(mi::MethodInstance, @nospecialize val) = new(mi, val)
 end
 
+struct SemiConcreteResult
+    mi::MethodInstance
+    ir::IRCode
+    effects::Effects
+end
+
 """
     info::ConstCallInfo
 
@@ -63,7 +70,7 @@ the inference results with constant information `info.results::Vector{Union{Noth
 """
 struct ConstCallInfo
     call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,InferenceResult,ConstResult}}
+    results::Vector{Union{Nothing,InferenceResult,SemiConcreteResult,ConstResult}}
 end
 
 """
@@ -129,7 +136,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct InvokeCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult}
+    result::Union{Nothing,InferenceResult,ConstResult,SemiConcreteResult}
 end
 
 """
@@ -141,7 +148,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct OpaqueClosureCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult}
+    result::Union{Nothing,InferenceResult,ConstResult,SemiConcreteResult}
 end
 
 """
