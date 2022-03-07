@@ -474,16 +474,16 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     @assert length(bbs) >= length(cases)
     for i in 1:length(cases)
         ithcase = cases[i]
-        metharg = ithcase.sig::DataType # checked within `handle_cases!`
+        mtype = ithcase.sig::DataType # checked within `handle_cases!`
         case = ithcase.item
         next_cond_bb = bbs[i]
         cond = true
-        aparams, mparams = atype.parameters, metharg.parameters
-        @assert length(aparams) == length(mparams)
+        nparams = fieldcount(atype)
+        @assert nparams == fieldcount(mtype)
         if i != length(cases) || !fully_covered ||
                 (!params.trust_inference && isdispatchtuple(cases[i].sig))
-            for i in 1:length(aparams)
-                a, m = aparams[i], mparams[i]
+            for i = 1:nparams
+                a, m = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
                 a <: m && continue
                 # Generate isa check
@@ -503,10 +503,10 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         argexprs′ = argexprs
         if !isa(case, ConstantCase)
             argexprs′ = copy(argexprs)
-            for i = 1:length(mparams)
+            for i = 1:nparams
                 argex = argexprs[i]
                 (isa(argex, SSAValue) || isa(argex, Argument)) || continue
-                a, m = aparams[i], mparams[i]
+                a, m = fieldtype(atype, i), fieldtype(mtype, i)
                 if !(a <: m)
                     argexprs′[i] = insert_node_here!(compact,
                         NewInstruction(PiNode(argex, m), m, line))
