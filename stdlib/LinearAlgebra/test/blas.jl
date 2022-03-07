@@ -18,9 +18,14 @@ function pack(A, uplo)
 end
 
 @testset "vec_pointer_stride" begin
-    a = zeros(4,4,4)
-    @test BLAS.asum(view(a,1:2:4,:,:)) == 0 # vector like
+    a = float(rand(1:20,4,4,4))
+    @test BLAS.asum(a) == sum(a) # dense case
+    @test BLAS.asum(view(a,1:2:4,:,:)) == sum(view(a,1:2:4,:,:)) # vector like
+    @test BLAS.asum(view(a,1:3,2:2,3:3)) == sum(view(a,1:3,2:2,3:3))
+    @test BLAS.asum(view(a,1:1,1:3,1:1)) == sum(view(a,1:1,1:3,1:1))
+    @test BLAS.asum(view(a,1:1,1:1,1:3)) == sum(view(a,1:1,1:1,1:3))
     @test_throws ArgumentError BLAS.asum(view(a,1:3:4,:,:)) # non-vector like
+    @test_throws ArgumentError BLAS.asum(view(a,1:2,1:1,1:3))
 end
 Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines

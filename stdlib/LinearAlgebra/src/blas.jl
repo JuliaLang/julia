@@ -147,18 +147,19 @@ end
 # Level 1
 # A help function to pick the pointer and inc for 1d like inputs.
 @inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
-    isdense(x) && return pointer(x), 1 # simpify runtime check when possibe
-    ndims(x) == 1 || strides(x) == Base.size_to_strides(stride(x, 1), size(x)...) ||
-        throw(ArgumentError("only support vector like inputs"))
-    st = stride(x, 1)
+    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simpify runtime check when possibe
+    st, ptr = checkedstride(x), pointer(x)
     isnothing(stride0check) || (st == 0 && throw(stride0check))
-    ptr = st > 0 ? pointer(x) : pointer(x, lastindex(x))
+    ptr += min(st, 0) * sizeof(eltype(x)) * (length(x) - 1)
     ptr, st
 end
-isdense(x) = x isa DenseArray
-isdense(x::Base.FastContiguousSubArray) = isdense(parent(x))
-isdense(x::Base.ReshapedArray) = isdense(parent(x))
-isdense(x::Base.ReinterpretArray) = isdense(parent(x))
+function checkedstride(x::AbstractArray)
+    szs::Dims = size(x)
+    sts::Dims = strides(x)
+    _, st, n = Base.merge_adjacent_dim(szs, sts)
+    n === ndims(x) && return st
+    throw(ArgumentError("only support vector like inputs"))
+end
 ## copy
 
 """
