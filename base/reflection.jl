@@ -1347,15 +1347,11 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type), world=get_world_counter())
-    min_valid = RefValue{UInt}(typemin(UInt))
-    max_valid = RefValue{UInt}(typemax(UInt))
-    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
-        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-        tt, world, min_valid, max_valid)
-    if match === nothing
+    result = Core.Compiler._findsup(tt, nothing, world)
+    if result === nothing
         error("no unique matching method found for the specified argument types")
     end
-    return match::Core.MethodMatch
+    return first(result)::Core.MethodMatch
 end
 
 """
@@ -1478,7 +1474,7 @@ true
 function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
     t = to_tuple_type(t)
     t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())

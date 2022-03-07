@@ -45,3 +45,21 @@ CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_co
 @test Base.return_types((Int,), MTOverlayInterp()) do x
     sin(x)
 end == Any[Int]
+@test Base.return_types((Any,), MTOverlayInterp()) do x
+    Base.@invoke sin(x::Float64)
+end == Any[Int]
+
+# fallback to the internal method table
+@test Base.return_types((Int,), MTOverlayInterp()) do x
+    cos(x)
+end == Any[Float64]
+@test Base.return_types((Any,), MTOverlayInterp()) do x
+    Base.@invoke cos(x::Float64)
+end == Any[Float64]
+
+# not fully covered overlay method match
+overlay_match(::Any) = nothing
+@overlay OverlayedMT overlay_match(::Int) = missing
+@test Base.return_types((Any,), MTOverlayInterp()) do x
+    overlay_match(x)
+end == Any[Union{Nothing,Missing}]
