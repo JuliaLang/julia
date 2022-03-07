@@ -31,6 +31,11 @@ end
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
 end
+
+function block_for_inst(index::Vector{BasicBlock}, inst::Int)
+    return searchsortedfirst(index, BasicBlock(StmtRange(inst, inst)), by=x->first(x.stmts), lt=(<=))-1
+end
+
 block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
 
 function basic_blocks_starts(stmts::Vector{Any})
@@ -674,6 +679,14 @@ end
 
 function getindex(compact::IncrementalCompact, ssa::NewSSAValue)
     return compact.new_new_nodes.stmts[ssa.id][:inst]
+end
+
+function block_for_inst(compact::IncrementalCompact, idx::SSAValue)
+    if idx.id < compact.result_idx
+        return block_for_inst(compact.result_bbs, idx.id)
+    else
+        return block_for_inst(compact.ir.cfg, idx.idx)
+    end
 end
 
 function count_added_node!(compact::IncrementalCompact, @nospecialize(v))

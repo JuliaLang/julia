@@ -559,7 +559,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val)::LiftedValue
+        lifted_leaves::LiftedLeaves, val, ()->nothing, idx)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -579,8 +579,38 @@ end
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val), get_domtree, idx::Int)
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
+
+    # Check if all the lifted leaves are the same
+    local the_leaf
+    all_same = true
+    for (_, val) in lifted_leaves
+        if !@isdefined(the_leaf)
+            the_leaf = val
+            continue
+        end
+        if val !== the_leaf
+            all_same = false
+        end
+    end
+
+    if all_same && isa((the_leaf::LiftedValue).x, SSAValue)
+        domtree = get_domtree()
+        if domtree !== nothing
+            lb = compact.active_result_bb
+            if lb > 1
+                if idx <= last(compact.result_bbs[lb-1].stmts)
+                    lb -= 1
+                end
+            end
+            db = block_for_inst(compact, the_leaf.x)
+            if dominates(domtree, db, lb)
+                return the_leaf
+            end
+            # TODO: Only insert PhiNodes on the CFG meet path
+        end
+    end
 
     # Insert PhiNodes
     lifted_phis = LiftedPhi[]
@@ -681,6 +711,14 @@ function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
+    # initialization of domtree is delayed to avoid the expensive computation in many cases
+    local domtree = nothing
+    function get_domtree()
+        if domtree === nothing
+            @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
+        end
+        return domtree
+    end
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
@@ -822,7 +860,7 @@ function sroa_pass!(ir::IRCode)
         end
 
         val = perform_lifting!(compact,
-            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val)
+            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, get_domtree, idx)
 
         # Insert the undef check if necessary
         if any_undef
@@ -849,7 +887,7 @@ function sroa_pass!(ir::IRCode)
         used_ssas = copy(compact.used_ssas)
         simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas)
+        sroa_mutables!(ir, defuses, used_ssas, get_domtree)
         return ir
     else
         simple_dce!(compact)
@@ -857,9 +895,7 @@ function sroa_pass!(ir::IRCode)
     end
 end
 
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
-    # initialization of domtree is delayed to avoid the expensive computation in many cases
-    local domtree = nothing
+function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, get_domtree)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -923,15 +959,13 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
-                domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get_domtree())
             end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for use in du.uses
-                    domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                    has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
+                    has_safe_def(ir, get_domtree(), allblocks, du, newidx, use) || @goto skip
                 end
             end
         end
@@ -939,7 +973,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
-        domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
+        domtree = get_domtree()
         preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
             IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
         for fidx in 1:ndefuse
