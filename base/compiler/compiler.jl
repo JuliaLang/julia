@@ -164,7 +164,7 @@ include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
-include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+include("compiler/optimize.jl")
 
 # required for bootstrap because sort.jl uses extrema
 # to decide whether to dispatch to counting sort.

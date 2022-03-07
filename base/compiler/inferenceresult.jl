@@ -16,6 +16,36 @@ function is_forwardable_argtype(@nospecialize x)
            isa(x, PartialOpaque)
 end
 
+function va_process_argtypes(given_argtypes::Vector{Any}, mi::MethodInstance,
+                             condargs::Union{Vector{Tuple{Int,Int}}, Nothing}=nothing)
+    isva = mi.def.isva
+    nargs = Int(mi.def.nargs)
+    if isva || isvarargtype(given_argtypes[end])
+        isva_given_argtypes = Vector{Any}(undef, nargs)
+        for i = 1:(nargs - isva)
+            isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
+        end
+        if isva
+            if length(given_argtypes) < nargs && isvarargtype(given_argtypes[end])
+                last = length(given_argtypes)
+            else
+                last = nargs
+            end
+            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
+            # invalidate `Conditional` imposed on varargs
+            if condargs !== nothing
+                for (slotid, i) in condargs
+                    if slotid ≥ last
+                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
+                    end
+                end
+            end
+        end
+        return isva_given_argtypes
+    end
+    return given_argtypes
+end
+
 # In theory, there could be a `cache` containing a matching `InferenceResult`
 # for the provided `linfo` and `given_argtypes`. The purpose of this function is
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
@@ -56,30 +86,7 @@ function matching_cache_argtypes(
         end
         given_argtypes[i] = widenconditional(argtype)
     end
-    isva = def.isva
-    if isva || isvarargtype(given_argtypes[end])
-        isva_given_argtypes = Vector{Any}(undef, nargs)
-        for i = 1:(nargs - isva)
-            isva_given_argtypes[i] = argtype_by_index(given_argtypes, i)
-        end
-        if isva
-            if length(given_argtypes) < nargs && isvarargtype(given_argtypes[end])
-                last = length(given_argtypes)
-            else
-                last = nargs
-            end
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
-            # invalidate `Conditional` imposed on varargs
-            if condargs !== nothing
-                for (slotid, i) in condargs
-                    if slotid ≥ last
-                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
-                    end
-                end
-            end
-        end
-        given_argtypes = isva_given_argtypes
-    end
+    given_argtypes = va_process_argtypes(given_argtypes, linfo, condargs)
     @assert length(given_argtypes) == nargs
     for i in 1:nargs
         given_argtype = given_argtypes[i]

@@ -293,6 +293,17 @@ function singleton_type(@nospecialize(ft))
     return nothing
 end
 
+function maybe_singleton_const(@nospecialize(t))
+    if isa(t, DataType)
+        if isdefined(t, :instance)
+            return Const(t.instance)
+        elseif isconstType(t)
+            return Const(t.parameters[1])
+        end
+    end
+    return t
+end
+
 ###################
 # SSAValues/Slots #
 ###################

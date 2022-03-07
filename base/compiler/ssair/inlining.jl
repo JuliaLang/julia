@@ -1371,6 +1371,8 @@ function compute_inlining_cases(info::ConstCallInfo,
                 push!(cases, InliningCase(result.mi.specTypes, case))
             elseif isa(result, ConstPropResult)
                 handled_all_cases &= handle_const_prop_result!(result, argtypes, flag, state, cases, #=allow_abstract=#true)
+            elseif isa(result, SemiConcreteResult)
+                handled_all_cases &= handle_semi_concrete_result!(result, cases, #=allow_abstract=#true)
             else
                 @assert result === nothing
                 handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, #=allow_typevars=#false)
@@ -1431,6 +1433,15 @@ function handle_const_prop_result!(
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
+    return true
+end
+
+function handle_semi_concrete_result!(result::SemiConcreteResult, cases::Vector{InliningCase}, allow_abstract::Bool = false)
+    mi = result.mi
+    spec_types = mi.specTypes
+    allow_abstract || isdispatchtuple(spec_types) || return false
+    validate_sparams(mi.sparam_vals) || return false
+    push!(cases, InliningCase(spec_types, InliningTodo(mi, result.ir, result.effects)))
     return true
 end
 

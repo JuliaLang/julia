@@ -2010,7 +2010,7 @@ function builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
-                           sv::Union{InferenceState,Nothing})
+                           sv::Union{InferenceState,IRCode,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
     end
@@ -2176,7 +2176,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::Union{InferenceState, IRCode})
     if length(argtypes) == 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -2192,10 +2192,14 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     # Run the abstract_call without restricting abstract call
                     # sites. Otherwise, our behavior model of abstract_call
                     # below will be wrong.
-                    old_restrict = sv.restrict_abstract_call_sites
-                    sv.restrict_abstract_call_sites = false
-                    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
-                    sv.restrict_abstract_call_sites = old_restrict
+                    if isa(sv, InferenceState)
+                        old_restrict = sv.restrict_abstract_call_sites
+                        sv.restrict_abstract_call_sites = false
+                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                        sv.restrict_abstract_call_sites = old_restrict
+                    else
+                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    end
                     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
@@ -2206,7 +2210,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
                         return CallMeta(Const(rt), EFFECTS_TOTAL, info)
-                    elseif !isempty(sv.pclimitations)
+                    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
