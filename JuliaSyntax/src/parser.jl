@@ -71,6 +71,11 @@ function peek_token(ps::ParseState, n=1; skip_newlines=nothing)
     peek_token(ps.stream, n, skip_newlines=skip_nl)
 end
 
+function peek_full_token(ps::ParseState, n=1; skip_newlines=nothing, kws...)
+    skip_nl = isnothing(skip_newlines) ? ps.whitespace_newline : skip_newlines
+    peek_full_token(ps.stream, n; skip_newlines=skip_nl, kws...)
+end
+
 function peek_behind(ps::ParseState, args...; kws...)
     peek_behind(ps.stream, args...; kws...)
 end
@@ -100,8 +105,8 @@ function reset_node!(ps::ParseState, args...; kws...)
     reset_node!(ps.stream, args...; kws...)
 end
 
-function steal_node_bytes!(ps::ParseState, args...)
-    steal_node_bytes!(ps.stream, args...)
+function steal_token_bytes!(ps::ParseState, args...)
+    steal_token_bytes!(ps.stream, args...)
 end
 
 function Base.position(ps::ParseState, args...)
@@ -3048,7 +3053,7 @@ function parse_string(ps::ParseState, raw::Bool)
     had_interpolation = false
     prev_chunk_newline = false
     while true
-        t = peek_token(ps)
+        t = peek_full_token(ps)
         k = kind(t)
         if k == K"$"
             @assert !raw  # The lexer detects raw strings separately
@@ -3182,7 +3187,7 @@ function parse_string(ps::ParseState, raw::Bool)
     if triplestr && indent_ref_len > 0
         for pos in indent_chunks
             reset_node!(ps, pos, kind=K"Whitespace", flags=TRIVIA_FLAG)
-            rhs_empty = steal_node_bytes!(ps, pos, indent_ref_len)
+            rhs_empty = steal_token_bytes!(ps, pos, indent_ref_len)
             if rhs_empty
                 # Empty chunks after dedent are removed
                 # """\n \n """        ==> (string-s "\n")

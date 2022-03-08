@@ -17,13 +17,16 @@ const TRIPLE_STRING_FLAG = RawFlags(1<<3)
 const RAW_STRING_FLAG = RawFlags(1<<4)
 # try-finally-catch
 const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
+# Record whether operator has a suffix
+const SUFFIXED_FLAG        = RawFlags(1<<6)
+
+# Token-only flag
+# Record whether a token had preceding whitespace
+const PRECEDING_WHITESPACE_FLAG = RawFlags(1<<7)
+
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
 # Todo ERROR_FLAG = 0x8000 ?
-
-## Flags for tokens (may overlap with the flags allocated for syntax above)
-const SUFFIXED_FLAG        = RawFlags(1<<6)
-const PRECEDING_WHITESPACE_FLAG = RawFlags(1<<7)
 
 function set_numeric_flags(n::Integer)
     f = RawFlags((n << 8) & NUMERIC_FLAGS)
@@ -62,11 +65,9 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     if is_dotted(head)
         str = "."*str
     end
-    f = flags(head)
     # Ignore some flags:
-    # - DOTOP_FLAG is represented with . prefix
-    # - PRECEDING_WHITESPACE_FLAG relates to the environment of this token
-    f &= ~(DOTOP_FLAG | PRECEDING_WHITESPACE_FLAG)
+    # DOTOP_FLAG is represented above with . prefix
+    # PRECEDING_WHITESPACE_FLAG relates to the environment of this token
     suffix_flags = remove_flags(flags(head), DOTOP_FLAG, PRECEDING_WHITESPACE_FLAG)
     if include_flag_suff && suffix_flags != EMPTY_FLAGS
         str = str*"-"
@@ -97,6 +98,7 @@ is_trivia(x) = has_flags(x, TRIVIA_FLAG)
 is_infix(x)  = has_flags(x, INFIX_FLAG)
 is_dotted(x) = has_flags(x, DOTOP_FLAG)
 is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
+is_decorated(x) = is_dotted(x) || is_suffixed(x)
 preceding_whitespace(x) = has_flags(x, PRECEDING_WHITESPACE_FLAG)
 numeric_flags(x) = numeric_flags(flags(x))
 
@@ -107,20 +109,20 @@ Information about preceding whitespace is added for use by the parser.
 """
 struct SyntaxToken
     head::SyntaxHead
+    orig_kind::Kind
     first_byte::UInt32
-    last_byte::UInt32 # TODO: Remove this?
+end
+
+function SyntaxToken(head::SyntaxHead, first_byte::Integer)
+    SyntaxToken(head, kind(head), first_byte)
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
-    print(io, untokenize(tok.head, unique=false), " @", first_byte(tok))
+    print(io, rpad(untokenize(tok.head, unique=false), 15), " @", first_byte(tok))
 end
 
 head(tok::SyntaxToken) = tok.head
 first_byte(tok::SyntaxToken) = tok.first_byte
-last_byte(tok::SyntaxToken) = tok.last_byte
-span(tok::SyntaxToken) = last_byte(tok) - first_byte(tok) + 1
-
-is_decorated(tok::SyntaxToken) = is_dotted(tok) || is_suffixed(tok)
 
 
 #-------------------------------------------------------------------------------
@@ -132,32 +134,22 @@ start_mark compares to previous nodes.
 """
 struct TaggedRange
     head::SyntaxHead # Kind,flags
-    orig_kind::Kind  # Kind of the original token for leaf tokens, or K"None"
-    first_byte::UInt32  # First byte in the input text
-    last_byte::UInt32   # Last byte in the input text
-    start_mark::UInt32  # Index of first emitted range which this range covers
-    # TODO: Remove the three fields above & replace with:
-    # is_leaf::Bool
-    # # The following field is used for one of two things:
-    # # - For leaf nodes it points to the last byte of the token in the input text
-    # # - For non-leaf nodes it points to the index of the first child
-    # last_byte_or_first_child::UInt32
+    # The following field is used for one of two things:
+    # - For leaf nodes it's an index in the tokens array
+    # - For non-leaf nodes it points to the index of the first child
+    first_token::UInt32
+    last_token::UInt32
 end
 
-head(range::TaggedRange)       = range.head
-kind(range::TaggedRange)       = kind(range.head)
-flags(range::TaggedRange)      = flags(range.head)
-first_byte(range::TaggedRange) = Int(range.first_byte)
-last_byte(range::TaggedRange)  = Int(range.last_byte)
-span(range::TaggedRange)       = 1 + last_byte(range) - first_byte(range)
+head(range::TaggedRange) = range.head
 
 #-------------------------------------------------------------------------------
 struct ParseStreamPosition
-    input_byte::Int    # Index of next byte in input
-    output_index::Int  # Index of last span in output
+    token_index::UInt32  # Index of last token in output
+    range_index::UInt32
 end
 
-const NO_POSITION = ParseStreamPosition(0,0)
+const NO_POSITION = ParseStreamPosition(0, 0)
 
 #-------------------------------------------------------------------------------
 """
@@ -185,12 +177,12 @@ mutable struct ParseStream
     lookahead_index::Int
     # Pool of stream positions for use as working space in parsing
     position_pool::Vector{Vector{ParseStreamPosition}}
+    # Buffer of finalized tokens
+    tokens::Vector{SyntaxToken}
     # Parser output as an ordered sequence of ranges, parent nodes after children.
     ranges::Vector{TaggedRange}
     # Parsing diagnostics (errors/warnings etc)
     diagnostics::Vector{Diagnostic}
-    # First byte of next token
-    next_byte::Int
     # Counter for number of peek()s we've done without making progress via a bump()
     peek_count::Int
     # (major,minor) version of Julia we're parsing this code for.
@@ -214,9 +206,9 @@ mutable struct ParseStream
             Vector{SyntaxToken}(),
             1,
             Vector{Vector{ParseStreamPosition}}(),
+            Vector{SyntaxToken}(),
             Vector{TaggedRange}(),
             Vector{Diagnostic}(),
-            next_byte,
             0,
             ver)
     end
@@ -262,9 +254,8 @@ function ParseStream(io::IO; version=VERSION)
     ParseStream(textbuf, textbuf, 1, version)
 end
 
-
 function Base.show(io::IO, mime::MIME"text/plain", stream::ParseStream)
-    println(io, "ParseStream at position $(stream.next_byte)")
+    println(io, "ParseStream at position $(_next_byte(stream))")
 end
 
 function show_diagnostics(io::IO, stream::ParseStream, code)
@@ -285,12 +276,28 @@ function release_positions(stream, positions)
 end
 
 #-------------------------------------------------------------------------------
+# Return true when a token was emitted last at stream position `pos` 
+function token_is_last(stream, pos)
+    return pos.range_index == 0 ||
+           pos.token_index > stream.ranges[pos.range_index].last_token
+end
+
+# Safely compute the first byte of a token, including the token off the end of
+# the stream.
+function token_first_byte(stream, i)
+    i == length(stream.tokens) + 1 ?
+        _next_byte(stream) :
+        stream.tokens[i].first_byte
+end
+
+#-------------------------------------------------------------------------------
 # Stream input interface - the peek_* family of functions
 
 # Buffer several tokens ahead
 function _buffer_lookahead_tokens(lexer, lookahead)
     had_whitespace = false
     token_count = 0
+    done = false
     while true
         raw = Tokenize.Lexers.next_token(lexer)
         k = TzTokens.exactkind(raw)
@@ -300,7 +307,7 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
         raw.dotop      && (f |= DOTOP_FLAG)
         raw.suffix     && (f |= SUFFIXED_FLAG)
-        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1, raw.endbyte + 1))
+        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1))
         token_count += 1
         if k == K"EndMarker"
             break
@@ -311,21 +318,38 @@ function _buffer_lookahead_tokens(lexer, lookahead)
             # but not too large to avoid (a) polluting the processor cache and
             # (b) doing unnecessary work when not parsing the whole input.
             had_whitespace = false
-            if token_count > 100
+            if done
                 break
+            end
+            if token_count > 100
+                # Buffer at least one token after the last so we can get the
+                # current token's last byte based on the next token. (May need
+                # more than one to correctly apply had_whitespace state.)
+                done = true
             end
         end
     end
 end
 
+# Return the index of the next byte of the input
+function _next_byte(stream)
+    if stream.lookahead_index > length(stream.lookahead)
+        __lookahead_index(stream, 1, false) # Will buffer more tokens
+    end
+    stream.lookahead[stream.lookahead_index].first_byte
+end
+
 # Find the index of the next nontrivia token
+#
+# Postcondition: After returning `i`, the lookahead buffer will buffers tokens
+# at least up until stream.lookahead[i+1]
 @inline function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
     # Much of the time we'll be peeking ahead a single token and have one or
     # zero whitespace tokens before the next token. The following code is an
     # unrolled optimized version for that fast path. Empirically it seems we
     # only hit the slow path about 5% of the time here.
     i = stream.lookahead_index
-    @inbounds if n == 1 && i+1 <= length(stream.lookahead)
+    @inbounds if n == 1 && i+2 <= length(stream.lookahead)
         if skip_newlines
             k = kind(stream.lookahead[i])
             if !(k == K"Whitespace" || k == K"Comment" || k == K"NewlineWs")
@@ -355,7 +379,7 @@ end
 @noinline function __lookahead_index(stream, n, skip_newlines)
     i = stream.lookahead_index
     while true
-        if i > length(stream.lookahead)
+        if i+1 > length(stream.lookahead)
             n_to_delete = stream.lookahead_index-1
             if n_to_delete > 0.9*length(stream.lookahead)
                 Base._deletebeg!(stream.lookahead, n_to_delete)
@@ -363,6 +387,7 @@ end
                 stream.lookahead_index = 1
             end
             _buffer_lookahead_tokens(stream.lexer, stream.lookahead)
+            continue
         end
         k = @inbounds kind(stream.lookahead[i])
         if !((k == K"Whitespace" || k == K"Comment") ||
@@ -378,7 +403,7 @@ end
 
 @noinline function _parser_stuck_error(stream)
     # Optimization: emit unlikely errors in a separate function
-    error("The parser seems stuck at byte $(stream.next_byte)")
+    error("The parser seems stuck at byte $(_next_byte(stream))")
 end
 
 """
@@ -412,12 +437,33 @@ function peek_token(stream::ParseStream, n::Integer=1;
     return @inbounds stream.lookahead[i]
 end
 
-function _peek_behind_fields(ranges, i)
-    r = ranges[i]
-    return (kind=kind(r),
-            flags=flags(r),
-            orig_kind=r.orig_kind,
-            is_leaf=r.start_mark == i)
+
+struct FullToken
+    head::SyntaxHead
+    first_byte::UInt32
+    last_byte::UInt32
+end
+
+head(t::FullToken) = t.head
+first_byte(t::FullToken) = t.first_byte
+last_byte(t::FullToken) = t.last_byte
+span(t::FullToken) = 1 + last_byte(t) - first_byte(t)
+
+function peek_full_token(stream::ParseStream, n::Integer=1;
+                         skip_newlines=false, skip_whitespace=true)
+    stream.peek_count += 1
+    if stream.peek_count > 100_000
+        _parser_stuck_error(stream)
+    end
+    i = _lookahead_index(stream, n, skip_newlines)
+    if !skip_whitespace
+        i = stream.lookahead_index
+    end
+    tok = stream.lookahead[i]
+
+    FullToken(head(tok),
+              first_byte(tok),
+              first_byte(stream.lookahead[i+1]) - 1)
 end
 
 """
@@ -431,22 +477,46 @@ at the provided position `pos`.
 Retroactively inspecting or modifying the parser's output can be confusing, so
 using this function should be avoided where possible.
 """
-function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
-    if skip_trivia
-        for i = length(stream.ranges):-1:1
-            r = stream.ranges[i]
-            if !is_trivia(head(r)) && kind(r) != K"TOMBSTONE"
-                return _peek_behind_fields(stream.ranges, i)
-            end
-        end
+function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
+    if token_is_last(stream, pos) && !isempty(stream.tokens)
+        t = stream.tokens[pos.token_index]
+        return (kind=kind(t),
+                flags=flags(t),
+                orig_kind=t.orig_kind,
+                is_leaf=true)
     elseif !isempty(stream.ranges)
-        return _peek_behind_fields(stream.ranges, lastindex(stream.ranges))
+        r = stream.ranges[pos.range_index]
+        return (kind=kind(r),
+                flags=flags(r),
+                orig_kind=K"None",
+                is_leaf=false)
+    else
+        internal_error("Can't peek behind at start of stream")
     end
-    internal_error("Can't peek behind at start of stream")
 end
 
-function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
-    return _peek_behind_fields(stream.ranges, pos.output_index)
+function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
+    pos = position(stream)
+    if !skip_trivia || !token_is_last(stream, pos)
+        return peek_behind(stream, pos)
+    else
+        token_index = lastindex(stream.tokens)
+        range_index = lastindex(stream.ranges)
+        last_token_in_nonterminal = isempty(stream.ranges) ? 0 :
+                                    stream.ranges[range_index].last_token
+        while token_index > last_token_in_nonterminal
+            t = stream.tokens[token_index]
+            if !is_trivia(t) && kind(t) != K"TOMBSTONE"
+                break
+            end
+            token_index -= 1
+        end
+        if token_index > 0
+            return peek_behind(stream, ParseStreamPosition(token_index, range_index))
+        else
+            internal_error("Can't peek behind at start of stream")
+        end
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -466,16 +536,14 @@ function _bump_until_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None
         if k == K"EndMarker"
             break
         end
+        f = flags | remove_flags((@__MODULE__).flags(tok), PRECEDING_WHITESPACE_FLAG)
         is_trivia = k ∈ (K"Whitespace", K"Comment", K"NewlineWs")
-        f = is_trivia ? TRIVIA_FLAG : flags
-        is_dotted(tok) && (f |= DOTOP_FLAG)
+        is_trivia && (f |= TRIVIA_FLAG)
         outk = (is_trivia || remap_kind == K"None") ? k : remap_kind
-        range = TaggedRange(SyntaxHead(outk, f), k, first_byte(tok),
-                            last_byte(tok), lastindex(stream.ranges)+1)
-        push!(stream.ranges, range)
+        h = SyntaxHead(outk, f)
+        push!(stream.tokens, SyntaxToken(h, kind(tok), first_byte(tok)))
     end
     stream.lookahead_index = n + 1
-    stream.next_byte = last_byte(last(stream.ranges)) + 1
     # Defuse the time bomb
     stream.peek_count = 0
 end
@@ -520,7 +588,13 @@ example, `2x` means `2*x` via the juxtoposition rules.
 """
 function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
                         error=nothing)
-    emit(stream, position(stream), kind, flags, error=error)
+    b = _next_byte(stream)
+    h = SyntaxHead(kind, flags)
+    push!(stream.tokens, SyntaxToken(h, b))
+    if !isnothing(error)
+        _emit_diagnostic(stream, b, b-1, error=error)
+    end
+    stream.peek_count = 0
     return position(stream)
 end
 
@@ -533,13 +607,9 @@ whitespace if necessary with bump_trivia.
 """
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
     i = stream.lookahead_index
-    span = TaggedRange(SyntaxHead(kind, flags), K"None",
-                       first_byte(stream.lookahead[i]),
-                       last_byte(stream.lookahead[i-1+num_tokens]),
-                       lastindex(stream.ranges) + 1)
+    h = SyntaxHead(kind, flags)
+    push!(stream.tokens, SyntaxToken(h, stream.lookahead[i].first_byte))
     stream.lookahead_index += num_tokens
-    push!(stream.ranges, span)
-    stream.next_byte = last_byte(last(stream.ranges)) + 1
     stream.peek_count = 0
     return position(stream)
 end
@@ -565,19 +635,21 @@ simpler one which only splits preceding dots?
 function bump_split(stream::ParseStream, split_spec...)
     tok = stream.lookahead[stream.lookahead_index]
     stream.lookahead_index += 1
-    fbyte = first_byte(tok)
+    fbyte = tok.first_byte
     for (i, (nbyte, k, f)) in enumerate(split_spec)
-        lbyte = (i == length(split_spec)) ? last_byte(tok) : fbyte + nbyte - 1
-        push!(stream.ranges, TaggedRange(SyntaxHead(k, f), kind(tok),
-                                         fbyte, lbyte,
-                                         lastindex(stream.ranges) + 1))
+        h = SyntaxHead(k, f)
+        push!(stream.tokens, SyntaxToken(h, kind(tok), fbyte))
         fbyte += nbyte
     end
-    stream.next_byte = last_byte(last(stream.ranges)) + 1
     stream.peek_count = 0
     # Returning position(stream) like the other bump* methods would be
     # ambiguous here; return nothing instead.
     nothing
+end
+
+function _reset_node_head(x, k, f)
+    h = SyntaxHead(isnothing(k) ? kind(x)  : k,
+                   isnothing(f) ? flags(x) : f)
 end
 
 """
@@ -590,12 +662,15 @@ in those cases.
 """
 function reset_node!(stream::ParseStream, pos::ParseStreamPosition;
                      kind=nothing, flags=nothing)
-    range = stream.ranges[pos.output_index]
-    k = isnothing(kind)  ? (@__MODULE__).kind(range)  : kind
-    f = isnothing(flags) ? (@__MODULE__).flags(range) : flags
-    stream.ranges[pos.output_index] =
-        TaggedRange(SyntaxHead(k, f), range.orig_kind,
-                    first_byte(range), last_byte(range), range.start_mark)
+    if token_is_last(stream, pos)
+        t = stream.tokens[pos.token_index]
+        stream.tokens[pos.token_index] = SyntaxToken(_reset_node_head(t, kind, flags),
+                                                     t.orig_kind, t.first_byte)
+    else
+        r = stream.ranges[pos.range_index]
+        stream.ranges[pos.range_index] = TaggedRange(_reset_node_head(r, kind, flags),
+                                                     r.first_token, r.last_token)
+    end
 end
 
 """
@@ -606,26 +681,22 @@ K"TOMBSTONE" and return `true`, otherwise return `false`.
 Hack alert! This is used only for managing the complicated rules related to
 dedenting triple quoted strings.
 """
-function steal_node_bytes!(stream::ParseStream, pos::ParseStreamPosition, numbytes)
-    i = pos.output_index
-    r1 = stream.ranges[i]
-    r2 = stream.ranges[i+1]
-    @assert span(r1) == 0
-    @assert numbytes <= span(r2)
-    fb2 = r2.first_byte + numbytes
-    rhs_empty = fb2 > last_byte(r2)
-    head2 = rhs_empty ? SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS) : r2.head
-    stream.ranges[i]   = TaggedRange(r1.head, r1.orig_kind,
-                                     r2.first_byte, fb2 - 1,
-                                     r1.start_mark)
-    stream.ranges[i+1] = TaggedRange(head2, r2.orig_kind,
-                                     fb2, r2.last_byte,
-                                     r2.start_mark)
-    return rhs_empty
+function steal_token_bytes!(stream::ParseStream, pos::ParseStreamPosition, numbytes)
+    # Token index to modify
+    i = pos.token_index + 1
+    t = stream.tokens[i]
+    # Compute new token
+    next_byte = token_first_byte(stream, i + 1)
+    first_byte = t.first_byte + numbytes
+    is_empty = first_byte >= next_byte
+    head2 = is_empty ? SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS) : t.head
+    stream.tokens[i] = SyntaxToken(head2, t.orig_kind, first_byte)
+
+    return is_empty
 end
 
 function Base.position(stream::ParseStream)
-    ParseStreamPosition(stream.next_byte, lastindex(stream.ranges))
+    ParseStreamPosition(lastindex(stream.tokens), lastindex(stream.ranges))
 end
 
 """
@@ -637,10 +708,14 @@ should be a previous return value of `position()`.
 """
 function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
               flags::RawFlags = EMPTY_FLAGS; error=nothing)
-    range = TaggedRange(SyntaxHead(kind, flags), K"None", mark.input_byte,
-                        stream.next_byte-1, mark.output_index+1)
+    first_token = mark.token_index + 1
+    range = TaggedRange(SyntaxHead(kind, flags), first_token, length(stream.tokens))
     if !isnothing(error)
-        _emit_diagnostic(stream, first_byte(range), last_byte(range), error=error)
+        # The first child must be a leaf, otherwise ranges would be improperly
+        # nested.
+        fbyte = token_first_byte(stream, first_token)
+        lbyte = _next_byte(stream) - 1
+        _emit_diagnostic(stream, fbyte, lbyte, error=error)
     end
     push!(stream.ranges, range)
     return position(stream)
@@ -657,7 +732,7 @@ Emit a diagnostic at the position of the next token
 If `whitespace` is true, the diagnostic is positioned on the whitespace before
 the next token. Otherwise it's positioned at the next token as returned by `peek()`.
 
-FIXME: Rename? This doesn't emit normal tokens into the output event list!
+TODO: Rename? This doesn't emit normal tokens into the output event list!
 """
 function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
     i = _lookahead_index(stream, 1, true)
@@ -668,16 +743,17 @@ function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
         # whitespace.
         begin_tok_i = stream.lookahead_index
         end_tok_i = is_whitespace(stream.lookahead[i]) ?
-                    i : max(stream.lookahead_index, i-1)
+                    i : max(stream.lookahead_index, i - 1)
     end
     fbyte = first_byte(stream.lookahead[begin_tok_i])
-    lbyte = last_byte(stream.lookahead[end_tok_i])
+    lbyte = first_byte(stream.lookahead[end_tok_i + 1]) - 1
     _emit_diagnostic(stream, fbyte, lbyte; kws...)
     return nothing
 end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition; kws...)
-    _emit_diagnostic(stream, mark.input_byte, stream.next_byte-1; kws...)
+    _emit_diagnostic(stream, token_first_byte(stream, mark.token_index),
+                     _next_byte(stream) - 1; kws...)
 end
 
 function emit_diagnostic(stream::ParseStream, r::NTuple{2,ParseStreamPosition}; kws...)
@@ -686,7 +762,9 @@ end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition,
                          end_mark::ParseStreamPosition; kws...)
-    _emit_diagnostic(stream, mark.input_byte, end_mark.input_byte-1; kws...)
+    fbyte = token_first_byte(stream, mark.token_index)
+    lbyte = token_first_byte(stream, end_mark.token_index) - 1
+    _emit_diagnostic(stream, fbyte, lbyte; kws...)
 end
 
 #-------------------------------------------------------------------------------
@@ -714,59 +792,63 @@ traverse the list of ranges backward rather than forward.)
 """
 function build_tree(::Type{NodeType}, stream::ParseStream;
                     wrap_toplevel_as_kind=nothing, kws...) where NodeType
-    stack = Vector{NamedTuple{(:range,:node),Tuple{TaggedRange,NodeType}}}()
-    for (span_index, range) in enumerate(stream.ranges)
-        if kind(range) == K"TOMBSTONE"
-            # Ignore invisible tokens which were created but never finalized.
-            # See bump_invisible()
-            continue
-        end
+    stack = Vector{NamedTuple{(:first_token,:node),Tuple{Int,NodeType}}}()
 
-        if isempty(stack) || range.start_mark > stack[end].range.start_mark
-            # A leaf node (span covering a single token):
-            # [a][b][stack[end]]
-            #                   [range]
-            node = NodeType(head(range), span(range))
-            push!(stack, (range=range, node=node))
-            continue
+    tokens = stream.tokens
+    ranges = stream.ranges
+    i = firstindex(tokens)
+    j = firstindex(ranges)
+    while true
+        last_token = j <= lastindex(ranges) ?
+                     ranges[j].last_token : lastindex(tokens)
+        # Process tokens to nodes for all tokens used by the next internal node
+        while i <= last_token
+            t = tokens[i]
+            if kind(t) == K"TOMBSTONE"
+                i += 1
+                continue # Ignore removed tokens
+            end
+            next_byte = token_first_byte(stream, i + 1)
+            node = NodeType(head(t), next_byte - t.first_byte)
+            push!(stack, (first_token=i, node=node))
+            i += 1
         end
-        # An interior node, span covering multiple tokens:
-        #
-        # [a][b][stack[end]]
-        #    [        range]
-        #
-        # We use start_mark rather than first_byte to determine node overlap.
-        # This solve the following ambiguity between invisible nodes 1 and 2:
-        #
-        # [a][b]|[...]
-        #       |--- invisible node 1
-        #       `--- invisible node 2
-        #
-        # Does node 2 contain node 1? Using start_mark, we can distinguish the
-        # cases:
-        #
-        # [a][b][2][1]  [a][b][2]...
-        #                     [   1]
-        j = length(stack)
-        while j > 1 && range.start_mark < stack[j].range.start_mark
-            j -= 1
+        if j > lastindex(ranges)
+            break
         end
-        children = [stack[k].node for k = j:length(stack)]
-        resize!(stack, j-1)
-        node = NodeType(head(range), span(range), children)
-        push!(stack, (range=range, node=node))
+        # Process internal nodes which end at the current position
+        while j <= lastindex(ranges)
+            r = ranges[j]
+            if r.last_token != last_token
+                break
+            end
+            if kind(r) == K"TOMBSTONE"
+                j += 1
+                continue
+            end
+            # Collect children from the stack for this internal node
+            k = length(stack) + 1
+            while k > 1 && r.first_token <= stack[k-1].first_token
+                k -= 1
+            end
+            children = (stack[n].node for n = k:length(stack))
+            node = NodeType(head(r), children)
+            resize!(stack, k-1)
+            push!(stack, (first_token=r.first_token, node=node))
+            j += 1
+        end
     end
-    # show(stdout, MIME"text/plain"(), stack[1].node)
     if length(stack) == 1
         return only(stack).node
     elseif !isnothing(wrap_toplevel_as_kind)
         # Mostly for debugging
-        children = [x.node for x in stack]
-        return NodeType(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS), children...)
+        children = (x.node for x in stack)
+        return NodeType(SyntaxHead(wrap_toplevel_as_kind, EMPTY_FLAGS), children)
     else
         error("Found multiple nodes at top level")
     end
 end
+
 
 """
     sourcetext(stream::ParseStream; steal_textbuf=true)
@@ -799,6 +881,9 @@ Return the `Vector{UInt8}` text buffer being parsed by this `ParseStream`.
 """
 textbuf(stream) = stream.textbuf
 
-first_byte(stream::ParseStream) = first_byte(first(stream.ranges))
-last_byte(stream::ParseStream) = last_byte(last(stream.ranges))
+function first_byte(stream::ParseStream)
+    isempty(stream.tokens) ? _next_byte(stream) : first_byte(first(stream.tokens))
+end
+
+last_byte(stream::ParseStream) = _next_byte(stream)-1
 any_error(stream::ParseStream) = any_error(stream.diagnostics)

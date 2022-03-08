@@ -15,7 +15,7 @@
             stream = ParseStream(pointer(code), 3)
             parse(stream, rule=:statement)
             @test JuliaSyntax.build_tree(Expr, stream) == :(x+y)
-            @test stream.next_byte == 4
+            @test JuliaSyntax.last_byte(stream) == 3
         end
 
         # SubString
