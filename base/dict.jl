@@ -77,7 +77,7 @@ Dict{String, Int64} with 2 entries:
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
     # Swiss table: empty => 0x80, removed => 0xff, full => 0b0[7 highest hash bits]
-    slots::Vector{UInt8} 
+    slots::Vector{UInt8}
     pairs::Vector{Pair{K,V}} # stored pairs (key::K => value::V)
     ndel::Int
     count::Int
@@ -169,7 +169,7 @@ empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 shorthash(hsh::UInt32) = (hsh >> UInt(25))%UInt8
 shorthash(hsh::UInt64) = (hsh >> UInt(57))%UInt8
 
-function hashindex(key, sz) 
+function hashindex(key, sz)
     hsh = hash(key)::UInt
     idx = (((hsh % Int) & (sz-1)) + 1)::Int
     return idx, shorthash(hsh)
