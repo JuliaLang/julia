@@ -72,6 +72,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     any_const_result = false
     const_results = Union{InferenceResult,Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
+    if matches.overlayed
+        # currently we don't have a good way to execute the overlayed method definition,
+        # so we should give up pure/concrete eval when any of the matched methods is overlayed
+        f = nothing
+    end
 
     val = pure_eval_call(interp, f, applicable, arginfo, sv)
     val !== nothing && return CallMeta(val, MethodResultPure(info)) # TODO: add some sort of edge(s)
@@ -102,7 +107,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
-                const_call_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
+                const_call_result = abstract_call_method_with_const_args(interp, result,
+                    f, this_arginfo, match, sv)
                 effects = result.edge_effects
                 const_result = nothing
                 if const_call_result !== nothing
@@ -144,7 +150,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
             this_arginfo = ArgInfo(fargs, this_argtypes)
-            const_call_result = abstract_call_method_with_const_args(interp, result, f, this_arginfo, match, sv)
+            const_call_result = abstract_call_method_with_const_args(interp, result,
+                f, this_arginfo, match, sv)
             effects = result.edge_effects
             const_result = nothing
             if const_call_result !== nothing
@@ -228,6 +235,7 @@ struct MethodMatches
     valid_worlds::WorldRange
     mt::Core.MethodTable
     fullmatch::Bool
+    overlayed::Bool
 end
 any_ambig(info::MethodMatchInfo) = info.results.ambig
 any_ambig(m::MethodMatches) = any_ambig(m.info)
@@ -239,6 +247,7 @@ struct UnionSplitMethodMatches
     valid_worlds::WorldRange
     mts::Vector{Core.MethodTable}
     fullmatches::Vector{Bool}
+    overlayed::Bool
 end
 any_ambig(m::UnionSplitMethodMatches) = _any(any_ambig, m.info.matches)
 
@@ -253,16 +262,19 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         valid_worlds = WorldRange()
         mts = Core.MethodTable[]
         fullmatches = Bool[]
+        overlayed = false
         for i in 1:length(split_argtypes)
             arg_n = split_argtypes[i]::Vector{Any}
             sig_n = argtypes_to_type(arg_n)
             mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
             mt = mt::Core.MethodTable
-            matches = findall(sig_n, method_table; limit = max_methods)
-            if matches === missing
+            result = findall(sig_n, method_table; limit = max_methods)
+            if result === missing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
+            matches, overlayedᵢ = result
+            overlayed |= overlayedᵢ
             push!(infos, MethodMatchInfo(matches))
             for m in matches
                 push!(applicable, m)
@@ -288,25 +300,28 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
                                        UnionSplitInfo(infos),
                                        valid_worlds,
                                        mts,
-                                       fullmatches)
+                                       fullmatches,
+                                       overlayed)
     else
         mt = ccall(:jl_method_table_for, Any, (Any,), atype)
         if mt === nothing
             return FailedMethodMatch("Could not identify method table for call")
         end
         mt = mt::Core.MethodTable
-        matches = findall(atype, method_table; limit = max_methods)
-        if matches === missing
+        result = findall(atype, method_table; limit = max_methods)
+        if result === missing
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
         end
+        matches, overlayed = result
         fullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
         return MethodMatches(matches.matches,
                              MethodMatchInfo(matches),
                              matches.valid_worlds,
                              mt,
-                             fullmatch)
+                             fullmatch,
+                             overlayed)
     end
 end
 
@@ -645,8 +660,7 @@ end
 
 function pure_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo, sv::InferenceState)
-    return !isoverlayed(method_table(interp)) &&
-           f !== nothing &&
+    return f !== nothing &&
            length(applicable) == 1 &&
            is_method_pure(applicable[1]::MethodMatch) &&
            is_all_const_arg(arginfo)
@@ -682,8 +696,7 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
-    return !isoverlayed(method_table(interp)) &&
-           f !== nothing &&
+    return f !== nothing &&
            result.edge !== nothing &&
            is_total_or_error(result.edge_effects) &&
            is_all_const_arg(arginfo)
@@ -1482,7 +1495,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds = findsup(types, method_table(interp))
+    match, valid_worlds, overlayed = findsup(types, method_table(interp))
     match === nothing && return CallMeta(Any, false)
     update_valid_age!(sv, valid_worlds)
     method = match.method
@@ -1500,7 +1513,8 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     #     t, a = ti.parameters[i], argtypes′[i]
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
-    const_call_result = abstract_call_method_with_const_args(interp, result, singleton_type(ft′), arginfo, match, sv)
+    const_call_result = abstract_call_method_with_const_args(interp, result,
+        overlayed ? nothing : singleton_type(ft′), arginfo, match, sv)
     const_result = nothing
     if const_call_result !== nothing
         if const_call_result.rt ⊑ rt
@@ -1648,8 +1662,8 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
     const_result = nothing
     if !result.edgecycle
-        const_call_result = abstract_call_method_with_const_args(interp, result, nothing,
-            arginfo, match, sv)
+        const_call_result = abstract_call_method_with_const_args(interp, result,
+            nothing, arginfo, match, sv)
         if const_call_result !== nothing
             if const_call_result.rt ⊑ rt
                 (; rt, const_result) = const_call_result

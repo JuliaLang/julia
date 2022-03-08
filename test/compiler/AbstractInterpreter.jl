@@ -63,3 +63,20 @@ overlay_match(::Any) = nothing
 @test Base.return_types((Any,), MTOverlayInterp()) do x
     overlay_match(x)
 end == Any[Union{Nothing,Missing}]
+
+# partial pure/concrete evaluation
+@test Base.return_types((), MTOverlayInterp()) do
+    isbitstype(Int) ? nothing : missing
+end == Any[Nothing]
+Base.@assume_effects :terminates_globally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+@test Base.return_types((), MTOverlayInterp()) do
+    issue41694(3) == 6 ? nothing : missing
+end == Any[Nothing]
