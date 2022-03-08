@@ -9,6 +9,19 @@ of functions).
 This type is designed to be cheap to construct at runtime, trying to offload
 as much work as possible to either the macro or later printing operations.
 
+# Examples
+
+```jldoctest
+julia> n = 5; str = LazyString("n is ", n)
+"n is 5"
+
+julia> str2 = lazy"n is $n"
+"n is 5"
+
+julia> typeof(str2)
+LazyString
+```
+
 !!! compat "Julia 1.8"
     `LazyString` requires Julia 1.8 or later.
 """
