@@ -1010,8 +1010,8 @@ end
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
-    xyhi = logxhi*y
-    xylo = muladd(logxlo, y, fma(logxhi, y, -xyhi))
+    xyhi, xylo = two_mul(logxhi,y)
+    xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
