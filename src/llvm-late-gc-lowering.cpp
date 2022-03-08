@@ -1878,29 +1878,27 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
      * perform this iteration.
      */
     ReversePostOrderTraversal<Function *> RPOT(S.F);
+    BitVector NewLive;
     while (!Converged) {
         bool AnyChanged = false;
         for (BasicBlock *BB : RPOT) {
             // This could all be done more efficiently, by only updating what
             // changed - Let's get it working first though.
             BBState &BBS = S.BBStates[BB];
-            BitVector NewLiveOut = BBS.PhiOuts;
+            NewLive = BBS.PhiOuts;
             for (BasicBlock *Succ : successors(BB)) {
-                NewLiveOut |= S.BBStates[Succ].LiveIn;
+                NewLive |= S.BBStates[Succ].LiveIn;
             }
-            if (NewLiveOut != BBS.LiveOut) {
+            if (NewLive != BBS.LiveOut) {
                 AnyChanged = true;
-                BBS.LiveOut = NewLiveOut;
+		BBS.LiveOut = NewLive;
                 MaybeResize(BBS, BBS.LiveOut.size() - 1);
             }
-            BitVector NewLiveIn = BBS.LiveOut;
-            BitVector FlippedDefs = BBS.Defs;
-            FlippedDefs.flip();
-            NewLiveIn &= FlippedDefs;
-            NewLiveIn |= BBS.UpExposedUses;
-            if (NewLiveIn != BBS.LiveIn) {
+            NewLive.reset(BBS.Defs);
+            NewLive |= BBS.UpExposedUses;
+            if (NewLive != BBS.LiveIn) {
                 AnyChanged = true;
-                BBS.LiveIn = NewLiveIn;
+		std::swap(BBS.LiveIn, NewLive);
             }
         }
         Converged = !AnyChanged;
