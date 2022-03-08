@@ -998,6 +998,8 @@ end
 @constprop :aggressive function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
     return pow_body(x, y)
@@ -1016,6 +1018,8 @@ end
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps(T)) && return x^(typemax(Int64)-1)
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     return pow_body(x, y)
 end
