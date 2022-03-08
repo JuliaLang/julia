@@ -1618,6 +1618,11 @@ end
         @test x == [0.0, 0.2, 0.4, 0.6, 0.8]
     end
 
+    let x = @inferred range(0.0, step=2, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [0.0, 2.0, 4.0, 6.0, 8.0]
+    end
+
     let x = @inferred range(stop=1, step=0.2, length=5)
         @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
         @test x == [0.2, 0.4, 0.6, 0.8, 1.0]
