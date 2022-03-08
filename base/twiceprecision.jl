@@ -477,7 +477,13 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     steprangelen_hp(T, a, st, 0, len, 1)
 end
 
-function range_step_stop_length(step::IEEEFloat, stop, len::Integer)
+range_step_stop_length(step, stop::IEEEFloat, len::Integer) =
+    range_step_stop_length(oftype(stop, step), stop, len)
+
+range_step_stop_length(step::IEEEFloat, stop, len::Integer) =
+    range_step_stop_length(step, oftype(step, stop), len)
+
+function range_step_stop_length(step::T, stop::T, len::Integer) where {T<:IEEEFloat}
     r = range_start_step_length(stop, negate(step), len)
     reverse(r)
 end

@@ -1624,8 +1624,14 @@ end
     end
 
     let x = @inferred range(stop=1, step=0.2, length=5)
+        @test x === @inferred range(stop=1.0, step=0.2, length=5)
         @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
         @test x == [0.2, 0.4, 0.6, 0.8, 1.0]
+    end
+
+    let x = @inferred range(stop=10.0, step=2, length=4)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [4.0, 6.0, 8.0, 10.0]
     end
 end
 
