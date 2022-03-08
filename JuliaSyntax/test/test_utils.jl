@@ -59,7 +59,7 @@ function parsers_agree_on_file(filename)
             JuliaSyntax.remove_linenums!(ex) ==
             JuliaSyntax.remove_linenums!(fl_ex)
     catch exc
-        @error "Parsing failed" path exception=current_exceptions()
+        @error "Parsing failed" filename exception=current_exceptions()
         return false
     end
 end

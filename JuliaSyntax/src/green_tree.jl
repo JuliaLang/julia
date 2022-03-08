@@ -43,17 +43,22 @@ struct GreenNode{Head}
     args::Union{Tuple{},Vector{GreenNode{Head}}}
 end
 
+function GreenNode{Head}(head::Head, span::Integer) where {Head}
+    GreenNode{Head}(head, span, ())
+end
+
 function GreenNode(head::Head, span::Integer) where {Head}
     GreenNode{Head}(head, span, ())
 end
 
-function GreenNode(head::Head, span::Integer, args::Vector{GreenNode{Head}}) where {Head}
-    GreenNode{Head}(head, span, args)
+function GreenNode(head::Head, args) where {Head}
+    children = collect(GreenNode{Head}, args)
+    span = isempty(children) ? 0 : sum(x.span for x in children)
+    GreenNode{Head}(head, span, children)
 end
 
 function GreenNode(head::Head, args::GreenNode{Head}...) where {Head}
-    span = sum(x.span for x in args)
-    GreenNode{Head}(head, span, GreenNode{Head}[args...])
+    GreenNode{Head}(head, GreenNode{Head}[args...])
 end
 
 

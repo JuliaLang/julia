@@ -111,7 +111,7 @@ function parse(::Type{T}, io::IO;
     stream = ParseStream(io; version=version)
     parse(stream; rule=rule)
     tree = build_tree(T, stream; kws...)
-    seek(io, stream.next_byte-1)
+    seek(io, last_byte(stream))
     tree, stream.diagnostics
 end
 
@@ -122,7 +122,7 @@ function parse(::Type{T}, input...;
     stream = ParseStream(input...; version=version)
     parse(stream; rule=rule)
     tree = build_tree(T, stream; kws...)
-    tree, stream.diagnostics, stream.next_byte
+    tree, stream.diagnostics, last_byte(stream) + 1
 end
 
 
@@ -148,6 +148,7 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
     stream = ParseStream(input...; version=version)
     if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
+        empty!(stream.tokens)
         empty!(stream.ranges)
     end
     parse(stream; rule=rule)
