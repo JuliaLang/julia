@@ -1441,6 +1441,12 @@ let
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
+
 # issue #2365
 mutable struct B2365{T}
      v::Union{T, Nothing}
