@@ -122,8 +122,9 @@ end
 @test round(UInt8, 123) == 123
 @test mod(123, UInt8) === 0x7b
 
-primitive type MyBitsType <: Integer 8 end
+primitive type MyBitsType <: Signed 8 end
 @test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
+@test signed(MyBitsType) === MyBitsType
 
 UItypes = Base.BitUnsigned_types
 SItypes = Base.BitSigned_types
@@ -428,4 +429,11 @@ end
     @test typemax(UInt64) === UInt64(0xffffffffffffffff)
     @test typemax(Int128) === Int128(170141183460469231731687303715884105727)
     @test typemax(UInt128) === UInt128(0xffffffffffffffffffffffffffffffff)
+end
+
+@testset "BitIntegerType" begin
+    @test Int isa Base.BitIntegerType
+    @test Base.BitIntegerType === Union{
+        Type{ Int8}, Type{ Int16}, Type{ Int32}, Type{ Int64}, Type{ Int128},
+        Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt128}}
 end
