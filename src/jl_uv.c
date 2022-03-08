@@ -282,7 +282,7 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
     handle->data = NULL;
 }
 
-#define UV_CLOSED 0x02 // UV_HANDLE_CLOSED on Windows (same value)
+#define UV_HANDLE_CLOSED 0x02
 
 JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
@@ -308,7 +308,7 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
         if (!(flags == UV_INHERIT_FD || flags == UV_INHERIT_STREAM || flags == UV_IGNORE)) {
             proc->type = UV_PROCESS;
             proc->loop = loop;
-            proc->flags = UV_CLOSED;
+            proc->flags = UV_HANDLE_CLOSED;
             return UV_EINVAL;
         }
     }
