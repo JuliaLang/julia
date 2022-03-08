@@ -1011,7 +1011,7 @@ end
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
     xyhi = logxhi*y
-    xylo = logxlo*y
+    xylo = muladd(logxlo, y, fma(logxhi, y, -xyhi))
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
