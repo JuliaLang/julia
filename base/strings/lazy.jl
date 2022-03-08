@@ -15,7 +15,7 @@ as much work as possible to either the macro or later printing operations.
 julia> n = 5; str = LazyString("n is ", n)
 "n is 5"
 
-julia> str2 = lazy"n is $n"
+julia> str2 = lazy"n is \$n"
 "n is 5"
 
 julia> typeof(str2)
