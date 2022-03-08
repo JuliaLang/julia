@@ -195,7 +195,7 @@ function early_finalize!(ir::IRCode, estate::EscapeState, domtree::DomTree)
             defs = find_def_for_use(ir, domtree, allblocks, fdu, use)
             EARLY_FINALIZE_VERBOSE[] && ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int, Int, Bool),
                                               "early_finalize!: For alloc at %d, return at %d: Defs(%d)\n",
-                                              alloc_idx, idx, defs !== nothing ? defs[1]: -1)
+                                              alloc_idx, idx, defs !== nothing ? defs[1] : -1)
             if defs !== nothing && defs[1] == alloc_idx
                 push!(non_escaping, alloc_idx=>alloc_info)
             end
