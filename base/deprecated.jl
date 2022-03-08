@@ -284,8 +284,8 @@ end
 
 # BEGIN 1.8 deprecations
 
-@deprecate var"@_inline_meta"   var"@inline"   false
-@deprecate var"@_noinline_meta" var"@noinline" false
+const var"@_inline_meta" = var"@inline"
+const var"@_noinline_meta" = var"@noinline"
 @deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations
