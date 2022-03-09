@@ -557,6 +557,9 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
 void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int64_t live_bytes, int64_t estimate_freed,
                          int sweep_full);
+void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
+                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t pause);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
@@ -582,6 +585,8 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
 #define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
+#define  gc_time_summary(sweep_full, start, end, freed, live,           \
+                            interval, pause)
 #endif
 
 #ifdef MEMFENCE
