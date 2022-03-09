@@ -117,9 +117,13 @@ EARLY_FINALIZE_VERBOSE = RefValue{Bool}(false)
 
 Analyzes `ir` for heap allocations which escape only via `FinalizerEscape`
 (thus having a `finalizer` call associated), and inserts a call to
-`finalize(obj)` just before any return where the allocation doesn't escape.
+`finalize(obj)` just before any effective return (including throws) where the
+allocation doesn't escape.
+
+Preconditions:
+- `ir` must be compacted with respect to `estate` and `domtree`
 """
-function early_finalize!(ir::IRCode, estate::EscapeState, domtree::DomTree)
+function early_finalize!(ir::IRCode, estate::EscapeState, domtree::DomTree, interp::AbstractInterpreter)
     EARLY_FINALIZE_VERBOSE[] && ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int), "early_finalize!: Analyzing with nargs %d\n", estate.nargs)
     # Find all allocations that escape only through a finalizer
     isalloc(ir::IRCode, pc::Int) = isexpr(ir.stmts[pc][:inst], :new)
@@ -137,6 +141,35 @@ function early_finalize!(ir::IRCode, estate::EscapeState, domtree::DomTree)
         if has_finalizer_escape(info) && isalloc(ir, pc)
             EARLY_FINALIZE_VERBOSE[] && ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int), "early_finalize!: Found finalizing alloc at %d\n", pc)
             push!(to_finalize, pc => info)
+        end
+    end
+
+    for (alloc_idx, alloc_info) in to_finalize
+        for pc in 1:length(ir.stmts)
+            inst = ir.stmts[pc][:inst]
+            if isexpr(inst, :invoke)
+                mi = inst.args[1]::MethodInstance
+                for argidx in 2:length(inst.args)
+                    arg = inst.args[argidx]
+                    if arg isa SSAValue && arg.id == alloc_idx
+                        println("Possible ArgEscape:")
+                        println(inst)
+                        cc = code_cache(interp)
+                        if haskey(cc, mi)
+                            ae = code_cache(interp)[mi].argescapes
+                            if ae !== nothing
+                                ae::ArgEscapeCache
+                                println("FOUND ESCAPE")
+                                println(length(ae.argescapes))
+                                for ae_info in ae.argescapes
+                                #ae_info = ae.argescapes[argidx] # Skip func arg
+                                    println(ae_info)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 
@@ -174,6 +207,7 @@ function early_finalize!(ir::IRCode, estate::EscapeState, domtree::DomTree)
                has_thrown_escape(alloc_info, idx)
                 continue
             end
+            # TODO: Check if the argescape is truly escaping
             # Construct all blocks for which the allocation is live
             allblocks = Int[]
             fdu = FieldDefUse()
@@ -635,12 +669,12 @@ end
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState,
                   params::OptimizationParams, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
+    @timeit "optimizer" ir = run_passes(interp, opt.src, opt, caller)
     return finish(interp, opt, params, ir, caller)
 end
 const IR_SAVE = [false]
 const IR_CACHE = Any[]
-function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
+function run_passes(interp::AbstractInterpreter, ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
@@ -658,12 +692,14 @@ function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult
     @timeit "compact 2" ir = compact!(ir)
     @timeit "SROA" ir, memory_opt = linear_pass!(ir)
     @timeit "pre-EA compact" ir = compact!(ir)
-    @timeit "Local EA" estate = analyze_escapes(ir, nargs, #=call_resolved=#true, null_escape_cache)
+    #@timeit "Local EA" estate = analyze_escapes(ir, nargs, #=call_resolved=#true, null_escape_cache)
+    @timeit "IPO EA" estate = analyze_escapes(ir, nargs, #=call_resolved=#false, ipo_escape_cache(sv.inlining.mi_cache))
+    cache_escapes!(caller, estate)
     if false #memory_opt
         @timeit "memory_opt_pass!" ir = memory_opt_pass!(ir, estate)
     end
     @timeit "EA domtree" domtree = construct_domtree(ir.cfg.blocks)
-    @timeit "early_finalize_pass!" ir = early_finalize!(ir, estate, domtree)
+    @timeit "early_finalize_pass!" ir = early_finalize!(ir, estate, domtree, interp)
     push!(IR_CACHE, ir)
     @timeit "ADCE"      ir = adce_pass!(ir)
     @timeit "type lift" ir = type_lift_pass!(ir)
