@@ -7,13 +7,23 @@ const _str_to_kind = let Ts = TzTokens
 Dict([
 "None"           =>  Ts.NONE
 "EndMarker"      =>  Ts.ENDMARKER
-"error"          =>  Ts.ERROR
 "Comment"        =>  Ts.COMMENT
 "Whitespace"     =>  Ts.WHITESPACE
 "Identifier"     =>  Ts.IDENTIFIER
 "@"              =>  Ts.AT_SIGN
 ","              =>  Ts.COMMA
 ";"              =>  Ts.SEMICOLON
+
+"BEGIN_ERRORS"   =>  Ts.begin_errors
+# Tokenization errors
+"ErrorEofMultiComment"        => Ts.EOF_MULTICOMMENT
+"ErrorEofChar"                => Ts.EOF_CHAR
+"ErrorInvalidNumericConstant" => Ts.INVALID_NUMERIC_CONSTANT
+"ErrorInvalidOperator"        => Ts.INVALID_OPERATOR
+"ErrorInvalidInterpolationTerminator" => Ts.INVALID_INTERPOLATION_TERMINATOR
+# Generic error
+"error"          =>  Ts.ERROR
+"END_ERRORS"     =>  Ts.end_errors
 
 "BEGIN_KEYWORDS" => Ts.begin_keywords
 "baremodule"  =>  Ts.BAREMODULE
