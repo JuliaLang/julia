@@ -42,30 +42,30 @@ import Base.Experimental: @MethodTable, @overlay
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
 
 @overlay OverlayedMT sin(x::Float64) = 1
-@test Base.return_types((Int,), MTOverlayInterp()) do x
+@test Base.return_types((Int,); interp=MTOverlayInterp()) do x
     sin(x)
 end == Any[Int]
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     Base.@invoke sin(x::Float64)
 end == Any[Int]
 
 # fallback to the internal method table
-@test Base.return_types((Int,), MTOverlayInterp()) do x
+@test Base.return_types((Int,); interp=MTOverlayInterp()) do x
     cos(x)
 end == Any[Float64]
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     Base.@invoke cos(x::Float64)
 end == Any[Float64]
 
 # not fully covered overlay method match
 overlay_match(::Any) = nothing
 @overlay OverlayedMT overlay_match(::Int) = missing
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     overlay_match(x)
 end == Any[Union{Nothing,Missing}]
 
 # partial pure/concrete evaluation
-@test Base.return_types((), MTOverlayInterp()) do
+@test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end == Any[Nothing]
 Base.@assume_effects :terminates_globally function issue41694(x)
@@ -77,6 +77,6 @@ Base.@assume_effects :terminates_globally function issue41694(x)
     end
     return res
 end
-@test Base.return_types((), MTOverlayInterp()) do
+@test Base.return_types(; interp=MTOverlayInterp()) do
     issue41694(3) == 6 ? nothing : missing
 end == Any[Nothing]
