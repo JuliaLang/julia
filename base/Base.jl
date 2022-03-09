@@ -117,7 +117,6 @@ include("error.jl")
 include("bool.jl")
 include("number.jl")
 include("int.jl")
-include("staticint.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
@@ -369,6 +368,8 @@ include("combinatorics.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
+
+include("staticint.jl")
 
 # metaprogramming
 include("meta.jl")
