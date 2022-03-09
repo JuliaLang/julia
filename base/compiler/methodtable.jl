@@ -47,29 +47,28 @@ given signature `sig`. If no applicable methods are found, an empty result is
 returned. If the number of applicable methods exceeded the specified limit,
 `missing` is returned.
 """
-function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=Int(typemax(Int32)))
     return _findall(sig, nothing, table.world, limit)
 end
 
-function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=Int(typemax(Int32)))
     result = _findall(sig, table.mt, table.world, limit)
     result === missing && return missing
-    if !isempty(result)
-        if all(match->match.fully_covers, result)
-            # no need to fall back to the internal method table
-            return result
-        else
-            # merge the match results with the internal method table
-            fallback_result = _findall(sig, nothing, table.world, limit)
-            return MethodLookupResult(
-                vcat(result.matches, fallback_result.matches),
-                WorldRange(min(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
-                           max(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),
-                result.ambig | fallback_result.ambig)
-        end
+    nr = length(result)
+    if nr ≥ 1 && result[nr].fully_covers
+        # no need to fall back to the internal method table
+        return result
     end
     # fall back to the internal method table
-    return _findall(sig, nothing, table.world, limit)
+    fallback_result = _findall(sig, nothing, table.world, limit)
+    fallback_result === missing && return missing
+    # merge the fallback match results with the internal method table
+    return MethodLookupResult(
+        vcat(result.matches, fallback_result.matches),
+        WorldRange(
+            max(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
+            min(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),
+        result.ambig | fallback_result.ambig)
 end
 
 function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt, limit::Int)
@@ -102,17 +101,22 @@ function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
 end
 
 function findsup(@nospecialize(sig::Type), table::OverlayMethodTable)
-    result = _findsup(sig, table.mt, table.world)
-    result === nothing || return result
-    return _findsup(sig, nothing, table.world) # fall back to the internal method table
+    match, valid_worlds = _findsup(sig, table.mt, table.world)
+    match !== nothing && return match, valid_worlds
+    # fall back to the internal method table
+    fallback_match, fallback_valid_worlds = _findsup(sig, nothing, table.world)
+    return fallback_match, WorldRange(
+        max(valid_worlds.min_world, fallback_valid_worlds.min_world),
+        min(valid_worlds.max_world, fallback_valid_worlds.max_world))
 end
 
 function _findsup(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt)
     min_valid = RefValue{UInt}(typemin(UInt))
     max_valid = RefValue{UInt}(typemax(UInt))
-    result = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
+    match = ccall(:jl_gf_invoke_lookup_worlds, Any, (Any, Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
                    sig, mt, world, min_valid, max_valid)::Union{MethodMatch, Nothing}
-    return result === nothing ? result : (result, WorldRange(min_valid[], max_valid[]))
+    valid_worlds = WorldRange(min_valid[], max_valid[])
+    return match, valid_worlds
 end
 
 isoverlayed(::MethodTableView)     = error("unsatisfied MethodTableView interface")
