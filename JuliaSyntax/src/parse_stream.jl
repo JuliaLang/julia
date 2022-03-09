@@ -92,7 +92,7 @@ kind(x)  = kind(head(x))
 flags(x) = flags(head(x))
 
 # Predicates based on kind() / flags()
-is_error(x)  = kind(x) == K"error"
+is_error(x)  = is_error(kind(x))
 has_flags(x, test_flags) = has_flags(flags(x), test_flags)
 is_trivia(x) = has_flags(x, TRIVIA_FLAG)
 is_infix(x)  = has_flags(x, INFIX_FLAG)
