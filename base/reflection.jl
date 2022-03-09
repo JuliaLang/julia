@@ -1347,11 +1347,11 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type), world=get_world_counter())
-    result = Core.Compiler._findsup(tt, nothing, world)
-    if result === nothing
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
+    if match === nothing
         error("no unique matching method found for the specified argument types")
     end
-    return first(result)::Core.MethodMatch
+    return match
 end
 
 """
