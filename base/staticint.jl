@@ -60,17 +60,11 @@ Base.one(@nospecialize(x::Type{<:StaticInt})) = One()
 
 for T in [:Real, :Rational, :Integer]
     @eval begin
-        @inline Base.:(+)(x::$T, y::Zero) = x
         @inline Base.:(+)(x::$T, @nospecialize(y::StaticInt)) = x + Int(y)
-        @inline Base.:(+)(x::Zero, y::$T) = x
         @inline Base.:(+)(@nospecialize(x::StaticInt), y::$T) = Int(x) + y
-        @inline Base.:(-)(x::$T, y::Zero) = x
         @inline Base.:(-)(x::$T, @nospecialize(y::StaticInt)) = x - Int(y)
-        @inline Base.:(*)(x::$T, y::Zero) = Zero()
-        @inline Base.:(*)(x::$T, y::One) = x
+        @inline Base.:(-)(@nospecialize(x::StaticInt), - y::$T) = Int(x) - y
         @inline Base.:(*)(x::$T, @nospecialize(y::StaticInt)) = x * Int(y)
-        @inline Base.:(*)(x::Zero, y::$T) = Zero()
-        @inline Base.:(*)(x::One, y::$T) = y
         @inline Base.:(*)(@nospecialize(x::StaticInt), y::$T) = Int(x) * y
     end
 end
