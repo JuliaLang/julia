@@ -36,7 +36,7 @@ dmg/Applications:
 dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p dmg
 	osacompile -o $@ startup.applescript
-	rm $@/Contents/Resources/applet.icns
+	rm -f $@/Contents/Resources/applet.icns
 	cp julia.icns $@/Contents/Resources/
 	plutil -replace CFBundleDevelopmentRegion  -string "en" $@/Contents/Info.plist
 	plutil -insert  CFBundleDisplayName        -string "Julia" $@/Contents/Info.plist

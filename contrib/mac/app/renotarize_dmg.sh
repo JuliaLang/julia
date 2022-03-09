@@ -34,6 +34,9 @@ for j in /Volumes/Julia-*; do hdiutil detach "${j}"; done
 hdiutil mount "${DMG_NAME}"
 cp -Ra /Volumes/Julia-* dmg
 
+# Make sure `renotarize_dmg.sh` doesn't try to replace files
+find dmg | xargs touch
+
 # Autodetect APP_NAME and VOL_NAME
 APP_NAME=$(basename dmg/*.app)
 VOL_NAME=$(basename /Volumes/Julia-*)
