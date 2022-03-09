@@ -1041,6 +1041,7 @@ end
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
+    n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
         n==-2 && return rx*rx #keep compatability with literal_pow
@@ -1048,7 +1049,6 @@ end
         x = rx
         n = -n
     end
-    n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
             err = muladd(y, xnlo, x*ynlo)
