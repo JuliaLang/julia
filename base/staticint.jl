@@ -74,24 +74,11 @@ for T in [:Real, :Rational, :Integer]
         @inline Base.:(*)(@nospecialize(x::StaticInt), y::$T) = Int(x) * y
     end
 end
-@inline Base.:(+)(::Zero, ::Zero) = Zero()
-@inline Base.:(+)(::Zero, ::StaticInt{M}) where {M} = StaticInt{M}()
-@inline Base.:(+)(::StaticInt{M}, ::Zero) where {M} = StaticInt{M}()
-
 @inline Base.:(-)(::StaticInt{M}) where {M} = StaticInt{-M}()
-@inline Base.:(-)(::StaticInt{M}, ::Zero) where {M} = StaticInt{M}()
 
-@inline Base.:(*)(::Zero, ::Zero) = Zero()
-@inline Base.:(*)(::One, ::Zero) = Zero()
-@inline Base.:(*)(::Zero, ::One) = Zero()
-@inline Base.:(*)(::One, ::One) = One()
-@inline Base.:(*)(::StaticInt{M}, ::Zero) where {M} = Zero()
-@inline Base.:(*)(::Zero, ::StaticInt{M}) where {M} = Zero()
-@inline Base.:(*)(::StaticInt{M}, ::One) where {M} = StaticInt{M}()
-@inline Base.:(*)(::One, ::StaticInt{M}) where {M} = StaticInt{M}()
-for f in [:(+), :(-), :(*), :(/), :(÷), :(%), :(<<), :(>>), :(>>>), :(&), :(|), :(⊻)]
-    @eval @generated function Base.$f(::StaticInt{M}, ::StaticInt{N}) where {M,N}
-        return Expr(:call, Expr(:curly, :StaticInt, $f(M, N)))
+for f in [:(+), :(-), :(*), :(÷), :(%), :(<<), :(>>), :(>>>), :(&), :(|), :(⊻)]
+    @eval begin
+        @inline Base.$f(::StaticInt{M}, ::StaticInt{N}) where {M,N} = StaticInt{$f(M,N)}()
     end
 end
 for f in [:(<<), :(>>), :(>>>)]
@@ -108,16 +95,7 @@ for f in [:(==), :(!=), :(<), :(≤), :(>), :(≥)]
     end
 end
 
-@inline function maybe_static(f::F, g::G, x) where {F,G}
-    L = f(x)
-    if L === nothing
-        return g(x)
-    else
-        return static(L)
-    end
-end
-
-@inline Base.widen(::StaticInt{N}) where {N} = widen(N)
+@inline Base.widen(@nospecialize(x::StaticInt)) = Int(x)
 
 Base.UnitRange{T}(@nospecialize(start::StaticInt), stop) where {T<:Real} = UnitRange{T}(T(start), T(stop))
 Base.UnitRange{T}(start, @nospecialize(stop::StaticInt)) where {T<:Real} = UnitRange{T}(T(start), T(stop))
@@ -127,7 +105,7 @@ end
 
 Base.UnitRange(@nospecialize(start::StaticInt), stop) = UnitRange(Int(start), stop)
 Base.UnitRange(start, @nospecialize(stop::StaticInt)) = UnitRange(start, Int(stop))
-function Base.UnitRange(@nospecialize(start::StaticInt), @nospecialize(stop::StaticInt))
+Base.UnitRange(@nospecialize(start::StaticInt), @nospecialize(stop::StaticInt))
     UnitRange(Int(start), Int(stop))
 end
 
