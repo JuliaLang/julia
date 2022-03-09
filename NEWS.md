@@ -33,10 +33,10 @@ New library functions
 Library changes
 ---------------
 
-* A known concurrency issue of `iterate` method on `Dict` and other derived objects such
-  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  It can now be called on a
-  dictionary or set shared by arbitrary tasks provided that there are no tasks mutating the
-  dictionary or set ([#44534]).
+* A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
+  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
+  now be called on a dictionary or set shared by arbitrary tasks provided that there are no
+  tasks mutating the dictionary or set ([#44534]).
 
 
 Standard library changes
