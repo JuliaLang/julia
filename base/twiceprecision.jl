@@ -459,6 +459,9 @@ range_start_step_length(a, st::IEEEFloat, len::Integer) =
 range_start_step_length(a::IEEEFloat, st::Real, len::Integer) =
     range_start_step_length(promote(a, st)..., len)
 
+range_start_step_length(a::IEEEFloat, st::IEEEFloat, len::Integer) =
+    range_start_step_length(promote(a, st)..., len)
+
 function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     len = len + 0 # promote with Int
     start_n, start_d = rat(a)
@@ -483,7 +486,7 @@ range_step_stop_length(step, stop::IEEEFloat, len::Integer) =
 range_step_stop_length(step::IEEEFloat, stop, len::Integer) =
     range_step_stop_length(step, oftype(step, stop), len)
 
-function range_step_stop_length(step::T, stop::T, len::Integer) where {T<:IEEEFloat}
+function range_step_stop_length(step::IEEEFloat, stop::IEEEFloat, len::Integer)
     r = range_start_step_length(stop, negate(step), len)
     reverse(r)
 end
