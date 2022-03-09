@@ -69,7 +69,7 @@ function _uv_hook_close(proc::Process)
     nothing
 end
 
-const SpawnIO  = Union{IO, RawFD}
+const SpawnIO  = Union{IO, RawFD, OS_HANDLE}
 const SpawnIOs = Vector{SpawnIO} # convenience name for readability
 
 function as_cpumask(cpus::Vector{UInt16})
