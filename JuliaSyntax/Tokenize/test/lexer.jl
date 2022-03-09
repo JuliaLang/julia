@@ -183,7 +183,7 @@ end
     test_roundtrip("1234.0 .+1",   Tokens.FLOAT,   "1234.0")
     test_roundtrip("1234.f(a)",    Tokens.FLOAT,   "1234.")
     test_roundtrip("1234 .f(a)",   Tokens.INTEGER, "1234")
-    test_roundtrip("1234.0.f(a)",  Tokens.ERROR,   "1234.0.")
+    test_roundtrip("1234.0.f(a)",  Tokens.INVALID_NUMERIC_CONSTANT,   "1234.0.")
     test_roundtrip("1234.0 .f(a)", Tokens.FLOAT,   "1234.0")
 end
 
@@ -280,9 +280,9 @@ end
 end
 
 @testset "errors" begin
-    @test tok("#=   #=   =#",           1).kind == T.ERROR
-    @test tok("'dsadsa",                1).kind == T.ERROR
-    @test tok("aa **",                  3).kind == T.ERROR
+    @test tok("#=   #=   =#",           1).kind == T.EOF_MULTICOMMENT
+    @test tok("'dsadsa",                1).kind == T.EOF_CHAR
+    @test tok("aa **",                  3).kind == T.INVALID_OPERATOR
 end
 
 @testset "xor_eq" begin
@@ -501,9 +501,10 @@ end
         str = """ "\$x෴" """
     ts = collect(tokenize(str))
         @test ts[4] ~ (T.IDENTIFIER , "x" , str)
-        @test ts[5] ~ (T.ERROR      , ""  , str)
+        @test ts[5] ~ (T.INVALID_INTERPOLATION_TERMINATOR      , ""  , str)
         @test ts[6] ~ (T.STRING     , "෴" , str)
-        @test ts[5].token_error == Tokens.INVALID_INTERPOLATION_TERMINATOR
+        @test Tokens.iserror(ts[5].kind)
+        @test ts[5].kind == Tokens.INVALID_INTERPOLATION_TERMINATOR
     end
 end
 
@@ -650,10 +651,10 @@ end
 end
 
 @testset "hex/bin/octal errors" begin
-    @test tok("0x").kind == T.ERROR
-    @test tok("0b").kind == T.ERROR
-    @test tok("0o").kind == T.ERROR
-    @test tok("0x 2", 1).kind == T.ERROR
+    @test tok("0x").kind == T.INVALID_NUMERIC_CONSTANT
+    @test tok("0b").kind == T.INVALID_NUMERIC_CONSTANT
+    @test tok("0o").kind == T.INVALID_NUMERIC_CONSTANT
+    @test tok("0x 2", 1).kind == T.INVALID_NUMERIC_CONSTANT
     @test tok("0x.1p1").kind == T.FLOAT
 end
 
@@ -716,15 +717,20 @@ end
     @test tok("outer", 1).kind==T.OUTER
 end
 
+function test_error(tok, kind)
+    @test Tokens.iserror(tok.kind)
+    @test tok.kind == kind
+end
+
 @testset "token errors" begin
-    @test tok("1.2e2.3",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
-    @test tok("1.2.",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
-    @test tok("1.2.f",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
-    @test tok("0xv",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
-    @test tok("0b3",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
-    @test tok("0op",1).token_error === Tokens.INVALID_NUMERIC_CONSTANT
-    @test tok("--",1).token_error === Tokens.INVALID_OPERATOR
-    @test tok("1**2",2).token_error === Tokens.INVALID_OPERATOR
+    test_error(tok("1.2e2.3",1), Tokens.INVALID_NUMERIC_CONSTANT)
+    test_error(tok("1.2.",1),    Tokens.INVALID_NUMERIC_CONSTANT)
+    test_error(tok("1.2.f",1),   Tokens.INVALID_NUMERIC_CONSTANT)
+    test_error(tok("0xv",1),     Tokens.INVALID_NUMERIC_CONSTANT)
+    test_error(tok("0b3",1),     Tokens.INVALID_NUMERIC_CONSTANT)
+    test_error(tok("0op",1),     Tokens.INVALID_NUMERIC_CONSTANT)
+    test_error(tok("--",1),      Tokens.INVALID_OPERATOR)
+    test_error(tok("1**2",2),    Tokens.INVALID_OPERATOR)
 end
 
 @testset "hat suffix" begin
@@ -765,7 +771,7 @@ end
 
 @testset "invalid float" begin
     s = ".0."
-    @test collect(tokenize(s))[1].kind == Tokens.ERROR
+    @test collect(tokenize(s))[1].kind == Tokens.INVALID_NUMERIC_CONSTANT
 end
 
 @testset "allow prime after end" begin

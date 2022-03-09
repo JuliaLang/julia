@@ -10,7 +10,7 @@ include("token_kinds.jl")
 iskeyword(k::Kind) = begin_keywords < k < end_keywords
 isliteral(k::Kind) = begin_literal < k < end_literal
 isoperator(k::Kind) = begin_ops < k < end_ops
-
+iserror(k::Kind) = begin_errors < k < end_errors
 iscontextualkeyword(k::Kind) = begin_contextual_keywords < k < end_contextual_keywords
 
 function iswordoperator(k::Kind)
@@ -32,25 +32,14 @@ function _add_kws()
 end
 _add_kws()
 
-# TODO: more
-@enum(TokenError,
-    NO_ERR,
-    EOF_MULTICOMMENT,
-    EOF_CHAR,
-    INVALID_NUMERIC_CONSTANT,
-    INVALID_OPERATOR,
-    INVALID_INTERPOLATION_TERMINATOR,
-    UNKNOWN,
-)
-
 # Error kind => description
-TOKEN_ERROR_DESCRIPTION = Dict{TokenError, String}(
+TOKEN_ERROR_DESCRIPTION = Dict{Kind, String}(
     EOF_MULTICOMMENT => "unterminated multi-line comment #= ... =#",
     EOF_CHAR => "unterminated character literal",
     INVALID_NUMERIC_CONSTANT => "invalid numeric constant",
     INVALID_OPERATOR => "invalid operator",
     INVALID_INTERPOLATION_TERMINATOR => "interpolated variable ends with invalid character; use `\$(...)` instead",
-    UNKNOWN => "unknown",
+    ERROR => "unknown error",
 )
 
 struct Token
@@ -58,20 +47,20 @@ struct Token
     # Offsets into a string or buffer
     startbyte::Int # The byte where the token start in the buffer
     endbyte::Int # The byte where the token ended in the buffer
-    token_error::TokenError
     dotop::Bool
     suffix::Bool
 end
 function Token(kind::Kind, startbyte::Int, endbyte::Int)
-    Token(kind, startbyte, endbyte, NO_ERR, false, false)
+    Token(kind, startbyte, endbyte, false, false)
 end
-Token() = Token(ERROR, 0, 0, UNKNOWN, false, false)
+Token() = Token(ERROR, 0, 0, false, false)
 
 const EMPTY_TOKEN = Token()
 
 function kind(t::Token)
     isoperator(t.kind) && return OP
     iskeyword(t.kind) && return KEYWORD
+    iserror(t.kind) && return ERROR
     return t.kind
 end
 exactkind(t::Token) = t.kind

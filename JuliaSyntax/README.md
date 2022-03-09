@@ -405,7 +405,7 @@ name of compatibility, perhaps with a warning.)
   broken-looking AST like `(macrocall (. A (quote (. B @x))))`.  It should
   probably be rejected.
 * Operator prefix call syntax doesn't work in the cases like `+(a;b,c)` where
-  keyword parameters are separated by commas. A tuple is produced instead. 
+  keyword parameters are separated by commas. A tuple is produced instead.
 * `const` and `global` allow chained assignment, but the right hand side is not
   constant. `a` const here but not `b`.
   ```
@@ -698,7 +698,7 @@ interface. Could we have `Expr2` wrap `SyntaxNode`?
   tree library (rowan) for representing of a non-rust toy language is here
   https://dev.to/cad97/lossless-syntax-trees-280c
 
-Not all the design decisions in `rust-analyzer` are finalized but the 
+Not all the design decisions in `rust-analyzer` are finalized but the
 [architecture document](https://github.com/rust-analyzer/rust-analyzer/blob/master/docs/dev/architecture.md)
 is a fantastic source of design inspiration.
 
@@ -772,7 +772,7 @@ The tree datastructure design here is tricky:
     parentheses in `2*(x + y)` and the explicit vs implicit multiplication
     symbol in `2*x` vs `2x`.
 
-2. There's various type of *analyses* 
+2. There's various type of *analyses*
 - There's many useful ways to augment a syntax tree depending on use case.
 - Analysis algorithms should be able to act on any tree type, ignoring
   but carrying augmentations which they don't know about.
@@ -983,4 +983,3 @@ indentation from the syntax tree?  Source formatting involves a big pile of
 heuristics to get something which "looks nice"... and ML systems have become
 very good at heuristics. Also, we've got huge piles of training data — just
 choose some high quality, tastefully hand-formatted libraries.
-

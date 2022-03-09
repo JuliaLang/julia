@@ -61,7 +61,7 @@ function Base.summary(head::SyntaxHead)
 end
 
 function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
-    str = untokenize(kind(head); unique=unique)
+    str = is_error(kind(head)) ? "error" : untokenize(kind(head); unique=unique)
     if is_dotted(head)
         str = "."*str
     end

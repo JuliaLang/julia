@@ -3,7 +3,7 @@ module Lexers
 include("utilities.jl")
 
 import ..Tokens
-import ..Tokens: Token, Kind, TokenError, UNICODE_OPS, EMPTY_TOKEN, isliteral
+import ..Tokens: Token, Kind, UNICODE_OPS, EMPTY_TOKEN, isliteral
 
 import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BREAK, CATCH, CONST, CONTINUE,
                  DO, ELSE, ELSEIF, END, EXPORT, FALSE, FINALLY, FOR, FUNCTION, GLOBAL, LET, LOCAL, IF,
@@ -52,6 +52,7 @@ mutable struct Lexer{IO_t <: IO}
     charspos::Tuple{Int,Int,Int,Int}
     doread::Bool
     dotop::Bool
+    errored::Bool
 end
 
 function Lexer(io::IO)
@@ -80,7 +81,7 @@ function Lexer(io::IO)
     end
     Lexer(io, position(io), 1, 1, position(io), 1, 1, position(io),
                   Tokens.ERROR, Vector{StringState}(), IOBuffer(),
-                  (c1,c2,c3,c4), (p1,p2,p3,p4), false, false)
+                  (c1,c2,c3,c4), (p1,p2,p3,p4), false, false, false)
 end
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
@@ -243,11 +244,11 @@ Consumes all following characters until `accept(l, f)` is `false`.
 end
 
 """
-    emit(l::Lexer, kind::Kind, err::TokenError=Tokens.NO_ERR)
+    emit(l::Lexer, kind::Kind)
 
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
-function emit(l::Lexer, kind::Kind, err::TokenError = Tokens.NO_ERR)
+function emit(l::Lexer, kind::Kind)
     suffix = false
     if optakessuffix(kind)
         while isopsuffix(peekchar(l))
@@ -256,7 +257,7 @@ function emit(l::Lexer, kind::Kind, err::TokenError = Tokens.NO_ERR)
         end
     end
 
-    tok = Token(kind, startpos(l), position(l) - 1, err, l.dotop, suffix)
+    tok = Token(kind, startpos(l), position(l) - 1, l.dotop, suffix)
 
     l.dotop = false
     l.last_token = kind
@@ -264,12 +265,14 @@ function emit(l::Lexer, kind::Kind, err::TokenError = Tokens.NO_ERR)
 end
 
 """
-    emit_error(l::Lexer, err::TokenError=Tokens.UNKNOWN)
+    emit_error(l::Lexer, err::Kind=Tokens.ERROR)
 
 Returns an `ERROR` token with error `err` and starts a new `Token`.
 """
-function emit_error(l::Lexer, err::TokenError = Tokens.UNKNOWN)
-    return emit(l, Tokens.ERROR, err)
+function emit_error(l::Lexer, err::Kind = Tokens.ERROR)
+    l.errored = true
+    @assert Tokens.iserror(err)
+    return emit(l, err)
 end
 
 

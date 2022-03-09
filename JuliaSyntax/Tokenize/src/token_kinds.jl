@@ -1,13 +1,21 @@
 @enum(Kind::UInt16,
     NONE,      # Placeholder; never emitted by lexer
     ENDMARKER, # EOF
-    ERROR,
     COMMENT, # aadsdsa, #= fdsf #=
     WHITESPACE, # '\n   \t'
     IDENTIFIER, # foo, Σxx
     AT_SIGN, # @
     COMMA, #,
     SEMICOLON, # ;
+
+    begin_errors,
+        EOF_MULTICOMMENT,
+        EOF_CHAR,
+        INVALID_NUMERIC_CONSTANT,
+        INVALID_OPERATOR,
+        INVALID_INTERPOLATION_TERMINATOR,
+        ERROR,
+    end_errors,
 
     begin_keywords,
         KEYWORD, # general

@@ -18,7 +18,7 @@ function speed_test()
                     while !Tokenize.Lexers.eof(l)
                         t = Tokenize.Lexers.next_token(l)
                         tot_tokens += 1
-                        if t.kind == Tokens.ERROR
+                        if Tokens.iserror(t.kind)
                             tot_errors += 1
                         end
                     end
