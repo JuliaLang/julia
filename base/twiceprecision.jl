@@ -457,7 +457,7 @@ range_start_step_length(a, st::IEEEFloat, len::Integer) =
     range_start_step_length(oftype(st, a), st, len)
 
 range_start_step_length(a::IEEEFloat, st::Real, len::Integer) =
-    range_start_step_length(a, oftype(a, st), len)
+    range_start_step_length(promote(a, st)..., len)
 
 function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     len = len + 0 # promote with Int
