@@ -453,7 +453,7 @@ end
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
 
-range_start_step_length(a, st::IEEEFloat, len::Integer) =
+range_start_step_length(a::Real, st::IEEEFloat, len::Integer) =
     range_start_step_length(oftype(st, a), st, len)
 
 range_start_step_length(a::IEEEFloat, st::Real, len::Integer) =
@@ -480,10 +480,10 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     steprangelen_hp(T, a, st, 0, len, 1)
 end
 
-range_step_stop_length(step, stop::IEEEFloat, len::Integer) =
+range_step_stop_length(step::Real, stop::IEEEFloat, len::Integer) =
     range_step_stop_length(oftype(stop, step), stop, len)
 
-range_step_stop_length(step::IEEEFloat, stop, len::Integer) =
+range_step_stop_length(step::IEEEFloat, stop::Real, len::Integer) =
     range_step_stop_length(step, oftype(step, stop), len)
 
 function range_step_stop_length(step::IEEEFloat, stop::IEEEFloat, len::Integer)
