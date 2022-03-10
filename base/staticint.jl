@@ -60,12 +60,12 @@ Base.one(@nospecialize(x::Type{<:StaticInt})) = One()
 
 for T in [:Real, :Rational, :Integer]
     @eval begin
-        @inline Base.:(+)(x::$T, @nospecialize(y::StaticInt)) = x + Int(y)
-        @inline Base.:(+)(@nospecialize(x::StaticInt), y::$T) = Int(x) + y
-        @inline Base.:(-)(x::$T, @nospecialize(y::StaticInt)) = x - Int(y)
-        @inline Base.:(-)(@nospecialize(x::StaticInt), - y::$T) = Int(x) - y
-        @inline Base.:(*)(x::$T, @nospecialize(y::StaticInt)) = x * Int(y)
-        @inline Base.:(*)(@nospecialize(x::StaticInt), y::$T) = Int(x) * y
+        Base.:(+)(x::$T, @nospecialize(y::StaticInt)) = x + Int(y)
+        Base.:(+)(@nospecialize(x::StaticInt), y::$T) = Int(x) + y
+        Base.:(-)(x::$T, @nospecialize(y::StaticInt)) = x - Int(y)
+        Base.:(-)(@nospecialize(x::StaticInt), - y::$T) = Int(x) - y
+        Base.:(*)(x::$T, @nospecialize(y::StaticInt)) = x * Int(y)
+        Base.:(*)(@nospecialize(x::StaticInt), y::$T) = Int(x) * y
     end
 end
 @inline Base.:(-)(::StaticInt{M}) where {M} = StaticInt{-M}()
@@ -77,19 +77,19 @@ for f in [:(+), :(-), :(*), :(÷), :(%), :(<<), :(>>), :(>>>), :(&), :(|), :(⊻
 end
 for f in [:(<<), :(>>), :(>>>)]
     @eval begin
-        @inline Base.$f(@nospecialize(x::StaticInt), y::UInt) where {M} = $f(Int(x), y)
-        @inline Base.$f(x::Integer, @nospecialize(y::StaticInt)) = $f(x, Int(y))
+        Base.$f(@nospecialize(x::StaticInt), y::UInt) where {M} = $f(Int(x), y)
+        Base.$f(x::Integer, @nospecialize(y::StaticInt)) = $f(x, Int(y))
     end
 end
 for f in [:(==), :(!=), :(<), :(≤), :(>), :(≥)]
     @eval begin
-        @inline Base.$f(::StaticInt{M}, ::StaticInt{N}) where {M,N} = $f(M, N)
-        @inline Base.$f(@nospecialize(x::StaticInt), y::Int) where {M} = $f(Int(x), y)
-        @inline Base.$f(x::Int, @nospecialize(y::StaticInt)) = $f(x, Int(y))
+        Base.$f(::StaticInt{M}, ::StaticInt{N}) where {M,N} = $f(M, N)
+        Base.$f(@nospecialize(x::StaticInt), y::Int) where {M} = $f(Int(x), y)
+        Base.$f(x::Int, @nospecialize(y::StaticInt)) = $f(x, Int(y))
     end
 end
 
-@inline Base.widen(@nospecialize(x::StaticInt)) = Int(x)
+Base.widen(@nospecialize(x::StaticInt)) = Int(x)
 
 Base.UnitRange{T}(@nospecialize(start::StaticInt), stop) where {T<:Real} = UnitRange{T}(T(start), T(stop))
 Base.UnitRange{T}(start, @nospecialize(stop::StaticInt)) where {T<:Real} = UnitRange{T}(T(start), T(stop))
