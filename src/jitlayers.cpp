@@ -125,12 +125,12 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
         if (std::get<0>(result)) {
             emitted[codeinst] = std::move(result);
-            assert(verify_module_contexts(std::get<0>(emitted[codeinst]), params.tsctx));
+            // assert(verify_module_contexts(std::get<0>(emitted[codeinst]), params.tsctx));
         }
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
         if (params._shared_module) {
-            assert(verify_module_contexts(params._shared_module, params.tsctx));
+            // assert(verify_module_contexts(params._shared_module, params.tsctx));
             jl_add_to_ee(std::move(params._shared_module));
         }
         StringMap<orc::ThreadSafeModule*> NewExports;
@@ -226,7 +226,8 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
     orc::ThreadSafeModule backing;
     if (into == NULL) {
-        backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext());
+        // backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext());
+        backing = jl_create_llvm_module("cextern", orc::ThreadSafeContext(std::make_unique<LLVMContext>()));
         into = &backing;
     }
     jl_codegen_params_t params(into->getContext());
@@ -304,6 +305,8 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    // auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
+    // auto context = jl_ExecutionEngine->getContext();
     auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
@@ -361,7 +364,8 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
+    // auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
+    auto context = jl_ExecutionEngine->getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -415,7 +419,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            auto &context = jl_ExecutionEngine->getContext();
+            // auto &context = jl_ExecutionEngine->getContext();
+            auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -453,7 +458,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
 
     // whatever, that didn't work - use the assembler output instead
     // just make a new context for this one operation
-    void *F = jl_get_llvmf_defn(mi, reinterpret_cast<LLVMOrcThreadSafeContextRef>(&jl_ExecutionEngine->getContext()), world, getwrapper, true, jl_default_cgparams);
+    auto context = orc::ThreadSafeContext(std::make_unique<LLVMContext>());
+    void *F = jl_get_llvmf_defn(mi, reinterpret_cast<LLVMOrcThreadSafeContextRef>(&context), world, getwrapper, true, jl_default_cgparams);
     if (!F)
         return jl_an_empty_string;
     return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
@@ -1029,6 +1035,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     JL_TIMING(LLVM_MODULE_FINISH);
     std::vector<std::string> NewExports;
     TSM.withModuleDo([&](Module &M) {
+        shareStringData(M);
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
                 NewExports.push_back(getMangledName(F.getName()));
@@ -1221,6 +1228,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
         srcTSM.withModuleDo([&](Module &src) {
     //TODO fix indentation after review
     assert(&dest != &src);
+    assert(&dest.getContext() == &src.getContext());
     for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
         GlobalVariable *sG = &*I;
         GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(sG->getName()));
@@ -1325,7 +1333,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 
 // optimize memory by turning long strings into memoized copies, instead of
 // making a copy per object file of output.
-void jl_jit_share_data(Module &M)
+void JuliaOJIT::shareStringData(Module &M)
 {
     std::vector<GlobalVariable*> erase;
     for (auto &GV : M.globals()) {
@@ -1338,7 +1346,7 @@ void jl_jit_share_data(Module &M)
         if (data.size() > 16) { // only for long strings: keep short ones as values
             Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
             Constant *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                ConstantInt::get(T_size, (uintptr_t)(*ES.intern(data)).data()),
                 GV.getType());
             GV.replaceAllUsesWith(v);
             erase.push_back(&GV);
@@ -1366,7 +1374,6 @@ static void jl_add_to_ee(orc::ThreadSafeModule TSM)
     gvs[1]->setSection(".text");
     appendToCompilerUsed(m, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
-    jl_jit_share_data(m);
     });
     assert(jl_ExecutionEngine);
     jl_ExecutionEngine->addModule(std::move(TSM));

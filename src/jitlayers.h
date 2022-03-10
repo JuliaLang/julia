@@ -245,6 +245,7 @@ public:
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
+    void shareStringData(Module &M);
 
     std::unique_ptr<TargetMachine> TM;
     DataLayout DL;

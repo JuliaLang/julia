@@ -7803,7 +7803,7 @@ static jl_compile_result_t
     }
 
     JL_GC_POP();
-    assert(verify_module_contexts(TSM, params.tsctx));
+    // assert(verify_module_contexts(TSM, params.tsctx));
     return std::make_tuple(std::move(TSM), declarations);
 }
 
