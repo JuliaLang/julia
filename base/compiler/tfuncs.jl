@@ -1735,7 +1735,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
             return true
         end
         return false
-    elseif f === Core.getglobal
+    elseif f === getglobal
         return getglobal_nothrow(argtypes)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return false
@@ -1754,7 +1754,7 @@ const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, Core.getglobal,
+    typeassert, throw, arraysize, getglobal,
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -1812,7 +1812,7 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
                 builtin_nothrow(f, argtypes[2:end], rt)
         end
         effect_free = f === isdefined
-    elseif f === Core.getglobal && length(argtypes) >= 3
+    elseif f === getglobal && length(argtypes) >= 3
         nothrow = effect_free = getglobal_nothrow(argtypes[2:end])
         ipo_consistent = nothrow && isconst((argtypes[2]::Const).val, (argtypes[3]::Const).val)
         #effect_free = nothrow && isbindingresolved((argtypes[2]::Const).val, (argtypes[3]::Const).val)
@@ -2109,8 +2109,8 @@ function setglobal!_tfunc(@nospecialize(M), @nospecialize(s), @nospecialize(v),
     end
     return v
 end
-add_tfunc(Core.getglobal, 2, 3, getglobal_tfunc, 1)
-add_tfunc(Core.setglobal!, 3, 4, setglobal!_tfunc, 3)
+add_tfunc(getglobal, 2, 3, getglobal_tfunc, 1)
+add_tfunc(setglobal!, 3, 4, setglobal!_tfunc, 3)
 
 function get_binding_type_effect_free(@nospecialize(M), @nospecialize(s))
     if M isa Const && s isa Const

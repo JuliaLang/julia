@@ -7703,12 +7703,12 @@ end
     m = Module()
     @eval m global x::Int
 
-    Core.setglobal!(m, :x, 1)
+    setglobal!(m, :x, 1)
     @test m.x === 1
-    Core.setglobal!(m, :x, 2, :release)
+    setglobal!(m, :x, 2, :release)
     @test m.x === 2
-    @test_throws ConcurrencyViolationError Core.setglobal!(m, :x, 3, :not_atomic)
-    @test_throws ErrorException Core.setglobal!(m, :x, 4., :release)
+    @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setglobal!(m, :x, 4., :release)
 
     m.x = 1
     @test m.x === 1
