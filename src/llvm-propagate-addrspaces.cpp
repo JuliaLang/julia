@@ -56,9 +56,11 @@ public:
     void visitAtomicRMWInst(AtomicRMWInst &SI);
     void visitMemSetInst(MemSetInst &MI);
     void visitMemTransferInst(MemTransferInst &MTI);
+    void visitBranchInst(BranchInst &BI);
 
 private:
     void PoisonValues(std::vector<Value *> &Worklist);
+    Value *replaceICmpInst(ICmpInst *ICI);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -282,6 +284,66 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
     MTI.setCalledFunction(TheFn);
     MTI.setArgOperand(0, Dest);
     MTI.setArgOperand(1, Src);
+}
+
+Value *PropagateJuliaAddrspacesVisitor::replaceICmpInst(ICmpInst *ICI) {
+    auto *IT = dyn_cast<IntegerType>(CmpInst::makeCmpResultType(ICI->getType()));
+    if (!IT || !ICI->isEquality())
+        return dyn_cast<Value>(ICI);
+    bool isEQ = CmpInst::isTrueWhenEqual(ICI->getPredicate());
+
+    Value *LHS = ICI->getOperand(0);
+    Value *RHS = ICI->getOperand(1);
+    if (!isa<PointerType>(LHS->getType()) || !isa<PointerType>(RHS->getType()))
+        return dyn_cast<Value>(ICI);
+    if (isSpecialAS(getValueAddrSpace(LHS))) {
+        Value *Replacement = LiftPointer(LHS, ICI);
+        if (Replacement)
+            LHS = Replacement;
+    }
+    if (isSpecialAS(getValueAddrSpace(RHS))) {
+        Value *Replacement = LiftPointer(RHS, ICI);
+        if (Replacement)
+            RHS = Replacement;
+    }
+
+    if (isa<ConstantPointerNull>(RHS)) {
+        auto tmp = LHS;
+        LHS = RHS;
+        RHS = tmp;
+
+    RHS->print(errs());
+    printf("\n\n");
+    }
+    else if (!isa<ConstantPointerNull>(LHS)) {
+        ICI->setOperand(0, LHS);
+        ICI->setOperand(1, RHS);
+
+        return dyn_cast<Value>(ICI);
+    }
+
+    if (isa<ConstantPointerNull>(RHS)) {
+        Constant* x = ConstantInt::getBool(IT, isEQ);
+        return dyn_cast<Value>(x);
+    }
+    else if (auto *ITPI = dyn_cast<IntToPtrInst>(RHS)) {
+        if (ITPI->getAddressSpace() != 10)
+            return dyn_cast<Value>(ICI);
+
+        if (auto *CI = dyn_cast<ConstantInt>(ITPI->getOperand(0))) {
+            Constant* x = ConstantInt::getBool(IT, isEQ == CI->isZero());
+            return dyn_cast<Value>(x);
+        }
+    }
+
+    return dyn_cast<Value>(ICI);
+}
+
+void PropagateJuliaAddrspacesVisitor::visitBranchInst(BranchInst &BI) {
+    if (!BI.isConditional())
+        return;
+    if (auto *ICI = dyn_cast<ICmpInst>(BI.getCondition()))
+        BI.setCondition(replaceICmpInst(ICI));
 }
 
 bool propagateJuliaAddrspaces(Function &F) {

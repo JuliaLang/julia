@@ -3934,8 +3934,8 @@ static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name,
     v->setOrdering(AtomicOrdering::Unordered);
     if (tbaa)
         tbaa_decorate(tbaa, v);
-    Value *null = Constant::getNullValue(PointerType::get(ctx.builder.getContext(), 0)); // ctx.builder.CreateIntToPtr(ConstantInt::get(getSizeTy(ctx.builder.getContext()), 0), PointerType::get(ctx.builder.getContext(), 0));
-    Value *isdef = ctx.builder.CreateICmpNE(v, ctx.builder.CreateAddrSpaceCast(null, ctx.types().T_prjlvalue));
+    Value *null = Constant::getNullValue(ctx.types().T_prjlvalue); //ctx.builder.CreateIntToPtr(ConstantInt::get(getSizeTy(ctx.builder.getContext()), 0), ctx.types().T_prjlvalue);
+    Value *isdef = ctx.builder.CreateICmpNE(v, null);
     undef_var_error_ifnot(ctx, isdef, name);
     return mark_julia_type(ctx, v, true, jl_any_type);
 }
