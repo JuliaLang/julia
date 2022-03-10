@@ -76,7 +76,7 @@ Dict{String, Int64} with 2 entries:
 ```
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
-    # Swiss table: empty => 0x80, removed => 0xff, full => 0b0[7 highest hash bits]
+    # Metadata: empty => 0x80, removed => 0xff, full => 0b0[7 most significant hash bits]
     slots::Vector{UInt8}
     pairs::Vector{Pair{K,V}} # stored pairs (key::K => value::V)
     ndel::Int
@@ -165,14 +165,17 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-# Get 7 highest hash bits
-shorthash(hsh::UInt32) = (hsh >> UInt(25))%UInt8
-shorthash(hsh::UInt64) = (hsh >> UInt(57))%UInt8
+# Gets 7 most significant bits from the hash (hsh)
+_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8
+_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8
 
+# hashindex (key, sz) - computes optimal position and shorthash7
+#     idx - optimal position in the hash table
+#     sh::UInt8 - short hash (7 highest hash bits)
 function hashindex(key, sz)
     hsh = hash(key)::UInt
     idx = (((hsh % Int) & (sz-1)) + 1)::Int
-    return idx, shorthash(hsh)
+    return idx, _shorthash7(hsh)
 end
 
 @propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x80
