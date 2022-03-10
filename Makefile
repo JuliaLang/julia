@@ -374,14 +374,22 @@ endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	# Codesign the libjulia we just modified
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+endif
 
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	# Codesign the libjulia we just modified
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+endif
 endif
 endif
 
-	# On FreeBSD, remove the build's libdir from each library's RPATH
 ifeq ($(OS),FreeBSD)
+	# On FreeBSD, remove the build's libdir from each library's RPATH
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(libdir) $(build_libdir)
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(private_libdir) $(build_libdir)
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(bindir) $(build_libdir)
@@ -428,7 +436,12 @@ endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 endif
+ifeq ($(OS),Darwin)
+	# If we're on macOS, and we have a codesigning identity, then codesign the binary-dist tarball!
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(BUILDROOT)/julia-$(JULIA_COMMIT)"
+endif
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
+
 
 exe:
 	# run Inno Setup to compile installer

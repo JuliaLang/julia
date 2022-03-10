@@ -125,6 +125,13 @@ To list all the instances of an enum use `instances`, e.g.
 julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
+
+It is possible to construct a symbol from an enum instance:
+
+```jldoctest fruitenum
+julia> Symbol(apple)
+:apple
+```
 """
 macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)

@@ -583,6 +583,8 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_options.machine_file = abspath(jl_options.machine_file, 0);
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
+    if (jl_options.tracked_path)
+        jl_options.tracked_path = absformat(jl_options.tracked_path);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {

@@ -4030,3 +4030,11 @@ end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
 
 @test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+
+# Test that max_methods works as expected
+@Base.Experimental.max_methods 1 function f_max_methods end
+f_max_methods(x::Int) = 1
+f_max_methods(x::Float64) = 2
+g_max_methods(x) = f_max_methods(x)
+@test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
+@test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any

@@ -1524,6 +1524,12 @@ let
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
+
 # issue #2365
 mutable struct B2365{T}
      v::Union{T, Nothing}
@@ -7323,6 +7329,12 @@ struct X41654 <: Ref{X41654}
 end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
+
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
 
 # Issue #34206/34207
 function mre34206(a, n)

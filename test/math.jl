@@ -155,6 +155,10 @@ end
             @test x^y === T(big(x)^big(y))
             @test x^1 === x
             @test x^yi === T(big(x)^yi)
+            # test (-x)^y for y larger than typemax(Int)
+            @test T(-1)^floatmax(T) === T(1)
+            @test prevfloat(T(-1))^floatmax(T) === T(Inf)
+            @test nextfloat(T(-1))^floatmax(T) === T(0.0)
             # test for large negative exponent where error compensation matters
             @test 0.9999999955206014^-1.0e8 == 1.565084574870928
             @test (-x)^yi == x^yi
@@ -1399,3 +1403,12 @@ end
 # the compiler ever gets good enough to figure
 # that out by itself, move this to inference).
 @test code_typed(x->Val{x^0.0}(), Tuple{Float64})[1][2] == Val{1.0}
+
+function f44336()
+    as = ntuple(_ -> rand(), Val(32))
+    @inline hypot(as...)
+end
+@testset "Issue #44336" begin
+    f44336()
+    @test (@allocated f44336()) == 0
+end

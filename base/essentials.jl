@@ -766,12 +766,19 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
 end
 
 # TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
 
 """
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
+
+!!! warning
+
+    `isempty(itr)` may consume the next element of a stateful iterator `itr`
+    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
+    Use of `isempty` should therefore be avoided when writing generic
+    code which should support any iterator type.
 
 # Examples
 ```jldoctest

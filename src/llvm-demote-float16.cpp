@@ -19,6 +19,7 @@
 #include "support/dtypes.h"
 #include "passes.h"
 
+#include <llvm/Pass.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
@@ -130,7 +131,9 @@ static bool demoteFloat16(Function &F)
 
 PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
 {
-    demoteFloat16(F);
+    if (demoteFloat16(F)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

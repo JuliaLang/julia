@@ -17,9 +17,10 @@
 """
     @deprecate old new [export_old=true]
 
-Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
-exporting `old` by setting `export_old` to `false`. `@deprecate` defines a new method with the same
-signature as `old`.
+Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
+with the specified signature in the process.
+
+To prevent `old` from being exported, set `export_old` to `false`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -34,6 +35,23 @@ old (generic function with 1 method)
 julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
+
+Calls to `@deprecate` without explicit type-annotations will define deprecated methods
+accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
+the arguments of `old`. For example,
+```jldoctest; filter = r"in Main at.*"
+julia> new(x::Int) = x;
+
+julia> new(x::Float64) = 2x;
+
+julia> @deprecate old(x::Int) new(x);
+
+julia> methods(old)
+# 1 method for generic function "old":
+[1] old(x::Int64) in Main at deprecated.jl:70
+```
+will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
+define nor deprecate the method `old(x::Float64)`.
 """
 macro deprecate(old, new, export_old=true)
     meta = Expr(:meta, :noinline)
@@ -266,8 +284,8 @@ end
 
 # BEGIN 1.8 deprecations
 
-@deprecate var"@_inline_meta"   var"@inline"   false
-@deprecate var"@_noinline_meta" var"@noinline" false
+const var"@_inline_meta" = var"@inline"
+const var"@_noinline_meta" = var"@noinline"
 @deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations

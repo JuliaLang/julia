@@ -194,8 +194,23 @@ fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
 
 Return a boolean indicating whether `T` has `name` as one of its own fields.
 
+See also [`fieldnames`](@ref), [`fieldcount`](@ref), [`hasproperty`](@ref).
+
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
+
+# Examples
+```jldoctest
+julia> struct Foo
+            bar::Int
+       end
+
+julia> hasfield(Foo, :bar)
+true
+
+julia> hasfield(Foo, :x)
+false
+```
 """
 function hasfield(T::Type, name::Symbol)
     @_pure_meta
@@ -1332,15 +1347,11 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type), world=get_world_counter())
-    min_valid = RefValue{UInt}(typemin(UInt))
-    max_valid = RefValue{UInt}(typemax(UInt))
-    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
-        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-        tt, world, min_valid, max_valid)
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
     if match === nothing
         error("no unique matching method found for the specified argument types")
     end
-    return match::Core.MethodMatch
+    return match
 end
 
 """
@@ -1463,7 +1474,7 @@ true
 function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
     t = to_tuple_type(t)
     t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())

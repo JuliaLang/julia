@@ -278,6 +278,7 @@ end
 
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex(h::Dict{K,V}, key) where V where K
+    isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe

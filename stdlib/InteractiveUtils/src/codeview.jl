@@ -188,7 +188,8 @@ function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wr
 end
 
 function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, true, params)
+    llvmctxt = ccall(:jl_get_ee_context, Ptr{Cvoid}, ())
+    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, Ptr{Cvoid}, UInt, Bool, Bool, CodegenParams), linfo, llvmctxt, world, wrapper, true, params)
     llvmf == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_asm, Ref{String},
                 (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
@@ -201,7 +202,8 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
+    llvmctxt = ccall(:jl_get_ee_context, Ptr{Cvoid}, ())
+    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, Ptr{Cvoid}, UInt, Bool, Bool, CodegenParams), linfo, llvmctxt, world, wrapper, optimize, params)
     llvmf == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
                 (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),

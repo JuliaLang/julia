@@ -164,6 +164,10 @@ end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
+# These used to be in build_h.jl and are retained for backwards compatibility
+const libblas_name = "libblastrampoline"
+const liblapack_name = "libblastrampoline"
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -279,9 +283,6 @@ include("weakkeydict.jl")
 
 include("env.jl")
 
-# BinaryPlatforms, used by Artifacts
-include("binaryplatforms.jl")
-
 # functions defined in Random
 function rand end
 function randn end
@@ -338,6 +339,9 @@ using .Order
 # Combinatorics
 include("sort.jl")
 using .Sort
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # Fast math
 include("fastmath.jl")
@@ -430,7 +434,7 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
-# Precompiles for Revise
+# Precompiles for Revise and other packages
 # TODO: move these to contrib/generate_precompile.jl
 # The problem is they don't work there
 for match = _methods(+, (Int, Int), -1, get_world_counter())
@@ -464,6 +468,23 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
 
     # Code loading uses this
     sortperm(mtime.(readdir(".")), rev=true)
+    # JLLWrappers uses these
+    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    eachindex(IndexLinear(), Expr[])
+    push!(Expr[], Expr(:return, false))
+    vcat(String[], String[])
+    k, v = (:hello => nothing)
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+    # Preferences uses these
+    precompile(get_preferences, (UUID,))
+    precompile(record_compiletime_preference, (UUID, String))
+    get(Dict{String,Any}(), "missing", nothing)
+    delete!(Dict{String,Any}(), "missing")
+    for (k, v) in Dict{String,Any}()
+        println(k)
+    end
 
     break   # only actually need to do this once
 end

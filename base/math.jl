@@ -671,7 +671,8 @@ true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...))...)
+hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
@@ -743,7 +744,7 @@ end
 end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
-function _hypot(x...)
+function _hypot(x::NTuple{N,<:Number}) where {N}
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
         return typeof(maxabs)(Inf)
@@ -998,6 +999,8 @@ end
 @constprop :aggressive function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
     return pow_body(x, y)
@@ -1016,6 +1019,8 @@ end
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps(T)) && return x^(typemax(Int64)-1)
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     return pow_body(x, y)
 end

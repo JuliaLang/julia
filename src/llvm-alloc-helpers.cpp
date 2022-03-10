@@ -5,6 +5,8 @@
 #include "codegen_shared.h"
 #include "julia_assert.h"
 
+#include <llvm/IR/IntrinsicInst.h>
+
 using namespace llvm;
 using namespace jl_alloc;
 

@@ -69,7 +69,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     AllocaInst *gcframe = new AllocaInst(
         T_prjlvalue,
         0,
-        ConstantInt::get(T_int32, nRoots + 2),
+        ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2),
         Align(16));
     gcframe->insertAfter(target);
     gcframe->takeName(target);
@@ -77,12 +77,12 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // Zero out the GC frame.
     BitCastInst *tempSlot_i8 = new BitCastInst(gcframe, Type::getInt8PtrTy(F.getContext()), "");
     tempSlot_i8->insertAfter(gcframe);
-    Type *argsT[2] = {tempSlot_i8->getType(), T_int32};
+    Type *argsT[2] = {tempSlot_i8->getType(), Type::getInt32Ty(F.getContext())};
     Function *memset = Intrinsic::getDeclaration(F.getParent(), Intrinsic::memset, makeArrayRef(argsT));
     Value *args[4] = {
         tempSlot_i8, // dest
         ConstantInt::get(Type::getInt8Ty(F.getContext()), 0), // val
-        ConstantInt::get(T_int32, sizeof(jl_value_t*) * (nRoots + 2)), // len
+        ConstantInt::get(Type::getInt32Ty(F.getContext()), sizeof(jl_value_t*) * (nRoots + 2)), // len
         ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
     cast<MemSetInst>(zeroing)->setDestAlignment(16);
@@ -101,10 +101,10 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
     IRBuilder<> builder(target->getContext());
     builder.SetInsertPoint(&*(++BasicBlock::iterator(target)));
     StoreInst *inst = builder.CreateAlignedStore(
-                ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
+                ConstantInt::get(getSizeTy(F.getContext()), JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateBitCast(
                         builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0),
-                        T_size->getPointerTo()),
+                        getSizeTy(F.getContext())->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     inst = builder.CreateAlignedStore(
@@ -150,7 +150,7 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
     builder.SetInsertPoint(target);
 
     // The first two slots are reserved, so we'll add two to the index.
-    index = builder.CreateAdd(index, ConstantInt::get(T_int32, 2));
+    index = builder.CreateAdd(index, ConstantInt::get(Type::getInt32Ty(F.getContext()), 2));
 
     // Lower the intrinsic as a GEP.
     auto gep = builder.CreateInBoundsGEP(T_prjlvalue, gcframe, index);
@@ -179,11 +179,11 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     if (offset < 0) {
         newI = builder.CreateCall(
             bigAllocFunc,
-            { ptls, ConstantInt::get(T_size, sz + sizeof(void*)) });
+            { ptls, ConstantInt::get(getSizeTy(F.getContext()), sz + sizeof(void*)) });
     }
     else {
-        auto pool_offs = ConstantInt::get(T_int32, offset);
-        auto pool_osize = ConstantInt::get(T_int32, osize);
+        auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
+        auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
         newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
@@ -240,7 +240,7 @@ bool FinalLowerGC::doFinalization(Module &M)
     used->eraseFromParent();
     if (init.empty())
         return true;
-    ArrayType *ATy = ArrayType::get(T_pint8, init.size());
+    ArrayType *ATy = ArrayType::get(Type::getInt8PtrTy(M.getContext()), init.size());
     used = new GlobalVariable(M, ATy, false, GlobalValue::AppendingLinkage,
                                     ConstantArray::get(ATy, init), "llvm.compiler.used");
     used->setSection("llvm.metadata");
@@ -356,13 +356,17 @@ bool FinalLowerGCLegacy::doFinalization(Module &M) {
 PreservedAnalyses FinalLowerGCPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     auto finalLowerGC = FinalLowerGC();
-    finalLowerGC.doInitialization(M);
+    bool modified = false;
+    modified |= finalLowerGC.doInitialization(M);
     for (auto &F : M.functions()) {
         if (F.isDeclaration())
             continue;
-        finalLowerGC.runOnFunction(F);
+        modified |= finalLowerGC.runOnFunction(F);
     }
-    finalLowerGC.doFinalization(M);
+    modified |= finalLowerGC.doFinalization(M);
+    if (modified) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 
