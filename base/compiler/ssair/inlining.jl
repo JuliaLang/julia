@@ -316,10 +316,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     inline_cfg = spec.ir.cfg
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = Int(compact.result[idx][:line])
+    inlined_at = compact.result[idx][:line]
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
-    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
+    push!(linetable, LineInfoNode(def.module, def.name, def.file, def.line, inlined_at))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
