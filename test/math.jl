@@ -1329,7 +1329,7 @@ end
             x=rand(T)*100; y=rand(T)*200-100
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= 1.3*eps(T(expected))
+                @test abs(expected-got) <= 1.3*eps(T(expected)) || (x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
