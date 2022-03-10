@@ -43,30 +43,30 @@ CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_co
 
 strangesin(x) = sin(x)
 @overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
-@test Base.return_types((Float64,), MTOverlayInterp()) do x
+@test Base.return_types((Float64,); interp=MTOverlayInterp()) do x
     strangesin(x)
 end |> only === Union{Float64,Nothing}
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     Base.@invoke strangesin(x::Float64)
 end |> only === Union{Float64,Nothing}
 
 # fallback to the internal method table
-@test Base.return_types((Int,), MTOverlayInterp()) do x
+@test Base.return_types((Int,); interp=MTOverlayInterp()) do x
     cos(x)
 end |> only === Float64
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     Base.@invoke cos(x::Float64)
 end |> only === Float64
 
 # not fully covered overlay method match
 overlay_match(::Any) = nothing
 @overlay OverlayedMT overlay_match(::Int) = missing
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     overlay_match(x)
 end |> only === Union{Nothing,Missing}
 
 # partial pure/concrete evaluation
-@test Base.return_types((), MTOverlayInterp()) do
+@test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
 Base.@assume_effects :terminates_globally function issue41694(x)
@@ -78,13 +78,13 @@ Base.@assume_effects :terminates_globally function issue41694(x)
     end
     return res
 end
-@test Base.return_types((), MTOverlayInterp()) do
+@test Base.return_types(; interp=MTOverlayInterp()) do
     issue41694(3) == 6 ? nothing : missing
 end |> only === Nothing
 
 # disable partial pure/concrete evaluation when tainted by any overlayed call
 Base.@assume_effects :total totalcall(f, args...) = f(args...)
-@test Base.return_types((), MTOverlayInterp()) do
+@test Base.return_types(; interp=MTOverlayInterp()) do
     if totalcall(strangesin, 1.0) == cos(1.0)
         return nothing
     else
