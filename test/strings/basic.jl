@@ -650,6 +650,8 @@ end
 end
 @testset "ascii for ASCII strings and non-ASCII strings" begin
     @test ascii("Hello, world") == "Hello, world"
+	 @test isascii("Hello, world") == true
+	 @test isascii("αβγ") == false
     @test typeof(ascii("Hello, world")) == String
     @test ascii(GenericString("Hello, world")) == "Hello, world"
     @test typeof(ascii(GenericString("Hello, world"))) == String
