@@ -148,8 +148,7 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
     stream = ParseStream(input...; version=version)
     if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
-        empty!(stream.tokens)
-        empty!(stream.ranges)
+        empty!(stream)
     end
     parse(stream; rule=rule)
     if (ignore_trivia  && peek(stream, skip_newlines=true) != K"EndMarker") ||
