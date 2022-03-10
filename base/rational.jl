@@ -95,12 +95,22 @@ end
 function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
-function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer 
-    ns, ds = split(s, '/'; keepempty = false)
+function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer  
+    ss = split(s, '/'; limit = 2)
+    if isone(length(ss))
+        return parse(T, only(ss)) // one(T) 
+    end    
+    @assert length(ss) == 2
+    ns, ds = ss
+    # Correctly account for non-ascii strings.
+    if first(ds, 1) == "/" 
+        ds = chop(ds; head = 1, tail = 0)
+    end    
     n = parse(T, ns)
     d = parse(T, ds)
     return n//d
 end
+
 
 function Rational{T}(x::Rational) where T<:Integer
     unsafe_rational(T, convert(T, x.num), convert(T, x.den))
