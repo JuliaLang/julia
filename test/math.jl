@@ -1321,7 +1321,8 @@ end
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
-                @test T(x)^T(y) === T(big(x)^y)
+                got, expected = T(x)^T(y), T(big(x))^T(y)
+                @test isnan_type(T, got) && isnan_type(T, expected) || (got === expected)
             end
         end
         for _ in 1:2^16
@@ -1331,11 +1332,11 @@ end
                 @test abs(expected-got) <= 1.3*eps(T(expected))
             end
         end
+        # test (-x)^y for y larger than typemax(Int)
+        @test T(-1)^floatmax(T) === T(1)
+        @test prevfloat(T(-1))^floatmax(T) === T(Inf)
+        @test nextfloat(T(-1))^floatmax(T) === T(0.0)
     end
-    # test (-x)^y for y larger than typemax(Int)
-    @test T(-1)^floatmax(T) === T(1)
-    @test prevfloat(T(-1))^floatmax(T) === T(Inf)
-    @test nextfloat(T(-1))^floatmax(T) === T(0.0)
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
 end
