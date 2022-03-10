@@ -1628,27 +1628,27 @@ end
 
     # start::IEEEFloat and step::Complex
     let x = @inferred range(2.0, step=1im, length=3)
-        @test x isa StepRangeLen{ComplexF64, Float64, Complex{Int64}, Int64}
+        @test typeof(x) === StepRangeLen{ComplexF64, Float64, Complex{Int}, Int}
         @test x == range(2, step=1im, length=3)  # compare with integer range
         @test x == 2.0 .+ [0im, 1im, 2im]
     end
 
     # start::Complex and step::IEEEFloat
     let x = @inferred range(2im, step=1.0, length=3)
-        @test x isa StepRangeLen{ComplexF64, Complex{Int64}, Float64, Int64}
+        @test typeof(x) === StepRangeLen{ComplexF64, Complex{Int}, Float64, Int}
         @test x == range(2im, step=1, length=3)  # compare with integer range
     end
 
     # stop::IEEEFloat and step::Complex
     let x = @inferred range(stop=2.0, step=1im, length=3)
-        @test x isa StepRangeLen{ComplexF64, ComplexF64, Complex{Int64}, Int64}
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Complex{Int}, Int}
         @test x == range(stop=2, step=1im, length=3)  # compare with integer range
         @test x == 2.0 .- [2im, 1im, 0im]
     end
 
     # stop::Complex and step::IEEEFloat
     let x = @inferred range(stop=2im, step=1.0, length=3)
-        @test x isa StepRangeLen{ComplexF64, ComplexF64, Float64, Int64}
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Float64, Int}
         @test x == range(stop=2im, step=1, length=3)  # compare with integer range
     end
 
