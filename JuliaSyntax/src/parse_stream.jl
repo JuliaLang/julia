@@ -105,24 +105,27 @@ numeric_flags(x) = numeric_flags(flags(x))
 #-------------------------------------------------------------------------------
 """
 `SyntaxToken` is a token covering a contiguous byte range in the input text.
-Information about preceding whitespace is added for use by the parser.
+
+We record only the `next_byte` here (the index of the next byte *after* the
+token) to avoid duplication of data between neighbouring tokens. This is more
+useful than recording the first byte, as it allows an initial fixed sentinel
+token to be used for recording the first byte of the first real token.
 """
 struct SyntaxToken
     head::SyntaxHead
     orig_kind::Kind
-    first_byte::UInt32
+    next_byte::UInt32
 end
 
-function SyntaxToken(head::SyntaxHead, first_byte::Integer)
-    SyntaxToken(head, kind(head), first_byte)
+function SyntaxToken(head::SyntaxHead, next_byte::Integer)
+    SyntaxToken(head, kind(head), next_byte)
 end
 
 function Base.show(io::IO, tok::SyntaxToken)
-    print(io, rpad(untokenize(tok.head, unique=false), 15), " @", first_byte(tok))
+    print(io, rpad(untokenize(tok.head, unique=false), 15), " |", tok.next_byte)
 end
 
 head(tok::SyntaxToken) = tok.head
-first_byte(tok::SyntaxToken) = tok.first_byte
 
 
 #-------------------------------------------------------------------------------
@@ -200,13 +203,16 @@ mutable struct ParseStream
         # numbers. This means we're inexact for old dev versions but that seems
         # like an acceptable tradeoff.
         ver = (version.major, version.minor)
+        # Initial sentinel token containing the first byte of the first real token.
+        sentinel = SyntaxToken(SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS),
+                               K"TOMBSTONE", next_byte)
         new(text_buf,
             text_root,
             lexer,
             Vector{SyntaxToken}(),
             1,
             Vector{Vector{ParseStreamPosition}}(),
-            Vector{SyntaxToken}(),
+            SyntaxToken[sentinel],
             Vector{TaggedRange}(),
             Vector{Diagnostic}(),
             0,
@@ -282,12 +288,25 @@ function token_is_last(stream, pos)
            pos.token_index > stream.ranges[pos.range_index].last_token
 end
 
-# Safely compute the first byte of a token, including the token off the end of
-# the stream.
+# Compute the first byte of a token at given index `i`
 function token_first_byte(stream, i)
-    i == length(stream.tokens) + 1 ?
-        _next_byte(stream) :
-        stream.tokens[i].first_byte
+    stream.tokens[i-1].next_byte
+end
+
+function token_last_byte(stream::ParseStream, i)
+    stream.tokens[i].next_byte - 1
+end
+
+function token_span(stream::ParseStream, i)
+    stream.tokens[i].next_byte - stream.tokens[i-1].next_byte
+end
+
+function lookahead_token_first_byte(stream, i)
+    i == 1 ? _next_byte(stream) : stream.lookahead[i-1].next_byte
+end
+
+function lookahead_token_last_byte(stream, i)
+    stream.lookahead[i].next_byte - 1
 end
 
 #-------------------------------------------------------------------------------
@@ -297,7 +316,6 @@ end
 function _buffer_lookahead_tokens(lexer, lookahead)
     had_whitespace = false
     token_count = 0
-    done = false
     while true
         raw = Tokenize.Lexers.next_token(lexer)
         k = TzTokens.exactkind(raw)
@@ -307,7 +325,7 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         had_whitespace && (f |= PRECEDING_WHITESPACE_FLAG)
         raw.dotop      && (f |= DOTOP_FLAG)
         raw.suffix     && (f |= SUFFIXED_FLAG)
-        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.startbyte + 1))
+        push!(lookahead, SyntaxToken(SyntaxHead(k, f), raw.endbyte + 2))
         token_count += 1
         if k == K"EndMarker"
             break
@@ -318,14 +336,8 @@ function _buffer_lookahead_tokens(lexer, lookahead)
             # but not too large to avoid (a) polluting the processor cache and
             # (b) doing unnecessary work when not parsing the whole input.
             had_whitespace = false
-            if done
-                break
-            end
             if token_count > 100
-                # Buffer at least one token after the last so we can get the
-                # current token's last byte based on the next token. (May need
-                # more than one to correctly apply had_whitespace state.)
-                done = true
+                break
             end
         end
     end
@@ -333,16 +345,10 @@ end
 
 # Return the index of the next byte of the input
 function _next_byte(stream)
-    if stream.lookahead_index > length(stream.lookahead)
-        __lookahead_index(stream, 1, false) # Will buffer more tokens
-    end
-    stream.lookahead[stream.lookahead_index].first_byte
+    last(stream.tokens).next_byte
 end
 
 # Find the index of the next nontrivia token
-#
-# Postcondition: After returning `i`, the lookahead buffer will buffers tokens
-# at least up until stream.lookahead[i+1]
 @inline function _lookahead_index(stream::ParseStream, n::Integer, skip_newlines::Bool)
     # Much of the time we'll be peeking ahead a single token and have one or
     # zero whitespace tokens before the next token. The following code is an
@@ -434,7 +440,7 @@ function peek_token(stream::ParseStream, n::Integer=1;
     if !skip_whitespace
         i = stream.lookahead_index
     end
-    return @inbounds stream.lookahead[i]
+    return @inbounds head(stream.lookahead[i])
 end
 
 
@@ -459,11 +465,10 @@ function peek_full_token(stream::ParseStream, n::Integer=1;
     if !skip_whitespace
         i = stream.lookahead_index
     end
-    tok = stream.lookahead[i]
+    t = stream.lookahead[i]
 
-    FullToken(head(tok),
-              first_byte(tok),
-              first_byte(stream.lookahead[i+1]) - 1)
+    FullToken(head(t), lookahead_token_first_byte(stream, i),
+              lookahead_token_last_byte(stream, i))
 end
 
 """
@@ -541,7 +546,7 @@ function _bump_until_n(stream::ParseStream, n::Integer, flags, remap_kind=K"None
         is_trivia && (f |= TRIVIA_FLAG)
         outk = (is_trivia || remap_kind == K"None") ? k : remap_kind
         h = SyntaxHead(outk, f)
-        push!(stream.tokens, SyntaxToken(h, kind(tok), first_byte(tok)))
+        push!(stream.tokens, SyntaxToken(h, kind(tok), tok.next_byte))
     end
     stream.lookahead_index = n + 1
     # Defuse the time bomb
@@ -608,7 +613,7 @@ whitespace if necessary with bump_trivia.
 function bump_glue(stream::ParseStream, kind, flags, num_tokens)
     i = stream.lookahead_index
     h = SyntaxHead(kind, flags)
-    push!(stream.tokens, SyntaxToken(h, stream.lookahead[i].first_byte))
+    push!(stream.tokens, SyntaxToken(h, stream.lookahead[i+1].next_byte))
     stream.lookahead_index += num_tokens
     stream.peek_count = 0
     return position(stream)
@@ -635,11 +640,11 @@ simpler one which only splits preceding dots?
 function bump_split(stream::ParseStream, split_spec...)
     tok = stream.lookahead[stream.lookahead_index]
     stream.lookahead_index += 1
-    fbyte = tok.first_byte
+    b = _next_byte(stream)
     for (i, (nbyte, k, f)) in enumerate(split_spec)
         h = SyntaxHead(k, f)
-        push!(stream.tokens, SyntaxToken(h, kind(tok), fbyte))
-        fbyte += nbyte
+        b = (i == length(split_spec)) ? tok.next_byte : b + nbyte
+        push!(stream.tokens, SyntaxToken(h, kind(tok), b))
     end
     stream.peek_count = 0
     # Returning position(stream) like the other bump* methods would be
@@ -665,7 +670,7 @@ function reset_node!(stream::ParseStream, pos::ParseStreamPosition;
     if token_is_last(stream, pos)
         t = stream.tokens[pos.token_index]
         stream.tokens[pos.token_index] = SyntaxToken(_reset_node_head(t, kind, flags),
-                                                     t.orig_kind, t.first_byte)
+                                                     t.orig_kind, t.next_byte)
     else
         r = stream.ranges[pos.range_index]
         stream.ranges[pos.range_index] = TaggedRange(_reset_node_head(r, kind, flags),
@@ -682,17 +687,17 @@ Hack alert! This is used only for managing the complicated rules related to
 dedenting triple quoted strings.
 """
 function steal_token_bytes!(stream::ParseStream, pos::ParseStreamPosition, numbytes)
-    # Token index to modify
-    i = pos.token_index + 1
-    t = stream.tokens[i]
-    # Compute new token
-    next_byte = token_first_byte(stream, i + 1)
-    first_byte = t.first_byte + numbytes
-    is_empty = first_byte >= next_byte
-    head2 = is_empty ? SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS) : t.head
-    stream.tokens[i] = SyntaxToken(head2, t.orig_kind, first_byte)
+    i = pos.token_index
+    t1 = stream.tokens[i]
+    t2 = stream.tokens[i+1]
 
-    return is_empty
+    t1_next_byte = t1.next_byte + numbytes
+    stream.tokens[i] = SyntaxToken(t1.head, t1.orig_kind, t1_next_byte)
+
+    t2_is_empty = t1_next_byte == t2.next_byte
+    head2 = t2_is_empty ? SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS) : t2.head
+    stream.tokens[i+1] = SyntaxToken(head2, t2.orig_kind, t2.next_byte)
+    return t2_is_empty
 end
 
 function Base.position(stream::ParseStream)
@@ -714,7 +719,7 @@ function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
         # The first child must be a leaf, otherwise ranges would be improperly
         # nested.
         fbyte = token_first_byte(stream, first_token)
-        lbyte = _next_byte(stream) - 1
+        lbyte = token_last_byte(stream, lastindex(stream.tokens))
         _emit_diagnostic(stream, fbyte, lbyte, error=error)
     end
     push!(stream.ranges, range)
@@ -745,8 +750,8 @@ function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
         end_tok_i = is_whitespace(stream.lookahead[i]) ?
                     i : max(stream.lookahead_index, i - 1)
     end
-    fbyte = first_byte(stream.lookahead[begin_tok_i])
-    lbyte = first_byte(stream.lookahead[end_tok_i + 1]) - 1
+    fbyte = lookahead_token_first_byte(stream, begin_tok_i)
+    lbyte = lookahead_token_last_byte(stream, end_tok_i)
     _emit_diagnostic(stream, fbyte, lbyte; kws...)
     return nothing
 end
@@ -808,8 +813,7 @@ function build_tree(::Type{NodeType}, stream::ParseStream;
                 i += 1
                 continue # Ignore removed tokens
             end
-            next_byte = token_first_byte(stream, i + 1)
-            node = NodeType(head(t), next_byte - t.first_byte)
+            node = NodeType(head(t), token_span(stream, i))
             push!(stack, (first_token=i, node=node))
             i += 1
         end
@@ -881,9 +885,15 @@ Return the `Vector{UInt8}` text buffer being parsed by this `ParseStream`.
 """
 textbuf(stream) = stream.textbuf
 
-function first_byte(stream::ParseStream)
-    isempty(stream.tokens) ? _next_byte(stream) : first_byte(first(stream.tokens))
-end
-
+first_byte(stream::ParseStream) = first(stream.tokens).next_byte # Use sentinel token
 last_byte(stream::ParseStream) = _next_byte(stream)-1
 any_error(stream::ParseStream) = any_error(stream.diagnostics)
+
+function Base.empty!(stream::ParseStream)
+    t = last(stream.tokens)
+    empty!(stream.tokens)
+    # Restore sentinel token
+    push!(stream.tokens, SyntaxToken(SyntaxHead(K"TOMBSTONE",EMPTY_FLAGS),
+                                     K"TOMBSTONE", t.next_byte))
+    empty!(stream.ranges)
+end
