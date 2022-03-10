@@ -24,6 +24,18 @@ steps:
     commands: |
       echo "--- Build julia-debug with ASAN"
       contrib/asan/build.sh ./tmp/test-asan -j$${JULIA_CPU_THREADS:?} debug
+      echo "--- Run tests"
+      tmp/test-asan/asan/usr/bin/julia-debug -e 'Base.runtests(ARGS; ncores = Sys.CPU_THREADS)' \
+          core \
+          compiler/codegen \
+          interpreter \
+          intrinsics \
+          ccall \
+          llvmcall \
+          llvmcall2 \
+          precompile \
+          threads \
+          worlds
   - label: "tsan"
     key: "tsan"
     plugins:
