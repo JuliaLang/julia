@@ -504,6 +504,10 @@ function __init__()
     nothing
 end
 
+# enable threads support
+@eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
+
 end
+
 
 end # baremodule Base
