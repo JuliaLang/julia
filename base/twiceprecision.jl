@@ -454,7 +454,7 @@ step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractF
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
 
 range_start_step_length(a::Real, st::IEEEFloat, len::Integer) =
-    range_start_step_length(oftype(st, a), st, len)
+    range_start_step_length(promote(a, st)..., len)
 
 range_start_step_length(a::IEEEFloat, st::Real, len::Integer) =
     range_start_step_length(promote(a, st)..., len)
