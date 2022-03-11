@@ -37,6 +37,8 @@ New library functions
 ---------------------
 
 * `Iterators.flatmap` was added ([#44792]).
+* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
+  inspecting which function `f` was originally wrapped. ([#42717])
 
 Library changes
 ---------------
@@ -47,7 +49,6 @@ Library changes
   tasks mutating the dictionary or set ([#44534]).
 * Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
-
 
 Standard library changes
 ------------------------
@@ -110,6 +111,7 @@ Standard library changes
 Deprecated or removed
 ---------------------
 
+* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
 
 External dependencies
 ---------------------
