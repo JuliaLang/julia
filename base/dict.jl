@@ -326,12 +326,10 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        else
-            if h.slots[index] == sh
-                k = pairs[index].first
-                if key === k || isequal(key, k)
-                    return index, sh
-                end
+        elseif h.slots[index] == sh
+            k = pairs[index].first
+            if key === k || isequal(key, k)
+                return index, sh
             end
         end
 
