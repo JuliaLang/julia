@@ -299,7 +299,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
         index = (index & (sz-1)) + 1
         (iter += 1) > maxprobe && return -1
     end
-    return -1
+    # This line is unreachable
 end
 
 # get (index, sh) for the key
