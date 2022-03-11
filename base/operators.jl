@@ -1230,6 +1230,7 @@ julia> my_add((1,2,3))
 """
 struct Splat{F} <: Function
     f::F
+    Splat(f) = new{Core.Typeof(f)}(f)
 end
 (s::Splat)(args) = s.f(args...)
 print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
