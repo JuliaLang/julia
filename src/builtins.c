@@ -1183,11 +1183,10 @@ JL_CALLABLE(jl_f_getglobal)
     }
     JL_TYPECHK(getglobal, module, args[0]);
     JL_TYPECHK(getglobal, symbol, args[1]);
-    jl_value_t *v = jl_eval_global_var((jl_module_t*)args[0], (jl_sym_t*)args[1]);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
-    if (order >= jl_memory_order_acq_rel || order == jl_memory_order_acquire)
-        jl_fence(); // `v` already had at least consume ordering
+    jl_value_t *v = jl_eval_global_var((jl_module_t*)args[0], (jl_sym_t*)args[1]);
+    // is seq_cst already, no fence needed
     return v;
 }
 
@@ -1203,8 +1202,7 @@ JL_CALLABLE(jl_f_setglobal)
     JL_TYPECHK(setglobal!, symbol, args[1]);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
-    if (order >= jl_memory_order_acq_rel || order == jl_memory_order_release)
-        jl_fence();
+    // is seq_cst already, no fence needed
     jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
     jl_checked_assignment(b, args[2]);
     return args[2];
