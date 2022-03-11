@@ -772,7 +772,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
             # we know lenm1 ≥ 30, so this will never underflow.
             # if lenm1 > 3.7e18 (59 exabytes), then this may incorrectly dispatch to fallback
             if v_range < 5lenm1-100 # count sort will outperform comparison sort if v's range is small
-                return sort_int_range!(v, v_range+1, v_min, o === Forward ? identity : reverse, lo, hi)
+                return sort_int_range!(v, Int(v_range+1), v_min, o === Forward ? identity : reverse, lo, hi)
             end
         end
         return sort!(v, lo, hi, a.fallback, o)
@@ -783,7 +783,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         R = o === Reverse
         v_range = maybe_unsigned(R ? v_min-v_max : v_max-v_min)
         if v_range < div(lenm1, 2) # count sort will be superior if v's range is very small
-            return sort_int_range!(v, v_range+1, R ? v_max : v_min, R ? reverse : identity, lo, hi)
+            return sort_int_range!(v, Int(v_range+1), R ? v_max : v_min, R ? reverse : identity, lo, hi)
         end
     end
 
@@ -814,7 +814,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     u = Serial.serialize!(v, lo, hi, o)
 
     if u_range < div(lenm1, 2) # count sort will be superior if u's range is very small
-        sort_int_range!(u, u_range+1, u_min, identity, lo, hi)
+        sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
         return Serial.deserialize!(v, u, lo, hi, o)
     end
     # At this point, we are comitted to radix sort.

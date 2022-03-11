@@ -692,4 +692,8 @@ end
     @test searchsortedlast(o, 1.5) == -1
 end
 
+@testset "sort negative int range" begin
+    @test sort!(fill(-1, 100)) == fill(-1, 100)
+end
+
 end
