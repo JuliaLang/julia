@@ -98,12 +98,12 @@ end
 function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer  
     ss = split(s, '/'; limit = 2)
     if isone(length(ss))
-        return parse(T, only(ss)) // one(T) 
+        return Rational{T}(parse(T, ss[1]))
     end    
     @assert length(ss) == 2
     ns, ds = ss
     # Correctly account for non-ascii strings.
-    if first(ds, 1) == "/" 
+    if startswith(ds, '/')
         ds = chop(ds; head = 1, tail = 0)
     end    
     n = parse(T, ns)
