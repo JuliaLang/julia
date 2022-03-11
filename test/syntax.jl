@@ -3268,3 +3268,6 @@ end
     @test m.Foo.bar === 1
     @test Core.get_binding_type(m.Foo, :bar) == Any
 end
+
+# Issue #44532 (disallow infix macros)
+@test_throws ParseError Meta.parse("@(x + y)")

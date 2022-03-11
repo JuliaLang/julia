@@ -1661,7 +1661,10 @@
   (with-space-sensitive
    (if (eq? (peek-token s) '|.|)
        (begin (take-token s) '__dot__)
-       (parse-atom s #f))))
+       (let ((name (parse-atom s #f)))
+         (if (and (pair? name) (eq? (car name) 'call))
+             (error (string "invalid macro name \"" (deparse name) "\"")))
+         name))))
 
 (define (parse-atsym s)
   (let ((t (peek-token s)))

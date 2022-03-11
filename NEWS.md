@@ -8,6 +8,8 @@ New language features
 Language changes
 ----------------
 
+* A parser bug allowed "infix macro syntax" such as `@(x + y)` to parse as a
+  macro call to `@+` with arguments `x` and `y`. This is now a parser error.
 
 Compiler/Runtime improvements
 -----------------------------
