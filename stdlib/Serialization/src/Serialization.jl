@@ -1112,8 +1112,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    T = format_version(s) >= 19 ? Int32 : Int
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::T), Int32(deserialize(s)::T))
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)), Int32(deserialize(s)))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})
