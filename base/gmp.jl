@@ -982,7 +982,7 @@ for (fJ, fC) in ((:+, :add), (:-, :sub), (:*, :mul), (://, :div))
     end
 end
 
-function cmp(x::Rational{BigInt}, y::Rational{BigInt})
+function Base.cmp(x::Rational{BigInt}, y::Rational{BigInt})
     Int(ccall((:__gmpq_cmp, :libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y)))
 end
 

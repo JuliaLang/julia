@@ -573,9 +573,9 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
     @test e == a // b
 
     @testset "gmp cmp" begin
-        @test cmp(b,   a) ==  1
-        @test cmp(a,   b) == -1
-        @test cmp(c-a, a) ==  0
+        @test Base.GMP.MPQ.cmp(b,   a) ==  1
+        @test Base.GMP.MPQ.cmp(a,   b) == -1
+        @test Base.GMP.MPQ.cmp(c-a, a) ==  0
     end
 
     @testset "division errors" begin
