@@ -2289,8 +2289,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :meta && nargs == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
     elseif head === :meta && nargs == 2 && args[1] === :pop_loc
-        loc = args[2]::Int
-        print(io, "# meta: pop locations ($loc)")
+        print(io, "# meta: pop locations ($(args[2]::Int))")
     # print anything else as "Expr(head, args...)"
     else
         unhandled = true

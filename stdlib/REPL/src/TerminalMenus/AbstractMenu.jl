@@ -192,7 +192,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
         REPL.Terminals.raw!(term, true)
         true
     catch err
-        suppress_output || @warn("TerminalMenus: Unable to enter raw mode: $(err::Exception)")
+        suppress_output || @warn(LazyString("TerminalMenus: Unable to enter raw mode: ", err))
         false
     end
     # hide the cursor
