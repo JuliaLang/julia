@@ -98,7 +98,7 @@ end
 function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer  
     ss = split(s, '/'; limit = 2)
     if isone(length(ss))
-        return Rational{T}(parse(T, ss[1]))
+        return Rational{T}(parse(T, s))
     end    
     @assert length(ss) == 2
     ns, ds = ss
