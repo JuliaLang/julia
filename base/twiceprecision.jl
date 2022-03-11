@@ -484,7 +484,7 @@ range_step_stop_length(step::Real, stop::IEEEFloat, len::Integer) =
     range_step_stop_length(promote(step, stop)..., len)
 
 range_step_stop_length(step::IEEEFloat, stop::Real, len::Integer) =
-    range_step_stop_length(step, oftype(step, stop), len)
+    range_step_stop_length(promote(step, stop)..., len)
 
 function range_step_stop_length(step::IEEEFloat, stop::IEEEFloat, len::Integer)
     r = range_start_step_length(stop, negate(step), len)
