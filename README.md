@@ -5,15 +5,17 @@
 </a>
 </div>
 
-Documentation:
-[![Documentation][docs-img]][docs-url]
+| Type | Badge/Status |
+|------|--------------|
+| Documentation | [![Documentation][docs-img]][docs-url]|
+| Continuous integration | [![Continuous integration (master)][buildkite-master-img]][buildkite-master-url] |
+| Code coverage | [![Code coverage (Coveralls)][coveralls-img]][coveralls-url] [![Code coverage (Codecov)][codecov-img]][codecov-url] |
 
+<!-- Docs -->
 [docs-img]: https://img.shields.io/badge/docs-v1-blue.svg "Documentation (version 1)"
 [docs-url]: https://docs.julialang.org
 
-Continuous integration:
-[![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
-
+<!-- Continuous integration -->
 <!--
 To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
 You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
@@ -21,10 +23,7 @@ You need to go to the Buildkite website and get the SVG URL for the correct pipe
 [buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
 [buildkite-master-url]: https://buildkite.com/julialang/julia-master
 
-Code coverage:
-[![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
-[![Code coverage (Codecov)][codecov-img]][codecov-url]
-
+<!-- Coverage -->
 [coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls "Code coverage (Coveralls)"
 [coveralls-url]: https://coveralls.io/r/JuliaLang/julia?branch=master
 
