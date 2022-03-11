@@ -86,7 +86,7 @@ function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
     return generic_lufact!(A, pivot; check = check)
 end
 
-function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
+function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
 end
@@ -132,9 +132,9 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
+lu!(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(eltype(A)); check::Bool = true) =
     generic_lufact!(A, pivot; check = check)
-function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum();
+function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
                          check::Bool = true) where {T}
     # Extract values
     m, n = size(A)
@@ -154,6 +154,13 @@ function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot} =
                     if absi > amax
                         kp = i
                         amax = absi
+                    end
+                end
+            elseif pivot === RowNonZero()
+                for i = k:m
+                    if !iszero(A[i,k])
+                        kp = i
+                        break
                     end
                 end
             end
@@ -205,6 +212,8 @@ function lutype(T::Type)
     LT = typeof(oneunit(UT) / oneunit(UT))
     S = promote_type(T, LT, UT)
 end
+
+lupivottype(::Type{T}) where {T} = RowMaximum()
 
 # for all other types we must promote to a type which is stable under division
 """
@@ -275,7 +284,7 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
+function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T); check::Bool = true) where {T}
     lu!(_lucopy(A, lutype(T)), pivot; check = check)
 end
 # TODO: remove for Julia v2.0

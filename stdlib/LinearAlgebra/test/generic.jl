@@ -399,18 +399,28 @@ Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
 LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
+LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
 
 @testset "Issue 22042" begin
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
     @test A*(lu(A, NoPivot())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
+    @test_throws MethodError lu(A, RowMaximum())
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-
     @test A*(lu(A, RowMaximum())\b) == b
+
+    A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
 end
 
 @testset "Issue 18742" begin

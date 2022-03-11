@@ -17,6 +17,7 @@ size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
 checknonsingular(info, ::RowMaximum) = info == 0 || throw(SingularException(info))
+checknonsingular(info, ::RowNonZero) = info == 0 || throw(SingularException(info))
 checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
 checknonsingular(info) = checknonsingular(info, RowMaximum())
 
