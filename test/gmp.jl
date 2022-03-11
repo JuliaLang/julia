@@ -542,3 +542,78 @@ end
         @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
     end
 end
+
+a = Rational{BigInt}(12345678901234567890123456789, 987654321987654320)
+b = Rational{BigInt}(12345678902222222212111111109, 987654321987654320)
+c = Rational{BigInt}(24691357802469135780246913578, 987654321987654320)
+d = Rational{BigInt}(- 12345678901234567890123456789, 493827160993827160)
+e = Rational{BigInt}(12345678901234567890123456789, 12345678902222222212111111109)
+@testset "big rational basics" begin
+    @test a+BigInt(1) == b
+    @test typeof(a+1) == Rational{BigInt}
+    @test a+1 == b
+    @test isequal(a+1, b)
+    @test b == a+1
+    @test !(b == a)
+    @test b > a
+    @test b >= a
+    @test !(b < a)
+    @test !(b <= a)
+
+    @test typeof(a * 2) == Rational{BigInt}
+    @test a*2 == c
+    @test c-a == a
+    @test c == a + a
+    @test c+1 == a+b
+
+    @test typeof(d) == Rational{BigInt}
+    @test d == -c
+
+
+    @test e == a // b
+
+    @testset "gmp cmp" begin
+        @test cmp(b,   a) ==  1
+        @test cmp(a,   b) == -1
+        @test cmp(c-a, a) ==  0
+    end
+
+    @testset "division errors" begin
+        oz = Rational{BigInt}(0, 1)
+        zo = Rational{BigInt}(1, 0)
+
+        @test oz + oz == 2 * oz
+        @test oz // zo == oz
+        @test zo // oz == zo
+
+        @test_throws DivideError() zo - zo
+        @test_throws DivideError() zo + (-zo)
+        @test_throws DivideError() zo * oz
+        @test_throws DivideError() oz // oz
+        @test_throws DivideError() zo // zo
+    end
+end
+
+
+a = Rational{BigInt}(1, 2)
+b = Rational{BigInt}(-1, 3)
+c = Rational{BigInt}(3, 2)
+t = Rational{BigInt}(0, 1)
+@testset "big rational inplace" begin
+    @test Base.GMP.MPQ.add!(t, a, b) == Rational{BigInt}(1, 6)
+    @test t == Rational{BigInt}(1, 6)
+    @test Base.GMP.MPQ.add!(t, t) == Rational{BigInt}(1, 3)
+
+    @test iszero(Base.GMP.MPQ.sub!(t, t))
+    @test Base.GMP.MPQ.sub!(t, b, c) == Rational{BigInt}(-11, 6)
+    @test t == Rational{BigInt}(-11, 6)
+
+    @test Base.GMP.MPQ.mul!(t, a, b) == Rational{BigInt}(-1, 6)
+    @test t == Rational{BigInt}(-1, 6)
+    @test Base.GMP.MPQ.mul!(t, t) == Rational{BigInt}(1, 36)
+    @test t == Rational{BigInt}(1, 36)
+    @test iszero(Base.GMP.MPQ.mul!(t, Rational{BigInt}(0)))
+
+    @test Base.GMP.MPQ.div!(t, a, b) == Rational{BigInt}(-3, 2)
+    @test t == Rational{BigInt}(-3, 2)
+end
