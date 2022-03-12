@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#define DEBUG_TYPE "julia_irgen"
+#undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
 #if defined(_CPU_X86_)
