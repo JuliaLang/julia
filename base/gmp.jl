@@ -968,7 +968,8 @@ function sub!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.den) && iszero(y.den) && isneg(x.num) == isneg(y.num)
             throw(DivideError())
         end
-        return set!(z, iszero(x.den) ? x : -y)
+        iszero(x.den) && return set!(z, x)
+        return set_si!(z, flipsign(-1, y.num), 0)
     end
     zq = _MPQ(z)
     ccall((:__gmpq_sub, :libgmp), Cvoid,
