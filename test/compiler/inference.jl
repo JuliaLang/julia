@@ -273,7 +273,7 @@ barTuple2() = fooTuple{tuple(:y)}()
 # issue #6050
 @test Core.Compiler.getfield_tfunc(
           Dict{Int64,Tuple{UnitRange{Int64},UnitRange{Int64}}},
-          Core.Compiler.Const(:pairs)) == Array{Pair{Int64, Tuple{UnitRange{Int64},UnitRange{Int64}}},1}
+          Core.Compiler.Const(:vals)) == Array{Tuple{UnitRange{Int64},UnitRange{Int64}},1}
 
 # assert robustness of `getfield_tfunc`
 struct GetfieldRobustness

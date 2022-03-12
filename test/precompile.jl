@@ -586,36 +586,21 @@ end
 
 # method root provenance & external code caching
 precompile_test_harness("code caching") do dir
+    Bid = rootid(Base)
     Cache_module = :Cacheb8321416e8a3e2f1
-    # Note: calling store(::DictOld{K,V}, ::Any, ::K) adds both compression and codegen roots
+    # Note: calling setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
     write(joinpath(dir, "$Cache_module.jl"),
           """
           module $Cache_module
-              mutable struct OldDict{K,V} <: AbstractDict{K,V}
-                  keys::Vector{K}
-                  vals::Vector{V}
-
-                  function OldDict{K,V}() where V where K
-                      n = 16
-                      new(Vector{K}(undef, n), Vector{V}(undef, n))
-                  end
-              end
-
-              function store(h::OldDict{K,Any}, v, key::K) where K
-                  @nospecialize v
-                  h.keys[1] = key
-                  h.vals[1] = v
-              end
-
               struct X end
               struct X2 end
               @noinline function f(d)
                   @noinline
-                  store(d, nothing, X())
+                  d[X()] = nothing
               end
               @noinline fpush(dest) = push!(dest, X())
               function callboth()
-                  f(OldDict{X,Any}())
+                  f(Dict{X,Any}())
                   fpush(X[])
                   nothing
               end
@@ -660,17 +645,17 @@ precompile_test_harness("code caching") do dir
     end
     @test hasspec
     # Test that compilation adds to method roots with appropriate provenance
-    m = which(M.store, (M.OldDict{M.X,Any}, Any, M.X))
+    m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
     @test M.X ∈ m.roots
     # Check that roots added outside of incremental builds get attributed to a moduleid of 0
     Base.invokelatest() do
-        M.store(M.OldDict{M.X2,Any}(), nothing, M.X2())
+        Dict{M.X2,Any}()[M.X2()] = nothing
     end
     @test M.X2 ∈ m.roots
     groups = group_roots(m)
     @test M.X ∈ groups[Mid]           # attributed to M
     @test M.X2 ∈ groups[0]            # activate module is not known
-    @test !isempty(groups[Mid])
+    @test !isempty(groups[Bid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]

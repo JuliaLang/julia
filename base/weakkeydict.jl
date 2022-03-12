@@ -69,7 +69,7 @@ function _cleanup_locked(h::WeakKeyDict)
         h.dirty = false
         idx = skip_deleted_floor!(h.ht)
         while idx != 0
-            if h.ht.pairs[idx].first.value === nothing
+            if h.ht.keys[idx].value === nothing
                 _delete!(h.ht, idx)
             end
             idx = skip_deleted(h.ht, idx + 1)

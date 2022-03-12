@@ -169,14 +169,14 @@ end
     # array element
     s = Set(["a", "b", "c"])
     Base.rehash!(s)
-    k = s.dict.pairs
+    k = s.dict.keys
     Base.rehash!(s)
-    @test length(k) == length(s.dict.pairs)
+    @test length(k) == length(s.dict.keys)
     for i in 1:length(k)
         if isassigned(k, i)
-            @test k[i].first == s.dict.pairs[i].first
+            @test k[i] == s.dict.keys[i]
         else
-            @test !isassigned(s.dict.pairs, i)
+            @test !isassigned(s.dict.keys, i)
         end
     end
     @test s == Set(["a", "b", "c"])

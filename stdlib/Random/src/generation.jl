@@ -434,7 +434,7 @@ end
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
     while true
         i = rand(rng, sp.data)
-        Base.isslotfilled(sp[], i) && @inbounds return sp[].pairs[i]
+        Base.isslotfilled(sp[], i) && @inbounds return (sp[].keys[i] => sp[].vals[i])
     end
 end
 

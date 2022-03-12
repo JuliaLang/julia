@@ -11,21 +11,12 @@ Set{T}(s::Set{T}) where {T} = _Set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
-function Set{T}(s::KeySet{T, <:Dict{T,V}}) where {T,V}
+function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     d = s.dict
     slots = copy(d.slots)
-    if isbitstype(Pair{T, V})
-        pairs = Pair{T, Nothing}[Pair{T, Nothing}(x.first, nothing) for x in d.pairs]
-    else
-        n = length(d.pairs)
-        pairs = Vector{Pair{T,Nothing}}(undef, n)
-        for i in 1:n
-            if isslotfilled(d, i)
-                @inbounds pairs[i] = Pair{T,Nothing}(d.pairs[i].first, nothing)
-            end
-        end
-    end
-    _Set(Dict{T,Nothing}(slots, pairs, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+    keys = copy(d.keys)
+    vals = similar(d.vals, Nothing)
+    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
 end
 
 """
@@ -763,11 +754,14 @@ function _replace!(new::Callable, t::Dict{K,V}, A::AbstractDict, count::Int) whe
     news = Pair{K,V}[]
     i = skip_deleted_floor!(t)
     @inbounds while i != 0
-        x1 = t.pairs[i]
+        k1, v1 = t.keys[i], t.vals[i]
+        x1 = Pair{K,V}(k1, v1)
         x2 = new(x1)
         if x1 !== x2
-            if isequal(x1.first, x2.first)
-                t.pairs[i] = x2
+            k2, v2 = first(x2), last(x2)
+            if isequal(k1, k2)
+                t.keys[i] = k2
+                t.vals[i] = v2
                 t.age += 1
             else
                 _delete!(t, i)
