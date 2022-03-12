@@ -895,6 +895,8 @@ llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
+Expected<std::unique_ptr<jitlink::JITLinkMemoryManager>> CreateJuliaJITLinkMemMgr();
+
 JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
   : TM(createTargetMachine()),
     DL(create_jl_data_layout(*TM)),
@@ -912,13 +914,17 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
 #endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
+#if defined(JL_USE_JITLINK) && JL_LLVM_VERSION >= 140000
+    LCTM(cantFail(orc::createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0))),
+#endif
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
 # if JL_LLVM_VERSION < 140000
     ObjectLayer(ES, std::make_unique<jitlink::InProcessMemoryManager>()),
 # else
-    ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
+    MemMgr(cantFail(CreateJuliaJITLinkMemMgr())),
+    ObjectLayer(ES, *MemMgr),
 # endif
 #else
     MemMgr(createRTDyldMemoryManager()),
@@ -941,6 +947,9 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
         {ES, CompileLayer3, OptimizerT(PM3, 3)},
     },
     OptSelLayer(OptimizeLayers)
+#if defined(JL_USE_JITLINK) && JL_LLVM_VERSION >= 140000
+    ,JITLayer(ES, OptSelLayer, *LCTM, orc::createLocalIndirectStubsManagerBuilder(TM->getTargetTriple()))
+#endif
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)

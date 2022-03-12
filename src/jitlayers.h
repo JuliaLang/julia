@@ -9,6 +9,7 @@
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
+#include <llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -190,6 +191,7 @@ public:
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::CompileOnDemandLayer JITLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 private:
     struct OptimizerT {
@@ -260,9 +262,14 @@ private:
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
 
-#ifndef JL_USE_JITLINK
+#ifdef JL_USE_JITLINK
+#if JL_LLVM_VERSION >= 140000
+    std::unique_ptr<orc::LazyCallThroughManager> LCTM;
+    std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
+#endif // JL_LLVM_VERSION >= 140000
+#else
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
-#endif
+#endif // JL_USE_JITLINK
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer0;
     CompileLayerT CompileLayer1;
@@ -270,6 +277,9 @@ private:
     CompileLayerT CompileLayer3;
     OptimizeLayerT OptimizeLayers[4];
     OptSelLayerT OptSelLayer;
+#if defined(JL_USE_JITLINK) && JL_LLVM_VERSION >= 140000
+    JITLayerT JITLayer;
+#endif
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
