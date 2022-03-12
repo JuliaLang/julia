@@ -46,6 +46,9 @@ Standard library changes
 
 #### LinearAlgebra
 
+* The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector,
+  which were equivalent to `a * pinv(b)`, have been removed due to the
+  risk of confusion with elementwise division ([#44358]).
 * We are now wholly reliant on libblastrampoline (LBT) for calling
   BLAS and LAPACK. OpenBLAS is shipped by default, but building the
   system image with other BLAS/LAPACK libraries is not
