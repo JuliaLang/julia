@@ -76,7 +76,7 @@ Dict{String, Int64} with 2 entries:
 ```
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
-    # Metadata: empty => 0x80, removed => 0xff, full => 0b0[7 most significant hash bits]
+    # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
     slots::Vector{UInt8}
     keys::Array{K,1}
     vals::Array{V,1}
@@ -88,7 +88,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(fill(0x80,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
+        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -167,9 +167,9 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-# Gets 7 most significant bits from the hash (hsh)
-_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8
-_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8
+# Gets 7 most significant bits from the hash (hsh), first bit is 1
+_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8 | 0x80
+_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8 | 0x80
 
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
@@ -180,9 +180,9 @@ function hashindex(key, sz)
     return idx, _shorthash7(hsh)
 end
 
-@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x80
-@propagate_inbounds isslotfilled(h::Dict, i::Int) = (h.slots[i] & 0x80) == 0
-@propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0xff
+@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x00
+@propagate_inbounds isslotfilled(h::Dict, i::Int) = (h.slots[i] & 0x80) != 0
+@propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x7f
 
 @constprop :none function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
@@ -194,14 +194,14 @@ end
     h.idxfloor = 1
     if h.count == 0
         resize!(h.slots, newsz)
-        fill!(h.slots, 0x80)
+        fill!(h.slots, 0x0)
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
         h.ndel = 0
         return h
     end
 
-    slots = fill(0x80, newsz)
+    slots = fill(0x0, newsz)
     keys = Vector{K}(undef, newsz)
     vals = Vector{V}(undef, newsz)
     age0 = h.age
@@ -209,12 +209,12 @@ end
     maxprobe = 0
 
     for i = 1:sz
-        @inbounds if (olds[i] & 0x80) == 0
+        @inbounds if (olds[i] & 0x80) != 0
             k = oldk[i]
             v = oldv[i]
             index, sh = hashindex(k, newsz)
             index0 = index
-            while slots[index] != 0x80
+            while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
             probe = (index - index0) & (newsz-1)
@@ -276,7 +276,7 @@ Dict{String, Int64}()
 ```
 """
 function empty!(h::Dict{K,V}) where V where K
-    fill!(h.slots, 0x80)
+    fill!(h.slots, 0x0)
     sz = length(h.slots)
     empty!(h.keys)
     empty!(h.vals)
@@ -658,7 +658,7 @@ function pop!(h::Dict)
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
-    @inbounds h.slots[index] = 0xff
+    @inbounds h.slots[index] = 0x7f
     @inbounds _unsetindex!(h.keys, index)
     @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
@@ -735,7 +735,7 @@ end
 function filter!(pred, h::Dict{K,V}) where {K,V}
     h.count == 0 && return h
     @inbounds for i=1:length(h.slots)
-        if ((h.slots[i] & 0x80) == 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+        if ((h.slots[i] & 0x80) != 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
         end
     end
