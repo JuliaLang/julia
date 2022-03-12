@@ -318,7 +318,7 @@ end
 #             and the key would be inserted at pos
 #     sh::UInt8 - short hash (7 highest hash bits)
 # This version is for use by setindex! and get!
-function ht_keyindex2!(h::Dict{K,V}, key) where V where K
+function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -364,10 +364,13 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
 
     rehash!(h, h.count > 64000 ? sz*2 : sz*4)
 
-    return ht_keyindex2!(h, key)
+    return ht_keyindex2_shorthash!(h, key)
 end
 
-@propagate_inbounds function _setindex!(h::Dict, v, key, index, sh)
+# Only for better backward compatibility. It can be removed in the future.
+ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
+
+@propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
     h.slots[index] = sh
     h.keys[index] = key
     h.vals[index] = v
@@ -396,7 +399,7 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
-    index, sh = ht_keyindex2!(h, key)
+    index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
         h.age += 1
@@ -411,7 +414,7 @@ end
 
 function setindex!(h::Dict{K,Any}, v, key::K) where K
     @nospecialize v
-    index, sh = ht_keyindex2!(h, key)
+    index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
         h.age += 1
@@ -489,14 +492,14 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
 end
 
 function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
-    index, sh = ht_keyindex2!(h, key)
+    index, sh = ht_keyindex2_shorthash!(h, key)
 
     index > 0 && return h.vals[index]
 
     age0 = h.age
     v = convert(V, default())
     if h.age != age0
-        index, sh = ht_keyindex2!(h, key)
+        index, sh = ht_keyindex2_shorthash!(h, key)
     end
     if index > 0
         h.age += 1
@@ -762,7 +765,7 @@ end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
     for (k, v) in d2
-        i, sh = ht_keyindex2!(d1, k)
+        i, sh = ht_keyindex2_shorthash!(d1, k)
         if i > 0
             d1.vals[i] = combine(d1.vals[i], v)
         else
