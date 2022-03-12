@@ -1178,7 +1178,7 @@ end
 """
     spr!(uplo, α, x, AP)
 
-Update matrix `A` as `α*A*x*x'`, where `A` is a symmetric matrix provided
+Update matrix `A` as `A+α*x*x'`, where `A` is a symmetric matrix provided
 in packed format `AP` and `x` is a vector.
 
 With `uplo = 'U'`, the array AP must contain the upper triangular part of the

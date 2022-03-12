@@ -233,10 +233,11 @@ static GlobalVariable *emit_plt_thunk(
     else {
         // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
         // Known failures includes vararg (not needed here) and sret.
-#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
-                        defined(_CPU_AARCH64_))
+
+#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || (defined(_CPU_AARCH64_) && !defined(_OS_DARWIN_)))
         // Ref https://bugs.llvm.org/show_bug.cgi?id=47058
         // LLVM, as of 10.0.1 emits wrong/worse code when musttail is set
+        // Apple silicon macs give an LLVM ERROR if musttail is set here #44107.
         if (!attrs.hasAttrSomewhere(Attribute::ByVal))
             ret->setTailCallKind(CallInst::TCK_MustTail);
 #endif
@@ -1088,6 +1089,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
+        assert(t && "LLVM type should not be null");
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, lrt->getContext(), t);
 
         if (jl_is_cpointer_type(tti)) {

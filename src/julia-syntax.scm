@@ -120,6 +120,10 @@
          ;; inside ref only replace within the first argument
          (list* 'ref (replace-beginend (cadr ex) a n tuples last)
                 (cddr ex)))
+        ;; TODO: this probably should not be allowed since keyword args aren't
+        ;; positional, but in this context we have just used their positions anyway
+        ((eq? (car ex) 'kw)
+         (list 'kw (cadr ex) (replace-beginend (caddr ex) a n tuples last)))
         (else
          (cons (car ex)
                (map (lambda (x) (replace-beginend x a n tuples last))
@@ -142,16 +146,20 @@
                  (idx  (if (vararg? idx0) (cadr idx0) idx0))
                  (last (null? (cdr lst)))
                  (replaced (replace-beginend idx a n tuples last))
-                 (idx      (if (or (not has-va?) (simple-atom? replaced)) replaced (make-ssavalue))))
+                 (val      (if (kwarg? replaced) (caddr replaced) replaced))
+                 (idx      (if (or (not has-va?) (simple-atom? val))
+                               val (make-ssavalue))))
             (loop (cdr lst) (+ n 1)
-                  (if (eq? idx replaced)
+                  (if (eq? idx val)
                       stmts
-                      (cons `(= ,idx ,replaced)
+                      (cons `(= ,idx ,val)
                             stmts))
                   (if (vararg? idx0) (cons idx tuples) tuples)
                   (cons (if (vararg? idx0)
                             `(... ,idx)
-                            idx)
+                            (if (eq? val replaced)
+                                idx
+                                (list 'kw (cadr replaced) idx)))
                         ret)))))))
 
 ;; GF method does not need to keep decl expressions on lambda args

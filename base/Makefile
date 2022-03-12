@@ -204,7 +204,11 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
+ifeq ($(APPLE_ARCH),arm64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif

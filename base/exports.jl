@@ -122,6 +122,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
