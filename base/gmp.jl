@@ -1004,7 +1004,7 @@ function div!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num)
             throw(DivideError())
         end
-        return set!(z, (isneg(x.num) ? -one(BigInt) : one(BigInt)) // y.num)
+        return set_si!(z, flipsign(1, x.num), 0)
     end
     zq = _MPQ(z)
     ccall((:__gmpq_div, :libgmp), Cvoid,
