@@ -7,6 +7,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 
 #include "julia.h"
@@ -32,6 +33,7 @@ static bool removeNI(Module &M)
     }
     dlstr.erase(nistart, niend - nistart);
     M.setDataLayout(dlstr);
+    assert(!verifyModule(M));
     return true;
 }
 }

@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IR/Constants.h>
@@ -22,7 +23,7 @@ using namespace llvm;
 
 using AddrspaceRemapFunction = std::function<unsigned(unsigned)>;
 
-
+STATISTIC(JuliaRemappedAddrspaces, "Julia rewritten address spaces");
 //
 // Helpers
 //
@@ -51,7 +52,7 @@ public:
             else {
                 //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
-                        remapType(Ty->getElementType()),
+                        remapType(Ty->getPointerElementType()),
                         ASRemapper(Ty->getAddressSpace()));
             }
         }
@@ -161,7 +162,7 @@ public:
                     auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
                     //Remove once opaque pointer transition is complete
                     if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getElementType());
+                        Type *SrcTy = remapType(ptrty->getPointerElementType());
                         DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
                     }
                 }
@@ -452,6 +453,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
         }
     }
 
+    verifyModule(M);
     return true;
 }
 
@@ -499,10 +501,12 @@ PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM
 
 unsigned removeJuliaAddrspaces(unsigned AS)
 {
-    if (AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial)
+    if (AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial) {
+        ++JuliaRemappedAddrspaces;
         return AddressSpace::Generic;
-    else
+    } else {
         return AS;
+    }
 }
 
 struct RemoveJuliaAddrspacesPassLegacy : public ModulePass {

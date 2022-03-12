@@ -7,6 +7,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/DepthFirstIterator.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -16,6 +17,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -30,6 +32,8 @@
 
 using namespace llvm;
 
+STATISTIC(ExceptionEnters, "Number of times we enter an exception frame");
+STATISTIC(ExceptionLeaves, "Number of times we leave an exception frame");
 /* Lowers Julia Exception Handlers and colors EH frames.
  *
  *  Our task is to lower:
@@ -79,14 +83,12 @@ namespace {
  */
 static void ensure_enter_function(Module &M)
 {
-    auto T_int8  = Type::getInt8Ty(M.getContext());
-    auto T_pint8 = PointerType::get(T_int8, 0);
-    auto T_void = Type::getVoidTy(M.getContext());
+    auto T_pint8 = Type::getInt8PtrTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
     if (!M.getNamedValue(XSTR(jl_enter_handler))) {
         std::vector<Type*> ehargs(0);
         ehargs.push_back(T_pint8);
-        Function::Create(FunctionType::get(T_void, ehargs, false),
+        Function::Create(FunctionType::get(Type::getVoidTy(M.getContext()), ehargs, false),
                          Function::ExternalLinkage, XSTR(jl_enter_handler), &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
@@ -111,7 +113,7 @@ static bool lowerExcHandlers(Function &F) {
     Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     Function *setjmp_func = M.getFunction(jl_setjmp_name);
 
-    auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
+    auto T_pint8 = Type::getInt8PtrTy(M.getContext());
     Function *lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
     Function *lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
 
@@ -143,9 +145,11 @@ static bool lowerExcHandlers(Function &F) {
             Function *Callee = CI->getCalledFunction();
             if (!Callee)
                 continue;
-            if (Callee == except_enter_func)
+            if (Callee == except_enter_func) {
+                ++ExceptionEnters;
                 EnterDepth[CI] = Depth++;
-            else if (Callee == leave_func) {
+            } else if (Callee == leave_func) {
+                ++ExceptionLeaves;
                 LeaveDepth[CI] = Depth;
                 Depth -= cast<ConstantInt>(CI->getArgOperand(0))->getLimitedValue();
             }
@@ -215,6 +219,7 @@ static bool lowerExcHandlers(Function &F) {
             LifetimeEnd->insertAfter(it.first);
         }
     }
+    verifyFunction(F);
     return true;
 }
 

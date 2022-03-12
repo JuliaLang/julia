@@ -6,6 +6,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/SmallPtrSet.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/ValueMap.h>
@@ -28,6 +29,14 @@
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 
+STATISTIC(MutatedInsts, "Number of instructions that changed types");
+STATISTIC(LoadInsts, "Number of loads visited");
+STATISTIC(StoreInsts, "Number of stores visited");
+STATISTIC(AtomicCmpXchgInsts, "Number of compare-and-swaps visited");
+STATISTIC(AtomicRMWInsts, "Number of atomic RMWs visited");
+STATISTIC(MemSetInsts, "Number of memsets visited");
+STATISTIC(MemTransferInsts, "Number of memcpys and memmoves visited");
+
 using namespace llvm;
 
 /* This pass performs propagation of addrspace information that is legal from
@@ -44,7 +53,6 @@ using namespace llvm;
 struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrspacesVisitor> {
     DenseMap<Value *, Value *> LiftingMap;
     SmallPtrSet<Value *, 4> Visited;
-    std::vector<Instruction *> ToDelete;
     std::vector<std::pair<Instruction *, Instruction *>> ToInsert;
 
 public:
@@ -162,6 +170,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *Inser
         if (LiftingMap.count(V))
             continue;
         if (isa<GetElementPtrInst>(V) || isa<PHINode>(V) || isa<SelectInst>(V)) {
+            ++MutatedInsts;
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
@@ -229,22 +238,27 @@ void PropagateJuliaAddrspacesVisitor::visitMemop(Instruction &I, Type *T, unsign
 }
 
 void PropagateJuliaAddrspacesVisitor::visitLoadInst(LoadInst &LI) {
+    ++LoadInsts;
     visitMemop(LI, LI.getType(), LoadInst::getPointerOperandIndex());
 }
 
 void PropagateJuliaAddrspacesVisitor::visitStoreInst(StoreInst &SI) {
+    ++StoreInsts;
     visitMemop(SI, SI.getValueOperand()->getType(), StoreInst::getPointerOperandIndex());
 }
 
 void PropagateJuliaAddrspacesVisitor::visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI) {
+    ++AtomicCmpXchgInsts;
     visitMemop(SI, SI.getNewValOperand()->getType(), AtomicCmpXchgInst::getPointerOperandIndex());
 }
 
 void PropagateJuliaAddrspacesVisitor::visitAtomicRMWInst(AtomicRMWInst &SI) {
+    ++AtomicRMWInsts;
     visitMemop(SI, SI.getType(), AtomicRMWInst::getPointerOperandIndex());
 }
 
 void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
+    ++MemSetInsts;
     unsigned AS = MI.getDestAddressSpace();
     if (!isSpecialAS(AS))
         return;
@@ -258,6 +272,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
 }
 
 void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI) {
+    ++MemTransferInsts;
     unsigned DestAS = MTI.getDestAddressSpace();
     unsigned SrcAS = MTI.getSourceAddressSpace();
     if (!isSpecialAS(DestAS) && !isSpecialAS(SrcAS))
@@ -289,12 +304,10 @@ bool propagateJuliaAddrspaces(Function &F) {
     visitor.visit(F);
     for (auto it : visitor.ToInsert)
         it.first->insertBefore(it.second);
-    for (Instruction *I : visitor.ToDelete)
-        I->eraseFromParent();
     visitor.ToInsert.clear();
-    visitor.ToDelete.clear();
     visitor.LiftingMap.clear();
     visitor.Visited.clear();
+    verifyFunction(F);
     return true;
 }
 
