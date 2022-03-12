@@ -141,16 +141,21 @@ Now the build command is simply `make`.
 If the `JULIA_DIR` environment variable hasn't been setup, add it using the System panel before
 starting Visual Studio. The `bin` folder under JULIA_DIR should be on the system PATH.
 
-We start by opening Visual Studio and creating a new Console Application project. To the 'stdafx.h'
-header file, add the following lines at the end:
+We start by opening Visual Studio and creating a new Console Application project. Replace the 
+generated C++ code with the following:
 
-```c
+```c++
+#include <uv.h>
+#include <windows.h>
+
+template <typename T>
+static inline T jl_atomic_load_relaxed(volatile T *obj)
+{
+    return jl_atomic_load_acquire(obj);
+}
+
 #include <julia.h>
-```
 
-Then, replace the main() function in the project with this code:
-
-```c
 int main(int argc, char *argv[])
 {
     /* required: setup the Julia context */
