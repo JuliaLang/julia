@@ -155,12 +155,6 @@ end
             @test x^y === T(big(x)^big(y))
             @test x^1 === x
             @test x^yi === T(big(x)^yi)
-            # test (-x)^y for y larger than typemax(Int)
-            @test T(-1)^floatmax(T) === T(1)
-            @test prevfloat(T(-1))^floatmax(T) === T(Inf)
-            @test nextfloat(T(-1))^floatmax(T) === T(0.0)
-            # test for large negative exponent where error compensation matters
-            @test 0.9999999955206014^-1.0e8 == 1.565084574870928
             @test (-x)^yi == x^yi
             @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
@@ -1321,6 +1315,30 @@ end
         @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
         @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
     end
+end
+
+@testset "pow" begin
+    for T in (Float16, Float32, Float64)
+        for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
+            for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
+                got, expected = T(x)^T(y), T(big(x))^T(y)
+                @test isnan_type(T, got) && isnan_type(T, expected) || (got === expected)
+            end
+        end
+        for _ in 1:2^16
+            x=rand(T)*100; y=rand(T)*200-100
+            got, expected = x^y, widen(x)^y
+            if isfinite(eps(T(expected)))
+                @test abs(expected-got) <= 1.3*eps(T(expected)) || (x,y)
+            end
+        end
+        # test (-x)^y for y larger than typemax(Int)
+        @test T(-1)^floatmax(T) === T(1)
+        @test prevfloat(T(-1))^floatmax(T) === T(Inf)
+        @test nextfloat(T(-1))^floatmax(T) === T(0.0)
+    end
+    # test for large negative exponent where error compensation matters
+    @test 0.9999999955206014^-1.0e8 == 1.565084574870928
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
