@@ -592,6 +592,23 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
         @test_throws DivideError() oz // oz
         @test_throws DivideError() zo // zo
     end
+
+    @testset "big infinities" begin
+        oz   = Rational{BigInt}(1, 0)
+        zo   = Rational{BigInt}(0, 1)
+        o    = Rational{BigInt}(1, 1)
+
+        @test oz + zo    == oz
+        @test zo - oz    == -oz
+        @test zo + (-oz) == -oz
+        @test -oz + zo   == -oz
+
+        @test (-oz) * (-oz) == oz
+        @test (-oz) * oz    == -oz
+
+        @test o // zo       == oz
+        @test (-o) // zo    == -oz
+    end
 end
 
 
@@ -599,12 +616,17 @@ a = Rational{BigInt}(1, 2)
 b = Rational{BigInt}(-1, 3)
 c = Rational{BigInt}(3, 2)
 t = Rational{BigInt}(0, 1)
+aa = copy(a)
+bb = copy(b)
+cc = copy(c)
 @testset "big rational inplace" begin
     @test Base.GMP.MPQ.add!(t, a, b) == Rational{BigInt}(1, 6)
     @test t == Rational{BigInt}(1, 6)
     @test Base.GMP.MPQ.add!(t, t) == Rational{BigInt}(1, 3)
+    @test t == Rational{BigInt}(1, 3)
 
     @test iszero(Base.GMP.MPQ.sub!(t, t))
+    @test iszero(t)
     @test Base.GMP.MPQ.sub!(t, b, c) == Rational{BigInt}(-11, 6)
     @test t == Rational{BigInt}(-11, 6)
 
@@ -616,4 +638,65 @@ t = Rational{BigInt}(0, 1)
 
     @test Base.GMP.MPQ.div!(t, a, b) == Rational{BigInt}(-3, 2)
     @test t == Rational{BigInt}(-3, 2)
+    @test Base.GMP.MPQ.div!(t, a) == Rational{BigInt}(-3, 1)
+    @test t == Rational{BigInt}(-3, 1)
+
+    @test aa == a && bb == b && cc == c
+
+    @testset "set" begin
+        @test Base.GMP.MPQ.set!(a, b) == b
+        @test a == b == bb
+
+        Base.GMP.MPQ.add!(a, b, c)
+        @test b == bb
+
+        @test Base.GMP.MPQ.set_z!(a, BigInt(0)) == BigInt(0)
+        @test iszero(a)
+        @test Base.GMP.MPQ.set_z!(a, BigInt(3)) == BigInt(3)
+        @test a == BigInt(3)
+
+        @test Base.GMP.MPQ.set_ui(1, 2)      == Rational{BigInt}(1, 2)
+        @test Base.GMP.MPQ.set_ui(0, 1)      == Rational{BigInt}(0, 1)
+        @test Base.GMP.MPQ.set_ui!(a, 1, 2)  == Rational{BigInt}(1, 2)
+        @test a == Rational{BigInt}(1, 2)
+
+        @test Base.GMP.MPQ.set_si(1, 2)      == Rational{BigInt}(1, 2)
+        @test Base.GMP.MPQ.set_si(-1, 2)     == Rational{BigInt}(-1, 2)
+        @test Base.GMP.MPQ.set_si!(a, -1, 2) == Rational{BigInt}(-1, 2)
+        @test a == Rational{BigInt}(-1, 2)
+    end
+
+    @testset "infinities" begin
+        oz   = Rational{BigInt}(1, 0)
+        zo   = Rational{BigInt}(0, 1)
+        oo   = Rational{BigInt}(1, 1)
+
+        @test Base.GMP.MPQ.add!(zo, oz) == oz
+        @test zo == oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.sub!(zo, oz) == -oz
+        @test zo == -oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.add!(zo, -oz) == -oz
+        @test zo == -oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.sub!(zo, oz) == -oz
+        @test zo == -oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.mul!(-oz, -oz) == oz
+        @test Base.GMP.MPQ.mul!(-oz, oz)  == -oz
+        @test Base.GMP.MPQ.mul!(oz, -oz)  == -Rational{BigInt}(1, 0)
+        @test oz == -Rational{BigInt}(1, 0)
+        oz = Rational{BigInt}(1, 0)
+
+        @test Base.GMP.MPQ.div!(oo, zo) == oz
+        @test oo == oz
+        oo = Rational{BigInt}(1, 1)
+
+        @test Base.GMP.MPQ.div!(-oo, zo) == -oz
+    end
 end
