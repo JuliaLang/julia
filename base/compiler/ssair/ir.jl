@@ -304,17 +304,17 @@ end
 
 function getindex(x::IRCode, s::SSAValue)
     if s.id <= length(x.stmts)
-        return x.stmts[s.id][:inst]
+        return x.stmts[s.id]
     else
-        return x.new_nodes.stmts[s.id - length(x.stmts)][:inst]
+        return x.new_nodes.stmts[s.id - length(x.stmts)]
     end
 end
 
-function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
+function setindex!(x::IRCode, repl::Instruction, s::SSAValue)
     if s.id <= length(x.stmts)
-        x.stmts[s.id][:inst] = repl
+        x.stmts[s.id] = repl
     else
-        x.new_nodes.stmts[s.id - length(x.stmts)][:inst] = repl
+        x.new_nodes.stmts[s.id - length(x.stmts)] = repl
     end
     return x
 end
@@ -1000,14 +1000,24 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, GotoNode) && compact.cfg_transforms_enabled
         result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
         result_idx += 1
-    elseif isa(stmt, GlobalRef) || isa(stmt, GotoNode)
+    elseif isa(stmt, GlobalRef)
+        result[result_idx][:inst] = stmt
+        result[result_idx][:type] = argextype(stmt, compact)
+        result_idx += 1
+    elseif isa(stmt, GotoNode)
         result[result_idx][:inst] = stmt
         result_idx += 1
     elseif isa(stmt, GotoIfNot) && compact.cfg_transforms_enabled
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::GotoIfNot
         result[result_idx][:inst] = stmt
         cond = stmt.cond
-        if isa(cond, Bool) && compact.fold_constant_branches
+        if compact.fold_constant_branches
+            if !isa(cond, Bool)
+                condT = widenconditional(argextype(cond, compact))
+                isa(condT, Const) || @goto bail
+                cond = condT.val
+                isa(cond, Bool) || @goto bail
+            end
             if cond
                 result[result_idx][:inst] = nothing
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
@@ -1018,6 +1028,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 result_idx += 1
             end
         else
+            @label bail
             result[result_idx][:inst] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
             result_idx += 1
         end

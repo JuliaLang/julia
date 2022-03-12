@@ -1204,6 +1204,25 @@ end
 @test [(0,0)... 1] == [0 0 1]
 @test Float32[(0,0)... 1] == Float32[0 0 1]
 
+# issue #43960, evaluation order of splatting in `ref`
+let a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test b[f(), g()...] == 3
+    @test a == [1,2]
+end
+
+# issue #44239
+struct KWGetindex end
+Base.getindex(::KWGetindex, args...; kws...) = (args, NamedTuple(kws))
+let A = KWGetindex(), a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test A[f(), g()..., k = f()] === ((2,), (k = 2,))
+    @test a == [1, 2, 1]
+    @test A[var"end"=1] === ((), (var"end" = 1,))
+end
+
 @testset "raw_str macro" begin
     @test raw"$" == "\$"
     @test raw"\n" == "\\n"
@@ -2278,6 +2297,9 @@ h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
+# issue #44343
+f44343(;kw...) = NamedTuple(kw)
+@test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
     # Test these evals shouldnt segfault
@@ -2495,6 +2517,7 @@ end
 end
 
 module Mod2
+import ..Mod.x as x_from_mod
 const y = 2
 end
 
@@ -2535,6 +2558,11 @@ import .Mod.@mac as @m
 @test_throws ErrorException eval(:(import .Mod.func as @notmacro))
 @test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
 @test_throws ErrorException eval(:(using .Mod: func as @notmacro))
+
+import .Mod2.x_from_mod
+
+@test @isdefined(x_from_mod)
+@test x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
@@ -2953,15 +2981,15 @@ end
 end
 
 @testset "slurping into function def" begin
-    x, f()... = [1, 2, 3]
+    x, f1()... = [1, 2, 3]
     @test x == 1
-    @test f() == [2, 3]
+    @test f1() == [2, 3]
     # test that call to `Base.rest` is outside the definition of `f`
-    @test f() === f()
+    @test f1() === f1()
 
-    x, f()... = 1, 2, 3
+    x, f2()... = 1, 2, 3
     @test x == 1
-    @test f() == (2, 3)
+    @test f2() == (2, 3)
 end
 
 @testset "long function bodies" begin
@@ -2980,6 +3008,21 @@ end
 
 @generated g25678(x) = return :x
 @test g25678(7) === 7
+
+# issue 25678: module of name `Core`
+# https://github.com/JuliaLang/julia/pull/40778/files#r784416018
+@test @eval Module() begin
+    Core = 1
+    @generated f() = 1
+    f() == 1
+end
+
+# issue 25678: argument of name `tmp`
+# https://github.com/JuliaLang/julia/pull/43823#discussion_r785365312
+@test @eval Module() begin
+    @generated f(tmp) = tmp
+    f(1) === Int
+end
 
 # issue #19012
 @test Meta.parse("\U2200", raise=false) == Symbol("∀")
@@ -3088,3 +3131,140 @@ function checkUserAccess(u::User)
 	return false
 end
 """)
+
+@testset "empty nd arrays" begin
+    @test :([])    == Expr(:vect)
+    @test :([;])   == Expr(:ncat, 1)
+    @test :([;;])  == Expr(:ncat, 2)
+    @test :([;;;]) == Expr(:ncat, 3)
+
+    @test []    == Array{Any}(undef, 0)
+    @test [;]   == Array{Any}(undef, 0)
+    @test [;;]  == Array{Any}(undef, 0, 0)
+    @test [;;;] == Array{Any}(undef, 0, 0, 0)
+
+    @test :(T[])    == Expr(:ref, :T)
+    @test :(T[;])   == Expr(:typed_ncat, :T, 1)
+    @test :(T[;;])  == Expr(:typed_ncat, :T, 2)
+    @test :(T[;;;]) == Expr(:typed_ncat, :T, 3)
+
+    @test Int[]    == Array{Int}(undef, 0)
+    @test Int[;]   == Array{Int}(undef, 0)
+    @test Int[;;]  == Array{Int}(undef, 0, 0)
+    @test Int[;;;] == Array{Int}(undef, 0, 0, 0)
+
+    @test :([  ]) == Expr(:vect)
+    @test :([
+            ]) == Expr(:vect)
+    @test :([ ;; ]) == Expr(:ncat, 2)
+    @test :([
+             ;;
+            ]) == Expr(:ncat, 2)
+
+    @test_throws ParseError Meta.parse("[; ;]")
+    @test_throws ParseError Meta.parse("[;; ;]")
+    @test_throws ParseError Meta.parse("[;\n;]")
+end
+
+@test Meta.parseatom("@foo", 1; filename="foo", lineno=7) == (Expr(:macrocall, :var"@foo", LineNumberNode(7, :foo)), 5)
+@test Meta.parseall("@foo"; filename="foo", lineno=3) == Expr(:toplevel, LineNumberNode(3, :foo), Expr(:macrocall, :var"@foo", LineNumberNode(3, :foo)))
+
+let ex = :(const $(esc(:x)) = 1; (::typeof(2))() = $(esc(:x)))
+    @test macroexpand(Main, Expr(:var"hygienic-scope", ex, Main)).args[3].args[1] == :((::$(GlobalRef(Main, :typeof))(2))())
+end
+
+struct Foo44013
+    x
+    f
+end
+
+@testset "issue #44013" begin
+    f = Foo44013(1, 2)
+    res = begin (; x, f) = f end
+    @test res == Foo44013(1, 2)
+    @test x == 1
+    @test f == 2
+
+    f = Foo44013(1, 2)
+    res = begin (; f, x) = f end
+    @test res == Foo44013(1, 2)
+    @test x == 1
+    @test f == 2
+end
+
+@testset "typed globals" begin
+    m = Module()
+    @eval m begin
+        x::Int = 1
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @eval m begin
+        global x::Int
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        function f()
+            global x
+            x::Int = 1
+            x = 2.
+        end
+        g() = x
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m function f()
+        global x
+        x::Int = 1
+        x::Float64 = 2.
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        x::Float64 = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        const x = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        const x = 1
+        x::Int = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Float64
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Int
+    end
+
+    m = Module()
+    @eval m module Foo
+        export bar
+        bar = 1
+    end
+    @eval m begin
+        using .Foo
+        bar::Float64 = 2
+    end
+    @test m.bar === 2.0
+    @test Core.get_binding_type(m, :bar) == Float64
+    @test m.Foo.bar === 1
+    @test Core.get_binding_type(m.Foo, :bar) == Any
+end

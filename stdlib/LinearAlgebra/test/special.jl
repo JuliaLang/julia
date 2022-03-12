@@ -145,7 +145,7 @@ end
     LoBi = Bidiagonal(rand(20,20), :L)
     Sym = SymTridiagonal(rand(20), rand(19))
     Dense = rand(20, 20)
-    mats = [UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
+    mats = Any[UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
 
     for op in (+,-,*)
         for A in mats
@@ -160,7 +160,7 @@ end
     diag = 1:5
     offdiag = 1:4
     uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(ComplexF64(1.3, 3.5))]
-    mats = [Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
+    mats = Any[Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
     for T in [ComplexF64, Int64, Rational{Int64}, Float64]
         push!(mats, Diagonal(Vector{T}(diag)))
         push!(mats, Bidiagonal(Vector{T}(diag), Vector{T}(offdiag), 'U'))
@@ -321,7 +321,7 @@ using .Main.Furlongs
         Bl = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
         T = Tridiagonal(rand(elty, 9),rand(elty, 10), rand(elty, 9))
         S = SymTridiagonal(rand(elty, 10), rand(elty, 9))
-        mats = [D, Bu, Bl, T, S]
+        mats = Any[D, Bu, Bl, T, S]
         for A in mats
             @test iszero(zero(A))
             @test isone(one(A))
@@ -375,12 +375,18 @@ using .Main.Furlongs
     @test one(S) isa SymTridiagonal
 
     # eltype with dimensions
-    D = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4])
-    Bu = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
-    Bl =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
-    T = Tridiagonal{Furlong{2, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
-    S = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3])
-    mats = [D, Bu, Bl, T, S]
+    D0 = Diagonal{Furlong{0, Int64}}([1, 2, 3, 4])
+    Bu0 = Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
+    Bl0 =  Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
+    T0 = Tridiagonal{Furlong{0, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
+    S0 = SymTridiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3])
+    F2 = Furlongs.Furlong{2}(1)
+    D2 = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2)
+    Bu2 = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'U')
+    Bl2 =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'L')
+    T2 = Tridiagonal{Furlong{2, Int64}}([1, 2, 3].*F2, [1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    S2 = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    mats = Any[D0, Bu0, Bl0, T0, S0, D2, Bu2, Bl2, T2, S2]
     for A in mats
         @test iszero(zero(A))
         @test isone(one(A))

@@ -912,7 +912,7 @@ julia> (sqrt ∘ sum)(1:10)
 7.416198487095663
 ```
 
-The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described next).
+The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described below).
 
 ```jldoctest
 julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
@@ -921,6 +921,19 @@ julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length
   "tsil"
   "Of"
  7
+```
+
+When combining pipes with anonymous functions, parentheses must be used if subsequent pipes are not to parsed as part of the anonymous function's body. Compare:
+
+```jldoctest
+julia> 1:3 .|> (x -> x^2) |> sum |> sqrt
+3.7416573867739413
+
+julia> 1:3 .|> x -> x^2 |> sum |> sqrt
+3-element Vector{Float64}:
+ 1.0
+ 2.0
+ 3.0
 ```
 
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
@@ -979,6 +992,9 @@ julia> f.(A, B)
  26.0
  33.0
 ```
+
+Keyword arguments are not broadcasted over, but are simply passed through to each call of
+the function.  For example, `round.(x, digits=3)` is equivalent to `broadcast(x -> round(x, digits=3), x)`.
 
 Moreover, *nested* `f.(args...)` calls are *fused* into a single `broadcast` loop. For example,
 `sin.(cos.(X))` is equivalent to `broadcast(x -> sin(cos(x)), X)`, similar to `[sin(cos(x)) for x in X]`:

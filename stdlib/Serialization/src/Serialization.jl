@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 16 # do not make changes without bumping the version #!
+const ser_version = 18 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -419,6 +419,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
     serialize(s, meth.constprop)
+    serialize(s, meth.purity)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -513,6 +514,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, t.max_methods)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -1026,11 +1028,15 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
     constprop = 0x00
+    purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 14
             constprop = deserialize(s)::UInt8
+        end
+        if format_version(s) >= 17
+            purity = deserialize(s)::UInt8
         end
         template = deserialize(s)
     else
@@ -1051,6 +1057,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
         meth.constprop = constprop
+        meth.purity = purity
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1182,6 +1189,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
+    if format_version(s) >= 17
+        ci.purity = deserialize(s)::UInt8
+    end
     return ci
 end
 
@@ -1290,6 +1300,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
+    maxm = format_version(s) >= 18 ? deserialize(s)::UInt8 : UInt8(0)
 
     if makenew
         # TODO: there's an unhanded cycle in the dependency graph at this point:
@@ -1301,6 +1312,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
+        tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
             if !isdefined(ty, :instance)

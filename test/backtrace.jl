@@ -184,7 +184,7 @@ end
 
 # issue 28618
 let bt, found = false
-    @info ""
+    @debug ""
     bt = backtrace()
     for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)

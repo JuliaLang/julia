@@ -278,6 +278,7 @@ end
 
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex(h::Dict{K,V}, key) where V where K
+    isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -702,7 +703,7 @@ end
 
 @propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted_floor!(t))
+    _iterate(t, skip_deleted(t, t.idxfloor))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 

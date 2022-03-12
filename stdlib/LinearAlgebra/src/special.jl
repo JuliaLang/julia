@@ -50,6 +50,15 @@ Bidiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 
+_lucopy(A::Bidiagonal, T)     = copy_oftype(Tridiagonal(A), T)
+_lucopy(A::Diagonal, T)       = copy_oftype(Tridiagonal(A), T)
+function _lucopy(A::SymTridiagonal, T)
+    du = copy_similar(_evview(A), T)
+    dl = copy.(transpose.(du))
+    d  = copy_similar(A.dv, T)
+    return Tridiagonal(dl, d, du)
+end
+
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
 const PossibleTriangularMatrix = Union{Diagonal, Bidiagonal, AbstractTriangular}
 
@@ -315,6 +324,10 @@ one(D::Diagonal) = Diagonal(one.(D.diag))
 one(A::Bidiagonal{T}) where T = Bidiagonal(fill!(similar(A.dv, typeof(one(T))), one(T)), fill!(similar(A.ev, typeof(one(T))), zero(one(T))), A.uplo)
 one(A::Tridiagonal{T}) where T = Tridiagonal(fill!(similar(A.du, typeof(one(T))), zero(one(T))), fill!(similar(A.d, typeof(one(T))), one(T)), fill!(similar(A.dl, typeof(one(T))), zero(one(T))))
 one(A::SymTridiagonal{T}) where T = SymTridiagonal(fill!(similar(A.dv, typeof(one(T))), one(T)), fill!(similar(A.ev, typeof(one(T))), zero(one(T))))
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
+    @eval one(A::$t) = $t(one(parent(A)))
+    @eval oneunit(A::$t) = $t(oneunit(parent(A)))
+end
 
 zero(D::Diagonal) = Diagonal(zero.(D.diag))
 oneunit(D::Diagonal) = Diagonal(oneunit.(D.diag))
@@ -363,3 +376,10 @@ Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.cat_t(T, xs..
 vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
 hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)
+
+# factorizations
+function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)
+    T = choltype(eltype(S))
+    B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
+    cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
+end

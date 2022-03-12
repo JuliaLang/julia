@@ -110,7 +110,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
     JL_TRY {
         const char filename[] = "none";
         jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename));
+                filename, strlen(filename), 1);
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
         JL_GC_POP();
@@ -173,7 +173,7 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
     return jl_string_data(s);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -411,7 +411,7 @@ JL_DLLEXPORT const char *jl_git_commit(void)
     return commit;
 }
 
-// Create function versions of some useful macros
+// Create function versions of some useful macros for GDB or FFI use
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
     return jl_astaggedvalue(v);
@@ -430,6 +430,11 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 {
     return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
+}
+
+JL_DLLEXPORT int ijl_egal(jl_value_t *a, jl_value_t *b)
+{
+    return jl_egal(a, b);
 }
 
 
@@ -459,7 +464,7 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 }
 #endif
 
-JL_DLLEXPORT void (jl_gc_safepoint)(void)
+JL_DLLEXPORT void jl_gc_safepoint(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_gc_safepoint_(ct->ptls);

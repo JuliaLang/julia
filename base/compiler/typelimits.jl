@@ -414,8 +414,12 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
             fields = Vector{Any}(undef, type_nfields)
             anyconst = false
             for i = 1:type_nfields
-                ity = tmerge(getfield_tfunc(typea, Const(i)),
-                             getfield_tfunc(typeb, Const(i)))
+                ai = getfield_tfunc(typea, Const(i))
+                bi = getfield_tfunc(typeb, Const(i))
+                ity = tmerge(ai, bi)
+                if ai === Union{} || bi === Union{}
+                    ity = widenconst(ity)
+                end
                 fields[i] = ity
                 anyconst |= has_nontrivial_const_info(ity)
             end
@@ -424,12 +428,11 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
         if !(typea.source === typeb.source &&
-             typea.isva === typeb.isva &&
              typea.parent === typeb.parent)
             return widenconst(typea)
         end
         return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
-            typea.isva, typea.parent, typea.source)
+            typea.parent, typea.source)
     end
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)

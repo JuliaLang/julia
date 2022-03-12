@@ -99,6 +99,22 @@ julia> module E
 ERROR: cannot assign variables in other modules
 ```
 
+If a top-level expression contains a variable declaration with keyword `local`,
+then that variable is not accessible outside that expression.
+The variable inside the expression does not affect global variables of the same name.
+An example is to declare `local x` in a `begin` or `if` block at the top-level:
+
+```jldoctest
+julia> x = 1
+       begin
+           local x = 0
+           @show x
+       end
+       @show x;
+x = 0
+x = 1
+```
+
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
 
 ## Local Scope
@@ -423,7 +439,7 @@ evaluated first. One might imagine that the `s` on the first line of the loop co
 the `s` on the second line of the loop is local, but that's not possible since the two lines are in
 the same scope block and each variable can only mean one thing in a given scope.
 
-#### On Soft Scope
+#### [On Soft Scope](@id on-soft-scope)
 
 We have now covered all the local scope rules, but before wrapping up this section, perhaps a few
 words should be said about why the ambiguous soft scope case is handled differently in interactive
@@ -782,4 +798,59 @@ WARNING: redefinition of constant x. This may fail, cause incorrect answers, or 
 
 julia> f()
 1
+```
+
+## [Typed Globals](@id man-typed-globals)
+
+!!! compat "Julia 1.8"
+    Support for typed globals was added in Julia 1.8
+
+Similar to being declared as constants, global bindings can also be declared to always be of a
+constant type. This can either be done without assigning an actual value using the syntax
+`global x::T` or upon assignment as `x::T = 123`.
+
+```jldoctest
+julia> x::Float64 = 2.718
+2.718
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> Base.return_types(f)
+1-element Vector{Any}:
+ Float64
+```
+
+For any assignment to a global, Julia will first try to convert it to the appropriate type using
+[`convert`](@ref):
+
+```jldoctest
+julia> global y::Int
+
+julia> y = 1.0
+1.0
+
+julia> y
+1
+
+julia> y = 3.14
+ERROR: InexactError: Int64(3.14)
+Stacktrace:
+[...]
+```
+
+The type does not need to be concrete, but annotations with abstract types typically have little
+performance benefit.
+
+Once a global has either been assigned to or its type has been set, the binding type is not allowed
+to change:
+
+```jldoctest
+julia> x = 1
+1
+
+julia> global x::Int
+ERROR: cannot set type for global x. It already has a value or is already set to a different type.
+Stacktrace:
+[...]
 ```

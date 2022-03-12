@@ -124,8 +124,15 @@ end
         end
 
         # test cholesky of 2x2 Strang matrix
-        S = Matrix{eltya}(SymTridiagonal([2, 2], [-1]))
+        S = SymTridiagonal{eltya}([2, 2], [-1])
+        for uplo in (:U, :L)
+            @test Matrix(@inferred cholesky(Hermitian(S, uplo))) ≈ S
+            if eltya <: Real
+                @test Matrix(@inferred cholesky(Symmetric(S, uplo))) ≈ S
+            end
+        end
         @test Matrix(cholesky(S).U) ≈ [2 -1; 0 sqrt(eltya(3))] / sqrt(eltya(2))
+        @test Matrix(cholesky(S)) ≈ S
 
         # test extraction of factor and re-creating original matrix
         if eltya <: Real
@@ -291,6 +298,13 @@ end
     @test sum(sum(norm, U'*U - XX)) < eps()
 end
 
+@testset "Non-strided Cholesky solves" begin
+    B = randn(5, 5)
+    v = rand(5)
+    @test cholesky(Diagonal(v)) \ B ≈ Diagonal(v) \ B
+    @test B / cholesky(Diagonal(v)) ≈ B / Diagonal(v)
+end
+
 struct WrappedVector{T} <: AbstractVector{T}
     data::Vector{T}
 end
@@ -364,6 +378,10 @@ end
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
 
+    F = cholesky(Hermitian(I(3)))
+    @test F isa Cholesky{Float64,<:Diagonal}
+    @test Matrix(F) ≈ I(3)
+
     # real, failing
     @test_throws PosDefException cholesky(Diagonal([1.0, -2.0]))
     Dnpd = cholesky(Diagonal([1.0, -2.0]); check = false)
@@ -402,9 +420,6 @@ end
 
     factors, uplo, piv, rank, tol, info =
         cholp.factors, cholp.uplo, cholp.piv, cholp.rank, cholp.tol, cholp.info
-
-    @test CholeskyPivoted(factors, uplo, Vector{Int32}(piv), rank, tol, info) == cholp
-    @test CholeskyPivoted(factors, uplo, Vector{Int64}(piv), rank, tol, info) == cholp
 
     @test CholeskyPivoted(factors, uplo, piv, Int32(rank), tol, info) == cholp
     @test CholeskyPivoted(factors, uplo, piv, Int64(rank), tol, info) == cholp
@@ -498,6 +513,15 @@ end
     @test B.U ≈ B32.U
     @test B.L ≈ B32.L
     @test B.UL ≈ B32.UL
+    @test Matrix(B) ≈ A
+    B = cholesky(A, RowMaximum())
+    B32 = cholesky(Float32.(A), RowMaximum())
+    @test B isa CholeskyPivoted{Float16,Matrix{Float16}}
+    @test B.U isa UpperTriangular{Float16, Matrix{Float16}}
+    @test B.L isa LowerTriangular{Float16, Matrix{Float16}}
+    @test B.U ≈ B32.U
+    @test B.L ≈ B32.L
+    @test Matrix(B) ≈ A
 end
 
 @testset "det and logdet" begin

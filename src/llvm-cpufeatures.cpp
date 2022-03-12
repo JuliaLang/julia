@@ -1,5 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-//
+
 // Lower intrinsics that expose subtarget information to the language. This makes it
 // possible to write code that changes behavior based on, e.g., the availability of
 // specific CPU features.
@@ -14,6 +14,7 @@
 //      instead of using the global target machine?
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
@@ -24,22 +25,20 @@
 #include <llvm/Support/Debug.h>
 
 #include "julia.h"
+#include "jitlayers.h"
 
 #define DEBUG_TYPE "cpufeatures"
 
 using namespace llvm;
 
-extern TargetMachine *jl_TargetMachine;
+extern JuliaOJIT *jl_ExecutionEngine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
 Optional<bool> always_have_fma(Function &intr) {
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
 
-#if defined(_OS_WINDOWS_)
-    // FMA on Windows is weirdly broken (#43088)
-    return false;
-#elif defined(_CPU_AARCH64_)
+#if defined(_CPU_AARCH64_)
     return typ == "f32" || typ == "f64";
 #else
     (void)typ;
@@ -57,7 +56,7 @@ bool have_fma(Function &intr, Function &caller) {
 
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_TargetMachine->getTargetFeatureString();
+        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetMachine().getTargetFeatureString();
 
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
@@ -111,13 +110,11 @@ bool lowerCPUFeatures(Module &M)
     }
 }
 
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-};
-
 PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
 {
-    lowerCPUFeatures(M);
+    if (lowerCPUFeatures(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

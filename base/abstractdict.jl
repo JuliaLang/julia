@@ -14,7 +14,7 @@ end
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d, k) = in(k, keys(d))
+haskey(d::AbstractDict, k) = in(k, keys(d))
 
 function in(p::Pair, a::AbstractDict, valcmp=(==))
     v = get(a, p.first, secret_table_token)
@@ -189,7 +189,10 @@ empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
 copy(a::AbstractDict) = merge!(empty(a), a)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
+function copy!(dst::AbstractDict, src::AbstractDict)
+    dst === src && return dst
+    merge!(empty!(dst), src)
+end
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)

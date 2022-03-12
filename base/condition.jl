@@ -91,7 +91,7 @@ function _wait2(c::GenericCondition, waiter::Task)
         # XXX: Ideally we would be able to unset this
         ct.sticky = true
         tid = Threads.threadid()
-        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
     return
 end

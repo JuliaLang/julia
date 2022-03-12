@@ -19,15 +19,16 @@ The number of execution threads is controlled either by using the
 specified, then `-t`/`--threads` takes precedence.
 
 The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
-(`--threads=auto`), where `auto` sets the number of threads to the number of local CPU
-threads.
+(`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
+(see [Command-line Options](@ref command-line-options) for more details).
 
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
 
 !!! compat "Julia 1.7"
-    Using `auto` together with the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
 ```bash

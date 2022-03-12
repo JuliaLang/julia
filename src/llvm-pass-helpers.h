@@ -40,11 +40,6 @@ namespace jl_intrinsics {
 // from modules or add them if they're not available yet.
 // Mainly useful for building Julia-specific LLVM passes.
 struct JuliaPassContext {
-    // Standard types.
-    llvm::Type *T_size;
-    llvm::Type *T_int8;
-    llvm::Type *T_int32;
-    llvm::PointerType *T_pint8;
 
     // Types derived from 'jl_value_t'.
     llvm::Type *T_jlvalue;

@@ -351,8 +351,11 @@ function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta
     return C
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
+_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
+    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
+_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
 
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -372,7 +375,13 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-\(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
+function \(D::Diagonal, B::AbstractVector)
+    j = findfirst(iszero, D.diag)
+    isnothing(j) || throw(SingularException(j))
+    return D.diag .\ B
+end
+\(D::Diagonal, B::AbstractMatrix) =
+    ldiv!(_init(\, D, B).(B), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -595,8 +604,8 @@ transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
-Base.permutedims(D::Diagonal) = D
-Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
+permutedims(D::Diagonal) = D
+permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
 function diag(D::Diagonal{T}, k::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
@@ -666,20 +675,38 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
+    Td = Base.promote_op(/, eltype(D), eltype(D))
+    λ = eigvals(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        λ = λ[p] # make a copy, otherwise this permutes D.diag
+        evecs = zeros(Td, size(D))
+        @inbounds for i in eachindex(p)
+            evecs[p[i],i] = one(Td)
+        end
+    else
+        evecs = Matrix{Td}(I, size(D))
+    end
+    Eigen(λ, evecs)
 end
 
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd(D::Diagonal{T}) where T<:Number
-    S   = abs.(D.diag)
-    piv = sortperm(S, rev = true)
-    U   = Diagonal(D.diag ./ S)
-    Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = Diagonal(fill!(similar(D.diag), one(T)))
-    Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return SVD(Up, S[piv], copy(Vp'))
+function svd(D::Diagonal{T}) where {T<:Number}
+    d = D.diag
+    s = abs.(d)
+    piv = sortperm(s, rev = true)
+    S = s[piv]
+    Td  = typeof(oneunit(T)/oneunit(T))
+    U = zeros(Td, size(D))
+    Vt = copy(U)
+    for i in 1:length(d)
+        j = piv[i]
+        U[j,i] = d[j] / S[i]
+        Vt[i,j] = one(Td)
+    end
+    return SVD(U, S, Vt)
 end
 
 # disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
@@ -726,10 +753,10 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
     Cholesky(A, 'U', convert(BlasInt, info))
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
-
-cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
-    cholesky!(cholcopy(A), NoPivot(); check = check)
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+@inline cholcopy(A::Diagonal) = copy_oftype(A, choltype(A))
+@inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copy_oftype(A, choltype(A))
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

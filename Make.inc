@@ -1,4 +1,4 @@
-# -*- mode: makefile-gmake -*-
+# -*- mode: makefile -*-
 # vi:syntax=make
 
 ## Note:
@@ -14,6 +14,11 @@
 # Set to zero to turn off extra precompile (e.g. for the REPL)
 JULIA_PRECOMPILE ?= 1
 
+# Set FORCE_ASSERTIONS to 1 to enable assertions in the C and C++ portions
+# of the Julia code base. You may also want to set LLVM_ASSERTIONS to 1,
+# which will enable assertions in LLVM.
+# An "assert build" of Julia is a build that has both FORCE_ASSERTIONS=1
+# and LLVM_ASSERTIONS=1.
 FORCE_ASSERTIONS ?= 0
 
 # OPENBLAS build options
@@ -330,6 +335,7 @@ INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
 
 # LLVM Options
 LLVMROOT := $(build_prefix)
+# Set LLVM_ASSERTIONS to 1 to enable assertions in LLVM.
 LLVM_ASSERTIONS := 0
 LLVM_DEBUG := 0
 # set to 1 to get clang and compiler-rt
@@ -477,12 +483,9 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
-ifeq ($(SANITIZE),1)
-$(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
-endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
-JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
@@ -497,7 +500,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic -std=c++14
@@ -512,6 +515,8 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
+
+JLDFLAGS :=
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -868,6 +873,10 @@ ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 DIST_ARCH:=ppc64le
 endif
 ifeq (1,$(ISX86))
+# on x86 make sure not to use 80 bit math when we want 64 bit math.
+ifeq (32,$(BINARY))
+JCFLAGS += -mfpmath=sse
+endif
 DIST_ARCH:=$(BINARY)
 endif
 ifneq (,$(findstring arm,$(ARCH)))
@@ -891,7 +900,6 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
 BINARY:=64
-HAVE_SSP:=1
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
 MCPU:=apple-a12
@@ -1135,7 +1143,7 @@ endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
 FC_VERSION := $(shell $(FC) --version 2>/dev/null | head -1)
-FC_OR_CC_VERISON := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
+FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
 BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
@@ -1228,26 +1236,24 @@ IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void 
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
-JLDFLAGS := -Wl,-Bdynamic
-ifneq ($(SANITIZE),1)
-ifneq ($(SANITIZE_MEMORY),1)
-ifneq ($(LLVM_SANITIZE),1)
+JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
-endif
-endif
 endif
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
 else
 JLIBLDFLAGS :=
 endif
+# Linker doesn't detect automatically that Julia doesn't need executable stack
+JLIBLDFLAGS += -Wl,-z,noexecstack
 else ifneq ($(OS), Darwin)
 JLIBLDFLAGS :=
 endif
 
 ifeq ($(OS), FreeBSD)
-JLDFLAGS := -Wl,-Bdynamic
+JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 
 # Tweak order of libgcc_s in DT_NEEDED,
@@ -1265,7 +1271,6 @@ SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
-JLDFLAGS :=
 HAVE_SSP := 1
 JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
@@ -1274,7 +1279,7 @@ ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
-JLDFLAGS := -Wl,--stack,8388608
+JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
@@ -1469,7 +1474,7 @@ endif
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(ARCH),aarch64)
-LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
 else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
 endif

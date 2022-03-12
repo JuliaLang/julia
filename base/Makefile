@@ -47,8 +47,6 @@ else
 	@echo "const MACHINE = \"$(XC_HOST)\"" >> $@
 endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
-	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
-	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
 else
@@ -99,7 +97,7 @@ endif
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
 	sh $< $(SRCDIR) > $@
-	@# This to avoid touching git_version.jl when it is not modified,
+	@# This to avoid touching version_git.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
 	    $(call PRINT_PERL,) \
@@ -206,7 +204,11 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
+ifeq ($(APPLE_ARCH),arm64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif

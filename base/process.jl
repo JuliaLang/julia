@@ -38,9 +38,13 @@ pipe_writer(p::ProcessChain) = p.in
 # release ownership of the libuv handle
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
-        disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
-        proc.handle = C_NULL
+        iolock_begin()
+        if proc.handle != C_NULL
+            disassociate_julia_struct(proc.handle)
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
+            proc.handle = C_NULL
+        end
+        iolock_end()
     end
     nothing
 end
@@ -52,6 +56,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
+    disassociate_julia_struct(proc) # ensure that data field is set to C_NULL
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
     lock(proc.exitnotify)
@@ -71,9 +76,20 @@ end
 
 const SpawnIOs = Vector{Any} # convenience name for readability
 
+function as_cpumask(cpus::Vector{UInt16})
+    n = max(Int(maximum(cpus)), Int(ccall(:uv_cpumask_size, Cint, ())))
+    cpumask = zeros(Bool, n)
+    for i in cpus
+        cpumask[i] = true
+    end
+    return cpumask
+end
+
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
+    cpumask = cmd.cpus
+    cpumask === nothing || (cpumask = as_cpumask(cmd.cpus))
     GC.@preserve stdio begin
         iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
             let h = rawhandle(io)
@@ -84,25 +100,32 @@ const SpawnIOs = Vector{Any} # convenience name for readability
             end
             for io in stdio]
         handle = Libc.malloc(_sizeof_uv_process)
-        disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
+        disassociate_julia_struct(handle)
         (; exec, flags, env, dir) = cmd
+        iolock_begin()
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,
             env === nothing ? C_NULL : env,
             isempty(dir) ? C_NULL : dir,
+            cpumask === nothing ? C_NULL : cpumask,
+            cpumask === nothing ? 0 : length(cpumask),
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+        if err == 0
+            pp = Process(cmd, handle)
+            associate_julia_struct(handle, pp)
+        else
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
+        end
+        iolock_end()
     end
     if err != 0
-        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), err))
     end
-    pp = Process(cmd, handle)
-    associate_julia_struct(handle, pp)
     return pp
 end
 
@@ -389,16 +412,25 @@ process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
+    function waitkill(P::Process)
+        close(P)
+        # 0.1 seconds after we hope it dies (from closing stdio),
+        # we kill the process with SIGTERM (15)
+        local t = Timer(0.1) do t
+            process_running(P) && kill(P)
+        end
+        wait(P)
+        close(t)
+    end
     ret = try
         f(P)
     catch
-        kill(P)
-        close(P)
+        waitkill(P)
         rethrow()
     end
     close(P.in)
     if !eof(P.out)
-        close(P.out)
+        waitkill(P)
         throw(_UVError("open(do)", UV_EPIPE))
     end
     success(P) || pipeline_error(P)
@@ -641,6 +673,7 @@ show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p),
 for f in (:length, :firstindex, :lastindex, :keys, :first, :last, :iterate)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
+Iterators.reverse(cmd::Cmd) = Iterators.reverse(cmd.exec)
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)

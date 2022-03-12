@@ -314,15 +314,17 @@ end
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
-widenconditional(@nospecialize typ) = typ
-function widenconditional(typ::AnyConditional)
-    if typ.vtype === Union{}
-        return Const(false)
-    elseif typ.elsetype === Union{}
-        return Const(true)
-    else
-        return Bool
+function widenconditional(@nospecialize typ)
+    if isa(typ, AnyConditional)
+        if typ.vtype === Union{}
+            return Const(false)
+        elseif typ.elsetype === Union{}
+            return Const(true)
+        else
+            return Bool
+        end
     end
+    return typ
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
