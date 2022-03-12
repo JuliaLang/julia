@@ -685,7 +685,7 @@ end
 # In the case of an odd number of passes, the returned list will === the input list t,
 # not v. This is one of the many reasons radix_sort! is not exported.
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
-               ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
+                     ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
     # bits is unsigned and CHUNK_SIZE is a compile time constant for performance reasons.
     MASK = UInt(1) << CHUNK_SIZE - 0x1
     counts = Vector{UInt}(undef, MASK+2)
