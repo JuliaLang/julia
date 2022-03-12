@@ -1050,7 +1050,13 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
     }
 #endif
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+    cantFail(
+#if defined(JL_USE_JITLINK) && JL_LLVM_VERSION >= 140000
+        JITLayer
+#else
+        OptSelLayer
+#endif
+        .add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
