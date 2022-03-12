@@ -6,6 +6,31 @@ namespace JL_I {
 
 #include "ccall.cpp"
 
+STATISTIC(EmittedConstants, "Number of constants emitted");
+STATISTIC(EmittedCoercedUnboxes, "Number of unbox coercions emitted");
+STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
+STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
+STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
+STATISTIC(Emitted_arraylen, "Number of arraylen calls emitted");
+STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
+STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
+STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
+STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
+STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
+STATISTIC(Emitted_bitcast, "Number of bitcast calls emitted");
+STATISTIC(Emitted_trunc_int, "Number of trunc_int calls emitted");
+STATISTIC(Emitted_sext_int, "Number of sext_int calls emitted");
+STATISTIC(Emitted_zext_int, "Number of zext_int calls emitted");
+STATISTIC(Emitted_uitofp, "Number of uitofp calls emitted");
+STATISTIC(Emitted_sitofp, "Number of sitofp calls emitted");
+STATISTIC(Emitted_fptoui, "Number of fptoui calls emitted");
+STATISTIC(Emitted_fptosi, "Number of fptosi calls emitted");
+STATISTIC(Emitted_fptrunc, "Number of fptrunc calls emitted");
+STATISTIC(Emitted_fpext, "Number of fpext calls emitted");
+STATISTIC(Emitted_not_int, "Number of not_int calls emitted");
+STATISTIC(Emitted_have_fma, "Number of have_fma calls emitted");
+STATISTIC(EmittedUntypedIntrinsics, "Number of untyped intrinsics emitted");
+
 using namespace JL_I;
 
 FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C)}, false); }
@@ -1090,6 +1115,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     switch (f) {
     case arraylen: {
+        ++Emitted_arraylen;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         jl_value_t *typ = jl_unwrap_unionall(x.typ);
@@ -1098,54 +1124,70 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }
     case pointerref:
+        ++Emitted_pointerref;
         assert(nargs == 3);
         return emit_pointerref(ctx, argv);
     case pointerset:
+        ++Emitted_pointerset;
         assert(nargs == 4);
         return emit_pointerset(ctx, argv);
     case atomic_fence:
+        ++Emitted_atomic_fence;
         assert(nargs == 1);
         return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
+        ++Emitted_atomic_pointerref;
         assert(nargs == 2);
         return emit_atomic_pointerref(ctx, argv);
     case atomic_pointerset:
     case atomic_pointerswap:
     case atomic_pointermodify:
     case atomic_pointerreplace:
+        ++Emitted_atomic_pointerop;
         return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
     case bitcast:
+        ++Emitted_bitcast;
         assert(nargs == 2);
         return generic_bitcast(ctx, argv);
     case trunc_int:
+        ++Emitted_trunc_int;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::Trunc, argv, true, true);
     case sext_int:
+        ++Emitted_sext_int;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::SExt, argv, true, true);
     case zext_int:
+        ++Emitted_zext_int;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::ZExt, argv, true, true);
     case uitofp:
+        ++Emitted_uitofp;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::UIToFP, argv, false, true);
     case sitofp:
+        ++Emitted_sitofp;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::SIToFP, argv, false, true);
     case fptoui:
+        ++Emitted_fptoui;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPToUI, argv, true, false);
     case fptosi:
+        ++Emitted_fptosi;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPToSI, argv, true, false);
     case fptrunc:
+        ++Emitted_fptrunc;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPTrunc, argv, false, false);
     case fpext:
+        ++Emitted_fpext;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPExt, argv, false, false);
 
     case not_int: {
+        ++Emitted_not_int;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!jl_is_primitivetype(x.typ))
@@ -1161,6 +1203,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     }
 
     case have_fma: {
+        ++Emitted_have_fma;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!x.constant || !jl_is_datatype(x.constant))
@@ -1242,6 +1285,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **argvalues, size_t nargs,
                                      jl_datatype_t **newtyp, jl_value_t *xtyp)
 {
+    ++EmittedUntypedIntrinsics;
     Value *x = nargs > 0 ? argvalues[0] : NULL;
     Value *y = nargs > 1 ? argvalues[1] : NULL;
     Value *z = nargs > 2 ? argvalues[2] : NULL;
