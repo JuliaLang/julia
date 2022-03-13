@@ -740,9 +740,8 @@ maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on 
 maybe_unsigned(x::Union{Int8, Int16, Int32, Int64, Int128}) = unsigned(x)
 function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
     mn = mx = v[lo]
-    while lo < hi
-        lo += 1
-        vi = v[lo]
+    @inbounds for i in (lo+1):hi
+        vi = v[i]
         lt(o, vi, mn) && (mn = vi)
         lt(o, mx, vi) && (mx = vi)
     end
