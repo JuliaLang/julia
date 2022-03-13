@@ -817,7 +817,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
         return Serial.deserialize!(v, u, lo, hi, o)
     end
-    # At this point, we are comitted to radix sort.
+    # At this point, we are committed to radix sort.
 
     # we subtract u_min to avoid radixing over unnecessary bits. For example,
     # Int32[3, -1, 2] serializes to UInt32[0x80000003, 0x7fffffff, 0x80000002]
