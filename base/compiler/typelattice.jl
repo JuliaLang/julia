@@ -200,7 +200,7 @@ The non-strict partial order over the type inference lattice.
             end
             for i in 1:nfields(a.val)
                 # XXX: let's handle varargs later
-                isdefined(a.val, i) || return false
+                isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
                 ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
             end
             return true
@@ -289,6 +289,48 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     return a ⊑ b && b ⊑ a
 end
 
+# compute typeintersect over the extended inference lattice,
+# as precisely as we can,
+# where v is in the extended lattice, and t is a Type.
+function tmeet(@nospecialize(v), @nospecialize(t))
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
+        end
+        return v
+    elseif isa(v, PartialStruct)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        end
+        ti = typeintersect(widev, t)
+        valid_as_lattice(ti) || return Bottom
+        @assert widev <: Tuple
+        new_fields = Vector{Any}(undef, length(v.fields))
+        for i = 1:length(new_fields)
+            vfi = v.fields[i]
+            if isvarargtype(vfi)
+                new_fields[i] = vfi
+            else
+                new_fields[i] = tmeet(vfi, widenconst(getfield_tfunc(t, Const(i))))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
+            end
+        end
+        return tuple_tfunc(new_fields)
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
+    end
+    ti = typeintersect(widenconst(v), t)
+    valid_as_lattice(ti) || return Bottom
+    return ti
+end
+
 widenconst(c::AnyConditional) = Bool
 widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
 widenconst(m::MaybeUndef) = widenconst(m.typ)
@@ -314,15 +356,17 @@ end
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
-widenconditional(@nospecialize typ) = typ
-function widenconditional(typ::AnyConditional)
-    if typ.vtype === Union{}
-        return Const(false)
-    elseif typ.elsetype === Union{}
-        return Const(true)
-    else
-        return Bool
+function widenconditional(@nospecialize typ)
+    if isa(typ, AnyConditional)
+        if typ.vtype === Union{}
+            return Const(false)
+        elseif typ.elsetype === Union{}
+            return Const(true)
+        else
+            return Bool
+        end
     end
+    return typ
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
@@ -424,4 +468,46 @@ function stupdate1!(state::VarTable, change::StateUpdate)
         return true
     end
     return false
+end
+
+# compute typeintersect over the extended inference lattice,
+# as precisely as we can,
+# where v is in the extended lattice, and t is a Type.
+function tmeet(@nospecialize(v), @nospecialize(t))
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
+        end
+        return v
+    elseif isa(v, PartialStruct)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        end
+        ti = typeintersect(widev, t)
+        valid_as_lattice(ti) || return Bottom
+        @assert widev <: Tuple
+        new_fields = Vector{Any}(undef, length(v.fields))
+        for i = 1:length(new_fields)
+            vfi = v.fields[i]
+            if isvarargtype(vfi)
+                new_fields[i] = vfi
+            else
+                new_fields[i] = tmeet(vfi, widenconst(getfield_tfunc(t, Const(i))))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
+            end
+        end
+        return tuple_tfunc(new_fields)
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
+    end
+    ti = typeintersect(widenconst(v), t)
+    valid_as_lattice(ti) || return Bottom
+    return ti
 end

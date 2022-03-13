@@ -21,6 +21,14 @@ function get_max_methods(mod::Module, interp::AbstractInterpreter)
     max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
 end
 
+function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpreter)
+    if f !== nothing
+        fmm = typeof(f).name.max_methods
+        fmm !== UInt8(0) && return Int(fmm)
+    end
+    return get_max_methods(mod, interp)
+end
+
 const empty_bitset = BitSet()
 
 function should_infer_for_effects(sv::InferenceState)
@@ -30,7 +38,7 @@ end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
-                                  sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
+                                  sv::InferenceState, max_methods::Int)
     if !should_infer_for_effects(sv) &&
             sv.params.unoptimize_throw_blocks &&
             is_stmt_throw_block(get_curr_ssaflag(sv))
@@ -47,7 +55,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     argtypes = arginfo.argtypes
-    matches = find_matching_methods(argtypes, atype, method_table(interp, sv), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+    matches = find_matching_methods(argtypes, atype, method_table(interp), InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         tristate_merge!(sv, Effects())
@@ -637,7 +645,7 @@ end
 
 function pure_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo, sv::InferenceState)
-    return !isoverlayed(method_table(interp, sv)) &&
+    return !isoverlayed(method_table(interp)) &&
            f !== nothing &&
            length(applicable) == 1 &&
            is_method_pure(applicable[1]::MethodMatch) &&
@@ -674,7 +682,7 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
-    return !isoverlayed(method_table(interp, sv)) &&
+    return !isoverlayed(method_table(interp)) &&
            f !== nothing &&
            result.edge !== nothing &&
            is_total_or_error(result.edge_effects) &&
@@ -1474,10 +1482,10 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    result = findsup(types, method_table(interp))
-    result === nothing && return CallMeta(Any, false)
-    method, valid_worlds = result
+    match, valid_worlds = findsup(types, method_table(interp))
+    match === nothing && return CallMeta(Any, false)
     update_valid_age!(sv, valid_worlds)
+    method = match.method
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
@@ -1512,7 +1520,7 @@ end
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, sv::InferenceState,
-        max_methods::Int = get_max_methods(sv.mod, interp))
+        max_methods::Int = get_max_methods(f, sv.mod, interp))
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
 
@@ -1621,8 +1629,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
     elseif la == 2 && istopfunction(f, :typename)
         return CallMeta(typename_static(argtypes[2]), MethodResultPure())
-    elseif max_methods > 1 && istopfunction(f, :copyto!)
-        max_methods = 1
     elseif la == 3 && istopfunction(f, :typejoin)
         if is_all_const_arg(arginfo)
             val = _pure_eval_call(f, arginfo)
@@ -1666,7 +1672,7 @@ end
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
-                       sv::InferenceState, max_methods::Int = get_max_methods(sv.mod, interp))
+                       sv::InferenceState, max_methods::Union{Int, Nothing} = nothing)
     argtypes = arginfo.argtypes
     ft = argtypes[1]
     f = singleton_type(ft)
@@ -1686,8 +1692,10 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, false)
         end
+        max_methods = max_methods === nothing ? get_max_methods(sv.mod, interp) : max_methods
         return abstract_call_gf_by_type(interp, nothing, arginfo, argtypes_to_type(argtypes), sv, max_methods)
     end
+    max_methods = max_methods === nothing ? get_max_methods(f, sv.mod, interp) : max_methods
     return abstract_call_known(interp, f, arginfo, sv, max_methods)
 end
 
@@ -2068,6 +2076,10 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     # and is valid and good inter-procedurally
     isa(rt, Conditional) && return InterConditional(slot_id(rt.var), rt.vtype, rt.elsetype)
     isa(rt, InterConditional) && return rt
+    return widenreturn_noconditional(rt)
+end
+
+function widenreturn_noconditional(@nospecialize(rt))
     isa(rt, Const) && return rt
     isa(rt, Type) && return rt
     if isa(rt, PartialStruct)
@@ -2075,7 +2087,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
         local anyrefine = false
         for i in 1:length(fields)
             a = fields[i]
-            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
+            a = isvarargtype(a) ? a : widenreturn_noconditional(widenconditional(a))
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
                 anyrefine = has_const_info(a) ||
@@ -2090,6 +2102,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     end
     return widenconst(rt)
 end
+
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
@@ -2110,14 +2123,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     states = frame.stmt_types
-    n = frame.nstmts
+    nstmts = frame.nstmts
     nargs = frame.nargs
     def = frame.linfo.def
     isva = isa(def, Method) && def.isva
     nslots = nargs - isva
     slottypes = frame.slottypes
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
-    while frame.pc´´ <= n
+    while frame.pc´´ <= nstmts
         # make progress on the active ip set
         local pc::Int = frame.pc´´
         while true # inner loop optimizes the common case where it can run straight from pc to pc + 1
@@ -2189,7 +2202,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                 end
             elseif isa(stmt, ReturnNode)
-                pc´ = n + 1
+                pc´ = nstmts + 1
                 bestguess = frame.bestguess
                 rt = abstract_eval_value(interp, stmt.val, changes, frame)
                 rt = widenreturn(rt, bestguess, nslots, slottypes, changes)
@@ -2310,7 +2323,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 ssavaluetypes[pc] = Any
             end
 
-            pc´ > n && break # can't proceed with the fast-path fall-through
+            pc´ > nstmts && break # can't proceed with the fast-path fall-through
             newstate = stupdate!(states[pc´], changes)
             if isa(stmt, GotoNode) && frame.pc´´ < pc´
                 # if we are processing a goto node anyways,

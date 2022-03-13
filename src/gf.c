@@ -1217,7 +1217,7 @@ static jl_method_instance_t *cache_method(
     return newmeth;
 }
 
-static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid);
+static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_value_t *mt, size_t world, size_t *min_valid, size_t *max_valid);
 
 static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world)
 {
@@ -1237,7 +1237,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
 
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
-    jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, world, &min_valid, &max_valid);
+    jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
     jl_method_instance_t *nf = NULL;
     if (matc) {
         JL_GC_PUSH1(&matc);
@@ -2549,36 +2549,37 @@ JL_DLLEXPORT jl_value_t *jl_apply_generic(jl_value_t *F, jl_value_t **args, uint
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
 
-static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, size_t world, size_t *min_valid, size_t *max_valid)
+static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_value_t *mt, size_t world, size_t *min_valid, size_t *max_valid)
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
         return NULL;
-    jl_methtable_t *mt = jl_method_table_for(unw);
-    if ((jl_value_t*)mt == jl_nothing)
+    if (mt == jl_nothing)
+        mt = (jl_value_t*)jl_method_table_for(unw);
+    if (mt == jl_nothing)
         mt = NULL;
-    jl_value_t *matches = ml_matches(mt, (jl_tupletype_t*)types, 1, 0, 0, world, 1, min_valid, max_valid, NULL);
+    jl_value_t *matches = ml_matches((jl_methtable_t*)mt, (jl_tupletype_t*)types, 1, 0, 0, world, 1, min_valid, max_valid, NULL);
     if (matches == jl_false || jl_array_len(matches) != 1)
         return NULL;
     jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
     return matc;
 }
 
-JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, size_t world)
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_value_t *types, jl_value_t *mt, size_t world)
 {
     // Deprecated: Use jl_gf_invoke_lookup_worlds for future development
     size_t min_valid = 0;
     size_t max_valid = ~(size_t)0;
-    jl_method_match_t *matc = _gf_invoke_lookup(types, world, &min_valid, &max_valid);
+    jl_method_match_t *matc = _gf_invoke_lookup(types, mt, world, &min_valid, &max_valid);
     if (matc == NULL)
         return jl_nothing;
     return (jl_value_t*)matc->method;
 }
 
 
-JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, size_t world, size_t *min_world, size_t *max_world)
+JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world)
 {
-    jl_method_match_t *matc = _gf_invoke_lookup(types, world, min_world, max_world);
+    jl_method_match_t *matc = _gf_invoke_lookup(types, mt, world, min_world, max_world);
     if (matc == NULL)
         return jl_nothing;
     return (jl_value_t*)matc;
@@ -2599,7 +2600,7 @@ jl_value_t *jl_gf_invoke(jl_value_t *types0, jl_value_t *gf, jl_value_t **args, 
     jl_value_t *types = NULL;
     JL_GC_PUSH1(&types);
     types = jl_argtype_with_function(gf, types0);
-    jl_method_t *method = (jl_method_t*)jl_gf_invoke_lookup(types, world);
+    jl_method_t *method = (jl_method_t*)jl_gf_invoke_lookup(types, jl_nothing, world);
     JL_GC_PROMISE_ROOTED(method);
 
     if ((jl_value_t*)method == jl_nothing) {

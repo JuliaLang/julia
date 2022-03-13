@@ -234,6 +234,7 @@ append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
 @test watcher_counter[] == 0
 @test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
 @test watcher_counter[] == 1
+pop!(Base.active_project_callbacks)
 
 @test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
@@ -732,14 +733,14 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-for _ = 1:2 pop!(Base.active_project_callbacks) end
+pop!(Base.active_project_callbacks)
 Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
 
 # issue #28190
-module Foo; import Libdl; end
-import .Foo.Libdl; import Libdl
-@test Foo.Libdl === Libdl
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
 
 @testset "include with mapexpr" begin
     let exprs = Any[]

@@ -63,21 +63,11 @@ export
     trsm!,
     trsm
 
-# Eventually this will be replaced with `libblastrampoline_jll.libblastrampoline`
-const libblastrampoline = "libblastrampoline"
-libblastrampoline_handle = C_NULL
-
-# Legacy bindings that some packages (such as NNlib.jl) use.
-# We maintain these for backwards-compatibility but new packages
-# should not look at these, instead preferring to parse the output
-# of BLAS.get_config()
-const libblas = libblastrampoline
-const liblapack = libblastrampoline
-
-import LinearAlgebra
-using LinearAlgebra: BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
+using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, BlasInt, DimensionMismatch, checksquare, stride1, chkstride1
 
 include("lbt.jl")
+
+vendor() = :lbt
 
 """
     get_config()
@@ -88,17 +78,6 @@ Return an object representing the current `libblastrampoline` configuration.
     `get_config()` requires at least Julia 1.7.
 """
 get_config() = lbt_get_config()
-
-# We hard-lock `vendor()` to `openblas(64)` here to satisfy older code, but all new code should use
-# `get_config()` since it is now possible to have multiple vendors loaded at once.
-function vendor()
-    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor; force=true)
-    if USE_BLAS64
-        return :openblas64
-    else
-        return :openblas
-    end
-end
 
 if USE_BLAS64
     macro blasfunc(x)

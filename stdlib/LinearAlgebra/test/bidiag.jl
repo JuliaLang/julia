@@ -437,7 +437,7 @@ Random.seed!(1)
             Tridiag = Tridiagonal(rand(elty, 9), rand(elty, 10), rand(elty, 9))
             SymTri = SymTridiagonal(rand(elty, 10), rand(elty, 9))
 
-            mats = [Diag, BidiagU, BidiagL, Tridiag, SymTri]
+            mats = Any[Diag, BidiagU, BidiagL, Tridiag, SymTri]
             for a in mats
                 for b in mats
                     @test a*b ≈ Matrix(a)*Matrix(b)

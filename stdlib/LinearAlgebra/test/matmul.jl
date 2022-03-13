@@ -477,7 +477,7 @@ end
     X = convert(Matrix{elty}, [1.0 2.0; 3.0 4.0])
     Y = convert(Matrix{elty}, [1.5 2.5; 3.5 4.5])
     @test dot(X, Y) == convert(elty, 35.0)
-    Z = convert(Vector{Matrix{elty}}, [reshape(1:4, 2, 2), fill(1, 2, 2)])
+    Z = Matrix{elty}[reshape(1:4, 2, 2), fill(1, 2, 2)]
     @test dot(Z, Z) == convert(elty, 34.0)
 end
 

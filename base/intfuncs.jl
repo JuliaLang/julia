@@ -321,7 +321,6 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
-@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p

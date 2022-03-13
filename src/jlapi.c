@@ -411,7 +411,7 @@ JL_DLLEXPORT const char *jl_git_commit(void)
     return commit;
 }
 
-// Create function versions of some useful macros
+// Create function versions of some useful macros for GDB or FFI use
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
     return jl_astaggedvalue(v);
@@ -430,6 +430,11 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 {
     return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
+}
+
+JL_DLLEXPORT int ijl_egal(jl_value_t *a, jl_value_t *b)
+{
+    return jl_egal(a, b);
 }
 
 
@@ -459,7 +464,7 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 }
 #endif
 
-JL_DLLEXPORT void (jl_gc_safepoint)(void)
+JL_DLLEXPORT void jl_gc_safepoint(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_gc_safepoint_(ct->ptls);
