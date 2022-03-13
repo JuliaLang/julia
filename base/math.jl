@@ -1010,8 +1010,8 @@ end
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
-    xyhi = logxhi*y
-    xylo = logxlo*y
+    xyhi, xylo = two_mul(logxhi,y)
+    xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
@@ -1041,6 +1041,7 @@ end
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
+    n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
         n==-2 && return rx*rx #keep compatability with literal_pow
@@ -1048,7 +1049,6 @@ end
         x = rx
         n = -n
     end
-    n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
             err = muladd(y, xnlo, x*ynlo)
@@ -1065,8 +1065,9 @@ end
 end
 
 function ^(x::Float32, n::Integer)
-    n < 0 && return inv(x)^(-n)
+    n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
     Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
