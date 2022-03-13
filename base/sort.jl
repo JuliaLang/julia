@@ -708,7 +708,7 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
         # of bucket 0x00 in t[counts[1]], the next element of bucket 0x00 in t[counts[1]+1],
         # and the last element of bucket 0x00 in t[counts[2]-1].
 
-        for k in lo:hi # Is this iteration slower than it could be?
+        for k in lo:hi
             x = v[k]                  # lookup the element
             i = (x >> shift)&MASK + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
