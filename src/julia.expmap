@@ -30,6 +30,9 @@
     _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
     _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
     _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
+    _Z18jl_get_llvm_targetB5cxx11bRj;
+    _Z25jl_get_llvm_disasm_targetB5cxx11v;
+    _Z25jl_get_llvm_clone_targetsv;
     LLVMExtra*;
     llvmGetPassPluginInfo;
 

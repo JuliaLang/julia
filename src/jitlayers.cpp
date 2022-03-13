@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include "processor.h"
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
@@ -38,7 +39,6 @@ using namespace llvm;
 #include "codegen_shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
-#include "processor.h"
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION >= 140000
