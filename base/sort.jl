@@ -925,7 +925,8 @@ function sort!(v::AbstractVector;
 end
 
 # sort! for vectors of few unique integers
-function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse, lo=firstindex(x), hi=lastindex(x))
+function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybereverse,
+                         lo=firstindex(x), hi=lastindex(x))
     offs = 1 - minval
 
     counts = fill(0, rangelen)
@@ -1319,7 +1320,7 @@ using ..Base: @inbounds, @eval, AbstractVector, nothing, signed, unsigned,
 Return `typeof(serialize(x::T, order))` if [`serialize`](@ref) and
 [`deserialize`](@ref) are implemented.
 
-If either is not implemented, return nothing.
+If either is not implemented, return `nothing`.
 """
 Serializable(T::Type, order::Ordering) = nothing
 
