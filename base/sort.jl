@@ -825,7 +825,10 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # Float32[2.012, 400.0, 12.345] serializes to UInt32[0x3fff3b63, 0x3c37ffff, 0x414570a4]
     # which is reduced to UInt32[0x03c73b64, 0x00000000, 0x050d70a5] using only 26 bits.
     # the overhead for this subtraction is small enough that it is worthwhile in many cases.
-    @inbounds for i in lo:hi u[i] -= u_min end # this line is faster than u[lo:hi] .-= u_min
+    # this is faster than u[lo:hi] .-= u_min
+    @inbounds for i in lo:hi
+        u[i] -= u_min
+    end
 
     # chunk_size is the number of bits to radix over at once.
     # We need to allocate an array of size 2^chunk size, and on the other hand the higher
