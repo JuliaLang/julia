@@ -1607,7 +1607,7 @@ catch ex
 end
 @test length(npids) == 0
 @test nprocs() == 1
-@test abs(t - 10.0) <= 5.0
+@test abs(t - 10.0) <= 25.0
 
 VERBOSE && println("\nTesting options to retain stdout/stderr...")
 # tests for start_worker options to retain stdio (issue #31035)
