@@ -723,16 +723,18 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
     v
 end
 
+# For AbstractVector{Bool}, counting sort is always best.
+# This is an implementation of counting sort specialized for Bools.
 function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
-    for i in lo:hi
+    @inbounds for i in lo:hi
         if v[i] == first
             count += 1
         end
     end
-    v[lo:lo+count-1] .= first
-    v[lo+count:hi] .= !first
+    @inbounds v[lo:lo+count-1] .= first
+    @inbounds v[lo+count:hi] .= !first
     v
 end
 
