@@ -1395,7 +1395,7 @@ function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering
 end
 
 function deserialize!(v::AbstractVector, u::AbstractVector{U},
-    lo::Integer, hi::Integer, order::Ordering, offset::U=zero(U)) where U <: Unsigned
+                      lo::Integer, hi::Integer, order::Ordering, offset::U=zero(U)) where U <: Unsigned
     @inbounds for i in lo:hi
         v[i] = deserialize(eltype(v), u[i]+offset, order)
     end
