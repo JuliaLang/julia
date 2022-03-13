@@ -434,11 +434,11 @@ given element type, order, length, and contents. If no alternatives are viable, 
 the `fallback` algorithm. AdaptiveSort is stable if `fallback` is stable.
 
 Algorithms currently in use:
-  * Insertion sort for short lists
-  * Radix sort for long lists
-  * Counting sort for lists of integers spanning a short range
+  * Insertion sort for short vectors
+  * Radix sort for long vectors
+  * Counting sort for vectors of integers spanning a short range
   * Fallback algorithm when the input cannot be efficiently
-    converted into a list of integers maintaining sort order
+    converted into a vector of integers maintaining sort order
 """
 struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
     fallback::Fallback
@@ -468,7 +468,7 @@ end
 Indicate that a sorting function should use the insertion sort
 algorithm. Insertion sort traverses the collection one element
 at a time, inserting each element into its correct, sorted position in
-the output list.
+the output vector.
 
 Characteristics:
   * *stable*: preserves the ordering of elements which
@@ -671,8 +671,8 @@ end
 
 # This is a stable least significant bit first radix sort.
 #
-# That is, it first sorts the entire list by the last CHUNK_SIZE bits, then by the second to
-# last CHUNK_SIZE bits, and so on. Stability means that it will not reorder two elements
+# That is, it first sorts the entire vector by the last CHUNK_SIZE bits, then by the second
+# to last CHUNK_SIZE bits, and so on. Stability means that it will not reorder two elements
 # that compare equal. This is essential so that the order introduced by earlier,
 # less significant passes is preserved by later passes.
 #
@@ -682,7 +682,7 @@ end
 #  * moves elements into the computed indices in the swap array
 #  * switches the swap and working array
 #
-# In the case of an odd number of passes, the returned list will === the input list t,
+# In the case of an odd number of passes, the returned vector will === the input vector t,
 # not v. This is one of the many reasons radix_sort! is not exported.
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                      ::Val{CHUNK_SIZE}, t::AbstractVector{U}) where {U <: Unsigned, CHUNK_SIZE}
@@ -716,7 +716,7 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
 
-        v, t = t, v # swap the now sorted destination list t back into the primary list v
+        v, t = t, v # swap the now sorted destination vector t back into primary vector v
 
     end
 
