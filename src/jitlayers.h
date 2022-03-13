@@ -60,6 +60,8 @@ void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 DataLayout create_jl_data_layout(TargetMachine &TM);
+orc::ThreadSafeContext jl_llvm_context_acquire();
+void jl_llvm_context_release(orc::ThreadSafeContext C);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name

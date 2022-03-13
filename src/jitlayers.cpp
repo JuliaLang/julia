@@ -66,6 +66,38 @@ void jl_dump_llvm_opt_impl(void *s)
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
 
+template<typename ResourceT, typename CreatorT>
+class TSPool {
+    public:
+    TSPool(CreatorT creator=[](){ return ResourceT(); }) : creator(std::move(creator)) {}
+    ResourceT acquire() {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (pool.empty()) {
+            return creator();
+        } else {
+            return pool.pop_back_val();
+        }
+    }
+    void release(ResourceT resource) {
+        std::lock_guard<std::mutex> lock(mutex);
+        pool.emplace_back(std::move(resource));
+    }
+    private:
+    CreatorT creator;
+    llvm::SmallVector<ResourceT, 8> pool;
+    std::mutex mutex;
+};
+
+static const auto context_creator = [](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); };
+static TSPool<decltype(context_creator()), decltype(context_creator)> context_pool(context_creator);
+
+orc::ThreadSafeContext jl_llvm_context_acquire() {
+    return context_pool.acquire();
+}
+void jl_llvm_context_release(orc::ThreadSafeContext C) {
+    return context_pool.release(std::move(C));
+}
+
 static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports);
 static void jl_decorate_module(Module &M);
 static uint64_t getAddressForFunction(StringRef fname);
@@ -222,11 +254,15 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
+    auto ctxt = orc::ThreadSafeContext();
     if (into == NULL) {
-        backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext(), pparams ? pparams->imaging_mode : codegen_imaging_mode());
+        ctxt = jl_llvm_context_acquire();
+        backing = jl_create_llvm_module("cextern", ctxt, pparams ? pparams->imaging_mode : codegen_imaging_mode());
         into = &backing;
+    } else {
+        ctxt = into->getContext();
     }
-    jl_codegen_params_t params(into->getContext());
+    jl_codegen_params_t params(ctxt);
     if (pparams == NULL)
         pparams = &params;
     const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
@@ -241,11 +277,13 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             if (params._shared_module)
                 jl_ExecutionEngine->addModule(std::move(params._shared_module));
         }
-        if (success && llvmmod == NULL)
-            jl_ExecutionEngine->addModule(std::move(*into));
+        if (success && llvmmod == NULL) {
+            jl_ExecutionEngine->addModule(std::move(backing));
+        }
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (!llvmmod) jl_llvm_context_release(std::move(ctxt));
     JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
@@ -300,7 +338,6 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    auto &context = jl_ExecutionEngine->getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -336,7 +373,9 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             if (src->inferred && !codeinst->inferred)
                 codeinst->inferred = jl_nothing;
         }
+        auto context = jl_llvm_context_acquire();
         _jl_compile_codeinst(codeinst, src, world, context);
+        jl_llvm_context_release(std::move(context));
         if (codeinst->invoke == NULL)
             codeinst = NULL;
     }
@@ -357,7 +396,6 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto &context = jl_ExecutionEngine->getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -381,7 +419,9 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             src = (jl_code_info_t*)unspec->def->uninferred;
         }
         assert(src && jl_is_code_info(src));
+        auto context = jl_llvm_context_acquire();
         _jl_compile_codeinst(unspec, src, unspec->min_world, context);
+        jl_llvm_context_release(std::move(context));
         if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
             jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
@@ -411,7 +451,6 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            auto &context = jl_ExecutionEngine->getContext();
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -433,7 +472,9 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
+                        auto context = jl_llvm_context_acquire();
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, context);
+                        jl_llvm_context_release(context);
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }

@@ -251,12 +251,12 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
-    auto &ctxt = llvmctxt ? *reinterpret_cast<orc::ThreadSafeContext*>(llvmctxt) : jl_ExecutionEngine->getContext();
     std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&jl_codegen_lock);
+    auto ctxt = llvmctxt ? *reinterpret_cast<orc::ThreadSafeContext*>(llvmctxt) : jl_llvm_context_acquire();
     jl_codegen_params_t params(ctxt);
     params.params = cgparams;
     uint64_t compiler_start_time = 0;
@@ -394,6 +394,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (!llvmctxt) jl_llvm_context_release(std::move(ctxt));
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
