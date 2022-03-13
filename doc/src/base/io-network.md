@@ -13,6 +13,7 @@ Base.take!(::Base.GenericIOBuffer)
 Base.fdio
 Base.flush
 Base.close
+Base.closewrite
 Base.write
 Base.read
 Base.read!
@@ -28,7 +29,7 @@ Base.seekend
 Base.skip
 Base.mark
 Base.unmark
-Base.reset
+Base.reset(::IO)
 Base.ismarked
 Base.eof
 Base.isreadonly
@@ -36,6 +37,7 @@ Base.iswritable
 Base.isreadable
 Base.isopen
 Base.fd
+Base.redirect_stdio
 Base.redirect_stdout
 Base.redirect_stdout(::Function, ::Any)
 Base.redirect_stderr
@@ -72,7 +74,7 @@ Base.eachline
 Base.displaysize
 ```
 
-## Multimedia I/O
+## [Multimedia I/O](@id Multimedia-I/O)
 
 Just as text output is performed by [`print`](@ref) and user-defined types can indicate their textual
 representation by overloading [`show`](@ref), Julia provides a standardized mechanism for rich multimedia

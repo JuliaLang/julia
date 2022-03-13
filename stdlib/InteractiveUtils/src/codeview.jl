@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # highlighting settings
-highlighting = Dict{Symbol, Bool}(
+const highlighting = Dict{Symbol, Bool}(
     :warntype => true,
     :llvm => true,
     :native => true,
 )
 
-llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
+const llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
     :default     => (false, :normal), # e.g. comma, equal sign, unknown token
     :comment     => (false, :light_black),
     :label       => (false, :light_red),
@@ -57,10 +57,16 @@ Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to sp
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Symbol=:default, optimize::Bool=false)
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
+                       debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t, optimize=optimize)
+    for (src, rettype) in code_typed(f, t; optimize, kwargs...)
+        if !(src isa Core.CodeInfo)
+            println(io, src)
+            println(io, "  failed to infer")
+            continue
+        end
         lambda_io::IOContext = io
         p = src.parent
         nargs::Int = 0
@@ -127,12 +133,13 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t); debuginfo::Sy
         print(io, "Body")
         warntype_type_printer(io, rettype, true)
         println(io)
-        Base.IRShow.show_ir(lambda_io, src, lineprinter(src), warntype_type_printer)
+        irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+        Base.IRShow.show_ir(lambda_io, src, irshow_config)
         println(io)
     end
     nothing
 end
-code_warntype(@nospecialize(f), @nospecialize(t); kwargs...) =
+code_warntype(@nospecialize(f), @nospecialize(t=Base.default_tt(f)); kwargs...) =
     code_warntype(stdout, f, t; kwargs...)
 
 import Base.CodegenParams
@@ -140,19 +147,31 @@ import Base.CodegenParams
 # Printing code representations in IR and assembly
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol,
-                        params::CodegenParams=CodegenParams())
+                        optimize::Bool, debuginfo::Symbol, binary::Bool,
+                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0)))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    world = typemax(UInt)
+    world = Base.get_world_counter()
     match = Base._which(signature_type(f, t), world)
     linfo = Core.Compiler.specialize_method(match)
     # get the code for it
+    if debuginfo === :default
+        debuginfo = :source
+    elseif debuginfo !== :source && debuginfo !== :none
+        throw(ArgumentError("'debuginfo' must be either :source or :none"))
+    end
     if native
-        str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo)
+        if syntax !== :att && syntax !== :intel
+            throw(ArgumentError("'syntax' must be either :intel or :att"))
+        end
+        if dump_module
+            str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary, params)
+        else
+            str = _dump_function_linfo_native(linfo, world, wrapper, syntax, debuginfo, binary)
+        end
     else
         str = _dump_function_linfo_llvm(linfo, world, wrapper, strip_ir_metadata, dump_module, optimize, debuginfo, params)
     end
@@ -161,18 +180,20 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     return str
 end
 
-function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol)
-    if syntax !== :att && syntax !== :intel
-        throw(ArgumentError("'syntax' must be either :intel or :att"))
-    end
-    if debuginfo === :default
-        debuginfo = :source
-    elseif debuginfo !== :source && debuginfo !== :none
-        throw(ArgumentError("'debuginfo' must be either :source or :none"))
-    end
+function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool)
     str = ccall(:jl_dump_method_asm, Ref{String},
-                (Any, UInt, Cint, Bool, Ptr{UInt8}, Ptr{UInt8}),
-                linfo, world, 0, wrapper, syntax, debuginfo)
+                (Any, UInt, Bool, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                linfo, world, false, wrapper, syntax, debuginfo, binary)
+    return str
+end
+
+function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
+    llvmctxt = ccall(:jl_get_ee_context, Ptr{Cvoid}, ())
+    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, Ptr{Cvoid}, UInt, Bool, Bool, CodegenParams), linfo, llvmctxt, world, wrapper, true, params)
+    llvmf == C_NULL && error("could not compile the specified method")
+    str = ccall(:jl_dump_function_asm, Ref{String},
+                (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                llvmf, false, syntax, debuginfo, binary)
     return str
 end
 
@@ -181,12 +202,8 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    if debuginfo === :default
-        debuginfo = :source
-    elseif debuginfo !== :source && debuginfo !== :none
-        throw(ArgumentError("'debuginfo' must be either :source or :none"))
-    end
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
+    llvmctxt = ccall(:jl_get_ee_context, Ptr{Cvoid}, ())
+    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, Ptr{Cvoid}, UInt, Bool, Bool, CodegenParams), linfo, llvmctxt, world, wrapper, optimize, params)
     llvmf == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
                 (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
@@ -207,39 +224,43 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 """
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, !raw, dump_module, :att, optimize, debuginfo)
+    d = _dump_function(f, types, false, false, !raw, dump_module, :att, optimize, debuginfo, false)
     if highlighting[:llvm] && get(io, :color, false)
         print_llvm(io, d)
     else
         print(io, d)
     end
 end
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
     code_llvm(io, f, types, raw, dump_module, optimize, debuginfo)
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
-    code_llvm(stdout, f, types; raw=raw, dump_module=dump_module, optimize=optimize, debuginfo=debuginfo)
-
+code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
+    code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
 
 """
-    code_native([io=stdout,], f, types; syntax=:att, debuginfo=:default)
+    code_native([io=stdout,], f, types; syntax=:att, debuginfo=:default, binary=false, dump_module=true)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
-Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
+
+* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+
+See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
-function code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple);
-                     syntax::Symbol=:att, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, true, false, false, false, syntax, true, debuginfo)
+function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
+                     dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
+    d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
     if highlighting[:native] && get(io, :color, false)
         print_native(io, d)
     else
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Tuple); syntax::Symbol=:att, debuginfo::Symbol=:default) =
-    code_native(stdout, f, types; syntax=syntax, debuginfo=debuginfo)
-code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
+    code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
+code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 
 ## colorized IR and assembly printing
 

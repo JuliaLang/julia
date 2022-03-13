@@ -172,7 +172,7 @@ hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
 @propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 @propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
+@constprop :none function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -278,6 +278,7 @@ end
 
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex(h::Dict{K,V}, key) where V where K
+    isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -303,7 +304,6 @@ end
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
 function ht_keyindex2!(h::Dict{K,V}, key) where V where K
-    age0 = h.age
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -368,6 +368,7 @@ end
         # > 3/4 deleted or > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
+    nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
@@ -392,6 +393,22 @@ function setindex!(h::Dict{K,V}, v0, key::K) where V where K
 
     return h
 end
+
+function setindex!(h::Dict{K,Any}, v, key::K) where K
+    @nospecialize v
+    index = ht_keyindex2!(h, key)
+
+    if index > 0
+        h.age += 1
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
+    else
+        @inbounds _setindex!(h, v, key, -index)
+    end
+
+    return h
+end
+
 
 """
     get!(collection, key, default)
@@ -487,6 +504,9 @@ end
 
 Return the value stored for the given key, or the given default value if no mapping for the
 key is present.
+
+!!! compat "Julia 1.7"
+    For tuples and numbers, this function requires at least Julia 1.7.
 
 # Examples
 ```jldoctest
@@ -683,7 +703,7 @@ end
 
 @propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted_floor!(t))
+    _iterate(t, skip_deleted(t, t.idxfloor))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
@@ -717,13 +737,28 @@ end
 function map!(f, iter::ValueIterator{<:Dict})
     dict = iter.dict
     vals = dict.vals
-    # @inbounds is here so the it gets propagated to isslotfiled
+    # @inbounds is here so that it gets propagated to isslotfilled
     @inbounds for i = dict.idxfloor:lastindex(vals)
         if isslotfilled(dict, i)
             vals[i] = f(vals[i])
         end
     end
     return iter
+end
+
+function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
+    for (k, v) in d2
+        i = ht_keyindex2!(d1, k)
+        if i > 0
+            d1.vals[i] = combine(d1.vals[i], v)
+        else
+            if !isequal(k, convert(K, k))
+                throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+            end
+            @inbounds _setindex!(d1, convert(V, v), k, -i)
+        end
+    end
+    return d1
 end
 
 struct ImmutableDict{K,V} <: AbstractDict{K,V}
@@ -792,6 +827,14 @@ function get(dict::ImmutableDict, key, default)
     return default
 end
 
+function get(default::Callable, dict::ImmutableDict, key)
+    while isdefined(dict, :parent)
+        isequal(dict.key, key) && return dict.value
+        dict = dict.parent
+    end
+    return default()
+end
+
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :parent) && return nothing
@@ -801,6 +844,6 @@ length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
-_similar_for(c::Dict, ::Type{Pair{K,V}}, itr, isz) where {K, V} = empty(c, K, V)
-_similar_for(c::AbstractDict, ::Type{T}, itr, isz) where {T} =
+_similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
+_similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

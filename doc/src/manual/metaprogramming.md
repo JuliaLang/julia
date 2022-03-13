@@ -466,7 +466,7 @@ julia> eval(ex)
 
 ## [Macros](@id man-macros)
 
-Macros provide a method to include generated code in the final body of a program. A macro maps
+Macros provide a mechanism to include generated code in the final body of a program. A macro maps
 a tuple of arguments to a returned *expression*, and the resulting expression is compiled directly
 rather than requiring a runtime [`eval`](@ref) call. Macro arguments may include expressions,
 literal values, and symbols.

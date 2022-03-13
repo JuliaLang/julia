@@ -109,6 +109,19 @@ end
     end
 end
 
+@testset "two-argument functions" begin
+    two_argument_functions = [atan, hypot, log]
+
+    # All two-argument functions return missing when operating on two missing's
+    # All two-argument functions return missing when operating on a scalar and an missing
+    # All two-argument functions return missing when operating on an missing and a scalar
+    for f in two_argument_functions
+        @test ismissing(f(missing, missing))
+        @test ismissing(f(1, missing))
+        @test ismissing(f(missing, 1))
+    end
+end
+
 @testset "bit operators" begin
     bit_operators = [&, |, ⊻]
 
@@ -164,9 +177,11 @@ end
     @test ismissing(⊽(1, missing))
 end
 
-@testset "* string concatenation" begin
+@testset "* string/char concatenation" begin
     @test ismissing("a" * missing)
+    @test ismissing('a' * missing)
     @test ismissing(missing * "a")
+    @test ismissing(missing * 'a')
 end
 
 # Emulate a unitful type such as Dates.Minute
@@ -260,10 +275,10 @@ end
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
-    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing"
+    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing\n"
     b = IOBuffer()
     display(TextDisplay(b), [1 missing])
-    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing"
+    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing\n"
 end
 
 @testset "arrays with missing values" begin
@@ -463,10 +478,10 @@ end
             @test_throws BoundsError x[3, 1]
             @test findfirst(==(2), x) === nothing
             @test isempty(findall(==(2), x))
-            @test_throws ArgumentError argmin(x)
-            @test_throws ArgumentError findmin(x)
-            @test_throws ArgumentError argmax(x)
-            @test_throws ArgumentError findmax(x)
+            @test_throws "reducing over an empty collection is not allowed" argmin(x)
+            @test_throws "reducing over an empty collection is not allowed" findmin(x)
+            @test_throws "reducing over an empty collection is not allowed" argmax(x)
+            @test_throws "reducing over an empty collection is not allowed" findmax(x)
         end
     end
 
@@ -523,8 +538,8 @@ end
         for n in 0:3
             itr = skipmissing(Vector{Union{Int,Missing}}(fill(missing, n)))
             @test sum(itr) == reduce(+, itr) == mapreduce(identity, +, itr) === 0
-            @test_throws ArgumentError reduce(x -> x/2, itr)
-            @test_throws ArgumentError mapreduce(x -> x/2, +, itr)
+            @test_throws "reducing over an empty collection is not allowed" reduce(x -> x/2, itr)
+            @test_throws "reducing over an empty collection is not allowed" mapreduce(x -> x/2, +, itr)
         end
 
         # issue #35504
@@ -571,6 +586,16 @@ end
 
     @test coalesce(nothing, missing) === nothing
     @test coalesce(missing, nothing) === nothing
+end
+
+@testset "@coalesce" begin
+    @test @coalesce() === missing
+    @test @coalesce(1) === 1
+    @test @coalesce(nothing) === nothing
+    @test @coalesce(missing) === missing
+
+    @test @coalesce(1, error("failed")) === 1
+    @test_throws ErrorException @coalesce(missing, error("failed"))
 end
 
 mutable struct Obj; x; end

@@ -145,20 +145,43 @@ const UTF8PROC_STRIPMARK = (1<<13)
 
 utf8proc_error(result) = error(unsafe_string(ccall(:utf8proc_errmsg, Cstring, (Cssize_t,), result)))
 
-function utf8proc_map(str::Union{String,SubString{String}}, options::Integer)
-    nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
-                   str, sizeof(str), C_NULL, 0, options)
-    nwords < 0 && utf8proc_error(nwords)
+# static wrapper around user callback function
+utf8proc_custom_func(codepoint::UInt32, callback::Any) =
+    UInt32(callback(codepoint))::UInt32
+
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::typeof(identity))
+    ret = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
+                str, sizeof(str), buffer, nwords, options)
+    ret < 0 && utf8proc_error(ret)
+    return ret
+end
+function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
+    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
+                str, sizeof(str), buffer, nwords, options,
+                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
+    ret < 0 && utf8proc_error(ret)
+    return ret
+end
+
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
+    nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
     buffer = Base.StringVector(nwords*4)
-    nwords = ccall(:utf8proc_decompose, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint),
-                   str, sizeof(str), buffer, nwords, options)
-    nwords < 0 && utf8proc_error(nwords)
+    nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
     nbytes < 0 && utf8proc_error(nbytes)
     return String(resize!(buffer, nbytes))
 end
 
-utf8proc_map(s::AbstractString, flags::Integer) = utf8proc_map(String(s), flags)
+# from julia_charmap.h, used by julia_chartransform in the Unicode stdlib
+const _julia_charmap = Dict{UInt32,UInt32}(
+    0x025B => 0x03B5,
+    0x00B5 => 0x03BC,
+    0x00B7 => 0x22C5,
+    0x0387 => 0x22C5,
+    0x2212 => 0x002D,
+)
+
+utf8proc_map(s::AbstractString, flags::Integer, chartransform=identity) = utf8proc_map(String(s), flags, chartransform)
 
 # Documented in Unicode module
 function normalize(
@@ -176,6 +199,7 @@ function normalize(
     casefold::Bool=false,
     lump::Bool=false,
     stripmark::Bool=false,
+    chartransform=identity,
 )
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
@@ -198,7 +222,7 @@ function normalize(
     casefold && (flags = flags | UTF8PROC_CASEFOLD)
     lump && (flags = flags | UTF8PROC_LUMP)
     stripmark && (flags = flags | UTF8PROC_STRIPMARK)
-    utf8proc_map(s, flags)
+    utf8proc_map(s, flags, chartransform)
 end
 
 function normalize(s::AbstractString, nf::Symbol)
@@ -283,7 +307,7 @@ isassigned(c) = UTF8PROC_CATEGORY_CN < category_code(c) <= UTF8PROC_CATEGORY_CO
 Tests whether a character is a lowercase letter (according to the Unicode
 standard's `Lowercase` derived property).
 
-See also: [`isuppercase`](@ref).
+See also [`isuppercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -307,7 +331,7 @@ islowercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isl
 Tests whether a character is an uppercase letter (according to the Unicode
 standard's `Uppercase` derived property).
 
-See also: [`islowercase`](@ref).
+See also [`islowercase`](@ref).
 
 # Examples
 ```jldoctest
@@ -328,7 +352,7 @@ isuppercase(c::AbstractChar) = ismalformed(c) ? false : Bool(ccall(:utf8proc_isu
 
 Tests whether a character is cased, i.e. is lower-, upper- or title-cased.
 
-See also: [`islowercase`](@ref), [`isuppercase`](@ref).
+See also [`islowercase`](@ref), [`isuppercase`](@ref).
 """
 function iscased(c::AbstractChar)
     cat = category_code(c)
@@ -514,7 +538,7 @@ isxdigit(c::AbstractChar) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 Return `s` with all characters converted to uppercase.
 
-See also: [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
+See also [`lowercase`](@ref), [`titlecase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -529,7 +553,7 @@ uppercase(s::AbstractString) = map(uppercase, s)
 
 Return `s` with all characters converted to lowercase.
 
-See also: [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
+See also [`uppercase`](@ref), [`titlecase`](@ref), [`lowercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -551,7 +575,7 @@ which characters should be considered as word separators.
 See also [`uppercasefirst`](@ref) to capitalize only the first
 character in `s`.
 
-See also: [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
+See also [`uppercase`](@ref), [`lowercase`](@ref), [`uppercasefirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -593,8 +617,8 @@ Return `s` with the first character converted to uppercase (technically "title
 case" for Unicode). See also [`titlecase`](@ref) to capitalize the first
 character of every word in `s`.
 
-See also: [`lowercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
-[`titlecase`](@ref)
+See also [`lowercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+[`titlecase`](@ref).
 
 # Examples
 ```jldoctest
@@ -615,8 +639,8 @@ end
 
 Return `s` with the first character converted to lowercase.
 
-See also: [`uppercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
-[`titlecase`](@ref)
+See also [`uppercasefirst`](@ref), [`uppercase`](@ref), [`lowercase`](@ref),
+[`titlecase`](@ref).
 
 # Examples
 ```jldoctest
@@ -681,7 +705,7 @@ function iterate(g::GraphemeIterator, i_=(Int32(0),firstindex(g.s)))
     y === nothing && return nothing
     c0, k = y
     while k <= ncodeunits(s) # loop until next grapheme is s[i:j]
-        c, ℓ = iterate(s, k)
+        c, ℓ = iterate(s, k)::NTuple{2,Any}
         isgraphemebreak!(state, c0, c) && break
         j = k
         k = ℓ

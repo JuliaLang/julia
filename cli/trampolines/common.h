@@ -1,3 +1,7 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
+#include "../../src/support/platform.h"
+
 // Preprocessor annoyances
 #define CONCAT_(x,y)    x##y
 #define CONCAT(x,y)     CONCAT_(x, y)
@@ -23,6 +27,9 @@
                             .ascii STR(-export:##I(name)); \
                             .ascii " "; \
                             .section .text
+#elif defined(__ELF__)
+#define DEBUGINFO(name)     .type CNAME(name),@function
+#define EXPORT(name)        .size CNAME(name), . - CNAME(name)
 #else
 #define DEBUGINFO(name)
 #define EXPORT(name)

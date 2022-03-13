@@ -96,6 +96,15 @@ if nameof(@__MODULE__) === :Base
     $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
+function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
+    if @generated
+        Expr(:new, :(NamedTuple{names, T}),
+             Any[ :(convert(fieldtype(T, $n), getfield(nt, $(QuoteNode(names[n]))))) for n in 1:length(names) ]...)
+    else
+        NamedTuple{names, T}(map(Fix1(getfield, nt), names))
+    end
+end
+
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
@@ -103,7 +112,7 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
         types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length(names))...}
-        NamedTuple{names, types}(Tuple(getfield(nt, n) for n in 1:length(names)))
+        NamedTuple{names, types}(map(Fix1(getfield, nt), names))
     end
 end
 
@@ -165,7 +174,8 @@ function show(io::IO, t::NamedTuple)
         typeinfo = get(io, :typeinfo, Any)
         print(io, "(")
         for i = 1:n
-            print(io, fieldname(typeof(t),i), " = ")
+            show_sym(io, fieldname(typeof(t), i))
+            print(io, " = ")
             show(IOContext(io, :typeinfo =>
                            t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
                  getfield(t, i))
@@ -267,7 +277,7 @@ merge(a::NamedTuple,     b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
-merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, b.data)
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, getfield(b, :data))
 
 merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 
@@ -306,8 +316,8 @@ end
 keys(nt::NamedTuple{names}) where {names} = names
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
-get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
-get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
+get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
+get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key) ? getfield(nt, key) : f()
 tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
 
@@ -338,7 +348,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
     else
         names = diff_names(an, bn)
         types = Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
-        NamedTuple{names,types}(map(n->getfield(a, n), names))
+        NamedTuple{names,types}(map(Fix1(getfield, a), names))
     end
 end
 

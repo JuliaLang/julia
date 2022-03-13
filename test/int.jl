@@ -141,6 +141,10 @@ SItypes = Base.BitSigned_types
         R = sizeof(S) < sizeof(Int) ? Int : S
         @test promote(R(3), T(3)) === (sizeof(R) < sizeof(T) ? (T(3), T(3)) : (R(3), R(3)))
     end
+
+    for i in 1:length(UItypes)
+        @test promote(UItypes[i](3), SItypes[i](3)) === (UItypes[i](3), UItypes[i](3))
+    end
 end
 @testset "limiting conversions" begin
     for T in (Int8, Int16, Int32, Int64)
@@ -320,10 +324,16 @@ end
     end
 end
 
-@testset "issue #21092" begin
+@testset "Underscores in big_str" begin
     @test big"1_0_0_0" == BigInt(1000)
     @test_throws ArgumentError big"1_0_0_0_"
     @test_throws ArgumentError big"_1_0_0_0"
+
+    @test big"1_0.2_5" == BigFloat(10.25)
+    @test_throws ArgumentError big"_1_0.2_5"
+    @test_throws ArgumentError big"1_0.2_5_"
+    @test_throws ArgumentError big"1_0_.2_5"
+    @test_throws ArgumentError big"1_0._2_5"
 end
 
 # issue #26779

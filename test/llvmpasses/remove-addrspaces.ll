@@ -1,4 +1,5 @@
-; RUN: opt -load libjulia-internal%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s
 
 
 define i64 @getindex({} addrspace(10)* nonnull align 16 dereferenceable(40)) {
@@ -100,4 +101,11 @@ loop:
 
 exit:
   ret i64 %sum
+}
+
+
+; COM: check that address spaces in byval types are processed correctly
+define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} addrspace(10)*]) %0) {
+; CHECK: define void @byval_type([1 x {}*]* byval([1 x {}*]) %0)
+  ret void
 }

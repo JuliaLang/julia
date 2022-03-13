@@ -9,7 +9,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 #ifdef _OS_WINDOWS_
-#include <windows.h>
 #include <direct.h>
 #else
 #include <unistd.h>
@@ -58,20 +57,10 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 }
 
 #ifdef _OS_WINDOWS_
-#ifdef _MSC_VER
-#if (_MSC_VER >= 1930) || (_MSC_VER < 1800)
-#error This version of MSVC has not been tested.
-#elif _MSC_VER >= 1900 // VC++ 2015 / 2017 / 2019
-#define CRTDLL_BASENAME "vcruntime140"
-#elif _MSC_VER >= 1800 // VC++ 2013
-#define CRTDLL_BASENAME "msvcr120"
-#endif
-#else
 #define CRTDLL_BASENAME "msvcrt"
-#endif
 
-const char jl_crtdll_basename[] = CRTDLL_BASENAME;
-const char jl_crtdll_name[] = CRTDLL_BASENAME ".dll";
+JL_DLLEXPORT const char *jl_crtdll_basename = CRTDLL_BASENAME;
+const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
 
 #undef CRTDLL_BASENAME
 #endif
@@ -130,7 +119,7 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
 #ifdef RTLD_NOLOAD
                   | JL_RTLD(flags, NOLOAD)
 #endif
-#if defined(RTLD_DEEPBIND) && !(defined(JL_ASAN_ENABLED) || defined(JL_TSAN_ENABLED) || defined(JL_MSAN_ENABLED))
+#if defined(RTLD_DEEPBIND) && !(defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_))
                   | JL_RTLD(flags, DEEPBIND)
 #endif
 #ifdef RTLD_FIRST
@@ -156,7 +145,7 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
-JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err) JL_NOTSAFEPOINT // (or throw)
+JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, int throw_err)
 {
     char path[PATHBUF], relocated[PATHBUF];
     int i;
@@ -166,6 +155,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     uv_stat_t stbuf;
     void *handle;
     int abspath;
+    int is_atpath;
     // number of extensions to try — if modname already ends with the
     // standard extension, then we don't try adding additional extensions
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
@@ -178,39 +168,45 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                 (LPCWSTR)(uintptr_t)(&jl_load_dynamic_library),
                                 (HMODULE*)&handle)) {
-#ifndef __clang_analyzer__
-            // Hide the error throwing from the analyser since there isn't a way to express
-            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
-#endif
         }
 #else
         Dl_info info;
         if (!dladdr((void*)(uintptr_t)&jl_load_dynamic_library, &info) || !info.dli_fname) {
-#ifndef __clang_analyzer__
-            // Hide the error throwing from the analyser since there isn't a way to express
-            // "safepoint only when throwing error" currently.
             jl_error("could not load base module");
-#endif
         }
         handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
         goto done;
     }
 
-    abspath = isabspath(modname);
+    abspath = jl_isabspath(modname);
+    is_atpath = 0;
+
+    // Detect if our `modname` is something like `@rpath/libfoo.dylib`
+#ifdef _OS_DARWIN_
+    size_t nameLen = strlen(modname);
+    const char *const atPaths[] = {"@executable_path/", "@loader_path/", "@rpath/"};
+    for (i = 0; i < sizeof(atPaths)/sizeof(char*); ++i) {
+        size_t atLen = strlen(atPaths[i]);
+        if (nameLen >= atLen && 0 == strncmp(modname, atPaths[i], atLen)) {
+            is_atpath = 1;
+        }
+    }
+#endif
 
     /*
       this branch permutes all base paths in DL_LOAD_PATH with all extensions
       note: skip when !jl_base_module to avoid UndefVarError(:DL_LOAD_PATH),
             and also skip for absolute paths
+            and also skip for `@`-paths on macOS
       We also do simple string replacement here for elements starting with `@executable_path/`.
       While these exist as OS concepts on Darwin, we want to use them on other platforms
       such as Windows, so we emulate them here.
     */
-    if (!abspath && jl_base_module != NULL) {
+    if (!abspath && !is_atpath && jl_base_module != NULL) {
         jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"));
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? b->value : NULL);
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
@@ -274,11 +270,7 @@ notfound:
 #else
         const char *reason = dlerror();
 #endif
-#ifndef __clang_analyzer__
-        // Hide the error throwing from the analyser since there isn't a way to express
-        // "safepoint only when throwing error" currently.
         jl_errorf("could not load library \"%s\"\n%s", modname, reason);
-#endif
     }
     handle = NULL;
 
@@ -321,7 +313,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
         char err[256];
         win32_formatmessage(GetLastError(), err, sizeof(err));
 #endif
-#ifndef __clang_analyzer__
+#ifndef __clang_gcanalyzer__
         // Hide the error throwing from the analyser since there isn't a way to express
         // "safepoint only when throwing error" currently.
         jl_errorf("could not load symbol \"%s\":\n%s", symbol, err);
@@ -332,7 +324,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-const char *jl_dlfind_win32(const char *f_name)
+JL_DLLEXPORT const char *jl_dlfind_win32(const char *f_name)
 {
     void * dummy;
     if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))

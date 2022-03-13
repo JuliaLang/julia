@@ -74,7 +74,7 @@ end
 ## Libuv error handling ##
 
 struct IOError <: Exception
-    msg::AbstractString
+    msg::String
     code::Int32
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
@@ -107,6 +107,7 @@ end
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end
+function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
@@ -129,21 +130,21 @@ function reinit_stdio()
 end
 
 """
-    stdin
+    stdin::IO
 
 Global variable referring to the standard input stream.
 """
 :stdin
 
 """
-    stdout
+    stdout::IO
 
 Global variable referring to the standard out stream.
 """
 :stdout
 
 """
-    stderr
+    stderr::IO
 
 Global variable referring to the standard error stream.
 """

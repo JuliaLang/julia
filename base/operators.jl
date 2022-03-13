@@ -93,6 +93,10 @@ and of missing values. `isequal` treats all floating-point `NaN` values as equal
 to each other, treats `-0.0` as unequal to `0.0`, and [`missing`](@ref) as equal
 to `missing`. Always returns a `Bool` value.
 
+`isequal` is an equivalence relation - it is reflexive (`===` implies `isequal`), symmetric
+(`isequal(a, b)` implies `isequal(b, a)`) and transitive (`isequal(a, b)` and
+`isequal(b, c)` implies `isequal(a, c)`).
+
 # Implementation
 The default implementation of `isequal` calls `==`, so a type that does not involve
 floating-point values generally only needs to define `==`.
@@ -101,8 +105,12 @@ floating-point values generally only needs to define `==`.
 that `hash(x) == hash(y)`.
 
 This typically means that types for which a custom `==` or `isequal` method exists must
-implement a corresponding `hash` method (and vice versa). Collections typically implement
-`isequal` by calling `isequal` recursively on all contents.
+implement a corresponding [`hash`](@ref) method (and vice versa). Collections typically
+implement `isequal` by calling `isequal` recursively on all contents.
+
+Furthermore, `isequal` is linked with [`isless`](@ref), and they work together to
+define a fixed total ordering, where exactly one of `isequal(x, y)`, `isless(x, y)`, or
+`isless(y, x)` must be `true` (and the other two `false`).
 
 Scalar types generally do not need to implement `isequal` separate from `==`, unless they
 represent floating-point numbers amenable to a more efficient implementation than that
@@ -121,9 +129,15 @@ true
 
 julia> isequal(0.0, -0.0)
 false
+
+julia> missing == missing
+missing
+
+julia> isequal(missing, missing)
+true
 ```
 """
-isequal(x, y) = x == y
+isequal(x, y) = (x == y)::Bool # all `missing` cases are handled in missing.jl
 
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
@@ -135,8 +149,8 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 """
     isless(x, y)
 
-Test whether `x` is less than `y`, according to a fixed total order.
-`isless` is not defined on all pairs of values `(x, y)`. However, if it
+Test whether `x` is less than `y`, according to a fixed total order (defined together with
+[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -188,7 +202,7 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 !!! note
 
     Like `min`, `isgreater` orders containers (tuples, vectors, etc)
-    lexigraphically with `isless(y, x)` rather than recursively with itself:
+    lexicographically with `isless(y, x)` rather than recursively with itself:
 
     ```jldoctest
     julia> Base.isgreater(1, NaN) # 1 is greater than NaN
@@ -220,7 +234,11 @@ isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
 """
     isunordered(x)
 
-Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+Return `true` if `x` is a value that is not orderable according to [`<`](@ref), such as `NaN`
+or `missing`.
+
+The values that evaluate to `true` with this predicate may be orderable with respect to other
+orderings such as [`isless`](@ref).
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
@@ -416,22 +434,6 @@ const ≥ = >=
 isless(x::Real, y::Real) = x<y
 
 """
-    ifelse(condition::Bool, x, y)
-
-Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
-that it is an ordinary function, so all the arguments are evaluated first. In some cases,
-using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
-provide higher performance in tight loops.
-
-# Examples
-```jldoctest
-julia> ifelse(1 > 2, 1, 2)
-2
-```
-"""
-ifelse
-
-"""
     cmp(x,y)
 
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
@@ -466,7 +468,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. See also the [`maximum`](@ref) function
+Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 
 # Examples
@@ -480,7 +482,7 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. See also the [`minimum`](@ref) function
+Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 
 # Examples
@@ -494,7 +496,9 @@ min(x,y) = ifelse(isless(y, x), y, x)
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`.
+
+See also [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 # Examples
 ```jldoctest
@@ -504,64 +508,14 @@ julia> minmax('c','b')
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
-"""
-    extrema(itr) -> Tuple
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-
-# Examples
-```jldoctest
-julia> extrema(2:10)
-(2, 10)
-
-julia> extrema([9,pi,4.5])
-(3.141592653589793, 9.0)
-```
-"""
-extrema(itr) = _extrema_itr(identity, itr)
-
-"""
-    extrema(f, itr) -> Tuple
-
-Compute both the minimum and maximum of `f` applied to each element in `itr` and return
-them as a 2-tuple. Only one pass is made over `itr`.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
-
-# Examples
-```jldoctest
-julia> extrema(sin, 0:π)
-(0.0, 0.9092974268256817)
-```
-"""
-extrema(f, itr) = _extrema_itr(f, itr)
-
-function _extrema_itr(f, itr)
-    y = iterate(itr)
-    y === nothing && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = y
-    vmin = vmax = f(v)
-    while true
-        y = iterate(itr, s)
-        y === nothing && break
-        (x, s) = y
-        fx = f(x)
-        vmax = max(fx, vmax)
-        vmin = min(fx, vmin)
-    end
-    return (vmin, vmax)
-end
-
-extrema(x::Real) = (x, x)
-extrema(f, x::Real) = (y = f(x); (y, y))
-
 ## definitions providing basic traits of arithmetic operators ##
 
 """
     identity(x)
 
 The identity function. Returns its argument.
+
+See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
 
 # Examples
 ```jldoctest
@@ -590,7 +544,7 @@ afoldl(op, a) = a
 function afoldl(op, a, bs...)
     l = length(bs)
     i =  0; y = a;            l == i && return y
-    #@nexprs 15 i -> (y = op(y, bs[i]); l == i && return y)
+    #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)
     i =  1; y = op(y, bs[i]); l == i && return y
     i =  2; y = op(y, bs[i]); l == i && return y
     i =  3; y = op(y, bs[i]); l == i && return y
@@ -606,19 +560,35 @@ function afoldl(op, a, bs...)
     i = 13; y = op(y, bs[i]); l == i && return y
     i = 14; y = op(y, bs[i]); l == i && return y
     i = 15; y = op(y, bs[i]); l == i && return y
+    i = 16; y = op(y, bs[i]); l == i && return y
+    i = 17; y = op(y, bs[i]); l == i && return y
+    i = 18; y = op(y, bs[i]); l == i && return y
+    i = 19; y = op(y, bs[i]); l == i && return y
+    i = 20; y = op(y, bs[i]); l == i && return y
+    i = 21; y = op(y, bs[i]); l == i && return y
+    i = 22; y = op(y, bs[i]); l == i && return y
+    i = 23; y = op(y, bs[i]); l == i && return y
+    i = 24; y = op(y, bs[i]); l == i && return y
+    i = 25; y = op(y, bs[i]); l == i && return y
+    i = 26; y = op(y, bs[i]); l == i && return y
+    i = 27; y = op(y, bs[i]); l == i && return y
+    i = 28; y = op(y, bs[i]); l == i && return y
+    i = 29; y = op(y, bs[i]); l == i && return y
+    i = 30; y = op(y, bs[i]); l == i && return y
+    i = 31; y = op(y, bs[i]); l == i && return y
     for i in (i + 1):l
         y = op(y, bs[i])
     end
     return y
 end
-typeof(afoldl).name.mt.max_args = 18
+typeof(afoldl).name.mt.max_args = 34
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a,b),c), xs...)
+        ($op)(a, b, c, xs...) = (@inline; afoldl($op, ($op)(($op)(a,b),c), xs...))
         # a further concern is that it's easy for a type like (Int,Int...)
         # to match many definitions, so we need to keep the number of
         # definitions down to avoid losing type information.
@@ -680,16 +650,16 @@ julia> bitstring(Int8(3))
 julia> bitstring(Int8(12))
 "00001100"
 ```
-See also [`>>`](@ref), [`>>>`](@ref).
+See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(<<, (x, c)))
     end
@@ -728,7 +698,7 @@ julia> bitstring(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>, (x, c)))
     end
@@ -766,11 +736,11 @@ is equivalent to [`>>`](@ref).
 See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
 function >>>(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>>, (x, c)))
     end
@@ -787,6 +757,8 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
+See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = 15; y = 4;
@@ -796,6 +768,10 @@ julia> x % y
 
 julia> x == div(x, y) * y + rem(x, y)
 true
+
+julia> rem.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -2  -1  0  -2  -1  0  1  2  0  1  2
 ```
 """
 rem
@@ -808,6 +784,8 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
+See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+
 # Examples
 ```jldoctest
 julia> 9 ÷ 4
@@ -818,6 +796,10 @@ julia> -5 ÷ 3
 
 julia> 5.0 ÷ 2
 2.0
+
+julia> div.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ -1  -1  -1  0  0  0  0  0  1  1  1
 ```
 """
 div
@@ -829,15 +811,24 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
-See also: [`fld1`](@ref), [`fldmod1`](@ref).
+With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural
+for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for computations with
+offsets or strides.
+
+See also [`mod`](@ref), [`fld1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
 2
 
-julia> mod1(4, 3)
-1
+julia> mod1.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ 1  2  3  1  2  3  1  2  3  1  2
+
+julia> mod1.([-0.1, 0, 0.1, 1, 2, 2.9, 3, 3.1]', 3)
+1×8 Matrix{Float64}:
+ 2.9  3.0  0.1  1.0  2.0  2.9  3.0  0.1
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
@@ -848,7 +839,7 @@ mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also: [`mod1`](@ref), [`fldmod1`](@ref).
+See also [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -875,7 +866,7 @@ end
 
 Return `(fld1(x,y), mod1(x,y))`.
 
-See also: [`fld1`](@ref), [`mod1`](@ref).
+See also [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
@@ -910,10 +901,11 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
     |>(x, f)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
+When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> x->x.^2 |> sum |> inv
+julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 0.01818181818181818
 ```
 """
@@ -940,7 +932,7 @@ julia> f.value
 ```
 
 !!! compat "Julia 1.7"
-    Returns requires at least Julia 1.7.
+    `Returns` requires at least Julia 1.7.
 """
 struct Returns{V} <: Function
     value::V
@@ -994,7 +986,7 @@ julia> fs = [
 julia> ∘(fs...)(3)
 3.0
 ```
-See also [`ComposedFunction`](@ref).
+See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
 function ∘ end
 
@@ -1054,6 +1046,8 @@ end
 Predicate function negation: when the argument of `!` is a function, it returns a
 function which computes the boolean negation of `f`.
 
+See also [`∘`](@ref).
+
 # Examples
 ```jldoctest
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
@@ -1074,6 +1068,8 @@ julia> filter(!isletter, str)
 A type representing a partially-applied version of the two-argument function
 `f`, with the first argument fixed to the value "x". In other words,
 `Fix1(f, x)` behaves similarly to `y->f(x, y)`.
+
+See also [`Fix2`](@ref Base.Fix2).
 """
 struct Fix1{F,T} <: Function
     f::F
@@ -1334,6 +1330,8 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
+
+See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

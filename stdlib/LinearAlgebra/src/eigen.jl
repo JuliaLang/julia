@@ -140,7 +140,8 @@ end
 sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
-    eigen!(A, [B]; permute, scale, sortby)
+    eigen!(A; permute, scale, sortby)
+    eigen!(A, B; sortby)
 
 Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
@@ -179,7 +180,7 @@ end
 """
     eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -235,6 +236,14 @@ function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     AA = copy_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
+end
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
+    AA = copy_oftype(A, eigtype(T))
+    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
+    A = eigen!(AA; permute, scale, sortby)
+    values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
+    vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
+    return Eigen(values, vectors)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
@@ -308,7 +317,7 @@ Return the eigenvalues of `A`.
 
 For general non-symmetric matrices it is possible to specify how the matrix is balanced
 before the eigenvalue calculation. The `permute`, `scale`, and `sortby` keywords are
-the same as for [`eigen!`](@ref).
+the same as for [`eigen`](@ref).
 
 # Examples
 ```jldoctest
@@ -454,17 +463,18 @@ function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function
 end
 
 """
-    eigen(A, B) -> GeneralizedEigen
+    eigen(A, B; sortby) -> GeneralizedEigen
 
-Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
+Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
-Any keyword arguments passed to `eigen` are passed through to the lower-level
-[`eigen!`](@ref) function.
+By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
+A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
+`sortby=nothing` to leave the eigenvalues in an arbitrary order.
 
 # Examples
 ```jldoctest
@@ -555,7 +565,7 @@ end
 """
     eigvals(A, B) -> values
 
-Computes the generalized eigenvalues of `A` and `B`.
+Compute the generalized eigenvalues of `A` and `B`.
 
 # Examples
 ```jldoctest
@@ -612,6 +622,16 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,Generaliz
     show(io, mime, F.values)
     println(io, "\nvectors:")
     show(io, mime, F.vectors)
+end
+
+function Base.hash(F::Eigen, h::UInt)
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+end
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+function Base.isequal(A::Eigen, B::Eigen)
+    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
 end
 
 # Conversion methods
