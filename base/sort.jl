@@ -1394,8 +1394,8 @@ function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering
     u
 end
 
-function deserialize!(v::AbstractVector, u::AbstractVector{U},
-                      lo::Integer, hi::Integer, order::Ordering, offset::U=zero(U)) where U <: Unsigned
+function deserialize!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
+                      order::Ordering, offset::U=zero(U)) where U <: Unsigned
     @inbounds for i in lo:hi
         v[i] = deserialize(eltype(v), u[i]+offset, order)
     end
@@ -1530,6 +1530,8 @@ issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
+    # fpsort!'s optimizations speed up comparisons, of which there are O(nlogn). 
+    # The overhead is O(n). For n < 10, it's not worth it.
     length(v) < 10 && return sort!(v, first(axes(v,1)), last(axes(v,1)), SMALL_ALGORITHM, o)
 
     i, j = lo, hi = specials2end!(v,a,o)
