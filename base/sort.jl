@@ -1371,13 +1371,6 @@ end
 # Float serialization is defined in ..Float, where the Left and Right orderings guarantee
 # that there are no NaN values
 
-# Booleans
-# serialize! fails on AbstractVector{Bool} because the reinterpret is sketchy. try:
-#     u = reinterpret(UInt8, trues(10)); u[3] = 0x17; print(u)
-# serialize(x::Bool, ::ForwardOrdering) = UInt8(x)
-# deserialize(::Type{Bool}, u::UInt8, ::ForwardOrdering) = Bool(u)
-# Serializable(::Type{Bool}, ::ForwardOrdering) = UInt8
-
 # Chars
 serialize(x::Char, ::ForwardOrdering) = reinterpret(UInt32, x)
 deserialize(::Type{Char}, u::UInt32, ::ForwardOrdering) = reinterpret(Char, u)
