@@ -263,7 +263,7 @@ static Value *emit_plt(
         const AttributeList &attrs,
         CallingConv::ID cc, const char *f_lib, const char *f_name)
 {
-    assert(imaging_mode);
+    assert(ctx.emission_context.imaging_mode);
     // Don't do this for vararg functions so that the `musttail` is only
     // an optimization and is not required to function correctly.
     assert(!functype->isVarArg());
@@ -658,14 +658,14 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else if (sym.fptr != NULL) {
         res = ConstantInt::get(lrt, (uint64_t)sym.fptr);
-        if (imaging_mode)
+        if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
         if (sym.lib_expr) {
             res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
-        else if (imaging_mode) {
+        else if (ctx.emission_context.imaging_mode) {
             res = runtime_sym_lookup(ctx, cast<PointerType>(getInt8PtrTy(ctx.builder.getContext())), sym.f_lib, NULL, sym.f_name, ctx.f);
             res = ctx.builder.CreatePtrToInt(res, lrt);
         }
@@ -1951,7 +1951,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (symarg.fptr != NULL) {
         Type *funcptype = PointerType::get(functype, 0);
         llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
-        if (imaging_mode)
+        if (ctx.emission_context.imaging_mode)
             jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
     else {
@@ -1960,7 +1960,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (symarg.lib_expr) {
             llvmf = runtime_sym_lookup(ctx, funcptype, NULL, symarg.lib_expr, symarg.f_name, ctx.f);
         }
-        else if (imaging_mode) {
+        else if (ctx.emission_context.imaging_mode) {
             // vararg requires musttail,
             // but musttail is incompatible with noreturn.
             if (functype->isVarArg())

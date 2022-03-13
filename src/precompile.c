@@ -96,7 +96,7 @@ void jl_write_compiler_output(void)
                            jl_options.outputunoptbc,
                            jl_options.outputo,
                            jl_options.outputasm,
-                           (const char*)s->buf, (size_t)s->size);
+                           (const char*)s->buf, (size_t)s->size, jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental));
         }
     }
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {

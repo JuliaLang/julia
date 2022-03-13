@@ -220,13 +220,13 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
+    jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
     if (into == NULL) {
-        backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext());
+        backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext(), pparams ? pparams->imaging_mode : codegen_imaging_mode());
         into = &backing;
     }
     jl_codegen_params_t params(into->getContext());
-    jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     if (pparams == NULL)
         pparams = &params;
     const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
@@ -829,7 +829,7 @@ namespace {
         TheTriple.setObjectFormat(Triple::ELF);
 #endif
         uint32_t target_flags = 0;
-        auto target = jl_get_llvm_target(imaging_mode, target_flags);
+        auto target = jl_get_llvm_target(codegen_imaging_mode(), target_flags);
         auto &TheCPU = target.first;
         SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
         std::string errorstr;

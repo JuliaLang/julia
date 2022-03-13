@@ -852,7 +852,7 @@ JL_DLLEXPORT LLVMOrcThreadSafeContextRef jl_get_ee_context(void);
 void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeContextRef llvmctxt, const jl_cgparams_t *cgparams, int policy);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len);
+        const char *sysimg_data, size_t sysimg_len, int imaging_mode);
 int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);

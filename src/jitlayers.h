@@ -48,14 +48,16 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern bool imaging_mode;
+static inline auto codegen_imaging_mode() {
+    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+}
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 DataLayout create_jl_data_layout(TargetMachine &TM);
 
@@ -118,14 +120,15 @@ typedef struct _jl_codegen_params_t {
     orc::ThreadSafeModule _shared_module;
     orc::ThreadSafeModule &shared_module(orc::ThreadSafeContext context) {
         if (!_shared_module)
-            _shared_module = jl_create_llvm_module("globals", context);
+            _shared_module = jl_create_llvm_module("globals", context, imaging_mode);
         return _shared_module;
     }
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()) {}
+    bool imaging_mode;
+    _jl_codegen_params_t(orc::ThreadSafeContext ctx, bool imaging_mode = codegen_imaging_mode()) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging_mode(imaging_mode) {}
 } jl_codegen_params_t;
 
 jl_compile_result_t jl_emit_code(

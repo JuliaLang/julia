@@ -266,8 +266,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
 
     CompilationPolicy policy = (CompilationPolicy) _policy;
     if (policy == CompilationPolicy::ImagingMode)
-        imaging_mode = 1;
-    orc::ThreadSafeModule clone(jl_create_llvm_module("text", ctxt));
+        params.imaging_mode = true;
+    orc::ThreadSafeModule clone(jl_create_llvm_module("text", ctxt, params.imaging_mode));
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -394,8 +394,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    if (policy == CompilationPolicy::ImagingMode)
-        imaging_mode = 0;
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
@@ -430,7 +428,7 @@ extern "C" JL_DLLEXPORT
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len)
+        const char *sysimg_data, size_t sysimg_len, int imaging_mode)
 {
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;

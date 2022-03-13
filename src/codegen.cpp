@@ -195,9 +195,6 @@ extern void _chkstk(void);
 #endif
 }
 
-// for image reloading
-bool imaging_mode = false;
-
 // shared llvm state
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
@@ -1931,7 +1928,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule _jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
+orc::ThreadSafeModule _jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, bool imaging_mode, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
 {
     auto lock = context.getLock();
     Module *m = new Module(name, *context.getContext());
@@ -1965,9 +1962,9 @@ orc::ThreadSafeModule _jl_create_llvm_module(StringRef name, orc::ThreadSafeCont
     return TSM;
 }
 
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout *DL, const Triple *triple)
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout *DL, const Triple *triple)
 {
-    return _jl_create_llvm_module(name, std::move(ctx), &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
+    return _jl_create_llvm_module(name, std::move(ctx), imaging_mode, &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
 }
 
 static void jl_init_function(Function *F)
@@ -2082,7 +2079,7 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    assert(!imaging_mode);
+    assert(!ctx.emission_context.imaging_mode);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
@@ -2092,7 +2089,7 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
-    assert(!imaging_mode);
+    assert(!ctx.emission_context.imaging_mode);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     Value *addend = sync
@@ -6477,7 +6474,7 @@ static jl_compile_result_t
     declarations.specFunctionObject = funcName.str();
 
     // allocate Function declarations and wrapper objects
-    auto TSM = _jl_create_llvm_module(ctx.name, ctx.emission_context.tsctx, ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
+    auto TSM = _jl_create_llvm_module(ctx.name, ctx.emission_context.tsctx, ctx.emission_context.imaging_mode, ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
     //Safe because params holds ctx lock
     Module *M = TSM.getModuleUnlocked();
     jl_debugcache_t debuginfo;
@@ -7912,7 +7909,7 @@ jl_compile_result_t jl_emit_codeinst(
                      // don't delete inlineable code, unless it is constant
                      (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
-                     !(imaging_mode || jl_options.incremental)) {
+                     !(params.imaging_mode || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
                 codeinst->inferred = jl_nothing;
             }
@@ -8159,7 +8156,6 @@ void jl_init_debuginfo(void);
 extern "C" void jl_init_llvm(void)
 {
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
-    imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.generic_context = jl_nothing;
     jl_init_debuginfo();
 
