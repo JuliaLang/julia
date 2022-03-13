@@ -2,6 +2,10 @@
 
 // --- the ccall, cglobal, and llvm intrinsics ---
 
+// Mark our stats as being from ccall
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_ccall"
+
 STATISTIC(RuntimeSymLookups, "Number of runtime symbol lookups emitted");
 STATISTIC(PLTThunks, "Number of PLT Thunks emitted");
 STATISTIC(PLT, "Number of direct PLT entries emitted");
@@ -2162,3 +2166,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     return mark_or_box_ccall_result(ctx, result, jlretboxed, rt, unionall_env, static_rt);
 }
+
+// Reset us back to codegen debug type
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_codegen"

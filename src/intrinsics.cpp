@@ -6,6 +6,10 @@ namespace JL_I {
 
 #include "ccall.cpp"
 
+//Mark our stats as being from intrinsics irgen
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_intrinsics"
+
 STATISTIC(EmittedConstants, "Number of constants emitted");
 STATISTIC(EmittedCoercedUnboxes, "Number of unbox coercions emitted");
 STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
@@ -1556,3 +1560,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     }
     assert(0 && "unreachable");
 }
+
+//Redefine us as being part of codegen
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_codegen"

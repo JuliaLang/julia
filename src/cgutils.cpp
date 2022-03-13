@@ -2,6 +2,10 @@
 
 // utility procedures used in code generation
 
+// Mark our stats as being from cgutils
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_cgutils"
+
 STATISTIC(EmittedPointerFromObjref, "Number of emitted pointer_from_objref calls");
 STATISTIC(EmittedPointerBitcast, "Number of emitted pointer bitcasts");
 STATISTIC(EmittedNthPtrAddr, "Number of emitted nth pointer address instructions");
@@ -3718,3 +3722,7 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->generic_context == b->generic_context);
 }
 #endif
+
+// Reset us back to codegen debug type
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_codegen"
