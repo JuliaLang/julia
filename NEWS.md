@@ -13,7 +13,7 @@ New language features
   no errors were thrown ([#42211]).
 * `@inline` and `@noinline` annotations can now be placed within a function body ([#41312]).
 * `@inline` and `@noinline` annotations can now be applied to a function call site or block
-  to enforce the involved function calls to be (or not to be) inlined ([#41312]).
+  to enforce the involved function calls to be (or not to be) inlined ([#41328]).
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `Module(:name, false, false)` can be used to create a `module` that contains no names
@@ -237,7 +237,7 @@ Tooling Improvements
 
 * `GC.enable_logging(true)` can be used to log each garbage collection, with the
   time it took and the amount of memory that was collected ([#43511]).
-  
+
 <!-- manually added -->
 [Pkg#2284]: https://github.com/JuliaLang/Pkg.jl/issues/2284
 [Pkg#2689]: https://github.com/JuliaLang/Pkg.jl/issues/2689
@@ -263,6 +263,7 @@ Tooling Improvements
 [#40980]: https://github.com/JuliaLang/julia/issues/40980
 [#41085]: https://github.com/JuliaLang/julia/issues/41085
 [#41312]: https://github.com/JuliaLang/julia/issues/41312
+[#41328]: https://github.com/JuliaLang/julia/issues/41328
 [#41449]: https://github.com/JuliaLang/julia/issues/41449
 [#41551]: https://github.com/JuliaLang/julia/issues/41551
 [#41576]: https://github.com/JuliaLang/julia/issues/41576
