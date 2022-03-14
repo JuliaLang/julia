@@ -399,16 +399,6 @@ let s = Set(1:100)
     @test summarysize([s]) > summarysize(s)
 end
 
-# issue #13021
-let ex = try
-    Main.x13021 = 0
-    nothing
-catch ex
-    ex
-end
-    @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
-end
-
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
 # empty arrays
