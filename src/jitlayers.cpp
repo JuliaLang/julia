@@ -68,8 +68,8 @@ void jl_dump_llvm_opt_impl(void *s)
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
 
-static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
+static void jl_decorate_module(Module &M);
 static uint64_t getAddressForFunction(StringRef fname);
 
 void jl_link_global(GlobalVariable *GV, void *addr)
@@ -130,7 +130,7 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default, context);
 
         if (params._shared_module)
-            jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
+            jl_ExecutionEngine->addModule(std::unique_ptr<Module>(params._shared_module));
         StringMap<std::unique_ptr<Module>*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -236,10 +236,10 @@ int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, void *p, void *sysimg, jl_va
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
             if (params._shared_module)
-                jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
+                jl_ExecutionEngine->addModule(std::unique_ptr<Module>(params._shared_module));
         }
         if (success && llvmmod == NULL)
-            jl_add_to_ee(std::unique_ptr<Module>(into));
+            jl_ExecutionEngine->addModule(std::unique_ptr<Module>(into));
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
@@ -1016,6 +1016,8 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
     JL_TIMING(LLVM_MODULE_FINISH);
+    jl_decorate_module(*M);
+    shareStrings(*M);
     std::vector<std::string> NewExports;
     for (auto &F : M->global_values()) {
         if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
@@ -1307,7 +1309,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 
 // optimize memory by turning long strings into memoized copies, instead of
 // making a copy per object file of output.
-void jl_jit_share_data(Module &M)
+void JuliaOJIT::shareStrings(Module &M)
 {
     std::vector<GlobalVariable*> erase;
     for (auto &GV : M.globals()) {
@@ -1320,7 +1322,7 @@ void jl_jit_share_data(Module &M)
         if (data.size() > 16) { // only for long strings: keep short ones as values
             Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
             Constant *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                ConstantInt::get(T_size, (uintptr_t)(*ES.intern(data)).data()),
                 GV.getType());
             GV.replaceAllUsesWith(v);
             erase.push_back(&GV);
@@ -1330,26 +1332,21 @@ void jl_jit_share_data(Module &M)
         GV->eraseFromParent();
 }
 
-static void jl_add_to_ee(std::unique_ptr<Module> m)
-{
+static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
-    Type *T_uint32 = Type::getInt32Ty(m->getContext());
-    ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
+    ArrayType *atype = ArrayType::get(Type::getInt32Ty(M.getContext()), 3); // want 4-byte alignment of 12-bytes of data
     GlobalVariable *gvs[2] = {
-        new GlobalVariable(*m, atype,
+        new GlobalVariable(M, atype,
             false, GlobalVariable::InternalLinkage,
             ConstantAggregateZero::get(atype), "__UnwindData"),
-        new GlobalVariable(*m, atype,
+        new GlobalVariable(M, atype,
             false, GlobalVariable::InternalLinkage,
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(M, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
-    jl_jit_share_data(*m);
-    assert(jl_ExecutionEngine);
-    jl_ExecutionEngine->addModule(std::move(m));
 }
 
 static int jl_add_to_ee(
@@ -1393,7 +1390,7 @@ static int jl_add_to_ee(
             Queued.erase(CM->get());
             jl_merge_module(M.get(), std::move(*CM));
         }
-        jl_add_to_ee(std::move(M));
+        jl_ExecutionEngine->addModule(std::move(M));
         MergeUp = 0;
     }
     else {
