@@ -255,9 +255,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
-    JL_LOCK(&jl_codegen_lock);
     auto ctxt = llvmctxt ? *reinterpret_cast<orc::ThreadSafeContext*>(llvmctxt) : jl_llvm_context_acquire();
     jl_codegen_params_t params(ctxt);
+    JL_LOCK(&jl_typeinf_lock);
     params.params = cgparams;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
@@ -394,8 +394,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    JL_UNLOCK(&jl_typeinf_lock); // Might GC
     if (!llvmctxt) jl_llvm_context_release(std::move(ctxt));
-    JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
 
@@ -1004,8 +1004,8 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMOrcThreadSafeContextR
     if (src && jl_is_code_info(src)) {
         orc::ThreadSafeModule m;
         jl_llvm_functions_t decls;
-        JL_LOCK(&jl_codegen_lock);
         jl_codegen_params_t output(*reinterpret_cast<orc::ThreadSafeContext*>(ctxt));
+        JL_LOCK(&jl_typeinf_lock);
         output.world = world;
         output.params = &params;
         uint64_t compiler_start_time = 0;
@@ -1037,7 +1037,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMOrcThreadSafeContextR
         JL_GC_POP();
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-        JL_UNLOCK(&jl_codegen_lock); // Might GC
+        JL_UNLOCK(&jl_typeinf_lock); // Might GC
         if (F)
             return new jl_llvmf_dump_t{std::move(m), F};
     }

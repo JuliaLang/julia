@@ -246,11 +246,6 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
 extern "C" JL_DLLEXPORT
 int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
-    JL_LOCK(&jl_codegen_lock);
-    uint64_t compiler_start_time = 0;
-    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
-    if (measure_compile_time_enabled)
-        compiler_start_time = jl_hrtime();
     auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
@@ -265,6 +260,11 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     jl_codegen_params_t params(ctxt);
     if (pparams == NULL)
         pparams = &params;
+    JL_LOCK(&jl_typeinf_lock);
+    uint64_t compiler_start_time = 0;
+    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    if (measure_compile_time_enabled)
+        compiler_start_time = jl_hrtime();
     const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
     bool success = true;
     if (!sysimg) {
@@ -283,8 +283,8 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    JL_UNLOCK(&jl_typeinf_lock);
     if (!llvmmod) jl_llvm_context_release(std::move(ctxt));
-    JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
 
@@ -305,10 +305,8 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
     // compute / validate return type
     if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
         jl_error("@ccallable: return type must be concrete and correspond to a C type");
-    JL_LOCK(&jl_codegen_lock);
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
-    JL_UNLOCK(&jl_codegen_lock);
 
     // validate method signature
     size_t i, nargs = jl_nparams(sigt);
@@ -337,7 +335,8 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
-    JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    auto context = jl_llvm_context_acquire();
+    JL_LOCK(&jl_typeinf_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -373,9 +372,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             if (src->inferred && !codeinst->inferred)
                 codeinst->inferred = jl_nothing;
         }
-        auto context = jl_llvm_context_acquire();
         _jl_compile_codeinst(codeinst, src, world, context);
-        jl_llvm_context_release(std::move(context));
         if (codeinst->invoke == NULL)
             codeinst = NULL;
     }
@@ -384,7 +381,8 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    JL_UNLOCK(&jl_codegen_lock);
+    JL_UNLOCK(&jl_typeinf_lock);
+    jl_llvm_context_release(std::move(context));
     JL_GC_POP();
     return codeinst;
 }
@@ -395,7 +393,8 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
     }
-    JL_LOCK(&jl_codegen_lock);
+    auto context = jl_llvm_context_acquire();
+    JL_LOCK(&jl_typeinf_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -419,9 +418,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             src = (jl_code_info_t*)unspec->def->uninferred;
         }
         assert(src && jl_is_code_info(src));
-        auto context = jl_llvm_context_acquire();
         _jl_compile_codeinst(unspec, src, unspec->min_world, context);
-        jl_llvm_context_release(std::move(context));
         if (unspec->invoke == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
             jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
@@ -430,7 +427,8 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    JL_UNLOCK(&jl_codegen_lock); // Might GC
+    JL_UNLOCK(&jl_typeinf_lock); // Might GC
+    jl_llvm_context_release(std::move(context));
 }
 
 
@@ -450,7 +448,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
-            JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            auto context = jl_llvm_context_acquire();
+            JL_LOCK(&jl_typeinf_lock); // also disables finalizers, to prevent any unexpected recursion
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -472,9 +471,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        auto context = jl_llvm_context_acquire();
                         fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, context);
-                        jl_llvm_context_release(context);
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
@@ -482,7 +479,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             }
             if (measure_compile_time_enabled)
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-            JL_UNLOCK(&jl_codegen_lock);
+            JL_UNLOCK(&jl_typeinf_lock);
+            jl_llvm_context_release(context);
         }
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);

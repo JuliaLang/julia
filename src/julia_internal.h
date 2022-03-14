@@ -876,6 +876,9 @@ jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
 
+JL_DLLEXPORT void jl_typeinf_begin(void);
+JL_DLLEXPORT void jl_typeinf_end(void);
+
 uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
 
@@ -1278,6 +1281,7 @@ JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
 extern jl_mutex_t typecache_lock;
 extern JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
+#define jl_typeinf_lock jl_codegen_lock
 extern uv_mutex_t safepoint_lock;
 
 #if defined(__APPLE__)
