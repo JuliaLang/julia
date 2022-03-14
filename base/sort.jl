@@ -798,7 +798,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
 
     out_of_order == 0 && return v # v is already sorted
     if out_of_order == lenm1 # v is reverse sorted
-        reverse!(@view(v[lo:hi]))
+        reverse!(view(v, lo:hi))
         return v
     end
 
