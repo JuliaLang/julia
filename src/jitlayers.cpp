@@ -796,87 +796,86 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
     );
 }
 #endif
-namespace {
-    std::unique_ptr<TargetMachine> createTargetMachine() {
 
-        TargetOptions options = TargetOptions();
+std::unique_ptr<TargetMachine> createTargetMachine() {
+
+    TargetOptions options = TargetOptions();
 #if defined(_OS_WINDOWS_)
-        // use ELF because RuntimeDyld COFF i686 support didn't exist
-        // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
+    // use ELF because RuntimeDyld COFF i686 support didn't exist
+    // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
 #define FORCE_ELF
 #endif
-        //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
+    //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
-        // tell Win32 to assume the stack is always 16-byte aligned,
-        // and to ensure that it is 16-byte aligned for out-going calls,
-        // to ensure compatibility with GCC codes
-        // In LLVM 13 and onwards this has turned into a module option
-        options.StackAlignmentOverride = 16;
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
+    // to ensure compatibility with GCC codes
+    // In LLVM 13 and onwards this has turned into a module option
+    options.StackAlignmentOverride = 16;
 #endif
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
-        // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
-        options.StackProtectorGuard = StackProtectorGuards::Global;
+    // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
+    options.StackProtectorGuard = StackProtectorGuards::Global;
 #endif
-        Triple TheTriple(sys::getProcessTriple());
+    Triple TheTriple(sys::getProcessTriple());
 #if defined(FORCE_ELF)
-        TheTriple.setObjectFormat(Triple::ELF);
+    TheTriple.setObjectFormat(Triple::ELF);
 #endif
-        uint32_t target_flags = 0;
-        auto target = jl_get_llvm_target(imaging_mode, target_flags);
-        auto &TheCPU = target.first;
-        SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
-        std::string errorstr;
-        const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
-        if (!TheTarget)
-            jl_errorf("%s", errorstr.c_str());
-        if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
-            std::unique_ptr<MCSubtargetInfo> MSTI(
-                TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
-            if (!MSTI->isCPUStringValid(TheCPU))
-                jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
-            if (jl_processor_print_help) {
-                // This is the only way I can find to print the help message once.
-                // It'll be nice if we can iterate through the features and print our own help
-                // message...
-                MSTI->setDefaultFeatures("help", "", "");
-            }
+    uint32_t target_flags = 0;
+    auto target = jl_get_llvm_target(imaging_mode, target_flags);
+    auto &TheCPU = target.first;
+    SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
+    std::string errorstr;
+    const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
+    if (!TheTarget)
+        jl_errorf("%s", errorstr.c_str());
+    if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
+        std::unique_ptr<MCSubtargetInfo> MSTI(
+            TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
+        if (!MSTI->isCPUStringValid(TheCPU))
+            jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
+        if (jl_processor_print_help) {
+            // This is the only way I can find to print the help message once.
+            // It'll be nice if we can iterate through the features and print our own help
+            // message...
+            MSTI->setDefaultFeatures("help", "", "");
         }
-        // Package up features to be passed to target/subtarget
-        std::string FeaturesStr;
-        if (!targetFeatures.empty()) {
-            SubtargetFeatures Features;
-            for (unsigned i = 0; i != targetFeatures.size(); ++i)
-                Features.AddFeature(targetFeatures[i]);
-            FeaturesStr = Features.getString();
-        }
-        // Allocate a target...
-        Optional<CodeModel::Model> codemodel =
-#ifdef _P64
-            // Make sure we are using the large code model on 64bit
-            // Let LLVM pick a default suitable for jitting on 32bit
-            CodeModel::Large;
-#else
-            None;
-#endif
-        auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
-        auto TM = TheTarget->createTargetMachine(
-                TheTriple.getTriple(), TheCPU, FeaturesStr,
-                options,
-                Reloc::Static, // Generate simpler code for JIT
-                codemodel,
-                optlevel,
-                true // JIT
-                );
-        assert(TM && "Failed to select target machine -"
-                                " Is the LLVM backend for this CPU enabled?");
-        #if (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
-        // FastISel seems to be buggy for ARM. Ref #13321
-        if (jl_options.opt_level < 2)
-            TM->setFastISel(true);
-        #endif
-        return std::unique_ptr<TargetMachine>(TM);
     }
-} // namespace
+    // Package up features to be passed to target/subtarget
+    std::string FeaturesStr;
+    if (!targetFeatures.empty()) {
+        SubtargetFeatures Features;
+        for (unsigned i = 0; i != targetFeatures.size(); ++i)
+            Features.AddFeature(targetFeatures[i]);
+        FeaturesStr = Features.getString();
+    }
+    // Allocate a target...
+    Optional<CodeModel::Model> codemodel =
+#ifdef _P64
+        // Make sure we are using the large code model on 64bit
+        // Let LLVM pick a default suitable for jitting on 32bit
+        CodeModel::Large;
+#else
+        None;
+#endif
+    auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
+    auto TM = TheTarget->createTargetMachine(
+            TheTriple.getTriple(), TheCPU, FeaturesStr,
+            options,
+            Reloc::Static, // Generate simpler code for JIT
+            codemodel,
+            optlevel,
+            true // JIT
+            );
+    assert(TM && "Failed to select target machine -"
+                            " Is the LLVM backend for this CPU enabled?");
+    #if (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
+    // FastISel seems to be buggy for ARM. Ref #13321
+    if (jl_options.opt_level < 2)
+        TM->setFastISel(true);
+    #endif
+    return std::unique_ptr<TargetMachine>(TM);
+}
 
 namespace {
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {

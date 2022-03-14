@@ -31,8 +31,6 @@
 
 using namespace llvm;
 
-extern JuliaOJIT *jl_ExecutionEngine;
-
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
 Optional<bool> always_have_fma(Function &intr) {
     auto intr_name = intr.getName();
@@ -46,7 +44,8 @@ Optional<bool> always_have_fma(Function &intr) {
 #endif
 }
 
-bool have_fma(Function &intr, Function &caller) {
+template<typename TMGetter>
+static bool have_fma(Function &intr, Function &caller, TMGetter TM) {
     auto unconditional = always_have_fma(intr);
     if (unconditional.hasValue())
         return unconditional.getValue();
@@ -56,7 +55,7 @@ bool have_fma(Function &intr, Function &caller) {
 
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetMachine().getTargetFeatureString();
+        FSAttr.isValid() ? FSAttr.getValueAsString() : TM().getTargetFeatureString();
 
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
@@ -74,8 +73,9 @@ bool have_fma(Function &intr, Function &caller) {
     return false;
 }
 
-void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
-    if (have_fma(intr, caller))
+template<typename TMGetter>
+static void lowerHaveFMA(Function &intr, Function &caller, CallInst *I, TMGetter TM) {
+    if (have_fma(intr, caller, TM))
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
     else
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
@@ -83,7 +83,8 @@ void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
     return;
 }
 
-bool lowerCPUFeatures(Module &M)
+template<typename TMGetter>
+static bool lowerCPUFeatures(Module &M, TMGetter TM)
 {
     SmallVector<Instruction*,6> Materialized;
 
@@ -94,7 +95,7 @@ bool lowerCPUFeatures(Module &M)
             for (Use &U: F.uses()) {
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
-                lowerHaveFMA(F, *I->getParent()->getParent(), I);
+                lowerHaveFMA(F, *I->getParent()->getParent(), I, TM);
                 Materialized.push_back(I);
             }
         }
@@ -112,7 +113,13 @@ bool lowerCPUFeatures(Module &M)
 
 PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
 {
-    if (lowerCPUFeatures(M)) {
+    std::unique_ptr<TargetMachine> TM;
+    if (lowerCPUFeatures(M, [&]() -> const TargetMachine & {
+        if (!TM) {
+            TM = createTargetMachine();
+        }
+        return *TM;
+    })) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
@@ -121,11 +128,17 @@ PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
 namespace {
 struct CPUFeaturesLegacy : public ModulePass {
     static char ID;
+    std::unique_ptr<TargetMachine> TM;
     CPUFeaturesLegacy() : ModulePass(ID) {};
 
     bool runOnModule(Module &M)
     {
-        return lowerCPUFeatures(M);
+        return lowerCPUFeatures(M, [&]() -> const TargetMachine & {
+            if (!TM) {
+                TM = createTargetMachine();
+            }
+            return *TM;
+        });
     }
 };
 
