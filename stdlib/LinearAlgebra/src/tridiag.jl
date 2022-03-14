@@ -571,15 +571,16 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-function Matrix{T}(M::Tridiagonal{T}) where T
+function Matrix{T}(M::Tridiagonal) where {T}
     A = zeros(T, size(M))
-    for i = 1:length(M.d)
+    n = length(M.d)
+    n == 0 && return A
+    for i in 1:n-1
         A[i,i] = M.d[i]
-    end
-    for i = 1:length(M.d)-1
         A[i+1,i] = M.dl[i]
         A[i,i+1] = M.du[i]
     end
+    A[n,n] = M.d[n]
     A
 end
 Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
