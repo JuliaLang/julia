@@ -227,6 +227,7 @@ Tooling Improvements
 [#40980]: https://github.com/JuliaLang/julia/issues/40980
 [#41085]: https://github.com/JuliaLang/julia/issues/41085
 [#41312]: https://github.com/JuliaLang/julia/issues/41312
+[#41328]: https://github.com/JuliaLang/julia/issues/41328
 [#41449]: https://github.com/JuliaLang/julia/issues/41449
 [#41551]: https://github.com/JuliaLang/julia/issues/41551
 [#41576]: https://github.com/JuliaLang/julia/issues/41576
