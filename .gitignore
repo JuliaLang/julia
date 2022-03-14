@@ -34,5 +34,11 @@
 .idea/*
 .vscode/*
 
-# Buildkite: Ignore entire .buildkite directory
+# Buildkite: Ignore the entire .buildkite directory
 /.buildkite
+
+# Buildkite: Ignore the unencrypted repo_key
+repo_key
+
+# Buildkite: Ignore any agent keys (public or private) we have stored
+agent_key*
