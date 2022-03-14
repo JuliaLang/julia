@@ -13,7 +13,7 @@ New language features
   no errors were thrown ([#42211]).
 * `@inline` and `@noinline` annotations can now be placed within a function body ([#41312]).
 * `@inline` and `@noinline` annotations can now be applied to a function call site or block
-  to enforce the involved function calls to be (or not to be) inlined ([#41312]).
+  to enforce the involved function calls to be (or not to be) inlined ([#41328]).
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
 * `Module(:name, false, false)` can be used to create a `module` that contains no names
