@@ -26,6 +26,7 @@ LibGit2.GitAnnotated
 LibGit2.GitBlame
 LibGit2.GitBlob
 LibGit2.GitCommit
+LibGit2.GitConfig
 LibGit2.GitHash
 LibGit2.GitObject
 LibGit2.GitRemote

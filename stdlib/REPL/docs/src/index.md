@@ -728,6 +728,13 @@ Base.atreplinit
 
 ### TerminalMenus
 
+### Menus
+
+```@docs
+REPL.TerminalMenus.RadioMenu
+REPL.TerminalMenus.MultiSelectMenu
+```
+
 #### Configuration
 
 ```@docs
