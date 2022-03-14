@@ -753,13 +753,16 @@ end
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::Union{Int8, Int16, Int32, Int64, Int128}) = unsigned(x)
 function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
-    mn = mx = v[lo]
+    last = mn = mx = v[lo]
+    out_of_order = 0
     @inbounds for i in (lo+1):hi
         vi = v[i]
+        lt(o, vi, last) && (out_of_order += 1)
         lt(o, vi, mn) && (mn = vi)
         lt(o, mx, vi) && (mx = vi)
+        last = vi
     end
-    mn, mx
+    out_of_order, mn, mx
 end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
@@ -791,13 +794,30 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         return sort!(v, lo, hi, a.fallback, o)
     end
 
-    v_min, v_max = _extrema(v, lo, hi, o)
+    out_of_order, v_min, v_max = _extrema(v, lo, hi, o)
+
+    out_of_order == 0 && return v # v is already sorted
+    if out_of_order == lenm1 # v is reverse sorted
+        reverse!(@view(v[lo:hi]))
+        return v
+    end
+
     if eltype(v) <: Integer && o isa DirectOrdering
         R = o === Reverse
         v_range = maybe_unsigned(R ? v_min-v_max : v_max-v_min)
         if v_range < div(lenm1, 2) # count sort will be superior if v's range is very small
             return sort_int_range!(v, Int(v_range+1), R ? v_max : v_min, R ? reverse : identity, lo, hi)
         end
+    end
+
+    # These presorted fallbacks could be a specially tunend shell sorts.
+    # InsertionSort takes advantage of ordered data
+    if out_of_order < lenm1 ÷ 4 && lenm1 < 200 #TODO tune this
+        return sort!(v, lo, hi, InsertionSort, o)
+    end
+    # QuickSort takes advantage of ordered or reverse ordered data
+    if a.fallback === QuickSort && (out_of_order < lenm1÷4 || lenm1*3÷4 < out_of_order) #TODO tune this
+        return sort!(v, lo, hi, QuickSort, o)
     end
 
     u_min, u_max = Serial.serialize(v_min, o), Serial.serialize(v_max, o)
