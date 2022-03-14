@@ -201,7 +201,7 @@ end
         return h
     end
 
-    slots = fill(0x0, newsz)
+    slots = zeros(UInt8,newsz)
     keys = Vector{K}(undef, newsz)
     vals = Vector{V}(undef, newsz)
     age0 = h.age
