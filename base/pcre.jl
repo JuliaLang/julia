@@ -24,26 +24,45 @@ function create_match_context()
     return ctx
 end
 
-const THREAD_MATCH_CONTEXTS = Ptr{Cvoid}[C_NULL]
+THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 
 PCRE_COMPILE_LOCK = nothing
 
-_tid() = Int(ccall(:jl_threadid, Int16, ())+1)
+_tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
 _nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function get_local_match_context()
+    global THREAD_MATCH_CONTEXTS
     tid = _tid()
-    ctx = @inbounds THREAD_MATCH_CONTEXTS[tid]
+    ctxs = THREAD_MATCH_CONTEXTS
+    if length(ctxs) < tid
+        # slow path to allocate it
+        l = PCRE_COMPILE_LOCK::Threads.SpinLock
+        lock(l)
+        try
+            THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, _nth()), THREAD_MATCH_CONTEXTS)
+        finally
+            unlock(l)
+        end
+    end
+    ctx = @inbounds ctxs[tid]
     if ctx == C_NULL
-        @inbounds THREAD_MATCH_CONTEXTS[tid] = ctx = create_match_context()
+        # slow path to allocate it
+        ctx = create_match_context()
+        l = PCRE_COMPILE_LOCK
+        if l === nothing
+            THREAD_MATCH_CONTEXTS[tid] = ctx
+        else
+            l = l::Threads.SpinLock
+            lock(l)
+            try
+                THREAD_MATCH_CONTEXTS[tid] = ctx
+            finally
+                unlock(l)
+            end
+        end
     end
     return ctx
-end
-
-function __init__()
-    resize!(THREAD_MATCH_CONTEXTS, _nth())
-    fill!(THREAD_MATCH_CONTEXTS, C_NULL)
-    global PCRE_COMPILE_LOCK = Threads.SpinLock()
 end
 
 # supported options for different use cases
