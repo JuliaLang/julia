@@ -177,7 +177,7 @@
                   (cdr e)
                   (list e)))
             (deparse-block (string (car e) " " (deparse (cadr e)))
-                           (block-stmts (caddr e))
+                           (if (null? (cddr e)) '() (block-stmts (caddr e)))
                            ilvl))
            ((return)         (string "return " (deparse (cadr e))))
            ((break continue) (string (car e)))
