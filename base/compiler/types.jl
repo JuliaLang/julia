@@ -38,6 +38,7 @@ struct Effects
     effect_free::TriState
     nothrow::TriState
     terminates::TriState
+    overlayed::Bool
     # This effect is currently only tracked in inference and modified
     # :consistent before caching. We may want to track it in the future.
     inbounds_taints_consistency::Bool
@@ -46,27 +47,33 @@ function Effects(
     consistent::TriState,
     effect_free::TriState,
     nothrow::TriState,
-    terminates::TriState)
+    terminates::TriState,
+    overlayed::Bool)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
+        overlayed,
         false)
 end
-Effects() = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
 
-function Effects(e::Effects;
+const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
+const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
+
+function Effects(e::Effects = EFFECTS_UNKNOWN;
     consistent::TriState = e.consistent,
     effect_free::TriState = e.effect_free,
     nothrow::TriState = e.nothrow,
     terminates::TriState = e.terminates,
+    overlayed::Bool = e.overlayed,
     inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
+        overlayed,
         inbounds_taints_consistency)
 end
 
@@ -82,20 +89,20 @@ is_removable_if_unused(effects::Effects) =
     effects.terminates === ALWAYS_TRUE &&
     effects.nothrow === ALWAYS_TRUE
 
-const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE)
-
 function encode_effects(e::Effects)
-    return e.consistent.state |
-           (e.effect_free.state << 2) |
-           (e.nothrow.state << 4) |
-           (e.terminates.state << 6)
+    return (e.consistent.state << 1) |
+           (e.effect_free.state << 3) |
+           (e.nothrow.state << 5) |
+           (e.terminates.state << 7) |
+           (e.overlayed)
 end
 function decode_effects(e::UInt8)
     return Effects(
-        TriState(e & 0x3),
-        TriState((e >> 2) & 0x3),
-        TriState((e >> 4) & 0x3),
-        TriState((e >> 6) & 0x3),
+        TriState((e >> 1) & 0x03),
+        TriState((e >> 3) & 0x03),
+        TriState((e >> 5) & 0x03),
+        TriState((e >> 7) & 0x03),
+        e & 0x01 ≠ 0x00,
         false)
 end
 
@@ -109,6 +116,7 @@ function tristate_merge(old::Effects, new::Effects)
             old.nothrow, new.nothrow),
         tristate_merge(
             old.terminates, new.terminates),
+        old.overlayed | new.overlayed,
         old.inbounds_taints_consistency | new.inbounds_taints_consistency)
 end
 
@@ -158,7 +166,7 @@ mutable struct InferenceResult
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing)
+            WorldRange(), Effects(; overlayed=false), Effects(; overlayed=false), nothing)
     end
 end
 
