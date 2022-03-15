@@ -1396,7 +1396,7 @@ clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
 	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-	-rm -rf $$(abspath $(2)/$(3))
+	rm -rf $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)

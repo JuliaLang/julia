@@ -49,7 +49,7 @@ clean-p7zip:
 	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) clean
 
 distclean-p7zip:
-	-rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2 $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
+	rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2 $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
 
 
 get-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2

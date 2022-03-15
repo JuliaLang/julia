@@ -54,7 +54,7 @@ clean-pcre:
 	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
 
 distclean-pcre:
-	-rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
+	rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
 
 
 get-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2

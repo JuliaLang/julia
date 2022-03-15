@@ -76,7 +76,7 @@ clean-gmp:
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
 
 distclean-gmp:
-	-rm -rf $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2 \
 		$(SRCCACHE)/gmp-$(GMP_VER) \
 		$(BUILDDIR)/gmp-$(GMP_VER)
 

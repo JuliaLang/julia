@@ -40,7 +40,7 @@ clean-nghttp2:
 	-$(MAKE) -C $(BUILDDIR)/nghttp2-$(NGHTTP2_VER) clean
 
 distclean-nghttp2:
-	-rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \
 		$(SRCCACHE)/nghttp2-$(NGHTTP2_VER) \
 		$(BUILDDIR)/nghttp2-$(NGHTTP2_VER)
 

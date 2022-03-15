@@ -74,5 +74,5 @@ endif # DEPS_GIT
 
 $$(build_prefix)/manifest/$1: $$(SRCDIR)/$1.version # make the manifest stale if the version file is touched (causing re-install for compliant targets)
 distclean-$1:
-	-rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$$($2_SRC_DIR)
+	rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$$($2_SRC_DIR)
 endef

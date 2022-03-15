@@ -86,7 +86,7 @@ clean-libsuitesparse: uninstall-libsuitesparse
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) clean
 
 distclean-libsuitesparse:
-	-rm -rf $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz \
+	rm -rf $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz \
 		$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)
 
 get-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz

@@ -79,7 +79,7 @@ clean-curl:
 	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
 
 distclean-curl:
-	-rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
+	rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
 
 get-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 extract-curl: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted

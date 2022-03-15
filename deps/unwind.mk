@@ -61,7 +61,7 @@ clean-unwind:
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
 
 distclean-unwind:
-	-rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
+	rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
 		$(SRCCACHE)/libunwind-$(UNWIND_VER) \
 		$(BUILDDIR)/libunwind-$(UNWIND_VER)
 
@@ -115,11 +115,11 @@ $(eval $(call staged-install, \
 
 clean-llvmunwind:
 	-rm -f $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
-	-rm -rf $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
+	rm -rf $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
 	-$(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
 
 distclean-llvmunwind:
-	-rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
+	rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
 		$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) \
 		$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)
 

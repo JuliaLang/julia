@@ -76,7 +76,7 @@ clean-mbedtls:
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
+	rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
 		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 

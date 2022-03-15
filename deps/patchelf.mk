@@ -43,7 +43,7 @@ clean-patchelf:
 	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
 
 distclean-patchelf:
-	-rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \
 		$(SRCCACHE)/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 

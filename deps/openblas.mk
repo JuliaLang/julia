@@ -190,7 +190,7 @@ clean-lapack:
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
-	-rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
 get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz

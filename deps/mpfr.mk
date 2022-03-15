@@ -64,7 +64,7 @@ clean-mpfr:
 	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
 
 distclean-mpfr:
-	-rm -rf $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2 \
 		$(SRCCACHE)/mpfr-$(MPFR_VER) \
 		$(BUILDDIR)/mpfr-$(MPFR_VER)
 

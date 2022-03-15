@@ -216,7 +216,7 @@ uninstall-$1:
 ifeq ($$(BUILD_OS), WINNT)
 	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
 else
-	-rm -rf $3/$1
+	rm -rf $3/$1
 endif
 	-rm -f $$(build_prefix)/manifest/$1
 endef

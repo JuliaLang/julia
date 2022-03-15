@@ -15,7 +15,7 @@ $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCCACHE)
 
 $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
 	$(JLCHECKSUM) $<
-	-rm -rf $(dir $@)
+	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
 	echo 1 > $@
@@ -51,7 +51,7 @@ clean-dsfmt:
 	-rm -f $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 distclean-dsfmt:
-	-rm -rf $(SRCCACHE)/dsfmt*.tar.gz $(SRCCACHE)/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
+	rm -rf $(SRCCACHE)/dsfmt*.tar.gz $(SRCCACHE)/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
 
 get-dsfmt: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
 extract-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted
