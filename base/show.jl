@@ -727,11 +727,11 @@ function show_typealias(io::IO, @nospecialize(x::Type))
 end
 
 function make_typealiases(@nospecialize(x::Type))
-    Any === x && return Core.svec(), Union{}
-    x <: Tuple && return Core.svec(), Union{}
+    aliases = SimpleVector[]
+    Any === x && return aliases, Union{}
+    x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
-    aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -783,7 +783,7 @@ function make_typealiases(@nospecialize(x::Type))
         end
     end
     if isempty(aliases)
-        return Core.svec(), Union{}
+        return aliases, Union{}
     end
     sort!(aliases, by = x -> x[4]::Tuple{Int,Int}, rev = true) # heuristic sort by "best" environment
     let applied = Union{}
