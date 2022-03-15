@@ -1160,7 +1160,7 @@ function set_pkgorigin_version_path(pkg, path)
             d = parsed_toml(project_file)
             v = get(d, "version", nothing)
             if v !== nothing
-                pkgorigin.version = VersionNumber(v)   # can we narrow the types on `v`?
+                pkgorigin.version = VersionNumber(v::AbstractString)
             end
         end
     end
