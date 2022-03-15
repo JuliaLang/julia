@@ -63,6 +63,12 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
             return 0;
         if (dt->name == jl_namedtuple_typename)
             return layout_uses_free_typevars(jl_tparam0(dt), env) || layout_uses_free_typevars(jl_tparam1(dt), env);
+        if (dt->name == jl_tuple_typename)
+            // conservative, since we don't want to inline an abstract tuple,
+            // and we currently declare !has_fixed_layout for these, but that
+            // means we also won't be able to inline a tuple which is concrete
+            // except for the use of free type-vars
+            return 1;
         jl_svec_t *types = jl_get_fieldtypes(dt);
         size_t i, l = jl_svec_len(types);
         for (i = 0; i < l; i++) {
@@ -227,8 +233,10 @@ int jl_has_fixed_layout(jl_datatype_t *dt)
         return 1;
     if (dt->name->abstract)
         return 0;
-    if (jl_is_tuple_type(dt) || jl_is_namedtuple_type(dt))
-        return 0; // TODO: relax more?
+    if (dt->name == jl_namedtuple_typename)
+        return !layout_uses_free_typevars(jl_tparam0(dt), NULL) && !layout_uses_free_typevars(jl_tparam1(dt), NULL);
+    if (dt->name == jl_tuple_typename)
+        return 0;
     jl_svec_t *types = jl_get_fieldtypes(dt);
     size_t i, l = jl_svec_len(types);
     for (i = 0; i < l; i++) {
