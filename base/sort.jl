@@ -771,9 +771,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # and to avoid overflow, we check for small inputs before any other runtime checks
     hi <= lo && return v
     lenm1 = maybe_unsigned(hi-lo) # adding 1 would risk overflow
-    # only count sort on a short range can compete with insertion sort fo lenm1 < 30
+    # only count sort on a short range can compete with insertion sort fo lenm1 < 40
     # and the optimization is not worth the detection cost, so we use insertion sort.
-    lenm1 < 30 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+    lenm1 < 40 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
     # UInt128 does not support fast bit shifting so we never
     # dispatch to radix sort but we may still perform count sort
