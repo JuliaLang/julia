@@ -4102,7 +4102,7 @@ Library improvements
 
     + Using colons (`:`) to represent a collection of indices is deprecated. They now must be
       explicitly converted to a specialized array of integers with the `to_indices` function.
-      As a result, the type of `SubArray`s that represent views over colon indices has changed.
+      As a result, the type of `SubArray`s that represent views over colon indices has changed.
 
     + Logical indexing is now more efficient. Logical arrays are converted by `to_indices` to
       a lazy, iterable collection of indices that doesn't support indexing. A deprecation

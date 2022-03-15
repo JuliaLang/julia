@@ -25,7 +25,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, 0, 0)
+        i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
             @inbounds isvalid(s, i) || string_index_err(s, i)

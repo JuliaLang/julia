@@ -194,7 +194,7 @@ end
             "Ireland", "Sinead O'Connor", "Éire", "Sinéad O'Connor",
             "Israel", "Yehoram Gaon", "ישראל", "יהורם גאון",
             "Italy", "Fabrizio DeAndre", "Italia", "Fabrizio De André",
-            "Japan", "KUBOTA Toshinobu", "日本", "久保田    利伸",
+            "Japan", "KUBOTA Toshinobu", "日本", "久保田    利伸",
             "Japan", "HAYASHIBARA Megumi", "日本", "林原 めぐみ",
             "Japan", "Mori Ogai", "日本", "森鷗外",
             "Japan", "Tex Texin", "日本", "テクス テクサン",

@@ -434,7 +434,7 @@ issetequal(a::AbstractSet, b) = issetequal(a, Set(b))
 function issetequal(a, b::AbstractSet)
     if haslength(a)
         # check b for too many unique elements
-        length(a) < length(b) && return false
+        length(a) < length(b) && return false
     end
     return issetequal(Set(a), b)
 end
