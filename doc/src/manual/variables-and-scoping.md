@@ -91,12 +91,6 @@ julia> module D
            b = a # errors as D's global scope is separate from A's
        end;
 ERROR: UndefVarError: a not defined
-
-julia> module E
-           import ..A # make module A available
-           A.a = 2    # throws below error
-       end;
-ERROR: cannot assign variables in other modules
 ```
 
 If a top-level expression contains a variable declaration with keyword `local`,

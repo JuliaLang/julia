@@ -1291,11 +1291,12 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                      world = get_world_counter(),
+                      interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     rt = []
-    world = get_world_counter()
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)

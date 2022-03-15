@@ -4,10 +4,14 @@ Julia v1.9 Release Notes
 New language features
 ---------------------
 
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
 
 Language changes
 ----------------
 
+* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
+  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
+  `getfield`. ([#44137])
 
 Compiler/Runtime improvements
 -----------------------------

@@ -38,18 +38,44 @@ struct Effects
     effect_free::TriState
     nothrow::TriState
     terminates::TriState
+    overlayed::Bool
     # This effect is currently only tracked in inference and modified
     # :consistent before caching. We may want to track it in the future.
     inbounds_taints_consistency::Bool
 end
-Effects(consistent::TriState, effect_free::TriState, nothrow::TriState, terminates::TriState) =
-    Effects(consistent, effect_free, nothrow, terminates, false)
-Effects() = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN)
+function Effects(
+    consistent::TriState,
+    effect_free::TriState,
+    nothrow::TriState,
+    terminates::TriState,
+    overlayed::Bool)
+    return Effects(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates,
+        overlayed,
+        false)
+end
 
-Effects(e::Effects; consistent::TriState=e.consistent,
-    effect_free::TriState = e.effect_free, nothrow::TriState=e.nothrow, terminates::TriState=e.terminates,
-    inbounds_taints_consistency::Bool = e.inbounds_taints_consistency) =
-        Effects(consistent, effect_free, nothrow, terminates, inbounds_taints_consistency)
+const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
+const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
+
+function Effects(e::Effects = EFFECTS_UNKNOWN;
+    consistent::TriState = e.consistent,
+    effect_free::TriState = e.effect_free,
+    nothrow::TriState = e.nothrow,
+    terminates::TriState = e.terminates,
+    overlayed::Bool = e.overlayed,
+    inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
+    return Effects(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates,
+        overlayed,
+        inbounds_taints_consistency)
+end
 
 is_total_or_error(effects::Effects) =
     effects.consistent === ALWAYS_TRUE && effects.effect_free === ALWAYS_TRUE &&
@@ -63,17 +89,26 @@ is_removable_if_unused(effects::Effects) =
     effects.terminates === ALWAYS_TRUE &&
     effects.nothrow === ALWAYS_TRUE
 
-const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE)
-
-encode_effects(e::Effects) = e.consistent.state | (e.effect_free.state << 2) | (e.nothrow.state << 4) | (e.terminates.state << 6)
-decode_effects(e::UInt8) =
-    Effects(TriState(e & 0x3),
-        TriState((e >> 2) & 0x3),
-        TriState((e >> 4) & 0x3),
-        TriState((e >> 6) & 0x3), false)
+function encode_effects(e::Effects)
+    return (e.consistent.state << 1) |
+           (e.effect_free.state << 3) |
+           (e.nothrow.state << 5) |
+           (e.terminates.state << 7) |
+           (e.overlayed)
+end
+function decode_effects(e::UInt8)
+    return Effects(
+        TriState((e >> 1) & 0x03),
+        TriState((e >> 3) & 0x03),
+        TriState((e >> 5) & 0x03),
+        TriState((e >> 7) & 0x03),
+        e & 0x01 ≠ 0x00,
+        false)
+end
 
 function tristate_merge(old::Effects, new::Effects)
-    Effects(tristate_merge(
+    return Effects(
+        tristate_merge(
             old.consistent, new.consistent),
         tristate_merge(
             old.effect_free, new.effect_free),
@@ -81,8 +116,8 @@ function tristate_merge(old::Effects, new::Effects)
             old.nothrow, new.nothrow),
         tristate_merge(
             old.terminates, new.terminates),
-        old.inbounds_taints_consistency ||
-        new.inbounds_taints_consistency)
+        old.overlayed | new.overlayed,
+        old.inbounds_taints_consistency | new.inbounds_taints_consistency)
 end
 
 struct EffectsOverride
@@ -100,16 +135,17 @@ function encode_effects_override(eo::EffectsOverride)
     eo.nothrow && (e |= 0x04)
     eo.terminates_globally && (e |= 0x08)
     eo.terminates_locally && (e |= 0x10)
-    e
+    return e
 end
 
-decode_effects_override(e::UInt8) =
-    EffectsOverride(
+function decode_effects_override(e::UInt8)
+    return EffectsOverride(
         (e & 0x01) != 0x00,
         (e & 0x02) != 0x00,
         (e & 0x04) != 0x00,
         (e & 0x08) != 0x00,
         (e & 0x10) != 0x00)
+end
 
 """
     InferenceResult
@@ -130,7 +166,7 @@ mutable struct InferenceResult
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing)
+            WorldRange(), Effects(; overlayed=false), Effects(; overlayed=false), nothing)
     end
 end
 

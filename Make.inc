@@ -456,25 +456,20 @@ endif
 
 # Compiler specific stuff
 
-ifeq ($(USECLANG), 1)
+CC_VERSION_STRING = $(shell $(CC) --version)
+ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
+USECLANG := 1
 USEGCC := 0
-else  # default to gcc
-USEGCC := 1
+else
 USECLANG := 0
+USEGCC := 1
 endif
 
 FC := $(CROSS_COMPILE)gfortran
 
-ifeq ($(OS), FreeBSD)
-USEGCC := 0
-USECLANG := 1
-endif
-
 # Note: Supporting only macOS Yosemite and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
-USEGCC := 0
-USECLANG := 1
 ifneq ($(APPLE_ARCH),arm64)
 MACOSX_VERSION_MIN := 10.10
 else

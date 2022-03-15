@@ -431,7 +431,7 @@ function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
     # but we don't currently model idempontency using dataflow, so we don't notice.
     # Fix that up here to improve precision.
     if !ipo_effects.inbounds_taints_consistency && rt === Union{}
-        return Effects(ipo_effects, consistent=ALWAYS_TRUE)
+        return Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
     return ipo_effects
 end
@@ -494,7 +494,25 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
-    me.result.ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
+    ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
+    # override the analyzed effects using manually annotated effect settings
+    def = me.linfo.def
+    if isa(def, Method)
+        override = decode_effects_override(def.purity)
+        if is_effect_overridden(override, :consistent)
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :effect_free)
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :nothrow)
+            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :terminates_globally)
+            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
+        end
+    end
+    me.result.ipo_effects = ipo_effects
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -737,11 +755,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    tristate_merge!(parent, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
+    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        tristate_merge!(child, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
+        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -796,14 +814,6 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
 end
 
 generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-
-function tristate_merge!(caller::InferenceState, callee::Effects)
-    caller.ipo_effects = tristate_merge(caller.ipo_effects, callee)
-end
-
-function tristate_merge!(caller::InferenceState, callee::InferenceState)
-    tristate_merge!(caller, Effects(callee))
-end
 
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 

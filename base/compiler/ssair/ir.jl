@@ -332,70 +332,65 @@ end
 
 const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
-mutable struct UseRef
+mutable struct UseRefIterator
     stmt::Any
-    op::Int
-    UseRef(@nospecialize(a)) = new(a, 0)
-    UseRef(@nospecialize(a), op::Int) = new(a, op)
-end
-struct UseRefIterator
-    use::Tuple{UseRef, Nothing}
     relevant::Bool
-    UseRefIterator(@nospecialize(a), relevant::Bool) = new((UseRef(a), nothing), relevant)
+    UseRefIterator(@nospecialize(a), relevant::Bool) = new(a, relevant)
 end
-getindex(it::UseRefIterator) = it.use[1].stmt
+getindex(it::UseRefIterator) = it.stmt
 
-# TODO: stack-allocation
-#struct UseRef
-#    urs::UseRefIterator
-#    use::Int
-#end
+struct UseRef
+    urs::UseRefIterator
+    op::Int
+    UseRef(urs::UseRefIterator) = new(urs, 0)
+    UseRef(urs::UseRefIterator, op::Int) = new(urs, op)
+end
 
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
-function getindex(x::UseRef)
-    stmt = x.stmt
+@noinline function _useref_getindex(@nospecialize(stmt), op::Int)
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && return OOB_TOKEN
-                return rhs.args[x.op]
+                op > length(rhs.args) && return OOB_TOKEN
+                return rhs.args[op]
             end
         end
-        x.op == 1 || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && return OOB_TOKEN
-        return stmt.args[x.op]
+        op > length(stmt.args) && return OOB_TOKEN
+        return stmt.args[op]
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        x.op == 1 || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PiNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        x.op == 1 || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, UpsilonNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        x.op == 1 || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && return OOB_TOKEN
-        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
-        return stmt.values[x.op]
+        op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, op) || return UNDEF_TOKEN
+        return stmt.values[op]
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && return OOB_TOKEN
-        isassigned(stmt.values, x.op) || return UNDEF_TOKEN
-        return stmt.values[x.op]
+        op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, op) || return UNDEF_TOKEN
+        return stmt.values[op]
     else
         return OOB_TOKEN
     end
 end
+@inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
     return e.head in (:call, :invoke, :invoke_modify,
@@ -407,45 +402,49 @@ function is_relevant_expr(e::Expr)
                       :new_opaque_closure)
 end
 
-function setindex!(x::UseRef, @nospecialize(v))
-    stmt = x.stmt
+@noinline function _useref_setindex!(@nospecialize(stmt), op::Int, @nospecialize(v))
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && throw(BoundsError())
-                rhs.args[x.op] = v
-                return v
+                op > length(rhs.args) && throw(BoundsError())
+                rhs.args[op] = v
+                return stmt
             end
         end
-        x.op == 1 || throw(BoundsError())
+        op == 1 || throw(BoundsError())
         stmt.args[2] = v
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && throw(BoundsError())
-        stmt.args[x.op] = v
+        op > length(stmt.args) && throw(BoundsError())
+        stmt.args[op] = v
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = GotoIfNot(v, stmt.dest)
+        op == 1 || throw(BoundsError())
+        stmt = GotoIfNot(v, stmt.dest)
     elseif isa(stmt, ReturnNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = typeof(stmt)(v)
+        op == 1 || throw(BoundsError())
+        stmt = typeof(stmt)(v)
     elseif isa(stmt, UpsilonNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = typeof(stmt)(v)
+        op == 1 || throw(BoundsError())
+        stmt = typeof(stmt)(v)
     elseif isa(stmt, PiNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = typeof(stmt)(v, stmt.typ)
+        op == 1 || throw(BoundsError())
+        stmt = typeof(stmt)(v, stmt.typ)
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.op) || throw(BoundsError())
-        stmt.values[x.op] = v
+        op > length(stmt.values) && throw(BoundsError())
+        isassigned(stmt.values, op) || throw(BoundsError())
+        stmt.values[op] = v
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.op) || throw(BoundsError())
-        stmt.values[x.op] = v
+        op > length(stmt.values) && throw(BoundsError())
+        isassigned(stmt.values, op) || throw(BoundsError())
+        stmt.values[op] = v
     else
         throw(BoundsError())
     end
+    return stmt
+end
+
+@inline function setindex!(x::UseRef, @nospecialize(v))
+    x.urs.stmt = _useref_setindex!(x.urs.stmt, x.op, v)
     return x
 end
 
@@ -456,16 +455,20 @@ function userefs(@nospecialize(x))
     return UseRefIterator(x, relevant)
 end
 
-iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
-@noinline function iterate(it::UseRefIterator, ::Nothing)
-    it.relevant || return nothing
-    use = it.use[1]
+@noinline function _advance(@nospecialize(stmt), op)
     while true
-        use.op += 1
-        y = use[]
+        op += 1
+        y = _useref_getindex(stmt, op)
         y === OOB_TOKEN && return nothing
-        y === UNDEF_TOKEN || return it.use
+        y === UNDEF_TOKEN || return op
     end
+end
+
+@inline function iterate(it::UseRefIterator, op::Int=0)
+    it.relevant || return nothing
+    op = _advance(it.stmt, op)
+    op === nothing && return nothing
+    return (UseRef(it, op), op)
 end
 
 # This function is used from the show code, which may have a different

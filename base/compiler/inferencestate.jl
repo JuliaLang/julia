@@ -134,14 +134,29 @@ mutable struct InferenceState
             #=parent=#nothing,
             #=cached=#cache === :global,
             #=inferred=#false, #=dont_work_on_me=#false,
-            #=ipo_effects=#Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, inbounds_taints_consistency),
+            #=ipo_effects=#Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false, inbounds_taints_consistency),
             interp)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)
         return frame
     end
 end
+
 Effects(state::InferenceState) = state.ipo_effects
+
+function tristate_merge!(caller::InferenceState, effects::Effects)
+    caller.ipo_effects = tristate_merge(caller.ipo_effects, effects)
+end
+tristate_merge!(caller::InferenceState, callee::InferenceState) =
+    tristate_merge!(caller, Effects(callee))
+
+is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
+function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
+    def = linfo.def
+    return isa(def, Method) && is_effect_overridden(def, effect)
+end
+is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
+is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
 
 function any_inbounds(code::Vector{Any})
     for i=1:length(code)
