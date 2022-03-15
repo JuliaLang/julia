@@ -214,7 +214,6 @@
     XX(jl_get_excstack) \
     XX(jl_get_fenv_consts) \
     XX(jl_get_field) \
-    XX(jl_get_field_offset) \
     XX(jl_get_global) \
     XX(jl_get_image_file) \
     XX(jl_get_JIT) \
