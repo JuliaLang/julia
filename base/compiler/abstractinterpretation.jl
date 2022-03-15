@@ -606,10 +606,12 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     if edge === nothing
         edgecycle = edgelimited = true
     end
-    if is_effect_overrided(sv, :terminates_globally)
+    # we look for the termination effect override here as well, since the :terminates effect
+    # may have been tainted due to recursion at this point even if it's overridden
+    if is_effect_overridden(sv, :terminates_globally)
         # this frame is known to terminate
         edge_effects = Effects(edge_effects, terminates=ALWAYS_TRUE)
-    elseif is_effect_overrided(method, :terminates_globally)
+    elseif is_effect_overridden(method, :terminates_globally)
         # this edge is known to terminate
         edge_effects = Effects(edge_effects, terminates=ALWAYS_TRUE)
     elseif edgecycle
@@ -619,13 +621,6 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     end
     return MethodCallResult(rt, edgecycle, edgelimited, edge, edge_effects)
 end
-
-is_effect_overrided(sv::InferenceState, effect::Symbol) = is_effect_overrided(sv.linfo, effect)
-function is_effect_overrided(linfo::MethodInstance, effect::Symbol)
-    def = linfo.def
-    return isa(def, Method) && is_effect_overrided(def, effect)
-end
-is_effect_overrided(method::Method, effect::Symbol) = getfield(decode_effects_override(method.purity), effect)
 
 # keeps result and context information of abstract method call, will be used by succeeding constant-propagation
 struct MethodCallResult
@@ -2104,9 +2099,9 @@ end
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
-        if is_effect_overrided(frame, :terminates_globally)
+        if is_effect_overridden(frame, :terminates_globally)
             # this frame is known to terminate
-        elseif is_effect_overrided(frame, :terminates_locally)
+        elseif is_effect_overridden(frame, :terminates_locally)
             # this backedge is known to terminate
         else
             tristate_merge!(frame, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
