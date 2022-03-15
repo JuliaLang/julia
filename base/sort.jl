@@ -792,6 +792,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     end
 
     v_min, v_max = _extrema(v, lo, hi, o)
+    lt(o, v_min, v_max) || return v # all same
     if eltype(v) <: Integer && o isa DirectOrdering
         R = o === Reverse
         v_range = maybe_unsigned(R ? v_min-v_max : v_max-v_min)
