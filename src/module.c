@@ -386,6 +386,10 @@ JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
     JL_UNLOCK(&m->lock);
     if (b == NULL)
         return jl_nothing;
+    if (b->constp) {
+        jl_value_t *val = jl_atomic_load_relaxed(&b->value);
+        return val ? jl_typeof(val) : jl_nothing;
+    }
     jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
     return ty ? ty : jl_nothing;
 }
