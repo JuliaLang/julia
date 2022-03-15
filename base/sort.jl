@@ -781,6 +781,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         if eltype(v) <: Integer && o isa DirectOrdering
             v_min, v_max = _extrema(v, lo, hi, Forward)
             v_range = maybe_unsigned(v_max-v_min)
+            v_range == 0 && return v # all same
 
             # we know lenm1 ≥ 30, so this will never underflow.
             # if lenm1 > 3.7e18 (59 exabytes), then this may incorrectly dispatch to fallback
@@ -809,6 +810,36 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # where we only need to radix over the last few bits (5, in the example).
     bits = unsigned(8sizeof(u_range) - leading_zeros(u_range))
 
+    if u_range < div(lenm1, 2) # count sort will be superior if u's range is very small
+        u = Serial.serialize!(v, lo, hi, o)
+        sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
+        return Serial.deserialize!(v, u, lo, hi, o)
+    end
+
+    if lenm1 > 60
+        # Count the number of sequential elements that are out of order to inform possible
+        # optimizations that take advantage of partialally or completely presorted vectors.
+        # This has overhead on the order of 2-6% of the runtime of worst case sorting but
+        # can't occur earlier because it has overhead of 5-50% compared to some of the
+        # faster special cases above. And can't happen for shorter vectors because detection
+        # cost rises up to 10% for as lenm1 decreases down to 40.
+        out_of_order = sum(lt(o, v[i+1], v[i]) for i in lo:hi-1)
+        out_of_order == 0 && return v # v is already sorted
+        if out_of_order == lenm1 # v is reverse sorted
+            reverse!(view(v, lo:hi))
+            return v
+        end
+        # These presorted fallbacks could be a specially tunend shell sort.
+        # InsertionSort takes advantage of ordered data
+        if out_of_order < lenm1 ÷ 4 && lenm1 < 200 #TODO tune this
+            return sort!(v, lo, hi, InsertionSort, o)
+        end
+        # QuickSort takes advantage of ordered or reverse ordered data
+        if a.fallback === QuickSort && (out_of_order < lenm1÷4 || lenm1*3÷4 < out_of_order) #TODO tune this
+            return sort!(v, lo, hi, QuickSort, o)
+        end
+    end
+
     # radix sort runs in O(bits * lenm1), insertion sort runs in O(lenm1^2). Radix sort
     # has a constant factor that is three times higher, so radix runtime is 3bits * lenm1
     # and insertion runtime is lenm1^2. Empirically, insertion is faster than radix iff
@@ -816,40 +847,10 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # Insertion < Radix
     #   lenm1^2 < 3 * bits * lenm1
     #     lenm1 < 3bits
-    lenm1 < 3bits && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-    # at lenm1 = 64*3-1, QuickSort is about 20% faster than InsertionSort. The window
-    # where QuickSort is superior is the triangle defined by (lenm1=128, bits=43),
-    # (lenm1=191, bits=64), and (lenm1=128, bits=64). This is a small window, spanning only
-    # .015 square orders of magnitude, and the 20% performance gap is only present at
-    # the apex. At the centroid, the gap is about 6%. On the other hand, there are
-    # theoretical/compilation benefits to avoiding the fallback entirely for small
-    # serializable types and orderings, so we unconditionally use InsertionSort.
-
-    if u_range < div(lenm1, 2) # count sort will be superior if u's range is very small
-        u = Serial.serialize!(v, lo, hi, o)
-        sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
-        return Serial.deserialize!(v, u, lo, hi, o)
-    end
-
-    # Count the number of sequential elements that are out of order to inform possible
-    # optimizations that take advantage of partialally or completely presorted vectors.
-    # This has overhead on the order of 1-5% of the runtime of worst case sorting but
-    # can't occur earlier because it has overhead of 5-50% compared to some of the
-    # faster special cases above.
-    out_of_order = sum(lt(o, v[i+1], v[i]) for i in lo:hi-1)
-    out_of_order == 0 && return v # v is already sorted
-    if out_of_order == lenm1 # v is reverse sorted
-        reverse!(view(v, lo:hi))
-        return v
-    end
-    # These presorted fallbacks could be a specially tunend shell sort.
-    # InsertionSort takes advantage of ordered data
-    if out_of_order < lenm1 ÷ 4 && lenm1 < 200 #TODO tune this
-        return sort!(v, lo, hi, InsertionSort, o)
-    end
-    # QuickSort takes advantage of ordered or reverse ordered data
-    if a.fallback === QuickSort && (out_of_order < lenm1÷4 || lenm1*3÷4 < out_of_order) #TODO tune this
-        return sort!(v, lo, hi, QuickSort, o)
+    if lenm1 < 3bits
+        # at lenm1 = 64*3-1, QuickSort is about 20% faster than InsertionSort.
+        alg = a.fallback === QuickSort && lenm1 > 120 ? QuickSort : SMALL_ALGORITHM
+        return sort!(v, lo, hi, alg, o)
     end
 
     # At this point, we are committed to radix sort.
