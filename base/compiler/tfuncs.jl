@@ -1756,11 +1756,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
     if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
         # consistent if the argtype is immutable
         if isvarargtype(argtypes[2])
-            return Effects(Effects(), effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
         end
         s = widenconst(argtypes[2])
         if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(Effects(), effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
@@ -1789,7 +1789,9 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
         effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
         nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        ALWAYS_TRUE)
+        #=terminates=#ALWAYS_TRUE,
+        #=overlayed=#false,
+        )
 end
 
 function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
@@ -1970,7 +1972,9 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
         effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
         nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        ALWAYS_TRUE)
+        #=terminates=#ALWAYS_TRUE,
+        #=overlayed=#false,
+        )
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function
