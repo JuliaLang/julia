@@ -20,6 +20,7 @@ struct JLOptions
     compile_enabled::Int8
     code_coverage::Int8
     malloc_log::Int8
+    tracked_path::Ptr{UInt8}
     opt_level::Int8
     opt_level_min::Int8
     debug_level::Int8

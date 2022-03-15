@@ -1089,6 +1089,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
+        assert(t && "LLVM type should not be null");
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, lrt->getContext(), t);
 
         if (jl_is_cpointer_type(tti)) {

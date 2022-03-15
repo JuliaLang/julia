@@ -751,6 +751,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
     # Test switching repl modes
+    redirect_stdout(devnull) do # to suppress "foo" echoes
     sendrepl2("""\e[200~
             julia> A = 1
             1
@@ -775,6 +776,7 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(c)
     @test Main.A == 1
     @test Main.B == 2
+    end # redirect_stdout
 
     # Close repl
     write(stdin_write, '\x04')
