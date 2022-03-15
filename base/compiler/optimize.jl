@@ -558,12 +558,21 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
-    labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
+    if !coverage && JLOptions().code_coverage == 3
+        for codeloc in codelocs
+            if codeloc != 0 && is_file_tracked(ci.linetable[codeloc].file)
+                # if any line falls in a tracked file enable coverage for all
+                coverage = true
+                break
+            end
+        end
+    end
+    labelmap = coverage ? fill(0, length(code)) : changemap
     while idx <= length(code)
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
