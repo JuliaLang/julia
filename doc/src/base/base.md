@@ -390,6 +390,7 @@ Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ProcessFailedException
+Base.TaskFailedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
