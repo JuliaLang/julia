@@ -909,8 +909,7 @@ end
 function Rational{BigInt}(num::BigInt, den::BigInt)
     if iszero(den)
         iszero(num) && __throw_rational_argerror_zero(BigInt)
-        num = isneg(num) ? -one(BigInt) : one(BigInt)
-        return unsafe_rational(BigInt, num, den)
+        return set_si!(z, flipsign(1, num), 0)
     end
     xq = _MPQ(MPZ.set(num), MPZ.set(den))
     ccall((:__gmpq_canonicalize, :libgmp), Cvoid, (mpq_t,), xq)

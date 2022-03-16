@@ -608,6 +608,9 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
 
         @test o // zo       == oz
         @test (-o) // zo    == -oz
+
+        @test Rational{BigInt}(-1, 0) == -1//0
+        @test Rational{BigInt}(1, 0) == 1//0
     end
 end
 
@@ -620,26 +623,26 @@ b = Rational{BigInt}(bb)
 c = Rational{BigInt}(cc)
 t = Rational{BigInt}(0, 1)
 @testset "big rational inplace" begin
-    @test Base.GMP.MPQ.add!(t, a, b) == Rational{BigInt}(1, 6)
-    @test t == Rational{BigInt}(1, 6)
-    @test Base.GMP.MPQ.add!(t, t) == Rational{BigInt}(1, 3)
-    @test t == Rational{BigInt}(1, 3)
+    @test Base.GMP.MPQ.add!(t, a, b) == 1//6
+    @test t == 1//6
+    @test Base.GMP.MPQ.add!(t, t) == 1//3
+    @test t == 1//3
 
     @test iszero(Base.GMP.MPQ.sub!(t, t))
     @test iszero(t)
-    @test Base.GMP.MPQ.sub!(t, b, c) == Rational{BigInt}(-11, 6)
-    @test t == Rational{BigInt}(-11, 6)
+    @test Base.GMP.MPQ.sub!(t, b, c) == -11//6
+    @test t == -11//6
 
-    @test Base.GMP.MPQ.mul!(t, a, b) == Rational{BigInt}(-1, 6)
-    @test t == Rational{BigInt}(-1, 6)
-    @test Base.GMP.MPQ.mul!(t, t) == Rational{BigInt}(1, 36)
-    @test t == Rational{BigInt}(1, 36)
+    @test Base.GMP.MPQ.mul!(t, a, b) == -1//6
+    @test t == -1//6
+    @test Base.GMP.MPQ.mul!(t, t) == 1//36
+    @test t == 1//36
     @test iszero(Base.GMP.MPQ.mul!(t, Rational{BigInt}(0)))
 
-    @test Base.GMP.MPQ.div!(t, a, b) == Rational{BigInt}(-3, 2)
-    @test t == Rational{BigInt}(-3, 2)
-    @test Base.GMP.MPQ.div!(t, a) == Rational{BigInt}(-3, 1)
-    @test t == Rational{BigInt}(-3, 1)
+    @test Base.GMP.MPQ.div!(t, a, b) == -3//2
+    @test t == -3//2
+    @test Base.GMP.MPQ.div!(t, a) == -3//1
+    @test t == -3//1
 
     @test aa == a && bb == b && cc == c
 
@@ -650,20 +653,20 @@ t = Rational{BigInt}(0, 1)
         Base.GMP.MPQ.add!(a, b, c)
         @test b == bb
 
-        @test Base.GMP.MPQ.set_z!(a, BigInt(0)) == BigInt(0)
+        @test Base.GMP.MPQ.set_z!(a, BigInt(0)) == 0
         @test iszero(a)
-        @test Base.GMP.MPQ.set_z!(a, BigInt(3)) == BigInt(3)
+        @test Base.GMP.MPQ.set_z!(a, BigInt(3)) == 3
         @test a == BigInt(3)
 
-        @test Base.GMP.MPQ.set_ui(1, 2)      == Rational{BigInt}(1, 2)
-        @test Base.GMP.MPQ.set_ui(0, 1)      == Rational{BigInt}(0, 1)
-        @test Base.GMP.MPQ.set_ui!(a, 1, 2)  == Rational{BigInt}(1, 2)
-        @test a == Rational{BigInt}(1, 2)
+        @test Base.GMP.MPQ.set_ui(1, 2)      == 1//2
+        @test Base.GMP.MPQ.set_ui(0, 1)      == 0//1
+        @test Base.GMP.MPQ.set_ui!(a, 1, 2)  == 1//2
+        @test a == 1//2
 
-        @test Base.GMP.MPQ.set_si(1, 2)      == Rational{BigInt}(1, 2)
-        @test Base.GMP.MPQ.set_si(-1, 2)     == Rational{BigInt}(-1, 2)
-        @test Base.GMP.MPQ.set_si!(a, -1, 2) == Rational{BigInt}(-1, 2)
-        @test a == Rational{BigInt}(-1, 2)
+        @test Base.GMP.MPQ.set_si(1, 2)      == 1//2
+        @test Base.GMP.MPQ.set_si(-1, 2)     == -1//2
+        @test Base.GMP.MPQ.set_si!(a, -1, 2) == -1//2
+        @test a == -1//2
     end
 
     @testset "infinities" begin
@@ -689,8 +692,8 @@ t = Rational{BigInt}(0, 1)
 
         @test Base.GMP.MPQ.mul!(-oz, -oz) == oz
         @test Base.GMP.MPQ.mul!(-oz, oz)  == -oz
-        @test Base.GMP.MPQ.mul!(oz, -oz)  == -Rational{BigInt}(1, 0)
-        @test oz == -Rational{BigInt}(1, 0)
+        @test Base.GMP.MPQ.mul!(oz, -oz)  == -1//0
+        @test oz == -1//0
         oz = Rational{BigInt}(1, 0)
 
         @test Base.GMP.MPQ.div!(oo, zo) == oz
