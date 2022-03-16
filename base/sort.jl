@@ -1409,7 +1409,6 @@ end
 
 module Float
 using ..Sort
-using ..Sort.Serial
 using ...Order
 using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing, Type, reinterpret
 
