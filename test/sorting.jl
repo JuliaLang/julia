@@ -803,7 +803,10 @@ end
 
             for a in x
                 for b in x
-                    T <: AbstractFloat && (isnan(a) || isnan(b) || signbit(a) != signbit(b)) && continue
+                    if T === Base.Sort.Float.Left() || T === Base.Sort.Float.Right()
+                        # Left and Right orderings guarantee homogeneous sign and no NaNs
+                        (isnan(a) || isnan(b) || signbit(a) != signbit(b)) && continue
+                    end
                     @test Base.Order.lt(order, a, b) === Base.Order.lt(Forward, Base.Sort.uint_map(a, order), Base.Sort.uint_map(b, order))
                 end
             end
