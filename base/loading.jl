@@ -596,7 +596,8 @@ end
 
 function is_v1_format_manifest(raw_manifest::Dict)
     if haskey(raw_manifest, "manifest_format")
-        if raw_manifest["manifest_format"] isa Dict && haskey(raw_manifest["manifest_format"], "uuid")
+        mf = raw_manifest["manifest_format"]
+        if mf isa Dict && haskey(mf, "uuid")
             # the off-chance where an old format manifest has a dep called "manifest_format"
             return true
         end
@@ -612,7 +613,7 @@ function get_deps(raw_manifest::Dict)
         return raw_manifest
     else
         # if the manifest has no deps, there won't be a `deps` field
-        return get(Dict{String, Any}, raw_manifest, "deps")
+        return get(Dict{String, Any}, raw_manifest, "deps")::Dict{String, Any}
     end
 end
 
@@ -893,6 +894,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if staledeps === true
             continue
         end
+        staledeps = staledeps::Vector{Any}
         try
             touch(path_to_try) # update timestamp of precompilation file
         catch # file might be read-only and then we fail to update timestamp, which is fine
@@ -1289,8 +1291,11 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
-        return s[:SOURCE_PATH]::Union{Nothing,String}
+    if s !== nothing
+        s = s::IdDict{Any,Any}
+        if haskey(s, :SOURCE_PATH)
+            return s[:SOURCE_PATH]::Union{Nothing,String}
+        end
     end
     return default
 end
@@ -1877,7 +1882,7 @@ function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{Str
     for name in prefs_list
         prefs_value = get(prefs, name, nothing)
         if prefs_value !== nothing
-            h = hash(prefs_value, h)
+            h = hash(prefs_value, h)::UInt
         end
     end
     # We always return a `UInt64` so that our serialization format is stable
