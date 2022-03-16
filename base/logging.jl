@@ -457,7 +457,7 @@ end
     msg = try
               "Exception while generating log record in module $_module at $filepath:$line"
           catch ex
-              "Exception handling log message: $ex"
+              LazyString("Exception handling log message: ", ex)
           end
     bt = real ? catch_backtrace() : backtrace()
     handle_message(
@@ -674,7 +674,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = eachsplit(chomp(string(message)::String), '\n')
+    msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
     msg1, rest = Iterators.peel(msglines)
     println(iob, "┌ ", levelstr, ": ", msg1)
     for msg in rest
