@@ -95,11 +95,11 @@ end
 function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
-function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer  
+function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer
     ss = split(s, '/'; limit = 2)
     if isone(length(ss))
         return Rational{T}(parse(T, s))
-    end    
+    end
     @inbounds ns, ds = ss[1], ss[2]
     if startswith(ds, '/')
         ds = chop(ds; head = 1, tail = 0)

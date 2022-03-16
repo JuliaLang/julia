@@ -266,255 +266,90 @@ end
     end
 end
 @testset "parse" begin
-    # Non-negative BigInt tests
-    @test parse(Rational{BigInt}, string(BigInt(10))) == BigInt(10) // BigInt(1)
-
-    @test parse(Rational{BigInt}, "100/10" ) == BigInt(10) // BigInt(1)
-    @test parse(Rational{BigInt}, "$(BigInt(100))/$(BigInt(10))") == BigInt(10) // BigInt(1)
-    @test parse(Rational{BigInt}, "100 / 10") == BigInt(10) // BigInt(1)
-    @test parse(Rational{BigInt}, "0 / 10") == BigInt(0) // BigInt(1)
-
-    @test parse(Rational{BigInt}, "100//10" ) == BigInt(10) // BigInt(1)
-    @test parse(Rational{BigInt}, "$(BigInt(100))//$(BigInt(10))") == BigInt(10) // BigInt(1)
-    @test parse(Rational{BigInt}, "100 // 10") == BigInt(10) // BigInt(1)
-    @test parse(Rational{BigInt}, "0 // 10") == BigInt(0) // BigInt(1)
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "100\\10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "100 \\ 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "100\\\\10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "100 \\\\ 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "100/ /10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "100 / / 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "100// /10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "100 // / 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "100///10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "100 /// 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "100÷10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "100 ÷ 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "0//0")
-    # Non-negative Int tests
+    # Non-negative Int in which parsing is expected to work
     @test parse(Rational{Int}, string(Int(10))) == Int(10) // Int(1)
-
     @test parse(Rational{Int}, "100/10" ) == Int(10) // Int(1)
     @test parse(Rational{Int}, "$(Int(100))/$(Int(10))") == Int(10) // Int(1)
     @test parse(Rational{Int}, "100 / 10") == Int(10) // Int(1)
     @test parse(Rational{Int}, "0 / 10") == Int(0) // Int(1)
-
     @test parse(Rational{Int}, "100//10" ) == Int(10) // Int(1)
     @test parse(Rational{Int}, "$(Int(100))//$(Int(10))") == Int(10) // Int(1)
     @test parse(Rational{Int}, "100 // 10") == Int(10) // Int(1)
     @test parse(Rational{Int}, "0 // 10") == Int(0) // Int(1)
 
+    # Variations of the separator that should throw errors
     @test_throws ArgumentError parse(Rational{Int}, "100\\10" )
     @test_throws ArgumentError parse(Rational{Int}, "100 \\ 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "100\\\\10" )
     @test_throws ArgumentError parse(Rational{Int}, "100 \\\\ 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "100/ /10" )
     @test_throws ArgumentError parse(Rational{Int}, "100 / / 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "100// /10" )
     @test_throws ArgumentError parse(Rational{Int}, "100 // / 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "100///10" )
     @test_throws ArgumentError parse(Rational{Int}, "100 /// 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "100÷10" )
     @test_throws ArgumentError parse(Rational{Int}, "100 ÷ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100 10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100   10")
 
+    # Zero denominator, negative denominator, and double negative
     @test_throws ArgumentError parse(Rational{Int}, "0//0")
-    # Non-negative UInt tests
-    @test parse(Rational{UInt}, string(UInt(10))) == UInt(10) // UInt(1)
+    @test parse(Rational{Int}, "1000//-100") == Int(-10) // Int(1)
+    @test parse(Rational{Int}, "-1000//-100") == Int(10) // Int(1)
 
-    @test parse(Rational{UInt}, "100/10" ) == UInt(10) // UInt(1)
-    @test parse(Rational{UInt}, "$(UInt(100))/$(UInt(10))") == UInt(10) // UInt(1)
-    @test parse(Rational{UInt}, "100 / 10") == UInt(10) // UInt(1)
-    @test parse(Rational{UInt}, "0 / 10") == UInt(0) // UInt(1)
-
-    @test parse(Rational{UInt}, "100//10" ) == UInt(10) // UInt(1)
-    @test parse(Rational{UInt}, "$(UInt(100))//$(UInt(10))") == UInt(10) // UInt(1)
-    @test parse(Rational{UInt}, "100 // 10") == UInt(10) // UInt(1)
-    @test parse(Rational{UInt}, "0 // 10") == UInt(0) // UInt(1)
-
-    @test_throws ArgumentError parse(Rational{UInt}, "100\\10" )
-    @test_throws ArgumentError parse(Rational{UInt}, "100 \\ 10")
-
-    @test_throws ArgumentError parse(Rational{UInt}, "100\\\\10" )
-    @test_throws ArgumentError parse(Rational{UInt}, "100 \\\\ 10")
-
-    @test_throws ArgumentError parse(Rational{UInt}, "100/ /10" )
-    @test_throws ArgumentError parse(Rational{UInt}, "100 / / 10")
-
-    @test_throws ArgumentError parse(Rational{UInt}, "100// /10" )
-    @test_throws ArgumentError parse(Rational{UInt}, "100 // / 10")
-
-    @test_throws ArgumentError parse(Rational{UInt}, "100///10" )
-    @test_throws ArgumentError parse(Rational{UInt}, "100 /// 10")
-
-    @test_throws ArgumentError parse(Rational{UInt}, "100÷10" )
-    @test_throws ArgumentError parse(Rational{UInt}, "100 ÷ 10")
-
-    @test_throws ArgumentError parse(Rational{UInt}, "0//0")
-    # Non-negative Int8 tests
-    @test parse(Rational{Int8}, string(Int8(10))) == Int8(10) // Int8(1)
-
-    @test parse(Rational{Int8}, "100/10" ) == Int8(10) // Int8(1)
-    @test parse(Rational{Int8}, "$(Int8(100))/$(Int8(10))") == Int8(10) // Int8(1)
-    @test parse(Rational{Int8}, "100 / 10") == Int8(10) // Int8(1)
-    @test parse(Rational{Int8}, "0 / 10") == Int8(0) // Int8(1)
-
-    @test parse(Rational{Int8}, "100//10" ) == Int8(10) // Int8(1)
-    @test parse(Rational{Int8}, "$(Int8(100))//$(Int8(10))") == Int8(10) // Int8(1)
-    @test parse(Rational{Int8}, "100 // 10") == Int8(10) // Int8(1)
-    @test parse(Rational{Int8}, "0 // 10") == Int8(0) // Int8(1)
-
-    @test_throws ArgumentError parse(Rational{Int8}, "100\\10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "100 \\ 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "100\\\\10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "100 \\\\ 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "100/ /10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "100 / / 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "100// /10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "100 // / 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "100///10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "100 /// 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "100÷10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "100 ÷ 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "0//0")
-    # Non-negative UInt8 tests
-    @test parse(Rational{UInt8}, string(UInt8(10))) == UInt8(10) // UInt8(1)
-
-    @test parse(Rational{UInt8}, "100/10" ) == UInt8(10) // UInt8(1)
-    @test parse(Rational{UInt8}, "$(UInt8(100))/$(UInt8(10))") == UInt8(10) // UInt8(1)
-    @test parse(Rational{UInt8}, "100 / 10") == UInt8(10) // UInt8(1)
-    @test parse(Rational{UInt8}, "0 / 10") == UInt8(0) // UInt8(1)
-
-    @test parse(Rational{UInt8}, "100//10" ) == UInt8(10) // UInt8(1)
-    @test parse(Rational{UInt8}, "$(UInt8(100))//$(UInt8(10))") == UInt8(10) // UInt8(1)
-    @test parse(Rational{UInt8}, "100 // 10") == UInt8(10) // UInt8(1)
-    @test parse(Rational{UInt8}, "0 // 10") == UInt8(0) // UInt8(1)
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "100\\10" )
-    @test_throws ArgumentError parse(Rational{UInt8}, "100 \\ 10")
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "100\\\\10" )
-    @test_throws ArgumentError parse(Rational{UInt8}, "100 \\\\ 10")
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "100/ /10" )
-    @test_throws ArgumentError parse(Rational{UInt8}, "100 / / 10")
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "100// /10" )
-    @test_throws ArgumentError parse(Rational{UInt8}, "100 // / 10")
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "100///10" )
-    @test_throws ArgumentError parse(Rational{UInt8}, "100 /// 10")
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "100÷10" )
-    @test_throws ArgumentError parse(Rational{UInt8}, "100 ÷ 10")
-
-    @test_throws ArgumentError parse(Rational{UInt8}, "0//0")
-    # Negative Int tests
+    # Negative Int tests in which parsing is expected to work
     @test parse(Rational{Int}, string(Int(-10))) == Int(-10) // Int(1)
-
     @test parse(Rational{Int}, "-100/10" ) == Int(-10) // Int(1)
     @test parse(Rational{Int}, "$(Int(-100))/$(Int(10))") == Int(-10) // Int(1)
     @test parse(Rational{Int}, "-100 / 10") == Int(-10) // Int(1)
-
     @test parse(Rational{Int}, "-100//10" ) == Int(-10) // Int(1)
     @test parse(Rational{Int}, "$(Int(-100))//$(Int(10))") == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "-100 // 10") == Int(-10) // Int(1)
 
+    # Variations of the separator that should throw errors (negative version)
     @test_throws ArgumentError parse(Rational{Int}, "-100\\10" )
     @test_throws ArgumentError parse(Rational{Int}, "-100 \\ 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "-100\\\\10" )
     @test_throws ArgumentError parse(Rational{Int}, "-100 \\\\ 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "-100/ /10" )
     @test_throws ArgumentError parse(Rational{Int}, "-100 / / 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "-100// /10" )
     @test_throws ArgumentError parse(Rational{Int}, "-100 // / 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "-100///10" )
     @test_throws ArgumentError parse(Rational{Int}, "-100 /// 10")
-
     @test_throws ArgumentError parse(Rational{Int}, "-100÷10" )
     @test_throws ArgumentError parse(Rational{Int}, "-100 ÷ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100 10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100   10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100 -10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100   -10")
+    @test_throws ArgumentError parse(Rational{Int}, "100 -10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100   -10")
+    try  # issue 44570
+       parse(Rational{BigInt}, "100 10")
+       @test_broken false
+    catch
+       @test_broken true
+    end
 
-    # Negative BigInt tests
-    @test parse(Rational{BigInt}, string(BigInt(-10))) == BigInt(-10) // BigInt(1)
-
-    @test parse(Rational{BigInt}, "-100/10" ) == BigInt(-10) // BigInt(1)
-    @test parse(Rational{BigInt}, "$(BigInt(-100))/$(BigInt(10))") == BigInt(-10) // BigInt(1)
-    @test parse(Rational{BigInt}, "-100 / 10") == BigInt(-10) // BigInt(1)
-
-    @test parse(Rational{BigInt}, "-100//10" ) == BigInt(-10) // BigInt(1)
-    @test parse(Rational{BigInt}, "$(BigInt(-100))//$(BigInt(10))") == BigInt(-10) // BigInt(1)
-    @test parse(Rational{BigInt}, "-100 // 10") == BigInt(-10) // BigInt(1)
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100\\10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100 \\ 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100\\\\10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100 \\\\ 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100/ /10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100 / / 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100// /10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100 // / 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100///10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100 /// 10")
-
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100÷10" )
-    @test_throws ArgumentError parse(Rational{BigInt}, "-100 ÷ 10")
-
-    # Negative Int8 tests
-    @test parse(Rational{Int8}, string(Int8(-10))) == Int8(-10) // Int8(1)
-
-    @test parse(Rational{Int8}, "-100/10" ) == Int8(-10) // Int8(1)
-    @test parse(Rational{Int8}, "$(Int8(-100))/$(Int8(10))") == Int8(-10) // Int8(1)
-    @test parse(Rational{Int8}, "-100 / 10") == Int8(-10) // Int8(1)
-
-    @test parse(Rational{Int8}, "-100//10" ) == Int8(-10) // Int8(1)
-    @test parse(Rational{Int8}, "$(Int8(-100))//$(Int8(10))") == Int8(-10) // Int8(1)
-    @test parse(Rational{Int8}, "-100 // 10") == Int8(-10) // Int8(1)
-
-    @test_throws ArgumentError parse(Rational{Int8}, "-100\\10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "-100 \\ 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "-100\\\\10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "-100 \\\\ 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "-100/ /10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "-100 / / 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "-100// /10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "-100 // / 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "-100///10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "-100 /// 10")
-
-    @test_throws ArgumentError parse(Rational{Int8}, "-100÷10" )
-    @test_throws ArgumentError parse(Rational{Int8}, "-100 ÷ 10")
-
-    # Should this work?
+    # A few tests for other Integer types
     @test parse(Rational{Bool}, "true") == true // true
+    @test parse(Rational{UInt8}, "0xff/0xf") == UInt8(17) // UInt8(1)
+    @test parse(Rational{Int8}, "-0x7e/0xf") == Int8(-126) // Int8(15)
+    @test parse(Rational{BigInt}, "$(big(typemax(Int))*16)/8") == (big(typemax(Int))*2) // big(1)
+    # Mixed notations
+    @test parse(Rational{UInt8}, "0x64//28") == UInt8(25) // UInt8(7)
+    @test parse(Rational{UInt8}, "100//0x1c") == UInt8(25) // UInt8(7)
+
+    # Out of the bounds tests
+    # 0x100 is 256, Int test works for both Int32 and Int64
+    # The error must be throw even if the canonicalizad fraction fits
+    # (i.e., would be less than typemax after divided by 2 in examples below,
+    # both over tpemax values are even).
+    @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x1")
+    @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x2")
+    @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/1")
+    @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/2")
 end # parse
 
 @testset "round" begin
