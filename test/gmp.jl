@@ -582,7 +582,7 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
         oz = Rational{BigInt}(0, 1)
         zo = Rational{BigInt}(1, 0)
 
-        @test oz + oz == 2 * oz
+        @test oz + oz == 3 * oz == oz
         @test oz // zo == oz
         @test zo // oz == zo
 
