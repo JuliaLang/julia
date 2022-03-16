@@ -897,7 +897,7 @@ USE_BLAS64:=1
 BINARY:=64
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
-MCPU:=apple-a12
+MCPU:=apple-m1
 endif
 endif
 
