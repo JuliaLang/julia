@@ -272,6 +272,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     for (i = 0; i < n; i++) {
         jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, i);
         if (has_backedge_to_worklist(be, visited)) {
+            bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
             *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
             return 1;
         }
@@ -286,10 +287,10 @@ static size_t queue_external_mis(jl_array_t *list)
 {
     size_t i, n = 0;
     htable_t visited;
-    htable_new(&visited, 0);
     if (list) {
         assert(jl_is_array(list));
         size_t n0 = jl_array_len(list);
+        htable_new(&visited, n0);
         for (i = 0; i < n0; i++) {
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
             assert(jl_is_method_instance(mi));
@@ -311,8 +312,8 @@ static size_t queue_external_mis(jl_array_t *list)
                 }
             }
         }
+        htable_free(&visited);
     }
-    htable_free(&visited);
     return n;
 }
 
@@ -1001,6 +1002,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
                 write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->mayinlinealloc << 2));
+                write_uint8(s->s, tn->max_methods);
                 if (!tn->abstract)
                     write_uint16(s->s, tn->n_uninitialized);
                 size_t nb = tn->atomicfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
@@ -2013,6 +2015,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             tn->abstract = flags & 1;
             tn->mutabl = (flags>>1) & 1;
             tn->mayinlinealloc = (flags>>2) & 1;
+            tn->max_methods = read_uint8(s->s);
             if (tn->abstract)
                 tn->n_uninitialized = 0;
             else
@@ -2640,7 +2643,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     arraylist_new(&reinit_list, 0);
     htable_new(&edges_map, 0);
     htable_new(&backref_table, 5000);
-    htable_new(&external_mis, 0);
+    htable_new(&external_mis, newly_inferred ? jl_array_len(newly_inferred) : 0);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
     backref_table_numel = 1;
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;

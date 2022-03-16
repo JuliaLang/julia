@@ -1,4 +1,4 @@
-# -*- mode: makefile-gmake -*-
+# -*- mode: makefile -*-
 # vi:syntax=make
 
 ## Note:
@@ -456,25 +456,20 @@ endif
 
 # Compiler specific stuff
 
-ifeq ($(USECLANG), 1)
+CC_VERSION_STRING = $(shell $(CC) --version)
+ifneq (,$(findstring clang,$(CC_VERSION_STRING)))
+USECLANG := 1
 USEGCC := 0
-else  # default to gcc
-USEGCC := 1
+else
 USECLANG := 0
+USEGCC := 1
 endif
 
 FC := $(CROSS_COMPILE)gfortran
 
-ifeq ($(OS), FreeBSD)
-USEGCC := 0
-USECLANG := 1
-endif
-
 # Note: Supporting only macOS Yosemite and above
 ifeq ($(OS), Darwin)
 APPLE_ARCH := $(shell uname -m)
-USEGCC := 0
-USECLANG := 1
 ifneq ($(APPLE_ARCH),arm64)
 MACOSX_VERSION_MIN := 10.10
 else
@@ -483,12 +478,9 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
-ifeq ($(SANITIZE),1)
-$(error Sanitizers are only supported with clang. Try setting SANITIZE=0)
-endif
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
-JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -std=c++14
@@ -503,7 +495,7 @@ endif
 ifeq ($(USECLANG),1)
 CC := $(CROSS_COMPILE)clang
 CXX := $(CROSS_COMPILE)clang++
-JCFLAGS := -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCFLAGS := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 # AArch64 needs this flag to generate the .eh_frame used by libunwind
 JCPPFLAGS := -fasynchronous-unwind-tables
 JCXXFLAGS := -pipe $(fPIC) -fno-rtti -pedantic -std=c++14
@@ -518,6 +510,8 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
+
+JLDFLAGS :=
 
 ifeq ($(USECCACHE), 1)
 # Expand CC, CXX and FC here already because we want the original definition and not the ccache version.
@@ -653,8 +647,8 @@ ifeq ($(OS),FreeBSD)
 ifneq (,$(findstring gfortran,$(FC)))
 
 # First let's figure out what version of GCC we're dealing with
-_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
-_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
+_GCCMAJOR := $(shell $(FC) -dumpversion 2>/dev/null | cut -d'.' -f1)
+_GCCMINOR := $(shell $(FC) -dumpversion 2>/dev/null | cut -d'.' -f2)
 
 # The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
 ifeq ($(_GCCMAJOR),4)
@@ -1237,14 +1231,10 @@ IFUNC_DETECT_SRC := 'void (*f0(void))(void) { return (void(*)(void))0L; }; void 
 ifeq (supported, $(shell echo $(IFUNC_DETECT_SRC) | $(CC) -Werror -x c - -S -o /dev/null > /dev/null 2>&1 && echo supported))
 JCPPFLAGS += -DJULIA_HAS_IFUNC_SUPPORT=1
 endif
-JLDFLAGS := -Wl,-Bdynamic
-ifneq ($(SANITIZE),1)
-ifneq ($(SANITIZE_MEMORY),1)
-ifneq ($(LLVM_SANITIZE),1)
+JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
-endif
-endif
 endif
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS := -Wl,-Bsymbolic-functions
@@ -1258,7 +1248,7 @@ JLIBLDFLAGS :=
 endif
 
 ifeq ($(OS), FreeBSD)
-JLDFLAGS := -Wl,-Bdynamic
+JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
 
 # Tweak order of libgcc_s in DT_NEEDED,
@@ -1276,7 +1266,6 @@ SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
-JLDFLAGS :=
 HAVE_SSP := 1
 JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
@@ -1285,7 +1274,7 @@ ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
-JLDFLAGS := -Wl,--stack,8388608
+JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
@@ -1480,7 +1469,7 @@ endif
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(ARCH),aarch64)
-LIBGCC_NAME := libgcc_s.2.$(SHLIB_EXT)
+LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
 else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
 endif

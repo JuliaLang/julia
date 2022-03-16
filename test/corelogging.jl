@@ -151,6 +151,21 @@ end
     @test_throws MethodError @macrocall(@error)
 end
 
+@testset "Any type" begin
+    @test_logs (:info, sum) @info sum
+    # TODO: make this work (here we want `@test_logs` to fail)
+    # @test_fails @test_logs (:info, "sum") @info sum   # `sum` works, `"sum"` does not
+
+    # check that the message delivered to the user works
+    mktempdir() do dir
+        path_stdout = joinpath(dir, "stdout.txt")
+        path_stderr = joinpath(dir, "stderr.txt")
+        redirect_stdio(stdout=path_stdout, stderr=path_stderr) do
+            @info sum
+        end
+        @test occursin("Info: sum", read(path_stderr, String))
+    end
+end
 
 #-------------------------------------------------------------------------------
 # Early log level filtering

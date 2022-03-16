@@ -658,4 +658,3 @@ end
         @test isempty(r) && isempty(collect(r))
     end
 end
-

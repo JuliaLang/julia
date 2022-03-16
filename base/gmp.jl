@@ -736,7 +736,7 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
         i, j = firstindex(a)-1, length(s)+1
         lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
         while i < lasti
-            # base ≤ 36: 0-9, plus a-z for 10-35
+            # base ≤ 36: 0-9, plus a-z for 10-35
             # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
             x = s[j -= 1]
             a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)

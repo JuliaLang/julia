@@ -1291,11 +1291,12 @@ function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                      world = get_world_counter(),
+                      interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     rt = []
-    world = get_world_counter()
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
@@ -1347,15 +1348,11 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type), world=get_world_counter())
-    min_valid = RefValue{UInt}(typemin(UInt))
-    max_valid = RefValue{UInt}(typemax(UInt))
-    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
-        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-        tt, world, min_valid, max_valid)
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
     if match === nothing
         error("no unique matching method found for the specified argument types")
     end
-    return match::Core.MethodMatch
+    return match
 end
 
 """
@@ -1478,7 +1475,7 @@ true
 function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
     t = to_tuple_type(t)
     t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
@@ -1549,7 +1546,7 @@ Alternatively, in isolation `m1` and `m2` might be ordered, but if a third
 method cannot be sorted with them, they may cause an ambiguity together.
 
 For parametric types, the `ambiguous_bottom` keyword argument controls whether
-`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
 it is considered ambiguous, when `false` it is not.
 
 # Examples

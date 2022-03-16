@@ -1774,7 +1774,7 @@ function detect_unbound_args(mods...;
                 params = tuple_sig.parameters[1:(end - 1)]
                 tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
                 world = Base.get_world_counter()
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, world)
+                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tuple_sig, nothing, world)
                 if mf !== nothing && mf !== m && mf.sig <: tuple_sig
                     continue
                 end

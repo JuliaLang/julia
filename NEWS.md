@@ -4,10 +4,14 @@ Julia v1.9 Release Notes
 New language features
 ---------------------
 
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
 
 Language changes
 ----------------
 
+* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
+  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
+  `getfield`. ([#44137])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -30,9 +34,13 @@ Build system changes
 New library functions
 ---------------------
 
+Library changes
+---------------
 
-New library features
---------------------
+* A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
+  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
+  now be called on a dictionary or set shared by arbitrary tasks provided that there are no
+  tasks mutating the dictionary or set ([#44534]).
 
 
 Standard library changes
@@ -42,6 +50,9 @@ Standard library changes
 
 #### LinearAlgebra
 
+* The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector,
+  which were equivalent to `a * pinv(b)`, have been removed due to the
+  risk of confusion with elementwise division ([#44358]).
 * We are now wholly reliant on libblastrampoline (LBT) for calling
   BLAS and LAPACK. OpenBLAS is shipped by default, but building the
   system image with other BLAS/LAPACK libraries is not

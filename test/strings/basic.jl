@@ -854,7 +854,7 @@ end
                     p = prevind(s, p)
                     @test prevind(s, x, j) == p
                 end
-                if n ≤ ncodeunits(s)
+                if n ≤ ncodeunits(s)
                     n = nextind(s, n)
                     @test nextind(s, x, j) == n
                 end
@@ -1100,4 +1100,8 @@ end
     let d = Dict(lazy"$(1+2) is 3" => 3)
         @test d["3 is 3"] == 3
     end
+    l = lazy"1+2"
+    @test codeunit(l) == UInt8
+    @test codeunit(l,2) == 0x2b
+    @test isvalid(l, 1)
 end
