@@ -982,8 +982,7 @@ function mul!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num) || iszero(y.num)
             throw(DivideError())
         end
-        a, b = xor(isneg(x.num),isneg(y.num)) ? (-1, 0) : (1, 0)
-        return set_si!(z, a, b)
+        return set_si!(z, ifelse(xor(isneg(x.num), isneg(y.num)), -1, 1), 0)
     end
     zq = _MPQ(z)
     ccall((:__gmpq_mul, :libgmp), Cvoid,
