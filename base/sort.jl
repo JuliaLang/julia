@@ -1335,8 +1335,8 @@ Map `x` to an un unsigned integer, maintaining sort order.
 
 The map should be reversible with [`uint_unmap`](@ref), so `isless(order, a, b)` must be
 a linear ordering for `a, b <: typeof(x)`. Satisfies
-`isless(order, a, b) === (uint_map(order, a) < uint_map(order, b))`
-and `x === uint_unmap(typeof(x), uint_map(order, x), order)`
+`isless(order, a, b) === (uint_map(a, order) < uint_map(b, order))`
+and `x === uint_unmap(typeof(x), uint_map(x, order), order)`
 
 See also: [`UIntMappable`](@ref) [`uint_unmap`](@ref)
 """
@@ -1346,7 +1346,7 @@ function uint_map end
     uint_unmap(T::Type, u::Unsigned, order::Ordering)
 
 Reconstruct the unique value `x::T` that uint_maps to `u`. Satisfies
-`x === uint_unmap(T, order, uint_map(order, x::T))` for all `x <: T`.
+`x === uint_unmap(T, uint_map(x::T, order), order)` for all `x <: T`.
 
 See also: [`uint_map`](@ref) [`UIntMappable`](@ref)
 """
