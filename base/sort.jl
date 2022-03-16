@@ -429,16 +429,15 @@ struct MergeSortAlg     <: Algorithm end
 """
     AdaptiveSort(fallback)
 
-Indicate that a sorting function should pick the fastest available algorithm for the
-given element type, order, length, and contents. If no alternatives are viable, uses
-the `fallback` algorithm. AdaptiveSort is stable if `fallback` is stable.
+Indicate that a sorting function should use the fastest available algorithm.
 
-Algorithms currently in use:
+Adaptive sort will use the algorithm specified by `fallback` for types and orders that are
+not [`UIntMappable`](@ref). Otherwise, it will typically use:
   * Insertion sort for short vectors
   * Radix sort for long vectors
   * Counting sort for vectors of integers spanning a short range
-  * Fallback algorithm when the input cannot be efficiently
-    converted into a vector of integers maintaining sort order
+
+Adaptive sort is guaranteed to be stable if the fallback algorithm is stable.
 """
 struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
     fallback::Fallback
