@@ -803,12 +803,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
 
     u_min, u_max = uint_map(v_min, o), uint_map(v_max, o)
     u_range = maybe_unsigned(u_max-u_min)
-
-    # if u's range is small, then once we subtract out v_min, we'll get a vector like
-    # UInt16[0x001a, 0x0015, 0x0006, 0x001b, 0x0008, 0x000c, 0x0001, 0x000e, 0x001c, 0x0009]
-    # where we only need to radix over the last few bits (5, in the example).
-    bits = unsigned(8sizeof(u_range) - leading_zeros(u_range))
-
     if u_range < div(lenm1, 2) # count sort will be superior if u's range is very small
         u = uint_map!(v, lo, hi, o)
         sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
@@ -838,6 +832,11 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
             return sort!(v, lo, hi, QuickSort, o)
         end
     end
+
+    # if u's range is small, then once we subtract out v_min, we'll get a vector like
+    # UInt16[0x001a, 0x0015, 0x0006, 0x001b, 0x0008, 0x000c, 0x0001, 0x000e, 0x001c, 0x0009]
+    # where we only need to radix over the last few bits (5, in the example).
+    bits = unsigned(8sizeof(u_range) - leading_zeros(u_range))
 
     # radix sort runs in O(bits * lenm1), insertion sort runs in O(lenm1^2). Radix sort
     # has a constant factor that is three times higher, so radix runtime is 3bits * lenm1
