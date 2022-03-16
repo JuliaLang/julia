@@ -683,8 +683,8 @@ cc = copy(c)
         @test zo == -oz
         zo = Rational{BigInt}(0, 1)
 
-        @test Base.GMP.MPQ.sub!(zo, oz) == -oz
-        @test zo == -oz
+        @test Base.GMP.MPQ.sub!(zo, -oz) == oz
+        @test zo == oz
         zo = Rational{BigInt}(0, 1)
 
         @test Base.GMP.MPQ.mul!(-oz, -oz) == oz
