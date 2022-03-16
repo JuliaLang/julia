@@ -616,7 +616,7 @@ The MultiSelectMenu allows users to select many choices from a list.
 menu = MultiSelectMenu(options)
 
 # `request` returns a `Set` of selected indices
-# if the menu us canceled (ctrl-c or q), return an empty set
+# if the menu us canceled (ctrl-c or q), return `nothing`
 choices = request("Select the fruits you like:", menu)
 
 if length(choices) > 0

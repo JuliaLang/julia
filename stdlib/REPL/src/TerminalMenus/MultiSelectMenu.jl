@@ -32,6 +32,7 @@ mutable struct MultiSelectMenu{C} <: _ConfiguredMenu{C}
     pagesize::Int
     pageoffset::Int
     selected::Set{Int}
+    quit::Bool
     config::C
 end
 
@@ -42,7 +43,7 @@ end
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. It returns a `Set` containing the indices of options that
-were selected by the user.
+were selected by the user, or `nothing` if the menu was canceled.
 
 # Arguments
 
@@ -72,12 +73,11 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=In
     end
 
     if !isempty(kwargs)
-        MultiSelectMenu(options, pagesize, pageoffset, _selected, MultiSelectConfig(; kwargs...))
+        MultiSelectMenu(options, pagesize, pageoffset, _selected, false, MultiSelectConfig(; kwargs...))
     else
         warn && Base.depwarn("Legacy `MultiSelectMenu` interface is deprecated, set a configuration option such as `MultiSelectMenu(options; charset=:ascii)` to trigger the new interface.", :MultiSelectMenu)
-        MultiSelectMenu(options, pagesize, pageoffset, _selected, CONFIG)
+        MultiSelectMenu(options, pagesize, pageoffset, _selected, false, CONFIG)
     end
-
 end
 
 
@@ -86,14 +86,14 @@ end
 # See AbstractMenu.jl
 #######################################
 
-header(m::MultiSelectMenu) = "[press: d=done, a=all, n=none]"
-
+header(m::MultiSelectMenu) = "[press: q=quit, d=done, a=all, n=none]"
 options(m::MultiSelectMenu) = m.options
-
-cancel(m::MultiSelectMenu) = m.selected = Set{Int}()
+cancel(m::MultiSelectMenu) = m.quit = true
+selected(m::MultiSelectMenu) = m.quit ? nothing : m.selected
 
 # Do not exit menu when a user selects one of the options
 function pick(menu::MultiSelectMenu, cursor::Int)
+    menu.quit = false
     if cursor in menu.selected
         delete!(menu.selected, cursor)
     else
@@ -117,6 +117,7 @@ end
 # a: Select all
 # n: Deselect all
 function keypress(menu::MultiSelectMenu, key::UInt32)
+    menu.quit = false
     if key == UInt32('d') || key == UInt32('D')
         return true # break
     elseif key == UInt32('a') || key == UInt32('A')
