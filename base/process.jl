@@ -89,7 +89,7 @@ end
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
     cpumask = cmd.cpus
-    cpumask === nothing || (cpumask = as_cpumask(cmd.cpus))
+    cpumask === nothing || (cpumask = as_cpumask(cpumask))
     GC.@preserve stdio begin
         iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
             let h = rawhandle(io)

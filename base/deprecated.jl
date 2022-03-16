@@ -106,8 +106,13 @@ function depwarn(msg, funcsym; force::Bool=false)
         _module=begin
             bt = backtrace()
             frame, caller = firstcaller(bt, funcsym)
-            # TODO: Is it reasonable to attribute callers without linfo to Core?
-            caller.linfo isa Core.MethodInstance ? caller.linfo.def.module : Core
+            linfo = caller.linfo
+            if linfo isa Core.MethodInstance
+                def = linfo.def
+                def isa Module ? def : def.module
+            else
+                Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
+            end
         end,
         _file=String(caller.file),
         _line=caller.line,
