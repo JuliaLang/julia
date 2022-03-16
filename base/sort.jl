@@ -11,7 +11,7 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype,
-    UnitRange, min, max, Val, unsigned, @assert
+    UnitRange, min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type
 
 using .Base: >>>, !==
 
@@ -764,7 +764,7 @@ end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
     # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparison based.
-    U = Serial.Serializable(eltype(v), o)
+    U = UIntMappable(eltype(v), o)
     U === nothing && return sort!(v, lo, hi, a.fallback, o)
 
     # to avoid introducing excessive detection costs for the trivial sorting problem
@@ -802,7 +802,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         end
     end
 
-    u_min, u_max = Serial.serialize(v_min, o), Serial.serialize(v_max, o)
+    u_min, u_max = uint_map(v_min, o), uint_map(v_max, o)
     u_range = maybe_unsigned(u_max-u_min)
 
     # if u's range is small, then once we subtract out v_min, we'll get a vector like
@@ -811,9 +811,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     bits = unsigned(8sizeof(u_range) - leading_zeros(u_range))
 
     if u_range < div(lenm1, 2) # count sort will be superior if u's range is very small
-        u = Serial.serialize!(v, lo, hi, o)
+        u = uint_map!(v, lo, hi, o)
         sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
-        return Serial.deserialize!(v, u, lo, hi, o)
+        return uint_unmap!(v, u, lo, hi, o)
     end
 
     if lenm1 >= 60
@@ -854,13 +854,13 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     end
 
     # At this point, we are committed to radix sort.
-    u = Serial.serialize!(v, lo, hi, o)
+    u = uint_map!(v, lo, hi, o)
 
     # we subtract u_min to avoid radixing over unnecessary bits. For example,
-    # Int32[3, -1, 2] serializes to UInt32[0x80000003, 0x7fffffff, 0x80000002]
+    # Int32[3, -1, 2] uint_maps to UInt32[0x80000003, 0x7fffffff, 0x80000002]
     # which uses all 32 bits, but once we subtract u_min = 0x7fffffff, we are left with
     # UInt32[0x00000004, 0x00000000, 0x00000003] which uses only 3 bits, and
-    # Float32[2.012, 400.0, 12.345] serializes to UInt32[0x3fff3b63, 0x3c37ffff, 0x414570a4]
+    # Float32[2.012, 400.0, 12.345] uint_maps to UInt32[0x3fff3b63, 0x3c37ffff, 0x414570a4]
     # which is reduced to UInt32[0x03c73b64, 0x00000000, 0x050d70a5] using only 26 bits.
     # the overhead for this subtraction is small enough that it is worthwhile in many cases.
     # this is faster than u[lo:hi] .-= u_min
@@ -869,7 +869,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     end
 
     u2 = radix_sort!(u, lo, hi, bits, similar(u))
-    Serial.deserialize!(v, u2, lo, hi, o, u_min)
+    uint_unmap!(v, u2, lo, hi, o, u_min)
 end
 
 ## generic sorting methods ##
@@ -1317,98 +1317,93 @@ function sort!(A::AbstractArray;
     A
 end
 
+
 ## sorting serialization to alow radix sorting primitives other than UInts ##
-module Serial
-using ...Order
-using ..Base: @inbounds, @eval, AbstractVector, nothing, signed, unsigned,
-    typemin, xor, reinterpret, Signed, Unsigned, Type, eltype
 
 """
-    Serializable(T::Type, order::Ordering)
+    UIntMappable(T::Type, order::Ordering)
 
-Return `typeof(serialize(x::T, order))` if [`serialize`](@ref) and
-[`deserialize`](@ref) are implemented.
+Return `typeof(uint_map(x::T, order))` if [`uint_map`](@ref) and
+[`uint_unmap`](@ref) are implemented.
 
 If either is not implemented, return `nothing`.
 """
-Serializable(T::Type, order::Ordering) = nothing
+UIntMappable(T::Type, order::Ordering) = nothing
 
 """
-    serialize(x, order::Ordering)::Unsigned
+    uint_map(x, order::Ordering)::Unsigned
 
 Map `x` to an un unsigned integer, maintaining sort order.
 
-The map should be reversible with [`deserialize`](@ref), so `isless(order, a, b)` must be
+The map should be reversible with [`uint_unmap`](@ref), so `isless(order, a, b)` must be
 a linear ordering for `a, b <: typeof(x)`. Satisfies
-`isless(order, a, b) === (serialize(order, a) < serialize(order, b))`
-and `x === deserialize(typeof(x), serialize(order, x), order)`
+`isless(order, a, b) === (uint_map(order, a) < uint_map(order, b))`
+and `x === uint_unmap(typeof(x), uint_map(order, x), order)`
 
-See also: [`Serializable`](@ref) [`deserialize`](@ref)
+See also: [`UIntMappable`](@ref) [`uint_unmap`](@ref)
 """
-function serialize end
+function uint_map end
 
 """
-    deserialize(T::Type, u::Unsigned, order::Ordering)
+    uint_unmap(T::Type, u::Unsigned, order::Ordering)
 
-Reconstruct the unique value `x::T` that serializes to `u`. Satisfies
-`x === deserialize(T, order, serialize(order, x::T))` for all `x <: T`.
+Reconstruct the unique value `x::T` that uint_maps to `u`. Satisfies
+`x === uint_unmap(T, order, uint_map(order, x::T))` for all `x <: T`.
 
-See also: [`serialize`](@ref) [`Serializable`](@ref)
+See also: [`uint_map`](@ref) [`UIntMappable`](@ref)
 """
-function deserialize end
+function uint_unmap end
 
 
 ### Primitive Types
 
 # Integers
-serialize(x::Unsigned, ::ForwardOrdering) = x
-deserialize(::Type{T}, u::T, ::ForwardOrdering) where T <: Unsigned = u
+uint_map(x::Unsigned, ::ForwardOrdering) = x
+uint_unmap(::Type{T}, u::T, ::ForwardOrdering) where T <: Unsigned = u
 
-serialize(x::Signed, ::ForwardOrdering) =
+uint_map(x::Signed, ::ForwardOrdering) =
     unsigned(xor(x, typemin(x)))
-deserialize(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
+uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
 # unsigned(Int) is not available during bootstrapping.
 for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
-    @eval Serializable(::Type{<:Union{$U, $S}}, ::ForwardOrdering) = $U
+    @eval UIntMappable(::Type{<:Union{$U, $S}}, ::ForwardOrdering) = $U
 end
 
-# Floats are not Serializable under regular orderings because they fail on NaN edge cases.
+# Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
 # Float serialization is defined in ..Float, where the Left and Right orderings guarantee
 # that there are no NaN values
 
 # Chars
-serialize(x::Char, ::ForwardOrdering) = reinterpret(UInt32, x)
-deserialize(::Type{Char}, u::UInt32, ::ForwardOrdering) = reinterpret(Char, u)
-Serializable(::Type{Char}, ::ForwardOrdering) = UInt32
+uint_map(x::Char, ::ForwardOrdering) = reinterpret(UInt32, x)
+uint_unmap(::Type{Char}, u::UInt32, ::ForwardOrdering) = reinterpret(Char, u)
+UIntMappable(::Type{Char}, ::ForwardOrdering) = UInt32
 
 ### Reverse orderings
-serialize(x, rev::ReverseOrdering) = ~serialize(x, rev.fwd)
-deserialize(T::Type, u::Unsigned, rev::ReverseOrdering) = deserialize(T, ~u, rev.fwd)
-Serializable(T::Type, order::ReverseOrdering) = Serializable(T, order.fwd)
+uint_map(x, rev::ReverseOrdering) = ~uint_map(x, rev.fwd)
+uint_unmap(T::Type, u::Unsigned, rev::ReverseOrdering) = uint_unmap(T, ~u, rev.fwd)
+UIntMappable(T::Type, order::ReverseOrdering) = UIntMappable(T, order.fwd)
 
 
 ### Vectors
 
 # Convert v to unsigned integers in place, maintaining sort order.
-function serialize!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
-    u = reinterpret(Serializable(eltype(v), order), v)
+function uint_map!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
+    u = reinterpret(UIntMappable(eltype(v), order), v)
     @inbounds for i in lo:hi
-        u[i] = serialize(v[i], order)
+        u[i] = uint_map(v[i], order)
     end
     u
 end
 
-function deserialize!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
+function uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
                       order::Ordering, offset::U=zero(U)) where U <: Unsigned
     @inbounds for i in lo:hi
-        v[i] = deserialize(eltype(v), u[i]+offset, order)
+        v[i] = uint_unmap(eltype(v), u[i]+offset, order)
     end
     v
 end
-
-end # module Sort.Serial
 
 
 ## fast clever sorting for floats ##
@@ -1443,17 +1438,17 @@ right(o::Perm) = Perm(right(o.order), o.data)
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
-Serial.serialize(x::Float32, ::Left) = ~reinterpret(UInt32, x)
-Serial.deserialize(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, ~u)
-Serial.serialize(x::Float32, ::Right) = reinterpret(UInt32, x)
-Serial.deserialize(::Type{Float32}, u::UInt32, ::Right) = reinterpret(Float32, u)
-Serial.Serializable(::Type{Float32}, ::Union{Left, Right}) = UInt32
+uint_map(x::Float32, ::Left) = ~reinterpret(UInt32, x)
+uint_unmap(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, ~u)
+uint_map(x::Float32, ::Right) = reinterpret(UInt32, x)
+uint_unmap(::Type{Float32}, u::UInt32, ::Right) = reinterpret(Float32, u)
+UIntMappable(::Type{Float32}, ::Union{Left, Right}) = UInt32
 
-Serial.serialize(x::Float64, ::Left) = ~reinterpret(UInt64, x)
-Serial.deserialize(::Type{Float64}, u::UInt64, ::Left) = reinterpret(Float64, ~u)
-Serial.serialize(x::Float64, ::Right) = reinterpret(UInt64, x)
-Serial.deserialize(::Type{Float64}, u::UInt64, ::Right) = reinterpret(Float64, u)
-Serial.Serializable(::Type{Float64}, ::Union{Left, Right}) = UInt64
+uint_map(x::Float64, ::Left) = ~reinterpret(UInt64, x)
+uint_unmap(::Type{Float64}, u::UInt64, ::Left) = reinterpret(Float64, ~u)
+uint_map(x::Float64, ::Right) = reinterpret(UInt64, x)
+uint_unmap(::Type{Float64}, u::UInt64, ::Right) = reinterpret(Float64, u)
+UIntMappable(::Type{Float64}, ::Union{Left, Right}) = UInt64
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::DirectOrdering, x::Missing) = false
