@@ -612,13 +612,13 @@ e = Rational{BigInt}(12345678901234567890123456789, 1234567890222222221211111110
 end
 
 
-a = Rational{BigInt}(1, 2)
-b = Rational{BigInt}(-1, 3)
-c = Rational{BigInt}(3, 2)
+aa = 1//2
+bb = -1//3
+cc = 3//2
+a = Rational{BigInt}(aa)
+b = Rational{BigInt}(bb)
+c = Rational{BigInt}(cc)
 t = Rational{BigInt}(0, 1)
-aa = copy(a)
-bb = copy(b)
-cc = copy(c)
 @testset "big rational inplace" begin
     @test Base.GMP.MPQ.add!(t, a, b) == Rational{BigInt}(1, 6)
     @test t == Rational{BigInt}(1, 6)
