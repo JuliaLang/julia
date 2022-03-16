@@ -152,7 +152,7 @@ install wine wget mingw-w64`, as appropriate.
  1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
  2. `cd julia-win32`
  3. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
- 4. `make`
+ 4. `make` # this can take over an hour, so be prepared
  5. `make win-extras` (Necessary before running `make binary-dist`)
  6. `make binary-dist` then `make exe` to create the Windows installer.
  7. move the `julia-*.exe` installer to the target machine
