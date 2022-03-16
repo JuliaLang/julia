@@ -99,7 +99,7 @@ docs-revise:
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@$(JULIAHOME)/contrib/check-whitespace.sh
+	@$(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -472,7 +472,7 @@ endif
 
 	# Include all git-tracked filenames
 	git ls-files >> light-source-dist.tmp
-	
+
 	# Include documentation filenames
 	find doc/_build/html >> light-source-dist.tmp
 

@@ -20,6 +20,68 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+mutable struct BitSetBoundedMinPrioritySet <: AbstractSet{Int}
+    elems::BitSet
+    min::Int
+    # Stores whether min is exact or a lower bound
+    # If exact, it is not set in elems
+    min_exact::Bool
+    max::Int
+end
+
+function BitSetBoundedMinPrioritySet(max::Int)
+    bs = BitSet()
+    bs.offset = 0
+    BitSetBoundedMinPrioritySet(bs, max+1, true, max)
+end
+
+@noinline function _advance_bsbmp!(bsbmp::BitSetBoundedMinPrioritySet)
+    @assert !bsbmp.min_exact
+    bsbmp.min = _bits_findnext(bsbmp.elems.bits, bsbmp.min)::Int
+    bsbmp.min < 0 && (bsbmp.min = bsbmp.max + 1)
+    bsbmp.min_exact = true
+    delete!(bsbmp.elems, bsbmp.min)
+    return nothing
+end
+
+function isempty(bsbmp::BitSetBoundedMinPrioritySet)
+    if bsbmp.min > bsbmp.max
+        return true
+    end
+    bsbmp.min_exact && return false
+    _advance_bsbmp!(bsbmp)
+    return bsbmp.min > bsbmp.max
+end
+
+function popfirst!(bsbmp::BitSetBoundedMinPrioritySet)
+    bsbmp.min_exact || _advance_bsbmp!(bsbmp)
+    m = bsbmp.min
+    m > bsbmp.max && throw(ArgumentError("BitSetBoundedMinPrioritySet must be non-empty"))
+    bsbmp.min = m+1
+    bsbmp.min_exact = false
+    return m
+end
+
+function push!(bsbmp::BitSetBoundedMinPrioritySet, idx::Int)
+    if idx <= bsbmp.min
+        if bsbmp.min_exact && bsbmp.min < bsbmp.max && idx != bsbmp.min
+            push!(bsbmp.elems, bsbmp.min)
+        end
+        bsbmp.min = idx
+        bsbmp.min_exact = true
+        return nothing
+    end
+    push!(bsbmp.elems, idx)
+    return nothing
+end
+
+function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
+    if bsbmp.min_exact && idx == bsbmp.min
+        return true
+    end
+    return idx in bsbmp.elems
+end
+
 mutable struct InferenceState
     params::InferenceParams
     result::InferenceResult # remember where to put the result
@@ -42,9 +104,7 @@ mutable struct InferenceState
     # return type
     bestguess #::Type
     # current active instruction pointers
-    ip::BitSet
-    pc´´::LineNum
-    nstmts::Int
+    ip::BitSetBoundedMinPrioritySet
     # current exception handler info
     handler_at::Vector{LineNum}
     # ssavalue sparsity and restart info
@@ -100,8 +160,8 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
 
         # exception handlers
-        ip = BitSet()
-        handler_at = compute_trycatch(src.code, ip)
+        ip = BitSetBoundedMinPrioritySet(nstmts)
+        handler_at = compute_trycatch(src.code, ip.elems)
         push!(ip, 1)
 
         # `throw` block deoptimization
@@ -128,7 +188,7 @@ mutable struct InferenceState
             #=pclimitations=#IdSet{InferenceState}(), #=limitations=#IdSet{InferenceState}(),
             src, get_world_counter(interp), valid_worlds,
             nargs, s_types, s_edges, stmt_info,
-            #=bestguess=#Union{}, ip, #=pc´´=#1, nstmts, handler_at, ssavalue_uses,
+            #=bestguess=#Union{}, ip, handler_at, ssavalue_uses,
             #=cycle_backedges=#Vector{Tuple{InferenceState,LineNum}}(),
             #=callers_in_cycle=#Vector{InferenceState}(),
             #=parent=#nothing,
@@ -376,9 +436,6 @@ function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceStat
         s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
             if s[r] !== nothing # s[r] === nothing => unreached statement
-                if r < frame.pc´´
-                    frame.pc´´ = r
-                end
                 push!(W, r)
             end
         end

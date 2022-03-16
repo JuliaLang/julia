@@ -4056,3 +4056,13 @@ f_max_methods(x::Float64) = 2
 g_max_methods(x) = f_max_methods(x)
 @test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
 @test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
+
+# Unit tests for BitSetBoundedMinPrioritySet
+let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
+    Core.Compiler.push!(bsbmp, 2)
+    Core.Compiler.push!(bsbmp, 2)
+    @test Core.Compiler.popfirst!(bsbmp) == 2
+    Core.Compiler.push!(bsbmp, 1)
+    @test Core.Compiler.popfirst!(bsbmp) == 1
+    @test Core.Compiler.isempty(bsbmp)
+end
