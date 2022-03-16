@@ -108,7 +108,8 @@ function depwarn(msg, funcsym; force::Bool=false)
             frame, caller = firstcaller(bt, funcsym)
             linfo = caller.linfo
             if linfo isa Core.MethodInstance
-                linfo.def isa Module ? linfo.def : linfo.def.module
+                def = linfo.def
+                def isa Module ? def : def.module
             else
                 Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
             end
