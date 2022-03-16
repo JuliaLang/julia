@@ -179,6 +179,32 @@ typedef struct {
     void **pc_end; // Cached value of `gc_cache->pc_stack_end`
 } jl_gc_mark_sp_t;
 
+// Top of gc public mark queue. See comment in `gc_pop_pc` for why a version number
+// is used
+typedef struct {
+    int offset, version;
+} jl_gc_ws_top_t;
+
+// Bottom of gc public mark queue. Two offsets are used because size of pc/data queues
+// may differ (TODO: sizes are different only after popping from pc stack and before dispatching into
+// the right mark loop label/popping from data stack. Can we keep a single offset?)
+typedef struct {
+    int pc_offset, data_offset;
+} jl_gc_ws_bottom_t;
+
+// Fixed size work-stealing deque used for marking in gc
+typedef struct {
+    // Whether elements must be pushed/popped into/from the private queue
+    uint8_t overflow;
+    // Whether this queue has enough elements so that work-stealing is worth it (see
+    // comments in `gc.c`)
+    uint8_t ws_enabled;
+    _Atomic(jl_gc_ws_top_t) top;
+    _Atomic(jl_gc_ws_bottom_t) bottom;
+    void **pc_start;
+    jl_gc_mark_data_t *data_start;
+} jl_gc_public_mark_sp_t;
+
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
     size_t perm_scanned_bytes;
@@ -194,10 +220,11 @@ typedef struct {
     // `1` (atomically). Combining with the sync after marking,
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
-    void *big_obj[1024];
+    void *big_obj[1024];    
     void **pc_stack;
     void **pc_stack_end;
     jl_gc_mark_data_t *data_stack;
+    jl_gc_public_mark_sp_t public_sp; 
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
@@ -216,6 +243,9 @@ typedef struct _jl_tls_states_t {
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
+#define JL_GC_STATE_PARALLEL 3
+    // gc_state = 3 means the thread is doing GC work that can be executed
+    //              concurrently on multiple threads.
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain
@@ -262,8 +292,8 @@ typedef struct _jl_tls_states_t {
     jl_thread_t system_id;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
-    arraylist_t sweep_objs;
     jl_gc_mark_sp_t gc_mark_sp;
+    arraylist_t sweep_objs;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
@@ -357,6 +387,24 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
 JL_DLLEXPORT void (jl_gc_safepoint)(void);
+// Either NULL, or the address of a function that threads can call while
+// waiting for the GC, which will recruit them into a concurrent GC operation.
+extern _Atomic(void *) jl_gc_recruiting_location;
+STATIC_INLINE int jl_gc_try_recruit(jl_ptls_t ptls)
+{
+    // Try to get recruited for parallel GC work
+    int recruited = 0;
+    if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
+        uint8_t old_state = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
+        void *location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
+        if (location) {
+            ((void (*)(jl_ptls_t))location)(ptls);
+            recruited = 1;
+        }
+        jl_gc_state_set(ptls, old_state, JL_GC_STATE_PARALLEL);
+    }
+    return recruited;
+}
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);

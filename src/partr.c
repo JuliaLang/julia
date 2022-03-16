@@ -221,9 +221,14 @@ static inline jl_task_t *multiq_deletemin(void)
 void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     int32_t i, j;
-    for (i = 0; i < heap_p; ++i)
-        for (j = 0; j < jl_atomic_load_relaxed(&heaps[i].ntasks); ++j)
-            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
+    int tid = jl_threadid();
+    for (i = 0; i < heap_p; ++i) {
+        for (j = 0; j < heaps[i].ntasks; ++j) {
+            jl_task_t *task = heaps[i].tasks[j];
+            if ((task->tid == tid) || (task->tid < 0 && tid == 0))
+                jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)task);
+        }
+    }
 }
 
 
@@ -585,7 +590,8 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             uv_mutex_lock(&sleep_locks[ptls->tid]);
             while (may_sleep(ptls)) {
                 uv_cond_wait(&wake_signals[ptls->tid], &sleep_locks[ptls->tid]);
-                // TODO: help with gc work here, if applicable
+                if (jl_gc_try_recruit(ptls))
+                    break;
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&sleep_locks[ptls->tid]);

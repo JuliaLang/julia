@@ -34,6 +34,12 @@ extern "C" {
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
+// TODO: tune this parameter
+#define GC_SP_MIN_STEAL_SZ (1 << 10)
+// This capacity is referenced in Horie et al. (https://dl.acm.org/doi/pdf/10.1145/3299706.3210570)
+// May need to tune this as well
+#define GC_PUBLIC_MARK_SP_SZ (1 << 17)
+
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
 
@@ -209,28 +215,45 @@ union _jl_gc_mark_data {
     gc_mark_finlist_t finlist;
 };
 
-// Pop a data struct from the mark data stack (i.e. decrease the stack pointer)
-// This should be used after dispatch and therefore the pc stack pointer is already popped from
-// the stack.
-STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_sp_t *sp, size_t size)
+// Returns a pointer to the bottom of the data queue currently in use (private queue is used in
+// case of public queue overflow)
+STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
-    jl_gc_mark_data_t *data = (jl_gc_mark_data_t *)(((char*)sp->data) - size);
-    sp->data = data;
-    return data;
+    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
+    if (public_sp->overflow) {
+        return sp->data; 
+    }
+    jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
+    return &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
 }
-#define gc_pop_markdata(sp, type) ((type*)gc_pop_markdata_(sp, sizeof(type)))
 
-// Re-push a frame to the mark stack (both data and pc)
-// The data and pc are expected to be on the stack (or updated in place) already.
+// Re-push a frame to the mark queue (both data and pc)
+// The data and pc are expected to be on the queue (or updated in place) already.
 // Mainly useful to pause the current scanning in order to scan an new object.
-STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
+STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
 {
-    jl_gc_mark_data_t *data = sp->data;
-    sp->pc++;
-    sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + size);
-    return data;
+    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
+    if (public_sp->overflow) {
+        jl_gc_mark_data_t *data = sp->data;
+        sp->pc++;
+        sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + size);
+        return data;
+    }
+    jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
+    jl_gc_mark_data_t *old_data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    jl_gc_ws_bottom_t new_bottom = {bottom.pc_offset + 1, bottom.data_offset + 1};
+    jl_atomic_store_relaxed(&public_sp->bottom, new_bottom);
+    return old_data;
 }
-#define gc_repush_markdata(sp, type) ((type*)gc_repush_markdata_(sp, sizeof(type)))
+#define gc_repush_markdata(gc_cache, sp, type) ((type*)gc_repush_markdata_(gc_cache, sp, sizeof(type)))
+
+// Used to determine whether the bottom of pc/data stack should be incremented
+// on a push
+typedef enum {
+    no_inc,
+    inc,
+    inc_data_only
+} jl_gc_push_mode;
 
 // layout for big (>2k) objects
 
@@ -499,9 +522,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
 
 STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
-    sp->pc = gc_cache->pc_stack;
     sp->data = gc_cache->data_stack;
-    sp->pc_start = gc_cache->pc_stack;
+    sp->pc = sp->pc_start = gc_cache->pc_stack;
     sp->pc_end = gc_cache->pc_stack_end;
 }
 
