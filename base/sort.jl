@@ -1412,7 +1412,7 @@ using ...Order
 using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing, Type, reinterpret
 
 import Core.Intrinsics: slt_int
-import ..Sort: sort!
+import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
 const Floats = Union{Float32,Float64}
