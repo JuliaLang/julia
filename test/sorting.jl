@@ -37,9 +37,6 @@ end
     @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
     @test sort(OffsetVector([3,1,2], -2)) == OffsetVector([1,2,3], -2)
     @test sort(OffsetVector([3.0,1.0,2.0], 2), rev=true) == OffsetVector([3.0,2.0,1.0], 2)
-    @test sort([false, true, false]) == [false, false, true]
-    @test sort([false, true, false], by=x->0) == [false, true, false]
-    @test sort([false, true, false], rev=true) == [true, false, false]
 end
 
 @testset "sortperm" begin
@@ -692,8 +689,126 @@ end
     @test searchsortedlast(o, 1.5) == -1
 end
 
-@testset "sort negative int range" begin
-    @test sort!(fill(-1, 100)) == fill(-1, 100)
+function adaptive_sort_test(v; trusted=InsertionSort, kw...)
+    sm = sum(hash.(v))
+    truth = sort!(deepcopy(v); alg=trusted, kw...)
+    return (
+        v === sort!(v; kw...) &&
+        issorted(v; kw...) &&
+        sum(hash.(v)) == sm &&
+        all(v .=== truth))
+end
+@testset "AdaptiveSort" begin
+    len = 70
+
+    @testset "Bool" begin
+        @test sort([false, true, false]) == [false, false, true]
+        @test sort([false, true, false], by=x->0) == [false, true, false]
+        @test sort([false, true, false], rev=true) == [true, false, false]
+    end
+
+    @testset "fallback" begin
+        @test adaptive_sort_test(rand(1:typemax(Int32), len), by=x->x^2)# fallback
+        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=QuickSort)
+    end
+
+    @test adaptive_sort_test(rand(Int, 20)) # InsertionSort
+
+    @testset "large eltype" begin
+        for rev in [true, false]
+            @test adaptive_sort_test(rand(Int128, len), rev=rev) # direct ordered int
+            @test adaptive_sort_test(fill(rand(UInt128), len), rev=rev) # all same
+            @test adaptive_sort_test(rand(Int128.(1:len), len), rev=rev) # short int range
+        end
+    end
+
+    @test adaptive_sort_test(fill(rand(), len)) # All same
+
+    @testset "count sort" begin
+        @test adaptive_sort_test(rand(1:20, len))
+        @test adaptive_sort_test(rand(1:20, len), rev=true)
+    end
+
+    @testset "post-serialization count sort" begin
+        v = reinterpret(Float64, rand(1:20, len))###
+        @test adaptive_sort_test(copy(v))
+        @test adaptive_sort_test(copy(v), rev=true)
+    end
+
+    @testset "presorted" begin
+        @test adaptive_sort_test(sort!(rand(len)))
+        @test adaptive_sort_test(sort!(rand(Float32, len), rev=true))
+        @test adaptive_sort_test(vcat(sort!(rand(Int16, len)), Int16(0)))
+        @test adaptive_sort_test(vcat(sort!(rand(UInt64, len), rev=true), 0))###
+    end
+
+    @testset "lenm1 < 3bits fallback" begin
+        @test adaptive_sort_test(rand(len)) # InsertionSort
+        @test adaptive_sort_test(rand(130)) # QuickSort
+    end
+
+    @test adaptive_sort_test(rand(1000)) # RadixSort
+end
+
+@testset "uint mappings" begin
+
+    #Construct value lists
+    floats = [T[-π, -1.0, -1/π, 1/π, 1.0, π, -0.0, 0.0, Inf, -Inf, NaN, -NaN,
+                prevfloat(T(0)), nextfloat(T(0)), prevfloat(T(Inf)), nextfloat(T(-Inf))]
+        for T in [Float16, Float32, Float64]]
+
+    ints = [T[17, -T(17), 0, -one(T), 1, typemax(T), typemin(T), typemax(T)-1, typemin(T)+1]
+        for T in Base.BitInteger_types]
+
+    char = Char['\n', ' ', Char(0), Char(8), Char(17), typemax(Char)]
+
+    vals = vcat(floats, ints, [char])
+
+    #Add random values
+    UIntN(::Val{1}) = UInt8
+    UIntN(::Val{2}) = UInt16
+    UIntN(::Val{4}) = UInt32
+    UIntN(::Val{8}) = UInt64
+    UIntN(::Val{16}) = UInt128
+    map(vals) do x
+        T = eltype(x)
+        U = UIntN(Val(sizeof(T)))
+        append!(x, rand(T, 4))
+        append!(x, reinterpret.(T, rand(U, 4)))
+        if T <: AbstractFloat
+            mask = reinterpret(U, T(NaN))
+            append!(x, reinterpret.(T, mask .| rand(U, 4)))
+        end
+    end
+
+    for x in vals
+        T = eltype(x)
+        U = UIntN(Val(sizeof(T)))
+        for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
+            if order isa Base.Order.By || T === Float16 ||
+                ((T <: AbstractFloat) == (order isa DirectOrdering))
+                @test Base.Sort.UIntMappable(T, order) === nothing
+                continue
+            end
+
+            @test Base.Sort.UIntMappable(T, order) === U
+            x2 = deepcopy(x)
+            u = Base.Sort.uint_map!(x2, 1, length(x), order)
+            @test eltype(u) === U
+            @test all(Base.Sort.uint_map.(x, (order,)) .=== u)
+            mn = rand(U)
+            u .-= mn
+            @test x2 === Base.Sort.uint_unmap!(x2, u, 1, length(x), order, mn)
+            @test all(x2 .=== x)
+
+            for a in x
+                for b in x
+                    T <: AbstractFloat && (isnan(a) || isnan(b) || signbit(a) != signbit(b)) && continue
+                    @test Base.Order.lt(order, a, b) === Base.Order.lt(Forward, Base.Sort.uint_map(a, order), Base.Sort.uint_map(b, order))
+                end
+            end
+        end
+    end
 end
 
 end
