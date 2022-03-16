@@ -761,7 +761,7 @@ function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
     mn, mx
 end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
-    # if the sorting task is unserializable, then we can't radix sort or sort_int_range!
+    # if the sorting task is not UIntMappable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparison based.
     U = UIntMappable(eltype(v), o)
     U === nothing && return sort!(v, lo, hi, a.fallback, o)
@@ -1316,7 +1316,7 @@ function sort!(A::AbstractArray;
 end
 
 
-## sorting serialization to alow radix sorting primitives other than UInts ##
+## uint mapping to alow radix sorting primitives other than UInts ##
 
 """
     UIntMappable(T::Type, order::Ordering)
@@ -1370,8 +1370,8 @@ for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64),
 end
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
-# Float serialization is defined in ..Float, where the Left and Right orderings guarantee
-# that there are no NaN values
+# uint mappings for floats are defined in Float, where the Left and Right orderings
+# guarantee that there are no NaN values
 
 # Chars
 uint_map(x::Char, ::ForwardOrdering) = reinterpret(UInt32, x)
