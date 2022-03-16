@@ -816,7 +816,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         return Serial.deserialize!(v, u, lo, hi, o)
     end
 
-    if lenm1 > 60
+    if lenm1 >= 60
         # Count the number of sequential elements that are out of order to inform possible
         # optimizations that take advantage of partialally or completely presorted vectors.
         # This has overhead on the order of 2-6% of the runtime of worst case sorting but
