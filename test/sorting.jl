@@ -803,7 +803,7 @@ end
 
             for a in x
                 for b in x
-                    if T === Base.Sort.Float.Left() || T === Base.Sort.Float.Right()
+                    if order === Base.Sort.Float.Left() || order === Base.Sort.Float.Right()
                         # Left and Right orderings guarantee homogeneous sign and no NaNs
                         (isnan(a) || isnan(b) || signbit(a) != signbit(b)) && continue
                     end
