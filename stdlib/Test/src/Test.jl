@@ -652,7 +652,7 @@ function do_test(result::ExecutionResult, orig_expr)
         @assert isa(result, Threw)
         testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
     end
-    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
+    isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
 end
 
@@ -1317,6 +1317,9 @@ macro testset(args...)
     end
 end
 
+trigger_test_failure_break(@nospecialize(err)) =
+    ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
+
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
@@ -1360,6 +1363,7 @@ function testset_beginend_call(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
+            trigger_test_failure_break(err)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
@@ -1435,6 +1439,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
+            trigger_test_failure_break(err)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         end
     end
