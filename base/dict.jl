@@ -746,7 +746,7 @@ function map!(f, iter::ValueIterator{<:Dict})
 end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
-    sizehint!(d1, length(d1) + length(d2))
+    haslength(d2) && sizehint!(d1, length(d1) + length(d2))
     for (k, v) in d2
         i = ht_keyindex2!(d1, k)
         if i > 0
