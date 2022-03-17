@@ -14,7 +14,7 @@
 
 multi_menu = MultiSelectMenu(string.(1:20), warn=false)
 @test TerminalMenus.options(multi_menu) == string.(1:20)
-@test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
+@test TerminalMenus.header(multi_menu) == "[press: Enter=select, d=done, a=all, n=none]"
 
 # Output
 TerminalMenus.config() # Use default chars

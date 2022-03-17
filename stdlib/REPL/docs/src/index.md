@@ -633,7 +633,7 @@ Output:
 
 ```
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=select, d=done, a=all, n=none]
    [ ] apple
  > [X] orange
    [X] grape
@@ -659,7 +659,7 @@ For instance, the default multiple-selection menu
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
-[press: d=done, a=all, n=none]
+[press: Enter=select, d=done, a=all, n=none]
    [ ] apple
    [X] orange
    [ ] grape
@@ -673,7 +673,7 @@ can instead be rendered with Unicode selection and navigation characters with
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=select, d=done, a=all, n=none]
    ⬚ apple
    ✓ orange
    ⬚ grape
@@ -688,7 +688,7 @@ julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YE
 
 julia> request(menu)
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=select, d=done, a=all, n=none]
    NOPE apple
    YEP! orange
    NOPE grape
