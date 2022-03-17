@@ -296,28 +296,32 @@ Value *PropagateJuliaAddrspacesVisitor::replaceICmpInst(ICmpInst *ICI) {
     Value *RHS = ICI->getOperand(1);
     if (!isa<PointerType>(LHS->getType()) || !isa<PointerType>(RHS->getType()))
         return dyn_cast<Value>(ICI);
+    LHS->print(errs());
+    errs() << "\n";
     if (isSpecialAS(getValueAddrSpace(LHS))) {
         Value *Replacement = LiftPointer(LHS, ICI);
         if (Replacement)
             LHS = Replacement;
     }
-    if (isSpecialAS(getValueAddrSpace(RHS))) {
-        Value *Replacement = LiftPointer(RHS, ICI);
-        if (Replacement)
-            RHS = Replacement;
-    }
+    LHS->print(errs());
+    errs() << "\n";
+    //if (isSpecialAS(getValueAddrSpace(RHS))) {
+    //    Value *Replacement = LiftPointer(RHS, ICI);
+    //    if (Replacement)
+    //        RHS = Replacement;
+    //}
 
     if (isa<ConstantPointerNull>(RHS)) {
         auto tmp = LHS;
         LHS = RHS;
         RHS = tmp;
 
-    RHS->print(errs());
-    printf("\n\n");
+    //RHS->print(errs());
+    //printf("\n\n");
     }
     else if (!isa<ConstantPointerNull>(LHS)) {
-        ICI->setOperand(0, LHS);
-        ICI->setOperand(1, RHS);
+        //ICI->setOperand(0, LHS);
+        //ICI->setOperand(1, RHS);
 
         return dyn_cast<Value>(ICI);
     }
@@ -340,7 +344,15 @@ Value *PropagateJuliaAddrspacesVisitor::replaceICmpInst(ICmpInst *ICI) {
 }
 
 void PropagateJuliaAddrspacesVisitor::visitBranchInst(BranchInst &BI) {
+    return;
     if (!BI.isConditional())
+        return;
+    if (dyn_cast<ICmpInst>(BI.getCondition()) && BI.getNumSuccessors() == 2 &&
+        BI.getSuccessor(0)->getName() == "ok" && BI.getSuccessor(1)->getName() == "err") {
+        BI.getCondition()->print(errs());
+        errs() << "\n";
+    }
+    else
         return;
     if (auto *ICI = dyn_cast<ICmpInst>(BI.getCondition()))
         BI.setCondition(replaceICmpInst(ICI));
