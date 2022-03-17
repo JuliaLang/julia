@@ -181,9 +181,11 @@ let cmd = Base.julia_cmd()
         sleep(10)
         kill(p, Base.SIGKILL)
     end
-    s = read(p, String)
+    @time s = read(p, String)
     close(t)
-    @test success(p)
+    @time @test success(p)
+    @show s
+    @show read(p, String)
     @test parse(Int, s) > 100
 end
 
