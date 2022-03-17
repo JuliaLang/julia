@@ -273,7 +273,6 @@ end
     @test parse(Rational{Int}, "100 / 10") == Int(10) // Int(1)
     @test parse(Rational{Int}, "0 / 10") == Int(0) // Int(1)
     @test parse(Rational{Int}, "100//10" ) == Int(10) // Int(1)
-    @test parse(Rational{Int}, "$(Int(100))//$(Int(10))") == Int(10) // Int(1)
     @test parse(Rational{Int}, "100 // 10") == Int(10) // Int(1)
     @test parse(Rational{Int}, "0 // 10") == Int(0) // Int(1)
 
@@ -301,10 +300,8 @@ end
     # Negative Int tests in which parsing is expected to work
     @test parse(Rational{Int}, string(Int(-10))) == Int(-10) // Int(1)
     @test parse(Rational{Int}, "-100/10" ) == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "$(Int(-100))/$(Int(10))") == Int(-10) // Int(1)
     @test parse(Rational{Int}, "-100 / 10") == Int(-10) // Int(1)
     @test parse(Rational{Int}, "-100//10" ) == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "$(Int(-100))//$(Int(10))") == Int(-10) // Int(1)
 
     # Variations of the separator that should throw errors (negative version)
     @test_throws ArgumentError parse(Rational{Int}, "-100\\10" )
@@ -343,9 +340,9 @@ end
 
     # Out of the bounds tests
     # 0x100 is 256, Int test works for both Int32 and Int64
-    # The error must be throw even if the canonicalizad fraction fits
+    # The error must be throw even if the canonicalized fraction fits
     # (i.e., would be less than typemax after divided by 2 in examples below,
-    # both over tpemax values are even).
+    # both over typemax values are even).
     @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x1")
     @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x2")
     @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/1")
