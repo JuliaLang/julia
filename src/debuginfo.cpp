@@ -814,8 +814,10 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
                 StringRef((const char *)fbase, msize), "", false);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
             membuf->getMemBufferRef(), file_magic::unknown);
-        if (!origerrorobj)
+        if (!origerrorobj) {
+            ignoreError(origerrorobj);
             return entry;
+        }
 
         llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile*)
             origerrorobj.get().get();

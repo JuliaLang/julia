@@ -831,3 +831,6 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     @test length(ir.cfg.blocks) <= 2
     @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
 end
+
+@test Core.Compiler.builtin_effects(getfield, Any[Complex{Int}, Symbol], Any).effect_free.state == 0x01
+@test Core.Compiler.builtin_effects(getglobal, Any[Module, Symbol], Any).effect_free.state == 0x01

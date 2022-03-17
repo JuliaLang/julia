@@ -854,7 +854,7 @@ end
                     p = prevind(s, p)
                     @test prevind(s, x, j) == p
                 end
-                if n ≤ ncodeunits(s)
+                if n ≤ ncodeunits(s)
                     n = nextind(s, n)
                     @test nextind(s, x, j) == n
                 end

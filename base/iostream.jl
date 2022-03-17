@@ -272,7 +272,7 @@ safe multi-threaded access.
 !!! compat "Julia 1.5"
     The `lock` argument is available as of Julia 1.5.
 """
-function open(fname::AbstractString; lock = true,
+function open(fname::String; lock = true,
     read     :: Union{Bool,Nothing} = nothing,
     write    :: Union{Bool,Nothing} = nothing,
     create   :: Union{Bool,Nothing} = nothing,
@@ -299,6 +299,7 @@ function open(fname::AbstractString; lock = true,
     end
     return s
 end
+open(fname::AbstractString; kwargs...) = open(convert(String, fname)::String; kwargs...)
 
 """
     open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream

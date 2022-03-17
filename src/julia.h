@@ -394,21 +394,23 @@ typedef struct _jl_code_instance_t {
 
     // purity results
     union {
-        uint8_t ipo_purity_bits;
+        uint32_t ipo_purity_bits;
         struct {
             uint8_t ipo_consistent:2;
             uint8_t ipo_effect_free:2;
             uint8_t ipo_nothrow:2;
             uint8_t ipo_terminates:2;
+            uint8_t ipo_overlayed:1;
         } ipo_purity_flags;
     };
     union {
-        uint8_t purity_bits;
+        uint32_t purity_bits;
         struct {
             uint8_t consistent:2;
             uint8_t effect_free:2;
             uint8_t nothrow:2;
             uint8_t terminates:2;
+            uint8_t overlayed:1;
         } purity_flags;
     };
     jl_value_t *argescapes; // escape information of call arguments
