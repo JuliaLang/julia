@@ -267,14 +267,13 @@ end
 end
 @testset "parse" begin
     # Non-negative Int in which parsing is expected to work
-    @test parse(Rational{Int}, string(Int(10))) == Int(10) // Int(1)
-    @test parse(Rational{Int}, "100/10" ) == Int(10) // Int(1)
-    @test parse(Rational{Int}, "$(Int(100))/$(Int(10))") == Int(10) // Int(1)
-    @test parse(Rational{Int}, "100 / 10") == Int(10) // Int(1)
-    @test parse(Rational{Int}, "0 / 10") == Int(0) // Int(1)
-    @test parse(Rational{Int}, "100//10" ) == Int(10) // Int(1)
-    @test parse(Rational{Int}, "100 // 10") == Int(10) // Int(1)
-    @test parse(Rational{Int}, "0 // 10") == Int(0) // Int(1)
+    @test parse(Rational{Int}, string(10)) == 10 // 1
+    @test parse(Rational{Int}, "100/10" ) == 10 // 1
+    @test parse(Rational{Int}, "100 / 10") == 10 // 1
+    @test parse(Rational{Int}, "0 / 10") == 0 // 1
+    @test parse(Rational{Int}, "100//10" ) == 10 // 1
+    @test parse(Rational{Int}, "100 // 10") == 10 // 1
+    @test parse(Rational{Int}, "0 // 10") == 0 // 1
 
     # Variations of the separator that should throw errors
     @test_throws ArgumentError parse(Rational{Int}, "100\\10" )
@@ -294,14 +293,14 @@ end
 
     # Zero denominator, negative denominator, and double negative
     @test_throws ArgumentError parse(Rational{Int}, "0//0")
-    @test parse(Rational{Int}, "1000//-100") == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "-1000//-100") == Int(10) // Int(1)
+    @test parse(Rational{Int}, "1000//-100") == -10 // 1
+    @test parse(Rational{Int}, "-1000//-100") == 10 // 1
 
     # Negative Int tests in which parsing is expected to work
-    @test parse(Rational{Int}, string(Int(-10))) == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "-100/10" ) == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "-100 / 10") == Int(-10) // Int(1)
-    @test parse(Rational{Int}, "-100//10" ) == Int(-10) // Int(1)
+    @test parse(Rational{Int}, string(-10)) == -10 // 1
+    @test parse(Rational{Int}, "-100/10" ) == -10 // 1
+    @test parse(Rational{Int}, "-100 / 10") == -10 // 1
+    @test parse(Rational{Int}, "-100//10" ) == -10 // 1
 
     # Variations of the separator that should throw errors (negative version)
     @test_throws ArgumentError parse(Rational{Int}, "-100\\10" )
