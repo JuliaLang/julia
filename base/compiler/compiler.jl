@@ -58,6 +58,9 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 
+# the same constructor as defined in float.jl, but with a different name to avoid redefinition
+_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+
 # checked arithmetic
 const checked_add = +
 const checked_sub = -

@@ -2520,7 +2520,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             //jl_any_type,
                             //jl_bool_type,
-			                jl_uint8_type, jl_uint8_type,
+                            jl_uint32_type, jl_uint32_type,
                             jl_any_type,
                             jl_bool_type,
                             jl_bool_type,
