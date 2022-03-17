@@ -3,6 +3,8 @@ Julia v1.9 Release Notes
 
 New language features
 ---------------------
+* New Set(x,y,z) constructor is equivalent to Set((x,y,z))
+* New BitSet(x,y,z) constructor is equivalent to BitSet((x,y,z))
 
 
 Language changes

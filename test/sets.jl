@@ -37,6 +37,12 @@ using Dates
         @test !("baz2" in s1)
         @test "baz2" in s2
     end
+    @test Set(1,2,3,1) == Set(1,2,3)
+    @test Set((1,2,3)) == Set([1,2,3])
+    @test Set(1,2,3) == Set([1,2,3])
+    @test Set(1,2,3.0) == Set(1.0,2,3)
+    @test Set(1,2,3.0) == Set((1,2,3.0))
+    @test Set{Int}(1,2,3) == Set(1,2,3)
 end
 
 @testset "hash" begin
@@ -95,6 +101,9 @@ end
     s3 = empty(Set([1,"hello"]),Float32)
     @test isequal(s3, Set())
     @test ===(eltype(s3), Float32)
+    @test ===(eltype(Set((1,2,3.0))), eltype((1,2,3.0)))
+    @test ===(eltype(Set([1,2,3.0])), eltype([1,2,3.0]))
+    @test ===(eltype(Set(1,2,"three")), Any)
 end
 @testset "show" begin
     @test sprint(show, Set()) == "Set{Any}()"

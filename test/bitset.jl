@@ -10,6 +10,7 @@ using Random
     data_out = collect(s)
     @test all(map(in(data_out), data_in))
     @test length(data_out) === length(data_in)
+    @test BitSet(1,5,100) == s
 end
 
 @testset "eltype, empty" begin

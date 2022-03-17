@@ -10,6 +10,8 @@ Set{T}() where {T} = _Set(Dict{T,Nothing}())
 Set{T}(s::Set{T}) where {T} = _Set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
+Set{T}(x...) where {T} = Set(x)
+Set(x...) = Set(x)
 
 function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
     d = s.dict

@@ -27,6 +27,7 @@ If the set will be sparse (for example, holding a few
 very large integers), use [`Set`](@ref) instead.
 """
 BitSet(itr) = union!(BitSet(), itr)
+BitSet(x...) = BitSet(x)
 
 # Special implementation for BitSet, which lacks a fast `length` method.
 function union!(s::BitSet, itr)
