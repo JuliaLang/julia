@@ -355,11 +355,17 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             boundscheck = :off
         end
     end
+    if !validate_sparams(sparam_vals)
+        sparam_vals = insert_node_here!(compact,
+            effect_free(NewInstruction(Expr(:call, Core._compute_sparams, item.mi.def, argexprs...), SimpleVector, topline)))
+    end
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
     sig = def.sig
     # Special case inlining that maintains the current basic block if there's only one BB in the target
+    new_new_offset = length(compact.new_new_nodes)
+    late_fixup_offset = length(compact.late_fixup)
     if spec.linear_inline_eligible
         #compact[idx] = nothing
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
@@ -368,7 +374,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, inline_compact)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
@@ -380,7 +386,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             end
             inline_compact[idx′] = stmt′
         end
-        just_fixup!(inline_compact)
+        just_fixup!(inline_compact, new_new_offset, late_fixup_offset)
         compact.result_idx = inline_compact.result_idx
     else
         bb_offset, post_bb_id = popfirst!(todo_bbs)
@@ -394,7 +400,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, inline_compact)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -425,7 +431,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             end
             inline_compact[idx′] = stmt′
         end
-        just_fixup!(inline_compact)
+        just_fixup!(inline_compact, new_new_offset, late_fixup_offset)
         compact.result_idx = inline_compact.result_idx
         compact.active_result_bb = inline_compact.active_result_bb
         for i = 1:length(pn.values)
@@ -840,8 +846,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
         end
     end
 
-    # Bail out if any static parameters are left as TypeVar
-    validate_sparams(match.sparams) || return nothing
+    #validate_sparams(match.sparams) || return nothing
 
     et = state.et
 
@@ -1048,7 +1053,7 @@ function inline_invoke!(
         argtypes = invoke_rewrite(sig.argtypes)
         if isa(result, InferenceResult)
             (; mi) = item = InliningTodo(result, argtypes)
-            validate_sparams(mi.sparam_vals) || return nothing
+            #validate_sparams(mi.sparam_vals) || return nothing
             if argtypes_to_type(argtypes) <: mi.def.sig
                 state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
                 handle_single_case!(ir, idx, stmt, item, todo, state.params, true)
@@ -1324,7 +1329,7 @@ function handle_inf_result!(
     (; mi) = item = InliningTodo(result, argtypes)
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
-    validate_sparams(mi.sparam_vals) || return false
+    #validate_sparams(mi.sparam_vals) || return false
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
@@ -1360,7 +1365,6 @@ function handle_const_opaque_closure_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     item = InliningTodo(result, sig.argtypes)
     isdispatchtuple(item.mi.specTypes) || return
-    validate_sparams(item.mi.sparam_vals) || return
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     handle_single_case!(ir, idx, stmt, item, todo, state.params)
     return nothing
@@ -1539,15 +1543,16 @@ function late_inline_special_case!(
 end
 
 function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
-                         @nospecialize(spsig), spvals::SimpleVector,
+                         @nospecialize(spsig), spvals::Union{SimpleVector, SSAValue},
                          linetable_offset::Int32, boundscheck::Symbol, compact::IncrementalCompact)
     compact.result[idx][:flag] &= ~IR_FLAG_INBOUNDS
     compact.result[idx][:line] += linetable_offset
-    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck)
+    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck, compact, idx)
 end
 
 function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
-                            @nospecialize(spsig), spvals::SimpleVector, boundscheck::Symbol)
+                            @nospecialize(spsig), spvals::Union{SimpleVector, SSAValue}, boundscheck::Symbol,
+                            compact::IncrementalCompact, idx::Int)
     if isa(val, Argument)
         return arg_replacements[val.n]
     end
@@ -1555,22 +1560,32 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
         e = val::Expr
         head = e.head
         if head === :static_parameter
-            return quoted(spvals[e.args[1]::Int])
+            if isa(spvals, SimpleVector)
+                return quoted(spvals[e.args[1]::Int])
+            else
+                ret = insert_node!(compact, SSAValue(idx),
+                    effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals, e.args[1]), Any)))
+                return ret
+            end
         elseif head === :cfunction
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
-            e.args[4] = svec(Any[
-                ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                for argt in e.args[4]::SimpleVector ]...)
+            if isa(spvals, SimpleVector)
+                @assert !isa(spsig, UnionAll) || !isempty(spvals)
+                e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
+                e.args[4] = svec(Any[
+                    ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                    for argt in e.args[4]::SimpleVector ]...)
+            end
         elseif head === :foreigncall
-            @assert !isa(spsig, UnionAll) || !isempty(spvals)
-            for i = 1:length(e.args)
-                if i == 2
-                    e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
-                elseif i == 3
-                    e.args[3] = svec(Any[
-                        ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
-                        for argt in e.args[3]::SimpleVector ]...)
+            if isa(spvals, SimpleVector)
+                @assert !isa(spsig, UnionAll) || !isempty(spvals)
+                for i = 1:length(e.args)
+                    if i == 2
+                        e.args[2] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[2], spsig, spvals)
+                    elseif i == 3
+                        e.args[3] = svec(Any[
+                            ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
+                            for argt in e.args[3]::SimpleVector ]...)
+                    end
                 end
             end
         elseif head === :boundscheck
@@ -1585,7 +1600,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     end
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck)
+        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck, compact, idx)
     end
     return urs[]
 end

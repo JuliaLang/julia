@@ -652,6 +652,86 @@ function perform_lifting!(compact::IncrementalCompact,
     return stmt_val # N.B. should never happen
 end
 
+function lift_svec_ref!(compact, idx, stmt)
+    if length(stmt.args) != 4
+        return
+    end
+
+    vec = stmt.args[3]
+    val = stmt.args[4]
+    valT = argextype(val, compact)
+    (isa(valT, Const) && isa(valT.val, Int)) || return
+    valI = valT.val
+    (1 <= valI) || return
+
+    if isa(vec, SimpleVector)
+        if valI <= length(val)
+            compact[idx] = vec[valI]
+        end
+        return
+    end
+
+    if isa(vec, SSAValue)
+        # TODO: We could do the whole lifing machinery here, but really all
+        # we want to do is clean this up when it got inserted by inlining,
+        # which always
+        def = compact[vec]
+        if is_known_call(def, Core.svec, compact)
+            nargs = length(def.args)
+            if valI <= nargs-1
+                compact[idx] = def.args[valI+1]
+            end
+            return
+        elseif is_known_call(def, Core._compute_sparams, compact)
+            m = argextype(def.args[2], compact)
+            isa(m, Const) || return
+            m = m.val
+            isa(m, Method) || return
+            # For now, just pattern match the benchmark case
+            # TODO: More general structural analysis of the intersection
+            length(def.args) == 3 || return
+            sig = m.sig
+            isa(sig, UnionAll) || return
+            tvar = sig.var
+            sig = sig.body
+            isa(sig, DataType) || return
+            sig.name === Tuple.name
+            length(sig.parameters) == 1 || return
+
+            arg = sig.parameters[1]
+            isa(arg, DataType) || return
+            arg.name === typename(Type) || return
+            arg = arg.parameters[1]
+
+            isa(arg, DataType) || return
+
+            rarg = def.args[3]
+            isa(rarg, SSAValue) || return
+            argdef = compact[rarg]
+
+            is_known_call(argdef, Core.apply_type, compact) || return
+            length(argdef.args) == 3 || return
+
+            applyT = argextype(argdef.args[2], compact)
+            isa(applyT, Const) || return
+            applyT = applyT.val
+
+            isa(applyT, UnionAll) || return
+            applyTvar = applyT.var
+            applyTbody = applyT.body
+
+            isa(applyTbody, DataType) || return
+            applyTbody.name == arg.name || return
+            length(applyTbody.parameters) == length(arg.parameters) == 1 || return
+            applyTbody.parameters[1] === applyTvar || return
+            arg.parameters[1] === tvar || return
+
+            compact[idx] = argdef.args[3]
+            return
+        end
+    end
+end
+
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
@@ -746,6 +826,8 @@ function sroa_pass!(ir::IRCode)
         else # TODO: This isn't the best place to put these
             if is_known_call(stmt, typeassert, compact)
                 canonicalize_typeassert!(compact, idx, stmt)
+            elseif is_known_call(stmt, Core._svec_ref, compact)
+                lift_svec_ref!(compact, idx, stmt)
             elseif is_known_call(stmt, (===), compact)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache)
             elseif is_known_call(stmt, isa, compact)
