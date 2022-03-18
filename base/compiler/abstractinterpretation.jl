@@ -173,7 +173,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             const_result = nothing
             if const_call_result !== nothing
                 this_const_rt = const_call_result.rt
-                # return type of const-prop' inference can be wider than  that of non const-prop' inference
+                # return type of const-prop' inference can be wider than that of non const-prop' inference
                 # e.g. in cases when there are cycles but cached result is still accurate
                 if this_const_rt ⊑ this_rt
                     this_rt = this_const_rt
@@ -634,7 +634,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         sparams = recomputed[2]::SimpleVector
     end
 
-    rt, edge, edge_effects = typeinf_edge(interp, method, sig, sparams, sv)
+    (; rt, edge, edge_effects) = typeinf_edge(interp, method, sig, sparams, sv)
     if edge === nothing
         edgecycle = edgelimited = true
     end
@@ -654,7 +654,8 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     return MethodCallResult(rt, edgecycle, edgelimited, edge, edge_effects)
 end
 
-# keeps result and context information of abstract method call, will be used by succeeding constant-propagation
+# keeps result and context information of abstract_method_call, which will later be used for
+# backedge computation, and concrete evaluation or constant-propagation
 struct MethodCallResult
     rt
     edgecycle::Bool
