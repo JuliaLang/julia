@@ -2032,6 +2032,13 @@ end
         end
         @test ts == Any[Any]
     end
+
+    # a tricky case: if constant inference derives `Const` while non-constant infernece has
+    # derived `InterConditional`, we should not discard that constant information
+    iszero_simple(x) = x === 0
+    @test Base.return_types() do
+        iszero_simple(0) ? nothing : missing
+    end |> only === Nothing
 end
 
 @testset "branching on conditional object" begin
