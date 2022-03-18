@@ -817,6 +817,17 @@ generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions()
 
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 
+struct EdgeCallResult
+    rt #::Type
+    edge::Union{Nothing,MethodInstance}
+    edge_effects::Effects
+    function EdgeCallResult(@nospecialize(rt),
+                            edge::Union{Nothing,MethodInstance},
+                            edge_effects::Effects)
+        return new(rt, edge, edge_effects)
+    end
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::InferenceState)
     mi = specialize_method(method, atype, sparams)::MethodInstance
@@ -835,23 +846,22 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 # the second subtyping conditions are necessary to distinguish usual cases
                 # from rare cases when `Const` wrapped those extended lattice type objects
                 if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-                    return PartialStruct(rettype, rettype_const), mi, effects
+                    rettype = PartialStruct(rettype, rettype_const)
                 elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
-                    return rettype_const, mi, effects
+                    rettype = rettype_const
                 elseif isa(rettype_const, InterConditional) && !(InterConditional <: rettype)
-                    return rettype_const, mi, effects
+                    rettype = rettype_const
                 else
-                    return Const(rettype_const), mi, effects
+                    rettype = Const(rettype_const)
                 end
-            else
-                return rettype, mi, effects
             end
+            return EdgeCallResult(rettype, mi, effects)
         end
     else
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
-        return Any, nothing, Effects()
+        return EdgeCallResult(Any, nothing, Effects())
     end
     if !caller.cached && caller.parent === nothing
         # this caller exists to return to the user
@@ -868,22 +878,25 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if frame === nothing
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
-            return Any, nothing, Effects()
+            return EdgeCallResult(Any, nothing, Effects())
         end
         if caller.cached || caller.parent !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
-        return frame.bestguess, frame.inferred ? mi : nothing, rt_adjust_effects(frame.bestguess, Effects(frame))
+        edge = frame.inferred ? mi : nothing
+        edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
+        return EdgeCallResult(frame.bestguess, edge, edge_effects)
     elseif frame === true
         # unresolvable cycle
-        return Any, nothing, Effects()
+        return EdgeCallResult(Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
-    return frame.bestguess, nothing, rt_adjust_effects(frame.bestguess, Effects(frame))
+    edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
+    return EdgeCallResult(frame.bestguess, nothing, edge_effects)
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
