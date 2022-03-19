@@ -230,7 +230,7 @@ byteenv(env::Union{AbstractVector{Pair{T,V}}, Tuple{Vararg{Pair{T,V}}}}) where {
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
 """
-    setenv(command::Cmd, env; dir="")
+    setenv(command::Cmd, env; dir)
 
 Set environment variables to use when running the given `command`. `env` is either a
 dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or
@@ -239,11 +239,22 @@ existing environment, create `env` through `copy(ENV)` and then setting `env["va
 as desired, or use `addenv`.
 
 The `dir` keyword argument can be used to specify a working directory for the command.
+`dir` defaults to the currently set `dir` for `command` (which is the current working
+directory if not specified already).
 """
-setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
+setenv(cmd::Cmd, env; dir=cmd.dir) = Cmd(cmd; env=byteenv(env), dir=dir)
+setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir=cmd.dir) =
     setenv(cmd, env; dir=dir)
-setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
+setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
+
+# split environment entry string into before and after first `=` (key and value)
+function splitenv(e::String)
+    i = findnext('=', e, 2)
+    if i === nothing
+        throw(ArgumentError("malformed environment entry"))
+    end
+    e[1:prevind(e, i)], e[nextind(e, i):end]
+end
 
 """
     addenv(command::Cmd, env...; inherit::Bool = true)
@@ -262,7 +273,7 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
             merge!(new_env, ENV)
         end
     else
-        for (k, v) in split.(cmd.env, "=")
+        for (k, v) in splitenv.(cmd.env)
             new_env[string(k)::String] = string(v)::String
         end
     end
@@ -277,7 +288,7 @@ function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true
 end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
-    return addenv(cmd, Dict(k => v for (k, v) in split.(env, "=")); inherit)
+    return addenv(cmd, Dict(k => v for (k, v) in splitenv.(env)); inherit)
 end
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)

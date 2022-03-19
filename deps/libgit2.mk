@@ -1,7 +1,7 @@
 ## libgit2
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
-LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
+LIBGIT2_GIT_URL := https://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
 

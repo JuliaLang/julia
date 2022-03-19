@@ -120,6 +120,10 @@
          ;; inside ref only replace within the first argument
          (list* 'ref (replace-beginend (cadr ex) a n tuples last)
                 (cddr ex)))
+        ;; TODO: this probably should not be allowed since keyword args aren't
+        ;; positional, but in this context we have just used their positions anyway
+        ((eq? (car ex) 'kw)
+         (list 'kw (cadr ex) (replace-beginend (caddr ex) a n tuples last)))
         (else
          (cons (car ex)
                (map (lambda (x) (replace-beginend x a n tuples last))
@@ -130,31 +134,33 @@
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
 (define (process-indices a i)
-  (let loop ((lst i)
-             (n   1)
-             (stmts '())
-             (tuples '())
-             (ret '()))
-    (if (null? lst)
-        (values (reverse ret) (reverse stmts))
-        (let ((idx  (car lst))
-              (last (null? (cdr lst))))
-          (if (and (pair? idx) (eq? (car idx) '...))
-              (if (symbol-like? (cadr idx))
-                  (loop (cdr lst) (+ n 1)
-                        stmts
-                        (cons (cadr idx) tuples)
-                        (cons `(... ,(replace-beginend (cadr idx) a n tuples last))
-                              ret))
-                  (let ((g (make-ssavalue)))
-                    (loop (cdr lst) (+ n 1)
-                          (cons `(= ,g ,(replace-beginend (cadr idx) a n tuples last))
-                                stmts)
-                          (cons g tuples)
-                          (cons `(... ,g) ret))))
-              (loop (cdr lst) (+ n 1)
-                    stmts tuples
-                    (cons (replace-beginend idx a n tuples last) ret)))))))
+  (let ((has-va? (any vararg? i)))
+    (let loop ((lst i)
+               (n   1)
+               (stmts '())
+               (tuples '())
+               (ret '()))
+      (if (null? lst)
+          (values (reverse ret) (reverse stmts))
+          (let* ((idx0 (car lst))
+                 (idx  (if (vararg? idx0) (cadr idx0) idx0))
+                 (last (null? (cdr lst)))
+                 (replaced (replace-beginend idx a n tuples last))
+                 (val      (if (kwarg? replaced) (caddr replaced) replaced))
+                 (idx      (if (or (not has-va?) (simple-atom? val))
+                               val (make-ssavalue))))
+            (loop (cdr lst) (+ n 1)
+                  (if (eq? idx val)
+                      stmts
+                      (cons `(= ,idx ,val)
+                            stmts))
+                  (if (vararg? idx0) (cons idx tuples) tuples)
+                  (cons (if (vararg? idx0)
+                            `(... ,idx)
+                            (if (eq? val replaced)
+                                idx
+                                (list 'kw (cadr replaced) idx)))
+                        ret)))))))
 
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg

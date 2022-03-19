@@ -422,6 +422,7 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
+        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,
@@ -429,8 +430,8 @@ macro generated(f)
                               Expr(:if, Expr(:generated),
                                    # https://github.com/JuliaLang/julia/issues/25678
                                    Expr(:block,
-                                        :(local tmp = $body),
-                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
+                                        :(local $tmp = $body),
+                                        :(if $tmp isa $(GlobalRef(Core, :CodeInfo)); return $tmp; else $tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))

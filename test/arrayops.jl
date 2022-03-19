@@ -2876,3 +2876,18 @@ end
     @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
     @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
 end
+
+@testset "Allow assignment of singleton array to sparse array #43644" begin
+    K = spzeros(3,3)
+    b = zeros(3,3)
+    b[3,:] = [1,2,3]
+    K[3,1:3] += [1.0 2.0 3.0]'
+    @test K == b
+    K[3:3,1:3] += zeros(1, 3)
+    @test K == b
+    K[3,1:3] += zeros(3)
+    @test K == b
+    K[3,:] += zeros(3,1)
+    @test K == b
+    @test_throws DimensionMismatch K[3,1:2] += [1.0 2.0 3.0]'
+end

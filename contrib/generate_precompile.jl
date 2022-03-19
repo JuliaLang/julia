@@ -178,6 +178,11 @@ if Test !== nothing
     """
 end
 
+const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
+
 function generate_precompile_statements()
     start_time = time_ns()
     debug_output = devnull # or stdout
@@ -261,7 +266,7 @@ function generate_precompile_statements()
             end
         end
         # wait for the definitive prompt before start writing to the TTY
-        readuntil(output_copy, "julia>")
+        readuntil(output_copy, JULIA_PROMPT)
         sleep(0.1)
         readavailable(output_copy)
         # Input our script
@@ -279,9 +284,16 @@ function generate_precompile_statements()
                 write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
-                readuntil(output_copy, "> ")
+                strbuf = ""
+                while true
+                    strbuf *= String(readavailable(output_copy))
+                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(PKG_PROMPT, strbuf) && break
+                    occursin(SHELL_PROMPT, strbuf) && break
+                    occursin(HELP_PROMPT, strbuf) && break
+                    sleep(0.1)
+                end
             end
             println()
         end
@@ -344,6 +356,7 @@ generate_precompile_statements()
 
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.
+Base.Filesystem.temp_cleanup_purge(force=true)
 @eval Base PROGRAM_FILE = ""
 @eval Sys begin
     BINDIR = ""
