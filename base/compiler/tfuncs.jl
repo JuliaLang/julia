@@ -1993,7 +1993,13 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if contains_is(argtypes_vec, Union{})
                         return CallMeta(Const(Union{}), false)
                     end
+                    # Run the abstract_call without restricting abstract call
+                    # sites. Otherwise, our behavior model of abstract_call
+                    # below will be wrong.
+                    old_restrict = sv.restrict_abstract_call_sites
+                    sv.restrict_abstract_call_sites = false
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    sv.restrict_abstract_call_sites = old_restrict
                     info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)

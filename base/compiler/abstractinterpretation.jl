@@ -644,6 +644,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     if edge === nothing
         edgecycle = edgelimited = true
     end
+
     # we look for the termination effect override here as well, since the :terminates effect
     # may have been tainted due to recursion at this point even if it's overridden
     if is_effect_overridden(sv, :terminates_globally)

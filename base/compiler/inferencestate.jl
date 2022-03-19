@@ -59,6 +59,10 @@ mutable struct InferenceState
     inferred::Bool
     dont_work_on_me::Bool
 
+    # Whether to restrict inference of abstract call sites to avoid excessive work
+    # Set by default for toplevel frame.
+    restrict_abstract_call_sites::Bool
+
     # Inferred purity flags
     ipo_effects::Effects
 
@@ -133,7 +137,7 @@ mutable struct InferenceState
             #=callers_in_cycle=#Vector{InferenceState}(),
             #=parent=#nothing,
             #=cached=#cache === :global,
-            #=inferred=#false, #=dont_work_on_me=#false,
+            #=inferred=#false, #=dont_work_on_me=#false, #=restrict_abstract_call_sites=# isa(linfo.def, Module),
             #=ipo_effects=#Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency),
             interp)
         result.result = frame

@@ -4108,3 +4108,10 @@ end |> !Core.Compiler.is_foldable
 @test !fully_eliminated() do
     entry_to_be_invalidated('a')
 end
+
+# Make sure return_type_tfunc doesn't accidentally cause bad inference if used
+# at top level.
+@test let
+    Base.Experimental.@force_compile
+    Core.Compiler.return_type(+, NTuple{2, Rational})
+end == Rational
