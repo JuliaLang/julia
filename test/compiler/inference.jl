@@ -4066,3 +4066,10 @@ let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
     @test Core.Compiler.popfirst!(bsbmp) == 1
     @test Core.Compiler.isempty(bsbmp)
 end
+
+# Make sure return_type_tfunc doesn't accidentally cause bad inference if used
+# at top level.
+@test let
+    Base.Experimental.@force_compile
+    Core.Compiler.return_type(+, NTuple{2, Rational})
+end == Rational
