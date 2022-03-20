@@ -91,5 +91,5 @@ function unsafe_load_commands(v::Ptr{Ptr{UInt8}})
 end
 
 function is_file_tracked(file::Symbol)
-    return ccall(:jl_is_file_tracked, Int, (Any,), file) == 1
+    return ccall(:jl_is_file_tracked, Cint, (Any,), file) == 1
 end

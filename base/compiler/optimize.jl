@@ -563,9 +563,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
-    if !coverage && JLOptions().code_coverage == 3
-        for codeloc in codelocs
-            if codeloc != 0 && is_file_tracked(ci.linetable[codeloc].file)
+    if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
+        for line in ci.linetable
+            if is_file_tracked(line.file)
                 # if any line falls in a tracked file enable coverage for all
                 coverage = true
                 break
