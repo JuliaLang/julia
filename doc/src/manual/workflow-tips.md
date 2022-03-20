@@ -64,8 +64,9 @@ line. A common pattern includes the following elements:
 
 ## Browser-based workflow
 
-It is also possible to interact with a Julia REPL in the browser via [IJulia](https://github.com/JuliaLang/IJulia.jl).
-See the package home for details.
+There are a few ways to interact with Julia in a browser:
+- [IJulia.jl](https://github.com/JuliaLang/IJulia.jl)
+- [Pluto.jl](https://github.com/fonsp/Pluto.jl)
 
 ## Revise-based workflows
 
