@@ -355,6 +355,9 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
 // function returns.
 static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
 {
+    // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
+    // of `finalizer`) in a finalizer:
+    uint8_t sticky = ct->sticky;
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -369,6 +372,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     run_finalizer(ct, items[len-2], items[len-1]);
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
+    ct->sticky = sticky;
 }
 
 static void run_finalizers(jl_task_t *ct)
