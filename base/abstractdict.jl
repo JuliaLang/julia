@@ -522,6 +522,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     return anymissing ? missing : true
 end
 
+# Fallback implementation
+sizehint!(s::AbstractDict, n) = nothing
+
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)
     hv = hasha_seed
