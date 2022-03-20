@@ -853,3 +853,14 @@ end
     @test !((1, 2) ⊊ (1, 2, 2))
     @test !((1, 2, 2) ⊋ (1, 2))
 end
+
+@testset "AbstractSet & Fallback" begin
+    mutable struct TestSet{T} <: AbstractSet{T}
+        set::Set{T}
+        function TestSet{T}() where T
+            new{T}(Set{T}())
+        end
+    end
+    set = TestSet{Any}()
+    @test sizehint!(set, 1) === set
+end
