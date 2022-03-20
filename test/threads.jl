@@ -4,6 +4,8 @@ using Test
 
 using Base.Threads
 
+include("print_process_affinity.jl") # import `uv_thread_getaffinity`
+
 # simple sanity tests for locks under cooperative concurrent access
 let lk = ReentrantLock()
     c1 = Event()
