@@ -1811,11 +1811,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
             nothrow = isvarargtype(argtypes[end]) ? false :
                 builtin_nothrow(f, argtypes[2:end], rt)
         end
-        effect_free = f === isdefined
+        effect_free = true
     elseif f === getglobal && length(argtypes) >= 3
-        nothrow = effect_free = getglobal_nothrow(argtypes[2:end])
+        nothrow = getglobal_nothrow(argtypes[2:end])
         ipo_consistent = nothrow && isconst((argtypes[2]::Const).val, (argtypes[3]::Const).val)
-        #effect_free = nothrow && isbindingresolved((argtypes[2]::Const).val, (argtypes[3]::Const).val)
+        effect_free = true
     else
         ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
         effect_free = contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
@@ -2030,7 +2030,13 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if contains_is(argtypes_vec, Union{})
                         return CallMeta(Const(Union{}), false)
                     end
+                    # Run the abstract_call without restricting abstract call
+                    # sites. Otherwise, our behavior model of abstract_call
+                    # below will be wrong.
+                    old_restrict = sv.restrict_abstract_call_sites
+                    sv.restrict_abstract_call_sites = false
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    sv.restrict_abstract_call_sites = old_restrict
                     info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
