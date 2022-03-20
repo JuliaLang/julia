@@ -131,6 +131,7 @@ end
                 @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
                 @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
             end
+        end
     end
 end
 
