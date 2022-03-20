@@ -116,20 +116,21 @@ function get_nthreads(options = ``; cpus = nothing)
 end
 
 @testset "nthreads determined based on CPU affinity" begin
-    allowed_cpus = findall(uv_thread_getaffinity())
-    if AFFINITY_SUPPORTED && length(allowed_cpus) ≥ 2
-        @test get_nthreads() ≥ 2
-        @test get_nthreads(cpus = allowed_cpus[1:1]) == 1
-        @test get_nthreads(cpus = allowed_cpus[2:2]) == 1
-        @test get_nthreads(cpus = allowed_cpus[1:2]) == 2
-        @test get_nthreads(`-t1`, cpus = allowed_cpus[1:1]) == 1
-        @test get_nthreads(`-t1`, cpus = allowed_cpus[2:2]) == 1
-        @test get_nthreads(`-t1`, cpus = allowed_cpus[1:2]) == 1
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        if length(allowed_cpus) ≥ 2
+            @test get_nthreads() ≥ 2
+            @test get_nthreads(cpus = allowed_cpus[1:1]) == 1
+            @test get_nthreads(cpus = allowed_cpus[2:2]) == 1
+            @test get_nthreads(cpus = allowed_cpus[1:2]) == 2
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[1:1]) == 1
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[2:2]) == 1
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[1:2]) == 1
 
-        if length(allowed_cpus) ≥ 3
-            @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
-            @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
-        end
+            if length(allowed_cpus) ≥ 3
+                @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
+                @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
+            end
     end
 end
 
