@@ -471,6 +471,12 @@ isolating the asynchronous code from changes to the variable's value in the curr
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
+    do_async_macro(expr)
+end
+
+# generate the code for @async, possibly wrapping the task in something before
+# pushing it to the wait queue.
+function do_async_macro(expr; wrap=identity)
     letargs = Base._lift_one_interp!(expr)
 
     thunk = esc(:(()->($expr)))
@@ -479,12 +485,46 @@ macro async(expr)
         let $(letargs...)
             local task = Task($thunk)
             if $(Expr(:islocal, var))
-                put!($var, task)
+                put!($var, $(wrap(:task)))
             end
             schedule(task)
             task
         end
     end
+end
+
+# task wrapper that doesn't exceptions wrapped in TaskFailedException
+struct UnwrapTaskFailedException
+    task::Task
+end
+
+# the unwrapping for above task wrapper (gets triggered in sync_end())
+wait(t::UnwrapTaskFailedException) =
+    try
+        wait(t.task)
+    catch ex
+        if ex isa TaskFailedException
+            throw(ex.task.exception)
+        else
+            rethrow()
+        end
+    end
+
+# same for fetching the tasks, for convenience
+fetch(t::UnwrapTaskFailedException) =
+    try
+        fetch(t.task)
+    catch ex
+        if ex isa TaskFailedException
+            throw(ex.task.exception)
+        else
+            rethrow()
+        end
+    end
+
+# macro for running async code that doesn't throw wrapped exceptions
+macro async_nowrap(expr)
+    do_async_macro(expr, wrap=task->:(Base.UnwrapTaskFailedException($task)))
 end
 
 """

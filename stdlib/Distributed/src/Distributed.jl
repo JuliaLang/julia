@@ -76,7 +76,7 @@ function _require_callback(mod::Base.PkgId)
         # broadcast top-level (e.g. from Main) import/using from node 1 (only)
         @sync for p in procs()
             p == 1 && continue
-            @async remotecall_wait(p) do
+            Base.@async_nowrap remotecall_wait(p) do
                 Base.require(mod)
                 nothing
             end
