@@ -1244,7 +1244,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n)
+    sizehint!(s, n) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
 
