@@ -469,7 +469,7 @@ isolating the asynchronous code from changes to the variable's value in the curr
 
 !!! warning
     It is strongly encouraged to favor `Threads.@spawn` over `@async` always **even when no
-    parallelism is required** especially in publicily distributed libraries.  This is
+    parallelism is required** especially in publicly distributed libraries.  This is
     because a use of `@async` disables the migration of the *parent* task across worker
     threads in the current implementation of Julia.  Thus, seemingly innocent use of
     `@async` in a library function can have a large impact on the performance of very
