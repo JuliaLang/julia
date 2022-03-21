@@ -37,6 +37,7 @@ struct Effects
     consistent::TriState
     effect_free::TriState
     nothrow::TriState
+    nothrow_if_inbounds::TriState
     terminates::TriState
     overlayed::Bool
     # This effect is currently only tracked in inference and modified
@@ -47,24 +48,27 @@ function Effects(
     consistent::TriState,
     effect_free::TriState,
     nothrow::TriState,
+    nothrow_if_inbounds::TriState,
     terminates::TriState,
     overlayed::Bool)
     return Effects(
         consistent,
         effect_free,
         nothrow,
+        nothrow_if_inbounds,
         terminates,
         overlayed,
         false)
 end
 
-const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
-const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
+const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
+const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
 
 function Effects(e::Effects = EFFECTS_UNKNOWN;
     consistent::TriState = e.consistent,
     effect_free::TriState = e.effect_free,
     nothrow::TriState = e.nothrow,
+    nothrow_if_inbounds::TriState=e.nothrow_if_inbounds,
     terminates::TriState = e.terminates,
     overlayed::Bool = e.overlayed,
     inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
@@ -72,6 +76,7 @@ function Effects(e::Effects = EFFECTS_UNKNOWN;
         consistent,
         effect_free,
         nothrow,
+        nothrow_if_inbounds,
         terminates,
         overlayed,
         inbounds_taints_consistency)
@@ -86,17 +91,19 @@ is_total(effects::Effects) =
     is_total_or_error(effects) &&
     effects.nothrow === ALWAYS_TRUE
 
-is_removable_if_unused(effects::Effects) =
+is_removable_if_unused(effects::Effects, assume_inbounds::Bool) =
     effects.effect_free === ALWAYS_TRUE &&
     effects.terminates === ALWAYS_TRUE &&
-    effects.nothrow === ALWAYS_TRUE
+    (effects.nothrow === ALWAYS_TRUE ||
+    (assume_inbounds && effects.nothrow_if_inbounds === ALWAYS_TRUE))
 
 function encode_effects(e::Effects)
     return (e.consistent.state << 0) |
            (e.effect_free.state << 2) |
            (e.nothrow.state << 4) |
-           (e.terminates.state << 6) |
-           (UInt32(e.overlayed) << 8)
+           (e.nothrow_if_inbounds.state << 6) |
+           (UInt32(e.terminates.state) << 8) |
+           (UInt32(e.overlayed) << 10)
 end
 function decode_effects(e::UInt32)
     return Effects(
@@ -104,7 +111,8 @@ function decode_effects(e::UInt32)
         TriState((e >> 2) & 0x03),
         TriState((e >> 4) & 0x03),
         TriState((e >> 6) & 0x03),
-        _Bool(   (e >> 8) & 0x01),
+        TriState((e >> 8) & 0x03),
+        _Bool(   (e >> 10) & 0x01),
         false)
 end
 
@@ -117,6 +125,8 @@ function tristate_merge(old::Effects, new::Effects)
         tristate_merge(
             old.nothrow, new.nothrow),
         tristate_merge(
+            old.nothrow_if_inbounds, new.nothrow_if_inbounds),
+        tristate_merge(
             old.terminates, new.terminates),
         old.overlayed | new.overlayed,
         old.inbounds_taints_consistency | new.inbounds_taints_consistency)
@@ -126,6 +136,7 @@ struct EffectsOverride
     consistent::Bool
     effect_free::Bool
     nothrow::Bool
+    nothrow_if_inbounds::Bool
     terminates_globally::Bool
     terminates_locally::Bool
 end
@@ -135,8 +146,9 @@ function encode_effects_override(eo::EffectsOverride)
     eo.consistent && (e |= 0x01)
     eo.effect_free && (e |= 0x02)
     eo.nothrow && (e |= 0x04)
-    eo.terminates_globally && (e |= 0x08)
-    eo.terminates_locally && (e |= 0x10)
+    eo.nothrow_if_inbounds && (e |= 0x08)
+    eo.terminates_globally && (e |= 0x10)
+    eo.terminates_locally && (e |= 0x20)
     return e
 end
 
@@ -146,7 +158,8 @@ function decode_effects_override(e::UInt8)
         (e & 0x02) != 0x00,
         (e & 0x04) != 0x00,
         (e & 0x08) != 0x00,
-        (e & 0x10) != 0x00)
+        (e & 0x10) != 0x00,
+        (e & 0x20) != 0x00)
 end
 
 """

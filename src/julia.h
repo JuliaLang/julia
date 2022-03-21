@@ -238,6 +238,7 @@ typedef union __jl_purity_overrides_t {
         uint8_t ipo_consistent  : 1;
         uint8_t ipo_effect_free : 1;
         uint8_t ipo_nothrow     : 1;
+        uint8_t ipo_nothrow_if_inbounds : 1;
         uint8_t ipo_terminates  : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
@@ -396,21 +397,23 @@ typedef struct _jl_code_instance_t {
     union {
         uint32_t ipo_purity_bits;
         struct {
-            uint8_t ipo_consistent:2;
-            uint8_t ipo_effect_free:2;
-            uint8_t ipo_nothrow:2;
-            uint8_t ipo_terminates:2;
-            uint8_t ipo_overlayed:1;
+            uint32_t ipo_consistent:2;
+            uint32_t ipo_effect_free:2;
+            uint32_t ipo_nothrow:2;
+            uint32_t ipo_terminates:2;
+            uint32_t ipo_nothrow_if_inbounds:2;
+            uint32_t ipo_overlayed:1;
         } ipo_purity_flags;
     };
     union {
         uint32_t purity_bits;
         struct {
-            uint8_t consistent:2;
-            uint8_t effect_free:2;
-            uint8_t nothrow:2;
-            uint8_t terminates:2;
-            uint8_t overlayed:1;
+            uint32_t consistent:2;
+            uint32_t effect_free:2;
+            uint32_t nothrow:2;
+            uint32_t terminates:2;
+            uint32_t ipo_nothrow_if_inbounds:2;
+            uint32_t overlayed:1;
         } purity_flags;
     };
     jl_value_t *argescapes; // escape information of call arguments

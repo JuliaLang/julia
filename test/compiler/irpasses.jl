@@ -832,8 +832,8 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
     @test isa(ir.stmts[length(ir.stmts)][:inst], ReturnNode)
 end
 
-@test Core.Compiler.builtin_effects(getfield, Any[Complex{Int}, Symbol], Any).effect_free.state == 0x01
-@test Core.Compiler.builtin_effects(getglobal, Any[Module, Symbol], Any).effect_free.state == 0x01
+@test Core.Compiler.builtin_effects(getfield, Core.Compiler.ArgInfo(nothing, Any[Complex{Int}, Symbol]), Any).effect_free.state == 0x01
+@test Core.Compiler.builtin_effects(getglobal, Core.Compiler.ArgInfo(nothing, Any[Module, Symbol]), Any).effect_free.state == 0x01
 # Test that UseRefIterator gets SROA'd inside of new_to_regular (#44557)
 # expression and new_to_regular offset are arbitrary here, we just want to see the UseRefIterator erased
 let e = Expr(:call, Core.GlobalRef(Base, :arrayset), false, Core.SSAValue(4), Core.SSAValue(9), Core.SSAValue(8))

@@ -1643,7 +1643,7 @@ function array_type_undefable(@nospecialize(arytype))
 end
 
 function array_builtin_common_nothrow(argtypes::Vector{Any}, first_idx_idx::Int)
-    length(argtypes) >= 4 || return false
+    length(argtypes) >= first_idx_idx || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
     array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
@@ -1778,10 +1778,11 @@ const _SPECIAL_BUILTINS = Any[
     Core._apply_iterate
 ]
 
-function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
+function builtin_effects(f::Builtin, arginfo::ArgInfo, rt)
     if isa(f, IntrinsicFunction)
-        return intrinsic_effects(f, argtypes)
+        return intrinsic_effects(f, arginfo.argtypes)
     end
+    (;argtypes, fargs) = arginfo
 
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
@@ -1822,10 +1823,20 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         nothrow = isvarargtype(argtypes[end]) ? false : builtin_nothrow(f, argtypes[2:end], rt)
     end
 
+    nothrow_if_inbounds = nothrow
+
+    if !nothrow && f === Core.arrayref && fargs !== nothing && length(fargs) >= 3 &&
+            isexpr(fargs[2], :boundscheck) && !isvarargtype(argtypes[end])
+        new_argtypes = argtypes[3:end]
+        pushfirst!(new_argtypes, Const(false))
+        nothrow_if_inbounds = builtin_nothrow(f, new_argtypes, rt)
+    end
+
     return Effects(
         ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
         effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
         nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        nothrow_if_inbounds ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
         #=terminates=#ALWAYS_TRUE,
         #=overlayed=#false,
         )
@@ -2008,6 +2019,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     return Effects(
         ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
         effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
         nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
         #=terminates=#ALWAYS_TRUE,
         #=overlayed=#false,
