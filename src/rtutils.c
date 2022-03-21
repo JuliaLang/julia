@@ -1316,6 +1316,11 @@ JL_DLLEXPORT void jl_breakpoint(jl_value_t *v)
     // put a breakpoint in your debugger here
 }
 
+JL_DLLEXPORT void jl_test_failure_breakpoint(jl_value_t *v)
+{
+    // put a breakpoint in your debugger here
+}
+
 // logging tools --------------------------------------------------------------
 
 void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
