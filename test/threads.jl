@@ -4,6 +4,8 @@ using Test
 
 using Base.Threads
 
+include("print_process_affinity.jl") # import `uv_thread_getaffinity`
+
 # simple sanity tests for locks under cooperative concurrent access
 let lk = ReentrantLock()
     c1 = Event()
@@ -93,10 +95,13 @@ else
 end
 # Note also that libuv does not support affinity in macOS and it is known to
 # hang in FreeBSD. So, it's tested only in Linux and Windows:
-if Sys.islinux() || Sys.iswindows()
-    if Sys.CPU_THREADS > 1 && !running_under_rr()
-        @test run_with_affinity([2]) == "2"
-        @test run_with_affinity([1, 2]) == "1,2"
+const AFFINITY_SUPPORTED = (Sys.islinux() || Sys.iswindows()) && !running_under_rr()
+
+if AFFINITY_SUPPORTED
+    allowed_cpus = findall(uv_thread_getaffinity())
+    if length(allowed_cpus) ≥ 2
+        @test run_with_affinity(allowed_cpus[1:1]) == "$(allowed_cpus[1])"
+        @test run_with_affinity(allowed_cpus[1:2]) == "$(allowed_cpus[1]),$(allowed_cpus[2])"
     end
 end
 
