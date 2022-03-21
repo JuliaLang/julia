@@ -6,6 +6,7 @@ using Dates
 import REPL
 using Printf: @sprintf
 using Base: Experimental
+using InteractiveUtils: versioninfo
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -122,6 +123,11 @@ cd(@__DIR__) do
     if use_revise
         Base.invokelatest(revise_trackall)
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
+    end
+
+    if tryparse(Bool, get(ENV, "CI", "false")) == true
+        # start report on CI with info for debugging
+        versioninfo()
     end
 
     #pretty print the information about gc and mem usage
