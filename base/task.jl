@@ -498,29 +498,28 @@ struct UnwrapTaskFailedException
     task::Task
 end
 
-# the unwrapping for above task wrapper (gets triggered in sync_end())
-wait(t::UnwrapTaskFailedException) =
-    try
-        wait(t.task)
-    catch ex
-        if ex isa TaskFailedException
-            throw(ex.task.exception)
-        else
-            rethrow()
+# common code for wait&fetch for UnwrapTaskFailedException
+macro unwrap_task_failed(f, t)
+    quote
+        try
+            $(esc(f))($(esc(t)).task)
+        catch ex
+            if ex isa TaskFailedException
+                throw(ex.task.exception)
+            else
+                rethrow()
+            end
         end
     end
+end
+
+# the unwrapping for above task wrapper (gets triggered in sync_end())
+wait(t::UnwrapTaskFailedException) =
+    @unwrap_task_failed wait t
 
 # same for fetching the tasks, for convenience
 fetch(t::UnwrapTaskFailedException) =
-    try
-        fetch(t.task)
-    catch ex
-        if ex isa TaskFailedException
-            throw(ex.task.exception)
-        else
-            rethrow()
-        end
-    end
+    @unwrap_task_failed fetch t
 
 # macro for running async code that doesn't throw wrapped exceptions
 macro async_nowrap(expr)
