@@ -493,7 +493,7 @@ function do_async_macro(expr; wrap=identity)
     end
 end
 
-# task wrapper that doesn't exceptions wrapped in TaskFailedException
+# task wrapper that doesn't create exceptions wrapped in TaskFailedException
 struct UnwrapTaskFailedException
     task::Task
 end
