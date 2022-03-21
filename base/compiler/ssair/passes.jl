@@ -440,10 +440,15 @@ function lift_arg!(
     lifted = stmt.args[argidx]
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
+        if already_inserted(compact, lifted)
+            lifted = compact.ssa_rename[lifted.id]
+        end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
         lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
+        compact[leaf] = nothing
         stmt.args[argidx] = lifted
+        compact[leaf] = stmt
         if isa(leaf, SSAValue) && leaf.id < compact.result_idx
             push!(compact.late_fixup, leaf.id)
         end
@@ -556,7 +561,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val)::LiftedValue
+        lifted_leaves::LiftedLeaves, val, ()->nothing, idx)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -576,8 +581,42 @@ end
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val), get_domtree, idx::Int)
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
+
+    # Check if all the lifted leaves are the same
+    local the_leaf
+    all_same = true
+    for (_, val) in lifted_leaves
+        if !@isdefined(the_leaf)
+            the_leaf = val
+            continue
+        end
+        if val !== the_leaf
+            all_same = false
+        end
+    end
+
+    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.x : nothing
+    if !isa(the_leaf_val, SSAValue)
+        all_same = false
+    end
+
+    if all_same
+        dominates_all = true
+        domtree = get_domtree()
+        if domtree !== nothing
+            for item in visited_phinodes
+                if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                    dominates_all = false
+                    break
+                end
+            end
+            if dominates_all
+                return the_leaf
+            end
+        end
+    end
 
     # Insert PhiNodes
     lifted_phis = LiftedPhi[]
@@ -632,10 +671,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 # Probably ignored by path condition, skip this
             end
         end
-    end
-
-    for lf in lifted_phis
-        count_added_node!(compact, lf.node)
+        count_added_node!(compact, new_node)
     end
 
     # Fixup the stmt itself
@@ -678,6 +714,14 @@ function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
+    # initialization of domtree is delayed to avoid the expensive computation in many cases
+    local domtree = nothing
+    function get_domtree()
+        if domtree === nothing
+            @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
+        end
+        return domtree
+    end
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
@@ -740,6 +784,7 @@ function sroa_pass!(ir::IRCode)
                 continue
             end
             if !isempty(new_preserves)
+                compact[idx] = nothing
                 compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
@@ -819,7 +864,7 @@ function sroa_pass!(ir::IRCode)
         end
 
         val = perform_lifting!(compact,
-            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val)
+            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, get_domtree, idx)
 
         # Insert the undef check if necessary
         if any_undef
@@ -846,7 +891,7 @@ function sroa_pass!(ir::IRCode)
         used_ssas = copy(compact.used_ssas)
         simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas)
+        sroa_mutables!(ir, defuses, used_ssas, get_domtree)
         return ir
     else
         simple_dce!(compact)
@@ -854,9 +899,7 @@ function sroa_pass!(ir::IRCode)
     end
 end
 
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
-    # initialization of domtree is delayed to avoid the expensive computation in many cases
-    local domtree = nothing
+function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, get_domtree)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -920,15 +963,13 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
-                domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get_domtree())
             end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for use in du.uses
-                    domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                    has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
+                    has_safe_def(ir, get_domtree(), allblocks, du, newidx, use) || @goto skip
                 end
             end
         end
@@ -936,7 +977,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
-        domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
+        domtree = get_domtree()
         preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
             IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
         for fidx in 1:ndefuse
@@ -1031,12 +1072,12 @@ function canonicalize_typeassert!(compact::IncrementalCompact, idx::Int, stmt::E
     compact.ssa_rename[compact.idx-1] = pi
 end
 
-function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
+function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
     end
 end
 
@@ -1189,10 +1230,10 @@ function adce_pass!(ir::IRCode)
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx)
+        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1211,7 +1252,7 @@ function adce_pass!(ir::IRCode)
             end
         end
         while !isempty(extra_worklist)
-            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
             end
         end

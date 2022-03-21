@@ -834,3 +834,25 @@ end
 
 @test Core.Compiler.builtin_effects(getfield, Any[Complex{Int}, Symbol], Any).effect_free.state == 0x01
 @test Core.Compiler.builtin_effects(getglobal, Any[Module, Symbol], Any).effect_free.state == 0x01
+# Test that UseRefIterator gets SROA'd inside of new_to_regular (#44557)
+# expression and new_to_regular offset are arbitrary here, we just want to see the UseRefIterator erased
+let e = Expr(:call, Core.GlobalRef(Base, :arrayset), false, Core.SSAValue(4), Core.SSAValue(9), Core.SSAValue(8))
+    new_to_reg(expr) = Core.Compiler.new_to_regular(expr, 1)
+    @allocated new_to_reg(e) # warmup call
+    @test (@allocated new_to_reg(e)) == 0
+end
+
+# Test that SROA doesn't try to forward a previous iteration's SSA value
+let sroa_no_forward() = begin
+    res = (0, 0)
+    for i in 1:5
+        a = first(res)
+        a == 5 && error()
+        if i == 1
+            res = (i, 2.0)
+        end
+    end
+    return res
+    end
+    @test sroa_no_forward() == (1, 2.0)
+end
