@@ -467,10 +467,9 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
         return;
     if (*env == 'r') {
         env++;
-        srand((unsigned)uv_hrtime());
         for (int i = 0;i < 3;i++) {
             while (num->random[i] == 0) {
-                num->random[i] = rand();
+                num->random[i] = jl_rand();
             }
         }
     }

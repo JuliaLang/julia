@@ -299,9 +299,6 @@ include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
 
-# RandomDevice support
-include("randomdevice.jl")
-
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")
@@ -491,8 +488,6 @@ end
 
 if is_primary_base_module
 function __init__()
-    # for the few uses of Libc.rand in Base:
-    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
