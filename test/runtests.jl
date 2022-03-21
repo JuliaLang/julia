@@ -6,7 +6,6 @@ using Dates
 import REPL
 using Printf: @sprintf
 using Base: Experimental
-using InteractiveUtils: versioninfo
 
 include("choosetests.jl")
 include("testenv.jl")
@@ -125,10 +124,14 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
-    if tryparse(Bool, get(ENV, "CI", "false")) == true
-        # start report on CI with info for debugging
-        versioninfo()
-    end
+    println("""\n
+        Running parallel tests with:
+          nworkers() = $(nworkers())
+          nthreads() = $(Threads.nthreads())
+          Sys.CPU_THREADS = $(Sys.CPU_THREADS)
+          Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
+          Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+        """)
 
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
