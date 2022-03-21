@@ -618,8 +618,8 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
 
     write_uint8(s->s, TAG_CODE_INSTANCE);
     write_uint8(s->s, flags);
-    write_uint8(s->s, codeinst->ipo_purity_bits);
-    write_uint8(s->s, codeinst->purity_bits);
+    write_uint32(s->s, codeinst->ipo_purity_bits);
+    write_uint32(s->s, codeinst->purity_bits);
     jl_serialize_value(s, (jl_value_t*)codeinst->def);
     if (write_ret_type) {
         jl_serialize_value(s, codeinst->inferred);
@@ -1829,8 +1829,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     int flags = read_uint8(s->s);
     int validate = (flags >> 0) & 3;
     int constret = (flags >> 2) & 1;
-    codeinst->ipo_purity_bits = read_uint8(s->s);
-    codeinst->purity_bits = read_uint8(s->s);
+    codeinst->ipo_purity_bits = read_uint32(s->s);
+    codeinst->purity_bits = read_uint32(s->s);
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
     codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);

@@ -498,7 +498,8 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        !iszero(stride(x, 1)) # We only check input's stride here.
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
     else
         return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
@@ -516,8 +517,9 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
-        stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) &&
-        stride(y, 1) == 1 && tA == 'N' # reinterpret-based optimization is valid only for contiguous `y`
+        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        stride(y, 1) == 1 && tA == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
+        !iszero(stride(x, 1))
         BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
         return y
     else
@@ -535,7 +537,9 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     mA == 0 && return y
     nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} && stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+    @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
+        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        !iszero(stride(x, 1))
         xfl = reinterpret(reshape, T, x) # Use reshape here.
         yfl = reinterpret(reshape, T, y)
         BLAS.gemv!(tA, alpha, A, xfl[1, :], beta, yfl[1, :])

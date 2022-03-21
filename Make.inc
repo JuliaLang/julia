@@ -652,8 +652,8 @@ ifeq ($(OS),FreeBSD)
 ifneq (,$(findstring gfortran,$(FC)))
 
 # First let's figure out what version of GCC we're dealing with
-_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
-_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
+_GCCMAJOR := $(shell $(FC) -dumpversion 2>/dev/null | cut -d'.' -f1)
+_GCCMINOR := $(shell $(FC) -dumpversion 2>/dev/null | cut -d'.' -f2)
 
 # The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
 ifeq ($(_GCCMAJOR),4)

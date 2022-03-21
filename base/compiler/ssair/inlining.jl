@@ -319,10 +319,15 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     inlined_at = Int(compact.result[idx][:line])
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
+    coverage_by_path = JLOptions().code_coverage == 3
     push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
+        if !coverage && coverage_by_path && is_file_tracked(entry.file)
+            # include topline coverage entry if in path-specific coverage mode, and any file falls under path
+            coverage = true
+        end
         newentry = LineInfoNode(entry.module, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
         if oldline == 1

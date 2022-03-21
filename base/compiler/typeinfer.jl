@@ -512,7 +512,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
             ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
         end
     end
-    me.result.ipo_effects = ipo_effects
+    me.ipo_effects = me.result.ipo_effects = ipo_effects
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end

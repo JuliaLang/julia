@@ -973,14 +973,14 @@ end
     destc = dest.chunks
     cind = 1
     bc′ = preprocess(dest, bc)
-    for P in Iterators.partition(eachindex(bc′), bitcache_size)
+    @inbounds for P in Iterators.partition(eachindex(bc′), bitcache_size)
         ind = 1
         @simd for I in P
-            @inbounds tmp[ind] = bc′[I]
+            tmp[ind] = bc′[I]
             ind += 1
         end
         @simd for i in ind:bitcache_size
-            @inbounds tmp[i] = false
+            tmp[i] = false
         end
         dumpbitcache(destc, cind, tmp)
         cind += bitcache_chunks
