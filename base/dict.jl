@@ -293,14 +293,25 @@ end
 function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
-    iter = 0
-    maxprobe = h.maxprobe
     index, sh = hashindex(key, sz)
     keys = h.keys
-
+    slots = h.slots
+    if sz<=16
+        index=1
+        @inbounds while index <= sz
+            index = findnext(isequal(sh), slots, index)
+            k = keys[index]
+            if (key ===  k || isequal(key, k))
+                return index
+            end
+        end
+        return -1
+    end
+    maxprobe = h.maxprobe
+    iter = 0
     @inbounds while true
         isslotempty(h,index) && return -1
-        if h.slots[index] == sh
+        if slots[index] == sh
             k = keys[index]
             if (key ===  k || isequal(key, k))
                 return index
@@ -326,6 +337,17 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     avail = 0
     keys = h.keys
 
+    if sz<16
+        index=1
+        @inbounds while index <= sz
+            index = findnext(isequal(sh), slots, index)
+            k = keys[index]
+            if (key ===  k || isequal(key, k))
+                return index, sh
+            end
+        end
+        return -index
+    end
     @inbounds while true
         if isslotempty(h,index)
             return (avail < 0 ? avail : -index), sh
@@ -661,10 +683,21 @@ function pop!(h::Dict)
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
+    size = h.count
+    if size <=16
+        @inbounds for ind in index:(size-1)
+            h.slots[ind] = h.slots[ind+1]
+            h.keys[ind]  = h.keys[ind+1]
+            h.vals[ind]  = h.vals[ind+1]
+        end
+        @inbounds _unsetindex!(h.keys, size)
+        @inbounds _unsetindex!(h.vals, size)
+    else
     @inbounds h.slots[index] = 0x7f
     @inbounds _unsetindex!(h.keys, index)
     @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
+    end
     h.count -= 1
     h.age += 1
     return h
