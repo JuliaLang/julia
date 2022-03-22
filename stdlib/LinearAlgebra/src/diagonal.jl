@@ -77,8 +77,16 @@ Diagonal{T}(D::Diagonal{T}) where {T} = D
 Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
-Matrix(D::Diagonal) = diagm(0 => D.diag)
-Array(D::Diagonal) = Matrix(D)
+Matrix(D::Diagonal{T}) where {T} = Matrix{T}(D)
+Array(D::Diagonal{T}) where {T} = Matrix{T}(D)
+function Matrix{T}(D::Diagonal) where {T}
+    n = size(D, 1)
+    B = zeros(T, n, n)
+    @inbounds for i in 1:n
+        B[i,i] = D.diag[i]
+    end
+    return B
+end
 
 """
     Diagonal{T}(undef, n)

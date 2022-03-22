@@ -188,16 +188,21 @@ end
 
 
 @testset "Triangular Types and QR" begin
-    for typ in [UpperTriangular,LowerTriangular,LinearAlgebra.UnitUpperTriangular,LinearAlgebra.UnitLowerTriangular]
+    for typ in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         a = rand(n,n)
         atri = typ(a)
+        matri = Matrix(atri)
         b = rand(n,n)
         qrb = qr(b, ColumnNorm())
-        @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
+        @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
+        @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
+        @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
         qrb = qr(b, NoPivot())
-        @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
+        @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
+        @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
+        @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
     end
 end
 
@@ -421,19 +426,18 @@ end
 end
 
 @testset "BiTriSym*Q' and Q'*BiTriSym" begin
-    dl = [1, 1, 1];
-    d = [1, 1, 1, 1];
-    Tri = Tridiagonal(dl, d, dl)
+    dl = [1, 1, 1]
+    d = [1, 1, 1, 1]
+    D = Diagonal(d)
     Bi = Bidiagonal(d, dl, :L)
+    Tri = Tridiagonal(dl, d, dl)
     Sym = SymTridiagonal(d, dl)
     F = qr(ones(4, 1))
     A = F.Q'
-    @test Tri*A ≈ Matrix(Tri)*A
-    @test A*Tri ≈ A*Matrix(Tri)
-    @test Bi*A ≈ Matrix(Bi)*A
-    @test A*Bi ≈ A*Matrix(Bi)
-    @test Sym*A ≈ Matrix(Sym)*A
-    @test A*Sym ≈ A*Matrix(Sym)
+    for A in (F.Q, F.Q'), B in (D, Bi, Tri, Sym)
+        @test B*A ≈ Matrix(B)*A
+        @test A*B ≈ A*Matrix(B)
+    end
 end
 
 @testset "Ops on SymTridiagonal ev has the same length as dv" begin
