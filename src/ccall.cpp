@@ -1927,14 +1927,37 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
         else {
             assert(symarg.f_name != NULL);
-            const char* f_name = symarg.f_name;
-            bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
-            if (f_extern)
-                f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
-            if (!f_extern && (!isa<Function>(llvmf) ||
-                              cast<Function>(llvmf)->getIntrinsicID() ==
-                                      Intrinsic::not_intrinsic)) {
+            StringRef f_name(symarg.f_name);
+            bool f_extern = f_name.consume_front("extern ");
+            llvmf = NULL;
+            if (f_extern) {
+                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
+                    llvmf = NULL;
+            }
+            else {
+                // compute and verify auto-mangling for intrinsic name
+                auto ID = Function::lookupIntrinsicID(f_name);
+                if (ID != Intrinsic::not_intrinsic) {
+                    // Accumulate an array of overloaded types for the given intrinsic
+                    // and compute the new name mangling schema
+                    SmallVector<Type*, 4> overloadTys;
+                    SmallVector<Intrinsic::IITDescriptor, 8> Table;
+                    getIntrinsicInfoTableEntries(ID, Table);
+                    ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+                    auto res = Intrinsic::matchIntrinsicSignature(functype, TableRef, overloadTys);
+                    if (res == Intrinsic::MatchIntrinsicTypes_Match) {
+                        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
+                        if (matchvararg) {
+                            Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
+                            assert(intrinsic->getFunctionType() == functype);
+                            if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
+                                llvmf = intrinsic;
+                        }
+                    }
+                }
+            }
+            if (llvmf == NULL) {
                 emit_error(ctx, "llvmcall only supports intrinsic calls");
                 return jl_cgval_t(ctx.builder.getContext());
             }
