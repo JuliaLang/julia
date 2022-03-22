@@ -124,7 +124,7 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
-    println("""\n
+    println("""
         Running parallel tests with:
           nworkers() = $(nworkers())
           nthreads() = $(Threads.nthreads())
