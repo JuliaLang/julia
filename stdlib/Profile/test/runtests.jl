@@ -185,10 +185,9 @@ let cmd = Base.julia_cmd()
         sleep(10)
         kill(p, Base.SIGKILL)
     end
-    @showtime s = read(p, String)
+    s = read(p, String)
     close(t)
     @test success(p)
-    @show s
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
