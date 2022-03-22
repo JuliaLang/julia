@@ -204,8 +204,8 @@ constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx5
 constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
-constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq,
-                                                   rdpid, movdiri, pku, movdir64b, serialize, ptwriteavxvnni);
+constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq, pconfig,
+                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni);
 constexpr auto sapphirerapids = icelake_server |
     get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, serialize, cldemote, waitpkg,
                       ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
