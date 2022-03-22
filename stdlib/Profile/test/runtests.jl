@@ -170,7 +170,11 @@ let cmd = Base.julia_cmd()
     script = """
         using Profile
         f(::Val) = GC.safepoint()
-        @profile for i = 1:10^3; f(Val(i)); end
+        @profile for i = 1:10^3
+            println(i)
+            f(Val(i))
+        end
+        println("done")
         print(Profile.len_data())
         """
     p = open(`$cmd -e $script`)
@@ -184,7 +188,9 @@ let cmd = Base.julia_cmd()
     s = read(p, String)
     close(t)
     @test success(p)
-    @test parse(Int, s) > 100
+    @test !isempty(s)
+    @test occursin("done", s)
+    @test parse(Int, split(s, '\n')[end]) > 100
 end
 
 if Sys.isbsd() || Sys.islinux()
