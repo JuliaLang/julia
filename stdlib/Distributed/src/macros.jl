@@ -222,7 +222,7 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                Base.@async_unwrap remotecall_wait(Core.eval, pid, m, ex)
+                @async_unwrap remotecall_wait(Core.eval, pid, m, ex)
             end
         end
         yield() # ensure that the remotecalls have had a chance to start
