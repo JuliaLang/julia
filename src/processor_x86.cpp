@@ -203,7 +203,7 @@ constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx5
 constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
-constexpr auto alderlake = skylake; //TODO:avx-vnni                                                     
+constexpr auto alderlake = skylake | get_feature_masks(avxvnni);
 constexpr auto sapphirerapids = icelake_server |
     get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, serialize, cldemote, waitpkg,
                       ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
@@ -257,7 +257,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
      Feature::icelake_server},
     {"tigerlake", CPU::intel_corei7_tigerlake, CPU::intel_corei7_icelake_client, 100000,
      Feature::tigerlake},
-    {"alderlake", CPU::intel_corei7_alderlake, CPU::intel_corei7_alderlake, 120000,
+    {"alderlake", CPU::intel_corei7_alderlake, CPU::intel_corei7_skylake, 120000,
      Feature::alderlake},
     {"sapphirerapids", CPU::intel_corei7_sapphirerapids, CPU::intel_corei7_icelake_server, 120000,
      Feature::sapphirerapids},
@@ -419,7 +419,7 @@ static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t br
         case 0x97:
         case 0x9a:
             return CPU::intel_corei7_alderlake;
-            
+
             // Sapphire Rapids
         case 0x8f:
             return CPU::intel_corei7_sapphirerapids;
