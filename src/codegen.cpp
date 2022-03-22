@@ -8175,6 +8175,7 @@ void jl_init_debuginfo(void);
 
 extern "C" void jl_init_llvm(void)
 {
+    jl_page_size = jl_getpagesize();
     builtin_func_map =
         { { jl_f_is_addr,                 new JuliaFunction{XSTR(jl_f_is), get_func_sig, get_func_attrs} },
           { jl_f_typeof_addr,             new JuliaFunction{XSTR(jl_f_typeof), get_func_sig, get_func_attrs} },
