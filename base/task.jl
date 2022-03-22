@@ -518,7 +518,7 @@ wait(t::UnwrapTaskFailedException) = unwrap_task_failed(wait, t)
 fetch(t::UnwrapTaskFailedException) = unwrap_task_failed(fetch, t)
 
 # macro for running async code that doesn't throw wrapped exceptions
-macro async_nowrap(expr)
+macro async_unwrap(expr)
     do_async_macro(expr, wrap=task->:(Base.UnwrapTaskFailedException($task)))
 end
 
