@@ -251,7 +251,7 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 # maximum & minimum & extrema
 
-@test_throws "reducing over an empty" maximum(Int[])
+@test_throws "reducing with maximum over an empty" maximum(Int[])
 @test_throws "reducing over an empty" minimum(Int[])
 @test_throws "reducing over an empty" extrema(Int[])
 

@@ -184,7 +184,8 @@ end
     @test prod(A) === 1
     @test_throws ["reducing over an empty",
                   "consider supplying `init`"] minimum(A)
-    @test_throws "consider supplying `init`" maximum(A)
+    @test_throws ["reducing with maximum over an empty",
+                  "prevent this error by supplying an `init`"] maximum(A)
 
     @test isequal(sum(A, dims=1), zeros(Int, 1, 1))
     @test isequal(sum(A, dims=2), zeros(Int, 0, 1))
