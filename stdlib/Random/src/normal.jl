@@ -95,8 +95,7 @@ function randn(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat}
     # Marsaglia polar variant of Box–Muller transform:
     while true
         x, y = 2rand(rng, T)-1, 2rand(rng, T)-1
-        0 < (s = x^2 + y^2) < 1 || continue
-        return x * sqrt(-2log(s)/s) # and/or y * sqrt(...)
+        0 < (s = x^2 + y^2) < 1 && return x * sqrt(-2log(s)/s)
     end
 end
 
