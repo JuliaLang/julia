@@ -238,7 +238,7 @@ end
 ## promotion mechanism ##
 
 """
-    promote_type(type1, type2)
+    promote_type(type1, type2, ...)
 
 Promotion refers to converting values of mixed types to a single common type.
 `promote_type` represents the default promotion behavior in Julia when
