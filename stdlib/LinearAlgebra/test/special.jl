@@ -123,7 +123,6 @@ Random.seed!(1)
         Tri = Tridiagonal(dl, d, du)
         Sym = SymTridiagonal(d, dl)
         for M in (D, Bu, Bl, Tri, Sym)
-            @show typeof(M)
             @test Matrix(M) == zeros(TypeWithZero, 3, 3)
         end
     end
