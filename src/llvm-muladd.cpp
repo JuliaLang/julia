@@ -85,7 +85,9 @@ static bool combineMulAdd(Function &F)
 
 PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM)
 {
-    combineMulAdd(F);
+    if (combineMulAdd(F)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

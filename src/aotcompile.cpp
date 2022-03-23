@@ -256,7 +256,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // all reachable & inferrrable functions. The `policy` flag switches between the default
 // mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy)
+void *jl_create_native_impl(jl_array_t *methods, LLVMContextRef llvmctxt, const jl_cgparams_t *cgparams, int _policy)
 {
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
@@ -268,6 +268,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&jl_codegen_lock);
+    auto &ctxt = llvmctxt ? *unwrap(llvmctxt) : *jl_ExecutionEngine->getContext().getContext();
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -276,7 +277,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     CompilationPolicy policy = (CompilationPolicy) _policy;
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 1;
-    std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
+    std::unique_ptr<Module> clone(jl_create_llvm_module("text", ctxt));
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -294,7 +295,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(clone.get(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(wrap(clone.get()), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -309,7 +310,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
-                    jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params);
+                    jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params, ctxt);
                     if (std::get<0>(result))
                         emitted[codeinst] = std::move(result);
                 }
@@ -317,7 +318,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, params, policy);
+        jl_compile_workqueue(emitted, params, policy, clone->getContext());
     }
     JL_GC_POP();
 
@@ -444,7 +445,7 @@ void jl_dump_native_impl(void *native_code,
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
-    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+    Triple TheTriple = Triple(jl_ExecutionEngine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
 #if defined(_OS_WINDOWS_)
     TheTriple.setObjectFormat(Triple::COFF);
@@ -453,11 +454,11 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine> TM(
-        jl_TargetMachine->getTarget().createTargetMachine(
+        jl_ExecutionEngine->getTargetMachine().getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_TargetMachine->getTargetCPU(),
-            jl_TargetMachine->getTargetFeatureString(),
-            jl_TargetMachine->Options,
+            jl_ExecutionEngine->getTargetMachine().getTargetCPU(),
+            jl_ExecutionEngine->getTargetMachine().getTargetFeatureString(),
+            jl_ExecutionEngine->getTargetMachine().Options,
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
             Reloc::PIC_,
 #else
@@ -508,9 +509,7 @@ void jl_dump_native_impl(void *native_code,
 
     // Reset the target triple to make sure it matches the new target machine
     data->M->setTargetTriple(TM->getTargetTriple().str());
-    DataLayout DL = TM->createDataLayout();
-    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
-    data->M->setDataLayout(DL);
+    data->M->setDataLayout(create_jl_data_layout(*TM));
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);
@@ -849,9 +848,9 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, jl_TargetMachine);
+        addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
         addOptimizationPasses(&Adapter, OptLevel);
-        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
+        addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -879,33 +878,80 @@ static void registerCallbacks(PassBuilder &PB) {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-          if (Name == "DemoteFloat16") {
-            PM.addPass(DemoteFloat16());
-            return true;
-          }
-          if (Name == "CombineMulAdd") {
-            PM.addPass(CombineMulAdd());
-            return true;
-          }
-          return false;
+            if (Name == "DemoteFloat16") {
+                PM.addPass(DemoteFloat16());
+                return true;
+            }
+            if (Name == "CombineMulAdd") {
+              PM.addPass(CombineMulAdd());
+              return true;
+            }
+            if (Name == "LateLowerGCFrame") {
+                PM.addPass(LateLowerGC());
+                return true;
+            }
+            if (Name == "AllocOpt") {
+                PM.addPass(AllocOptPass());
+                return true;
+            }
+            if (Name == "PropagateJuliaAddrspaces") {
+                PM.addPass(PropagateJuliaAddrspacesPass());
+                return true;
+            }
+            if (Name == "LowerExcHandlers") {
+                PM.addPass(LowerExcHandlers());
+                return true;
+            }
+            if (Name == "GCInvariantVerifier") {
+                // TODO: Parse option and allow users to set `Strong`
+                PM.addPass(GCInvariantVerifierPass());
+                return true;
+            }
+            return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-          if (Name == "CPUFeatures") {
-            PM.addPass(CPUFeatures());
-            return true;
-          }
-          if (Name == "RemoveNI") {
-            PM.addPass(RemoveNI());
-            return true;
-          }
-          if (Name == "LowerSIMDLoop") {
-            PM.addPass(LowerSIMDLoop());
-            return true;
-          }
-          return false;
+            if (Name == "CPUFeatures") {
+              PM.addPass(CPUFeatures());
+              return true;
+            }
+            if (Name == "RemoveNI") {
+              PM.addPass(RemoveNI());
+              return true;
+            }
+            if (Name == "LowerSIMDLoop") {
+              PM.addPass(LowerSIMDLoop());
+              return true;
+            }
+            if (Name == "FinalLowerGC") {
+                PM.addPass(FinalLowerGCPass());
+                return true;
+            }
+            if (Name == "RemoveJuliaAddrspaces") {
+                PM.addPass(RemoveJuliaAddrspacesPass());
+                return true;
+            }
+            if (Name == "MultiVersioning") {
+                PM.addPass(MultiVersioning());
+                return true;
+            }
+            if (Name == "LowerPTLS") {
+                PM.addPass(LowerPTLSPass());
+                return true;
+            }
+            return false;
+        });
+
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, LoopPassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+            if (Name == "JuliaLICM") {
+                PM.addPass(JuliaLICMPass());
+                return true;
+            }
+            return false;
         });
 }
 
@@ -920,7 +966,7 @@ llvmGetPassPluginInfo() {
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMContextRef ctxt, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
@@ -931,9 +977,9 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     static legacy::PassManager *PM;
     if (!PM) {
         PM = new legacy::PassManager();
-        addTargetPasses(PM, jl_TargetMachine);
+        addTargetPasses(PM, &jl_ExecutionEngine->getTargetMachine());
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
+        addMachinePasses(PM, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level);
     }
 
     // get the source code for this function
@@ -972,7 +1018,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
-        std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
+        std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output, *unwrap(ctxt));
 
         Function *F = NULL;
         if (m) {

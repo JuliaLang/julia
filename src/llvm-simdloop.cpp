@@ -230,7 +230,11 @@ PreservedAnalyses LowerSIMDLoop::run(Module &M, ModuleAnalysisManager &AM)
         return FAM.getResult<LoopAnalysis>(F);
     };
 
-    markLoopInfo(M, loopinfo_marker, GetLI);
+    if (markLoopInfo(M, loopinfo_marker, GetLI)) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<LoopAnalysis>();
+        return preserved;
+    }
 
     return PreservedAnalyses::all();
 }

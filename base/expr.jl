@@ -400,7 +400,7 @@ The following `setting`s are supported.
 ---
 # `:consistent`
 
-The `:consistent` setting asserts that for egal inputs:
+The `:consistent` setting asserts that for egal (`===`) inputs:
 - The manner of termination (return value, exception, non-termination) will always be the same.
 - If the method returns, the results will always be egal.
 
