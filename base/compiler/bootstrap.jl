@@ -11,7 +11,11 @@ let
     world = get_world_counter()
     interp = NativeInterpreter(world)
 
-    analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, Bool, typeof(null_escape_cache)}
+    analyze_escapes_tt = Any[typeof(analyze_escapes), IRCode, Int, Bool,
+        # typeof(get_escape_cache(code_cache(interp))) # once we enable IPO EA
+        typeof(null_escape_cache)
+        ]
+    analyze_escapes_tt = Tuple{analyze_escapes_tt...}
     fs = Any[
         # we first create caches for the optimizer, because they contain many loop constructions
         # and they're better to not run in interpreter even during bootstrapping
