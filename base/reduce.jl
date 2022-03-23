@@ -758,7 +758,8 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing with maximum over an empty collection of element type Union{} is not allowed.
+You may be able to prevent this error by supplying an `init` value to the reducer.
 Stacktrace:
 [...]
 
