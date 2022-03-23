@@ -33,7 +33,7 @@ if Sys.iswindows()
     const libgomp = "libgomp-1.dll"
 elseif Sys.isapple()
     if arch(HostPlatform()) == "aarch64"
-        const libgcc_s = "@rpath/libgcc_s.2.dylib"
+        const libgcc_s = "@rpath/libgcc_s.1.1.dylib"
     else
         const libgcc_s = "@rpath/libgcc_s.1.dylib"
     end

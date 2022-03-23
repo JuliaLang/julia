@@ -109,11 +109,11 @@ Metadata *to_md_tree(jl_value_t *val, LLVMContext &ctxt) {
 
 // --- Debug info ---
 
-static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
+static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
 {
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (isboxed || !jl_is_datatype(jt) || !jdt->isconcretetype)
-        return jl_pvalue_dillvmt;
+        return debuginfo.jl_pvalue_dillvmt;
     assert(jdt->layout);
     DIType* _ditype = NULL;
     DIType* &ditype = (ctx ? ctx->ditypes[jdt] : _ditype);
@@ -131,10 +131,10 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
             jl_value_t *el = jl_field_type_concrete(jdt, i);
             DIType *di;
             if (jl_field_isptr(jdt, i))
-                di = jl_pvalue_dillvmt;
+                di = debuginfo.jl_pvalue_dillvmt;
             // TODO: elseif jl_islayout_inline
             else
-                di = _julia_type_to_di(ctx, el, dbuilder, false);
+                di = _julia_type_to_di(ctx, debuginfo, el, dbuilder, false);
             Elements[i] = di;
         }
         DINodeArray ElemArray = dbuilder->getOrCreateArray(Elements);
@@ -157,14 +157,56 @@ static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_value_t *jt, DIBui
     }
     else {
         // return a typealias for types with hidden content
-        ditype = dbuilder->createTypedef(jl_pvalue_dillvmt, tname, NULL, 0, NULL);
+        ditype = dbuilder->createTypedef(debuginfo.jl_pvalue_dillvmt, tname, NULL, 0, NULL);
     }
     return ditype;
 }
 
-static DIType *julia_type_to_di(jl_codectx_t &ctx, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
+static DIType *julia_type_to_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
 {
-    return _julia_type_to_di(&ctx.emission_context, jt, dbuilder, isboxed);
+    return _julia_type_to_di(&ctx.emission_context, debuginfo, jt, dbuilder, isboxed);
+}
+
+void jl_debugcache_t::initialize(Module *m) {
+    if (initialized) {
+        return;
+    }
+    initialized = true;
+    // add needed base debugging definitions to our LLVM environment
+    DIBuilder dbuilder(*m);
+    DIFile *julia_h = dbuilder.createFile("julia.h", "");
+    DICompositeType *jl_value_dillvmt = dbuilder.createStructType(nullptr,
+        "jl_value_t",
+        julia_h,
+        71, // At the time of this writing. Not sure if it's worth it to keep this in sync
+        0 * 8, // sizeof(jl_value_t) * 8,
+        __alignof__(void*) * 8, // __alignof__(jl_value_t) * 8,
+        DINode::FlagZero, // Flags
+        nullptr,    // Derived from
+        nullptr);  // Elements - will be corrected later
+
+    jl_pvalue_dillvmt = dbuilder.createPointerType(jl_value_dillvmt, sizeof(jl_value_t*) * 8,
+                                                __alignof__(jl_value_t*) * 8);
+
+    SmallVector<llvm::Metadata *, 1> Elts;
+    std::vector<Metadata*> diargs(0);
+    Elts.push_back(jl_pvalue_dillvmt);
+    dbuilder.replaceArrays(jl_value_dillvmt,
+    dbuilder.getOrCreateArray(Elts));
+
+    jl_ppvalue_dillvmt = dbuilder.createPointerType(jl_pvalue_dillvmt, sizeof(jl_value_t**) * 8,
+                                                    __alignof__(jl_value_t**) * 8);
+
+    diargs.push_back(jl_pvalue_dillvmt);    // Return Type (ret value)
+    diargs.push_back(jl_pvalue_dillvmt);    // First Argument (function)
+    diargs.push_back(jl_ppvalue_dillvmt);   // Second Argument (argv)
+    // Third argument (length(argv))
+    diargs.push_back(_julia_type_to_di(NULL, *this, (jl_value_t*)jl_int32_type, &dbuilder, false));
+
+    jl_di_func_sig = dbuilder.createSubroutineType(
+        dbuilder.getOrCreateTypeArray(diargs));
+    jl_di_func_null_sig = dbuilder.createSubroutineType(
+        dbuilder.getOrCreateTypeArray(None));
 }
 
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
@@ -510,9 +552,9 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
 }
 
 extern "C" JL_DLLEXPORT
-Type *jl_type_to_llvm_impl(jl_value_t *jt, bool *isboxed)
+Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
 {
-    return _julia_type_to_llvm(NULL, jl_LLVMContext, jt, isboxed);
+    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed);
 }
 
 
@@ -3234,6 +3276,14 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
         decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
     }
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+}
+
+static void emit_write_barrier_binding(jl_codectx_t &ctx, Value *parent, Value *ptr)
+{
+    SmallVector<Value*, 8> decay_ptrs;
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, parent, ctx.types().T_prjlvalue)));
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
+    ctx.builder.CreateCall(prepare_call(jl_write_barrier_binding_func), decay_ptrs);
 }
 
 static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, unsigned offset)

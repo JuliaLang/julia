@@ -185,7 +185,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
             }
             else if (error) {
                 JL_UNLOCK(&m->lock);
-                jl_errorf("cannot assign a value to variable %s.%s from module %s",
+                jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
                           jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
             }
         }
@@ -528,7 +528,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_s
             }
         }
         else {
-            jl_binding_t *nb = new_binding(s);
+            jl_binding_t *nb = new_binding(b->name);
             nb->owner = b->owner;
             nb->imported = (explici!=0);
             nb->deprecated = b->deprecated;

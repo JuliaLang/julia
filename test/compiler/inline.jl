@@ -1088,6 +1088,13 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
+const ___CONST_DICT___ = Dict{Any,Any}(:a => 1, :b => 2)
+Base.@assume_effects :consistent :effect_free :terminates_globally consteval(
+    f, args...; kwargs...) = f(args...; kwargs...)
+@test fully_eliminated() do
+    consteval(getindex, ___CONST_DICT___, :a)
+end
+
 global x44200::Int = 0
 function f44200()
     global x = 0
@@ -1098,4 +1105,13 @@ function f44200()
 end
 let src = code_typed1(f44200)
     @test count(x -> isa(x, Core.PiNode), src.code) == 0
+end
+
+# Test that peeling off one case from (::Any) doesn't introduce
+# a dynamic dispatch.
+@noinline f_peel(x::Int) = Base.inferencebarrier(1)
+@noinline f_peel(@nospecialize(x::Any)) = Base.inferencebarrier(2)
+g_call_peel(x) = f_peel(x)
+let src = code_typed1(g_call_peel, Tuple{Any})
+    @test count(isinvoke(:f_peel), src.code) == 2
 end

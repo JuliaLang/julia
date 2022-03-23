@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 17 # do not make changes without bumping the version #!
+const ser_version = 18 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -481,7 +481,7 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     if (g.mod === __deserialized_types__ ) ||
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
-        v = getfield(g.mod, g.name)
+        v = getglobal(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
             # handle references to types in Main by sending the whole type.
@@ -514,6 +514,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, t.max_methods)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -540,7 +541,7 @@ function should_send_whole_type(s, t::DataType)
         isanonfunction = mod === Main && # only Main
             t.super === Function && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-            (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
+            (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
         #TODO: iskw = startswith(tn.name, "#kw#") && ???
         #TODO: iskw && return send-as-kwftype
@@ -985,7 +986,7 @@ function deserialize_module(s::AbstractSerializer)
         end
         m = Base.root_module(mkey[1])
         for i = 2:length(mkey)
-            m = getfield(m, mkey[i])::Module
+            m = getglobal(m, mkey[i])::Module
         end
     else
         name = String(deserialize(s)::Symbol)
@@ -993,7 +994,7 @@ function deserialize_module(s::AbstractSerializer)
         m = Base.root_module(pkg)
         mname = deserialize(s)
         while mname !== ()
-            m = getfield(m, mname)::Module
+            m = getglobal(m, mname)::Module
             mname = deserialize(s)
         end
     end
@@ -1299,6 +1300,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
+    maxm = format_version(s) >= 18 ? deserialize(s)::UInt8 : UInt8(0)
 
     if makenew
         # TODO: there's an unhanded cycle in the dependency graph at this point:
@@ -1310,6 +1312,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
+        tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
             if !isdefined(ty, :instance)
@@ -1361,7 +1364,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     else
         name = deserialize(s)::Symbol
         mod = deserialize(s)::Module
-        ty = getfield(mod,name)
+        ty = getglobal(mod, name)
     end
     if isa(ty,DataType) && isempty(ty.parameters)
         t = ty

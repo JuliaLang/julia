@@ -1556,7 +1556,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee == write_barrier_func || callee->getName() == "memcmp") {
+                        callee == write_barrier_func || callee == write_barrier_binding_func ||
+                        callee->getName() == "memcmp") {
                         continue;
                     }
                     if (callee->hasFnAttribute(Attribute::ReadNone) ||
@@ -1878,29 +1879,27 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
      * perform this iteration.
      */
     ReversePostOrderTraversal<Function *> RPOT(S.F);
+    BitVector NewLive;
     while (!Converged) {
         bool AnyChanged = false;
         for (BasicBlock *BB : RPOT) {
             // This could all be done more efficiently, by only updating what
             // changed - Let's get it working first though.
             BBState &BBS = S.BBStates[BB];
-            BitVector NewLiveOut = BBS.PhiOuts;
+            NewLive = BBS.PhiOuts;
             for (BasicBlock *Succ : successors(BB)) {
-                NewLiveOut |= S.BBStates[Succ].LiveIn;
+                NewLive |= S.BBStates[Succ].LiveIn;
             }
-            if (NewLiveOut != BBS.LiveOut) {
+            if (NewLive != BBS.LiveOut) {
                 AnyChanged = true;
-                BBS.LiveOut = NewLiveOut;
+		BBS.LiveOut = NewLive;
                 MaybeResize(BBS, BBS.LiveOut.size() - 1);
             }
-            BitVector NewLiveIn = BBS.LiveOut;
-            BitVector FlippedDefs = BBS.Defs;
-            FlippedDefs.flip();
-            NewLiveIn &= FlippedDefs;
-            NewLiveIn |= BBS.UpExposedUses;
-            if (NewLiveIn != BBS.LiveIn) {
+            NewLive.reset(BBS.Defs);
+            NewLive |= BBS.UpExposedUses;
+            if (NewLive != BBS.LiveIn) {
                 AnyChanged = true;
-                BBS.LiveIn = NewLiveIn;
+		std::swap(BBS.LiveIn, NewLive);
             }
         }
         Converged = !AnyChanged;
@@ -2168,6 +2167,7 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
 // Size of T is assumed to be `sizeof(void*)`
 Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 {
+    auto T_size = getSizeTy(T->getContext());
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
@@ -2176,6 +2176,7 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
 {
+    auto T_size = getSizeTy(builder.getContext());
     auto addr = EmitTagPtr(builder, T_size, V);
     LoadInst *load = builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
     load->setOrdering(AtomicOrdering::Unordered);
@@ -2235,6 +2236,8 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 
 
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
+    auto T_int32 = Type::getInt32Ty(F.getContext());
+    auto T_size = getSizeTy(F.getContext());
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
     // yet. LLVM would merge them anyway later, so might as well save it a bit
@@ -2376,7 +2379,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
+            } else if ((write_barrier_func && callee == write_barrier_func) ||
+                       (write_barrier_binding_func && callee == write_barrier_binding_func)) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
                 assert(CI->arg_size() >= 1);
@@ -2482,7 +2486,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        if (CI->getCalledOperand() == write_barrier_func) {
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        }
+        else if (CI->getCalledOperand() == write_barrier_binding_func) {
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCBinding), parent);
+        }
+        else {
+            assert(false);
+        }
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
@@ -2535,7 +2547,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     // Get the slot address.
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
-        {GCFrame, ConstantInt::get(T_int32, Colors[R] + MinColorRoot)},
+        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
         "", InsertBefore);
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
@@ -2574,6 +2586,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
 
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
     auto F = S.F;
+    auto T_int32 = Type::getInt32Ty(F->getContext());
     int MaxColor = -1;
     for (auto C : Colors)
         if (C > MaxColor)
@@ -2595,7 +2608,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
-        auto replace_alloca = [this, gcframe, &AllocaSlot](AllocaInst *&AI) {
+        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
             // Pick a slot for the alloca.
             unsigned align = AI->getAlignment() / sizeof(void*); // TODO: use DataLayout pointer size
             assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");

@@ -1524,6 +1524,12 @@ let
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
+
 # issue #2365
 mutable struct B2365{T}
      v::Union{T, Nothing}
@@ -4326,6 +4332,30 @@ let gc_enabled13995 = GC.enable(false)
     GC.enable(false)
     @test finalized13995 == [true, true, true, true]
     GC.enable(gc_enabled13995)
+end
+
+# Ensure an independent GC frame
+@noinline outlined(f) = f()
+
+@testset "finalizers must not change the sticky flag" begin
+    GC.enable(false)
+    try
+        outlined() do
+            local obj = Ref(0)
+            finalizer(obj) do _
+                @async nothing
+            end
+            Base.donotdelete(obj)
+        end
+        task = Threads.@spawn begin
+            GC.enable(true)
+            GC.gc()
+        end
+        wait(task)
+        @test !task.sticky
+    finally
+        GC.enable(true)
+    end
 end
 
 # issue #15283
@@ -7703,4 +7733,24 @@ end
     a, b... = x
     @test a == 1
     @test b == Core.svec(2, 3)
+end
+
+@testset "setproperty! on modules" begin
+    m = Module()
+    @eval m global x::Int
+
+    setglobal!(m, :x, 1)
+    @test m.x === 1
+    setglobal!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+
+    m.x = 1
+    @test m.x === 1
+    setproperty!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
+    m.x = 4.
+    @test m.x === 4
 end

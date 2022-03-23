@@ -558,12 +558,21 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
-    labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
+    if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
+        for line in ci.linetable
+            if is_file_tracked(line.file)
+                # if any line falls in a tracked file enable coverage for all
+                coverage = true
+                break
+            end
+        end
+    end
+    labelmap = coverage ? fill(0, length(code)) : changemap
     while idx <= length(code)
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -675,7 +684,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
-            if f === Core.getfield || f === Core.tuple
+            if f === Core.getfield || f === Core.tuple || f === Core.getglobal
                 # we might like to penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)

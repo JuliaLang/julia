@@ -7,6 +7,7 @@
 #include "jl_internal_funcs.inc"
 #undef jl_setjmp
 #undef jl_longjmp
+#undef jl_egal
 #endif
 
 #include "julia_fasttls.h"
@@ -393,21 +394,23 @@ typedef struct _jl_code_instance_t {
 
     // purity results
     union {
-        uint8_t ipo_purity_bits;
+        uint32_t ipo_purity_bits;
         struct {
             uint8_t ipo_consistent:2;
             uint8_t ipo_effect_free:2;
             uint8_t ipo_nothrow:2;
             uint8_t ipo_terminates:2;
+            uint8_t ipo_overlayed:1;
         } ipo_purity_flags;
     };
     union {
-        uint8_t purity_bits;
+        uint32_t purity_bits;
         struct {
             uint8_t consistent:2;
             uint8_t effect_free:2;
             uint8_t nothrow:2;
             uint8_t terminates:2;
+            uint8_t overlayed:1;
         } purity_flags;
     };
     jl_value_t *argescapes; // escape information of call arguments
@@ -467,6 +470,7 @@ typedef struct {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
+    uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
 } jl_typename_t;
 
 typedef struct {
@@ -925,6 +929,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
+JL_DLLEXPORT void jl_gc_safepoint(void);
 
 // object accessors -----------------------------------------------------------
 
@@ -2075,6 +2080,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_LOG_NONE 0
 #define JL_LOG_USER 1
 #define JL_LOG_ALL  2
+#define JL_LOG_PATH 3
 
 #define JL_OPTIONS_CHECK_BOUNDS_DEFAULT 0
 #define JL_OPTIONS_CHECK_BOUNDS_ON 1

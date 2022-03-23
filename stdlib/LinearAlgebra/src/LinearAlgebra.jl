@@ -19,6 +19,8 @@ using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
+using OpenBLAS_jll
+using libblastrampoline_jll
 import Libdl
 
 export
@@ -563,42 +565,9 @@ function versioninfo(io::IO=stdout)
     return nothing
 end
 
-function find_library_path(name)
-    shlib_ext = string(".", Libdl.dlext)
-    if !endswith(name, shlib_ext)
-        name_ext = string(name, shlib_ext)
-    end
-
-    # On windows, we look in `bin` and never in `lib`
-    @static if Sys.iswindows()
-        path = joinpath(Sys.BINDIR, name_ext)
-        isfile(path) && return path
-    else
-        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
-        isfile(path) && return path
-
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
-        isfile(path) && return path
-    end
-
-    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
-    return name
-end
-
 function __init__()
     try
-        libblas_path = find_library_path(Base.libblas_name)
-        liblapack_path = find_library_path(Base.liblapack_name)
-        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
-        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
-        # it will find the library already loaded.
-        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
-        BLAS.lbt_forward(libblas_path; clear=true)
-        if liblapack_path != libblas_path
-            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
-            BLAS.lbt_forward(liblapack_path)
-        end
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")

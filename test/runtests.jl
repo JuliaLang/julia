@@ -124,6 +124,15 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
+    println("""
+        Running parallel tests with:
+          nworkers() = $(nworkers())
+          nthreads() = $(Threads.nthreads())
+          Sys.CPU_THREADS = $(Sys.CPU_THREADS)
+          Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
+          Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+        """)
+
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
     workerheader = "(Worker)"
