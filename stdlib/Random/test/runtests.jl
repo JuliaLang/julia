@@ -307,9 +307,32 @@ let a = [rand(RandomDevice(), UInt128) for i=1:10]
     @test reduce(|, a)>>>64 != 0
 end
 
+# wrapper around Float64 to check fallback random generators
+struct FakeFloat64 <: AbstractFloat
+    x::Float64
+end
+Base.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{FakeFloat64}}) = FakeFloat64(rand(rng))
+for f in (:sqrt, :log, :one, :zero, :abs, :+, :-)
+    @eval Base.$f(x::FakeFloat64) = FakeFloat64($f(x.x))
+end
+for f in (:+, :-, :*, :/)
+    @eval begin
+        Base.$f(x::FakeFloat64, y::FakeFloat64) = FakeFloat64($f(x.x,y.x))
+        Base.$f(x::FakeFloat64, y::Real) = FakeFloat64($f(x.x,y))
+        Base.$f(x::Real, y::FakeFloat64) = FakeFloat64($f(x,y.x))
+    end
+end
+for f in (:<, :<=, :>, :>=, :(==), :(!=))
+    @eval begin
+        Base.$f(x::FakeFloat64, y::FakeFloat64) = $f(x.x,y.x)
+        Base.$f(x::FakeFloat64, y::Real) = $f(x.x,y)
+        Base.$f(x::Real, y::FakeFloat64) = $f(x,y.x)
+    end
+end
+
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
-    ftypes = [Float16, Float32, Float64]
+    ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
@@ -406,15 +429,12 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     rand!(rng..., BitMatrix(undef, 2, 3))  ::BitArray{2}
 
     # Test that you cannot call randn or randexp with non-Float types.
-    for r in [randn, randexp, randn!, randexp!]
-        local r
+    for r in [randn, randexp]
         @test_throws MethodError r(Int)
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)
         @test_throws MethodError r(String)
-        @test_throws MethodError r(AbstractFloat)
-        # TODO(#17627): Consider adding support for randn(BigFloat) and removing this test.
-        @test_throws MethodError r(BigFloat)
+        @test_throws ArgumentError r(AbstractFloat)
 
         @test_throws MethodError r(Int64, (2,3))
         @test_throws MethodError r(String, 1)

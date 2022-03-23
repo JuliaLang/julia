@@ -90,6 +90,16 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
     Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 
+### fallback randn for float types defining rand:
+function randn(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat}
+    # Marsaglia polar variant of Box–Muller transform:
+    while true
+        x, y = 2rand(rng, T)-1, 2rand(rng, T)-1
+        0 < (s = x^2 + y^2) < 1 || continue
+        return x * sqrt(-2log(s)/s) # and/or y * sqrt(...)
+    end
+end
+
 ## randexp
 
 """
@@ -137,6 +147,9 @@ end
     end
 end
 
+### fallback randexp for float types defining rand:
+randexp(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat} =
+    -log(rand(rng, T))
 
 ## arrays & other scalar methods
 

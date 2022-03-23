@@ -65,6 +65,8 @@ Standard library changes
 
 #### Random
 
+* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
+
 #### REPL
 
 #### SparseArrays
