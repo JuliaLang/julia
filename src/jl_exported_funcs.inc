@@ -119,7 +119,6 @@
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
     XX(jl_eh_restore_state) \
-    XX(jl_enqueue_task) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
