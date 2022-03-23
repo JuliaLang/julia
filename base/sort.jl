@@ -774,6 +774,9 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # and the optimization is not worth the detection cost, so we use insertion sort.
     lenm1 < 40 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
+    # For most long arrays, a presorted check is essentially free (overhead < 1%)
+    lenm1 >= 200 && issorted(view(v, lo:hi), o) && return v
+
     # UInt128 does not support fast bit shifting so we never
     # dispatch to radix sort but we may still perform count sort
     if sizeof(U) > 8
@@ -807,30 +810,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
         u = uint_map!(v, lo, hi, o)
         sort_int_range!(u, Int(u_range+1), u_min, identity, lo, hi)
         return uint_unmap!(v, u, lo, hi, o)
-    end
-
-    if lenm1 >= 60
-        # Count the number of sequential elements that are out of order to inform possible
-        # optimizations that take advantage of partialally or completely presorted vectors.
-        # This has overhead on the order of 2-6% of the runtime of worst case sorting but
-        # can't occur earlier because it has overhead of 5-50% compared to some of the
-        # faster special cases above. And can't happen for shorter vectors because detection
-        # cost rises up to 10% for as lenm1 decreases down to 40.
-        out_of_order = sum(lt(o, v[i+1], v[i]) for i in lo:hi-1)
-        out_of_order == 0 && return v # v is already sorted
-        if out_of_order == lenm1 # v is reverse sorted
-            reverse!(view(v, lo:hi))
-            return v
-        end
-        # These presorted fallbacks could be a specially tunend shell sort.
-        # InsertionSort takes advantage of ordered data
-        if out_of_order < lenm1 ÷ 4 && lenm1 < 200 #TODO tune this
-            return sort!(v, lo, hi, InsertionSort, o)
-        end
-        # QuickSort takes advantage of ordered or reverse ordered data
-        if a.fallback === QuickSort && (out_of_order < lenm1÷4 || lenm1*3÷4 < out_of_order) #TODO tune this
-            return sort!(v, lo, hi, QuickSort, o)
-        end
     end
 
     # if u's range is small, then once we subtract out v_min, we'll get a vector like
