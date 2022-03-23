@@ -656,14 +656,14 @@ end
 
 ## scheduler and work queue
 
-struct InvasiveLinkedListSynchronized{T}
-    queue::InvasiveLinkedList{T}
+struct IntrusiveLinkedListSynchronized{T}
+    queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
-    InvasiveLinkedListSynchronized{T}() where {T} = new(InvasiveLinkedList{T}(), Threads.SpinLock())
+    IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
-isempty(W::InvasiveLinkedListSynchronized) = isempty(W.queue)
-length(W::InvasiveLinkedListSynchronized) = length(W.queue)
-function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
+length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
+function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         push!(W.queue, t)
@@ -672,7 +672,7 @@ function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         pushfirst!(W.queue, t)
@@ -681,7 +681,7 @@ function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pop!(W::InvasiveLinkedListSynchronized)
+function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return pop!(W.queue)
@@ -689,7 +689,7 @@ function pop!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function popfirst!(W::InvasiveLinkedListSynchronized)
+function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return popfirst!(W.queue)
@@ -697,7 +697,7 @@ function popfirst!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         list_deletefirst!(W.queue, t)
@@ -707,7 +707,7 @@ function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     return W
 end
 
-const StickyWorkqueue = InvasiveLinkedListSynchronized{Task}
+const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
 global const Workqueues = [StickyWorkqueue()]
 global const Workqueue = Workqueues[1] # default work queue is thread 1
 function __preinit_threads__()
