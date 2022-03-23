@@ -104,6 +104,29 @@ Random.seed!(1)
             @test LowerTriangular(C) == LowerTriangular(Cdense)
         end
     end
+
+    @testset "Matrix constructor for !isa(zero(T), T)" begin
+        # the following models JuMP.jl's VariableRef and AffExpr, resp.
+        struct TypeWithoutZero end
+        struct TypeWithZero end
+        Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+        Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+        Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+        LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
+        Base.transpose(::TypeWithoutZero) = TypeWithoutZero()
+        d  = fill(TypeWithoutZero(), 3)
+        du = fill(TypeWithoutZero(), 2)
+        dl = fill(TypeWithoutZero(), 2)
+        D  = Diagonal(d)
+        Bu = Bidiagonal(d, du, :U)
+        Bl = Bidiagonal(d, dl, :L)
+        Tri = Tridiagonal(dl, d, du)
+        Sym = SymTridiagonal(d, dl)
+        for M in (D, Bu, Bl, Tri, Sym)
+            @show typeof(M)
+            @test Matrix(M) == zeros(TypeWithZero, 3, 3)
+        end
+    end
 end
 
 @testset "Binary ops among special types" begin
