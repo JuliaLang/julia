@@ -241,8 +241,8 @@ end
 (*)(D::Diagonal, A::AbstractMatrix) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
-rmul!(A::AbstractMatrix, D::Diagonal) = mul!(A, A, D)
-lmul!(D::Diagonal, B::AbstractVecOrMat) = mul!(B, D, B)
+rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
+lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
 #TODO: It seems better to call (D' * adjA')' directly?
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
@@ -276,11 +276,7 @@ function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     lmul!(D, At)
 end
 
-# in __muldiag! below we unroll the loops manually, since broadcasting may be unable to
-# prove that they are vectorizable
 function __muldiag!(out, D::Diagonal, B, alpha, beta)
-    # TODO: check if this code can be replaced by a single line
-    # out .= (D.diag .* B) .*ₛ alpha .+ out .*ₛ beta
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -302,8 +298,6 @@ function __muldiag!(out, D::Diagonal, B, alpha, beta)
     return out
 end
 function __muldiag!(out, A, D::Diagonal, alpha, beta)
-    # TODO: check if this code can be replaced by a single line
-    # out .= (B .* permutedims(D.diag)) .*ₛ alpha .+ out .*ₛ beta
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -327,8 +321,6 @@ function __muldiag!(out, A, D::Diagonal, alpha, beta)
     return out
 end
 function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
-    # TODO: check if this code can be replaced by a single line
-    # out.diag .= (D1.diag .* D2.diag) .*ₛ alpha .+ out.diag .*ₛ beta
     d1 = D1.diag
     d2 = D2.diag
     if iszero(alpha)
