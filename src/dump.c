@@ -2009,6 +2009,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             jl_gc_wb(tn, tn->names);
             tn->wrapper = jl_deserialize_value(s, &tn->wrapper);
             jl_gc_wb(tn, tn->wrapper);
+            tn->Typeofwrapper = NULL;
             tn->mt = (jl_methtable_t*)jl_deserialize_value(s, (jl_value_t**)&tn->mt);
             jl_gc_wb(tn, tn->mt);
             ios_read(s->s, (char*)&tn->hash, sizeof(tn->hash));

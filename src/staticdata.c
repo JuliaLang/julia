@@ -568,6 +568,7 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         jl_serialize_value(s, tn->module);
         jl_serialize_value(s, tn->names);
         jl_serialize_value(s, tn->wrapper);
+        jl_serialize_value(s, tn->Typeofwrapper);
         jl_serialize_value_(s, (jl_value_t*)tn->cache, 0);
         jl_serialize_value_(s, (jl_value_t*)tn->linearcache, 0);
         jl_serialize_value(s, tn->mt);
