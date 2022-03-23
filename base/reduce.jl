@@ -360,6 +360,7 @@ reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 reduce_empty(::typeof(max), ::Type{T}) where {T} = _empty_reduce_error(maximum, T)
 reduce_empty(::typeof(max), ::Type{T}) where {T<:Unsigned} = zero(T)
+reduce_empty(::typeof(max), ::Type{Union{}}) = _empty_reduce_error(maximum, Union{})
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
