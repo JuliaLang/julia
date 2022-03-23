@@ -425,6 +425,44 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 
+# isdefined elimination
+# ---------------------
+
+let src = code_typed1((Any,)) do a
+        r = Ref{Any}()
+        r[] = a
+        if isassigned(r)
+            return r[]
+        end
+        return nothing
+    end
+    @test is_scalar_replaced(src)
+end
+
+let src = code_typed1((Bool, Any,)) do cnd, a
+        r = Ref{Any}()
+        if cnd
+            r[] = a # this `setfield!` shouldn't be eliminated
+        end
+        return isassigned(r)
+    end
+    @test count(isnew, src.code) == 1
+    @test count(iscall((src, setfield!)), src.code) == 1
+end
+
+callit(f, args...) = f(args...)
+function isdefined_elim()
+    local arr::Vector{Any}
+    callit() do
+        arr = Any[]
+    end
+    return arr
+end
+let src = code_typed1(isdefined_elim)
+    @test is_scalar_replaced(src)
+end
+@test isdefined_elim() == Any[]
+
 # comparison lifting
 # ==================
 
