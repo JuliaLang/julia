@@ -807,9 +807,14 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
-        jl_errorf("cannot assign an incompatible value to the global %s.",
-                  jl_symbol_name(b->name));
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+        if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {
+            JL_GC_PUSH1(&rhs);
+            if (!jl_isa(rhs, old_ty))
+                jl_errorf("cannot assign an incompatible value to the global %s.",
+                          jl_symbol_name(b->name));
+            JL_GC_POP();
+        }
     }
     if (b->constp) {
         jl_value_t *old = NULL;
