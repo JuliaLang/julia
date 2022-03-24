@@ -47,7 +47,7 @@ let A = zeros(2, 2)
                 0.9103565379264364  0.17732884646626457]
 end
 let A = zeros(2, 2)
-    @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
+    @test_throws MethodError rand!(MersenneTwister(0), A, 5)
     @test rand(MersenneTwister(0), Int64, 1) == [-3433174948434291912]
 end
 let A = zeros(Int64, 2, 2)
@@ -434,7 +434,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)
         @test_throws MethodError r(String)
-        @test_throws ArgumentError r(AbstractFloat)
+        @test_throws MethodError r(AbstractFloat)
 
         @test_throws MethodError r(Int64, (2,3))
         @test_throws MethodError r(String, 1)
@@ -682,7 +682,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
 end
 
 # this shouldn't crash (#22403)
-@test_throws ArgumentError rand!(Union{UInt,Int}[1, 2, 3])
+@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
 @testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro)
     m = RNG()
@@ -754,8 +754,8 @@ end
 
 struct RandomStruct23964 end
 @testset "error message when rand not defined for a type" begin
-    @test_throws ArgumentError rand(nothing)
-    @test_throws ArgumentError rand(RandomStruct23964())
+    @test_throws MethodError rand(nothing)
+    @test_throws MethodError rand(RandomStruct23964())
 end
 
 @testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice(), Xoshiro()),
