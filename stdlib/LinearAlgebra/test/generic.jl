@@ -295,6 +295,14 @@ end
     @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
 
+@testset "LinearAlgebra.axp(b)y! for non strides input" begin
+    a = rand(5, 5)
+    @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test_broken LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
 @testset "norm and normalize!" begin
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)
