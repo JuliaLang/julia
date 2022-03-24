@@ -1,5 +1,4 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
@@ -9,6 +8,8 @@
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
+#include "llvm/ExecutionEngine/Orc/LazyReexports.h"
+#include "llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h"
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -189,6 +190,7 @@ public:
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
+
 private:
     struct OptimizerT {
         OptimizerT(legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM) {}
@@ -262,6 +264,7 @@ private:
 #ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
+    
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer0;
     CompileLayerT CompileLayer1;
@@ -271,6 +274,7 @@ private:
     OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+    orc::CompileOnDemandLayer CoDLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 

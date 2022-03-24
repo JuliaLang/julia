@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 
+#include "llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h"
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -942,7 +943,9 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
         {ES, CompileLayer2, OptimizerT(PM2, 2)},
         {ES, CompileLayer3, OptimizerT(PM3, 3)},
     },
-    OptSelLayer(OptimizeLayers)
+    OptSelLayer(OptimizeLayers),
+    CoDLayer(ES, OptSelLayer, *createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0).get(),createLocalIndirectStubsManagerBuilder(TM->getTargetTriple()))
+
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -1045,7 +1048,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
     }
 #endif
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
+    cantFail(CoDLayer.add(JD, orc::ThreadSafeModule(std::move(M), TSCtx)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
