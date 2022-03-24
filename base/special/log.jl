@@ -396,19 +396,6 @@ function log1p(x::Float32)
         throw_complex_domainerror(:log1p, x)
     end
 end
-@inline function log_ext_kernel(x_hi::Float64, x_lo::Float64)
-    c1hi = 0.666666666666666629659233
-    hi_order =  evalpoly(x_hi, (0.400000000000000077715612, 0.285714285714249172087875,
-                                0.222222222230083560345903, 0.181818180850050775676507,
-                                0.153846227114512262845736, 0.13332981086846273921509,
-                                0.117754809412463995466069, 0.103239680901072952701192,
-                                0.116255524079935043668677))
-    res_hi, res_lo = two_mul(hi_order, x_hi)
-    res_lo = fma(x_lo, hi_order, res_lo)
-    ans_hi = c1hi + res_hi
-    ans_lo = ((c1hi - ans_hi) + res_hi) + (res_lo + 3.80554962542412056336616e-17)
-    return ans_hi, ans_lo
-end
 
 const t_log_ext_Float64 = (
 (0x1.6a00000000000p+0, -0x1.62c82f2b9c800p-2, 0x1.ab42428375680p-48),
@@ -541,20 +528,19 @@ const t_log_ext_Float64 = (
 (0x1.6c00000000000p-1, 0x1.5d5bddf596000p-2, -0x1.a0b2a08a465dcp-47))
 
 # Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
+# Since `log` only makes sense for positive exponents, we speed up the implimentation by stealing the sign bit
+# of the input for an extra bit of the exponent which is used to normalize subnormal inputs.
 # Does not normalize results.
-# Must be caused with positive finite arguments
 # Copyright (c) 2018-2020, Arm Limited.
 # SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
-function _log_ext(x)
-    ix = reinterpret(UInt64, x)
+function _log_ext(xu)
     # x = 2^k z; where z is in range [OFF,2*OFF) and exact.
     # The range is split into N subintervals.
     # The ith subinterval contains z and c is near its center.
-    tmp = reinterpret(Int64, ix - 0x3fe6955500000000)
+    tmp = reinterpret(Int64, xu - 0x3fe6955500000000)
     i = (tmp >> 45) & 127
-    z = reinterpret(Float64, ix - (tmp & 0xfff0000000000000))
+    z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
-
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
     invc, logc, logctail = t_log_ext_Float64[i+1]
     # Note: 1/c is j/N or j/N/2 where j is an integer in [N,2N) and
@@ -571,10 +557,7 @@ function _log_ext(x)
     # k*Ln2 + log(c) + r + .5*r*r.
     hi = t2 + ar2
     lo4 = t2 - hi + ar2
-    #p = r*ar2*evalpoly(r, (0x1.555555555556p-2, -0x1.0000000000006p-2, 0x1.999999959554ep-3, -0x1.555555529a47ap-3, 0x1.2495b9b4845e9p-3,-0x1.0002b8b263fc3p-3))
-    p = r*ar2 * muladd(ar2, muladd(ar2, muladd(r, 0x1.0002b8b263fc3p+0, -0x1.2495b9b4845e9p+0), muladd(r, -0x1.555555529a47ap-1, 0x1.999999959554ep-1)), (muladd(r, 0x1.0000000000006p-1, -0x1.555555555556p-1)))
-    lo = lo1 + lo2 + lo3 + lo4 + p
+    p = evalpoly(r, (-0x1.555555555556p-1, 0x1.0000000000006p-1, -0x1.999999959554ep-2, 0x1.555555529a47ap-2, -0x1.2495b9b4845e9p-2, 0x1.0002b8b263fc3p-2))
+    lo = lo1 + lo2 + lo3 + muladd(r*ar2, p, lo4)
     return hi, lo
-    #y = hi + lo
-    #return y, hi - y + lo
 end
