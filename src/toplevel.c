@@ -298,7 +298,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
 }
 
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
-    // create uninitialized mutable binding for "global x" decl
+    // create uninitialized mutable binding for "global x" decl sometimes or probably
     size_t i, l = jl_array_len(ex->args);
     for (i = 0; i < l; i++) {
         jl_value_t *arg = jl_exprarg(ex, i);
@@ -313,10 +313,13 @@ void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
             gm = m;
             gs = (jl_sym_t*)arg;
         }
-        jl_binding_t *b = jl_get_binding_wr(gm, gs, 0);
-        if (set_type && b) {
-            jl_value_t *old_ty = NULL;
-            jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+        if (!jl_binding_resolved_p(gm, gs)) {
+            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+            if (set_type) {
+                jl_value_t *old_ty = NULL;
+                // maybe set the type too, perhaps
+                jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            }
         }
     }
 }
@@ -589,7 +592,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
         if ((!b->constp && b->owner != m) || (b->value && b->value != (jl_value_t*)import)) {
-            jl_errorf("importing %s into %s conflicts with an existing identifier",
+            jl_errorf("importing %s into %s conflicts with an existing global",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
     }

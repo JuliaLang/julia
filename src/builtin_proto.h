@@ -56,6 +56,7 @@ DECLARE_BUILTIN(typeof);
 DECLARE_BUILTIN(_typevar);
 DECLARE_BUILTIN(donotdelete);
 DECLARE_BUILTIN(getglobal);
+DECLARE_BUILTIN(setglobal);
 
 JL_CALLABLE(jl_f_invoke_kwsorter);
 #ifdef DEFINE_BUILTIN_GLOBALS
