@@ -848,6 +848,15 @@ static const auto jl_write_barrier_func = new JuliaFunction{
             AttributeSet(),
             {Attributes(C, {Attribute::ReadOnly})}); },
 };
+static const auto jl_write_barrier_binding_func = new JuliaFunction{
+    "julia.write_barrier_binding",
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {JuliaType::get_prjlvalue_ty(C)}, true); },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::NoUnwind, Attribute::NoRecurse, Attribute::InaccessibleMemOnly}),
+            AttributeSet(),
+            {Attributes(C, {Attribute::ReadOnly})}); },
+};
 static const auto jlisa_func = new JuliaFunction{
     XSTR(jl_isa),
     [](LLVMContext &C) {
@@ -4400,6 +4409,24 @@ static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t 
     }
 }
 
+static void emit_binding_store(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, jl_value_t *r, ssize_t ssaval, AtomicOrdering Order)
+{
+    assert(bnd);
+    jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
+    Value *rval = boxed(ctx, rval_info);
+    if (!bnd->constp && bnd->ty && jl_subtype(rval_info.typ, bnd->ty)) {
+        StoreInst *v = ctx.builder.CreateAlignedStore(rval, bp, Align(sizeof(void*)));
+        v->setOrdering(Order);
+        tbaa_decorate(ctx.tbaa().tbaa_binding, v);
+        emit_write_barrier_binding(ctx, literal_pointer_val(ctx, bnd), rval);
+    }
+    else {
+        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
+                               { literal_pointer_val(ctx, bnd),
+                                 mark_callee_rooted(ctx, rval) });
+    }
+}
+
 static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssize_t ssaval)
 {
     assert(!jl_is_ssavalue(l));
@@ -4416,11 +4443,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     if (bp == NULL && s != NULL)
         bp = global_binding_pointer(ctx, ctx.module, s, &bnd, true);
     if (bp != NULL) { // it's a global
-        assert(bnd);
-        Value *rval = mark_callee_rooted(ctx, boxed(ctx, emit_expr(ctx, r, ssaval)));
-        ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
-                           { literal_pointer_val(ctx, bnd),
-                             rval });
+        emit_binding_store(ctx, bnd, bp, r, ssaval, AtomicOrdering::Unordered);
         // Global variable. Does not need debug info because the debugger knows about
         // its memory location.
         return;
@@ -6323,7 +6346,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     // step 1. unpack AST and allocate codegen context for this function
     jl_llvm_functions_t declarations;
     jl_codectx_t ctx(ctxt, params);
-    JL_GC_PUSH2(&ctx.code, &ctx.roots);
+    jl_datatype_t *vatyp = NULL;
+    JL_GC_PUSH3(&ctx.code, &ctx.roots, &vatyp);
     ctx.code = src->code;
 
     std::map<int, BasicBlock*> labels;
@@ -6428,7 +6452,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     if (va && ctx.vaSlot != -1) {
         jl_varinfo_t &varinfo = ctx.slots[ctx.vaSlot];
         varinfo.isArgument = true;
-        jl_datatype_t *vatyp = specsig ? compute_va_type(lam, nreq) : (jl_tuple_type);
+        vatyp = specsig ? compute_va_type(lam, nreq) : (jl_tuple_type);
         varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, vatyp);
     }
 
@@ -8095,6 +8119,7 @@ static void init_jit_functions(void)
     add_named_global(jl_loopinfo_marker_func, (void*)NULL);
     add_named_global(jl_typeof_func, (void*)NULL);
     add_named_global(jl_write_barrier_func, (void*)NULL);
+    add_named_global(jl_write_barrier_binding_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
     add_named_global(jlgetnthfieldchecked_func, &jl_get_nth_field_checked);

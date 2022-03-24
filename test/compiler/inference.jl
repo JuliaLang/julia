@@ -2032,6 +2032,13 @@ end
         end
         @test ts == Any[Any]
     end
+
+    # a tricky case: if constant inference derives `Const` while non-constant inference has
+    # derived `InterConditional`, we should not discard that constant information
+    iszero_simple(x) = x === 0
+    @test Base.return_types() do
+        iszero_simple(0) ? nothing : missing
+    end |> only === Nothing
 end
 
 @testset "branching on conditional object" begin
@@ -4066,3 +4073,10 @@ let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
     @test Core.Compiler.popfirst!(bsbmp) == 1
     @test Core.Compiler.isempty(bsbmp)
 end
+
+# Make sure return_type_tfunc doesn't accidentally cause bad inference if used
+# at top level.
+@test let
+    Base.Experimental.@force_compile
+    Core.Compiler.return_type(+, NTuple{2, Rational})
+end == Rational

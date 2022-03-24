@@ -319,10 +319,15 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     inlined_at = Int(compact.result[idx][:line])
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
+    coverage_by_path = JLOptions().code_coverage == 3
     push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
+        if !coverage && coverage_by_path && is_file_tracked(entry.file)
+            # include topline coverage entry if in path-specific coverage mode, and any file falls under path
+            coverage = true
+        end
         newentry = LineInfoNode(entry.module, entry.method, entry.file, entry.line,
             (entry.inlined_at > 0 ? entry.inlined_at + linetable_offset + (oldline == 1) : inlined_at))
         if oldline == 1
@@ -371,7 +376,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, compact)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
-                isa(val, SSAValue) && (compact.used_ssas[val.id] += 1)
                 return_value = SSAValue(idx′)
                 inline_compact[idx′] = val
                 inline_compact.result[idx′][:type] =
@@ -428,13 +432,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         just_fixup!(inline_compact)
         compact.result_idx = inline_compact.result_idx
         compact.active_result_bb = inline_compact.active_result_bb
-        for i = 1:length(pn.values)
-            isassigned(pn.values, i) || continue
-            v = pn.values[i]
-            if isa(v, SSAValue)
-                compact.used_ssas[v.id] += 1
-            end
-        end
         if length(pn.edges) == 1
             return_value = pn.values[1]
         else

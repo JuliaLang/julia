@@ -1452,6 +1452,14 @@ invalid assignment location "function (s, o...)
 end\""""
 end
 
+let ex = Meta.lower(@__MODULE__, :(function g end = 1))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function g
+end\""""
+end
+
+
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")

@@ -10,7 +10,7 @@ end
     du::SSADefUse
 
 This struct keeps track of all uses of some mutable struct allocated in the current function:
-- `du.uses::Vector{Int}` are all instances of `getfield` on the struct
+- `du.uses::Vector{Int}` are all instances of `getfield` / `isdefined` on the struct
 - `du.defs::Vector{Int}` are all instances of `setfield!` on the struct
 The terminology refers to the uses/defs of the "slot bundle" that the mutable struct represents.
 
@@ -27,7 +27,10 @@ struct SSADefUse
 end
 SSADefUse() = SSADefUse(Int[], Int[], Int[])
 
-compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
+function compute_live_ins(cfg::CFG, du::SSADefUse)
+    # filter out `isdefined` usages
+    return compute_live_ins(cfg, du.defs, filter(>(0), du.uses))
+end
 
 # assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
 try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
@@ -440,10 +443,15 @@ function lift_arg!(
     lifted = stmt.args[argidx]
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
+        if already_inserted(compact, lifted)
+            lifted = compact.ssa_rename[lifted.id]
+        end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
         lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
+        compact[leaf] = nothing
         stmt.args[argidx] = lifted
+        compact[leaf] = stmt
         if isa(leaf, SSAValue) && leaf.id < compact.result_idx
             push!(compact.late_fixup, leaf.id)
         end
@@ -556,7 +564,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val)::LiftedValue
+        lifted_leaves::LiftedLeaves, val, ()->nothing, idx)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -576,8 +584,42 @@ end
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val), get_domtree, idx::Int)
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
+
+    # Check if all the lifted leaves are the same
+    local the_leaf
+    all_same = true
+    for (_, val) in lifted_leaves
+        if !@isdefined(the_leaf)
+            the_leaf = val
+            continue
+        end
+        if val !== the_leaf
+            all_same = false
+        end
+    end
+
+    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.x : nothing
+    if !isa(the_leaf_val, SSAValue)
+        all_same = false
+    end
+
+    if all_same
+        dominates_all = true
+        domtree = get_domtree()
+        if domtree !== nothing
+            for item in visited_phinodes
+                if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                    dominates_all = false
+                    break
+                end
+            end
+            if dominates_all
+                return the_leaf
+            end
+        end
+    end
 
     # Insert PhiNodes
     lifted_phis = LiftedPhi[]
@@ -632,10 +674,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 # Probably ignored by path condition, skip this
             end
         end
-    end
-
-    for lf in lifted_phis
-        count_added_node!(compact, lf.node)
+        count_added_node!(compact, new_node)
     end
 
     # Fixup the stmt itself
@@ -678,10 +717,18 @@ function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
+    # initialization of domtree is delayed to avoid the expensive computation in many cases
+    local domtree = nothing
+    function get_domtree()
+        if domtree === nothing
+            @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
+        end
+        return domtree
+    end
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
-        is_setfield = false
+        is_setfield = is_isdefined = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
             4 <= length(stmt.args) <= 5 || continue
@@ -694,6 +741,13 @@ function sroa_pass!(ir::IRCode)
             if length(stmt.args) == 5
                 field_ordering = argextype(stmt.args[5], compact)
             elseif length(stmt.args) == 4
+                field_ordering = argextype(stmt.args[4], compact)
+                widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+            end
+        elseif is_known_call(stmt, isdefined, compact)
+            3 <= length(stmt.args) <= 4 || continue
+            is_isdefined = true
+            if length(stmt.args) == 4
                 field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
@@ -740,6 +794,7 @@ function sroa_pass!(ir::IRCode)
                 continue
             end
             if !isempty(new_preserves)
+                compact[idx] = nothing
                 compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
@@ -750,13 +805,11 @@ function sroa_pass!(ir::IRCode)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache)
-            elseif is_known_call(stmt, isdefined, compact)
-                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
             end
             continue
         end
 
-        # analyze this `getfield` / `setfield!` call
+        # analyze this `getfield` / `isdefined` / `setfield!` call
 
         field = try_compute_field_stmt(compact, stmt)
         field === nothing && continue
@@ -767,10 +820,15 @@ function sroa_pass!(ir::IRCode)
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
         end
+        if isa(struct_typ, Union) && is_isdefined
+            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            continue
+        end
         isa(struct_typ, DataType) || continue
 
         struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
-        if !(field_ordering === :unspecified || (field_ordering isa Const && field_ordering.val === :not_atomic))
+        if !((field_ordering === :unspecified) ||
+             (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
@@ -791,6 +849,8 @@ function sroa_pass!(ir::IRCode)
                 mid, defuse = get!(defuses, def.id, (SPCSet(), SSADefUse()))
                 if is_setfield
                     push!(defuse.defs, idx)
+                elseif is_isdefined
+                    push!(defuse.uses, -idx)
                 else
                     push!(defuse.uses, idx)
                 end
@@ -799,6 +859,8 @@ function sroa_pass!(ir::IRCode)
             continue
         elseif is_setfield
             continue # invalid `setfield!` call, but just ignore here
+        elseif is_isdefined
+            continue # TODO?
         end
 
         # perform SROA on immutable structs here on
@@ -819,7 +881,7 @@ function sroa_pass!(ir::IRCode)
         end
 
         val = perform_lifting!(compact,
-            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val)
+            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, get_domtree, idx)
 
         # Insert the undef check if necessary
         if any_undef
@@ -846,7 +908,7 @@ function sroa_pass!(ir::IRCode)
         used_ssas = copy(compact.used_ssas)
         simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas)
+        sroa_mutables!(ir, defuses, used_ssas, get_domtree)
         return ir
     else
         simple_dce!(compact)
@@ -854,9 +916,7 @@ function sroa_pass!(ir::IRCode)
     end
 end
 
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
-    # initialization of domtree is delayed to avoid the expensive computation in many cases
-    local domtree = nothing
+function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, get_domtree)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -884,9 +944,9 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
-        all_forwarded = true
+        all_eliminated = all_forwarded = true
         for use in defuse.uses
-            stmt = ir[SSAValue(use)][:inst] # == `getfield` call
+            stmt = ir[SSAValue(abs(use))][:inst] # == `getfield`/`isdefined` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
@@ -920,15 +980,21 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
-                domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get_domtree())
             end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for use in du.uses
-                    domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                    has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
+                    if use > 0 # == `getfield` use
+                        has_safe_def(ir, get_domtree(), allblocks, du, newidx, use) || @goto skip
+                    else # == `isdefined` use
+                        if has_safe_def(ir, get_domtree(), allblocks, du, newidx, -use)
+                            ir[SSAValue(-use)][:inst] = true
+                        else
+                            all_eliminated = false
+                        end
+                    end
                 end
             end
         end
@@ -936,7 +1002,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
-        domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
+        domtree = get_domtree()
         preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
             IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
         for fidx in 1:ndefuse
@@ -950,8 +1016,12 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                         NewInstruction(PhiNode(), ftyp))
                 end
                 # Now go through all uses and rewrite them
-                for stmt in du.uses
-                    ir[SSAValue(stmt)][:inst] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
+                for use in du.uses
+                    if use > 0 # == `getfield` use
+                        ir[SSAValue(use)][:inst] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use)
+                    else # == `isdefined` use
+                        continue # already rewritten if possible
+                    end
                 end
                 if !isbitstype(ftyp)
                     if preserve_uses !== nothing
@@ -969,6 +1039,10 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     end
                 end
             end
+            all_eliminated || continue
+            # all "usages" (i.e. `getfield` and `isdefined` calls) are eliminated,
+            # now eliminate "definitions" (`setfield!`) calls
+            # (NOTE the allocation itself will be eliminated by DCE pass later)
             for stmt in du.defs
                 stmt == newidx && continue
                 ir[SSAValue(stmt)][:inst] = nothing
@@ -1031,12 +1105,12 @@ function canonicalize_typeassert!(compact::IncrementalCompact, idx::Int, stmt::E
     compact.ssa_rename[compact.idx-1] = pi
 end
 
-function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
+function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
     end
 end
 
@@ -1189,10 +1263,10 @@ function adce_pass!(ir::IRCode)
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx)
+        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1211,7 +1285,7 @@ function adce_pass!(ir::IRCode)
             end
         end
         while !isempty(extra_worklist)
-            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
             end
         end

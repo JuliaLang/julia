@@ -517,8 +517,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
         assert(res == Intrinsic::MatchIntrinsicTypes_Match);
         (void)res;
-        bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
-        assert(!matchvararg);
+        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(matchvararg);
         (void)matchvararg;
     }
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
@@ -640,7 +640,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_func == callee ||
+                pass.write_barrier_binding_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -744,7 +745,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_func == callee ||
+                pass.write_barrier_binding_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -1036,7 +1038,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_func == callee ||
+                pass.write_barrier_binding_func == callee) {
                 call->eraseFromParent();
                 return;
             }

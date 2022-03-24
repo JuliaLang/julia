@@ -119,7 +119,6 @@
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
     XX(jl_eh_restore_state) \
-    XX(jl_enqueue_task) \
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
@@ -214,7 +213,6 @@
     XX(jl_get_excstack) \
     XX(jl_get_fenv_consts) \
     XX(jl_get_field) \
-    XX(jl_get_field_offset) \
     XX(jl_get_global) \
     XX(jl_get_image_file) \
     XX(jl_get_JIT) \

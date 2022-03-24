@@ -4334,6 +4334,30 @@ let gc_enabled13995 = GC.enable(false)
     GC.enable(gc_enabled13995)
 end
 
+# Ensure an independent GC frame
+@noinline outlined(f) = f()
+
+@testset "finalizers must not change the sticky flag" begin
+    GC.enable(false)
+    try
+        outlined() do
+            local obj = Ref(0)
+            finalizer(obj) do _
+                @async nothing
+            end
+            Base.donotdelete(obj)
+        end
+        task = Threads.@spawn begin
+            GC.enable(true)
+            GC.gc()
+        end
+        wait(task)
+        @test !task.sticky
+    finally
+        GC.enable(true)
+    end
+end
+
 # issue #15283
 j15283 = 0
 let
@@ -7335,6 +7359,29 @@ struct A43411{S, T}
     x::NamedTuple{S, T}
 end
 @test isbitstype(A43411{(:a,), Tuple{Int}})
+
+# issue #44614
+struct T44614_1{T}
+    m::T
+end
+struct T44614_2{L}
+    tuple::NTuple{3, Int64}
+    T44614_2{L}(t::NTuple{3, Int64}) where {L} = new{sum(t)}(t)
+end
+struct T44614_3{L, N}
+    a::Tuple{T44614_2{L}}
+    param::NTuple{N, T44614_1}
+    T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
+end
+@test sizeof((T44614_2{L} where L).body) == 24
+let T = T44614_3{L,2} where L
+    # these values are computable, but we currently don't know how to compute them properly
+    ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
+    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T)
+    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test fieldoffset(T{1}, 2) == 24
+end
 
 # Issue #34206/34207
 function mre34206(a, n)

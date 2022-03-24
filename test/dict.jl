@@ -1199,6 +1199,7 @@ end
         map!(v->v-1, values(testdict))
         @test testdict[:a] == 0
         @test testdict[:b] == 1
+        @test sizehint!(testdict, 1) === testdict
     end
     @testset "Dict" begin
         testdict = Dict(:a=>1, :b=>2)
