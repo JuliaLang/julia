@@ -594,19 +594,16 @@ precompile_test_harness("code caching") do dir
               mutable struct OldDict{K,V} <: AbstractDict{K,V}
                   keys::Vector{K}
                   vals::Vector{V}
-
                   function OldDict{K,V}() where V where K
                       n = 16
                       new(Vector{K}(undef, n), Vector{V}(undef, n))
                   end
               end
-
               function store(h::OldDict{K,Any}, v, key::K) where K
                   @nospecialize v
                   h.keys[1] = key
                   h.vals[1] = v
               end
-
               struct X end
               struct X2 end
               @noinline function f(d)
