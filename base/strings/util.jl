@@ -62,14 +62,19 @@ end
 
 Check if an `IO` object starts with a prefix.
 """
-function Base.startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
-    pos = position(io)
-    s = _getminprefix(io, prefix)
-    seek(io, pos)
-    return startswith(s, prefix)
+function Base.startswith(io::IO, prefix::Base.Chars)
+    mark(io)
+    c = read(io, Char)
+    reset(io)
+    return c in prefix
 end
-_getminprefix(io::IO, prefix::Union{AbstractString,AbstractChar}) = String(read(io, length(prefix)))
-_getminprefix(io::IO, chars::Union{Tuple{Vararg{<:AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}) = _getminprefix(io, first(chars))
+function Base.startswith(io::IO, prefix::Union{String,SubString{String}})
+    mark(io)
+    s = read(io, ncodeunits(prefix))
+    reset(io)
+    return s == codeunits(prefix)
+end
+Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
