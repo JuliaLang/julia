@@ -312,7 +312,7 @@ struct FakeFloat64 <: AbstractFloat
     x::Float64
 end
 Base.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{FakeFloat64}}) = FakeFloat64(rand(rng))
-for f in (:sqrt, :log, :one, :zero, :abs, :+, :-)
+for f in (:sqrt, :log, :log1p, :one, :zero, :abs, :+, :-)
     @eval Base.$f(x::FakeFloat64) = FakeFloat64($f(x.x))
 end
 for f in (:+, :-, :*, :/)
