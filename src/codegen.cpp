@@ -6346,7 +6346,8 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     // step 1. unpack AST and allocate codegen context for this function
     jl_llvm_functions_t declarations;
     jl_codectx_t ctx(ctxt, params);
-    JL_GC_PUSH2(&ctx.code, &ctx.roots);
+    jl_datatype_t *vatyp = NULL;
+    JL_GC_PUSH3(&ctx.code, &ctx.roots, &vatyp);
     ctx.code = src->code;
 
     std::map<int, BasicBlock*> labels;
@@ -6451,7 +6452,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     if (va && ctx.vaSlot != -1) {
         jl_varinfo_t &varinfo = ctx.slots[ctx.vaSlot];
         varinfo.isArgument = true;
-        jl_datatype_t *vatyp = specsig ? compute_va_type(lam, nreq) : (jl_tuple_type);
+        vatyp = specsig ? compute_va_type(lam, nreq) : (jl_tuple_type);
         varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, vatyp);
     }
 
