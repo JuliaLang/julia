@@ -148,7 +148,7 @@ end
 
 ### fallback randexp for float types defining rand:
 randexp(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat} =
-    -log(1-rand(rng, T))
+    -log1p(-rand(rng, T))
 
 ## arrays & other scalar methods
 
