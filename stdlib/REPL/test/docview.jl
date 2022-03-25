@@ -57,5 +57,3 @@ end
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end
-
-

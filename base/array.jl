@@ -402,16 +402,19 @@ julia> getindex(Int8, 1, 2, 3)
 """
 function getindex(::Type{T}, vals...) where T
     a = Vector{T}(undef, length(vals))
-    @inbounds for i = 1:length(vals)
-        a[i] = vals[i]
+    if vals isa NTuple
+        @inbounds for i in 1:length(vals)
+            a[i] = vals[i]
+        end
+    else
+        # use afoldl to avoid type instability inside loop
+        afoldl(1, vals...) do i, v
+            @inbounds a[i] = v
+            return i + 1
+        end
     end
     return a
 end
-
-getindex(::Type{T}) where {T} = (@inline; Vector{T}())
-getindex(::Type{T}, x) where {T} = (@inline; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
-getindex(::Type{T}, x, y) where {T} = (@inline; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(::Type{T}, x, y, z) where {T} = (@inline; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, @nospecialize vals...)
     a = Vector{Any}(undef, length(vals))
@@ -449,7 +452,7 @@ the `value` that was passed; this means that if the `value` is itself modified,
 all elements of the `fill`ed array will reflect that modification because they're
 _still_ that very `value`. This is of no concern with `fill(1.0, (5,5))` as the
 `value` `1.0` is immutable and cannot itself be modified, but can be unexpected
-with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
+with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
 places _the very same_ empty array in all three locations of the returned vector:
 
 ```jldoctest
@@ -1241,7 +1244,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n)
+    sizehint!(s, n) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
 

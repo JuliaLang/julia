@@ -109,6 +109,18 @@ static uint16_t read_uint16(ios_t *s) JL_NOTSAFEPOINT
     return x;
 }
 
+static void write_uint32(ios_t *s, uint32_t i) JL_NOTSAFEPOINT
+{
+    ios_write(s, (char*)&i, 4);
+}
+
+static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
+{
+    uint32_t x = 0;
+    ios_read(s, (char*)&x, 4);
+    return x;
+}
+
 void *jl_lookup_ser_tag(jl_value_t *v);
 void *jl_lookup_common_symbol(jl_value_t *v);
 jl_value_t *jl_deser_tag(uint8_t tag);

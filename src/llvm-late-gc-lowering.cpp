@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -33,6 +34,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
+#include <map>
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -301,16 +303,11 @@ struct State {
     State(Function &F) : F(&F), DT(nullptr), MaxPtrNumber(-1), MaxSafepointNumber(-1) {}
 };
 
-namespace llvm {
-    void initializeLateLowerGCFramePass(PassRegistry &Registry);
-}
 
-struct LateLowerGCFrame: public FunctionPass, private JuliaPassContext {
+
+struct LateLowerGCFrameLegacy: public FunctionPass {
     static char ID;
-    LateLowerGCFrame() : FunctionPass(ID)
-    {
-        llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
-    }
+    LateLowerGCFrameLegacy() : FunctionPass(ID) {}
 
 protected:
     void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -319,6 +316,17 @@ protected:
         AU.addPreserved<DominatorTreeWrapperPass>();
         AU.setPreservesCFG();
     }
+
+private:
+    bool runOnFunction(Function &F) override;
+};
+
+struct LateLowerGCFrame:  private JuliaPassContext {
+    function_ref<DominatorTree &()> GetDT;
+    LateLowerGCFrame(function_ref<DominatorTree &()> GetDT) : GetDT(GetDT) {}
+
+public:
+    bool runOnFunction(Function &F, bool *CFGModified = nullptr);
 
 private:
     CallInst *pgcstack;
@@ -350,9 +358,7 @@ private:
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertBefore);
     void PlaceGCFrameStores(State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
-    bool doInitialization(Module &M) override;
-    bool runOnFunction(Function &F) override;
-    bool CleanupIR(Function &F, State *S=nullptr);
+    bool CleanupIR(Function &F, State *S, bool *CFGModified);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
@@ -1385,7 +1391,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
             j++;
             if (auto inst = dyn_cast<Instruction>(S.ReversePtrNumbering[refine])) {
                 if (!S.DT)
-                    S.DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+                    S.DT = &GetDT();
                 if (S.DT->dominates(inst, Phi))
                     continue;
                 // Decrement `j` so we'll overwrite/ignore it.
@@ -1467,8 +1473,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 }
                 if (CI->hasStructRetAttr()) {
-                    // TODO: get ElT from SRet attribute
-                    Type *ElT = (CI->arg_begin()[0])->getType()->getPointerElementType();
+                    Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
+                    assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
                     auto tracked = CountTrackedPointers(ElT);
                     if (tracked.count) {
                         AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
@@ -1550,7 +1556,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee == write_barrier_func || callee->getName() == "memcmp") {
+                        callee == write_barrier_func || callee == write_barrier_binding_func ||
+                        callee->getName() == "memcmp") {
                         continue;
                     }
                     if (callee->hasFnAttribute(Attribute::ReadNone) ||
@@ -1782,12 +1789,12 @@ std::vector<Value*> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBu
     return Ptrs;
 }
 
-unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
+unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, Type *DTy, IRBuilder<> &irbuilder) {
     auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
     for (unsigned i = 0; i < Ptrs.size(); ++i) {
-        Value *Elem = Ptrs[i];
-        Type *ET = Dst->getType()->getPointerElementType(); // Dst has type `[n x {}*]*`
-        Value *Slot = irbuilder.CreateConstInBoundsGEP2_32(ET, Dst, 0, i);
+        Value *Elem = Ptrs[i];// Dst has type `[n x {}*]*`
+        Value *Slot = irbuilder.CreateConstInBoundsGEP2_32(DTy, Dst, 0, i);
+        assert(cast<PointerType>(Dst->getType())->isOpaqueOrPointeeTypeMatches(DTy));
         StoreInst *shadowStore = irbuilder.CreateAlignedStore(Elem, Slot, Align(sizeof(void*)));
         shadowStore->setOrdering(AtomicOrdering::NotAtomic);
         // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
@@ -1872,29 +1879,27 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
      * perform this iteration.
      */
     ReversePostOrderTraversal<Function *> RPOT(S.F);
+    BitVector NewLive;
     while (!Converged) {
         bool AnyChanged = false;
         for (BasicBlock *BB : RPOT) {
             // This could all be done more efficiently, by only updating what
             // changed - Let's get it working first though.
             BBState &BBS = S.BBStates[BB];
-            BitVector NewLiveOut = BBS.PhiOuts;
+            NewLive = BBS.PhiOuts;
             for (BasicBlock *Succ : successors(BB)) {
-                NewLiveOut |= S.BBStates[Succ].LiveIn;
+                NewLive |= S.BBStates[Succ].LiveIn;
             }
-            if (NewLiveOut != BBS.LiveOut) {
+            if (NewLive != BBS.LiveOut) {
                 AnyChanged = true;
-                BBS.LiveOut = NewLiveOut;
+		BBS.LiveOut = NewLive;
                 MaybeResize(BBS, BBS.LiveOut.size() - 1);
             }
-            BitVector NewLiveIn = BBS.LiveOut;
-            BitVector FlippedDefs = BBS.Defs;
-            FlippedDefs.flip();
-            NewLiveIn &= FlippedDefs;
-            NewLiveIn |= BBS.UpExposedUses;
-            if (NewLiveIn != BBS.LiveIn) {
+            NewLive.reset(BBS.Defs);
+            NewLive |= BBS.UpExposedUses;
+            if (NewLive != BBS.LiveIn) {
                 AnyChanged = true;
-                BBS.LiveIn = NewLiveIn;
+		std::swap(BBS.LiveIn, NewLive);
             }
         }
         Converged = !AnyChanged;
@@ -1997,7 +2002,7 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
         // add in any extra live values.
         if (!S.GCPreserves.empty()) {
             if (!S.DT) {
-                S.DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+                S.DT = &GetDT();
             }
             for (auto it2 : S.GCPreserves) {
                 if (!S.DT->dominates(it2.first, Safepoint))
@@ -2162,6 +2167,7 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
 // Size of T is assumed to be `sizeof(void*)`
 Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 {
+    auto T_size = getSizeTy(T->getContext());
     assert(T == T_size || isa<PointerType>(T));
     auto TV = cast<PointerType>(V->getType());
     auto cast = builder.CreateBitCast(V, T->getPointerTo(TV->getAddressSpace()));
@@ -2170,6 +2176,7 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
 
 Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
 {
+    auto T_size = getSizeTy(builder.getContext());
     auto addr = EmitTagPtr(builder, T_size, V);
     LoadInst *load = builder.CreateAlignedLoad(T_size, addr, Align(sizeof(size_t)));
     load->setOrdering(AtomicOrdering::Unordered);
@@ -2228,7 +2235,9 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 }
 
 
-bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
+bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
+    auto T_int32 = Type::getInt32Ty(F.getContext());
+    auto T_size = getSizeTy(F.getContext());
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
     // yet. LLVM would merge them anyway later, so might as well save it a bit
@@ -2370,7 +2379,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
+            } else if ((write_barrier_func && callee == write_barrier_func) ||
+                       (write_barrier_binding_func && callee == write_barrier_binding_func)) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
                 assert(CI->arg_size() >= 1);
@@ -2454,6 +2464,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
             CI->eraseFromParent();
             continue;
         }
+        if (CFGModified) {
+            *CFGModified = true;
+        }
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
         auto parBits = builder.CreateAnd(EmitLoadTag(builder, parent), 3);
@@ -2473,7 +2486,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        if (CI->getCalledOperand() == write_barrier_func) {
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
+        }
+        else if (CI->getCalledOperand() == write_barrier_binding_func) {
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCBinding), parent);
+        }
+        else {
+            assert(false);
+        }
         CI->eraseFromParent();
     }
     if (maxframeargs == 0 && Frame) {
@@ -2526,7 +2547,7 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     // Get the slot address.
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
-        {GCFrame, ConstantInt::get(T_int32, Colors[R] + MinColorRoot)},
+        {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
         "", InsertBefore);
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
@@ -2565,6 +2586,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
 
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
     auto F = S.F;
+    auto T_int32 = Type::getInt32Ty(F->getContext());
     int MaxColor = -1;
     for (auto C : Colors)
         if (C > MaxColor)
@@ -2586,7 +2608,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
-        auto replace_alloca = [this, gcframe, &AllocaSlot](AllocaInst *&AI) {
+        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
             // Pick a slot for the alloca.
             unsigned align = AI->getAlignment() / sizeof(void*); // TODO: use DataLayout pointer size
             assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
@@ -2669,37 +2691,56 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
     }
 }
 
-bool LateLowerGCFrame::doInitialization(Module &M) {
-    // Initialize platform-agnostic references.
-    initAll(M);
-    return true;
-}
-
-bool LateLowerGCFrame::runOnFunction(Function &F) {
+bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
+    initAll(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    // Check availability of functions again since they might have been deleted.
-    initFunctions(*F.getParent());
     if (!pgcstack_getter)
-        return CleanupIR(F);
+        return CleanupIR(F, nullptr, CFGModified);
 
     pgcstack = getPGCstack(F);
     if (!pgcstack)
-        return CleanupIR(F);
+        return CleanupIR(F, nullptr, CFGModified);
 
     State S = LocalScan(F);
     ComputeLiveness(S);
     std::vector<int> Colors = ColorRoots(S);
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
     PlaceRootsAndUpdateCalls(Colors, S, CallFrames);
-    CleanupIR(F, &S);
+    CleanupIR(F, &S, CFGModified);
     return true;
 }
 
-char LateLowerGCFrame::ID = 0;
-static RegisterPass<LateLowerGCFrame> X("LateLowerGCFrame", "Late Lower GCFrame Pass", false, false);
+bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
+    auto GetDT = [this]() -> DominatorTree & {
+        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+    };
+    auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
+    return lateLowerGCFrame.runOnFunction(F);
+}
+
+PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
+{
+    auto GetDT = [&AM, &F]() -> DominatorTree & {
+        return AM.getResult<DominatorTreeAnalysis>(F);
+    };
+    auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
+    bool CFGModified = false;
+    if (lateLowerGCFrame.runOnFunction(F, &CFGModified)) {
+        if (CFGModified) {
+            return PreservedAnalyses::none();
+        } else {
+            return PreservedAnalyses::allInSet<CFGAnalyses>();
+        }
+    }
+    return PreservedAnalyses::all();
+}
+
+
+char LateLowerGCFrameLegacy::ID = 0;
+static RegisterPass<LateLowerGCFrameLegacy> X("LateLowerGCFrame", "Late Lower GCFrame Pass", false, false);
 
 Pass *createLateLowerGCFramePass() {
-    return new LateLowerGCFrame();
+    return new LateLowerGCFrameLegacy();
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_impl(LLVMPassManagerRef PM)

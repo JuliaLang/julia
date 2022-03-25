@@ -123,7 +123,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test read(`$exename -v`, String) == read(`$exename --version`, String)
 
     # --help
-    let header = "julia [switches] -- [programfile] [args...]"
+    let header = "\n    julia [switches] -- [programfile] [args...]"
         @test startswith(read(`$exename -h`, String), header)
         @test startswith(read(`$exename --help`, String), header)
     end
@@ -326,6 +326,35 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
         @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in specific file
+        tfile = realpath(inputfile)
+        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            --code-coverage=$covfile --code-coverage=@$tfile`) == "(3, $(repr(tfile)))"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in directory
+        tdir = dirname(realpath(inputfile))
+        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in a different directory
+        tdir = mktempdir() # a dir that contains no code
+        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        @test isempty(got)
+        rm(covfile)
     end
 
     # --track-allocation

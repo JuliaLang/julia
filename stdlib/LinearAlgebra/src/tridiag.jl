@@ -134,7 +134,7 @@ function Matrix{T}(M::SymTridiagonal) where T
     Mf[n,n] = symmetric(M.dv[n], :U)
     return Mf
 end
-Matrix(M::SymTridiagonal{T}) where {T} = Matrix{T}(M)
+Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
@@ -571,18 +571,19 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-function Matrix{T}(M::Tridiagonal{T}) where T
+function Matrix{T}(M::Tridiagonal) where {T}
     A = zeros(T, size(M))
-    for i = 1:length(M.d)
+    n = length(M.d)
+    n == 0 && return A
+    for i in 1:n-1
         A[i,i] = M.d[i]
-    end
-    for i = 1:length(M.d)-1
         A[i+1,i] = M.dl[i]
         A[i,i+1] = M.du[i]
     end
+    A[n,n] = M.d[n]
     A
 end
-Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
+Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::Tridiagonal) = Matrix(M)
 
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))

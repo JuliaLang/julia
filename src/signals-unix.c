@@ -501,6 +501,16 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     errno = errno_save;
 }
 
+// Because SIGUSR1 is dual-purpose, and the timer can have trailing signals after being deleted,
+// a 2-second grace period is imposed to ignore any trailing timer-created signals so they don't get
+// confused for user triggers
+uint64_t last_timer_delete_time = 0;
+
+int timer_graceperiod_elapsed(void)
+{
+    return jl_hrtime() > (last_timer_delete_time + 2e9);
+}
+
 #if defined(HAVE_TIMER)
 // Linux-style
 #include <time.h>
@@ -539,9 +549,11 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running)
+    if (running) {
         timer_delete(timerprof);
-    running = 0;
+        last_timer_delete_time = jl_hrtime();
+        running = 0;
+    }
 }
 
 #elif defined(HAVE_ITIMER)
@@ -556,18 +568,22 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     timerprof.it_interval.tv_usec = 0;
     timerprof.it_value.tv_sec = nsecprof / GIGA;
     timerprof.it_value.tv_usec = ((nsecprof % GIGA) + 999) / 1000;
-    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1)
-        return -3;
+    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
     running = 1;
+    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1) {
+        running = 0;
+        return -3;
+    }
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running) {
-        running = 0;
         memset(&timerprof, 0, sizeof(timerprof));
         setitimer(ITIMER_PROF, &timerprof, NULL);
+        last_timer_delete_time = jl_hrtime();
+        running = 0;
     }
 }
 
@@ -776,7 +792,7 @@ static void *signal_listener(void *arg)
         }
 #else
         if (sig == SIGUSR1) {
-            if (running != 1)
+            if (running != 1 && timer_graceperiod_elapsed())
                 trigger_profile_peek();
             doexit = 0;
         }
