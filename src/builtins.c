@@ -108,7 +108,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 int32_t idx = ft->layout->first_ptr;
                 jl_value_t *ptra = ((jl_value_t**)ao)[idx];
                 jl_value_t *ptrb = ((jl_value_t**)bo)[idx];
-                if ((ptra != NULL && ptrb == NULL) || (ptra == NULL && ptrb != NULL)) {
+                if ((ptra == NULL) != (ptrb == NULL)) {
                     return 0;
                 }
             }
