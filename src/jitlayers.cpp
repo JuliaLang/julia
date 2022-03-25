@@ -2,7 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-#include <iostream>
 
 #include "llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
@@ -15,7 +14,6 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
-#include <memory>
 #if JL_LLVM_VERSION >= 130000
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
 #endif
@@ -958,7 +956,8 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
         {ES, CompileLayer3, OptimizerT(PM3, 3)},
     },
     OptSelLayer(OptimizeLayers),
-    CoDLayer(ES, OptSelLayer, *create_callthroughmanager(*TM, ES),std::move(createLocalIndirectStubsManagerBuilder(TM->getTargetTriple())))
+    LCTMgr(create_callthroughmanager(*TM, ES)),
+    CoDLayer(ES, OptSelLayer, *LCTMgr,std::move(createLocalIndirectStubsManagerBuilder(TM->getTargetTriple())))
 
 {
 #ifdef JL_USE_JITLINK

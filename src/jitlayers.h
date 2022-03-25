@@ -13,6 +13,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
+
 #include "julia_assert.h"
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
@@ -274,6 +275,7 @@ private:
     OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+    std::unique_ptr<orc::LazyCallThroughManager> LCTMgr;
     orc::CompileOnDemandLayer CoDLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
