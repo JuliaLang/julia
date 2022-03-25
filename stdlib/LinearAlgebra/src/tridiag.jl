@@ -281,30 +281,30 @@ ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(
 rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
 
 eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
+eigen(A::SymTridiagonal{T}) where T = eigen!(copymutable_oftype(A, eigtype(T)))
 
 eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
 eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigen!(copy_oftype(A, eigtype(T)), irange)
+    eigen!(copymutable_oftype(A, eigtype(T)), irange)
 
 eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
 eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
+    eigen!(copymutable_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
-eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
+eigvals(A::SymTridiagonal{T}) where T = eigvals!(copymutable_oftype(A, eigtype(T)))
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
 eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigvals!(copy_oftype(A, eigtype(T)), irange)
+    eigvals!(copymutable_oftype(A, eigtype(T)), irange)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
 eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigvals!(copy_oftype(A, eigtype(T)), vl, vu)
+    eigvals!(copymutable_oftype(A, eigtype(T)), vl, vu)
 
 #Computes largest and smallest eigenvalue
 eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
