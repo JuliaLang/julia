@@ -3,11 +3,13 @@
 BEGIN
 {
     @gc_num = 1;
+    @ti_num = 1;
     printf("{\"displayTimeUnit\":\"ns\",\"traceEvents\":[\n");
 }
 
 END
 {
+    clear(@ti_num);
     clear(@gc_num);
     printf("]}");
 }
@@ -89,6 +91,18 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__pause__task
     printf("{\"name\":\"TaskRun\",\"cat\":\"task\",\"id\":\"0x%x\",\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", *$ptr0, pid, tid, elapsed);
 }
 
+// Type inference events
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__typeinf
+{
+    printf("{\"name\":\"TypeInference\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @ti_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__typeinf
+{
+    printf("{\"name\":\"TypeInference\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @ti_num, pid, tid, elapsed);
+    @ti_num++;
+}
+
 /*
 // IO loop events: MANY events
 usdt:usr/lib/libjulia-internal.so:julia:rt__start__process__events
@@ -99,19 +113,6 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__start__process__events
 usdt:usr/lib/libjulia-internal.so:julia:rt__finish__process__events
 {
     printf("{\"name\":\"ProcessEvents\",\"cat\":\"task\",\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg0);
-}
-*/
-
-/*
-// Task queues: for scheduler profiling
-usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__insert
-{
-    printf("{\"name\":\"Enqueue\",\"cat\":\"task\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg1);
-}
-
-usdt:usr/lib/libjulia-internal.so:julia:rt__taskq__get
-{
-    printf("{\"name\":\"Dequeue\",\"cat\":\"task\",\"ph\":\"i\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu,\"args\":{\"task\":\"0x%x\"}},\n", pid, tid, elapsed, arg1);
 }
 */
 

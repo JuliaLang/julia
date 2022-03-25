@@ -3384,6 +3384,7 @@ static uint8_t inference_is_measuring_compile_time = 0;
 
 JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
+    JL_PROBE_RT_START_TYPEINF();
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
         JL_LOCK_NOGC(&inference_timing_mutex);
         if (inference_is_measuring_compile_time++ == 0) {
@@ -3410,6 +3411,7 @@ JL_DLLEXPORT void jl_typeinf_lock_begin(void)
 JL_DLLEXPORT void jl_typeinf_lock_end(void)
 {
     JL_UNLOCK(&typeinf_lock);
+    JL_PROBE_RT_FINISH_TYPEINF();
 }
 
 #ifdef __cplusplus
