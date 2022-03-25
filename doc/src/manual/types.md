@@ -3,10 +3,8 @@
 Types in Julia establish distinctions between different kinds of data,
 and are used by the compiler to infer the intended use of those data.
 Programming languages have traditionally employed one of two quite different type systems:
-static type systems,
-where expressions must have a computable type before the execution of the program,
-and dynamic type systems,
-where types are only computed at run time,
+static type systems, where expressions must have a computable type before the execution of the program,
+and dynamic type systems, where types are only computed at run time,
 when the actual values manipulated by the program are available.
 Statically typed languages typically offer faster execution,
 at the cost of type annotations which must be explicitly added by the programmer.
@@ -26,14 +24,11 @@ All types belong to a single type tree, i.e. they are all at least related to th
 User-defined types are treated the same as built-in types.
 For additional flexibility, types can be defined as concrete, abstract or parametric.
 Their relation to other types must be explicitly declared.
-One particularly distinctive feature of Julia's type system is that
-only abstract types can be used as supertypes for a family of related types.
+One particularly distinctive feature of Julia's type system is that only abstract types can be used as supertypes for a family of related types.
 Concrete types are final, and may not subtype each other.
-While this might at first seem unduly restrictive,
-it has many beneficial consequences with surprisingly few drawbacks.
-Both [abstract types](#man-abstract-types) and [parametric types](#Parametric-Types)
-can be used to create flexible interfaces while leveraging method dispatch
-and mitigating type errors.
+While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
+few drawbacks. Both [abstract types](#man-abstract-types) and [parametric types](#Parametric-Types)
+can be used to create flexible interfaces while leveraging method dispatch and mitigating type errors.
 
 The methods [`isabstracttype`](@ref) and [`isconcretetype`](@ref) can be used
 to check if a type is abstract or concrete.
@@ -624,8 +619,8 @@ julia> Point{AbstractString}
 Point{AbstractString}
 ```
 
-`Point` itself is also a valid type object,
-containing all instances `Point{Float64}`, `Point{AbstractString}`, etc. as subtypes:
+`Point` itself is also a valid type object, containing all instances `Point{Float64}`, `Point{AbstractString}`,
+etc. as subtypes:
 
 ```jldoctest pointtype
 julia> Point{Float64} <: Point
