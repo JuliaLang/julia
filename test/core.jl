@@ -92,6 +92,14 @@ let abcd = ABCDconst(1, 2, 3, 4)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
 
+# test `===` handling null pointer in struct #44712
+struct N44712
+    a::Some{Any}
+    b::Int
+    AB() = new()
+end
+
+@test unsafe_load(Ptr{N44712}(pointer(Int[0,1]))) !== unsafe_load(Ptr{N44712}(pointer(Int[0,2])))
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
