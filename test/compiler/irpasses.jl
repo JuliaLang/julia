@@ -409,10 +409,25 @@ end
 # preserve elimination
 # --------------------
 
+function ispreserved(@nospecialize(x))
+    return function (@nospecialize(stmt),)
+        if Meta.isexpr(stmt, :foreigncall)
+            nccallargs = length(stmt.args[3]::Core.SimpleVector)
+            for pidx = (6+nccallargs):length(stmt.args)
+                if stmt.args[pidx] === x
+                    return true
+                end
+            end
+        end
+        return false
+    end
+end
+
 let src = code_typed1((String,)) do s
         ccall(:some_ccall, Cint, (Ptr{String},), Ref(s))
     end
     @test count(isnew, src.code) == 0
+    @test any(ispreserved(#=s=#Core.Argument(2)), src.code)
 end
 
 # if the mutable struct is directly used, we shouldn't eliminate it
@@ -423,6 +438,21 @@ let src = code_typed1() do
         return a.x
     end
     @test count(isnew, src.code) == 1
+end
+
+# should eliminate allocation whose address isn't taked even if it has unintialized field(s)
+mutable struct BadRef
+    x::String
+    y::String
+    BadRef(x) = new(x)
+end
+Base.cconvert(::Type{Ptr{BadRef}}, a::String) = BadRef(a)
+Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
+let src = code_typed1((String,)) do s
+        ccall(:jl_breakpoint, Cvoid, (Ptr{BadRef},), s)
+    end
+    @test count(isnew, src.code) == 0
+    @test any(ispreserved(#=s=#Core.Argument(2)), src.code)
 end
 
 # isdefined elimination
