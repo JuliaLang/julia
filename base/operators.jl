@@ -1035,8 +1035,17 @@ end
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.outer)
+    if c.outer |> Symbol |> Base.isoperator
+        print(io, '(', c.outer, ')')
+    else
+        show(io, c.outer)
+    end
     print(io, " ∘ ")
+    show(io, c.inner)
+end
+
+function show(io::IO, c::ComposedFunction{typeof(!)})
+    print(io, "!")
     show(io, c.inner)
 end
 
@@ -1060,7 +1069,10 @@ julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (!) ∘ f
+
+#allows !!f === f
+!(f::ComposedFunction{typeof(!)}) = f.inner
 
 """
     Fix1(f, x)

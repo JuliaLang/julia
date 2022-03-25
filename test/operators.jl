@@ -179,6 +179,7 @@ end
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
     @test filter(!islowercase, str) == replace(str, r"[a-z]" => "")
+    @test !!isnan === isnan
 end
 
 # issue #19891
