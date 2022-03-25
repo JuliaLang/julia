@@ -901,11 +901,10 @@ llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
     jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
     return jl_data_layout;
 }
-std::unique_ptr<llvm::orc::LazyCallThroughManager> create_callthroughmanager(TargetMachine &TM, ExecutionSession &ES)
+std::unique_ptr<llvm::orc::LazyCallThroughManager> create_callthroughmanager(TargetMachine &TM, llvm::orc::ExecutionSession &ES)
 {
-    auto Result = createLocalLazyCallThroughManager(TM.getTargetTriple(), ES, 0);
+    auto Result = llvm::orc::createLocalLazyCallThroughManager(TM.getTargetTriple(), ES, 0);
     if (auto E = Result.takeError()){
-    std::cout <<"Problem with division ";
     }
     return std::move(*Result);
 }
@@ -957,7 +956,7 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
     },
     OptSelLayer(OptimizeLayers),
     LCTMgr(create_callthroughmanager(*TM, ES)),
-    CoDLayer(ES, OptSelLayer, *LCTMgr,std::move(createLocalIndirectStubsManagerBuilder(TM->getTargetTriple())))
+    CoDLayer(ES, OptSelLayer, *LCTMgr,std::move(llvm::orc::createLocalIndirectStubsManagerBuilder(TM->getTargetTriple())))
 
 {
 #ifdef JL_USE_JITLINK
