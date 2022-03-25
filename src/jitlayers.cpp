@@ -2,14 +2,20 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <iostream>
 
 #include "llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h"
+#include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/LazyReexports.h"
+#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 #include "llvm/IR/Mangler.h"
+#include "llvm/Target/TargetMachine.h"
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#include <memory>
 #if JL_LLVM_VERSION >= 130000
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
 #endif
@@ -897,6 +903,14 @@ llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
     jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
     return jl_data_layout;
 }
+std::unique_ptr<llvm::orc::LazyCallThroughManager> create_callthroughmanager(TargetMachine &TM, ExecutionSession &ES)
+{
+    auto Result = createLocalLazyCallThroughManager(TM.getTargetTriple(), ES, 0);
+    if (auto E = Result.takeError()){
+    std::cout <<"Problem with division ";
+    }
+    return std::move(*Result);
+}
 
 JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
   : TM(createTargetMachine()),
@@ -944,7 +958,7 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
         {ES, CompileLayer3, OptimizerT(PM3, 3)},
     },
     OptSelLayer(OptimizeLayers),
-    CoDLayer(ES, OptSelLayer, *createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0).get(),createLocalIndirectStubsManagerBuilder(TM->getTargetTriple()))
+    CoDLayer(ES, OptSelLayer, *create_callthroughmanager(*TM, ES),std::move(createLocalIndirectStubsManagerBuilder(TM->getTargetTriple())))
 
 {
 #ifdef JL_USE_JITLINK
