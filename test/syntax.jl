@@ -3278,5 +3278,5 @@ end
 end
 
 # issue 44723
-demo44723(thunk)::Any = Base.Experimental.@opaque () -> true ? 1 : 2
-@test demo44723(7)() == 1
+demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
+@test demo44723()() == 1
