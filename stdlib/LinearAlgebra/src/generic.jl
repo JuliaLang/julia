@@ -1539,9 +1539,9 @@ julia> det(M)
 2.0
 ```
 """
-function det(A::AbstractMatrix{T}) where T
+function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
-        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
         return convert(S, det(UpperTriangular(A)))
     end
     return det(lu(A; check = false))
