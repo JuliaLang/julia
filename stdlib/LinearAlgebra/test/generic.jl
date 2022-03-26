@@ -104,7 +104,7 @@ n = 5 # should be odd
             @show istriu(triu(MyDual.(A, zero(A))))
             @test det(triu(MyDual.(A, zero(A)))) isa MyDual
         end
-    end        
+    end
 end
 
 @testset "diag" begin
