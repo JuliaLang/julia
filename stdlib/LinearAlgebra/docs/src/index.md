@@ -322,6 +322,8 @@ LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
+LinearAlgebra.axpy!
+LinearAlgebra.axpby!
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
 LinearAlgebra.Bidiagonal
@@ -532,8 +534,8 @@ LinearAlgebra.BLAS.dotc
 LinearAlgebra.BLAS.blascopy!
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
-LinearAlgebra.axpy!
-LinearAlgebra.axpby!
+LinearAlgebra.BLAS.axpy!
+LinearAlgebra.BLAS.axpby!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax

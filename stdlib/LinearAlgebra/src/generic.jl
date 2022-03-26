@@ -1404,7 +1404,7 @@ isdiag(x::Number) = true
 Overwrite `y` with `x * α + y` and return `y`.
 If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
 
-See also [BLAS.axpy!](@ref)
+See also [`BLAS.axpy!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1417,6 +1417,7 @@ julia> axpy!(2, x, y)
   6
   9
  12
+```
 """
 function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
@@ -1449,7 +1450,7 @@ end
 Overwrite `y` with `x * α + y * β` and return `y`.
 If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
 
-See also [BLAS.axpby!](@ref)
+See also [`BLAS.axpby!`](@ref)
 
 # Examples
 ```jldoctest
@@ -1462,6 +1463,7 @@ julia> axpby!(2, x, 2, y)
  10
  14
  18
+```
 """
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
