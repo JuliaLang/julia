@@ -1398,9 +1398,26 @@ true
 isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
 
+"""
+    axpy!(α, x::AbstractArray, y::AbstractArray)
 
-# BLAS-like in-place y = x*α+y function (see also the version in blas.jl
-#                                          for BlasFloat Arrays)
+Overwrite `y` with `x * α + y` and return `y`.
+If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
+
+See also [BLAS.axpy!](@ref)
+
+# Examples
+```jldoctest
+julia> x = [1; 2; 3];
+
+julia> y = [4; 5; 6];
+
+julia> axpy!(2, x, y)
+3-element Vector{Int64}:
+  6
+  9
+ 12
+"""
 function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
     if n != length(y)
@@ -1426,6 +1443,26 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     y
 end
 
+"""
+    axpby!(α, x::AbstractArray, β, y::AbstractArray)
+
+Overwrite `y` with `x * α + y * β` and return `y`.
+If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
+
+See also [BLAS.axpby!](@ref)
+
+# Examples
+```jldoctest
+julia> x = [1; 2; 3];
+
+julia> y = [4; 5; 6];
+
+julia> axpby!(2, x, 2, y)
+3-element Vector{Int64}:
+ 10
+ 14
+ 18
+"""
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
@@ -1434,6 +1471,24 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
         @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
     y
+end
+
+DenseLike{T} = Union{DenseArray{T}, Base.StridedReshapedArray{T}, Base.StridedReinterpretArray{T}}
+StridedVecLike{T} = Union{DenseLike{T}, Base.FastSubArray{T,<:Any,<:DenseLike{T}}}
+axpy!(α::Number, x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasFloat} = BLAS.axpy!(α, x, y)
+axpby!(α::Number, x::StridedVecLike{T}, β::Number, y::StridedVecLike{T}) where {T<:BlasFloat} = BLAS.axpby!(α, x, β, y)
+function axpy!(α::Number,
+    x::StridedVecLike{T}, rx::AbstractRange{<:Integer},
+    y::StridedVecLike{T}, ry::AbstractRange{<:Integer},
+) where {T<:BlasFloat}
+    if Base.has_offset_axes(rx, ry)
+        return Base.@invoke axpy!(α,
+            x::AbstractArray, rx::AbstractArray{<:Integer},
+            y::AbstractArray, ry::AbstractArray{<:Integer},
+        )
+    end
+    @views BLAS.axpy!(α, x[rx], y[ry])
+    return y
 end
 
 """
