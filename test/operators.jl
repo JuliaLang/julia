@@ -180,6 +180,10 @@ end
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
     @test filter(!islowercase, str) == replace(str, r"[a-z]" => "")
     @test !!isnan === isnan
+    @test repr(!isnan) == "!isnan"
+    @test repr((-) ∘ sin) == "(-) ∘ sin"
+    @test repr(cos ∘ (sin ∘ tan)) == "cos ∘ (sin ∘ tan)"
+    @test repr(!(cos ∘ !sin)) == "!(cos ∘ !sin)"
 end
 
 # issue #19891

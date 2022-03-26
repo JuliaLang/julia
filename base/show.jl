@@ -468,6 +468,20 @@ end
 show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
 print(io::IO, f::Function) = show_function(io, f, true)
 
+function show_function(io::IO, c::ComposedFunction, compact::Bool)
+    if compact
+        show(io, c)
+    else
+        print(io, "ComposedFunction(")
+        show_function(io, c.outer, false)
+        print(io, ", ")
+        show_function(io, c.inner, false)
+        print(io, ')')
+    end
+end
+
+show_function(io::IO, x, ::Bool) = show(io, x)
+
 function show(io::IO, f::Core.IntrinsicFunction)
     if !(get(io, :compact, false)::Bool)
         print(io, "Core.Intrinsics.")

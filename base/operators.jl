@@ -1035,19 +1035,24 @@ end
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    if c.outer |> Symbol |> Base.isoperator
-        print(io, '(', c.outer, ')')
-    else
-        show(io, c.outer)
-    end
+    _showcomposed(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.inner)
+    _showcomposed(io, c.inner)
 end
 
+#shows !f instead of (!) ∘ f when ! is the outermost function
 function show(io::IO, c::ComposedFunction{typeof(!)})
-    print(io, "!")
-    show(io, c.inner)
+    print(io, '!')
+    _showcomposed(io, c.inner)
 end
+
+_showcomposed(io::IO, x) = show(io, x)
+#display operators like + and - inside parens
+_showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); show(io, f); print(io, ')')) : show(io, f)
+#nesting for chained composition
+_showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
+#no nesting when ! is the outer function in a composition chain
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = (print(io, '!'); show(io, f.inner))
 
 """
     !f::Function
@@ -1070,9 +1075,7 @@ julia> filter(!isletter, str)
 ```
 """
 !(f::Function) = (!) ∘ f
-
-#allows !!f === f
-!(f::ComposedFunction{typeof(!)}) = f.inner
+!(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
     Fix1(f, x)
