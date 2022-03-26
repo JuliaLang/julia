@@ -333,12 +333,14 @@ end
 end
 
 @testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
-    a = rand(5, 5)
-    @test LinearAlgebra.axpby!(1, view(a, :, 5), 1, zeros(size(a))) == a
-    @test LinearAlgebra.axpy!(1, view(a, :, 5), zeros(size(a))) == a
-    b = view(a, 25:-2:1)
-    @test LinearAlgebra.axpby!(1, b, 1, zeros(size(b))) == b
-    @test LinearAlgebra.axpy!(1, b, zeros(size(b))) == b
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test LinearAlgebra.axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test LinearAlgebra.axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test LinearAlgebra.axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test LinearAlgebra.axpy!(1, b, zeros(T, size(b))) == b
+    end
 end
 
 @testset "norm and normalize!" begin
