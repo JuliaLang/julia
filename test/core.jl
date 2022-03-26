@@ -96,10 +96,13 @@ end
 struct N44712
     a::Some{Any}
     b::Int
-    AB() = new()
+    N44712() = new()
 end
-
-@test unsafe_load(Ptr{N44712}(pointer(Int[0,1]))) !== unsafe_load(Ptr{N44712}(pointer(Int[0,2])))
+let a  = Int[0, 1], b = Int[0, 2]
+    GC.@preserve a b begin
+        @test unsafe_load(Ptr{N44712}(pointer(a))) !== unsafe_load(Ptr{N44712}(pointer(b)))
+    end
+end
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
