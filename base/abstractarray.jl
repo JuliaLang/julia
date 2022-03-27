@@ -2617,14 +2617,14 @@ This has the same order of elements as [`Iterators.flatten`](@ref)`(iter)`.
 
 With keyword `dims::Integer`, instead the `i`th element of `iter` becomes the slice
 [`selectdim`](@ref)`(result, dims, i)`, so that `size(result, dims) == length(iter)`.
-This reverses the action of [`eachslice`](@ref) with the same `dims`.
+In this case `stack` reverses the action of [`eachslice`](@ref) with the same `dims`.
 
 Functions [`vcat`](@ref) and [`hvcat`](@ref) also combine arrays, but work
 mostly by extending their existing dimensions, rather than placing the arrays
 along new dimensions.
 
-!!! compat "Julia 1.8"
-    This function requires at least Julia 1.8.
+!!! compat "Julia 1.9"
+    This function requires at least Julia 1.9.
 
 # Examples
 ```jldoctest
