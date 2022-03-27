@@ -276,9 +276,6 @@ end
 @test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
 # issue #24558
-@test_throws ParseError Meta.parse("'\\xff'")
-@test_throws ParseError Meta.parse("'\\x80'")
-@test_throws ParseError Meta.parse("'ab'")
 @test '\u2200' == "\u2200"[1]
 
 @test_throws ParseError Meta.parse("f(2x for x=1:10, y")
@@ -3280,3 +3277,13 @@ end
 # issue 44723
 demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
 @test demo44723()() == 1
+
+@testset "issue 25072" begin
+    @test '\xc0\x80' == reinterpret(Char, 0xc0800000)
+    @test '\x80' == reinterpret(Char, 0x80000000)
+    @test '\xff' == reinterpret(Char, 0xff000000)
+    @test '\xff\xff\xff\xff' == reinterpret(Char, 0xffffffff)
+    @test 'abcd' == reinterpret(Char, 0x61626364)
+    @test_throws ParseError Meta.parse("''")
+    @test_throws ParseError Meta.parse("'\\xff\\xff\\xff\\xff\\xff'")
+end

@@ -361,6 +361,30 @@ value_t fl_string2normsymbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs
     return symbol(fl_ctx, normalize(fl_ctx, (char*)cvalue_data(args[0])));
 }
 
+// Return the uint32 representation if the string can be represented as a single Julia `Char`
+// object. Otherwise return false. Note that it does allow for overlong chars like 'abcd', as
+// long as they don't exceed 4 bytes
+value_t fl_string_only_julia_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) {
+    argcount(fl_ctx, "string.only-julia-char", nargs, 1);
+    if (!fl_isstring(fl_ctx, args[0]))
+        type_error(fl_ctx, "string.only-julia-char", "string", args[0]);
+    uint8_t *s = (uint8_t*)cvalue_data(args[0]);
+    size_t len = cv_len((cvalue_t*)ptr(args[0]));
+    if (!(0 < len && len <= 4))
+        return fl_ctx->F;
+
+    uint32_t u = (uint32_t)s[0] << 24;
+    if (len == 1) goto ret;
+    u |= (uint32_t)s[1] << 16;
+    if (len == 2) goto ret;
+    u |= (uint32_t)s[2] << 8;
+    if (len == 3) goto ret;
+    u |= (uint32_t)s[3];
+
+ret:
+    return fl_list2(fl_ctx, fl_ctx->jl_char_sym, mk_uint32(fl_ctx, u));
+}
+
 static const builtinspec_t julia_flisp_func_info[] = {
     { "skip-ws", fl_skipws },
     { "accum-julia-symbol", fl_accum_julia_symbol },
@@ -371,6 +395,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "strip-op-suffix", fl_julia_strip_op_suffix },
     { "underscore-symbol?", fl_julia_underscore_symbolp },
     { "string->normsymbol", fl_string2normsymbol },
+    { "string.only-julia-char", fl_string_only_julia_char },
     { NULL, NULL }
 };
 

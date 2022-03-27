@@ -112,6 +112,7 @@ JL_DLLEXPORT jl_sym_t *jl_acquire_sym;
 JL_DLLEXPORT jl_sym_t *jl_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
+JL_DLLEXPORT jl_sym_t *jl_julia_char_sym;
 
 
 static const uint8_t flisp_system_image[] = {
@@ -366,6 +367,7 @@ void jl_init_common_symbols(void)
     jl_release_sym = jl_symbol("release");
     jl_acquire_release_sym = jl_symbol("acquire_release");
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
+    jl_julia_char_sym = jl_symbol("julia_char");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -574,6 +576,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (iscons(e) && (sym == jl_inert_sym || (sym == jl_quote_sym && (!iscons(car_(e)))))) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct(jl_quotenode_type, ex);
+        }
+        else if (sym == jl_julia_char_sym) {
+            value_t v = car_(e);
+            if (!(iscprim(v) && cp_class((cprim_t*)ptr(v)) == fl_ctx->uint32type))
+                jl_error("malformed julia char");
+            uint32_t c = *(uint32_t*)cp_data((cprim_t*)ptr(v));
+            temp = jl_box_char(c);
         }
         if (temp) {
             JL_GC_POP();
