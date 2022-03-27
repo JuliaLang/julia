@@ -1095,6 +1095,28 @@ Base.@assume_effects :consistent :effect_free :terminates_globally consteval(
     consteval(getindex, ___CONST_DICT___, :a)
 end
 
+# https://github.com/JuliaLang/julia/issues/44732
+struct Component44732
+    v
+end
+struct Container44732
+    x::Union{Nothing,Component44732}
+end
+
+# NOTE make sure to prevent inference bail out
+validate44732(::Component44732) = nothing
+validate44732(::Any) = error("don't erase this error!")
+
+function issue44732(c::Container44732)
+    validate44732(c.x)
+    return nothing
+end
+
+let src = code_typed1(issue44732, (Container44732,))
+    @test any(isinvoke(:validate44732), src.code)
+end
+@test_throws ErrorException issue44732(Container44732(nothing))
+
 global x44200::Int = 0
 function f44200()
     global x = 0
