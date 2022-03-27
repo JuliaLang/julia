@@ -273,7 +273,7 @@ end
 
 # issue #14683
 @test_throws ParseError Meta.parse("'\\A\"'")
-@test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
+@test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1]
 
 # issue #24558
 @test '\u2200' == "\u2200"[1]
@@ -2049,7 +2049,7 @@ end == 1
 @test Meta.parse("'a'") == 'a'
 @test Meta.parse("'\U0061'") == 'a'
 @test_parseerror("''", "invalid empty character literal")
-@test_parseerror("'abcde'", "character literal contains multiple characters")
+@test_parseerror("'ab'", "character literal contains multiple characters")
 
 # optional soft scope: #28789, #33864
 
@@ -3280,7 +3280,15 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test '\x80' == reinterpret(Char, 0x80000000)
     @test '\xff' == reinterpret(Char, 0xff000000)
     @test '\xff\xff\xff\xff' == reinterpret(Char, 0xffffffff)
-    @test 'abcd' == reinterpret(Char, 0x61626364)
-    @test_throws ParseError Meta.parse("''")
-    @test_throws ParseError Meta.parse("'\\xff\\xff\\xff\\xff\\xff'")
+    @test '\uffff' == Char(0xffff)
+    @test '\U00002014' == Char(0x2014)
+    @test_parseerror "''" "invalid empty character literal"
+    @test_parseerror "'\\xff\\xff\\xff\\xff\\xff'" "character literal contains multiple characters"
+    @test_parseerror "'abcd'" "character literal contains multiple characters"
+    @test_parseerror "'\\uff\\xff'" "character literal contains multiple characters"
+    @test_parseerror "'\\xff\\uff'" "character literal contains multiple characters"
+    @test_parseerror "'\\xffa'" "character literal contains multiple characters"
+    @test_parseerror "'\\uffffa'" "character literal contains multiple characters"
+    @test_parseerror "'\\U00002014a'" "character literal contains multiple characters"
+    @test Meta.isexpr(Meta.parse("'a"), :incomplete)
 end
