@@ -273,7 +273,7 @@ end
 
 # issue #14683
 @test_throws ParseError Meta.parse("'\\A\"'")
-@test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1]
+@test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
 # issue #24558
 @test '\u2200' == "\u2200"[1]
@@ -3282,6 +3282,8 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test '\xff\xff\xff\xff' == reinterpret(Char, 0xffffffff)
     @test '\uffff' == Char(0xffff)
     @test '\U00002014' == Char(0x2014)
+    @test '\100' == reinterpret(Char, UInt32(0o100) << 24)
+    @test '\100\42' == reinterpret(Char, (UInt32(0o100) << 24) | (UInt32(0o42) << 16))
     @test_parseerror "''" "invalid empty character literal"
     @test_parseerror "'\\xff\\xff\\xff\\xff\\xff'" "character literal contains multiple characters"
     @test_parseerror "'abcd'" "character literal contains multiple characters"
@@ -3290,5 +3292,6 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test_parseerror "'\\xffa'" "character literal contains multiple characters"
     @test_parseerror "'\\uffffa'" "character literal contains multiple characters"
     @test_parseerror "'\\U00002014a'" "character literal contains multiple characters"
+    @test_parseerror "'\\1000'" "character literal contains multiple characters"
     @test Meta.isexpr(Meta.parse("'a"), :incomplete)
 end
