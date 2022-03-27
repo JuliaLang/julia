@@ -3265,3 +3265,7 @@ end
     @test m.Foo.bar === 1
     @test Core.get_binding_type(m.Foo, :bar) == Any
 end
+
+# issue 44723
+demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
+@test demo44723()() == 1
