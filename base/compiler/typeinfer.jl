@@ -356,7 +356,8 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result))
+                                    valid_worlds::WorldRange, @nospecialize(inferred_result),
+                                    ipo_effects::Effects)
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
@@ -391,7 +392,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
