@@ -556,7 +556,7 @@ end
 # Adapted and modified from https://github.com/ARM-software/optimized-routines/blob/master/math/pow.c
 # Copyright (c) 2018-2020, Arm Limited. (which is also MIT licensed)
 # note that this isn't an exact translation as this version compacts the table to reduce cache pressure.
-function _log_ext2(xu)
+function _log_ext(xu)
     # x = 2^k z; where z is in range [0x1.69555p-1,0x1.69555p-0) and exact.
     # The range is split into N subintervals.
     # The ith subinterval contains z and c is near the center of the interval.
