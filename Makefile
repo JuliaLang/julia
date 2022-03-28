@@ -370,8 +370,10 @@ endif
 endif
 
 	# Set rpath for LLVM.so which is `$ORIGIN/../lib` moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
+ifeq ($(USE_SYSTEM_LLVM),0)
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libLLVM.$(SHLIB_EXT)
+endif
 endif
 
 
