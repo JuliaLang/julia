@@ -2049,7 +2049,7 @@ end == 1
 @test Meta.parse("'a'") == 'a'
 @test Meta.parse("'\U0061'") == 'a'
 @test_parseerror("''", "invalid empty character literal")
-@test_parseerror("'ab'", "character literal contains multiple characters")
+@test_parseerror("'abc'", "character literal contains multiple characters")
 
 # optional soft scope: #28789, #33864
 
@@ -3294,4 +3294,5 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test_parseerror "'\\U00002014a'" "character literal contains multiple characters"
     @test_parseerror "'\\1000'" "character literal contains multiple characters"
     @test Meta.isexpr(Meta.parse("'a"), :incomplete)
+    @test ''' == "'"[1]
 end

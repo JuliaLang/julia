@@ -2465,43 +2465,44 @@
     (cond ;; char literal
           ((eq? t '|'|)
            (take-token s)
-           (let ((firstch (read-char (ts:port s))))
-               (if (and (not (eqv? firstch #\\))
-                        (not (eof-object? firstch))
-                        (eqv? (peek-char (ts:port s)) #\'))
-                   ;; easy case: 1 character, no \
-                   (begin (read-char (ts:port s)) firstch)
-                   (let ((b (open-output-string)))
-                     (let loop ((c firstch) (allowed-digits 0) (oct? #f) (first? #t) (only-raw? #t))
-                       (cond
-                         ((eqv? c #\'))
-                         ((eof-object? c)
-                          (error "incomplete: invalid character syntax"))
-                         ((eqv? c #\\)
-                          (let* ((c           (not-eof-1 (read-char (ts:port s))))
-                                 (only-raw?   (and only-raw? (or (= c #\x) (char-oct? c))))
-                                 (allowed-digits (case c (#\x 2)
-                                                         (#\u 4)
-                                                         (#\U 8)
-                                                         (else (if (char-oct? c) 2 0)))))
-                            (or first? only-raw?
-                                (error "character literal contains multiple characters"))
-                            (write-char #\\ b)
-                            (write-char c b)
-                            (loop (read-char (ts:port s)) allowed-digits (char-oct? c) #f only-raw?)))
-                         ((and (> allowed-digits 0) ((if oct? char-oct? char-hex?) c))
-                          (write-char c b)
-                          (loop (read-char (ts:port s)) (- allowed-digits 1) oct? #f only-raw?))
-                         (first?
-                          (write-char c b)
-                          (loop (read-char (ts:port s)) 0 #f #f #f))
-                         (else (error "character literal contains multiple characters"))))
-                     (let* ((str (unescape-string (io.tostring! b)))
-                            (c   (string.only-julia-char str)))
-                       (or c
-                           (if (= (string-length str) 0)
-                               (error "invalid empty character literal")
-                               (error "character literal contains multiple characters"))))))))
+           (let ((firstch (read-char (ts:port s)))
+                 (b       (open-output-string)))
+             ;; need to account for escape codes. In the case of `\x12` or `\12`, we even
+             ;; allow multiple codes in a single char literal to represent malformed chars
+             (let loop ((c firstch) (allowed-digits 0) (oct? #f) (first? #t) (only-raw? #t))
+               (cond
+                 ((eof-object? c)
+                  (error "incomplete: invalid character syntax"))
+                 ((= c #\')
+                  (and first? (eqv? (peek-char (ts:port s)) #\')
+                       (write-char (read-char (ts:port s)) b)))
+                 ((= c #\\)
+                  (let* ((c              (not-eof-1 (read-char (ts:port s))))
+                         (only-raw?      (and only-raw? (or (= c #\x) (char-oct? c))))
+                         (allowed-digits (case c (#\x 2)
+                                                 (#\u 4)
+                                                 (#\U 8)
+                                                 (else (if (char-oct? c) 2 0)))))
+                    (or first? only-raw?
+                        (error "character literal contains multiple characters"))
+                    (write-char #\\ b)
+                    (write-char c b)
+                    (loop (read-char (ts:port s)) allowed-digits (char-oct? c) #f only-raw?)))
+                 ((and (> allowed-digits 0) ((if oct? char-oct? char-hex?) c))
+                  (write-char c b)
+                  (loop (read-char (ts:port s)) (- allowed-digits 1) oct? #f only-raw?))
+                 ;; only allow one char if it's not an escape code
+                 (first?
+                  (if (= c #\") (write-char #\\ b)) ;; need to escape double quote
+                  (write-char c b)
+                  (loop (read-char (ts:port s)) 0 #f #f #f))
+                 (else (error "character literal contains multiple characters"))))
+             (let* ((str (unescape-string (io.tostring! b)))
+                    (c   (string.only-julia-char str)))
+               (or c
+                   (if (= (string-length str) 0)
+                       (error "invalid empty character literal")
+                       (error "character literal contains multiple characters"))))))
 
           ;; symbol/expression quote
           ((eq? t ':)
