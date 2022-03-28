@@ -2535,8 +2535,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
                 jl_module_t *mod = (jl_module_t*)v;
                 if (mod->parent == mod) // top level modules handled by loader
                     break;
-                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
-                jl_declare_constant(b); // this can throw
+                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1); // this can throw
+                jl_declare_constant(b); // this can also throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
                         jl_errorf("Invalid redefinition of constant %s.",
