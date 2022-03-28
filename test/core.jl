@@ -104,6 +104,9 @@ let a  = Int[0, 1], b = Int[0, 2]
     end
 end
 
+# another possible issue in #44712
+@test (("", 0),) !== (("", 1),)
+
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
 @test f47(Vector{Vector{Int}}()) == 0
