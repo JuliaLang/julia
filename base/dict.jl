@@ -223,11 +223,6 @@ end
             keys[index] = k
             vals[index] = v
             count += 1
-
-            if h.age != age0
-                # if `h` is changed by a finalizer, retry
-                return rehash!(h, newsz)
-            end
         end
     end
 
@@ -237,7 +232,7 @@ end
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
-    @assert h.age == age0
+    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
 
     return h
 end
