@@ -206,7 +206,7 @@ function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
 end
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
 function _tuple_unique_fieldtypes(@nospecialize t)
-    @_pure_meta
+    @_total_meta
     types = IdSet()
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
@@ -223,7 +223,7 @@ function _tuple_unique_fieldtypes(@nospecialize t)
     return Core.svec(types...)
 end
 function _compute_eltype(@nospecialize t)
-    @_pure_meta # TODO: the compiler shouldn't need this
+    @_total_meta # TODO: the compiler shouldn't need this
     types = _tuple_unique_fieldtypes(t)
     return afoldl(types...) do a, b
         # if we've already reached Any, it can't widen any more
@@ -345,7 +345,7 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 if nameof(@__MODULE__) === :Base
 
 function tuple_type_tail(T::Type)
-    @_pure_meta # TODO: this method is wrong (and not @pure)
+    @_total_may_throw_meta # TODO: this method is wrong (and not :total_may_throw)
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
@@ -583,18 +583,14 @@ _tuple_any(f::Function, tf::Bool) = tf
 
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
-    @nospecialize itr
-    @_pure_meta
+function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+    @_total_meta
     for y in itr
         y === x && return true
     end
     return false
 end
-function in(x::Symbol, itr::Tuple{Vararg{Symbol}})
-    @nospecialize itr
-    return sym_in(x, itr)
-end
+in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 
 """
