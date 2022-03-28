@@ -493,6 +493,31 @@ let src = code_typed1(isdefined_elim)
 end
 @test isdefined_elim() == Any[]
 
+function abmult(r::Int, x0)
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return @inline f(x0)
+end
+let src = code_typed1(abmult, (Int,Int))
+    @test is_scalar_replaced(src)
+end
+@test abmult(-3, 3) == 9
+
+function abmult2(r0::Int, x0)
+    r::Int = r0
+    if r < 0
+        r = -r
+    end
+    f = x -> x * r
+    return f(x0)
+end
+let src = code_typed1(abmult2, (Int,Int))
+    @test is_scalar_replaced(src)
+end
+@test abmult2(-3, 3) == 9
+
 # comparison lifting
 # ==================
 

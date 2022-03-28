@@ -372,10 +372,7 @@ function lift_leaves(compact::IncrementalCompact,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
-                typ = widenconst(types(compact)[leaf])
-                if isa(typ, UnionAll)
-                    typ = unwrap_unionall(typ)
-                end
+                typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 @assert !ismutabletype(typ)
                 if length(def.args) < 1+field
@@ -786,10 +783,7 @@ function sroa_pass!(ir::IRCode)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = widenconst(argextype(SSAValue(defidx), compact))
-                        if isa(typ, UnionAll)
-                            typ = unwrap_unionall(typ)
-                        end
+                        typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
                         if typ isa DataType && !ismutabletype(typ)
                             record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
@@ -948,10 +942,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         defexpr = ir[SSAValue(idx)][:inst]
         isexpr(defexpr, :new) || continue
         newidx = idx
-        typ = ir.stmts[newidx][:type]
-        if isa(typ, UnionAll)
-            typ = unwrap_unionall(typ)
-        end
+        typ = unwrap_unionall(ir.stmts[newidx][:type])
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
         ismutabletype(typ) || continue
@@ -1022,6 +1013,13 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                         end
                     end
                     has_safe_def(ir, get_domtree(), allblocks, du, newidx, use.idx) || @goto skip
+                end
+            else # always have some definition at the allocation site
+                for i = 1:length(du.uses)
+                    use = du.uses[i]
+                    if use.kind === :isdefined
+                        ir[SSAValue(use.idx)][:inst] = true
+                    end
                 end
             end
         end
