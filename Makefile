@@ -9,7 +9,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/embedding test/llvmpasses)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk
 DIRS := $(DIRS) $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -48,7 +48,7 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
-	@echo '@"%~dp0\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')"\" '%*' > $(BUILDROOT)/julia.bat
+	echo '@"%~dp0/'"$$(echo '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')"'" %*' | tr / '\\' > $(BUILDROOT)/julia.bat
 	chmod a+x $(BUILDROOT)/julia.bat
 else
 ifndef JULIA_VAGRANT_BUILD
@@ -75,7 +75,7 @@ julia-libllvmcalltest: julia-deps
 julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony julia-cli-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src $*
 
-julia-cli-release julia-cli-debug: julia-cli-% :
+julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
 julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
@@ -84,7 +84,7 @@ julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-sr
 julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
-julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-cli-%
+julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-src-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
@@ -99,7 +99,9 @@ docs-revise:
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@$(JULIAHOME)/contrib/check-whitespace.sh
+	@# Append the directory containing the julia we just built to the end of `PATH`,
+	@# to give us the best chance of being able to run this check.
+	@PATH=$(PATH):$(dirname $(JULIA_EXECUTABLE)) $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -127,15 +129,16 @@ release-candidate: release testall
 	@echo 2. Update references to the julia version in the source directories, such as in README.md
 	@echo 3. Bump VERSION
 	@echo 4. Increase SOMAJOR and SOMINOR if needed.
-	@echo 5. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
-	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
-	@echo 8. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
-	@echo 9. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
-	@echo 10. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 11. Update checksums on AWS for tarball and packaged binaries
-	@echo 12. Announce on mailing lists
-	@echo 13. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 5. Update SPDX document by running the script contrib/updateSPDX.jl
+	@echo 6. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
+	@echo 7. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
+	@echo 8. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
+	@echo 9. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
+	@echo 10. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
+	@echo 11. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 12. Update checksums on AWS for tarball and packaged binaries
+	@echo 13. Announce on mailing lists
+	@echo 14. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
@@ -154,7 +157,8 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
 julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
-	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) $(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) \
+	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
+		$(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/etc/write_base_cache.jl) \
 		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
@@ -164,14 +168,14 @@ JL_TARGETS += julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal libjulia-codegen
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
-JL_PRIVATE_LIBS-0 += libjulia-internal-debug
+JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
 ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS-0 += libsuitesparse_wrapper
-JL_PRIVATE_LIBS-$(USE_SYSTEM_SUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
 endif
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
 JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
 JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
 JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
@@ -188,13 +192,9 @@ else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-11jl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-13jl
 endif
-ifeq ($(OS),Darwin)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libosxunwind
-else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
-endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
@@ -294,8 +294,11 @@ endif
 		done \
 	done
 	for suffix in $(JL_PRIVATE_LIBS-1) ; do \
-		lib=$(build_private_libdir)/$${suffix}.$(SHLIB_EXT); \
-		$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+		for lib in $(build_private_libdir)/$${suffix}.$(SHLIB_EXT)*; do \
+			if [ "$${lib##*.}" != "dSYM" ]; then \
+				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) ; \
+			fi \
+		done \
 	done
 endif
 	# Install `7z` into libexec/
@@ -347,20 +350,20 @@ else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	done
 endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
-	if [ $(DARWIN_FRAMEWORK) = 0 ]; then \
-		RELEASE_TARGET=$(DESTDIR)$(libdir)/libjulia.$(SHLIB_EXT); \
-		DEBUG_TARGET=$(DESTDIR)$(libdir)/libjulia-debug.$(SHLIB_EXT); \
+	# Overwrite JL_SYSTEM_IMAGE_PATH in libjulia-internal
+	if [ "$(DARWIN_FRAMEWORK)" = "0" ]; then \
+		RELEASE_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT); \
+		DEBUG_TARGET=$(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT); \
 	else \
 		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
 		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
 	fi; \
 	$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
-	if [ $(BUNDLE_DEBUG_LIBS) = 1 ]; then \
+	if [ "$(BUNDLE_DEBUG_LIBS)" = "1" ]; then \
 		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
-	
+
 	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
@@ -373,14 +376,22 @@ endif
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	# Codesign the libjulia we just modified
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+endif
 
 ifeq ($(BUNDLE_DEBUG_LIBS),1)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+ifeq ($(OS),Darwin)
+	# Codesign the libjulia we just modified
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+endif
 endif
 endif
 
-	# On FreeBSD, remove the build's libdir from each library's RPATH
 ifeq ($(OS),FreeBSD)
+	# On FreeBSD, remove the build's libdir from each library's RPATH
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(libdir) $(build_libdir)
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(private_libdir) $(build_libdir)
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(bindir) $(build_libdir)
@@ -427,7 +438,12 @@ endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 endif
+ifeq ($(OS),Darwin)
+	# If we're on macOS, and we have a codesigning identity, then codesign the binary-dist tarball!
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(BUILDROOT)/julia-$(JULIA_COMMIT)"
+endif
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
+
 
 exe:
 	# run Inno Setup to compile installer
@@ -452,12 +468,14 @@ endif
 	echo "base/version_git.jl" > light-source-dist.tmp
 
 	# Download all stdlibs and include the tarball filenames in light-source-dist.tmp
-	@$(MAKE) -C stdlib getall NO_GIT=1
+	@$(MAKE) -C stdlib getall DEPS_GIT=0 USE_BINARYBUILDER=0
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
 	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
-	# Exclude git, github and CI config files
-	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
+	# Include all git-tracked filenames
+	git ls-files >> light-source-dist.tmp
+
+	# Include documentation filenames
 	find doc/_build/html >> light-source-dist.tmp
 
 # Make tarball with only Julia code + stdlib tarballs
@@ -476,7 +494,7 @@ source-dist:
 # Make tarball with Julia code plus all dependencies
 full-source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
-	@$(MAKE) -C deps getall NO_GIT=1
+	@$(MAKE) -C deps getall DEPS_GIT=0 USE_BINARYBUILDER=0
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
@@ -574,3 +592,6 @@ endif
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')
+
+print-locale:
+	@locale

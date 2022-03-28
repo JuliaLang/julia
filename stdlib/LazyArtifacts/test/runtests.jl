@@ -5,10 +5,12 @@ using Test
 
 mktempdir() do tempdir
     LazyArtifacts.Artifacts.with_artifacts_directory(tempdir) do
-        socrates_dir = artifact"socrates"
-        @test isdir(socrates_dir)
-        ex = @test_throws ErrorException artifact"c_simple"
-        @test startswith(ex.value.msg, "Artifact \"c_simple\" was not installed correctly. ")
+        redirect_stderr(devnull) do
+            socrates_dir = artifact"socrates"
+            @test isdir(socrates_dir)
+        end
+        ex = @test_throws ErrorException artifact"HelloWorldC"
+        @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not installed correctly. ")
     end
 end
 
@@ -18,10 +20,12 @@ end
     using Test
     mktempdir() do tempdir
         Artifacts.with_artifacts_directory(tempdir) do
-            socrates_dir = @test_logs(
-                    (:warn, "using Pkg instead of using LazyArtifacts is deprecated"),
-                    artifact"socrates")
-            @test isdir(socrates_dir)
+            redirect_stderr(devnull) do
+                socrates_dir = @test_logs(
+                        (:warn, "using Pkg instead of using LazyArtifacts is deprecated"),
+                        artifact"socrates")
+                @test isdir(socrates_dir)
+            end
         end
     end'`,
     dir=@__DIR__)))

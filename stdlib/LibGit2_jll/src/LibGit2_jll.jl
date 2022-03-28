@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libgit2
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libgit2_handle = C_NULL
 libgit2_path = ""
@@ -21,16 +21,17 @@ libgit2_path = ""
 if Sys.iswindows()
     const libgit2 = "libgit2.dll"
 elseif Sys.isapple()
-    const libgit2 = "@rpath/libgit2.1.1.dylib"
+    const libgit2 = "@rpath/libgit2.1.3.dylib"
 else
-    const libgit2 = "libgit2.so.1.1"
+    const libgit2 = "libgit2.so.1.3"
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libgit2_handle = dlopen(libgit2)
     global libgit2_path = dlpath(libgit2_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libgit2_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

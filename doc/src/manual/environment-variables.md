@@ -111,6 +111,11 @@ This behavior was chosen so that it would be possible to set an empty load path 
 the environment variable. If you want the default load path, either unset the
 environment variable or if it must have a value, set it to the string `:`.
 
+!!! note
+
+    On Windows, path elements are separated by the `;` character, as is the case with
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
+
 ### `JULIA_DEPOT_PATH`
 
 The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
@@ -140,7 +145,7 @@ or if it must have a value, set it to the string `:`.
 !!! note
 
     On Windows, path elements are separated by the `;` character, as is the case with
-    most path lists on Windows.
+    most path lists on Windows. Replace `:` with `;` in the above paragraph.
 
 ### `JULIA_HISTORY`
 
@@ -150,6 +155,89 @@ The absolute path `REPL.find_hist_file()` of the REPL's history file. If
 ```
 $(DEPOT_PATH[1])/logs/repl_history.jl
 ```
+
+### `JULIA_MAX_NUM_PRECOMPILE_FILES`
+
+Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
+
+## Pkg.jl
+
+### `JULIA_CI`
+
+If set to `true`, this indicates to the package server that any package operations are part of a continuous integration (CI) system for the purposes of gathering package usage statistics.
+
+### `JULIA_NUM_PRECOMPILE_TASKS`
+
+The number of parallel tasks to use when precompiling packages. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### `JULIA_PKG_DEVDIR`
+
+The default directory used by [`Pkg.develop`](https://pkgdocs.julialang.org/v1/api/#Pkg.develop) for downloading packages.
+
+### `JULIA_PKG_IGNORE_HASHES`
+
+If set to `1`, this will ignore incorrect hashes in artifacts. This should be used carefully, as it disables verification of downloads, but can resolve issues when moving files across different types of file systems. See [Pkg.jl issue #2317](https://github.com/JuliaLang/Pkg.jl/issues/2317) for more details.
+
+!!! compat "Julia 1.6"
+    This is only supported in Julia 1.6 and above.
+
+### `JULIA_PKG_OFFLINE`
+
+If set to `true`, this will enable offline mode: see [`Pkg.offline`](https://pkgdocs.julialang.org/v1/api/#Pkg.offline).
+
+!!! compat "Julia 1.5"
+    Pkg's offline mode requires Julia 1.5 or later.
+
+### `JULIA_PKG_PRECOMPILE_AUTO`
+
+If set to `0`, this will disable automatic precompilation by package actions which change the manifest. See [`Pkg.precompile`](https://pkgdocs.julialang.org/v1/api/#Pkg.precompile).
+
+### `JULIA_PKG_SERVER`
+
+Specifies the URL of the package registry to use. By default, `Pkg` uses
+`https://pkg.julialang.org` to fetch Julia packages. In addition, you can disable the use of the PkgServer
+protocol, and instead access the packages directly from their hosts (GitHub, GitLab, etc.)
+by setting: ``` export JULIA_PKG_SERVER="" ```
+
+### `JULIA_PKG_SERVER_REGISTRY_PREFERENCE`
+
+Specifies the preferred registry flavor. Currently supported values are `conservative`
+(the default), which will only publish resources that have been processed by the storage
+server (and thereby have a higher probability of being available from the PkgServers),
+whereas `eager` will publish registries whose resources have not necessarily been
+processed by the storage servers.  Users behind restrictive firewalls that do not allow
+downloading from arbitrary servers should not use the `eager` flavor.
+
+!!! compat "Julia 1.7"
+    This only affects Julia 1.7 and above.
+
+### `JULIA_PKG_UNPACK_REGISTRY`
+
+If set to `true`, this will unpack the registry instead of storing it as a compressed tarball.
+
+!!! compat "Julia 1.7"
+    This only affects Julia 1.7 and above. Earlier versions will always unpack the registry.
+
+### `JULIA_PKG_USE_CLI_GIT`
+
+If set to `true`, Pkg operations which use the git protocol will use an external `git` executable instead of the default libgit2 library.
+
+!!! compat "Julia 1.7"
+    Use of the `git` executable is only supported on Julia 1.7 and above.
+
+### `JULIA_PKGRESOLVE_ACCURACY`
+
+The accuracy of the package resolver. This should be a positive integer, the default is `1`.
+
+## Network transport
+
+### `JULIA_NO_VERIFY_HOSTS` / `JULIA_SSL_NO_VERIFY_HOSTS` / `JULIA_SSH_NO_VERIFY_HOSTS` / `JULIA_ALWAYS_VERIFY_HOSTS`
+
+Specify hosts whose identity should or should not be verified for specific transport layers. See [`NetworkOptions.verify_host`](https://github.com/JuliaLang/NetworkOptions.jl#verify_host)
+
+### `JULIA_SSL_CA_ROOTS_PATH`
+
+Specify the file or directory containing the certificate authority roots. See [`NetworkOptions.ca_roots`](https://github.com/JuliaLang/NetworkOptions.jl#ca_roots)
 
 ## External applications
 
@@ -173,6 +261,8 @@ referring to the command of the preferred editor, for instance `vim`.
 over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
+
+To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
 
 ## Parallelization
 
@@ -225,7 +315,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 
 Environment variables that determine how REPL output should be formatted at the
 terminal. Generally, these variables should be set to [ANSI terminal escape
-sequences](http://ascii-table.com/ansi-escape-sequences.php). Julia provides
+sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
 
@@ -258,7 +348,7 @@ should have at the terminal.
 
 ### `JULIA_DEBUG`
 
-Enable debug logging for a file or module, see [`Logging`](@ref Logging) for more information.
+Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
 
 ### `JULIA_GC_ALLOC_POOL`, `JULIA_GC_ALLOC_OTHER`, `JULIA_GC_ALLOC_PRINT`
 
@@ -320,7 +410,7 @@ event listener for just-in-time (JIT) profiling.
     profiling support, using either
     * Intel's [VTune™ Amplifier](https://software.intel.com/en-us/vtune)
       (`USE_INTEL_JITEVENTS` set to `1` in the build configuration), or
-    * [OProfile](http://oprofile.sourceforge.net/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
+    * [OProfile](https://oprofile.sourceforge.io/news/) (`USE_OPROFILE_JITEVENTS` set to `1`
       in the build configuration).
     * [Perf](https://perf.wiki.kernel.org) (`USE_PERF_JITEVENTS` set to `1`
       in the build configuration). This integration is enabled by default.
@@ -334,5 +424,3 @@ On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
 ### `JULIA_LLVM_ARGS`
 
 Arguments to be passed to the LLVM backend.
-
-

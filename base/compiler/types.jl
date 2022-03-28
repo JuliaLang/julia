@@ -6,16 +6,148 @@
 An abstract base class that allows multiple dispatch to determine the method of
 executing Julia code.  The native Julia LLVM pipeline is enabled by using the
 `NativeInterpreter` concrete instantiation of this abstract class, others can be
-swapped in as long as they follow the AbstractInterpreter API.
+swapped in as long as they follow the `AbstractInterpreter` API.
 
-All AbstractInterpreters are expected to provide at least the following methods:
-
-- InferenceParams(interp) - return an `InferenceParams` instance
-- OptimizationParams(interp) - return an `OptimizationParams` instance
-- get_world_counter(interp) - return the world age for this interpreter
-- get_inference_cache(interp) - return the runtime inference cache
+If `interp` is an `AbstractInterpreter`, it is expected to provide at least the following methods:
+- `InferenceParams(interp)` - return an `InferenceParams` instance
+- `OptimizationParams(interp)` - return an `OptimizationParams` instance
+- `get_world_counter(interp)` - return the world age for this interpreter
+- `get_inference_cache(interp)` - return the runtime inference cache
+- `code_cache(interp)` - return the global inference cache
 """
-abstract type AbstractInterpreter; end
+abstract type AbstractInterpreter end
+
+struct ArgInfo
+    fargs::Union{Nothing,Vector{Any}}
+    argtypes::Vector{Any}
+end
+
+struct TriState; state::UInt8; end
+const ALWAYS_FALSE     = TriState(0x00)
+const ALWAYS_TRUE      = TriState(0x01)
+const TRISTATE_UNKNOWN = TriState(0x02)
+
+function tristate_merge(old::TriState, new::TriState)
+    (old === ALWAYS_FALSE || new === ALWAYS_FALSE) && return ALWAYS_FALSE
+    old === TRISTATE_UNKNOWN && return old
+    return new
+end
+
+struct Effects
+    consistent::TriState
+    effect_free::TriState
+    nothrow::TriState
+    terminates::TriState
+    overlayed::Bool
+    # This effect is currently only tracked in inference and modified
+    # :consistent before caching. We may want to track it in the future.
+    inbounds_taints_consistency::Bool
+end
+function Effects(
+    consistent::TriState,
+    effect_free::TriState,
+    nothrow::TriState,
+    terminates::TriState,
+    overlayed::Bool)
+    return Effects(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates,
+        overlayed,
+        false)
+end
+
+const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
+const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
+
+function Effects(e::Effects = EFFECTS_UNKNOWN;
+    consistent::TriState = e.consistent,
+    effect_free::TriState = e.effect_free,
+    nothrow::TriState = e.nothrow,
+    terminates::TriState = e.terminates,
+    overlayed::Bool = e.overlayed,
+    inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
+    return Effects(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates,
+        overlayed,
+        inbounds_taints_consistency)
+end
+
+is_total_or_error(effects::Effects) =
+    effects.consistent === ALWAYS_TRUE &&
+    effects.effect_free === ALWAYS_TRUE &&
+    effects.terminates === ALWAYS_TRUE
+
+is_total(effects::Effects) =
+    is_total_or_error(effects) &&
+    effects.nothrow === ALWAYS_TRUE
+
+is_removable_if_unused(effects::Effects) =
+    effects.effect_free === ALWAYS_TRUE &&
+    effects.terminates === ALWAYS_TRUE &&
+    effects.nothrow === ALWAYS_TRUE
+
+function encode_effects(e::Effects)
+    return (e.consistent.state << 0) |
+           (e.effect_free.state << 2) |
+           (e.nothrow.state << 4) |
+           (e.terminates.state << 6) |
+           (UInt32(e.overlayed) << 8)
+end
+function decode_effects(e::UInt32)
+    return Effects(
+        TriState((e >> 0) & 0x03),
+        TriState((e >> 2) & 0x03),
+        TriState((e >> 4) & 0x03),
+        TriState((e >> 6) & 0x03),
+        _Bool(   (e >> 8) & 0x01),
+        false)
+end
+
+function tristate_merge(old::Effects, new::Effects)
+    return Effects(
+        tristate_merge(
+            old.consistent, new.consistent),
+        tristate_merge(
+            old.effect_free, new.effect_free),
+        tristate_merge(
+            old.nothrow, new.nothrow),
+        tristate_merge(
+            old.terminates, new.terminates),
+        old.overlayed | new.overlayed,
+        old.inbounds_taints_consistency | new.inbounds_taints_consistency)
+end
+
+struct EffectsOverride
+    consistent::Bool
+    effect_free::Bool
+    nothrow::Bool
+    terminates_globally::Bool
+    terminates_locally::Bool
+end
+
+function encode_effects_override(eo::EffectsOverride)
+    e = 0x00
+    eo.consistent && (e |= 0x01)
+    eo.effect_free && (e |= 0x02)
+    eo.nothrow && (e |= 0x04)
+    eo.terminates_globally && (e |= 0x08)
+    eo.terminates_locally && (e |= 0x10)
+    return e
+end
+
+function decode_effects_override(e::UInt8)
+    return EffectsOverride(
+        (e & 0x01) != 0x00,
+        (e & 0x02) != 0x00,
+        (e & 0x04) != 0x00,
+        (e & 0x08) != 0x00,
+        (e & 0x10) != 0x00)
+end
 
 """
     InferenceResult
@@ -26,15 +158,19 @@ mutable struct InferenceResult
     linfo::MethodInstance
     argtypes::Vector{Any}
     overridden_by_const::BitVector
-    result # ::Type, or InferenceState if WIP
-    src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
+    result                   # ::Type, or InferenceState if WIP
+    src                      # ::Union{CodeInfo, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance, given_argtypes = nothing)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, given_argtypes)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
+    ipo_effects::Effects     # if inference is finished
+    effects::Effects         # if optimization is finished
+    argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
+    function InferenceResult(linfo::MethodInstance,
+                             arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
+        return new(linfo, argtypes, overridden_by_const, Any, nothing,
+            WorldRange(), Effects(; overlayed=false), Effects(; overlayed=false), nothing)
     end
 end
-
 
 """
     OptimizationParams
@@ -48,13 +184,13 @@ struct OptimizationParams
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
+    trust_inference::Bool
+
     # Duplicating for now because optimizer inlining requires it.
     # Keno assures me this will be removed in the near future
     MAX_METHODS::Int
     MAX_TUPLE_SPLAT::Int
     MAX_UNION_SPLITTING::Int
-
-    unoptimize_throw_blocks::Bool
 
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
@@ -65,7 +201,7 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            unoptimize_throw_blocks::Bool = true,
+            trust_inference::Bool = false
         )
         return new(
             inlining,
@@ -73,10 +209,10 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            trust_inference,
             max_methods,
             tuple_splat,
-            union_splitting,
-            unoptimize_throw_blocks,
+            union_splitting
         )
     end
 end
@@ -165,7 +301,6 @@ struct NativeInterpreter <: AbstractInterpreter
         # incorrect, fail out loudly.
         @assert world <= get_world_counter()
 
-
         return new(
             # Initially empty cache
             Vector{InferenceResult}(),
@@ -185,30 +320,70 @@ InferenceParams(ni::NativeInterpreter) = ni.inf_params
 OptimizationParams(ni::NativeInterpreter) = ni.opt_params
 get_world_counter(ni::NativeInterpreter) = ni.world
 get_inference_cache(ni::NativeInterpreter) = ni.cache
-
-code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, ni.world)
+code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(ni))
 
 """
     lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance)
 
-Hint that `mi` is in inference to help accelerate bootstrapping. This helps limit the amount of wasted work we might do when inference is working on initially inferring itself by letting us detect when inference is already in progress and not running a second copy on it. This creates a data-race, but the entry point into this code from C (jl_type_infer) already includes detection and restriction on recursion, so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
+Hint that `mi` is in inference to help accelerate bootstrapping.
+This helps us limit the amount of wasted work we might do when inference is working on initially inferring itself
+by letting us detect when inference is already in progress and not running a second copy on it.
+This creates a data-race, but the entry point into this code from C (`jl_type_infer`) already includes detection and restriction on recursion,
+so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
 """
-lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
+lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
+lock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """
-    See lock_mi_inference
+See `lock_mi_inference`.
 """
-unlock_mi_inference(ni::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = false; nothing)
+unlock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """
-Emit an analysis remark during inference for the current line (`sv.pc`). These annotations are ignored
-by the native interpreter, but can be used by external tooling to annotate
-inference results.
+Emit an analysis remark during inference for the current line (`sv.pc`).
+These annotations are ignored by the native interpreter, but can be used by external tooling
+to annotate inference results.
 """
-add_remark!(ni::NativeInterpreter, sv, s) = nothing
+add_remark!(::AbstractInterpreter, sv#=::InferenceState=#, s) = return
 
-may_optimize(ni::NativeInterpreter) = true
-may_compress(ni::NativeInterpreter) = true
-may_discard_trees(ni::NativeInterpreter) = true
+may_optimize(::AbstractInterpreter) = true
+may_compress(::AbstractInterpreter) = true
+may_discard_trees(::AbstractInterpreter) = true
+verbose_stmt_info(::AbstractInterpreter) = false
 
-method_table(ai::AbstractInterpreter) = InternalMethodTable(get_world_counter(ai))
+"""
+    method_table(interp::AbstractInterpreter) -> MethodTableView
+
+Returns a method table this `interp` uses for method lookup.
+External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
+to incorporate customized dispatches for the overridden methods.
+"""
+method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
+
+"""
+By default `AbstractInterpreter` implements the following inference bail out logic:
+- `bail_out_toplevel_call(::AbstractInterpreter, sig, ::InferenceState)`: bail out from inter-procedural inference when inferring top-level and non-concrete call site `callsig`
+- `bail_out_call(::AbstractInterpreter, rt, ::InferenceState)`: bail out from inter-procedural inference when return type `rt` grows up to `Any`
+- `bail_out_apply(::AbstractInterpreter, rt, ::InferenceState)`: bail out from `_apply_iterate` inference when return type `rt` grows up to `Any`
+
+It also bails out from local statement/frame inference when any lattice element gets down to `Bottom`,
+but `AbstractInterpreter` doesn't provide a specific interface for configuring it.
+"""
+bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv#=::InferenceState=#) =
+    return sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
+    return rt === Any
+bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
+    return rt === Any
+
+"""
+    infer_compilation_signature(::AbstractInterpreter)::Bool
+
+For some call sites (for example calls to varargs methods), the signature to be compiled
+and executed at run time can differ from the argument types known at the call site.
+This flag controls whether we should always infer the compilation signature in addition
+to the call site signature.
+"""
+infer_compilation_signature(::AbstractInterpreter) = false
+infer_compilation_signature(::NativeInterpreter) = true

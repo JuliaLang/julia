@@ -57,6 +57,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    LazyString,
     Matrix,
     MergeSort,
     Missing,
@@ -70,6 +71,7 @@ export
     Rational,
     Regex,
     RegexMatch,
+    Returns,
     RoundFromZero,
     RoundDown,
     RoundingMode,
@@ -120,6 +122,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
@@ -168,6 +171,10 @@ export
     ≢,
     xor,
     ⊻,
+    nand,
+    nor,
+    ⊼,
+    ⊽,
     %,
     ÷,
     &,
@@ -380,12 +387,14 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
     first,
     hcat,
     hvcat,
+    hvncat,
     indexin,
     argmax,
     argmin,
@@ -467,7 +476,6 @@ export
 # linear algebra
     var"'", # to enable syntax a' for adjoint
     adjoint,
-    var"'ᵀ",
     transpose,
     kron,
     kron!,
@@ -490,6 +498,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,
@@ -499,6 +508,7 @@ export
     count,
     delete!,
     deleteat!,
+    keepat!,
     eltype,
     empty!,
     empty,
@@ -567,11 +577,14 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -671,6 +684,7 @@ export
     istaskstarted,
     istaskfailed,
     lock,
+    @lock,
     notify,
     ReentrantLock,
     schedule,
@@ -683,6 +697,7 @@ export
     timedwait,
     asyncmap,
     asyncmap!,
+    errormonitor,
 
 # channels
     take!,
@@ -693,9 +708,11 @@ export
 
 # missing values
     coalesce,
+    @coalesce,
     ismissing,
     missing,
     skipmissing,
+    @something,
     something,
     isnothing,
     nonmissingtype,
@@ -708,6 +725,7 @@ export
 # errors
     backtrace,
     catch_backtrace,
+    current_exceptions,
     error,
     rethrow,
     retry,
@@ -720,6 +738,9 @@ export
     convert,
     getproperty,
     setproperty!,
+    swapproperty!,
+    modifyproperty!,
+    replaceproperty!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -789,6 +810,7 @@ export
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
     readeach,
@@ -822,6 +844,7 @@ export
     readline,
     readlines,
     readuntil,
+    redirect_stdio,
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,
@@ -876,10 +899,12 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
     gperm,
+    hardlink,
     isblockdev,
     ischardev,
     isdir,
@@ -913,7 +938,7 @@ export
     uperm,
     walkdir,
 
-# external processes ## TODO: whittle down these exports.
+# external processes
     detach,
     getpid,
     ignorestatus,
@@ -923,6 +948,7 @@ export
     run,
     setenv,
     addenv,
+    setcpuaffinity,
     success,
     withenv,
 
@@ -963,6 +989,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @lazy_str, # lazy string
 
     # documentation
     @text_str,
@@ -974,6 +1001,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,
@@ -1003,6 +1031,9 @@ export
     @polly,
 
     @assert,
+    @atomic,
+    @atomicswap,
+    @atomicreplace,
     @__dot__,
     @enum,
     @label,

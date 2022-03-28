@@ -60,7 +60,7 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = "ARRAY{FLOAT64, N}"
+tag = "ARRAY"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
@@ -106,6 +106,7 @@ end # module ImportIntrinsics15819
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
+tag = "ANY"
 @test !warntype_hastag(+, Tuple{Int,Int}, tag)
 @test !warntype_hastag(-, Tuple{Int,Int}, tag)
 @test !warntype_hastag(*, Tuple{Int,Int}, tag)
@@ -198,6 +199,10 @@ end
 let v = repr(varinfo(_test_varinfo_, all = true, recursive = true))
     @test occursin("inner_x", v)
 end
+let v = repr(varinfo(_test_varinfo_, all = true, minsize = 9))
+    @test !occursin("x_exported", v) # excluded: 8 bytes
+    @test occursin("a_smaller", v)
+end
 
 # Issue 14173
 module Tmp14173
@@ -252,6 +257,10 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test (@which Int[1; 2]).name === :typed_vcat
 @test (@which [1 2;3 4]).name === :hvcat
 @test (@which Int[1 2;3 4]).name === :typed_hvcat
+# issue #39426
+let x..y = 0
+    @test (@which 1..2).name === :..
+end
 
 # issue #13464
 try
@@ -305,7 +314,7 @@ end
 
 # manually generate a broken function, which will break codegen
 # and make sure Julia doesn't crash
-@eval @noinline f_broken_code() = 0
+@eval @noinline @Base.constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
@@ -326,7 +335,7 @@ let err = tempname(),
         redirect_stderr(new_stderr)
         println(new_stderr, "start")
         flush(new_stderr)
-        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
@@ -336,10 +345,11 @@ let err = tempname(),
         close(new_stderr)
         let errstr = read(err, String)
             @test startswith(errstr, """start
+                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
                 """) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+            @test !endswith(errstr, "\nend\n") || errstr
         end
         rm(err)
     end
@@ -437,23 +447,36 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
 
     rgx = r"%"
     buf = IOBuffer()
-    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
     code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
-    output = String(take!(buf))
-
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
-    output = String(take!(buf))
-
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
     code_native(buf, linear_foo, ())
     output = String(take!(buf))
-
     @test occursin(rgx, output)
+
+    @testset "binary" begin
+        # check the RET instruction (opcode: C3)
+        ret = r"^; [0-9a-f]{4}: c3$"m
+
+        # without binary flag (default)
+        code_native(buf, linear_foo, (), dump_module=false)
+        output = String(take!(buf))
+        @test !occursin(ret, output)
+
+        # with binary flag
+        for binary in false:true
+            code_native(buf, linear_foo, (); binary, dump_module=false)
+            output = String(take!(buf))
+            @test occursin(ret, output) == binary
+        end
+    end
 end
 
 @testset "error message" begin
@@ -545,8 +568,105 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+@testset "buildbot path updating" begin
+    file, ln = functionloc(versioninfo, Tuple{})
+    @test isfile(file)
+
+    e = try versioninfo("wat")
+    catch e
+        e
+    end
+    @test e isa MethodError
+    m = @which versioninfo()
+    s = sprint(showerror, e)
+    m = match(Regex("at (.*?):$(m.line)"), s)
+    @test isfile(expanduser(m.captures[1]))
+
+    g() = x
+    e, bt = try code_llvm(g, Tuple{Int})
+    catch e
+        e, catch_backtrace()
+    end
+    @test e isa Exception
+    s = sprint(showerror, e, bt)
+    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    @test isfile(expanduser(m.captures[1]))
+end
+
 @testset "Issue #34434" begin
     io = IOBuffer()
     code_native(io, eltype, Tuple{Int})
     @test occursin("eltype", String(take!(io)))
+end
+
+@testset "Issue #41010" begin
+    struct A41010 end
+
+    struct B41010
+        a::A41010
+    end
+    export B41010
+
+    ms = methodswith(A41010, @__MODULE__) |> collect
+    @test ms[1].name == :B41010
+end
+
+# macro options should accept both literals and variables
+let
+    opt = false
+    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+end
+
+@testset "@time_imports" begin
+    mktempdir() do dir
+        cd(dir) do
+            try
+                pushfirst!(LOAD_PATH, dir)
+                foo_file = joinpath(dir, "Foo3242.jl")
+                write(foo_file,
+                    """
+                    module Foo3242
+                    foo() = 1
+                    end
+                    """)
+
+                Base.compilecache(Base.PkgId("Foo3242"))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stdout(f) do
+                    @eval @time_imports using Foo3242
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms  Foo3242\n", String(buf))
+
+            finally
+                filter!((≠)(dir), LOAD_PATH)
+            end
+        end
+    end
+end
+
+let # `default_tt` should work with any function with one method
+    @test (code_warntype(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_warntype(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_llvm(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_llvm(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_native(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_native(devnull, function (a::Int)
+        sin(a)
+    end); true)
 end

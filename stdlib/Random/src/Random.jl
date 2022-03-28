@@ -13,6 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
@@ -27,7 +28,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
 ## general definitions
 
@@ -291,16 +292,22 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
 
+
+include("Xoshiro.jl")
 include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=default_rng()], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
@@ -345,14 +352,14 @@ julia> rand(Float64, (2, 3))
     The complexity of `rand(rng, s::Union{AbstractDict,AbstractSet})`
     is linear in the length of `s`, unless an optimized method with
     constant complexity is available, which is the case for `Dict`,
-    `Set` and `BitSet`. For more than a few calls, use `rand(rng,
+    `Set` and dense `BitSet`s. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
 """
 rand
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=default_rng()], A, [S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -376,8 +383,8 @@ julia> rand!(rng, zeros(5))
 rand!
 
 """
-    seed!([rng=GLOBAL_RNG], seed) -> rng
-    seed!([rng=GLOBAL_RNG]) -> rng
+    seed!([rng=default_rng()], seed) -> rng
+    seed!([rng=default_rng()]) -> rng
 
 Reseed the random number generator: `rng` will give a reproducible
 sequence of numbers if and only if a `seed` is provided. Some RNGs
@@ -386,7 +393,7 @@ After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
 
 If `rng` is not specified, it defaults to seeding the state of the
-shared thread-local generator.
+shared task-local generator.
 
 # Examples
 ```julia-repl

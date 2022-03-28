@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector
+using Core: CodeInfo, SimpleVector, donotdelete
 
 const Callable = Union{Function,Type}
 
@@ -23,14 +23,24 @@ An `AbstractDict{K, V}` should be an iterator of `Pair{K, V}`.
 """
 abstract type AbstractDict{K,V} end
 
-# The real @inline macro is not available until after array.jl, so this
-# internal macro splices the meta Expr directly into the function body.
-macro _inline_meta()
-    Expr(:meta, :inline)
+"""
+    Iterators.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
+
+Transforms an indexable container into a Dictionary-view of the same data.
+Modifying the key-space of the underlying data may invalidate this object.
+"""
+struct Pairs{K, V, I, A} <: AbstractDict{K, V}
+    data::A
+    itr::I
 end
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
+Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = Pairs{K, V, I, A}(data, itr)
+Pairs{K}(data::A, itr::I) where {K, I, A} = Pairs{K, eltype(A), I, A}(data, itr)
+Pairs(data::A, itr::I) where  {I, A} = Pairs{eltype(I), eltype(A), I, A}(data, itr)
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+
+## optional pretty printer:
+#const NamedTuplePair{N, V, names, T<:NTuple{N, Any}} = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}}
+#export NamedTuplePair
 
 macro _gc_preserve_begin(arg1)
     Expr(:gc_preserve_begin, esc(arg1))
@@ -111,7 +121,8 @@ end
 
 Tests whether variable `s` is defined in the current scope.
 
-See also [`isdefined`](@ref).
+See also [`isdefined`](@ref) for field properties and [`isassigned`](@ref) for
+array indexes or [`haskey`](@ref) for other mappings.
 
 # Examples
 ```jldoctest
@@ -170,7 +181,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
+If `T` is a [`AbstractFloat`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
@@ -180,11 +191,8 @@ julia> x = 1/3
 julia> convert(Float32, x)
 0.33333334f0
 
-julia> convert(Rational{Int32}, x)
-1//3
-
-julia> convert(Rational{Int64}, x)
-6004799503160661//18014398509481984
+julia> convert(BigFloat, x)
+0.333333333333333314829616256247390992939472198486328125
 ```
 
 If `T` is a collection type and `x` a collection, the result of
@@ -197,12 +205,12 @@ julia> y = convert(Vector{Int}, x);
 julia> y === x
 true
 ```
+
+See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
 """
 function convert end
 
-convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
-convert(::Type{Any}, x) = x
-convert(::Type{T}, x::T) where {T} = x
+convert(::Type{Union{}}, @nospecialize x) = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
@@ -228,6 +236,8 @@ argtail(x, rest...) = rest
     tail(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the first component of `x`.
+
+See also: [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
 
 # Examples
 ```jldoctest
@@ -257,10 +267,14 @@ end
 
 function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
     isdefined(t, :T) || return t
-    if !isdefined(t, :N) || t.N === u.var
-        return Vararg{rewrap_unionall(t.T, u)}
+    if !isa(u, UnionAll)
+        return t
     end
-    Vararg{rewrap_unionall(t.T, u), t.N}
+    T = rewrap_unionall(t.T, u)
+    if !isdefined(t, :N) || t.N === u.var
+        return Vararg{T}
+    end
+    return Vararg{T, t.N}
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
@@ -312,7 +326,7 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-_tuple_error(T::Type, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
+_tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
 function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
@@ -321,7 +335,7 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@_inline_meta; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -428,7 +442,9 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
     sizeof(obj)
 
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
-Size, in bytes, of object `obj` if it is not `DataType`.
+Or the size, in bytes, of object `obj` if it is not a `DataType`.
+
+See also [`summarysize`](@ref).
 
 # Examples
 ```jldoctest
@@ -441,7 +457,7 @@ julia> sizeof(ComplexF64)
 julia> sizeof(1.0)
 8
 
-julia> sizeof([1.0:10.0;])
+julia> sizeof(collect(1.0:10.0))
 80
 ```
 
@@ -456,21 +472,24 @@ Stacktrace:
 """
 sizeof(x) = Core.sizeof(x)
 
+"""
+    ifelse(condition::Bool, x, y)
+
+Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
+that it is an ordinary function, so all the arguments are evaluated first. In some cases,
+using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
+provide higher performance in tight loops.
+
+# Examples
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
+"""
+ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
+
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
-
-"""
-    precompile(f, args::Tuple{Vararg{Any}})
-
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
-"""
-function precompile(@nospecialize(f), args::Tuple)
-    ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
-end
-
-function precompile(argt::Type)
-    ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
-end
 
 """
     esc(e)
@@ -521,7 +540,7 @@ julia> f2()
     As noted there, the caller must verify—using information they can access—that
     their accesses are valid before using `@inbounds`. For indexing into your
     [`AbstractArray`](@ref) subclasses, for example, this involves checking the
-    indices against its [`size`](@ref). Therefore, `@boundscheck` annotations
+    indices against its [`axes`](@ref). Therefore, `@boundscheck` annotations
     should only be added to a [`getindex`](@ref) or [`setindex!`](@ref)
     implementation after you are certain its behavior is correct.
 """
@@ -705,7 +724,7 @@ call obsolete versions of a function `f`.
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    kwargs = Base.merge(NamedTuple(), kwargs)
+    kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end
@@ -747,12 +766,19 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
 end
 
 # TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
 
 """
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
+
+!!! warning
+
+    `isempty(itr)` may consume the next element of a stateful iterator `itr`
+    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
+    Use of `isempty` should therefore be avoided when writing generic
+    code which should support any iterator type.
 
 # Examples
 ```jldoctest
@@ -798,6 +824,8 @@ values(itr) = itr
 
 A type with no fields whose singleton instance [`missing`](@ref) is used
 to represent missing values.
+
+See also: [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
 """
 struct Missing end
 
@@ -805,6 +833,8 @@ struct Missing end
     missing
 
 The singleton instance of type [`Missing`](@ref) representing a missing value.
+
+See also: [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
 """
 const missing = Missing()
 
@@ -812,9 +842,10 @@ const missing = Missing()
     ismissing(x)
 
 Indicate whether `x` is [`missing`](@ref).
+
+See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
-ismissing(::Any) = false
-ismissing(::Missing) = true
+ismissing(x) = x === missing
 
 function popfirst! end
 

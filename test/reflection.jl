@@ -197,9 +197,9 @@ let
     @test TestMod7648.TestModSub9475 == which(@__MODULE__, :a9475)
 end
 
-@test_throws ArgumentError("argument is not a generic function") which(===, Tuple{Int, Int})
-@test_throws ArgumentError("argument is not a generic function") code_typed(===, Tuple{Int, Int})
-@test_throws ArgumentError("argument is not a generic function") Base.return_types(===, Tuple{Int, Int})
+@test which(===, Tuple{Int, Int}) isa Method
+@test length(code_typed(===, Tuple{Int, Int})) === 1
+@test only(Base.return_types(===, Tuple{Int, Int})) === Any
 
 module TestingExported
 using Test
@@ -224,7 +224,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T, N}, ::Array, ::Vector{T} where T)")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} in")
 
 mutable struct TLayout
     x::Int8
@@ -545,7 +545,6 @@ end
 # code_typed_by_type
 @test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
-@test_throws ErrorException("signature does not correspond to a generic function") Base.code_typed_by_type(Tuple{Any})
 
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
@@ -883,6 +882,7 @@ _test_at_locals2(1,1,0.5f0)
     _dump_function(f31687_parent, Tuple{},
                    #=native=#false, #=wrapper=#false, #=strip=#false,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
+                   #=binary=#false,
                    params)
 end
 
@@ -934,4 +934,33 @@ end
     @test f !== Core._apply_iterate
     @test f !== Core._apply
     @test occursin("f2#", String(nameof(f)))
+end
+
+
+@testset "code_typed(; world)" begin
+    mod = @eval module $(gensym()) end
+
+    @eval mod foo() = 1
+    world1 = Base.get_world_counter()
+    @test only(code_typed(mod.foo, ())).second == Int
+    @test only(code_typed(mod.foo, (); world=world1)).second == Int
+
+    @eval mod foo() = 2.
+    world2 = Base.get_world_counter()
+    @test only(code_typed(mod.foo, ())).second == Float64
+    @test only(code_typed(mod.foo, (); world=world1)).second == Int
+    @test only(code_typed(mod.foo, (); world=world2)).second == Float64
+end
+
+@testset "default_tt" begin
+    m = Module()
+    @eval m f1() = return
+    @test Base.default_tt(m.f1) == Tuple{}
+    @eval m f2(a) = return
+    @test Base.default_tt(m.f2) == Tuple{Any}
+    @eval m f3(a::Integer) = return
+    @test Base.default_tt(m.f3) == Tuple{Integer}
+    @eval m f4() = return
+    @eval m f4(a) = return
+    @test Base.default_tt(m.f4) == Tuple
 end

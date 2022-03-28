@@ -12,8 +12,8 @@ const LIBPATH_list = String[]
 export libmbedcrypto, libmbedtls, libmbedx509
 
 # These get calculated in __init__()
-PATH = Ref("")
-LIBPATH = Ref("")
+const PATH = Ref("")
+const LIBPATH = Ref("")
 artifact_dir = ""
 libmbedcrypto_handle = C_NULL
 libmbedcrypto_path = ""
@@ -27,24 +27,25 @@ if Sys.iswindows()
     const libmbedtls = "libmbedtls.dll"
     const libmbedx509 = "libmbedx509.dll"
 elseif Sys.isapple()
-    const libmbedcrypto = "@rpath/libmbedcrypto.5.dylib"
-    const libmbedtls = "@rpath/libmbedtls.13.dylib"
+    const libmbedcrypto = "@rpath/libmbedcrypto.7.dylib"
+    const libmbedtls = "@rpath/libmbedtls.14.dylib"
     const libmbedx509 = "@rpath/libmbedx509.1.dylib"
 else
-    const libmbedcrypto = "libmbedcrypto.so.5"
-    const libmbedtls = "libmbedtls.so.13"
+    const libmbedcrypto = "libmbedcrypto.so.7"
+    const libmbedtls = "libmbedtls.so.14"
     const libmbedx509 = "libmbedx509.so.1"
 end
 
 function __init__()
-    global artifact_dir = dirname(Sys.BINDIR)
-    global LIBPATH[] = joinpath(Sys.BINDIR, Base.LIBDIR, "julia")
     global libmbedcrypto_handle = dlopen(libmbedcrypto)
     global libmbedcrypto_path = dlpath(libmbedcrypto_handle)
     global libmbedtls_handle = dlopen(libmbedtls)
     global libmbedtls_path = dlpath(libmbedtls_handle)
     global libmbedx509_handle = dlopen(libmbedx509)
     global libmbedx509_path = dlpath(libmbedx509_handle)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libmbedtls_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

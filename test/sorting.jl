@@ -35,6 +35,8 @@ end
     @test sort([2,3,1], rev=true) == [3,2,1] == sort([2,3,1], order=Reverse)
     @test sort(['z':-1:'a';]) == ['a':'z';]
     @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
+    @test sort(OffsetVector([3,1,2], -2)) == OffsetVector([1,2,3], -2)
+    @test sort(OffsetVector([3.0,1.0,2.0], 2), rev=true) == OffsetVector([3.0,2.0,1.0], 2)
 end
 
 @testset "sortperm" begin
@@ -46,6 +48,8 @@ end
         @test r === s
     end
     @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
+    @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
 end
 
 @testset "misc sorting" begin
@@ -53,6 +57,8 @@ end
     @test issorted([1,2,3])
     @test reverse([2,3,1]) == [1,3,2]
     @test sum(randperm(6)) == 21
+    @test length(reverse(0x1:0x2)) == 2
+    @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
 end
 
 @testset "partialsort" begin
@@ -105,7 +111,7 @@ end
         @test searchsorted(fill(R(1), 15), T(1), 6, 10, Forward) == 6:10
     end
 
-    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+    for (rg,I) in Any[(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = [rg;], [rg_r;]
         for i = I
@@ -142,9 +148,29 @@ end
         @test searchsortedlast(500:1.0:600, 1.0e20) == 101
     end
 
+    @testset "issue 10966" begin
+        for R in numTypes, T in numTypes
+            @test searchsortedfirst(R(2):R(2), T(0)) == 1
+            @test searchsortedfirst(R(2):R(2), T(2)) == 1
+            @test searchsortedfirst(R(2):R(2), T(3)) == 2
+            @test searchsortedfirst(R(1):1//2:R(5), T(0)) == 1
+            @test searchsortedfirst(R(1):1//2:R(5), T(2)) == 3
+            @test searchsortedfirst(R(1):1//2:R(5), T(6)) == 10
+            @test searchsortedlast(R(2):R(2), T(0)) == 0
+            @test searchsortedlast(R(2):R(2), T(2)) == 1
+            @test searchsortedlast(R(2):R(2), T(3)) == 1
+            @test searchsortedlast(R(1):1//2:R(5), T(0)) == 0
+            @test searchsortedlast(R(1):1//2:R(5), T(2)) == 3
+            @test searchsortedlast(R(1):1//2:R(5), T(6)) == 9
+            @test searchsorted(R(2):R(2), T(0)) === 1:0
+            @test searchsorted(R(2):R(2), T(2)) == 1:1
+            @test searchsorted(R(2):R(2), T(3)) === 2:1
+        end
+    end
+
     @testset "issue 32568" begin
         for R in numTypes, T in numTypes
-            for arr in [R[1:5;], R(1):R(5), R(1):2:R(5)]
+            for arr in Any[R[1:5;], R(1):R(5), R(1):2:R(5)]
                 @test eltype(searchsorted(arr, T(2))) == keytype(arr)
                 @test eltype(searchsorted(arr, T(2), big(1), big(4), Forward)) == keytype(arr)
                 @test searchsortedfirst(arr, T(2)) isa keytype(arr)
@@ -164,35 +190,45 @@ end
         @test searchsorted([1,2], Inf) === 3:2
         @test searchsorted(1:2,   Inf) === 3:2
 
-        for coll in [
+        for coll in Any[
                 Base.OneTo(10),
                 1:2,
+                0x01:0x02,
                 -4:6,
                 5:2:10,
                 [1,2],
                 1.0:4,
                 [10.0,20.0],
             ]
-            for huge in [Inf, 1e300]
+            for huge in Any[Inf, 1e300, typemax(Int64), typemax(UInt64)]
                 @test searchsortedfirst(coll, huge) === lastindex(coll) + 1
-                @test searchsortedfirst(coll, -huge)=== firstindex(coll)
                 @test searchsortedlast(coll, huge)  === lastindex(coll)
-                @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
                 @test searchsorted(coll, huge)      === lastindex(coll)+1 : lastindex(coll)
-                @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+                if !(eltype(coll) <: Unsigned)
+                    @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
+                    @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
+                    @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
+                end
 
-                @test searchsortedfirst(reverse(coll), huge, rev=true) === firstindex(coll)
-                @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
-                @test searchsortedlast(reverse(coll), huge, rev=true) === firstindex(coll) - 1
-                @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
-                @test searchsorted(reverse(coll), huge, rev=true) === firstindex(coll):firstindex(coll) - 1
-                @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+                if !(huge isa Unsigned)
+                    @test searchsortedfirst(coll, -huge)=== firstindex(coll)
+                    @test searchsortedlast(coll, -huge) === firstindex(coll) - 1
+                    @test searchsorted(coll, -huge)     === firstindex(coll) : firstindex(coll) - 1
+                    if !(eltype(coll) <: Unsigned)
+                        @test searchsortedfirst(reverse(coll), -huge, rev=true) === lastindex(coll) + 1
+                        @test searchsortedlast(reverse(coll), -huge, rev=true) === lastindex(coll)
+                        @test searchsorted(reverse(coll), -huge, rev=true) === lastindex(coll)+1:lastindex(coll)
+                    end
+                end
             end
         end
-        @testset "issue ##34408" begin
+
+        @testset "issue #34408" begin
             r = 1f8-10:1f8
             # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
-            @test_broken searchsorted(collect(r)) == searchsorted(r)
+            for i in r
+                @test_broken searchsorted(collect(r), i) == searchsorted(r, i)
+            end
         end
     end
     @testset "issue #35272" begin
@@ -329,7 +365,7 @@ end
         @test insorted(T(10), R.(collect(1:10)), by=(>=(5)))
     end
 
-    for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
+    for (rg,I) in Any[(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
         rg_r = reverse(rg)
         rgv, rgv_r = collect(rg), collect(rg_r)
         for i = I
@@ -631,6 +667,22 @@ end
     a = OffsetArray([9:-1:0;], -5)
     Base.Sort.sort_int_range!(a, 10, 0, identity)
     @test issorted(a)
+end
+
+@testset "sort!(::OffsetMatrix; dims)" begin
+    x = OffsetMatrix(rand(5,5), 5, -5)
+    sort!(x; dims=1)
+    for i in axes(x, 2)
+        @test issorted(x[:,i])
+    end
+end
+
+@testset "searchsortedfirst/last with generalized indexing" begin
+    o = OffsetVector(1:3, -2)
+    @test searchsortedfirst(o, 4) == lastindex(o) + 1
+    @test searchsortedfirst(o, 1.5) == 0
+    @test searchsortedlast(o, 0) == firstindex(o) - 1
+    @test searchsortedlast(o, 1.5) == -1
 end
 
 end
