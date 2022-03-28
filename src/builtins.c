@@ -111,8 +111,8 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 if ((ptra == NULL) != (ptrb == NULL)) {
                     return 0;
                 }
-                else {
-                    continue;
+                else if (ptra == NULL) { // implies ptrb == NULL
+                    continue; // skip this field (it is #undef)
                 }
             }
             if (!ft->layout->haspadding) {
