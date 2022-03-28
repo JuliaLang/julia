@@ -1035,7 +1035,7 @@ end
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    _showcomposed(io, c.outer)
+    c.outer isa ComposedFunction ? show(io, c.outer) : _showcomposed(io, c.outer)
     print(io, " ∘ ")
     _showcomposed(io, c.inner)
 end
@@ -1052,7 +1052,21 @@ _showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); sh
 #nesting for chained composition
 _showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
 #no nesting when ! is the outer function in a composition chain
-_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = (print(io, '!'); show(io, f.inner))
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
+
+function show_function(io::IO, c::ComposedFunction, compact::Bool)
+    if compact
+        show(io, c)
+    else
+        print(io, "ComposedFunction(")
+        show_function(io, c.outer, false)
+        print(io, ", ")
+        show_function(io, c.inner, false)
+        print(io, ')')
+    end
+end
+
+show_function(io::IO, x, ::Bool) = show(io, x)
 
 """
     !f::Function
