@@ -276,7 +276,7 @@ function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
     lmul!(D, At)
 end
 
-function __muldiag!(out, D::Diagonal, B, alpha, beta)
+@inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -297,7 +297,7 @@ function __muldiag!(out, D::Diagonal, B, alpha, beta)
     end
     return out
 end
-function __muldiag!(out, A, D::Diagonal, alpha, beta)
+@inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -320,25 +320,18 @@ function __muldiag!(out, A, D::Diagonal, alpha, beta)
     end
     return out
 end
-function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
+@inline function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
     d1 = D1.diag
     d2 = D2.diag
-    if iszero(alpha)
-        _rmul_or_fill!(out.diag, beta)
-    else
-        if iszero(beta)
-            @inbounds @simd for i in eachindex(out.diag)
-                out.diag[i] = d1[i] * d2[i] * alpha
-            end
-        else
-            @inbounds @simd for i in eachindex(out.diag)
-                out.diag[i] = d1[i] * d2[i] * alpha + out.diag[i] * beta
-            end
+    _rmul_or_fill!(out.diag, beta)
+    if !iszero(alpha)
+        @inbounds @simd for i in eachindex(out.diag)
+            out.diag[i] += d1[i] * d2[i] * alpha
         end
     end
     return out
 end
-function __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta)
+@inline function __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta)
     require_one_based_indexing(out)
     mA = size(D1, 1)
     d1 = D1.diag
@@ -352,7 +345,7 @@ function __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta)
     return out
 end
 
-function _muldiag!(out, A, B, alpha, beta)
+@inline function _muldiag!(out, A, B, alpha, beta)
     _muldiag_size_check(out, A, B)
     __muldiag!(out, A, B, alpha, beta)
     return out
