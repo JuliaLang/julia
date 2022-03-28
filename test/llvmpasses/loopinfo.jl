@@ -2,7 +2,8 @@
 
 # RUN: julia --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s
-# RUN: cat %t/module.ll | opt -load libjulia%shlibext -LowerSIMDLoop -S - | FileCheck %s -check-prefix=LOWER
+# RUN: cat %t/module.ll | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerSIMDLoop -S - | FileCheck %s -check-prefix=LOWER
+# RUN: cat %t/module.ll | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='LowerSIMDLoop' -S - | FileCheck %s -check-prefix=LOWER
 # RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s -check-prefix=FINAL
 
@@ -63,10 +64,10 @@ end
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO3:![0-9]+]]
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL-NOT: call void @julia_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL-NOT: call void @j_iteration
 # FINAL: br
     end
 end
@@ -89,30 +90,31 @@ end
 # CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO4:![0-9]+]]
 # LOWER-NOT: call void @julia.loopinfo_marker()
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL: call void @julia_iteration
-# FINAL-NOT: call void @julia_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL: call void @j_iteration
+# FINAL-NOT: call void @j_iteration
     end
 end
 
 # FINAL-LABEL: @julia_notunroll
-function notunroll(J, I)
+@eval function notunroll(J, I)
     for i in 1:10
         for j in J
             1 <= j <= I && continue
             @show (i,j)
             iteration(i)
-# FINAL: call void @julia_iteration
-# FINAL-NOT: call void @julia_iteration
+# FINAL: call void @j_iteration
+# FINAL-NOT: call void @j_iteration
         end
+        $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.disable"),)))
     end
 end
 

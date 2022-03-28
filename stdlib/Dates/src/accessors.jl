@@ -41,12 +41,19 @@ function week(days)
     return div(w, 28) + 1
 end
 
+function quarter(days)
+    m = month(days)
+    return m < 4 ? 1 : m < 7 ? 2 : m < 10 ? 3 : 4
+end
+
+
 # Accessor functions
 value(dt::TimeType) = dt.instant.periods.value
 value(t::Time) = t.instant.value
 days(dt::Date) = value(dt)
 days(dt::DateTime) = fld(value(dt), 86400000)
 year(dt::TimeType) = year(days(dt))
+quarter(dt::TimeType) = quarter(days(dt))
 month(dt::TimeType) = month(days(dt))
 week(dt::TimeType) = week(days(dt))
 day(dt::TimeType) = day(days(dt))
@@ -68,7 +75,7 @@ monthday(dt::TimeType) = monthday(days(dt))
 yearmonthday(dt::TimeType) = yearmonthday(days(dt))
 
 # Documentation for exported accessors
-for func in (:year, :month)
+for func in (:year, :month, :quarter)
     name = string(func)
     @eval begin
         @doc """

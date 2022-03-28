@@ -28,6 +28,20 @@ using Test, LinearAlgebra
         @test broadcast!(+, Z, fV, fA, X) == broadcast(+, fV, fA, fX)
         @test (Q = broadcast(*, s, fV, fA, X); Q isa Matrix && Q == broadcast(*, s, fV, fA, fX))
         @test broadcast!(*, Z, s, fV, fA, X) == broadcast(*, s, fV, fA, fX)
+
+        @test X .* 2.0 == X .* (2.0,) == fX .* 2.0
+        @test X .* 2.0 isa typeof(X)
+        @test X .* (2.0,) isa typeof(X)
+        @test isequal(X .* Inf, fX .* Inf)
+
+        two = 2
+        @test X .^ 2 ==  X .^ (2,) == fX .^ 2 == X .^ two
+        @test X .^ 2 isa typeof(X)
+        @test X .^ (2,) isa typeof(X)
+        @test X .^ two isa typeof(X)
+        @test X .^ 0 == fX .^ 0
+        @test X .^ -1 == fX .^ -1
+
         for (Y, fY) in zip(structuredarrays, fstructuredarrays)
             @test broadcast(+, X, Y) == broadcast(+, fX, fY)
             @test broadcast!(+, Z, X, Y) == broadcast(+, fX, fY)
@@ -146,4 +160,80 @@ end
     @test L .+ UnitL .+ UnitU .+ U .+ D == L + UnitL + UnitU + U + D
     @test L .+ U .+ D .+ D .+ D .+ D == L + U + D + D + D + D
 end
+@testset "Broadcast Returned Types" begin
+    # Issue 35245
+    N = 3
+    dV = rand(N)
+    evu = rand(N-1)
+    evl = rand(N-1)
+
+    Bu = Bidiagonal(dV, evu, :U)
+    Bl = Bidiagonal(dV, evl, :L)
+    T = Tridiagonal(evl, dV * 2, evu)
+
+    @test typeof(Bu .+ Bl) <: Tridiagonal
+    @test typeof(Bl .+ Bu) <: Tridiagonal
+    @test typeof(Bu .+ Bu) <: Bidiagonal
+    @test typeof(Bl .+ Bl) <: Bidiagonal
+    @test Bu .+ Bl == T
+    @test Bl .+ Bu == T
+    @test Bu .+ Bu == Bidiagonal(dV * 2, evu * 2, :U)
+    @test Bl .+ Bl == Bidiagonal(dV * 2, evl * 2, :L)
+
+
+    @test typeof(Bu .* Bl) <: Tridiagonal
+    @test typeof(Bl .* Bu) <: Tridiagonal
+    @test typeof(Bu .* Bu) <: Bidiagonal
+    @test typeof(Bl .* Bl) <: Bidiagonal
+
+    @test Bu .* Bl == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
+    @test Bl .* Bu == Tridiagonal(zeros(N-1), dV .* dV, zeros(N-1))
+    @test Bu .* Bu == Bidiagonal(dV .* dV, evu .* evu, :U)
+    @test Bl .* Bl == Bidiagonal(dV .* dV, evl .* evl, :L)
+
+    Bu2 =  Bu .* 2
+    @test typeof(Bu2) <: Bidiagonal && Bu2.uplo == 'U'
+    Bu2 = 2 .* Bu
+    @test typeof(Bu2) <: Bidiagonal && Bu2.uplo == 'U'
+    Bl2 =  Bl .* 2
+    @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
+    Bu2 = 2 .* Bl
+    @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
+
+    # Example of Nested Brodacasts
+    tmp = (1 .* 2) .* (Bidiagonal(1:3, 1:2, 'U') .* (3 .* 4)) .* (5 .* Bidiagonal(1:3, 1:2, 'L'))
+    @test typeof(tmp) <: Tridiagonal
+
+end
+
+struct Zero36193 end
+Base.iszero(::Zero36193) = true
+LinearAlgebra.iszerodefined(::Type{Zero36193}) = true
+@testset "PR #36193" begin
+    f(::Union{Int, Zero36193}) = Zero36193()
+    function test(el)
+        M = [el el
+             el el]
+        v = [el, el]
+        U = UpperTriangular(M)
+        L = LowerTriangular(M)
+        D = Diagonal(v)
+        for (T, A) in [(UpperTriangular, U), (LowerTriangular, L), (Diagonal, D)]
+            @test identity.(A) isa typeof(A)
+            @test map(identity, A) isa typeof(A)
+            @test f.(A) isa T{Zero36193}
+            @test map(f, A) isa T{Zero36193}
+        end
+    end
+    # This should not need `zero(::Type{Zero36193})` to be defined
+    test(1)
+    Base.zero(::Type{Zero36193}) = Zero36193()
+    # This should not need `==(::Zero36193, ::Int)` to be defined as `iszerodefined`
+    # returns true.
+    test(Zero36193())
+end
+
+# structured broadcast with function returning non-number type
+@test tuple.(Diagonal([1, 2])) == [(1,) (0,); (0,) (2,)]
+
 end

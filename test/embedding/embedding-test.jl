@@ -20,8 +20,7 @@ end
     close(out.in)
     close(err.in)
     out_task = @async readlines(out)
-    err = read(err, String)
-    @test err == "MethodError: no method matching this_function_has_no_methods()\n"
+    @test readline(err) == "MethodError: no method matching this_function_has_no_methods()"
     @test success(p)
     lines = fetch(out_task)
     @test length(lines) == 10
@@ -29,4 +28,5 @@ end
     @test lines[8] == "called bar"
     @test lines[9] == "calling new bar"
     @test lines[10] == "      From worker 2:\tTaking over the world..."
+    @test readline(err) == "exception caught from C"
 end

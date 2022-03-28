@@ -27,12 +27,28 @@ end
         @test isempty(ENV) || first(ENV) in c
     end
 end
+
+# issue #43486
+struct Obj43486 end
+(::Obj43486)() = ENV["KEY"] == "VALUE"
+let
+    f = Obj43486()
+    @test !(f isa Function)
+    @test withenv(f, "KEY" => "VALUE")
+end
+
 @testset "non-existent keys" begin
     key = randstring(25)
     @test !haskey(ENV,key)
     @test_throws KeyError ENV[key]
     @test get(ENV,key,"default") == "default"
     @test get(() -> "default", ENV, key) == "default"
+
+    key = randstring(25)
+    @test !haskey(ENV, key)
+    @test get!(ENV, key, "default") == "default"
+    @test haskey(ENV, key)
+    @test ENV[key] == "default"
 end
 @testset "#17956" begin
     @test length(ENV) > 1
