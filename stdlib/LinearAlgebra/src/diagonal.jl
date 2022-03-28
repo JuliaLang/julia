@@ -323,10 +323,17 @@ end
 @inline function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
     d1 = D1.diag
     d2 = D2.diag
-    _rmul_or_fill!(out.diag, beta)
-    if !iszero(alpha)
-        @inbounds @simd for i in eachindex(out.diag)
-            out.diag[i] += d1[i] * d2[i] * alpha
+    if iszero(alpha)
+        _rmul_or_fill!(out.diag, beta)
+    else
+        if iszero(beta)
+            @inbounds @simd for i in eachindex(out.diag)
+                out.diag[i] = d1[i] * d2[i] * alpha
+            end
+        else
+            @inbounds @simd for i in eachindex(out.diag)
+                out.diag[i] = d1[i] * d2[i] * alpha + out.diag[i] * beta
+            end
         end
     end
     return out
