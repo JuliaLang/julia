@@ -298,7 +298,7 @@ let wid1 = workers()[1],
     end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid))
 end
 
 # Tests for issue #23109 - should not hang.
