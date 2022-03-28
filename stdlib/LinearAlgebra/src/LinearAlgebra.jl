@@ -355,6 +355,13 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
+"""
+    copy_oftype(A, T)
+
+Creates a copy of `A` with eltype `T`. No assertions about mutability of the result are
+made. When `eltype(A) == T`, then this calls `copy(A)` which may be overloaded for custom
+array types. Otherwise, this calls `convert(AbstractArray{T}, A)`.
+"""
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
 
@@ -373,7 +380,7 @@ algorithm is known to preserve the algebraic structure, use `copymutable_oftype`
 If the algorithm is known to return a dense matrix (or some wrapper backed by a dense
 matrix), then use `copy_similar`.
 
-See also: `copy_similar`.
+See also: `Base.copymutable`, `copy_similar`.
 """
 copymutable_oftype(A::AbstractArray, ::Type{S}) where {S} = copyto!(similar(A, S), A)
 
@@ -388,11 +395,6 @@ of the output corresponds to that of the three-argument method `similar(A, T, si
 See also: `copymutable_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
-
-# The three copy functions above return mutable arrays with eltype T.
-# To only ensure a certain eltype, and if a mutable copy is not needed, it is
-# more efficient to use:
-# convert(AbstractArray{T}, A)
 
 
 include("adjtrans.jl")
