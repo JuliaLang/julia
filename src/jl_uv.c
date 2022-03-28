@@ -59,10 +59,10 @@ void JL_UV_LOCK(void)
     if (jl_mutex_trylock(&jl_uv_mutex)) {
     }
     else {
-        jl_atomic_fetch_add(&jl_uv_n_waiters, 1);
+        jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, 1);
         jl_wake_libuv();
         JL_LOCK(&jl_uv_mutex);
-        jl_atomic_fetch_add(&jl_uv_n_waiters, -1);
+        jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, -1);
     }
 }
 
@@ -204,9 +204,11 @@ JL_DLLEXPORT int jl_process_events(void)
     uv_loop_t *loop = jl_io_loop;
     jl_gc_safepoint_(ct->ptls);
     if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
-        if (jl_atomic_load(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+            JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
             int r = uv_run(loop, UV_RUN_NOWAIT);
+            JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
             JL_UV_UNLOCK();
             return r;
         }
@@ -280,12 +282,13 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
     handle->data = NULL;
 }
 
-#define UV_CLOSED 0x02 // UV_HANDLE_CLOSED on Windows (same value)
+#define UV_HANDLE_CLOSED 0x02
 
 JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
-                          uint32_t flags, char **env, char *cwd, uv_exit_cb cb)
+                          uint32_t flags, char **env, char *cwd, char* cpumask,
+                          size_t cpumask_size, uv_exit_cb cb)
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
@@ -295,8 +298,8 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
     // unused fields:
     //opts.uid = 0;
     //opts.gid = 0;
-    //opts.cpumask = NULL;
-    //opts.cpumask_size = 0;
+    opts.cpumask = cpumask;
+    opts.cpumask_size = cpumask_size;
     opts.cwd = cwd;
     opts.args = argv;
     opts.stdio_count = nstdio;
@@ -305,7 +308,7 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
         if (!(flags == UV_INHERIT_FD || flags == UV_INHERIT_STREAM || flags == UV_IGNORE)) {
             proc->type = UV_PROCESS;
             proc->loop = loop;
-            proc->flags = UV_CLOSED;
+            proc->flags = UV_HANDLE_CLOSED;
             return UV_EINVAL;
         }
     }

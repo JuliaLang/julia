@@ -12,13 +12,15 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!, cos,
     cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
     getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
-    one, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
+    one, oneunit, parent, permutedims, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
     setindex!, show, similar, sin, sincos, sinh, size, sqrt,
     strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
+using OpenBLAS_jll
+using libblastrampoline_jll
 import Libdl
 
 export
@@ -366,11 +368,11 @@ In general, the type of the output corresponds to that of `similar(A, T)`.
 
 There are three often used methods in LinearAlgebra to create a mutable copy
 of an array with a given eltype. These copies can be passed to in-place
-algorithms (such as ldiv!, rdiv!, lu! and so on). Which one to use in practice
+algorithms (such as `ldiv!`, `rdiv!`, `lu!` and so on). Which one to use in practice
 depends on what is known (or assumed) about the structure of the array in that
 algorithm.
 
-See also: `copy_similar`, `copy_to_array`.
+See also: `copy_similar`.
 """
 copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T), A)
 
@@ -380,24 +382,11 @@ copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T), A)
 Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
 
 Compared to `copy_oftype`, the result can be more flexible. In general, the type
-of the output corresponds to that of the three-argument method `similar(A, T, size(s))`.
+of the output corresponds to that of the three-argument method `similar(A, T, size(A))`.
 
-See also: `copy_oftype`, `copy_to_array`.
+See also: `copy_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
-
-"""
-    copy_to_array(A, T)
-
-Copy `A` to a regular dense `Array` with element type `T`.
-
-The resulting array is mutable. It can be used, for example, to pass the data of
-`A` to an efficient in-place method for a matrix factorization such as `lu!`, in
-cases where a more specific implementation of `lu!` (or `lu`) is not available.
-
-See also: `copy_oftype`, `copy_similar`.
-"""
-copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
 
 # The three copy functions above return mutable arrays with eltype T.
 # To only ensure a certain eltype, and if a mutable copy is not needed, it is
@@ -544,50 +533,41 @@ end
 
 
 function versioninfo(io::IO=stdout)
+    indent = "  "
     config = BLAS.get_config()
-    println(io, "BLAS: $(BLAS.libblastrampoline) ($(join(string.(config.build_flags), ", ")))")
+    build_flags = join(string.(config.build_flags), ", ")
+    println(io, "BLAS: ", BLAS.libblastrampoline, " (", build_flags, ")")
     for lib in config.loaded_libs
-        println(io, " --> $(lib.libname) ($(uppercase(string(lib.interface))))")
+        interface = uppercase(string(lib.interface))
+        println(io, indent, "--> ", lib.libname, " (", interface, ")")
+    end
+    println(io, "Threading:")
+    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
+    println(io, "Relevant environment variables:")
+    env_var_names = [
+        "JULIA_NUM_THREADS",
+        "MKL_DYNAMIC",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+    ]
+    printed_at_least_one_env_var = false
+    for name in env_var_names
+        if haskey(ENV, name)
+            value = ENV[name]
+            println(io, indent, name, " = ", value)
+            printed_at_least_one_env_var = true
+        end
+    end
+    if !printed_at_least_one_env_var
+        println(io, indent, "[none]")
     end
     return nothing
 end
 
-function find_library_path(name)
-    shlib_ext = string(".", Libdl.dlext)
-    if !endswith(name, shlib_ext)
-        name_ext = string(name, shlib_ext)
-    end
-
-    # On windows, we look in `bin` and never in `lib`
-    @static if Sys.iswindows()
-        path = joinpath(Sys.BINDIR, name_ext)
-        isfile(path) && return path
-    else
-        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
-        isfile(path) && return path
-
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
-        isfile(path) && return path
-    end
-
-    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
-    return name
-end
-
 function __init__()
     try
-        libblas_path = find_library_path(Base.libblas_name)
-        liblapack_path = find_library_path(Base.liblapack_name)
-        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
-        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
-        # it will find the library already loaded.
-        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
-        BLAS.lbt_forward(libblas_path; clear=true)
-        if liblapack_path != libblas_path
-            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
-            BLAS.lbt_forward(liblapack_path)
-        end
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")

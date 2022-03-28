@@ -3,7 +3,7 @@
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
-       os_version, libc, compiler_abi, libgfortran_version, libstdcxx_version,
+       os_version, libc, libgfortran_version, libstdcxx_version,
        cxxstring_abi, parse_dl_name_version, detect_libgfortran_version,
        detect_libstdcxx_version, detect_cxxstring_abi, call_abi, wordsize, triplet,
        select_platform, platforms_match, platform_name
@@ -40,10 +40,10 @@ struct Platform <: AbstractPlatform
     # The "compare strategy" allows selective overriding on how a tag is compared
     compare_strategies::Dict{String,Function}
 
-    function Platform(arch::String, os::String;
+    # Passing `tags` as a `Dict` avoids the need to infer different NamedTuple specializations
+    function Platform(arch::String, os::String, _tags::Dict{String};
                       validate_strict::Bool = false,
-                      compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
-                      kwargs...)
+                      compare_strategies::Dict{String,<:Function} = Dict{String,Function}())
         # A wee bit of normalization
         os = lowercase(os)
         arch = CPUID.normalize_arch(arch)
@@ -52,8 +52,9 @@ struct Platform <: AbstractPlatform
             "arch" => arch,
             "os" => os,
         )
-        for (tag, value) in kwargs
-            tag = lowercase(string(tag::Symbol))
+        for (tag, value) in _tags
+            value = value::Union{String,VersionNumber,Nothing}
+            tag = lowercase(tag)
             if tag ∈ ("arch", "os")
                 throw(ArgumentError("Cannot double-pass key $(tag)"))
             end
@@ -70,8 +71,8 @@ struct Platform <: AbstractPlatform
             if tag ∈ ("libgfortran_version", "libstdcxx_version", "os_version")
                 if isa(value, VersionNumber)
                     value = string(value)
-                elseif isa(value, AbstractString)
-                    v = tryparse(VersionNumber, String(value))
+                elseif isa(value, String)
+                    v = tryparse(VersionNumber, value)
                     if isa(v, VersionNumber)
                         value = string(v)
                     end
@@ -109,6 +110,19 @@ struct Platform <: AbstractPlatform
         return new(tags, compare_strategies)
     end
 end
+
+# Keyword interface (to avoid inference of specialized NamedTuple methods, use the Dict interface for `tags`)
+function Platform(arch::String, os::String;
+                  validate_strict::Bool = false,
+                  compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
+                  kwargs...)
+    tags = Dict{String,Any}(String(tag)::String=>tagvalue(value) for (tag, value) in kwargs)
+    return Platform(arch, os, tags; validate_strict, compare_strategies)
+end
+
+tagvalue(v::Union{String,VersionNumber,Nothing}) = v
+tagvalue(v::Symbol) = String(v)
+tagvalue(v::AbstractString) = convert(String, v)::String
 
 # Simple tag insertion that performs a little bit of validation
 function add_tag!(tags::Dict{String,String}, tag::String, value::String)
@@ -608,7 +622,8 @@ const arch_march_isa_mapping = let
             "armv8_0" => get_set("aarch64", "armv8.0-a"),
             "armv8_1" => get_set("aarch64", "armv8.1-a"),
             "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
-            "armv8_4_crypto_sve" => get_set("aarch64", "armv8.4-a+crypto+sve"),
+            "a64fx" => get_set("aarch64", "a64fx"),
+            "apple_m1" => get_set("aarch64", "apple_m1"),
         ],
         "powerpc64le" => [
             "power8" => get_set("powerpc64le", "power8"),
@@ -652,7 +667,7 @@ const libstdcxx_version_mapping = Dict{String,String}(
 
 Parses a string platform triplet back into a `Platform` object.
 """
-function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::Bool = false)
+function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = false)
     # Helper function to collapse dictionary of mappings down into a regex of
     # named capture groups joined by "|" operators
     c(mapping) = string("(",join(["(?<$k>$v)" for (k, v) in mapping], "|"), ")")
@@ -698,21 +713,22 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         end
 
         # Extract the information we're interested in:
+        tags = Dict{String,Any}()
         arch = get_field(m, arch_mapping)
         os = get_field(m, os_mapping)
-        libc = get_field(m, libc_mapping)
-        call_abi = get_field(m, call_abi_mapping)
-        libgfortran_version = get_field(m, libgfortran_version_mapping)
-        libstdcxx_version = get_field(m, libstdcxx_version_mapping)
-        cxxstring_abi = get_field(m, cxxstring_abi_mapping)
+        tags["libc"] = get_field(m, libc_mapping)
+        tags["call_abi"] = get_field(m, call_abi_mapping)
+        tags["libgfortran_version"] = get_field(m, libgfortran_version_mapping)
+        tags["libstdcxx_version"] = get_field(m, libstdcxx_version_mapping)
+        tags["cxxstring_abi"] = get_field(m, cxxstring_abi_mapping)
         function split_tags(tagstr)
             tag_fields = split(tagstr, "-"; keepempty=false)
             if isempty(tag_fields)
                 return Pair{String,String}[]
             end
-            return map(v -> Symbol(v[1]) => v[2], split.(tag_fields, "+"))
+            return map(v -> String(v[1]) => String(v[2]), split.(tag_fields, "+"))
         end
-        tags = split_tags(m["tags"])
+        merge!(tags, Dict(split_tags(m["tags"])))
 
         # Special parsing of os version number, if any exists
         function extract_os_version(os_name, pattern)
@@ -729,21 +745,14 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)")
         end
+        tags["os_version"] = os_version
 
-        return Platform(
-            arch, os;
-            validate_strict,
-            libc,
-            call_abi,
-            libgfortran_version,
-            cxxstring_abi,
-            libstdcxx_version,
-            os_version,
-            tags...,
-        )
+        return Platform(arch, os, tags; validate_strict)
     end
     throw(ArgumentError("Platform `$(triplet)` is not an officially supported platform"))
 end
+Base.parse(::Type{Platform}, triplet::AbstractString; kwargs...) =
+    parse(Platform, convert(String, triplet)::String; kwargs...)
 
 function Base.tryparse(::Type{Platform}, triplet::AbstractString)
     try
@@ -894,7 +903,7 @@ function detect_cxxstring_abi()
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in ("libLLVM-13jl", "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try
@@ -1066,5 +1075,10 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     p = last(sort(ps, by = p -> triplet(p)))
     return download_info[p]
 end
+
+# precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)
+Dict{Platform,String}()[HostPlatform()] = ""
+Platform("x86_64", "linux", Dict{String,Any}(); validate_strict=true)
+Platform("x86_64", "linux", Dict{String,String}(); validate_strict=false)  # called this way from Artifacts.unpack_platform
 
 end # module

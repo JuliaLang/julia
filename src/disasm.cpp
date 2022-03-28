@@ -64,7 +64,6 @@
 #include <llvm/BinaryFormat/MachO.h>
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/AssemblyAnnotationWriter.h>
 #include <llvm/IR/DebugInfo.h>
 #include <llvm/IR/Function.h>
@@ -92,7 +91,11 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/NativeFormatting.h>
 #include <llvm/Support/SourceMgr.h>
+#if JL_LLVM_VERSION >= 140000
+#include <llvm/MC/TargetRegistry.h>
+#else
 #include <llvm/Support/TargetRegistry.h>
+#endif
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -912,7 +915,11 @@ static void jl_dump_asm_internal(
                                          IP.release(),
                                          std::move(CE), std::move(MAB),
                                          /*ShowInst*/ false));
+#if JL_LLVM_VERSION >= 140000
+    Streamer->initSections(true, *STI);
+#else
     Streamer->InitSections(true);
+#endif
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
@@ -1194,7 +1201,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
             if (f != &f2 && !f->isDeclaration())
                 f2.deleteBody();
         }
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(jl_TargetMachine);
+        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(&jl_ExecutionEngine->getTargetMachine());
         legacy::PassManager PM;
         addTargetPasses(&PM, TM);
         if (raw_mc) {
@@ -1219,7 +1226,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
             if (!strcmp(asm_variant, "intel"))
                 OutputAsmDialect = 1;
             MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
+                jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;

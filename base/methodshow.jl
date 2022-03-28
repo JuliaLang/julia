@@ -131,9 +131,13 @@ const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB::String
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB::String))
+    if isdefined(@__MODULE__, :Sys)
+        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
+        STDLIB = Sys.STDLIB::String
+        if BUILD_STDLIB_PATH != STDLIB
+            # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+            path = replace(path, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+        end
     end
     return path
 end
@@ -224,6 +228,7 @@ function show(io::IO, m::Method)
         file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
     end
+    nothing
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -232,24 +237,27 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     hasname = isdefined(mt.module, name) &&
               typeof(getfield(mt.module, name)) <: Function
     n = length(ms)
-    if mt.module === Core && n == 0 && mt.defs === nothing && mt.cache !== nothing
-        # try to detect Builtin
-        print(io, "# built-in function; no methods")
+    m = n==1 ? "method" : "methods"
+    print(io, "# $n $m")
+    sname = string(name)
+    namedisplay = namefmt(sname)
+    if hasname
+        what = (startswith(sname, '@') ?
+                    "macro"
+               : mt.module === Core && last(ms).sig === Tuple ?
+                    "builtin function"
+               : # else
+                    "generic function")
+        print(io, " for ", what, " ", namedisplay)
+    elseif '#' in sname
+        print(io, " for anonymous function ", namedisplay)
+    elseif mt === _TYPE_NAME.mt
+        print(io, " for type constructor")
     else
-        m = n==1 ? "method" : "methods"
-        print(io, "# $n $m")
-        sname = string(name)
-        namedisplay = namefmt(sname)
-        if hasname
-            what = startswith(sname, '@') ? "macro" : "generic function"
-            print(io, " for ", what, " ", namedisplay)
-        elseif '#' in sname
-            print(io, " for anonymous function ", namedisplay)
-        elseif mt === _TYPE_NAME.mt
-            print(io, " for type constructor")
-        end
-        print(io, ":")
+        print(io, " for callable object")
     end
+    n > 0 && print(io, ":")
+    nothing
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
@@ -267,7 +275,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
     for meth in ms
-        if max==-1 || n<max
+        if max == -1 || n < max
             n += 1
             println(io)
             print(io, "[$n] ")
@@ -292,6 +300,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             end
         end
     end
+    nothing
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)

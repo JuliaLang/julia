@@ -156,7 +156,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     void *handle;
     int abspath;
     int is_atpath;
-    // number of extensions to try — if modname already ends with the
+    // number of extensions to try — if modname already ends with the
     // standard extension, then we don't try adding additional extensions
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
 

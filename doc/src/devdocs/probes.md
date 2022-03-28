@@ -90,11 +90,37 @@ the probe handler.
 3. `julia:gc__mark__begin`: Beginning the mark phase
 4. `julia:gc__mark_end(scanned_bytes, perm_scanned)`: Mark phase ended
 5. `julia:gc__sweep_begin(full)`: Starting sweep
-6. `julia:gc__sweep_end()`: Sweep phase finished
+6. `julia:gc__sweep_end`: Sweep phase finished
 7. `julia:gc__end`: GC is finished, other threads continue work
 8. `julia:gc__finalizer`: Initial GC thread has finished running finalizers
 
-#### GC stop-the-world latency
+### Task runtime probes
+
+1. `julia:rt__run__task(task)`: Switching to task `task` on current thread.
+2. `julia:rt__pause__task(task)`: Switching from task `task` on current thread.
+3. `julia:rt__new__task(parent, child)`: Task `parent` created task `child` on current thread.
+4. `julia:rt__start__task(task)`: Task `task` started for the first time with a new stack.
+5. `julia:rt__finish__task(task)`: Task `task` finished and will no longer execute.
+6. `julia:rt__start__process__events(task)`: Task `task` started processing libuv events.
+7. `julia:rt__finish__process__events(task)`: Task `task` finished processing libuv events.
+
+### Task queue probes
+
+1. `julia:rt__taskq__insert(ptls, task)`: Thread `ptls` attempted to insert `task` into a PARTR multiq.
+2. `julia:rt__taskq__get(ptls, task)`: Thread `ptls` popped `task` from a PARTR multiq.
+
+### Thread sleep/wake probes
+
+1. `julia:rt__sleep__check__wake(ptls, old_state)`: Thread (PTLS `ptls`) waking up, previously in state `old_state`.
+2. `julia:rt__sleep__check__wakeup(ptls)`: Thread (PTLS `ptls`) woke itself up.
+3. `julia:rt__sleep__check__sleep(ptls)`: Thread (PTLS `ptls`) is attempting to sleep.
+4. `julia:rt__sleep__check__taskq__wake(ptls)`: Thread (PTLS `ptls`) fails to sleep due to tasks in PARTR multiq.
+5. `julia:rt__sleep__check__task__wake(ptls)`: Thread (PTLS `ptls`) fails to sleep due to tasks in Base workqueue.
+6. `julia:rt__sleep__check__uv__wake(ptls)`: Thread (PTLS `ptls`) fails to sleep due to libuv wakeup.
+
+## Probe usage examples
+
+### GC stop-the-world latency
 
 An example `bpftrace` script is given in `contrib/gc_stop_the_world_latency.bt`
 and it creates a histogram of the latency for all threads to reach a safepoint.
@@ -142,6 +168,136 @@ Tracing Julia GC Stop-The-World Latency... Hit Ctrl-C to end.
 ```
 
 We can see the latency distribution of the stop-the-world phase in the executed Julia process.
+
+### Task spawn monitor
+
+It's sometimes useful to know when a task is spawning other tasks. This is very
+easy to see with `rt__new__task`. The first argument to the probe, `parent`, is
+the existing task which is creating a new task. This means that if you know the
+address of the task you want to monitor, you can easily just look at the tasks
+that that specific task spawned. Let's see how to do this; first let's start a
+Julia session and get the PID and REPL's task address:
+
+```
+> julia
+               _
+   _       _ _(_)_     |  Documentation: https://docs.julialang.org
+  (_)     | (_) (_)    |
+   _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+|__/                   |
+
+1> getpid()
+997825
+
+2> current_task()
+Task (runnable) @0x00007f524d088010
+```
+
+Now we can start `bpftrace` and have it monitor `rt__new__task` for *only* this parent:
+
+`sudo bpftrace -p 997825 -e 'usdt:usr/lib/libjulia-internal.so:julia:rt__new__task /arg0==0x00007f524d088010/{ printf("Task: %x\n", arg0); }'`
+
+(Note that in the above, `arg0` is the first argument, `parent`).
+
+And if we spawn a single task:
+
+`@async 1+1`
+
+we see this task being created:
+
+`Task: 4d088010`
+
+However, if we spawn a bunch of tasks from that newly-spawned task:
+
+```julia
+@async for i in 1:10
+   @async 1+1
+end
+```
+
+we still only see one task from `bpftrace`:
+
+`Task: 4d088010`
+
+and it's still the same task we were monitoring! Of course, we can remove this
+filter to see *all* newly-created tasks just as easily:
+
+`sudo bpftrace -p 997825 -e 'usdt:usr/lib/libjulia-internal.so:julia:rt__new__task { printf("Task: %x\n", arg0); }'`
+
+```
+Task: 4d088010
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+Task: 4dc4e290
+```
+
+We can see our root task, and the newly-spawned task as the parent of the ten
+even newer tasks.
+
+### Thundering herd detection
+
+Task runtimes can often suffer from the "thundering herd" problem: when some
+work is added to a quiet task runtime, all threads may be woken up from their
+slumber, even if there isn't enough work for each thread to process. This can
+cause extra latency and CPU cycles while all threads awaken (and simultaneously
+go back to sleep, not finding any work to execute).
+
+We can see this problem illustrated with `bpftrace` quite easily. First, in one terminal we start Julia with multiple threads (6 in this example), and get the PID of that process:
+
+```
+> julia -t 6
+               _
+   _       _ _(_)_     |  Documentation: https://docs.julialang.org
+  (_)     | (_) (_)    |
+   _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |  Version 1.6.2 (2021-07-14)
+ _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+|__/                   |
+
+1> getpid()
+997825
+```
+
+And in another terminal we start `bpftrace` monitoring our process,
+specifically probing the `rt__sleep__check__wake` hook:
+
+`sudo bpftrace -p 997825 -e 'usdt:usr/lib/libjulia-internal.so:julia:rt__sleep__check__wake { printf("Thread wake up! %x\n", arg0); }'`
+
+Now, we create and execute a single task in Julia:
+
+`Threads.@spawn 1+1`
+
+And in `bpftrace` we see printed out something like:
+
+```
+Thread wake up! 3f926100
+Thread wake up! 3ebd5140
+Thread wake up! 3f876130
+Thread wake up! 3e2711a0
+Thread wake up! 3e312190
+```
+
+Even though we only spawned a single task (which only one thread could process
+at a time), we woke up all of our other threads! In the future, a smarter task
+runtime might only wake up a single thread (or none at all; the spawning thread
+could execute this task!), and we should see this behavior go away.
+
+### Task Monitor with BPFnative.jl
+
+BPFnative.jl is able to attach to USDT probe points just like `bpftrace`. There
+is a demo available for monitoring the task runtime, GC, and thread sleep/wake
+transitions [here](https://github.com/jpsamaroo/BPFnative.jl/blob/master/examples/task-runtime.jl).
 
 ## Notes on using `bpftrace`
 

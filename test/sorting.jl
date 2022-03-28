@@ -49,6 +49,7 @@ end
     end
     @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
     @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
 end
 
 @testset "misc sorting" begin
@@ -56,6 +57,8 @@ end
     @test issorted([1,2,3])
     @test reverse([2,3,1]) == [1,3,2]
     @test sum(randperm(6)) == 21
+    @test length(reverse(0x1:0x2)) == 2
+    @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
 end
 
 @testset "partialsort" begin
@@ -220,7 +223,6 @@ end
             end
         end
 
-        @test_broken length(reverse(0x1:0x2)) == 2
         @testset "issue #34408" begin
             r = 1f8-10:1f8
             # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]

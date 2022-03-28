@@ -4,21 +4,50 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/PassManager.h>
 #include "llvm/IR/LegacyPassManager.h"
 
-#include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
-#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 
+// As of LLVM 13, there are two runtime JIT linker implementations, the older
+// RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
+// (used via orc::ObjectLinkingLayer).
+//
+// JITLink is not only more flexible (which isn't of great importance for us, as
+// we do only single-threaded in-process codegen), but crucially supports using
+// the Small code model, where the linker needs to fix up relocations between
+// object files that end up far apart in address space. RuntimeDyld can't do
+// that and relies on the Large code model instead, which is broken on
+// aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
+// (see https://bugs.llvm.org/show_bug.cgi?id=52029).
+//
+// However, JITLink is a relatively young library and lags behind in platform
+// and feature support (e.g. Windows, JITEventListeners for various profilers,
+// etc.). Thus, we currently only use JITLink where absolutely required, that is,
+// for Mac/aarch64.
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+# if JL_LLVM_VERSION < 130000
+#  warning "On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults"
+# endif
+# define JL_USE_JITLINK
+#endif
+
+#ifdef JL_USE_JITLINK
+# include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#else
+# include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
+# include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#endif
+
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
@@ -26,8 +55,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lowe
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name);
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
+DataLayout create_jl_data_layout(TargetMachine &TM);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -81,7 +111,7 @@ typedef struct _jl_codegen_params_t {
     Module *_shared_module = NULL;
     Module *shared_module(LLVMContext &context) {
         if (!_shared_module)
-            _shared_module = jl_create_llvm_module("globals");
+            _shared_module = jl_create_llvm_module("globals", context);
         return _shared_module;
     }
     // inputs
@@ -94,12 +124,14 @@ jl_compile_result_t jl_emit_code(
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        LLVMContext &context);
 
 jl_compile_result_t jl_emit_codeinst(
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        LLVMContext &context);
 
 enum CompilationPolicy {
     Default = 0,
@@ -110,7 +142,8 @@ enum CompilationPolicy {
 void jl_compile_workqueue(
     std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
     jl_codegen_params_t &params,
-    CompilationPolicy policy);
+    CompilationPolicy policy,
+    LLVMContext &ctxt);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
@@ -143,88 +176,99 @@ typedef JITSymbol JL_JITSymbol;
 // is expected.
 typedef JITSymbol JL_SymbolInfo;
 
-#if JL_LLVM_VERSION < 120000
-using RTDyldObjHandleT = orc::VModuleKey;
-#endif
-
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
+using OptimizerResultT = Expected<orc::ThreadSafeModule>;
 
 class JuliaOJIT {
-    struct CompilerT : public orc::IRCompileLayer::IRCompiler {
-        CompilerT(JuliaOJIT *pjit)
-            : IRCompiler(orc::IRSymbolMapper::ManglingOptions{}),
-              jit(*pjit) {}
-        virtual CompilerResultT operator()(Module &M) override;
+public:
+#ifdef JL_USE_JITLINK
+    typedef orc::ObjectLinkingLayer ObjLayerT;
+#else
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+#endif
+    typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef object::OwningBinary<object::ObjectFile> OwningObj;
+private:
+    struct OptimizerT {
+        OptimizerT(legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM) {}
+
+        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
     private:
-        JuliaOJIT &jit;
+        int optlevel;
+        legacy::PassManager &PM;
     };
-#if JL_LLVM_VERSION >= 120000
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
     void registerObject(const ObjT &Obj, const LoadResult &LO);
-#else
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(RTDyldObjHandleT H, const ObjT &Obj, const LoadResult &LO);
-#endif
+
+    struct OptSelLayerT : orc::IRLayer {
+
+        template<size_t N>
+        OptSelLayerT(OptimizeLayerT (&optimizers)[N]) : orc::IRLayer(optimizers[0].getExecutionSession(), optimizers[0].getManglingOptions()), optimizers(optimizers), count(N) {
+            static_assert(N > 0, "Expected array with at least one optimizer!");
+        }
+
+        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
+
+        private:
+        OptimizeLayerT *optimizers;
+        size_t count;
+    };
 
 public:
-    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
-    typedef orc::IRCompileLayer CompileLayerT;
-#if JL_LLVM_VERSION < 120000
-    typedef RTDyldObjHandleT ModuleHandleT;
-#endif
-    typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
-    JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
+    JuliaOJIT(LLVMContext *Ctx);
 
+    void enableJITDebuggingSupport();
+#ifndef JL_USE_JITLINK
+    // JITLink doesn't support old JITEventListeners (yet).
     void RegisterJITEventListener(JITEventListener *L);
-#if JL_LLVM_VERSION < 120000
-    std::vector<JITEventListener *> EventListeners;
-    void NotifyFinalizer(RTDyldObjHandleT Key,
-                         const object::ObjectFile &Obj,
-                         const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
 #endif
+
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(std::unique_ptr<Module> M);
-#if JL_LLVM_VERSION < 120000
-    void removeModule(ModuleHandleT H);
-#endif
+
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
+    orc::ThreadSafeContext &getContext();
     const DataLayout& getDataLayout() const;
+    TargetMachine &getTargetMachine();
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
+    void shareStrings(Module &M);
 
-    TargetMachine &TM;
-    const DataLayout DL;
+    std::unique_ptr<TargetMachine> TM;
+    DataLayout DL;
     // Should be big enough that in the common case, The
     // object fits in its entirety
-    SmallVector<char, 4096> ObjBufferSV;
-    raw_svector_ostream ObjStream;
     legacy::PassManager PM0;  // per-optlevel pass managers
     legacy::PassManager PM1;
     legacy::PassManager PM2;
     legacy::PassManager PM3;
-    TargetMachine *TMs[4];
-    MCContext *Ctx;
-    std::shared_ptr<RTDyldMemoryManager> MemMgr;
-    std::unique_ptr<JITEventListener> JuliaListener;
-
+    std::unique_ptr<TargetMachine> TMs[4];
 
     orc::ThreadSafeContext TSCtx;
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
 
+#ifndef JL_USE_JITLINK
+    std::shared_ptr<RTDyldMemoryManager> MemMgr;
+#endif
     ObjLayerT ObjectLayer;
-    CompileLayerT CompileLayer;
+    CompileLayerT CompileLayer0;
+    CompileLayerT CompileLayer1;
+    CompileLayerT CompileLayer2;
+    CompileLayerT CompileLayer3;
+    OptimizeLayerT OptimizeLayers[4];
+    OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
@@ -244,6 +288,11 @@ Pass *createMultiVersioningPass();
 Pass *createAllocOptPass();
 Pass *createDemoteFloat16Pass();
 Pass *createCPUFeaturesPass();
+Pass *createLowerSimdLoopPass();
+
+// NewPM
+#include "passes.h"
+
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {

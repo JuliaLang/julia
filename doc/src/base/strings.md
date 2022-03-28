@@ -1,6 +1,7 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractString
 Core.AbstractChar
 Core.Char
 Base.codepoint
@@ -49,6 +50,7 @@ Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(s::AbstractString, ::Pair...)
+Base.eachsplit
 Base.split
 Base.rsplit
 Base.strip

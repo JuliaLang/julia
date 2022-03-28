@@ -634,7 +634,7 @@ mktempdir() do dir
     commit_oid1 = LibGit2.GitHash()
     commit_oid2 = LibGit2.GitHash()
     commit_oid3 = LibGit2.GitHash()
-    master_branch = "master"
+    default_branch = LibGit2.getconfig("init.defaultBranch", "master")
     test_branch = "test_branch"
     test_branch2 = "test_branch_two"
     tag1 = "tag1"
@@ -958,19 +958,19 @@ mktempdir() do dir
                     # various branch properties
                     @test LibGit2.isbranch(brref)
                     @test !LibGit2.isremote(brref)
-                    @test LibGit2.name(brref) == "refs/heads/master"
-                    @test LibGit2.shortname(brref) == master_branch
+                    @test LibGit2.name(brref) == "refs/heads/$(default_branch)"
+                    @test LibGit2.shortname(brref) == default_branch
                     @test LibGit2.ishead(brref)
                     @test LibGit2.upstream(brref) === nothing
 
                     # showing the GitReference to this branch
                     show_strs = split(sprint(show, brref), "\n")
                     @test show_strs[1] == "GitReference:"
-                    @test show_strs[2] == "Branch with name refs/heads/master"
+                    @test show_strs[2] == "Branch with name refs/heads/$(default_branch)"
                     @test show_strs[3] == "Branch is HEAD."
                     @test repo.ptr == LibGit2.repository(brref).ptr
-                    @test brnch == master_branch
-                    @test LibGit2.headname(repo) == master_branch
+                    @test brnch == default_branch
+                    @test LibGit2.headname(repo) == default_branch
 
                     # create a branch *without* setting its tip as HEAD
                     LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
@@ -991,7 +991,7 @@ mktempdir() do dir
                     end
                 end
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test master_branch in branches
+                @test default_branch in branches
                 @test test_branch in branches
             end
         end
@@ -1050,7 +1050,7 @@ mktempdir() do dir
                 @test tag2 in tags
 
                 refs = LibGit2.ref_list(repo)
-                @test refs == ["refs/heads/master", "refs/heads/test_branch", "refs/tags/tag1", "refs/tags/tag2"]
+                @test refs == ["refs/heads/$(default_branch)", "refs/heads/test_branch", "refs/tags/tag1", "refs/tags/tag2"]
                 # test deleting a tag
                 LibGit2.tag_delete(repo, tag1)
                 tags = LibGit2.tag_list(repo)
@@ -1334,7 +1334,7 @@ mktempdir() do dir
             add_and_commit_file(repo, "file1", "111\n")
             # switch back, add a commit, try to merge
             # from branch/merge_a
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, default_branch)
 
             # test for showing a Reference to a non-HEAD branch
             brref = LibGit2.GitReference(repo, "refs/heads/branch/merge_a")
@@ -1347,7 +1347,7 @@ mktempdir() do dir
 
             add_and_commit_file(repo, "file2", "222\n")
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
-            head_ann = LibGit2.GitAnnotated(repo, "master")
+            head_ann = LibGit2.GitAnnotated(repo, default_branch)
 
             # (fail to) merge them because we can't fastforward
             @test_logs (:warn,"Cannot perform fast-forward merge") !LibGit2.merge!(repo, [upst_ann], true)
@@ -1360,7 +1360,7 @@ mktempdir() do dir
             mv(joinpath(LibGit2.path(repo),"file1"),joinpath(LibGit2.path(repo),"mvfile1"))
             LibGit2.add!(repo, "mvfile1")
             LibGit2.commit(repo, "move file1")
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, default_branch)
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
             rename_flag = Cint(0)
             rename_flag = LibGit2.toggle(rename_flag, Cint(0)) # turns on the find renames opt
@@ -1438,14 +1438,14 @@ mktempdir() do dir
             # the rebase should fail.
             @test_throws LibGit2.GitError LibGit2.rebase!(repo)
             # Try rebasing on master instead
-            newhead = LibGit2.rebase!(repo, master_branch)
+            newhead = LibGit2.rebase!(repo, default_branch)
             @test newhead == head_oid
 
             # Switch to the master branch
-            LibGit2.branch!(repo, master_branch)
+            LibGit2.branch!(repo, default_branch)
 
             fetch_heads = LibGit2.fetchheads(repo)
-            @test fetch_heads[1].name == "refs/heads/master"
+            @test fetch_heads[1].name == "refs/heads/$(default_branch)"
             @test fetch_heads[1].ismerge == true # we just merged master
             @test fetch_heads[2].name == "refs/heads/test_branch"
             @test fetch_heads[2].ismerge == false
@@ -1485,7 +1485,7 @@ mktempdir() do dir
 
                 # all tag in place
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test master_branch in branches
+                @test default_branch in branches
                 @test test_branch in branches
 
                 # issue #16337
@@ -1683,7 +1683,7 @@ mktempdir() do dir
             # add yet another file
             add_and_commit_file(repo, "file4", "444\n")
             # rebase with onto
-            newhead = LibGit2.rebase!(repo, "branch/a", "master")
+            newhead = LibGit2.rebase!(repo, "branch/a", default_branch)
 
             newerhead = LibGit2.head_oid(repo)
             @test newerhead == newhead
@@ -1693,7 +1693,7 @@ mktempdir() do dir
             pre_abort_head = add_and_commit_file(repo, "file6", "666\n")
             # Rebase type
             head_ann = LibGit2.GitAnnotated(repo, "branch/a")
-            upst_ann = LibGit2.GitAnnotated(repo, "master")
+            upst_ann = LibGit2.GitAnnotated(repo, default_branch)
             rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
             @test_throws BoundsError rb[3]
             @test_throws BoundsError rb[0]
@@ -1718,7 +1718,7 @@ mktempdir() do dir
 
             a_head = LibGit2.head_oid(repo)
             add_and_commit_file(repo, "merge_file1", "111\n")
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, default_branch)
             a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
             # merge returns true if successful
             @test_logs (:info,"Review and commit merged changes") LibGit2.merge!(repo, [a_head_ann])
@@ -1751,7 +1751,7 @@ mktempdir() do dir
             close(repo_file)
             # and checkout HEAD once more
             LibGit2.checkout_head(repo, options=LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE))
-            @test LibGit2.headname(repo) == master_branch
+            @test LibGit2.headname(repo) == default_branch
             @test !LibGit2.isdirty(repo)
         end
     end
@@ -2473,11 +2473,11 @@ mktempdir() do dir
             CHECK_FAILURE  = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_FAILURE
 
             # randomly generated hashes matching no hosts
-            random_key = "\0\0\0\assh-rsa\0\0\0\x01#\0\0\0\x81\0¿\x95\xbe9\xfc9g\n:\xcf&\x06YA\xb5`\x97\xc13A\xbf;T+C\xc9Ut J>\xc5ҍ\xc4_S\x8a \xc1S\xeb\x15FH\xd2a\x04.D\xeeb\xac\x8f\xdb\xcc\xef\xc4l G\x9bR\xafp\x17s<=\x12\xab\x04ڳif\\A\x9ba0\xde%\xdei\x04\xc3\r\xb3\x81w\x88\xec\xc0f\x15A;AÝ\xc0r\xa1\u5fe\xd3\xf6)8\x8e\xa3\xcbc\xee\xdd\$\x04\x0f\xc1\xb4\x1f\xcc\xecK\xe0\x99" |> codeunits |> collect
+            random_key = collect(reinterpret(Cchar, codeunits("\0\0\0\assh-rsa\0\0\0\x01#\0\0\0\x81\0¿\x95\xbe9\xfc9g\n:\xcf&\x06YA\xb5`\x97\xc13A\xbf;T+C\xc9Ut J>\xc5ҍ\xc4_S\x8a \xc1S\xeb\x15FH\xd2a\x04.D\xeeb\xac\x8f\xdb\xcc\xef\xc4l G\x9bR\xafp\x17s<=\x12\xab\x04ڳif\\A\x9ba0\xde%\xdei\x04\xc3\r\xb3\x81w\x88\xec\xc0f\x15A;AÝ\xc0r\xa1\u5fe\xd3\xf6)8\x8e\xa3\xcbc\xee\xdd\$\x04\x0f\xc1\xb4\x1f\xcc\xecK\xe0\x99")))
             # hashes of the unique github.com fingerprint
-            github_key = "\0\0\0\assh-rsa\0\0\0\x01#\0\0\x01\x01\0\xab`;\x85\x11\xa6vy\xbd\xb5@\xdb;\xd2\x03K\0J\xe96\xd0k\xe3\xd7`\xf0\x8f˪\xdbN\xb4\xedóǑ\xc7\n\xae\x9at\xc9Xi\xe4wD!«\xea\x92\xe5T0_8\xb5\xfdAK2\b\xe5t\xc37\xe3 \x93e\x18F,vRɋ1\xe1n}\xa6R;\xd2\0t*dD\xd8?\xcd^\x172\xd06sǷ\x81\x15UH{U\xf0\xc4IO8)\xec\xe6\x0f\x94%Z\x95˚\xf57\xd7\xfc\x8c\x7f\xe4\x9e\xf3\x18GN\xf2\x92\t\x92\x05\"e\xb0\xa0n\xa6mJ\x16\x7f\xd9\xf3\xa4\x8a\x1aJ0~\xc1\xea\xaaQI\xa9i\xa6\xac]V\xa5\xefb~Q}\x81\xfbdO[t\\OG\x8e\xcd\b*\x94\x92\xf7D\xaa\xd3&\xf7l\x8cM\xc9\x10\vƫyF\x1d&W\xcbo\x06\xde\xc9.kd\xa6V/\xf0\xe3 \x84\xea\x06\xce\x0e\xa9\xd3ZX;\xfb\0\xbaӌ\x9d\x19p<T\x98\x92\xe5\xaaxܕ\xe2PQ@i" |> codeunits |> collect
+            github_key = collect(reinterpret(Cchar, codeunits("\0\0\0\assh-rsa\0\0\0\x01#\0\0\x01\x01\0\xab`;\x85\x11\xa6vy\xbd\xb5@\xdb;\xd2\x03K\0J\xe96\xd0k\xe3\xd7`\xf0\x8f˪\xdbN\xb4\xedóǑ\xc7\n\xae\x9at\xc9Xi\xe4wD!«\xea\x92\xe5T0_8\xb5\xfdAK2\b\xe5t\xc37\xe3 \x93e\x18F,vRɋ1\xe1n}\xa6R;\xd2\0t*dD\xd8?\xcd^\x172\xd06sǷ\x81\x15UH{U\xf0\xc4IO8)\xec\xe6\x0f\x94%Z\x95˚\xf57\xd7\xfc\x8c\x7f\xe4\x9e\xf3\x18GN\xf2\x92\t\x92\x05\"e\xb0\xa0n\xa6mJ\x16\x7f\xd9\xf3\xa4\x8a\x1aJ0~\xc1\xea\xaaQI\xa9i\xa6\xac]V\xa5\xefb~Q}\x81\xfbdO[t\\OG\x8e\xcd\b*\x94\x92\xf7D\xaa\xd3&\xf7l\x8cM\xc9\x10\vƫyF\x1d&W\xcbo\x06\xde\xc9.kd\xa6V/\xf0\xe3 \x84\xea\x06\xce\x0e\xa9\xd3ZX;\xfb\0\xbaӌ\x9d\x19p<T\x98\x92\xe5\xaaxܕ\xe2PQ@i")))
             # hashes of the middle github.com fingerprint
-            gitlab_key = "\0\0\0\vssh-ed25519\0\0\0 \a\xee\br\x95N:\xae\xc6\xfbz\bέtn\x12.\x9dA\xb6\x7f\xe79\xe1\xc7\x13\x95\x0e\xcd\x17_" |> codeunits |> collect
+            gitlab_key = collect(reinterpret(Cchar, codeunits("\0\0\0\vssh-ed25519\0\0\0 \a\xee\br\x95N:\xae\xc6\xfbz\bέtn\x12.\x9dA\xb6\x7f\xe79\xe1\xc7\x13\x95\x0e\xcd\x17_")))
 
             # various known hosts files
             no_file = tempname()

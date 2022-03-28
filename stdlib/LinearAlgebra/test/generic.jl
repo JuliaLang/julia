@@ -76,6 +76,35 @@ n = 5 # should be odd
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
     end
+
+    @testset "det with nonstandard Number type" begin
+        struct MyDual{T<:Real} <: Real
+            val::T
+            eps::T
+        end
+        Base.:+(x::MyDual, y::MyDual) = MyDual(x.val + y.val, x.eps + y.eps)
+        Base.:*(x::MyDual, y::MyDual) = MyDual(x.val * y.val, x.eps * y.val + y.eps * x.val)
+        Base.:/(x::MyDual, y::MyDual) = x.val / y.val
+        Base.:(==)(x::MyDual, y::MyDual) = x.val == y.val && x.eps == y.eps
+        Base.zero(::MyDual{T}) where {T} = MyDual(zero(T), zero(T))
+        Base.zero(::Type{MyDual{T}}) where {T} = MyDual(zero(T), zero(T))
+        Base.one(::MyDual{T}) where {T} = MyDual(one(T), zero(T))
+        Base.one(::Type{MyDual{T}}) where {T} = MyDual(one(T), zero(T))
+        # the following line is required for BigFloat, IDK why it doesn't work via
+        # promote_rule like for all other types
+        Base.promote_type(::Type{MyDual{BigFloat}}, ::Type{BigFloat}) = MyDual{BigFloat}
+        Base.promote_rule(::Type{MyDual{T}}, ::Type{S}) where {T,S<:Real} =
+            MyDual{promote_type(T, S)}
+        Base.promote_rule(::Type{MyDual{T}}, ::Type{MyDual{S}}) where {T,S} =
+            MyDual{promote_type(T, S)}
+        Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
+            MyDual(convert(T, x.val), convert(T, x.eps))
+        if elty <: Real
+            @show elty
+            @show istriu(triu(MyDual.(A, zero(A))))
+            @test det(triu(MyDual.(A, zero(A)))) isa MyDual
+        end
+    end
 end
 
 @testset "diag" begin
@@ -295,6 +324,14 @@ end
     @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
 
+@testset "LinearAlgebra.axp(b)y! for non strides input" begin
+    a = rand(5, 5)
+    @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test_broken LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
 @testset "norm and normalize!" begin
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)
@@ -497,20 +534,21 @@ end
 end
 
 @testset "adjtrans dot" begin
-    for t in (transpose, adjoint)
-        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
+    for t in (transpose, adjoint), T in (ComplexF64, Quaternion{Float64})
+        x, y = t(rand(T, 10)), t(rand(T, 10))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        x, y = t(rand(T, 10, 5)), t(rand(T, 10, 5))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
-        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        x = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
     end
 end
 

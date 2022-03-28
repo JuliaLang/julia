@@ -164,8 +164,9 @@ const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
 # for internal use below
-wrapperop(A::Adjoint) = adjoint
-wrapperop(A::Transpose) = transpose
+wrapperop(_) = identity
+wrapperop(::Adjoint) = adjoint
+wrapperop(::Transpose) = transpose
 
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)

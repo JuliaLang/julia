@@ -33,6 +33,55 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
     nothing
 end
 
+# method root provenance
+
+rootid(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), Base.parentmodule(m))
+rootid(m::Method) = rootid(m.module)
+
+function root_provenance(m::Method, i::Int)
+    mid = rootid(m)
+    isdefined(m, :root_blocks) || return mid
+    idxs = view(m.root_blocks, 2:2:length(m.root_blocks))
+    j = searchsortedfirst(idxs, i) - 1   # RLE roots are 0-indexed
+    j == 0 && return mid
+    return m.root_blocks[2*j-1]
+end
+
+struct RLEIterator{T}   # for method roots, T = UInt64 (even on 32-bit)
+    items::Vector{Any}
+    blocks::Vector{T}
+    defaultid::T
+end
+function RLEIterator(roots, blocks, defaultid)
+    T = promote_type(eltype(blocks), typeof(defaultid))
+    return RLEIterator{T}(convert(Vector{Any}, roots), blocks, defaultid)
+end
+RLEIterator(m::Method) = RLEIterator(m.roots, m.root_blocks, rootid(m))
+Base.iterate(iter::RLEIterator) = iterate(iter, (0, 0, iter.defaultid))
+function Base.iterate(iter::RLEIterator, (i, j, cid))
+    i += 1
+    i > length(iter.items) && return nothing
+    r = iter.items[i]
+    while (j + 1 < length(iter.blocks) && i > iter.blocks[j+2])
+        cid = iter.blocks[j+1]
+        j += 2
+    end
+    return cid => r, (i, j, cid)
+end
+
+function group_roots(m::Method)
+    mid = rootid(m)
+    isdefined(m, :root_blocks) || return Dict(mid => m.roots)
+    group_roots(RLEIterator(m.roots, m.root_blocks, mid))
+end
+function group_roots(iter::RLEIterator)
+    rootsby = Dict{typeof(iter.defaultid),Vector{Any}}()
+    for (id, r) in iter
+        list = get!(valtype(rootsby), rootsby, id)
+        push!(list, r)
+    end
+    return rootsby
+end
 
 precompile_test_harness("basic precompile functionality") do dir2
 precompile_test_harness(false) do dir
@@ -191,8 +240,8 @@ precompile_test_harness(false) do dir
               const layout3 = collect(x.match for x in eachmatch(r"..", "abcdefghijk"))::Vector{SubString{String}}
 
               # create a backedge that includes Type{Union{}}, to ensure lookup can handle that
-              call_bottom() = show(stdout::IO, Union{})
-              Core.Compiler.return_type(call_bottom, ())
+              call_bottom() = show(stdout, Union{})
+              Core.Compiler.return_type(call_bottom, Tuple{})
 
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
@@ -310,10 +359,10 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates, :DelimitedFiles,
-                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils,
+                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates, :DelimitedFiles,
+                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :Pkg, :Printf,
+                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
                  :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
                  :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
@@ -535,6 +584,295 @@ precompile_test_harness(false) do dir
 end
 end
 
+# method root provenance & external code caching
+precompile_test_harness("code caching") do dir
+    Bid = rootid(Base)
+    Cache_module = :Cacheb8321416e8a3e2f1
+    # Note: calling setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
+    write(joinpath(dir, "$Cache_module.jl"),
+          """
+          module $Cache_module
+              struct X end
+              struct X2 end
+              @noinline function f(d)
+                  @noinline
+                  d[X()] = nothing
+              end
+              @noinline fpush(dest) = push!(dest, X())
+              function callboth()
+                  f(Dict{X,Any}())
+                  fpush(X[])
+                  nothing
+              end
+              function getelsize(list::Vector{T}) where T
+                  n = 0
+                  for item in list
+                      n += sizeof(T)
+                  end
+                  return n
+              end
+              precompile(callboth, ())
+              precompile(getelsize, (Vector{Int32},))
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(Cache_module)))
+    @eval using $Cache_module
+    M = getfield(@__MODULE__, Cache_module)
+    # Test that this cache file "owns" all the roots
+    Mid = rootid(M)
+    for name in (:f, :fpush, :callboth)
+        func = getfield(M, name)
+        m = only(collect(methods(func)))
+        @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
+    end
+    # Check that we can cache external CodeInstances:
+    # size(::Vector) has an inferred specialization for Vector{X}
+    msize = which(size, (Vector{<:Any},))
+    hasspec = false
+    for i = 1:length(msize.specializations)
+        if isassigned(msize.specializations, i)
+            mi = msize.specializations[i]
+            if isa(mi, Core.MethodInstance)
+                tt = Base.unwrap_unionall(mi.specTypes)
+                if tt.parameters[2] == Vector{Cacheb8321416e8a3e2f1.X}
+                    if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+                        hasspec = true
+                        break
+                    end
+                end
+            end
+        end
+    end
+    @test hasspec
+    # Test that compilation adds to method roots with appropriate provenance
+    m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
+    @test M.X ∈ m.roots
+    # Check that roots added outside of incremental builds get attributed to a moduleid of 0
+    Base.invokelatest() do
+        Dict{M.X2,Any}()[M.X2()] = nothing
+    end
+    @test M.X2 ∈ m.roots
+    groups = group_roots(m)
+    @test M.X ∈ groups[Mid]           # attributed to M
+    @test M.X2 ∈ groups[0]            # activate module is not known
+    @test !isempty(groups[Bid])
+    # Check that internal methods and their roots are accounted appropriately
+    minternal = which(M.getelsize, (Vector,))
+    mi = minternal.specializations[1]
+    @test Base.unwrap_unionall(mi.specTypes).parameters[2] == Vector{Int32}
+    ci = mi.cache
+    @test ci.relocatability == 1
+    @test ci.inferred !== nothing
+    # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
+    Base.invokelatest() do
+        M.getelsize(M.X2[])
+    end
+    mi = minternal.specializations[2]
+    ci = mi.cache
+    @test ci.relocatability == 0
+    # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
+    Cache_module2 = :Cachea1544c83560f0c99
+    write(joinpath(dir, "$Cache_module2.jl"),
+          """
+          module $Cache_module2
+              struct Y end
+              @noinline f(dest) = push!(dest, Y())
+              callf() = f(Y[])
+              callf()
+              using $(Cache_module)
+              struct Z end
+              @noinline g(dest) = push!(dest, Z())
+              callg() = g(Z[])
+              callg()
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(Cache_module2)))
+    @eval using $Cache_module2
+    M2 = getfield(@__MODULE__, Cache_module2)
+    M2id = rootid(M2)
+    dest = []
+    Base.invokelatest() do  # use invokelatest to see the results of loading the compile
+        M2.f(dest)
+        M.fpush(dest)
+        M2.g(dest)
+        @test dest == [M2.Y(), M.X(), M2.Z()]
+        @test M2.callf() == [M2.Y()]
+        @test M2.callg() == [M2.Z()]
+        @test M.fpush(M.X[]) == [M.X()]
+    end
+    mT = which(push!, (Vector{T} where T, Any))
+    groups = group_roots(mT)
+    @test M2.Y ∈ groups[M2id]
+    @test M2.Z ∈ groups[M2id]
+    @test M.X ∈ groups[Mid]
+    @test M.X ∉ groups[M2id]
+    # backedges of external MethodInstances
+    # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
+    # Do both callers get listed as backedges?
+    RootModule = :Root_0xab07d60518763a7e
+    write(joinpath(dir, "$RootModule.jl"),
+          """
+          module $RootModule
+          function f(x)
+              while x < 10
+                  x += oftype(x, 1)
+              end
+              return x
+          end
+          g1() = f(Int16(9))
+          g2() = f(Int16(9))
+          # all deliberately uncompiled
+          end
+          """)
+    RootA = :RootA_0xab07d60518763a7e
+    write(joinpath(dir, "$RootA.jl"),
+          """
+          module $RootA
+          using $RootModule
+          fA() = $RootModule.f(Int8(4))
+          fA()
+          $RootModule.g1()
+          end
+          """)
+    RootB = :RootB_0xab07d60518763a7e
+    write(joinpath(dir, "$RootB.jl"),
+          """
+          module $RootB
+          using $RootModule
+          fB() = $RootModule.f(Int8(4))
+          fB()
+          $RootModule.g2()
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(RootA)))
+    Base.compilecache(Base.PkgId(string(RootB)))
+    @eval using $RootA
+    @eval using $RootB
+    MA = getfield(@__MODULE__, RootA)
+    MB = getfield(@__MODULE__, RootB)
+    M = getfield(MA, RootModule)
+    m = which(M.f, (Any,))
+    for mi in m.specializations
+        mi === nothing && continue
+        if mi.specTypes.parameters[2] === Int8
+            # external callers
+            mods = Module[]
+            for be in mi.backedges
+                push!(mods, be.def.module)
+            end
+            @test MA ∈ mods
+            @test MB ∈ mods
+            @test length(mods) == 2
+        elseif mi.specTypes.parameters[2] === Int16
+            # internal callers
+            meths = Method[]
+            for be in mi.backedges
+                push!(meths, be.def)
+            end
+            @test which(M.g1, ()) ∈ meths
+            @test which(M.g2, ()) ∈ meths
+            @test length(meths) == 2
+        end
+    end
+
+    # Invalidations (this test is adapted from from SnoopCompile)
+    function hasvalid(mi, world)
+        isdefined(mi, :cache) || return false
+        ci = mi.cache
+        while true
+            ci.max_world >= world && return true
+            isdefined(ci, :next) || return false
+            ci = ci.next
+        end
+    end
+
+    StaleA = :StaleA_0xab07d60518763a7e
+    StaleB = :StaleB_0xab07d60518763a7e
+    StaleC = :StaleC_0xab07d60518763a7e
+    write(joinpath(dir, "$StaleA.jl"),
+        """
+        module $StaleA
+
+        stale(x) = rand(1:8)
+        stale(x::Int) = length(digits(x))
+
+        not_stale(x::String) = first(x)
+
+        use_stale(c) = stale(c[1]) + not_stale("hello")
+        build_stale(x) = use_stale(Any[x])
+
+        # force precompilation
+        build_stale(37)
+        stale('c')
+
+        end
+        """
+    )
+    write(joinpath(dir, "$StaleB.jl"),
+        """
+        module $StaleB
+
+        # StaleB does not know about StaleC when it is being built.
+        # However, if StaleC is loaded first, we get `"jl_insert_method_instance"`
+        # invalidations.
+        using $StaleA
+
+        # This will be invalidated if StaleC is loaded
+        useA() = $StaleA.stale("hello")
+
+        # force precompilation
+        useA()
+
+        end
+        """
+    )
+    write(joinpath(dir, "$StaleC.jl"),
+        """
+        module $StaleC
+
+        using $StaleA
+
+        $StaleA.stale(x::String) = length(x)
+        call_buildstale(x) = $StaleA.build_stale(x)
+
+        call_buildstale("hey")
+
+        end # module
+        """
+    )
+    for pkg in (StaleA, StaleB, StaleC)
+        Base.compilecache(Base.PkgId(string(pkg)))
+    end
+    @eval using $StaleA
+    @eval using $StaleC
+    @eval using $StaleB
+    MA = getfield(@__MODULE__, StaleA)
+    MB = getfield(@__MODULE__, StaleB)
+    MC = getfield(@__MODULE__, StaleC)
+    world = Base.get_world_counter()
+    m = only(methods(MA.use_stale))
+    mi = m.specializations[1]
+    @test hasvalid(mi, world)   # it was re-inferred by StaleC
+    m = only(methods(MA.build_stale))
+    mis = filter(!isnothing, collect(m.specializations))
+    @test length(mis) == 2
+    for mi in mis
+        if mi.specTypes.parameters[2] == Int
+            @test mi.cache.max_world < world
+        else
+            # The variant for String got "healed" by recompilation in StaleC
+            @test mi.specTypes.parameters[2] == String
+            @test mi.cache.max_world == typemax(UInt)
+        end
+    end
+    m = only(methods(MB.useA))
+    mi = m.specializations[1]
+    @test !hasvalid(mi, world)      # invalidated by the stale(x::String) method in StaleC
+    m = only(methods(MC.call_buildstale))
+    mi = m.specializations[1]
+    @test hasvalid(mi, world)       # was compiled with the new method
+end
+
 # test --compiled-modules=no command line option
 precompile_test_harness("--compiled-modules=no") do dir
     Time_module = :Time4b3a94a1a081a8cb
@@ -633,6 +971,27 @@ precompile_test_harness("package_callbacks") do dir
               """)
         Base.require(Main, Test3_module)
         @test take!(loaded_modules) == Test3_module
+    finally
+        pop!(Base.package_callbacks)
+    end
+    L = ReentrantLock()
+    E = Base.Event()
+    t = errormonitor(@async lock(L) do
+                     wait(E)
+                     Base.root_module_key(Base)
+                     end)
+    Test4_module = :Teste4095a84
+    write(joinpath(dir, "$(Test4_module).jl"),
+          """
+          module $(Test4_module)
+          end
+          """)
+    Base.compilecache(Base.PkgId("$(Test4_module)"))
+    push!(Base.package_callbacks, _->(notify(E); lock(L) do; end))
+    # should not hang here
+    try
+        @eval using $(Symbol(Test4_module))
+        wait(t)
     finally
         pop!(Base.package_callbacks)
     end

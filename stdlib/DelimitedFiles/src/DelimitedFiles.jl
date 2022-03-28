@@ -190,7 +190,7 @@ Specifying `skipstart` will ignore the corresponding number of initial lines fro
 If `skipblanks` is `true`, blank lines in the input will be ignored.
 
 If `use_mmap` is `true`, the file specified by `source` is memory mapped for potential
-speedups if the file is large. Default is `false'. On a Windows filesystem, `use_mmap` should not be set
+speedups if the file is large. Default is `false`. On a Windows filesystem, `use_mmap` should not be set
 to `true` unless the file is only read once and is also not written to.
 Some edge cases exist where an OS is Unix-like but the filesystem is Windows-like.
 

@@ -66,29 +66,30 @@ for (_A, Ar, _B) in ((A, Ars, B), (As, Arss, Bs))
         @test Arsc == [1 -1; 2 -2]
         reinterpret(NTuple{3, Int64}, Bc)[2] = (4,5,6)
         @test Bc == Complex{Int64}[5+6im, 7+4im, 5+6im]
-        reinterpret(NTuple{3, Int64}, Bc)[1] = (1,2,3)
+        B2 = reinterpret(NTuple{3, Int64}, Bc)
+        @test setindex!(B2, (1,2,3), 1) === B2
         @test Bc == Complex{Int64}[1+2im, 3+4im, 5+6im]
         Bc = copy(_B)
         Brrs = reinterpret(reshape, Int64, Bc)
-        Brrs[2, 3] = -5
+        @test setindex!(Brrs, -5, 2, 3) === Brrs
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9-5im]
         Brrs[last(eachindex(Brrs))] = 22
         @test Bc == Complex{Int64}[5+6im, 7+8im, 9+22im]
 
         A1 = reinterpret(Float64, _A)
         A2 = reinterpret(ComplexF64, _A)
-        A1[1] = 1.0
+        @test setindex!(A1, 1.0, 1) === A1
         @test real(A2[1]) == 1.0
         A1 = reinterpret(reshape, Float64, _A)
-        A1[1] = 2.5
+        @test setindex!(A1, 2.5, 1) === A1
         @test reinterpret(Float64, _A[1]) == 2.5
         A1rs = reinterpret(Float64, Ar)
         A2rs = reinterpret(ComplexF64, Ar)
-        A1rs[1, 1] = 1.0
+        @test setindex!(A1rs, 1.0, 1, 1) === A1rs
         @test real(A2rs[1]) == 1.0
         A1rs = reinterpret(reshape, Float64, Ar)
         A2rs = reinterpret(reshape, ComplexF64, Ar)
-        A1rs[1, 1] = 2.5
+        @test setindex!(A1rs, 2.5, 1, 1) === A1rs
         @test real(A2rs[1]) == 2.5
     end
 end
@@ -106,14 +107,14 @@ A3r[CartesianIndex(1,2)] = 300+400im
 @test A3[2,1,2] == 400
 
 # same-size reinterpret where one of the types is non-primitive
-let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
-    @test reinterpret(Float32, a)[1] == reinterpret(Float32, 0x04030201)
-    reinterpret(Float32, a)[1] = 2.0
+let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)], ra = reinterpret(Float32, a)
+    @test ra[1] == reinterpret(Float32, 0x04030201)
+    @test setindex!(ra, 2.0) === ra
     @test reinterpret(Float32, a)[1] == 2.0
 end
-let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
-    @test reinterpret(reshape, Float32, a)[1] == reinterpret(Float32, 0x04030201)
-    reinterpret(reshape, Float32, a)[1] = 2.0
+let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)], ra = reinterpret(reshape, Float32, a)
+    @test ra[1] == reinterpret(Float32, 0x04030201)
+    @test setindex!(ra, 2.0) === ra
     @test reinterpret(reshape, Float32, a)[1] == 2.0
 end
 
@@ -156,12 +157,62 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
-# and ensure a reinterpret array containing a strided array can have strides computed
-let A = view(reinterpret(Int16, collect(reshape(UnitRange{Int64}(1, 20), 5, 4))), :, 1:2)
-    R = reinterpret(Int32, A)
-    @test strides(R) == (1, 10)
-    @test stride(R, 1) == 1
-    @test stride(R, 2) == 10
+function check_strides(A::AbstractArray)
+    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+    dims = ntuple(identity, ndims(A))
+    map(i -> stride(A, i), dims) == strides(A) || return false
+    # Test strides via value check.
+    for i in eachindex(IndexLinear(), A)
+        A[i] === Base.unsafe_load(pointer(A, i)) || return false
+    end
+    return true
+end
+
+@testset "strides for NonReshapedReinterpretArray" begin
+    A = Array{Int32}(reshape(1:88, 11, 8))
+    for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1, 2:3:8, 7:-6:1, 3:5:11)
+        # dim1 is contiguous
+        for T in (Int16, Float32)
+            @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
+        end
+        if mod(step(viewax2), 2) == 0
+            @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        end
+        # non-integer-multipled classified
+        if mod(step(viewax2), 3) == 0
+            @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+        end
+        if mod(step(viewax2), 5) == 0
+            @test check_strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+        end
+        # dim1 is not contiguous
+        for T in (Int16, Int64)
+            @test_throws "Parent must" strides(reinterpret(T, view(A, 8:-1:1, viewax2)))
+        end
+        @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
+    end
+end
+
+@testset "strides for ReshapedReinterpretArray" begin
+    A = Array{Int32}(reshape(1:192, 3, 8, 8))
+    for viewax1 in (1:8, 1:2:8, 8:-1:1, 8:-2:1), viewax2 in (1:2, 4:-1:1)
+        for T in (Int16, Float32)
+            @test check_strides(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
+            @test check_strides(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
+        end
+        if mod(step(viewax1), 2) == 0
+            @test check_strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+        end
+        @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
+    end
 end
 
 @testset "strides" begin
@@ -197,7 +248,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -2
     end
     for goodinds in (1, 15, (1,1), (5,3))
-        r[goodinds...] = -2
+        @test setindex!(r, -2, goodinds...) === r
         @test r[goodinds...] == -2
     end
     r = reinterpret(Int32, a)
@@ -210,7 +261,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -3
     end
     for goodinds in (1, 30, (1,1), (10,3))
-        r[goodinds...] = -3
+        @test setindex!(r, -3, goodinds...) === r
         @test r[goodinds...] == -3
     end
     r = reinterpret(Int64, view(a, 1:2:5, :))
@@ -223,7 +274,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -4
     end
     for goodinds in (1, 9, (1,1), (3,3))
-        r[goodinds...] = -4
+        @test setindex!(r, -4, goodinds...) === r
         @test r[goodinds...] == -4
     end
     r = reinterpret(Int32, view(a, 1:2:5, :))
@@ -236,7 +287,7 @@ let a = fill(1.0, 5, 3)
         @test_throws BoundsError r[badinds...] = -5
     end
     for goodinds in (1, 18, (1,1), (6,3))
-        r[goodinds...] = -5
+        @test setindex!(r, -5, goodinds...) === r
         @test r[goodinds...] == -5
     end
 
@@ -317,14 +368,25 @@ end
 
 # Test 0-dimensional Arrays
 A = zeros(UInt32)
-B = reinterpret(Int32,A)
-Brs = reinterpret(reshape,Int32,A)
-@test size(B) == size(Brs) == ()
-@test axes(B) == axes(Brs) == ()
-B[] = Int32(5)
+B = reinterpret(Int32, A)
+Brs = reinterpret(reshape,Int32, A)
+C = reinterpret(Tuple{UInt32}, A) # non-primitive type
+Crs = reinterpret(reshape, Tuple{UInt32}, A)  # non-primitive type
+@test size(B) == size(Brs) == size(C) == size(Crs) == ()
+@test axes(B) == axes(Brs) == axes(C) == axes(Crs) == ()
+@test setindex!(B, Int32(5)) === B
 @test B[] === Int32(5)
 @test Brs[] === Int32(5)
+@test C[] === (UInt32(5),)
+@test Crs[] === (UInt32(5),)
 @test A[] === UInt32(5)
+@test setindex!(Brs, Int32(12)) === Brs
+@test A[] === UInt32(12)
+@test setindex!(C, (UInt32(7),)) === C
+@test A[] === UInt32(7)
+@test setindex!(Crs, (UInt32(3),)) === Crs
+@test A[] === UInt32(3)
+
 
 a = [(1.0,2.0)]
 af = @inferred(reinterpret(reshape, Float64, a))
@@ -375,4 +437,74 @@ end
     @test typeof(Base.unaliascopy(a)) === typeof(a)
     a = reinterpret(reshape, NTuple{4,Float64}, rand(Float64, 4, 4))
     @test typeof(Base.unaliascopy(a)) === typeof(a)
+end
+
+
+@testset "singleton types" begin
+    mutable struct NotASingleton end # not a singleton because it is mutable
+    struct SomeSingleton
+        # A singleton type that does not have the internal constructor SomeSingleton()
+        SomeSingleton(x) = new()
+    end
+
+    @test_throws ErrorException reinterpret(Int, nothing)
+    @test_throws ErrorException reinterpret(Missing, 3)
+    @test_throws ErrorException reinterpret(Missing, NotASingleton())
+    @test_throws ErrorException reinterpret(NotASingleton, ())
+
+    @test_throws ArgumentError reinterpret(NotASingleton, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(reshape, NotASingleton, fill(missing, 3))
+    @test_throws ArgumentError reinterpret(Tuple{}, fill(NotASingleton(), 2))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(NotASingleton(), ()))
+
+    t = fill(nothing, 3, 5)
+    @test reinterpret(SomeSingleton, t) == reinterpret(reshape, SomeSingleton, t)
+    @test reinterpret(SomeSingleton, t) == [SomeSingleton(i*j) for i in 1:3, j in 1:5]
+    @test reinterpret(Int, t) == fill(17, 0, 5)
+    @test_throws ArgumentError reinterpret(reshape, Float64, t)
+    @test_throws ArgumentError reinterpret(Nothing, 1:6)
+    @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
+
+    # reintepret of empty array with reshape
+    @test reinterpret(reshape, Nothing, fill(missing, (0,0,0))) == fill(nothing, (0,0,0))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
+    @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
+
+    # reinterpret of 0-dimensional array
+    z = reinterpret(Tuple{}, fill(missing, ()))
+    @test z == fill((), ())
+    @test z == reinterpret(reshape, Tuple{}, fill(nothing, ()))
+    @test z[] == ()
+    @test setindex!(z, ()) === z
+    @test_throws BoundsError z[2]
+    @test_throws BoundsError z[3] = ()
+    @test_throws ArgumentError reinterpret(UInt8, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(Missing, fill(1f0, ()))
+    @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, ()))
+    @test_throws ArgumentError reinterpret(reshape, Nothing, fill(17, ()))
+    @test_throws MethodError z[] = nothing
+
+    @test @inferred(ndims(reinterpret(reshape, SomeSingleton, t))) == 2
+    @test @inferred(axes(reinterpret(reshape, Tuple{}, t))) == (Base.OneTo(3),Base.OneTo(5))
+    @test @inferred(size(reinterpret(reshape, Missing, t))) == (3,5)
+
+    x = reinterpret(Tuple{}, t)
+    @test x == reinterpret(reshape, Tuple{}, t)
+    @test x[3,5] === ()
+    x1 = fill((), 3, 5)
+    @test setindex!(x, (), 1, 1) == x1
+    @test_throws BoundsError x[17]
+    @test_throws BoundsError x[4,2]
+    @test_throws BoundsError x[1,2,3]
+    @test_throws BoundsError x[18] = ()
+    @test_throws MethodError x[1,3] = missing
+    @test x == fill((), (3, 5))
+    x = reinterpret(reshape, SomeSingleton, t)
+    @test_throws BoundsError x[19]
+    @test_throws BoundsError x[2,6] = SomeSingleton(0xa)
+    @test x[2,3] === SomeSingleton(:x)
+    x2 = fill(SomeSingleton(0.7), 3, 5)
+    @test x == x2
+    @test setindex!(x, SomeSingleton(:), 3, 5) == x2
+    @test_throws MethodError x[2,4] = nothing
 end

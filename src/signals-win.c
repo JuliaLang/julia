@@ -388,6 +388,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     jl_gc_debug_critical_error();
                     abort();
                 }
+                jl_check_profile_autostop();
             }
         }
     }
