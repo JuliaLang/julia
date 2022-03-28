@@ -1490,25 +1490,26 @@ end
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
-    ft === Bottom && return CallMeta(Bottom, false)
+    ft === Bottom && return CallMeta(Bottom, false), EFFECTS_THROWN
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
-    types === Bottom && return CallMeta(Bottom, false)
-    isexact || return CallMeta(Any, false)
+    types === Bottom && return CallMeta(Bottom, false), EFFECTS_THROWN
+    isexact || return CallMeta(Any, false), Effects()
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
-    nargtype === Bottom && return CallMeta(Bottom, false)
-    nargtype isa DataType || return CallMeta(Any, false) # other cases are not implemented below
-    isdispatchelem(ft) || return CallMeta(Any, false) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+    nargtype === Bottom && return CallMeta(Bottom, false), EFFECTS_THROWN
+    nargtype isa DataType || return CallMeta(Any, false), Effects() # other cases are not implemented below
+    isdispatchelem(ft) || return CallMeta(Any, false), Effects() # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
     match, valid_worlds, overlayed = findsup(types, method_table(interp))
-    match === nothing && return CallMeta(Any, false)
+    match === nothing && return CallMeta(Any, false), Effects()
     update_valid_age!(sv, valid_worlds)
     method = match.method
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
+    effects = result.edge_effects
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
@@ -1526,10 +1527,10 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     const_result = nothing
     if const_call_result !== nothing
         if const_call_result.rt ⊑ rt
-            (; rt, const_result) = const_call_result
+            (; rt, effects, const_result) = const_call_result
         end
     end
-    return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result))
+    return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result)), effects
 end
 
 function invoke_rewrite(xs::Vector{Any})
@@ -1550,14 +1551,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if f === _apply_iterate
             return abstract_apply(interp, argtypes, sv, max_methods)
         elseif f === invoke
-            call = abstract_invoke(interp, arginfo, sv)
-            if call.info === false
-                if call.rt === Bottom
-                    tristate_merge!(sv, Effects(EFFECTS_TOTAL; nothrow=ALWAYS_FALSE))
-                else
-                    tristate_merge!(sv, Effects())
-                end
-            end
+            call, effects = abstract_invoke(interp, arginfo, sv)
+            tristate_merge!(sv, effects)
             return call
         elseif f === modifyfield!
             tristate_merge!(sv, Effects()) # TODO
