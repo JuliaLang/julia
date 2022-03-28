@@ -449,6 +449,12 @@ end
         @test Q2[:, :] ≈ M[:, :]
         @test Q2[:, :, :] ≈ M[:, :, :]
     end
+    # Check that getindex works if copy returns itself (#44729)
+    struct MyIdentity{T} <: LinearAlgebra.AbstractQ{T} end
+    Base.size(::MyIdentity, dim::Integer) = dim in (1,2) ? 2 : 1
+    Base.copy(J::MyIdentity) = J
+    LinearAlgebra.lmul!(::MyIdentity{T}, M::Array{T}) where {T} = M
+    @test MyIdentity{Float64}()[1,:] == [1.0, 0.0]
 end
 
 end # module TestQR
