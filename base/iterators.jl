@@ -1163,6 +1163,59 @@ reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 last(f::Flatten) = last(last(f.it))
 
 """
+    Iterators.flatmap(f, iterators...)
+
+Equivalent to flatten(map(f, iterators...)).
+
+# Examples
+```jldoctest
+julia> flatmap(n->-n:2:n, 1:3) |> collect
+9-element Vector{Int64}:
+ -1
+  1
+ -2
+  0
+  2
+ -3
+ -1
+  1
+  3
+
+julia> flatmap(x -> (x+1)*x % 4 == 0 ? x*x : nothing, 1:11) |> collect
+5-element Vector{Int64}:
+   9
+  16
+  49
+  64
+ 121
+
+julia> [(j,k) for j in 1:3 for k in 1:3 if j>k]
+3-element Vector{Tuple{Int64, Int64}}:
+ (2, 1)
+ (3, 1)
+ (3, 2)
+
+julia> flatmap(1:3) do j
+           flatmap(1:3) do k
+               j>k ? Some((j,k)) : nothing
+           end
+       end |> collect
+3-element Vector{Tuple{Int64, Int64}}:
+ (2, 1)
+ (3, 1)
+ (3, 2)
+```
+"""
+# flatmap(f, c...) = flatten(map(f, c...))
+flatmap = flatten ∘ map
+
+# Allows filtering through `flatten` (or `flatmap`) by removing `nothing` values
+iterate(_::Nothing) = nothing
+iterate(x::Some{T}) where T = (something(x), nothing)
+iterate(x::Some{T}, state::Nothing) where T = nothing
+length(x::Some{T}) where T = 1
+
+"""
     partition(collection, n)
 
 Iterate over a collection `n` elements at a time.
