@@ -1066,8 +1066,6 @@ function show_function(io::IO, c::ComposedFunction, compact::Bool)
     end
 end
 
-show_function(io::IO, x, ::Bool) = show(io, x)
-
 """
     !f::Function
 

@@ -465,8 +465,11 @@ function show_function(io::IO, f::Function, compact::Bool)
     end
 end
 
+show_function(io::IO, x, ::Bool) = show(io, x)
+
 show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
 print(io::IO, f::Function) = show_function(io, f, true)
+
 
 function show(io::IO, f::Core.IntrinsicFunction)
     if !(get(io, :compact, false)::Bool)
