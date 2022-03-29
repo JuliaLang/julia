@@ -2032,6 +2032,13 @@ end
         end
         @test ts == Any[Any]
     end
+
+    # a tricky case: if constant inference derives `Const` while non-constant inference has
+    # derived `InterConditional`, we should not discard that constant information
+    iszero_simple(x) = x === 0
+    @test Base.return_types() do
+        iszero_simple(0) ? nothing : missing
+    end |> only === Nothing
 end
 
 @testset "branching on conditional object" begin
@@ -4073,3 +4080,12 @@ end
     Base.Experimental.@force_compile
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44763
+global x44763::Int = 0
+increase_x44763!(n) = (global x44763; x44763 += n)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
+@test Base.return_types() do
+    invoke44763(42)
+end |> only === Int
+@test x44763 == 0

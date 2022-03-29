@@ -6,28 +6,44 @@ function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,I
     return singleton_type(ft) === func
 end
 
+struct SSAUse
+    kind::Symbol
+    idx::Int
+end
+GetfieldUse(idx::Int)  = SSAUse(:getfield, idx)
+PreserveUse(idx::Int)  = SSAUse(:preserve, idx)
+NoPreserve()           = SSAUse(:nopreserve, 0)
+IsdefinedUse(idx::Int) = SSAUse(:isdefined, idx)
+
 """
     du::SSADefUse
 
 This struct keeps track of all uses of some mutable struct allocated in the current function:
-- `du.uses::Vector{Int}` are all instances of `getfield` on the struct
+- `du.uses::Vector{SSAUse}` are some "usages" (like `getfield`) of the struct
 - `du.defs::Vector{Int}` are all instances of `setfield!` on the struct
 The terminology refers to the uses/defs of the "slot bundle" that the mutable struct represents.
 
-In addition we keep track of all instances of a `:foreigncall` that preserves of this mutable
-struct in `du.ccall_preserve_uses`. Somewhat counterintuitively, we don't actually need to
-make sure that the struct itself is live (or even allocated) at a `ccall` site.
-If there are no other places where the struct escapes (and thus e.g. where its address is taken),
-it need not be allocated. We do however, need to make sure to preserve any elements of this struct.
+`du.uses` tracks all instances of `getfield` and `isdefined` calls on the struct.
+Additionally it also tracks all instances of a `:foreigncall` that preserves of this mutable
+struct. Somewhat counterintuitively, we don't actually need to make sure that the struct
+itself is live (or even allocated) at a `ccall` site. If there are no other places where
+the struct escapes (and thus e.g. where its address is taken), it need not be allocated.
+We do however, need to make sure to preserve any elements of this struct.
 """
 struct SSADefUse
-    uses::Vector{Int}
+    uses::Vector{SSAUse}
     defs::Vector{Int}
-    ccall_preserve_uses::Vector{Int}
 end
-SSADefUse() = SSADefUse(Int[], Int[], Int[])
+SSADefUse() = SSADefUse(SSAUse[], Int[])
 
-compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
+function compute_live_ins(cfg::CFG, du::SSADefUse)
+    uses = Int[]
+    for use in du.uses
+        use.kind === :isdefined && continue # filter out `isdefined` usages
+        push!(uses, use.idx)
+    end
+    compute_live_ins(cfg, du.defs, uses)
+end
 
 # assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
 try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
@@ -86,7 +102,8 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
+function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+    du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
     def, useblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use)
     if def == 0
         if !haskey(phinodes, curblock)
@@ -355,10 +372,7 @@ function lift_leaves(compact::IncrementalCompact,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
-                typ = widenconst(types(compact)[leaf])
-                if isa(typ, UnionAll)
-                    typ = unwrap_unionall(typ)
-                end
+                typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 @assert !ismutabletype(typ)
                 if length(def.args) < 1+field
@@ -725,7 +739,7 @@ function sroa_pass!(ir::IRCode)
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
-        is_setfield = false
+        is_setfield = is_isdefined = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
             4 <= length(stmt.args) <= 5 || continue
@@ -738,6 +752,13 @@ function sroa_pass!(ir::IRCode)
             if length(stmt.args) == 5
                 field_ordering = argextype(stmt.args[5], compact)
             elseif length(stmt.args) == 4
+                field_ordering = argextype(stmt.args[4], compact)
+                widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+            end
+        elseif is_known_call(stmt, isdefined, compact)
+            3 <= length(stmt.args) <= 4 || continue
+            is_isdefined = true
+            if length(stmt.args) == 4
                 field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
@@ -762,10 +783,7 @@ function sroa_pass!(ir::IRCode)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = widenconst(argextype(SSAValue(defidx), compact))
-                        if isa(typ, UnionAll)
-                            typ = unwrap_unionall(typ)
-                        end
+                        typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
                         if typ isa DataType && !ismutabletype(typ)
                             record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
@@ -777,8 +795,8 @@ function sroa_pass!(ir::IRCode)
                     if defuses === nothing
                         defuses = IdDict{Int, Tuple{SPCSet, SSADefUse}}()
                     end
-                    mid, defuse = get!(defuses, defidx, (SPCSet(), SSADefUse()))
-                    push!(defuse.ccall_preserve_uses, idx)
+                    mid, defuse = get!(()->(SPCSet(),SSADefUse()), defuses, defidx)
+                    push!(defuse.uses, PreserveUse(idx))
                     union!(mid, intermediaries)
                 end
                 continue
@@ -795,13 +813,11 @@ function sroa_pass!(ir::IRCode)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, lifting_cache)
-            elseif is_known_call(stmt, isdefined, compact)
-                lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
             end
             continue
         end
 
-        # analyze this `getfield` / `setfield!` call
+        # analyze this `getfield` / `isdefined` / `setfield!` call
 
         field = try_compute_field_stmt(compact, stmt)
         field === nothing && continue
@@ -812,10 +828,15 @@ function sroa_pass!(ir::IRCode)
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
         end
+        if isa(struct_typ, Union) && is_isdefined
+            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            continue
+        end
         isa(struct_typ, DataType) || continue
 
         struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
-        if !(field_ordering === :unspecified || (field_ordering isa Const && field_ordering.val === :not_atomic))
+        if !((field_ordering === :unspecified) ||
+             (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
@@ -833,17 +854,21 @@ function sroa_pass!(ir::IRCode)
                 if defuses === nothing
                     defuses = IdDict{Int, Tuple{SPCSet, SSADefUse}}()
                 end
-                mid, defuse = get!(defuses, def.id, (SPCSet(), SSADefUse()))
+                mid, defuse = get!(()->(SPCSet(),SSADefUse()), defuses, def.id)
                 if is_setfield
                     push!(defuse.defs, idx)
+                elseif is_isdefined
+                    push!(defuse.uses, IsdefinedUse(idx))
                 else
-                    push!(defuse.uses, idx)
+                    push!(defuse.uses, GetfieldUse(idx))
                 end
                 union!(mid, intermediaries)
             end
             continue
         elseif is_setfield
             continue # invalid `setfield!` call, but just ignore here
+        elseif is_isdefined
+            continue # TODO?
         end
 
         # perform SROA on immutable structs here on
@@ -906,7 +931,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # escapes and we cannot eliminate the allocation. This works, because we're guaranteed
         # not to include any intermediaries that have dead uses. As a result, missing uses will only ever
         # show up in the nuses_total count.
-        nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
+        nleaves = length(defuse.uses) + length(defuse.defs)
         nuses = 0
         for idx in intermediaries
             nuses += used_ssas[idx]
@@ -917,19 +942,22 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         defexpr = ir[SSAValue(idx)][:inst]
         isexpr(defexpr, :new) || continue
         newidx = idx
-        typ = ir.stmts[newidx][:type]
-        if isa(typ, UnionAll)
-            typ = unwrap_unionall(typ)
-        end
+        typ = unwrap_unionall(ir.stmts[newidx][:type])
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
         ismutabletype(typ) || continue
         typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
-        all_forwarded = true
+        all_eliminated = all_forwarded = true
         for use in defuse.uses
-            stmt = ir[SSAValue(use)][:inst] # == `getfield` call
+            if use.kind === :preserve
+                for du in fielddefuse
+                    push!(du.uses, use)
+                end
+                continue
+            end
+            stmt = ir[SSAValue(use.idx)][:inst] # == `getfield`/`isdefined` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
@@ -968,8 +996,30 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
-                for use in du.uses
-                    has_safe_def(ir, get_domtree(), allblocks, du, newidx, use) || @goto skip
+                for i = 1:length(du.uses)
+                    use = du.uses[i]
+                    if use.kind === :isdefined
+                        if has_safe_def(ir, get_domtree(), allblocks, du, newidx, use.idx)
+                            ir[SSAValue(use.idx)][:inst] = true
+                        else
+                            all_eliminated = false
+                        end
+                        continue
+                    elseif use.kind === :preserve
+                        if length(du.defs) == 1 # allocation with this field unintialized
+                            # there is nothing to preserve, just ignore this use
+                            du.uses[i] = NoPreserve()
+                            continue
+                        end
+                    end
+                    has_safe_def(ir, get_domtree(), allblocks, du, newidx, use.idx) || @goto skip
+                end
+            else # always have some definition at the allocation site
+                for i = 1:length(du.uses)
+                    use = du.uses[i]
+                    if use.kind === :isdefined
+                        ir[SSAValue(use.idx)][:inst] = true
+                    end
                 end
             end
         end
@@ -978,8 +1028,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
         domtree = get_domtree()
-        preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
-            IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
+        local preserve_uses = nothing
         for fidx in 1:ndefuse
             du = fielddefuse[fidx]
             ftyp = fieldtype(typ, fidx)
@@ -991,14 +1040,25 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                         NewInstruction(PhiNode(), ftyp))
                 end
                 # Now go through all uses and rewrite them
-                for stmt in du.uses
-                    ir[SSAValue(stmt)][:inst] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
-                end
-                if !isbitstype(ftyp)
-                    if preserve_uses !== nothing
-                        for (use, list) in preserve_uses
-                            push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
+                for use in du.uses
+                    if use.kind === :getfield
+                        ir[SSAValue(use.idx)][:inst] = compute_value_for_use(ir, domtree, allblocks,
+                            du, phinodes, fidx, use.idx)
+                    elseif use.kind === :isdefined
+                        continue # already rewritten if possible
+                    elseif use.kind === :nopreserve
+                        continue # nothing to preserve (may happen when there are unintialized fields)
+                    elseif use.kind === :preserve
+                        newval = compute_value_for_use(ir, domtree, allblocks,
+                            du, phinodes, fidx, use.idx)
+                        if !isbitstype(widenconst(argextype(newval, ir)))
+                            if preserve_uses === nothing
+                                preserve_uses = IdDict{Int, Vector{Any}}()
+                            end
+                            push!(get!(()->Any[], preserve_uses, use.idx), newval)
                         end
+                    else
+                        @assert false "sroa_mutables!: unexpected use"
                     end
                 end
                 for b in phiblocks
@@ -1010,6 +1070,10 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     end
                 end
             end
+            all_eliminated || continue
+            # all "usages" (i.e. `getfield` and `isdefined` calls) are eliminated,
+            # now eliminate "definitions" (`setfield!`) calls
+            # (NOTE the allocation itself will be eliminated by DCE pass later)
             for stmt in du.defs
                 stmt == newidx && continue
                 ir[SSAValue(stmt)][:inst] = nothing
@@ -1023,8 +1087,9 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             push!(intermediaries, newidx)
         end
         # Insert the new preserves
-        for (use, new_preserves) in preserve_uses
-            ir[SSAValue(use)][:inst] = form_new_preserves(ir[SSAValue(use)][:inst]::Expr, intermediaries, new_preserves)
+        for (useidx, new_preserves) in preserve_uses
+            ir[SSAValue(useidx)][:inst] = form_new_preserves(ir[SSAValue(useidx)][:inst]::Expr,
+                intermediaries, new_preserves)
         end
 
         @label skip

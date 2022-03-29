@@ -118,10 +118,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
                 result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
-                rt, edge = result.rt, result.edge
-                if edge !== nothing
-                    push!(edges, edge)
-                end
+                rt = result.rt
+                edge = result.edge
+                edge !== nothing && push!(edges, edge)
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp, result,
@@ -129,20 +128,22 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 effects = result.edge_effects
                 const_result = nothing
                 if const_call_result !== nothing
-                    if const_call_result.rt ⊑ rt
-                        (; rt, effects, const_result) = const_call_result
+                    const_rt = const_call_result.rt
+                    if const_rt ⊑ rt
+                        rt = const_rt
+                        (; effects, const_result) = const_call_result
                     end
                 end
                 tristate_merge!(sv, effects)
                 push!(const_results, const_result)
-                if const_result !== nothing
-                    any_const_result = true
-                end
+                any_const_result |= const_result !== nothing
                 this_rt = tmerge(this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
                     break
                 end
             end
+            this_conditional = ignorelimited(this_rt)
+            this_rt = widenwrappedconditional(this_rt)
         else
             if infer_compilation_signature(interp)
                 # Also infer the compilation signature for this method, so it's available
@@ -159,10 +160,10 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
 
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
-            this_rt, edge = result.rt, result.edge
-            if edge !== nothing
-                push!(edges, edge)
-            end
+            this_conditional = ignorelimited(result.rt)
+            this_rt = widenwrappedconditional(result.rt)
+            edge = result.edge
+            edge !== nothing && push!(edges, edge)
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
@@ -172,22 +173,20 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             effects = result.edge_effects
             const_result = nothing
             if const_call_result !== nothing
-                this_const_rt = const_call_result.rt
+                this_const_conditional = ignorelimited(const_call_result.rt)
+                this_const_rt = widenwrappedconditional(const_call_result.rt)
                 # return type of const-prop' inference can be wider than that of non const-prop' inference
                 # e.g. in cases when there are cycles but cached result is still accurate
                 if this_const_rt ⊑ this_rt
+                    this_conditional = this_const_conditional
                     this_rt = this_const_rt
                     (; effects, const_result) = const_call_result
                 end
             end
             tristate_merge!(sv, effects)
             push!(const_results, const_result)
-            if const_result !== nothing
-                any_const_result = true
-            end
+            any_const_result |= const_result !== nothing
         end
-        this_conditional = ignorelimited(this_rt)
-        this_rt = widenwrappedconditional(this_rt)
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
         rettype = tmerge(rettype, this_rt)
@@ -701,12 +700,12 @@ function pure_eval_call(interp::AbstractInterpreter,
 end
 function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
     args = collect_const_args(arginfo)
-    try
-        value = Core._apply_pure(f, args)
-        return Const(value)
+    value = try
+        Core._apply_pure(f, args)
     catch
         return nothing
     end
+    return Const(value)
 end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
@@ -740,17 +739,18 @@ function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     concrete_eval_eligible(interp, f, result, arginfo, sv) || return nothing
     args = collect_const_args(arginfo)
-    try
-        value = Core._call_in_world_total(get_world_counter(interp), f, args...)
-        if is_inlineable_constant(value) || call_result_unused(sv)
-            # If the constant is not inlineable, still do the const-prop, since the
-            # code that led to the creation of the Const may be inlineable in the same
-            # circumstance and may be optimizable.
-            return ConstCallResults(Const(value), ConstResult(result.edge, value), EFFECTS_TOTAL)
-        end
+    world = get_world_counter(interp)
+    value = try
+        Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConstResult(result.edge), result.edge_effects)
+        return ConstCallResults(Union{}, ConstResult(result.edge, result.edge_effects), result.edge_effects)
+    end
+    if is_inlineable_constant(value) || call_result_unused(sv)
+        # If the constant is not inlineable, still do the const-prop, since the
+        # code that led to the creation of the Const may be inlineable in the same
+        # circumstance and may be optimizable.
+        return ConstCallResults(Const(value), ConstResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
     end
     return nothing
 end
@@ -1500,25 +1500,26 @@ end
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
     ft′ = argtype_by_index(argtypes, 2)
     ft = widenconst(ft′)
-    ft === Bottom && return CallMeta(Bottom, false)
+    ft === Bottom && return CallMeta(Bottom, false), EFFECTS_THROWN
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
-    types === Bottom && return CallMeta(Bottom, false)
-    isexact || return CallMeta(Any, false)
+    types === Bottom && return CallMeta(Bottom, false), EFFECTS_THROWN
+    isexact || return CallMeta(Any, false), Effects()
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
-    nargtype === Bottom && return CallMeta(Bottom, false)
-    nargtype isa DataType || return CallMeta(Any, false) # other cases are not implemented below
-    isdispatchelem(ft) || return CallMeta(Any, false) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+    nargtype === Bottom && return CallMeta(Bottom, false), EFFECTS_THROWN
+    nargtype isa DataType || return CallMeta(Any, false), Effects() # other cases are not implemented below
+    isdispatchelem(ft) || return CallMeta(Any, false), Effects() # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
     types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
     match, valid_worlds, overlayed = findsup(types, method_table(interp))
-    match === nothing && return CallMeta(Any, false)
+    match === nothing && return CallMeta(Any, false), Effects()
     update_valid_age!(sv, valid_worlds)
     method = match.method
     (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
+    effects = result.edge_effects
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
@@ -1536,10 +1537,10 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     const_result = nothing
     if const_call_result !== nothing
         if const_call_result.rt ⊑ rt
-            (; rt, const_result) = const_call_result
+            (; rt, effects, const_result) = const_call_result
         end
     end
-    return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result))
+    return CallMeta(from_interprocedural!(rt, sv, arginfo, sig), InvokeCallInfo(match, const_result)), effects
 end
 
 function invoke_rewrite(xs::Vector{Any})
@@ -1560,14 +1561,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         if f === _apply_iterate
             return abstract_apply(interp, argtypes, sv, max_methods)
         elseif f === invoke
-            call = abstract_invoke(interp, arginfo, sv)
-            if call.info === false
-                if call.rt === Bottom
-                    tristate_merge!(sv, Effects(EFFECTS_TOTAL; nothrow=ALWAYS_FALSE))
-                else
-                    tristate_merge!(sv, Effects())
-                end
-            end
+            call, effects = abstract_invoke(interp, arginfo, sv)
+            tristate_merge!(sv, effects)
             return call
         elseif f === modifyfield!
             tristate_merge!(sv, Effects()) # TODO

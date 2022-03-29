@@ -483,7 +483,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
+                    jl_binding_t *b = jl_get_binding_wr_or_error(modu, sym);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }
