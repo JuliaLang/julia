@@ -513,7 +513,7 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield) \
+    XX(jl_yield)
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp)
@@ -568,4 +568,4 @@
     YY(LLVMExtraAddRemoveNIPass) \
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(LLVMExtraAddCPUFeaturesPass)
