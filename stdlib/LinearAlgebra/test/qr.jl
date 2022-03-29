@@ -270,11 +270,19 @@ end
     b  = randn(3)
     b0 = copy(b)
     c  = randn(2)
+    B  = randn(3,3)
+    B0 = copy(B)
+    C  = randn(2,3)
     @test A \b ≈ ldiv!(c, qr(A ), b)
     @test b == b0
+    @test A \B ≈ ldiv!(C, qr(A ), B)
+    @test B == B0
     c0 = copy(c)
+    C0 = copy(C)
     @test Ac\c ≈ ldiv!(b, qr(Ac, ColumnNorm()), c)
     @test c0 == c
+    @test Ac\C ≈ ldiv!(B, qr(Ac, ColumnNorm()), C)
+    @test C0 == C
 end
 
 @testset "Issue reflector of zero-length vector" begin
