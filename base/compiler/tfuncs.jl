@@ -1795,11 +1795,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
     if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
         # consistent if the argtype is immutable
         if isvarargtype(argtypes[2])
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
         end
         s = widenconst(argtypes[2])
         if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
@@ -1828,13 +1828,10 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         nothrow = isvarargtype(argtypes[end]) ? false : builtin_nothrow(f, argtypes[2:end], rt)
     end
 
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        #=terminates=#ALWAYS_TRUE,
-        #=overlayed=#false,
-        )
+    return Effects(EFFECTS_TOTAL;
+        consistent = ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
+        effect_free = effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
 function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
@@ -2000,24 +1997,19 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         return Effects()
     end
 
-    ipo_consistent = !(f === Intrinsics.pointerref || # this one is volatile
-        f === Intrinsics.arraylen || # this one is volatile
+    ipo_consistent = !(
+        f === Intrinsics.pointerref ||      # this one is volatile
+        f === Intrinsics.arraylen ||        # this one is volatile
         f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-        f === Intrinsics.cglobal) # cglobal lookup answer changes at runtime
-
+        f === Intrinsics.have_fma ||        # this one depends on the runtime environment
+        f === Intrinsics.cglobal)           # cglobal lookup answer changes at runtime
     effect_free = !(f === Intrinsics.pointerset)
+    nothrow = !isvarargtype(argtypes[end]) && intrinsic_nothrow(f, argtypes[2:end])
 
-    nothrow = isvarargtype(argtypes[end]) ? false :
-        intrinsic_nothrow(f, argtypes[2:end])
-
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        #=terminates=#ALWAYS_TRUE,
-        #=overlayed=#false,
-        )
+    return Effects(EFFECTS_TOTAL;
+        consistent = ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
+        effect_free = effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function
