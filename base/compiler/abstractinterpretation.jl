@@ -48,7 +48,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # aren't any in the throw block either to enable other optimizations.
         add_remark!(interp, sv, "Skipped call in throw block")
         nonoverlayed = false
-        if isoverlayed(method_table(interp)) && sv.ipo_effects.nonoverlayed
+        if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
             # as we may want to concrete-evaluate this frame in cases when there are
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
@@ -712,7 +712,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     # disable concrete-evaluation since this function call is tainted by some overlayed
     # method and currently there is no direct way to execute overlayed methods
-    isoverlayed(method_table(interp)) && !result.edge_effects.nonoverlayed && return false
+    isoverlayed(method_table(interp)) && !is_nonoverlayed(result.edge_effects) && return false
     return f !== nothing &&
            result.edge !== nothing &&
            is_total_or_error(result.edge_effects) &&
