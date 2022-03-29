@@ -1330,10 +1330,10 @@ end
 
 function const_result_item(result::ConstResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        return compileable_specialization(state.et, result.mi, EFFECTS_TOTAL)
-    else
-        return ConstantCase(quoted(result.result))
+        return compileable_specialization(state.et, result.mi, result.effects)
     end
+    @assert result.effects === EFFECTS_TOTAL
+    return ConstantCase(quoted(result.result))
 end
 
 function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),

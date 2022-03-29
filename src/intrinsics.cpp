@@ -14,7 +14,11 @@ FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(JuliaTyp
 FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
 FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
 
-static JuliaFunction *runtime_func[num_intrinsics] = {
+const auto &runtime_func() {
+    static struct runtime_funcs_t {
+        std::array<JuliaFunction *, num_intrinsics> runtime_func;
+        runtime_funcs_t() :
+        runtime_func{
 #define ADD_I(name, nargs) new JuliaFunction{XSTR(jl_##name), get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) nullptr,
@@ -22,12 +26,8 @@ static JuliaFunction *runtime_func[num_intrinsics] = {
 #undef ADD_I
 #undef ADD_HIDDEN
 #undef ALIAS
-};
-
-static bool float_func[num_intrinsics];
-
-static void jl_init_intrinsic_functions_codegen(void)
-{
+        }
+        {
 #define ADD_I(name, nargs)
 #define ADD_HIDDEN(name, nargs)
 #define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
@@ -35,38 +35,50 @@ static void jl_init_intrinsic_functions_codegen(void)
 #undef ADD_I
 #undef ADD_HIDDEN
 #undef ALIAS
+        }
+    } runtime_funcs;
+    return runtime_funcs.runtime_func;
+}
 
-    float_func[neg_float] = true;
-    float_func[neg_float_fast] = true;
-    float_func[add_float] = true;
-    float_func[sub_float] = true;
-    float_func[mul_float] = true;
-    float_func[div_float] = true;
-    float_func[rem_float] = true;
-    float_func[add_float_fast] = true;
-    float_func[sub_float_fast] = true;
-    float_func[mul_float_fast] = true;
-    float_func[div_float_fast] = true;
-    float_func[rem_float_fast] = true;
-    float_func[fma_float] = true;
-    float_func[muladd_float] = true;
-    float_func[eq_float] = true;
-    float_func[ne_float] = true;
-    float_func[lt_float] = true;
-    float_func[le_float] = true;
-    float_func[eq_float_fast] = true;
-    float_func[ne_float_fast] = true;
-    float_func[lt_float_fast] = true;
-    float_func[le_float_fast] = true;
-    float_func[fpiseq] = true;
-    float_func[abs_float] = true;
-    float_func[copysign_float] = true;
-    float_func[ceil_llvm] = true;
-    float_func[floor_llvm] = true;
-    float_func[trunc_llvm] = true;
-    float_func[rint_llvm] = true;
-    float_func[sqrt_llvm] = true;
-    float_func[sqrt_llvm_fast] = true;
+const auto &float_func() {
+    static struct float_funcs_t {
+        std::bitset<num_intrinsics> float_func;
+        float_funcs_t() {
+            float_func[neg_float] = true;
+            float_func[neg_float_fast] = true;
+            float_func[add_float] = true;
+            float_func[sub_float] = true;
+            float_func[mul_float] = true;
+            float_func[div_float] = true;
+            float_func[rem_float] = true;
+            float_func[add_float_fast] = true;
+            float_func[sub_float_fast] = true;
+            float_func[mul_float_fast] = true;
+            float_func[div_float_fast] = true;
+            float_func[rem_float_fast] = true;
+            float_func[fma_float] = true;
+            float_func[muladd_float] = true;
+            float_func[eq_float] = true;
+            float_func[ne_float] = true;
+            float_func[lt_float] = true;
+            float_func[le_float] = true;
+            float_func[eq_float_fast] = true;
+            float_func[ne_float_fast] = true;
+            float_func[lt_float_fast] = true;
+            float_func[le_float_fast] = true;
+            float_func[fpiseq] = true;
+            float_func[abs_float] = true;
+            float_func[copysign_float] = true;
+            float_func[ceil_llvm] = true;
+            float_func[floor_llvm] = true;
+            float_func[trunc_llvm] = true;
+            float_func[rint_llvm] = true;
+            float_func[sqrt_llvm] = true;
+            float_func[sqrt_llvm_fast] = true;
+        }
+    } float_funcs;
+
+    return float_funcs.float_func;
 }
 
 extern "C"
@@ -423,7 +435,7 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
-    Function *func = prepare_call(runtime_func[f]);
+    Function *func = prepare_call(runtime_func()[f]);
     Value **argvalues = (Value**)alloca(sizeof(Value*) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
@@ -1177,7 +1189,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext());
-        if (float_func[f])
+        if (float_func()[f])
             xtyp = FLOATT(xtyp);
         else
             xtyp = INTT(xtyp);

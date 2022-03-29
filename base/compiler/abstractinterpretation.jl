@@ -136,9 +136,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 end
                 tristate_merge!(sv, effects)
                 push!(const_results, const_result)
-                if const_result !== nothing
-                    any_const_result = true
-                end
+                any_const_result |= const_result !== nothing
                 this_rt = tmerge(this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
                     break
@@ -187,9 +185,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             end
             tristate_merge!(sv, effects)
             push!(const_results, const_result)
-            if const_result !== nothing
-                any_const_result = true
-            end
+            any_const_result |= const_result !== nothing
         end
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
@@ -704,12 +700,12 @@ function pure_eval_call(interp::AbstractInterpreter,
 end
 function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
     args = collect_const_args(arginfo)
-    try
-        value = Core._apply_pure(f, args)
-        return Const(value)
+    value = try
+        Core._apply_pure(f, args)
     catch
         return nothing
     end
+    return Const(value)
 end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
@@ -743,17 +739,18 @@ function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     concrete_eval_eligible(interp, f, result, arginfo, sv) || return nothing
     args = collect_const_args(arginfo)
-    try
-        value = Core._call_in_world_total(get_world_counter(interp), f, args...)
-        if is_inlineable_constant(value) || call_result_unused(sv)
-            # If the constant is not inlineable, still do the const-prop, since the
-            # code that led to the creation of the Const may be inlineable in the same
-            # circumstance and may be optimizable.
-            return ConstCallResults(Const(value), ConstResult(result.edge, value), EFFECTS_TOTAL)
-        end
+    world = get_world_counter(interp)
+    value = try
+        Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConstResult(result.edge), result.edge_effects)
+        return ConstCallResults(Union{}, ConstResult(result.edge, result.edge_effects), result.edge_effects)
+    end
+    if is_inlineable_constant(value) || call_result_unused(sv)
+        # If the constant is not inlineable, still do the const-prop, since the
+        # code that led to the creation of the Const may be inlineable in the same
+        # circumstance and may be optimizable.
+        return ConstCallResults(Const(value), ConstResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
     end
     return nothing
 end
