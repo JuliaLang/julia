@@ -10,8 +10,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
-
 #include <errno.h>
+#include <libgen.h> // defines dirname
 
 #if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
@@ -33,8 +33,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <libgen.h>
 
 #ifdef _OS_WINDOWS_
 extern int needsSymRefreshModuleList;
