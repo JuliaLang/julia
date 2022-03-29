@@ -1082,3 +1082,8 @@ end
     y = randn(2)
     @inferred(test(x, y)) == [0, 0]
 end
+
+@testset "Fix method error #32792" begin
+    xx = range(-10,10; length=1000)
+    @test xx .- im .* xx isa AbstractRange
+end
