@@ -1203,7 +1203,7 @@ JL_CALLABLE(jl_f_setglobal)
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr((jl_module_t*)args[0], (jl_sym_t*)args[1], 1);
+    jl_binding_t *b = jl_get_binding_wr_or_error((jl_module_t*)args[0], (jl_sym_t*)args[1]);
     jl_checked_assignment(b, args[2]);
     return args[2];
 }
@@ -1218,7 +1218,7 @@ JL_CALLABLE(jl_f_get_binding_type)
     jl_value_t *ty = jl_binding_type(mod, sym);
     if (ty == (jl_value_t*)jl_nothing) {
         jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
-        if (b) {
+        if (b && b->owner == mod) {
             jl_value_t *old_ty = NULL;
             jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
             return jl_atomic_load_relaxed(&b->ty);
@@ -1920,7 +1920,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     // module bindings
     jl_builtin_getglobal = add_builtin_func("getglobal", jl_f_getglobal);
-    add_builtin_func("setglobal!", jl_f_setglobal);
+    jl_builtin_setglobal = add_builtin_func("setglobal!", jl_f_setglobal);
     add_builtin_func("get_binding_type", jl_f_get_binding_type);
     add_builtin_func("set_binding_type!", jl_f_set_binding_type);
 
