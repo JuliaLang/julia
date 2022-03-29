@@ -1206,14 +1206,11 @@ julia> flatmap(1:3) do j
  (3, 2)
 ```
 """
-# flatmap(f, c...) = flatten(map(f, c...))
-flatmap = flatten ∘ map
+# flatmap = flatten ∘ map
+flatmap(f, c...) = flatten(map(f, c...))
 
 # Allows filtering through `flatten` (or `flatmap`) by removing `nothing` values
 iterate(_::Nothing) = nothing
-iterate(x::Some{T}) where T = (something(x), nothing)
-iterate(x::Some{T}, state::Nothing) where T = nothing
-length(x::Some{T}) where T = 1
 
 """
     partition(collection, n)

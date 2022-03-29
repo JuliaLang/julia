@@ -143,3 +143,8 @@ macro something(args...)
     something = GlobalRef(Base, :something)
     return :($something($expr))
 end
+
+# Allows filtering through `flatten` (or `flatmap`) by retaining `Some` values
+iterate(x::Some{T}) where T = (something(x), nothing)
+iterate(x::Some{T}, state::Nothing) where T = nothing
+length(x::Some{T}) where T = 1
