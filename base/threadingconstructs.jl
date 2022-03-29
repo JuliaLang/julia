@@ -270,6 +270,39 @@ macro spawn(expr)
     end
 end
 
+"""
+    pmap(f, c, [cc...]; outtype::Val{T}=Val(Any)) -> Array{T}
+
+Transform collection `c` by applying `f` to each element using multple threads.
+Multiple input collections are used as multiple arguments to the function.
+
+The `outtype` argument specifies the type of the output `Array` elements, which
+will be `Any` otherwise.
+
+```julia-repl
+julia> pmap(inv ∘ exp, -1:1, outtype=Val(Float64))
+3-element Vector{Float64}:
+ 2.718281828459045
+ 1.0
+ 0.36787944117144233
+
+julia> pmap(binomial, 3:5, 1:3)
+3-element Vector{Any}:
+  3
+  6
+ 10
+```
+"""
+function pmap(f, c; outtype::Val{T}=Val(Any)) where T
+    output = similar(Array{T}, axes(c))
+    Threads.@threads for n in CartesianIndices(c)
+        output[n] = f(c[n])
+    end
+    output
+end
+
+pmap(f, c, cc...; kwargs...) = pmap(a->f(a...), collect(zip(c, cc...)); kwargs...)
+
 # This is a stub that can be overloaded for downstream structures like `Channel`
 function foreach end
 
