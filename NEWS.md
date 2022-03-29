@@ -65,6 +65,9 @@ Standard library changes
 
 #### Random
 
+* `randn` and `randexp` now support generating `BigFloat` ([#35111]).
+
+
 #### REPL
 
 #### SparseArrays

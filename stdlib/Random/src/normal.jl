@@ -16,9 +16,15 @@ Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
-[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution of variance 1 (corresponding to real and imaginary part having independent normal distribution with mean zero and variance `1/2`).
+[`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref) (the default),
+and [`BigFloat`](@ref), and their [`Complex`](@ref) counterparts.
+When the type argument is complex, the values are drawn
+from the circularly symmetric complex normal distribution of variance 1
+(corresponding to real and imaginary part having independent normal distribution
+with mean zero and variance `1/2`).
+
+!!! compat "Julia 1.5"
+    Julia 1.5 or later is required for generating `BigFloat` numbers.
 
 # Examples
 ```jldoctest
@@ -99,7 +105,11 @@ Generate a random number of type `T` according to the
 exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
 The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
+[`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref) (the default),
+and [`BigFloat`](@ref).
+
+!!! compat "Julia 1.5"
+    Julia 1.5 or later is required for generating `BigFloat` numbers.
 
 # Examples
 ```jldoctest
@@ -137,6 +147,124 @@ end
     end
 end
 
+
+## BigFloat
+
+struct MPZ_t # like BigInt, but immutable
+    alloc::Cint
+    size::Cint
+    d::Ptr{Limb}
+end
+
+mutable struct GMPRandState <: Sampler{BigFloat}
+    seed::MPZ_t          # where to store the RNG state
+    alg::Cint            # unused by MPFR, we store here the distribution
+    alg_data::Ptr{Cvoid} # GMPRandFnPtr
+end
+
+GMPRandState() = GMPRandState(MPZ_t(zero(Cint), zero(Cint), C_NULL), zero(Cint), C_NULL)
+
+
+mutable struct GMPRandFnPtr
+    randseed_fn  ::Ptr{Cvoid}
+    randget_fn   ::Ptr{Cvoid}
+    randclear_fn ::Ptr{Cvoid}
+    randiset_fn  ::Ptr{Cvoid}
+end
+
+# the three following functions should be unused
+_randseed_fn(::GMPRandState, ::BigInt)       = @assert false
+_randclear_fn(::GMPRandState)                = @assert false
+_randiset_fn(::GMPRandState, ::GMPRandState) = @assert false
+
+function _randget_fn(s::GMPRandState, dst::Ptr{Limb}, nbits::Culong)
+    rng = unsafe_pointer_to_objref(Ptr{Cvoid}(s.seed.d))
+    sz = (nbits + bits_in_Limb - 1) ÷ bits_in_Limb
+    rest = nbits % bits_in_Limb
+    a = UnsafeView(dst, Int(sz))
+    _randget_fn_fill!(rng, a) # rng is not inferred here, so let's have a function barrier
+    if rest != 0
+        a[end] &= ~(typemax(Limb) << rest)
+    end
+    nothing
+end
+
+@noinline _randget_fn_fill!(rng, a) = rand!(rng, a)
+
+const JuliaGMPRandFnPtr = GMPRandFnPtr(C_NULL, C_NULL, C_NULL, C_NULL)
+
+function get_JuliaGMPRandFnPtr()
+    if JuliaGMPRandFnPtr.randget_fn == C_NULL
+        JuliaGMPRandFnPtr.randseed_fn  = @cfunction(_randseed_fn,  Cvoid, (Ref{GMPRandState}, Ref{BigInt}))
+        JuliaGMPRandFnPtr.randget_fn   = @cfunction(_randget_fn,   Cvoid, (Ref{GMPRandState}, Ptr{Limb}, Culong))
+        JuliaGMPRandFnPtr.randclear_fn = @cfunction(_randclear_fn, Cvoid, (Ref{GMPRandState},))
+        JuliaGMPRandFnPtr.randiset_fn  = @cfunction(_randiset_fn,  Cvoid, (Ref{GMPRandState}, Ref{GMPRandState}))
+    end
+    pointer_from_objref(JuliaGMPRandFnPtr)
+end
+
+struct Normal{T<:AbstractFloat} end
+struct Exponential{T<:AbstractFloat} end
+
+function Sampler(::Type{<:AbstractRNG}, d::Union{Normal{BigFloat},Exponential{BigFloat}}, ::Repetition)
+    s = GMPRandState()
+    s.alg_data = get_JuliaGMPRandFnPtr()
+    s.alg = Cint(d isa Normal{BigFloat})
+    return s
+end
+
+function rand(rng0::AbstractRNG, s::GMPRandState)
+    z = BigFloat()
+    if ismutable(rng)
+        rng = rng0
+    elseif rng0 isa TaskLocalRNG
+        rng = MutableRNG(copy(rng0)::Xoshiro)
+    else
+        rng = MutableRNG(rng0)
+    end
+    GC.@preserve rng begin
+        s.seed = MPZ_t(zero(Cint), zero(Cint), pointer_from_objref(rng))
+        if s.alg == 1
+            ccall((:mpfr_nrandom, :libmpfr), Cint,
+                  (Ref{BigFloat}, Ref{GMPRandState}, Base.MPFR.MPFRRoundingMode),
+                  z, s, Base.MPFR.ROUNDING_MODE[])
+        else
+            ccall((:mpfr_erandom, :libmpfr), Cint,
+                  (Ref{BigFloat}, Ref{GMPRandState}, Base.MPFR.MPFRRoundingMode),
+                  z, s, Base.MPFR.ROUNDING_MODE[])
+        end
+    end
+    if rng0 isa TaskLocalRNG
+        copy!(rng0, rng.rng)
+    end
+    z
+end
+
+randn(  rng::AbstractRNG, ::Type{BigFloat}) = rand(rng, Normal{BigFloat}())
+randexp(rng::AbstractRNG, ::Type{BigFloat}) = rand(rng, Exponential{BigFloat}())
+
+randn!(  rng::AbstractRNG, A::AbstractArray{BigFloat}) = rand!(rng, A, Normal{BigFloat}())
+randexp!(rng::AbstractRNG, A::AbstractArray{BigFloat}) = rand!(rng, A, Exponential{BigFloat}())
+
+# mutable RNG wrapper to allow passing to C
+mutable struct MutableRNG{RNG<:AbstractRNG} <: AbstractRNG
+    rng::RNG
+end
+
+Sampler(::Type{MutableRNG{RNG}}, x, n::Repetition) where {RNG <: AbstractRNG} =
+    Sampler(RNG, x, n)
+
+Sampler(::Type{MutableRNG{RNG}}, ::Type{X}, n::Repetition) where {RNG <: AbstractRNG, X} =
+    Sampler(RNG, X, n)
+
+rand(rng::MutableRNG, x::Sampler) = rand(rng.rng, x)
+
+# disambiguate
+Sampler(::Type{MutableRNG{RNG}},
+        x::Union{Exponential{BigFloat}, Normal{BigFloat}},
+        n::Repetition) where {RNG<:AbstractRNG} = Sampler(RNG, x, n)
+
+rand(rng::MutableRNG, st::GMPRandState) = rand(rng.rng, st)
 
 ## arrays & other scalar methods
 
