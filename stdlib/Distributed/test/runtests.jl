@@ -12,3 +12,5 @@ if !success(pipeline(cmd; stdout=stdout, stderr=stderr)) && ccall(:jl_running_on
 end
 
 include("managers.jl")
+
+sleep(60 * 60 * 48)
