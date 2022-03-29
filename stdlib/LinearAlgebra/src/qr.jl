@@ -582,8 +582,9 @@ size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
 size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
 
-copy(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
-getindex(Q::AbstractQ, inds...) = copy(Q)[inds...]
+copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
+copy(Q::AbstractQ) = copymutable(Q)
+getindex(Q::AbstractQ, inds...) = copymutable(Q)[inds...]
 getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
 
 function getindex(Q::AbstractQ, ::Colon, j::Int)

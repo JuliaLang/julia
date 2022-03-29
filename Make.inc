@@ -21,6 +21,9 @@ JULIA_PRECOMPILE ?= 1
 # and LLVM_ASSERTIONS=1.
 FORCE_ASSERTIONS ?= 0
 
+# Set BOOTSTRAP_DEBUG_LEVEL to 1 to enable Julia-level stacktrace during bootstrapping.
+BOOTSTRAP_DEBUG_LEVEL ?= 0
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
