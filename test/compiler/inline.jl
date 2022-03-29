@@ -1115,7 +1115,7 @@ end
 let src = code_typed1(issue44732, (Container44732,))
     @test any(isinvoke(:validate44732), src.code)
 end
-@test_throws ErrorException issue44732(Container44732(nothing))
+@test_throws ErrorException("don't erase this error!") issue44732(Container44732(nothing))
 
 global x44200::Int = 0
 function f44200()
