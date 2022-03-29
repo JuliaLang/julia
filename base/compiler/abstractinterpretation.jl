@@ -700,12 +700,12 @@ function pure_eval_call(interp::AbstractInterpreter,
 end
 function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
     args = collect_const_args(arginfo)
-    try
-        value = Core._apply_pure(f, args)
-        return Const(value)
+    value = try
+        Core._apply_pure(f, args)
     catch
         return nothing
     end
+    return Const(value)
 end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
@@ -739,8 +739,9 @@ function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     concrete_eval_eligible(interp, f, result, arginfo, sv) || return nothing
     args = collect_const_args(arginfo)
+    world = get_world_counter(interp)
     value = try
-        Core._call_in_world_total(get_world_counter(interp), f, args...)
+        Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
         return ConstCallResults(Union{}, ConstResult(result.edge, result.edge_effects), result.edge_effects)
