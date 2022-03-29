@@ -96,20 +96,25 @@ static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *
         else {
             jl_datatype_t *ft = (jl_datatype_t*)jl_field_type_concrete(dt, f);
             if (jl_is_uniontype(ft)) {
-                uint8_t asel = ((uint8_t*)ao)[jl_field_size(dt, f) - 1];
-                uint8_t bsel = ((uint8_t*)bo)[jl_field_size(dt, f) - 1];
+                size_t idx = jl_field_size(dt, f) - 1;
+                uint8_t asel = ((uint8_t*)ao)[idx];
+                uint8_t bsel = ((uint8_t*)bo)[idx];
                 if (asel != bsel)
                     return 0;
                 ft = (jl_datatype_t*)jl_nth_union_component((jl_value_t*)ft, asel);
             }
             else if (ft->layout->first_ptr >= 0) {
-                // If the field is a inline immutable that can be can be undef
-                // we need to check to check for undef first since undef struct
+                // If the field is a inline immutable that can be undef
+                // we need to check for undef first since undef struct
                 // may have fields that are different but should still be treated as equal.
-                jl_value_t *ptra = ((jl_value_t**)ao)[ft->layout->first_ptr];
-                jl_value_t *ptrb = ((jl_value_t**)bo)[ft->layout->first_ptr];
-                if (ptra == NULL && ptrb == NULL) {
-                    return 1;
+                int32_t idx = ft->layout->first_ptr;
+                jl_value_t *ptra = ((jl_value_t**)ao)[idx];
+                jl_value_t *ptrb = ((jl_value_t**)bo)[idx];
+                if ((ptra == NULL) != (ptrb == NULL)) {
+                    return 0;
+                }
+                else if (ptra == NULL) { // implies ptrb == NULL
+                    continue; // skip this field (it is #undef)
                 }
             }
             if (!ft->layout->haspadding) {
