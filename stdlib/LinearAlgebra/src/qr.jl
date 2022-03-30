@@ -579,8 +579,9 @@ Array(Q::AbstractQ) = Matrix(Q)
 
 size(F::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(F, :factors), dim)
 size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
-size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
-size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
+size(Q::Union{QRCompactWYQ,QRPackedQ}, dim::Integer) =
+    size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::Union{QRCompactWYQ,QRPackedQ}) = size(Q, 1), size(Q, 2)
 
 copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
 copy(Q::AbstractQ) = copymutable(Q)
