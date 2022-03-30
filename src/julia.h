@@ -400,7 +400,7 @@ typedef struct _jl_code_instance_t {
             uint8_t ipo_effect_free:2;
             uint8_t ipo_nothrow:2;
             uint8_t ipo_terminates:2;
-            uint8_t ipo_overlayed:1;
+            uint8_t ipo_nonoverlayed:1;
         } ipo_purity_flags;
     };
     union {
@@ -410,7 +410,7 @@ typedef struct _jl_code_instance_t {
             uint8_t effect_free:2;
             uint8_t nothrow:2;
             uint8_t terminates:2;
-            uint8_t overlayed:1;
+            uint8_t nonoverlayed:1;
         } purity_flags;
     };
     jl_value_t *argescapes; // escape information of call arguments
