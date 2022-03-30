@@ -41,6 +41,7 @@
 #include <locale.h>
 #include <limits.h>
 #include <errno.h>
+#include <libgen.h> // defines dirname
 
 #include "platform.h"
 #include "libsupport.h"
@@ -49,13 +50,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-#include <malloc.h>
-JL_DLLEXPORT char * dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 static const char *const builtin_names[] =

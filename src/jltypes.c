@@ -2152,6 +2152,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                           jl_any_type, jl_emptysvec, 64);
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
+    jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
+                                          jl_any_type, jl_emptysvec, 16);
 
     jl_ssavalue_type = jl_new_datatype(jl_symbol("SSAValue"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "id"),
@@ -2516,7 +2518,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inferred",
                             //"edges",
                             //"absolute_max",
-	                        "ipo_purity_bits", "purity_bits",
+                            "ipo_purity_bits", "purity_bits",
                             "argescapes",
                             "isspecsig", "precompile", "invoke", "specptr", // function object decls
                             "relocatability"),
@@ -2610,7 +2612,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(14,
+                        jl_perm_symsvec(15,
                                         "next",
                                         "queue",
                                         "storage",
@@ -2624,8 +2626,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "rngState3",
                                         "_state",
                                         "sticky",
-                                        "_isexception"),
-                        jl_svec(14,
+                                        "_isexception",
+                                        "priority"),
+                        jl_svec(15,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -2639,7 +2642,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_uint8_type,
                                 jl_bool_type,
-                                jl_bool_type),
+                                jl_bool_type,
+                                jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 6);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);

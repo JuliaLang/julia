@@ -58,12 +58,6 @@
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char *dirname(char *);
-#else
-#include <libgen.h>
-#endif
-
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -436,7 +430,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #endif
 }
 
-int jl_effective_threads(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
     int cpu = jl_cpu_threads();
     int masksize = uv_cpumask_size();

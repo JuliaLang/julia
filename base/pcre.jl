@@ -32,7 +32,6 @@ _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
 _nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function get_local_match_context()
-    global THREAD_MATCH_CONTEXTS
     tid = _tid()
     ctxs = THREAD_MATCH_CONTEXTS
     if length(ctxs) < tid
@@ -40,7 +39,10 @@ function get_local_match_context()
         l = PCRE_COMPILE_LOCK::Threads.SpinLock
         lock(l)
         try
-            THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, _nth()), THREAD_MATCH_CONTEXTS)
+            ctxs = THREAD_MATCH_CONTEXTS
+            if length(ctxs) < tid
+                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, _nth()), ctxs)
+            end
         finally
             unlock(l)
         end
@@ -49,18 +51,7 @@ function get_local_match_context()
     if ctx == C_NULL
         # slow path to allocate it
         ctx = create_match_context()
-        l = PCRE_COMPILE_LOCK
-        if l === nothing
-            THREAD_MATCH_CONTEXTS[tid] = ctx
-        else
-            l = l::Threads.SpinLock
-            lock(l)
-            try
-                THREAD_MATCH_CONTEXTS[tid] = ctx
-            finally
-                unlock(l)
-            end
-        end
+        THREAD_MATCH_CONTEXTS[tid] = ctx
     end
     return ctx
 end
