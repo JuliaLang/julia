@@ -605,7 +605,8 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlev
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                           bool lower_intrinsics, bool dump_native)
+                           bool lower_intrinsics, bool dump_native,
+                           bool external_use)
 {
     // Note: LLVM 12 disabled the hoisting of common instruction
     //       before loop vectorization (https://reviews.llvm.org/D84108).
@@ -654,7 +655,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native) {
-            PM->add(createMultiVersioningPass());
+            PM->add(createMultiVersioningPass(external_use));
             PM->add(createCPUFeaturesPass());
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
@@ -696,7 +697,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
-        PM->add(createMultiVersioningPass());
+        PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
@@ -849,7 +850,7 @@ public:
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
-        addOptimizationPasses(&Adapter, OptLevel, true, dump_native);
+        addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
         addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
