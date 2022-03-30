@@ -453,8 +453,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     }
 
     // whatever, that didn't work - use the assembler output instead
-    // just make a new context for this one operation
-    void *F = jl_get_llvmf_defn(mi, reinterpret_cast<LLVMOrcThreadSafeContextRef>(&jl_ExecutionEngine->getContext()), world, getwrapper, true, jl_default_cgparams);
+    void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
     if (!F)
         return jl_an_empty_string;
     return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
@@ -1459,9 +1458,4 @@ extern "C" JL_DLLEXPORT
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
-}
-
-extern "C" JL_DLLEXPORT
-LLVMOrcThreadSafeContextRef jl_get_ee_context_impl(void) {
-    return reinterpret_cast<LLVMOrcThreadSafeContextRef>(&jl_ExecutionEngine->getContext());
 }

@@ -970,7 +970,7 @@ llvmGetPassPluginInfo() {
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMOrcThreadSafeContextRef ctxt, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
@@ -1013,7 +1013,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMOrcThreadSafeContextR
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
         JL_LOCK(&jl_codegen_lock);
-        jl_codegen_params_t output(*reinterpret_cast<orc::ThreadSafeContext*>(ctxt));
+        jl_codegen_params_t output(jl_ExecutionEngine->getContext());
         output.world = world;
         output.params = &params;
         orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx);
