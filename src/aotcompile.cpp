@@ -511,8 +511,9 @@ void jl_dump_native_impl(void *native_code,
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
-    data->M.getModuleUnlocked()->setTargetTriple(TM->getTargetTriple().str());
-    data->M.getModuleUnlocked()->setDataLayout(jl_create_datalayout(*TM));
+    auto dataM = data->M.getModuleUnlocked();
+    dataM->setTargetTriple(TM->getTargetTriple().str());
+    dataM->setDataLayout(jl_create_datalayout(*TM));
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);
@@ -522,13 +523,13 @@ void jl_dump_native_impl(void *native_code,
 
     // add metadata information
     if (imaging_mode) {
-        emit_offset_table(*data->M.getModuleUnlocked(), data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
-        emit_offset_table(*data->M.getModuleUnlocked(), data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
+        emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
+        emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
-        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(data->M.getModuleUnlocked());
-        addComdat(new GlobalVariable(*data->M.getModuleUnlocked(),
+        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(dataM);
+        addComdat(new GlobalVariable(*dataM,
                                      jlRTLD_DEFAULT_var->getType(),
                                      true,
                                      GlobalVariable::ExternalLinkage,
@@ -549,29 +550,30 @@ void jl_dump_native_impl(void *native_code,
             emit_result(asm_Archive, asm_Buffer, asm_Name, outputs);
     };
 
-    add_output(*data->M.getModuleUnlocked(), "unopt.bc", "text.bc", "text.o", "text.s");
+    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s");
 
     orc::ThreadSafeModule sysimage(std::make_unique<Module>("sysimage", Context), TSCtx);
-    sysimage.getModuleUnlocked()->setTargetTriple(data->M.getModuleUnlocked()->getTargetTriple());
-    sysimage.getModuleUnlocked()->setDataLayout(data->M.getModuleUnlocked()->getDataLayout());
+    auto sysimageM = sysimage.getModuleUnlocked();
+    sysimageM->setTargetTriple(dataM->getTargetTriple());
+    sysimageM->setDataLayout(dataM->getDataLayout());
 #if JL_LLVM_VERSION >= 130000
-    sysimage.getModuleUnlocked()->setStackProtectorGuard(data->M.getModuleUnlocked()->getStackProtectorGuard());
-    sysimage.getModuleUnlocked()->setOverrideStackAlignment(data->M.getModuleUnlocked()->getOverrideStackAlignment());
+    sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
+    sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
 #endif
     data->M = orc::ThreadSafeModule(); // free memory for data->M
 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(Context,
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        addComdat(new GlobalVariable(*sysimage.getModuleUnlocked(), data->getType(), false,
+        addComdat(new GlobalVariable(*sysimageM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data"))->setAlignment(Align(64));
         Constant *len = ConstantInt::get(T_size, sysimg_len);
-        addComdat(new GlobalVariable(*sysimage.getModuleUnlocked(), len->getType(), true,
+        addComdat(new GlobalVariable(*sysimageM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"));
     }
-    add_output(*sysimage.getModuleUnlocked(), "data.bc", "data.bc", "data.o", "data.s");
+    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s");
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
