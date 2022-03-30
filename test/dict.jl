@@ -1247,3 +1247,16 @@ end
 let c = bar()
     @test c === missing || c == ComparesWithGC38727(1)
 end
+
+@testset "Detect multiple concurent writes" begin
+    if Threads.nthreads() > 1
+        @test_throws TaskFailedException let d = Dict()
+            Threads.@threads for i = 1:1000
+                d[i] = i
+            end
+        end
+    else
+        # Multiple threads not enabled.
+        @test false
+    end
+end
