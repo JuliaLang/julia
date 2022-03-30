@@ -56,7 +56,7 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlev
 void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
-DataLayout create_jl_data_layout(TargetMachine &TM);
+DataLayout jl_create_datalayout(TargetMachine &TM);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name

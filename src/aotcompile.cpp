@@ -512,7 +512,7 @@ void jl_dump_native_impl(void *native_code,
 
     // Reset the target triple to make sure it matches the new target machine
     data->M.getModuleUnlocked()->setTargetTriple(TM->getTargetTriple().str());
-    data->M.getModuleUnlocked()->setDataLayout(create_jl_data_layout(*TM));
+    data->M.getModuleUnlocked()->setDataLayout(jl_create_datalayout(*TM));
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);

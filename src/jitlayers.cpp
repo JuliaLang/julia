@@ -899,7 +899,7 @@ namespace {
     }
 }
 
-llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
+llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
     jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
@@ -908,7 +908,7 @@ llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
 
 JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
   : TM(createTargetMachine()),
-    DL(create_jl_data_layout(*TM)),
+    DL(jl_create_datalayout(*TM)),
     TMs{
         cantFail(createJTMBFromTM(*TM, 0).createTargetMachine()),
         cantFail(createJTMBFromTM(*TM, 1).createTargetMachine()),
