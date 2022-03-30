@@ -605,7 +605,8 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlev
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                           bool lower_intrinsics, bool dump_native)
+                           bool lower_intrinsics, bool dump_native,
+                           bool external_use)
 {
     // Note: LLVM 12 disabled the hoisting of common instruction
     //       before loop vectorization (https://reviews.llvm.org/D84108).
@@ -654,7 +655,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native) {
-            PM->add(createMultiVersioningPass());
+            PM->add(createMultiVersioningPass(external_use));
             PM->add(createCPUFeaturesPass());
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
@@ -696,7 +697,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass(simplifyCFGOptions));
     if (dump_native)
-        PM->add(createMultiVersioningPass());
+        PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
@@ -834,7 +835,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
 // debugging
-template <int OptLevel>
+template <int OptLevel, bool dump_native>
 class JuliaPipeline : public Pass {
 public:
     static char ID;
@@ -849,7 +850,7 @@ public:
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
         addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
-        addOptimizationPasses(&Adapter, OptLevel);
+        addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
         addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
@@ -857,12 +858,19 @@ public:
         return createPrintModulePass(O, Banner);
     }
 };
-template<> char JuliaPipeline<0>::ID = 0;
-template<> char JuliaPipeline<2>::ID = 0;
-template<> char JuliaPipeline<3>::ID = 0;
-static RegisterPass<JuliaPipeline<0>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
-static RegisterPass<JuliaPipeline<2>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
-static RegisterPass<JuliaPipeline<3>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
+template<> char JuliaPipeline<0,false>::ID = 0;
+template<> char JuliaPipeline<2,false>::ID = 0;
+template<> char JuliaPipeline<3,false>::ID = 0;
+template<> char JuliaPipeline<0,true>::ID = 0;
+template<> char JuliaPipeline<2,true>::ID = 0;
+template<> char JuliaPipeline<3,true>::ID = 0;
+static RegisterPass<JuliaPipeline<0,false>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
+static RegisterPass<JuliaPipeline<2,false>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
+static RegisterPass<JuliaPipeline<3,false>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
+
+static RegisterPass<JuliaPipeline<0,true>> XS("juliaO0-sysimg", "Runs the entire julia pipeline (at -O0/sysimg mode)", false, false);
+static RegisterPass<JuliaPipeline<2,true>> YS("julia-sysimg", "Runs the entire julia pipeline (at -O2/sysimg mode)", false, false);
+static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire julia pipeline (at -O3/sysimg mode)", false, false);
 
 extern "C" JL_DLLEXPORT
 void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {

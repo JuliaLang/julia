@@ -51,7 +51,7 @@ extern "C" jl_cgparams_t jl_default_cgparams;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
@@ -283,7 +283,7 @@ Pass *createPropagateJuliaAddrspaces();
 Pass *createRemoveJuliaAddrspacesPass();
 Pass *createRemoveNIPass();
 Pass *createJuliaLICMPass();
-Pass *createMultiVersioningPass();
+Pass *createMultiVersioningPass(bool external_use);
 Pass *createAllocOptPass();
 Pass *createDemoteFloat16Pass();
 Pass *createCPUFeaturesPass();
