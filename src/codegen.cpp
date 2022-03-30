@@ -8269,6 +8269,7 @@ void jl_init_debuginfo(void);
 
 extern "C" void jl_init_llvm(void)
 {
+    jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.generic_context = jl_nothing;
