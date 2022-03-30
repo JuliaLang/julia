@@ -1949,7 +1949,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule _jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
 {
     auto lock = context.getLock();
     Module *m = new Module(name, *context.getContext());
@@ -1981,11 +1981,6 @@ orc::ThreadSafeModule _jl_create_llvm_module(StringRef name, orc::ThreadSafeCont
     m->setStackProtectorGuard("global");
 #endif
     return TSM;
-}
-
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout *DL, const Triple *triple)
-{
-    return _jl_create_llvm_module(name, std::move(ctx), &jl_default_cgparams, DL ? *DL : jl_ExecutionEngine->getDataLayout(), triple ? *triple : jl_ExecutionEngine->getTargetTriple());
 }
 
 static void jl_init_function(Function *F)
@@ -2884,8 +2879,9 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     return false;
 }
 
-static jl_compile_result_t
+static jl_llvm_functions_t
     emit_function(
+        orc::ThreadSafeModule &TSM,
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
@@ -4721,9 +4717,10 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)ci->inferred);
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
-    orc::ThreadSafeModule closure_m;
-    jl_llvm_functions_t closure_decls;
-    std::tie(closure_m, closure_decls) = emit_function(mi, ir, rettype, ctx.emission_context);
+    orc::ThreadSafeModule closure_m = jl_create_llvm_module(
+            name_from_method_instance(mi), ctx.emission_context.tsctx, ctx.params,
+            jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
+    jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
 
     assert(closure_decls.functionObject != "jl_fptr_sparam");
     bool isspecsig = closure_decls.functionObject != "jl_fptr_args";
@@ -6431,8 +6428,9 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
 }
 
 // Compile to LLVM IR, using a specialized signature if applicable.
-static jl_compile_result_t
+static jl_llvm_functions_t
     emit_function(
+        orc::ThreadSafeModule &TSM,
         jl_method_instance_t *lam,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
@@ -6449,7 +6447,7 @@ static jl_compile_result_t
     bool toplevel = false;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
-    ctx.name = name_from_method_instance(lam);
+    ctx.name = TSM.getModuleUnlocked()->getModuleIdentifier().data();
     size_t nreq = 0;
     int va = 0;
     if (jl_is_method(lam->def.method)) {
@@ -6590,7 +6588,6 @@ static jl_compile_result_t
     declarations.specFunctionObject = funcName.str();
 
     // allocate Function declarations and wrapper objects
-    auto TSM = _jl_create_llvm_module(ctx.name, ctx.emission_context.tsctx, ctx.params, jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple());
     //Safe because params holds ctx lock
     Module *M = TSM.getModuleUnlocked();
     jl_debugcache_t debuginfo;
@@ -7908,7 +7905,7 @@ static jl_compile_result_t
     }
 
     JL_GC_POP();
-    return std::make_tuple(std::move(TSM), declarations);
+    return declarations;
 }
 
 // --- entry point ---
@@ -7916,7 +7913,8 @@ static jl_compile_result_t
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
 
 JL_GCC_IGNORE_START("-Wclobbered")
-jl_compile_result_t jl_emit_code(
+jl_llvm_functions_t jl_emit_code(
+        orc::ThreadSafeModule &m,
         jl_method_instance_t *li,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
@@ -7925,12 +7923,11 @@ jl_compile_result_t jl_emit_code(
     JL_TIMING(CODEGEN);
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
-    orc::ThreadSafeModule m;
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
         compare_cgparams(params.params, &jl_default_cgparams)) &&
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
-        std::tie(m, decls) = emit_function(li, src, jlrettype, params);
+        decls = emit_function(m, li, src, jlrettype, params);
         if (dump_emitted_mi_name_stream != NULL) {
             jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
@@ -7945,20 +7942,21 @@ jl_compile_result_t jl_emit_code(
     JL_CATCH {
         // Something failed! This is very, very bad.
         // Try to pretend that it isn't and attempt to recover.
+        const char *mname = m.getModuleUnlocked()->getModuleIdentifier().data();
         m = orc::ThreadSafeModule();
         decls.functionObject = "";
         decls.specFunctionObject = "";
-        const char *mname = name_from_method_instance(li);
         jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: encountered unexpected error during compilation of %s:\n", mname);
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
 
-    return std::make_tuple(std::move(m), decls);
+    return decls;
 }
 
-jl_compile_result_t jl_emit_codeinst(
+jl_llvm_functions_t jl_emit_codeinst(
+        orc::ThreadSafeModule &m,
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
         jl_codegen_params_t &params)
@@ -7972,16 +7970,15 @@ jl_compile_result_t jl_emit_codeinst(
             src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
-            return jl_compile_result_t(); // failed
+            m = orc::ThreadSafeModule();
+            return jl_llvm_functions_t(); // failed
         }
     }
-    jl_compile_result_t result = jl_emit_code(codeinst->def, src, codeinst->rettype, params);
+    jl_llvm_functions_t decls = jl_emit_code(m, codeinst->def, src, codeinst->rettype, params);
 
-    const jl_llvm_functions_t &decls = std::get<1>(result);
     const std::string &specf = decls.specFunctionObject;
     const std::string &f = decls.functionObject;
     if (params.cache && !f.empty()) {
-        const auto &m = std::get<0>(result);
         // Prepare debug info to receive this function
         // record that this function name came from this linfo,
         // so we can build a reverse mapping for debug-info.
@@ -8032,12 +8029,12 @@ jl_compile_result_t jl_emit_codeinst(
         }
     }
     JL_GC_POP();
-    return result;
+    return decls;
 }
 
 
 void jl_compile_workqueue(
-    std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
+    jl_workqueue_t &emitted,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
     JL_TIMING(CODEGEN);
@@ -8068,7 +8065,7 @@ void jl_compile_workqueue(
             }
         }
         else {
-            jl_compile_result_t &result = emitted[codeinst];
+            auto &result = emitted[codeinst];
             jl_llvm_functions_t *decls = NULL;
             if (std::get<0>(result)) {
                 decls = &std::get<1>(result);
@@ -8079,11 +8076,20 @@ void jl_compile_workqueue(
                 if (policy != CompilationPolicy::Default &&
                     codeinst->inferred && codeinst->inferred == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
-                    if (src)
-                        result = jl_emit_code(codeinst->def, src, src->rettype, params);
+                    if (src) {
+                        orc::ThreadSafeModule result_m =
+                        jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                            params.tsctx, params.params);
+                        result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
+                        result.first = std::move(result_m);
+                    }
                 }
                 else {
-                    result = jl_emit_codeinst(codeinst, NULL, params);
+                    orc::ThreadSafeModule result_m =
+                        jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                            params.tsctx, params.params);
+                    result.second = jl_emit_codeinst(result_m, codeinst, NULL, params);
+                    result.first = std::move(result_m);
                 }
                 if (std::get<0>(result))
                     decls = &std::get<1>(result);

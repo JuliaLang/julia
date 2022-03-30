@@ -55,7 +55,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lowe
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 DataLayout create_jl_data_layout(TargetMachine &TM);
 
@@ -85,7 +84,6 @@ struct jl_llvmf_dump_t {
 };
 
 typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool>> jl_codegen_call_targets_t;
-typedef std::tuple<orc::ThreadSafeModule, jl_llvm_functions_t> jl_compile_result_t;
 
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
@@ -116,11 +114,7 @@ typedef struct _jl_codegen_params_t {
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
     orc::ThreadSafeModule _shared_module;
-    orc::ThreadSafeModule &shared_module(orc::ThreadSafeContext context) {
-        if (!_shared_module)
-            _shared_module = jl_create_llvm_module("globals", context);
-        return _shared_module;
-    }
+    inline orc::ThreadSafeModule &shared_module(orc::ThreadSafeContext context);
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
@@ -128,13 +122,15 @@ typedef struct _jl_codegen_params_t {
     _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()) {}
 } jl_codegen_params_t;
 
-jl_compile_result_t jl_emit_code(
+jl_llvm_functions_t jl_emit_code(
+        orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
         jl_codegen_params_t &params);
 
-jl_compile_result_t jl_emit_codeinst(
+jl_llvm_functions_t jl_emit_codeinst(
+        orc::ThreadSafeModule &M,
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
         jl_codegen_params_t &params);
@@ -145,8 +141,10 @@ enum CompilationPolicy {
     ImagingMode = 2
 };
 
+typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;
+
 void jl_compile_workqueue(
-    std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
+    jl_workqueue_t &emitted,
     jl_codegen_params_t &params,
     CompilationPolicy policy);
 
@@ -277,6 +275,13 @@ private:
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const jl_cgparams_t *params = &jl_default_cgparams, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
+
+orc::ThreadSafeModule &jl_codegen_params_t::shared_module(orc::ThreadSafeContext context) {
+    if (!_shared_module)
+        _shared_module = jl_create_llvm_module("globals", context);
+    return _shared_module;
+}
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();

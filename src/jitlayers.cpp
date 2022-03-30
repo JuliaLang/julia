@@ -120,11 +120,13 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_codegen_params_t params(std::move(context)); // Locks the context
     params.cache = true;
     params.world = world;
-    std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
+    jl_workqueue_t emitted;
     {
-        jl_compile_result_t result = jl_emit_codeinst(codeinst, src, params);
-        if (std::get<0>(result))
-            emitted[codeinst] = std::move(result);
+        orc::ThreadSafeModule result_m =
+            jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.params);
+        jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
+        if (result_m)
+            emitted[codeinst] = {std::move(result_m), std::move(decls)};
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
 
         if (params._shared_module)

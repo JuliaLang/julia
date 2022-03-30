@@ -246,13 +246,18 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // all reachable & inferrrable functions. The `policy` flag switches between the default
 // mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llvmctxt, const jl_cgparams_t *cgparams, int _policy)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy)
 {
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
-    auto &ctxt = llvmctxt ? *reinterpret_cast<orc::ThreadSafeContext*>(llvmctxt) : jl_ExecutionEngine->getContext();
-    std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
+    orc::ThreadSafeModule backing;
+    if (!llvmmod) {
+        backing = jl_create_llvm_module("text", jl_ExecutionEngine->getContext(), cgparams ? cgparams : &jl_default_cgparams);
+    }
+    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
+    auto ctxt = clone.getContext();
+    jl_workqueue_t emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
@@ -267,7 +272,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
     CompilationPolicy policy = (CompilationPolicy) _policy;
     if (policy == CompilationPolicy::ImagingMode)
         imaging_mode = 1;
-    orc::ThreadSafeModule clone(jl_create_llvm_module("text", ctxt));
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -300,9 +304,13 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeContextRef llv
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
-                    jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params);
-                    if (std::get<0>(result))
-                        emitted[codeinst] = std::move(result);
+                    orc::ThreadSafeModule result_m = jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                            params.tsctx, params.params,
+                            clone.getModuleUnlocked()->getDataLayout(),
+                            Triple(clone.getModuleUnlocked()->getTargetTriple()));
+                    jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
+                    if (result_m)
+                        emitted[codeinst] = {std::move(result_m), std::move(decls)};
                 }
             }
         }
@@ -1003,17 +1011,17 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMOrcThreadSafeContextR
 
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
-        orc::ThreadSafeModule m;
-        jl_llvm_functions_t decls;
         JL_LOCK(&jl_codegen_lock);
         jl_codegen_params_t output(*reinterpret_cast<orc::ThreadSafeContext*>(ctxt));
         output.world = world;
         output.params = &params;
+        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi),
+                            output.tsctx, output.params);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
-        std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
+        auto decls = jl_emit_code(m, mi, src, jlrettype, output);
 
         Function *F = NULL;
         if (m) {

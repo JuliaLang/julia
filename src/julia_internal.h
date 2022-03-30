@@ -849,7 +849,7 @@ JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, ch
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 JL_DLLEXPORT LLVMOrcThreadSafeContextRef jl_get_ee_context(void);
 
-void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeContextRef llvmctxt, const jl_cgparams_t *cgparams, int policy);
+void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
