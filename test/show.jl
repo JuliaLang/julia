@@ -1453,6 +1453,9 @@ struct var"%X%" end  # Invalid name without '#'
     end
 end
 
+# Test that static show prints something reasonable for `<:Function` types
+@test static_shown(:) == "Base.Colon()"
+
 # Test @show
 let fname = tempname()
     try
