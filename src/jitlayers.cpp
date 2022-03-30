@@ -123,11 +123,14 @@ static jl_callptr_t _jl_compile_codeinst(
     jl_workqueue_t emitted;
     {
         orc::ThreadSafeModule result_m =
-            jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.params);
+            jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
         if (result_m)
             emitted[codeinst] = {std::move(result_m), std::move(decls)};
-        jl_compile_workqueue(emitted, params, CompilationPolicy::Default);
+        {
+            auto temp_module = jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx);
+            jl_compile_workqueue(emitted, *temp_module.getModuleUnlocked(), params, CompilationPolicy::Default);
+        }
 
         if (params._shared_module)
             jl_ExecutionEngine->addModule(std::move(params._shared_module));
@@ -224,7 +227,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
     orc::ThreadSafeModule backing;
     if (into == NULL) {
-        backing = jl_create_llvm_module("cextern", jl_ExecutionEngine->getContext());
+        backing = jl_create_llvm_module("cextern", p ? ((jl_codegen_params_t*)p)->tsctx : jl_ExecutionEngine->getContext());
         into = &backing;
     }
     jl_codegen_params_t params(into->getContext());
@@ -1220,7 +1223,11 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
     destTSM.withModuleDo([&](Module &dest) {
         srcTSM.withModuleDo([&](Module &src) {
     //TODO fix indentation after review
-    assert(&dest != &src);
+    assert(&dest != &src && "Cannot merge module with itself!");
+    assert(&dest.getContext() == &src.getContext() && "Cannot merge modules with different contexts!");
+    assert(dest.getDataLayout() == src.getDataLayout() && "Cannot merge modules with different data layouts!");
+    assert(dest.getTargetTriple() == src.getTargetTriple() && "Cannot merge modules with different target triples!");
+
     for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
         GlobalVariable *sG = &*I;
         GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(sG->getName()));

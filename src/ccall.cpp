@@ -11,10 +11,10 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
 // The `lib` and `sym` GV returned may not be in the current module.
-static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f_lib, const char *f_name,
+static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    auto &TSM = emission_context.shared_module(emission_context.tsctx);
+    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
     //Safe b/c emission context holds context lock
     auto M = TSM.getModuleUnlocked();
     bool runtime_lib = false;
@@ -23,28 +23,28 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, const char *f
 #ifdef _OS_WINDOWS_
     if ((intptr_t)f_lib == (intptr_t)JL_EXE_LIBNAME) {
         libptrgv = prepare_global_in(M, jlexe_var);
-        symMap = &emission_context.symMapExe;
+        symMap = &ctx.emission_context.symMapExe;
     }
     else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_INTERNAL_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldlli_var);
-        symMap = &emission_context.symMapDlli;
+        symMap = &ctx.emission_context.symMapDlli;
     }
     else if ((intptr_t)f_lib == (intptr_t)JL_LIBJULIA_DL_LIBNAME) {
         libptrgv = prepare_global_in(M, jldll_var);
-        symMap = &emission_context.symMapDll;
+        symMap = &ctx.emission_context.symMapDll;
     }
     else
 #endif
     if (f_lib == NULL) {
         libptrgv = jl_emit_RTLD_DEFAULT_var(M);
-        symMap = &emission_context.symMapDefault;
+        symMap = &ctx.emission_context.symMapDefault;
     }
     else {
         std::string name = "ccalllib_";
         name += llvm::sys::path::filename(f_lib);
         name += std::to_string(globalUniqueGeneratedNames++);
         runtime_lib = true;
-        auto &libgv = emission_context.libMapGV[f_lib];
+        auto &libgv = ctx.emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
             libptrgv = new GlobalVariable(*M, getInt8PtrTy(M->getContext()), false,
                                           GlobalVariable::ExternalLinkage,
@@ -177,7 +177,7 @@ static Value *runtime_sym_lookup(
                                     Constant::getNullValue(T_pvoidfunc), gvname);
     }
     else {
-        runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
+        runtime_lib = runtime_sym_gvs(ctx, f_lib, f_name, libptrgv, llvmgv);
         libptrgv = prepare_global_in(jl_Module, libptrgv);
     }
     llvmgv = prepare_global_in(jl_Module, llvmgv);
@@ -187,13 +187,13 @@ static Value *runtime_sym_lookup(
 // Emit a "PLT" entry that will be lazily initialized
 // when being called the first time.
 static GlobalVariable *emit_plt_thunk(
-        jl_codegen_params_t &emission_context,
+        jl_codectx_t &ctx,
         FunctionType *functype, const AttributeList &attrs,
         CallingConv::ID cc, const char *f_lib, const char *f_name,
         GlobalVariable *libptrgv, GlobalVariable *llvmgv,
         bool runtime_lib)
 {
-    auto &TSM = emission_context.shared_module(emission_context.tsctx);
+    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
     Module *M = TSM.getModuleUnlocked();
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
@@ -214,7 +214,7 @@ static GlobalVariable *emit_plt_thunk(
                                              fname);
     BasicBlock *b0 = BasicBlock::Create(M->getContext(), "top", plt);
     IRBuilder<> irbuilder(b0);
-    Value *ptr = runtime_sym_lookup(emission_context, irbuilder, NULL, funcptype, f_lib, NULL, f_name, plt, libptrgv,
+    Value *ptr = runtime_sym_lookup(ctx.emission_context, irbuilder, NULL, funcptype, f_lib, NULL, f_name, plt, libptrgv,
                                     llvmgv, runtime_lib);
     StoreInst *store = irbuilder.CreateAlignedStore(irbuilder.CreateBitCast(ptr, T_pvoidfunc), got, Align(sizeof(void*)));
     store->setAtomic(AtomicOrdering::Release);
@@ -269,14 +269,14 @@ static Value *emit_plt(
     assert(!functype->isVarArg());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
-    bool runtime_lib = runtime_sym_gvs(ctx.emission_context, f_lib, f_name, libptrgv, llvmgv);
+    bool runtime_lib = runtime_sym_gvs(ctx, f_lib, f_name, libptrgv, llvmgv);
     PointerType *funcptype = PointerType::get(functype, 0);
 
     auto &pltMap = ctx.emission_context.allPltMap[attrs];
     auto key = std::make_tuple(llvmgv, functype, cc);
     GlobalVariable *&sharedgot = pltMap[key];
     if (!sharedgot) {
-        sharedgot = emit_plt_thunk(ctx.emission_context,
+        sharedgot = emit_plt_thunk(ctx,
                 functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
     GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);

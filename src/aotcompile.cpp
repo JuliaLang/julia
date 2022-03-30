@@ -253,7 +253,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     orc::ThreadSafeModule backing;
     if (!llvmmod) {
-        backing = jl_create_llvm_module("text", jl_ExecutionEngine->getContext(), cgparams ? cgparams : &jl_default_cgparams);
+        backing = jl_create_llvm_module("text", jl_ExecutionEngine->getContext());
     }
     orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
     auto ctxt = clone.getContext();
@@ -305,8 +305,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     orc::ThreadSafeModule result_m = jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.params,
-                            clone.getModuleUnlocked()->getDataLayout(),
+                            params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
                     jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
                     if (result_m)
@@ -316,7 +315,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, params, policy);
+        jl_compile_workqueue(emitted, *clone.getModuleUnlocked(), params, policy);
     }
     JL_GC_POP();
 
@@ -1017,8 +1016,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, LLVMOrcThreadSafeContextR
         jl_codegen_params_t output(*reinterpret_cast<orc::ThreadSafeContext*>(ctxt));
         output.world = world;
         output.params = &params;
-        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi),
-                            output.tsctx, output.params);
+        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)

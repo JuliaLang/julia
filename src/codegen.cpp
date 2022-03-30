@@ -1949,7 +1949,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const jl_cgparams_t *params, const DataLayout &DL, const Triple &triple)
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const DataLayout &DL, const Triple &triple)
 {
     auto lock = context.getLock();
     Module *m = new Module(name, *context.getContext());
@@ -4718,7 +4718,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
     orc::ThreadSafeModule closure_m = jl_create_llvm_module(
-            name_from_method_instance(mi), ctx.emission_context.tsctx, ctx.params,
+            name_from_method_instance(mi), ctx.emission_context.tsctx,
             jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
     jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
 
@@ -8035,6 +8035,7 @@ jl_llvm_functions_t jl_emit_codeinst(
 
 void jl_compile_workqueue(
     jl_workqueue_t &emitted,
+    Module &original,
     jl_codegen_params_t &params, CompilationPolicy policy)
 {
     JL_TIMING(CODEGEN);
@@ -8079,7 +8080,7 @@ void jl_compile_workqueue(
                     if (src) {
                         orc::ThreadSafeModule result_m =
                         jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.params);
+                            params.tsctx, original.getDataLayout(), Triple(original.getTargetTriple()));
                         result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
                         result.first = std::move(result_m);
                     }
@@ -8087,7 +8088,7 @@ void jl_compile_workqueue(
                 else {
                     orc::ThreadSafeModule result_m =
                         jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.params);
+                            params.tsctx, original.getDataLayout(), Triple(original.getTargetTriple()));
                     result.second = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     result.first = std::move(result_m);
                 }

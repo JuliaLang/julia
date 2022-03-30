@@ -114,7 +114,7 @@ typedef struct _jl_codegen_params_t {
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
     orc::ThreadSafeModule _shared_module;
-    inline orc::ThreadSafeModule &shared_module(orc::ThreadSafeContext context);
+    inline orc::ThreadSafeModule &shared_module(Module &from);
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
@@ -145,6 +145,7 @@ typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_f
 
 void jl_compile_workqueue(
     jl_workqueue_t &emitted,
+    Module &original,
     jl_codegen_params_t &params,
     CompilationPolicy policy);
 
@@ -275,11 +276,17 @@ private:
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const jl_cgparams_t *params = &jl_default_cgparams, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
 
-orc::ThreadSafeModule &jl_codegen_params_t::shared_module(orc::ThreadSafeContext context) {
-    if (!_shared_module)
-        _shared_module = jl_create_llvm_module("globals", context);
+orc::ThreadSafeModule &jl_codegen_params_t::shared_module(Module &from) {
+    if (!_shared_module) {
+        _shared_module = jl_create_llvm_module("globals", tsctx, from.getDataLayout(), Triple(from.getTargetTriple()));
+        assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
+    } else {
+        assert(&from.getContext() == _shared_module.getContext().getContext() && "Module context differs from shared module context!");
+        assert(from.getDataLayout() == _shared_module.getModuleUnlocked()->getDataLayout() && "Module data layout differs from shared module data layout!");
+        assert(from.getTargetTriple() == _shared_module.getModuleUnlocked()->getTargetTriple() && "Module target triple differs from shared module target triple!");
+    }
     return _shared_module;
 }
 
