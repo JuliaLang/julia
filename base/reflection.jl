@@ -1276,16 +1276,16 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
-        optimize=true,
-        debuginfo::Symbol=:default,
-        interp = Core.Compiler.NativeInterpreter(closure.world))
+function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
+    debuginfo::Symbol=:default, __...)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    m = closure.source
+    m = oc.source
     if isa(m, Method)
         code = _uncompressed_ir(m, m.source)
         debuginfo === :none && remove_linenums!(code)
-        return Any[(code => code.rettype)]
+        # intersect the declared return type and the inferred return type (if available)
+        rt = typeintersect(code.rettype, typeof(oc).parameters[2])
+        return Any[code => rt]
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
@@ -1295,6 +1295,10 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world = get_world_counter(),
                       interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(f, Core.OpaqueClosure)
+        _, rt = only(code_typed_opaque_closure(f))
+        return Any[rt]
+    end
     types = to_tuple_type(types)
     rt = []
     for match in _methods(f, types, -1, world)::Vector
@@ -1304,6 +1308,35 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
         push!(rt, something(ty, Any))
     end
     return rt
+end
+
+function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       world = get_world_counter(),
+                       interp = Core.Compiler.NativeInterpreter(world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    types = to_tuple_type(types)
+    if isa(f, Core.Builtin)
+        args = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
+        return Core.Compiler.builtin_effects(f, args, rt)
+    else
+        effects = Core.Compiler.EFFECTS_TOTAL
+        matches = _methods(f, types, -1, world)::Vector
+        if isempty(matches)
+            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
+            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
+            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
+            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
+        end
+        for match in matches
+            match = match::Core.MethodMatch
+            frame = Core.Compiler.typeinf_frame(interp,
+                match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+            frame === nothing && return Core.Compiler.Effects()
+            effects = Core.Compiler.tristate_merge(effects, frame.ipo_effects)
+        end
+        return effects
+    end
 end
 
 """

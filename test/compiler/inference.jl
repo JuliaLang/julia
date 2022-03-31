@@ -1562,6 +1562,15 @@ end
 @test arraysize_tfunc(Vector, Float64) === Union{}
 @test arraysize_tfunc(String, Int) === Union{}
 
+let tuple_tfunc
+    function tuple_tfunc(@nospecialize xs...)
+        return Core.Compiler.tuple_tfunc(Any[xs...])
+    end
+    @test Core.Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
+    # https://github.com/JuliaLang/julia/issues/44705
+    @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
+end
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -2082,7 +2091,7 @@ let M = Module()
             obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
             r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
             a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
             return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
         end |> only
     end
@@ -4080,3 +4089,12 @@ end
     Base.Experimental.@force_compile
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44763
+global x44763::Int = 0
+increase_x44763!(n) = (global x44763; x44763 += n)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
+@test Base.return_types() do
+    invoke44763(42)
+end |> only === Int
+@test x44763 == 0

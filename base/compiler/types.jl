@@ -38,7 +38,7 @@ struct Effects
     effect_free::TriState
     nothrow::TriState
     terminates::TriState
-    overlayed::Bool
+    nonoverlayed::Bool
     # This effect is currently only tracked in inference and modified
     # :consistent before caching. We may want to track it in the future.
     inbounds_taints_consistency::Bool
@@ -48,55 +48,63 @@ function Effects(
     effect_free::TriState,
     nothrow::TriState,
     terminates::TriState,
-    overlayed::Bool)
+    nonoverlayed::Bool)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
-        overlayed,
+        nonoverlayed,
         false)
 end
 
-const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
-const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_FALSE,     ALWAYS_TRUE,      true)
+const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false) # unknown, really
 
-function Effects(e::Effects = EFFECTS_UNKNOWN;
+function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::TriState = e.consistent,
     effect_free::TriState = e.effect_free,
     nothrow::TriState = e.nothrow,
     terminates::TriState = e.terminates,
-    overlayed::Bool = e.overlayed,
+    nonoverlayed::Bool = e.nonoverlayed,
     inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
-        overlayed,
+        nonoverlayed,
         inbounds_taints_consistency)
 end
 
+is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
+is_effect_free(effects::Effects)  = effects.effect_free === ALWAYS_TRUE
+is_nothrow(effects::Effects)      = effects.nothrow === ALWAYS_TRUE
+is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
+is_nonoverlayed(effects::Effects) = effects.nonoverlayed
+
 is_total_or_error(effects::Effects) =
-    effects.consistent === ALWAYS_TRUE &&
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE
+    is_consistent(effects) &&
+    is_effect_free(effects) &&
+    is_terminates(effects)
 
 is_total(effects::Effects) =
     is_total_or_error(effects) &&
-    effects.nothrow === ALWAYS_TRUE
+    is_nothrow(effects)
 
 is_removable_if_unused(effects::Effects) =
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE &&
-    effects.nothrow === ALWAYS_TRUE
+    is_effect_free(effects) &&
+    is_terminates(effects) &&
+    is_nothrow(effects)
 
 function encode_effects(e::Effects)
     return (e.consistent.state << 0) |
            (e.effect_free.state << 2) |
            (e.nothrow.state << 4) |
            (e.terminates.state << 6) |
-           (UInt32(e.overlayed) << 8)
+           (UInt32(e.nonoverlayed) << 8)
 end
 function decode_effects(e::UInt32)
     return Effects(
@@ -118,7 +126,7 @@ function tristate_merge(old::Effects, new::Effects)
             old.nothrow, new.nothrow),
         tristate_merge(
             old.terminates, new.terminates),
-        old.overlayed | new.overlayed,
+        old.nonoverlayed & new.nonoverlayed,
         old.inbounds_taints_consistency | new.inbounds_taints_consistency)
 end
 
@@ -168,7 +176,7 @@ mutable struct InferenceResult
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(; overlayed=false), Effects(; overlayed=false), nothing)
+            WorldRange(), Effects(), Effects(), nothing)
     end
 end
 

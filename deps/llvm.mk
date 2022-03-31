@@ -281,7 +281,7 @@ $(eval $(call staged-install, \
 	LLVM_INSTALL,,,))
 
 clean-llvm:
-	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
+	-rm -f $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
 
 get-llvm: $(LLVM_SRC_FILE)

@@ -207,6 +207,7 @@
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
+    XX(jl_get_binding_wr_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
@@ -411,7 +412,6 @@
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
-    XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \
@@ -513,7 +513,7 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield) \
+    XX(jl_yield)
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp)
@@ -568,4 +568,4 @@
     YY(LLVMExtraAddRemoveNIPass) \
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass) \
+    YY(LLVMExtraAddCPUFeaturesPass)
