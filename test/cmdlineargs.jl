@@ -465,7 +465,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test parse(Int,readchomp(`$exename --math-mode=ieee -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
         @test parse(Int,readchomp(`$exename --math-mode=fast -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
+            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
     # --worker takes default / custom as argument (default/custom arguments
