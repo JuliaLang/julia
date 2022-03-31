@@ -82,7 +82,7 @@ end
 is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
 is_effect_free(effects::Effects)  = effects.effect_free === ALWAYS_TRUE
 is_nothrow(effects::Effects)      = effects.nothrow === ALWAYS_TRUE
-is_terminates(effects::Effects)  = effects.terminates === ALWAYS_TRUE
+is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
 is_nonoverlayed(effects::Effects) = effects.nonoverlayed
 
 is_total_or_error(effects::Effects) =
