@@ -1868,7 +1868,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                     t = Bottom
                     tristate_merge!(sv, Effects(EFFECTS_TOTAL;
                         # consistent = ALWAYS_TRUE, # N.B depends on !ismutabletype(t) above
-                        nothrow = ALWAYS_FALSE))
+                        nothrow = TRISTATE_UNKNOWN))
                     @goto t_computed
                 elseif !isa(at, Const)
                     allconst = false
@@ -1897,8 +1897,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             is_nothrow = false
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
-            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
+            consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+            nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = false # TODO: More precision
@@ -1916,8 +1916,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = ismutabletype(t) ? ALWAYS_FALSE : ALWAYS_TRUE,
-            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
+            consistent = ismutabletype(t) ? TRISTATE_UNKNOWN : ALWAYS_TRUE,
+            nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
     elseif ehead === :new_opaque_closure
         tristate_merge!(sv, Effects()) # TODO
         t = Union{}
@@ -2039,9 +2039,11 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     ty = abstract_eval_global(M, s)
     isa(ty, Const) && return ty
     if isdefined(M,s)
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=TRISTATE_UNKNOWN))
     else
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, nothrow=ALWAYS_FALSE))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL;
+            consistent=TRISTATE_UNKNOWN,
+            nothrow=TRISTATE_UNKNOWN))
     end
     return ty
 end
@@ -2281,7 +2283,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     changes = StateUpdate(lhs, VarState(t, false), changes, false)
                 elseif isa(lhs, GlobalRef)
                     tristate_merge!(frame, Effects(EFFECTS_TOTAL,
-                        effect_free=ALWAYS_FALSE,
+                        effect_free=TRISTATE_UNKNOWN,
                         nothrow=TRISTATE_UNKNOWN))
                 elseif !isa(lhs, SSAValue)
                     tristate_merge!(frame, EFFECTS_UNKNOWN)
