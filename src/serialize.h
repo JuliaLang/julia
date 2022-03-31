@@ -66,12 +66,27 @@ extern "C" {
 
 #define LAST_TAG 57
 
-#define write_uint8(s, n) ios_putc((n), (s))
-#define read_uint8(s) ((uint8_t)ios_getc((s)))
-#define write_int8(s, n) write_uint8((s), (n))
-#define read_int8(s) read_uint8((s))
-
 /* read and write in host byte order */
+
+static inline void write_uint8(ios_t *s, uint8_t n) JL_NOTSAFEPOINT
+{
+    ios_putc(n, s);
+}
+
+static inline uint8_t read_uint8(ios_t *s) JL_NOTSAFEPOINT
+{
+    return (uint8_t)ios_getc(s);
+}
+
+static inline void write_int8(ios_t *s, int8_t n) JL_NOTSAFEPOINT
+{
+    ios_putc(n, s);
+}
+
+static inline int8_t read_int8(ios_t *s) JL_NOTSAFEPOINT
+{
+    return (int8_t)ios_getc(s);
+}
 
 static inline void write_int32(ios_t *s, int32_t i) JL_NOTSAFEPOINT
 {
