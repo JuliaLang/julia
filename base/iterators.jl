@@ -71,13 +71,14 @@ and_iteratoreltype(a, b) = EltypeUnknown()
     Iterators.reverse(itr)
 
 Given an iterator `itr`, then `reverse(itr)` is an iterator over the
-same collection but in the reverse order.   (By default, this returns
+same collection but in the reverse order.
+This iterator is "lazy" in that it does not make a copy of the collection in
+order to reverse it; see [`Base.reverse`](@ref) for an eager implementation.
+
+(By default, this returns
 an `Iterators.Reverse` object wrapping `itr`, which is iterable
 if the corresponding [`iterate`](@ref) methods are defined, but some `itr` types
 may implement more specialized `Iterators.reverse` behaviors.)
-
-This iterator is "lazy" in that it does not make a copy of the collection in
-order to reverse it; see [`Base.reverse`](@ref) for an eager implementation.
 
 Not all iterator types `T` support reverse-order iteration.  If `T`
 doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodError`](@ref)
