@@ -1069,8 +1069,7 @@ end
 """
     !f::Function
 
-Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`.
+Predicate function negation: when the argument of `!` is a function, it returns a composed function which computes the boolean negation of `f`.
 
 See also [`∘`](@ref).
 
@@ -1084,6 +1083,9 @@ julia> filter(isletter, str)
 
 julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
+
+!!! compat "Julia 1.9"
+    Starting with Julia 1.9, `!f` returns a [`ComposedFunction`](@ref) instead of an anonymous function.
 ```
 """
 !(f::Function) = (!) ∘ f
