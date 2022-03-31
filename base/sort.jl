@@ -1295,7 +1295,7 @@ function sort!(A::AbstractArray;
 end
 
 
-## uint mapping to alow radix sorting primitives other than UInts ##
+## uint mapping to allow radix sorting primitives other than UInts ##
 
 """
     UIntMappable(T::Type, order::Ordering)
@@ -1375,7 +1375,7 @@ function uint_map!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
 end
 
 function uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
-                      order::Ordering, offset::U=zero(U)) where U <: Unsigned
+                     order::Ordering, offset::U=zero(U)) where U <: Unsigned
     @inbounds for i in lo:hi
         v[i] = uint_unmap(eltype(v), u[i]+offset, order)
     end

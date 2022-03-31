@@ -730,7 +730,7 @@ end
     end
 
     @testset "post-serialization count sort" begin
-        v = reinterpret(Float64, rand(1:20, len))###
+        v = reinterpret(Float64, rand(1:20, len))
         @test adaptive_sort_test(copy(v))
         @test adaptive_sort_test(copy(v), rev=true)
     end
@@ -739,7 +739,7 @@ end
         @test adaptive_sort_test(sort!(rand(len)))
         @test adaptive_sort_test(sort!(rand(Float32, len), rev=true))
         @test adaptive_sort_test(vcat(sort!(rand(Int16, len)), Int16(0)))
-        @test adaptive_sort_test(vcat(sort!(rand(UInt64, len), rev=true), 0))###
+        @test adaptive_sort_test(vcat(sort!(rand(UInt64, len), rev=true), 0))
     end
 
     @testset "lenm1 < 3bits fallback" begin
