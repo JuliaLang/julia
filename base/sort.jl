@@ -774,8 +774,16 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # and the optimization is not worth the detection cost, so we use insertion sort.
     lenm1 < 40 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
-    # For most long arrays, a presorted check is essentially free (overhead < 1%)
-    lenm1 >= 200 && issorted(view(v, lo:hi), o) && return v
+    # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
+    # arrays it is essentially free (<1%). Insertion sort runs in a fast O(n) on presorted
+    # input and this guarantees presorted input will always be efficiently handled
+    issorted(view(v, lo:hi), o) && return v
+
+    # For large arrays, a reverse-sorted check is essentially free (overhead < 1%)
+    if lenm1 >= 500 && issorted(view(v, lo:hi), ReverseOrdering(o))
+        reverse!(view(v, lo:hi))
+        return v
+    end
 
     # UInt128 does not support fast bit shifting so we never
     # dispatch to radix sort but we may still perform count sort
