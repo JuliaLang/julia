@@ -1,5 +1,6 @@
 #!/bin/bash
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #
 # Usage:
 #     contrib/asan/build.sh <path> [<make_targets>...]

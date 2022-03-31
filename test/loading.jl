@@ -60,6 +60,12 @@ end
 @test Base.in_sysimage(Base.PkgId(Base.UUID("cf7118a7-6976-5b1a-9a39-7adc72f591a4"), "UUIDs"))
 @test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
 
+## Unit tests for safe file operations ##
+
+@test Base.isaccessiblefile("/root/path/doesn't/exist") == false
+@test Base.isaccessiblepath("/root/path/doesn't/exist") == false
+@test Base.isaccessibledir("/root/path/doesn't/exist") == false
+
 # Issue #5789 and PR #13542:
 mktempdir() do dir
     cd(dir) do
@@ -132,18 +138,6 @@ end
 @test_throws ArgumentError parse(UUID, "not a UUID")
 @test tryparse(UUID, "either is this") === nothing
 
-function subset(v::Vector{T}, m::Int) where T
-    T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
-end
-
-function perm(p::Vector, i::Int)
-    for j = length(p):-1:1
-        i, k = divrem(i, j)
-        p[j], p[k+1] = p[k+1], p[j]
-    end
-    return p
-end
-
 @testset "explicit_project_deps_get" begin
     mktempdir() do dir
         project_file = joinpath(dir, "Project.toml")
@@ -152,52 +146,95 @@ end
         proj_uuid = dummy_uuid(project_file)
         root_uuid = uuid4()
         this_uuid = uuid4()
-        # project file to subset/permute
-        lines = split("""
-        name = "Root"
-        uuid = "$root_uuid"
-        [deps]
-        This = "$this_uuid"
-        """, '\n')
-        N = length(lines)
-        # test every permutation of every subset of lines
-        for m = 0:2^N-1
-            s = subset(lines, m) # each subset of lines
-            for i = 1:factorial(count_ones(m))
-                p = perm(s, i) # each permutation of the subset
-                open(project_file, write=true) do io
-                    for line in p
-                        println(io, line)
-                    end
-                end
-                # look at lines and their order
-                n = findfirst(line -> startswith(line, "name"), p)
-                u = findfirst(line -> startswith(line, "uuid"), p)
-                d = findfirst(line -> line == "[deps]", p)
-                t = findfirst(line -> startswith(line, "This"), p)
-                # look up various packages by name
-                root = Base.explicit_project_deps_get(project_file, "Root")
-                this = Base.explicit_project_deps_get(project_file, "This")
-                that = Base.explicit_project_deps_get(project_file, "That")
-                # test that the correct answers are given
-                @test root == (something(n, N+1) ≥ something(d, N+1) ? nothing :
-                               something(u, N+1) < something(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (something(d, N+1) < something(t, N+1) ≤ N ? this_uuid : nothing)
-                @test that == nothing
-            end
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [deps]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this.uuid == this_uuid
+            @test that == nothing
+
+            write(project_file, """
+            name = "Root"
+            This = "$this_uuid"
+            [deps]
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == proj_uuid
+            @test this == nothing
+            @test that == nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end
+
+# extras
+@testset "extras" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [extras]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this == nothing
+            @test that == nothing
+
+            @test Base.get_uuid_name(project_file, this_uuid) == "This"
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
 
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
 saved_active_project = Base.ACTIVE_PROJECT[]
+watcher_counter = Ref(0)
+push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
+push!(Base.active_project_callbacks, () -> error("broken"))
 
 push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
 append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
-Base.ACTIVE_PROJECT[] = nothing
+@test watcher_counter[] == 0
+@test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
+@test watcher_counter[] == 1
+pop!(Base.active_project_callbacks)
 
 @test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
@@ -609,12 +646,13 @@ end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
 try
-    Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+    Base.set_active_project(joinpath(@__DIR__, "TestPkg"))
     @eval using TestPkg
 finally
-    Base.ACTIVE_PROJECT[] = old_act_proj
+    Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
+@test Base.pkgorigins[Base.PkgId(UUID("69145d58-7df6-11e8-0660-cf7622583916"), "TestPkg")].version == v"1.2.3"
 
 @testset "--project and JULIA_PROJECT paths should be absolutified" begin
     mktempdir() do dir; cd(dir) do
@@ -695,12 +733,14 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-Base.ACTIVE_PROJECT[] = saved_active_project
+pop!(Base.active_project_callbacks)
+Base.set_active_project(saved_active_project)
+@test watcher_counter[] == 3
 
 # issue #28190
-module Foo; import Libdl; end
-import .Foo.Libdl; import Libdl
-@test Foo.Libdl === Libdl
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
 
 @testset "include with mapexpr" begin
     let exprs = Any[]
@@ -754,5 +794,121 @@ end
         raw_manifest = Base.parsed_toml(manifest_file)
         @test Base.is_v1_format_manifest(raw_manifest) == false
         @test Base.get_deps(raw_manifest) == deps
+    end
+end
+
+@testset "error message loading pkg bad module name" begin
+    mktempdir() do tmp
+        old_loadpath = copy(LOAD_PATH)
+        try
+            push!(LOAD_PATH, tmp)
+            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
+            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                                        check for typos in package module name") (@eval using BadCase)
+        finally
+            copy!(LOAD_PATH, old_loadpath)
+        end
+    end
+end
+
+@testset "Preferences loading" begin
+    mktempdir() do dir
+        this_uuid = uuid4()
+        that_uuid = uuid4()
+
+        # First, create outer environment with exported preferences
+        mkpath(joinpath(dir, "outer_env"))
+        open(joinpath(dir, "outer_env", "Project.toml"), write=true) do io
+            write(io, """
+            [deps]
+            This = "$(this_uuid)"
+            That = "$(that_uuid)"
+
+            [preferences.This]
+            pref1 = "outer-project"
+            pref2 = "outer-project"
+            pref3 = "outer-project"
+            pref4 = "outer-project"
+            pref5 = "outer-project"
+            pref6 = "outer-project"
+
+            [preferences.That]
+            pref1 = "outer-project"
+            """)
+        end
+
+        # Override some of those preferences above here:
+        open(joinpath(dir, "outer_env", "JuliaLocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref2 = "outer-jlp"
+            """)
+        end
+
+        # Ensure that a `JuliaLocalPreferences.toml` disables `LocalPreferences.toml`
+        # We test that both overriding `pref2` and trying to clear `pref5` are ignored
+        open(joinpath(dir, "outer_env", "LocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref2 = "outer-lp"
+            __clear__ = ["pref5"]
+            """)
+        end
+
+        # Next, set up an inner environment that will override some of the preferences
+        # set by the outer environment, even clearing `pref6`.
+        mkpath(joinpath(dir, "inner_env"))
+        open(joinpath(dir, "inner_env", "Project.toml"), write=true) do io
+            write(io, """
+            name = "Root"
+            uuid = "$(uuid4())"
+
+            [extras]
+            This = "$(this_uuid)"
+
+            [preferences.This]
+            pref3 = "inner-project"
+            pref4 = "inner-project"
+            __clear__ = ["pref6"]
+            """)
+        end
+
+        # And have an override here as well, this time only LocalPreferences.toml
+        open(joinpath(dir, "inner_env", "LocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref4 = "inner-lp"
+            """)
+        end
+
+        # Finally, we load preferences with a stacked environment, and ensure that
+        # we get the appropriate outputs:
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, "inner_env", "Project.toml"), joinpath(dir, "outer_env", "Project.toml")])
+
+            function test_this_prefs(this_prefs)
+                @test this_prefs["pref1"] == "outer-project"
+                @test this_prefs["pref2"] == "outer-jlp"
+                @test this_prefs["pref3"] == "inner-project"
+                @test this_prefs["pref4"] == "inner-lp"
+                @test this_prefs["pref5"] == "outer-project"
+                @test !haskey(this_prefs, "pref6")
+            end
+
+            # Test directly loading the UUID we're interested in
+            test_this_prefs(Base.get_preferences(this_uuid))
+
+            # Also test loading _all_ preferences
+            all_prefs = Base.get_preferences()
+            @test haskey(all_prefs, "This")
+            @test haskey(all_prefs, "That")
+            @test all_prefs["That"]["pref1"] == "outer-project"
+
+            # Ensure that the sub-tree of `This` still satisfies our tests
+            test_this_prefs(all_prefs["This"])
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
     end
 end

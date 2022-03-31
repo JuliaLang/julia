@@ -351,3 +351,68 @@ Finished connection to google.com
 Finished connection to julialang.org
 Finished connection to github.com
 ```
+
+## Multicast
+
+Julia supports [multicast](https://datatracker.ietf.org/doc/html/rfc1112) over IPv4 and IPv6 using the User Datagram Protocol ([UDP](https://datatracker.ietf.org/doc/html/rfc768)) as transport.
+
+Unlike the Transmission Control Protocol ([TCP](https://datatracker.ietf.org/doc/html/rfc793)), UDP makes almost no assumptions about the needs of the application.
+TCP provides flow control (it accelerates and decelerates to maximize throughput), reliability (lost or corrupt packets are automatically retransmitted), sequencing (packets are ordered by the operating system before they are given to the application), segment size, and session setup and teardown.
+UDP provides no such features.
+
+A common use for UDP is in multicast applications.
+TCP is a stateful protocol for communication between exactly two devices.
+UDP can use special multicast addresses to allow simultaneous communication between many devices.
+
+### Receiving IP Multicast Packets
+
+To transmit data over UDP multicast, simply `recv` on the socket, and the first packet received will be returned. Note that it may not be the first packet that you sent however!
+
+```
+using Sockets
+group = ip"228.5.6.7"
+socket = Sockets.UDPSocket()
+bind(socket, ip"0.0.0.0", 6789)
+join_multicast_group(socket, group)
+println(String(recv(socket)))
+leave_multicast_group(socket, group)
+close(socket)
+```
+
+### Sending IP Multicast Packets
+
+To transmit data over UDP multicast, simply `send` to the socket.
+Notice that it is not necessary for a sender to join the multicast group.
+
+```
+using Sockets
+group = ip"228.5.6.7"
+socket = Sockets.UDPSocket()
+send(socket, group, 6789, "Hello over IPv4")
+close(socket)
+```
+
+### IPv6 Example
+
+This example gives the same functionality as the previous program, but uses IPv6 as the network-layer protocol.
+
+Listener:
+```
+using Sockets
+group = Sockets.IPv6("ff05::5:6:7")
+socket = Sockets.UDPSocket()
+bind(socket, Sockets.IPv6("::"), 6789)
+join_multicast_group(socket, group)
+println(String(recv(socket)))
+leave_multicast_group(socket, group)
+close(socket)
+```
+
+Sender:
+```
+using Sockets
+group = Sockets.IPv6("ff05::5:6:7")
+socket = Sockets.UDPSocket()
+send(socket, group, 6789, "Hello over IPv6")
+close(socket)
+```

@@ -98,6 +98,20 @@ end
 
 timesofar("conversions")
 
+@testset "Promotions for size $sz" for (sz, T) in allsizes
+    @test isequal(promote(falses(sz...), zeros(sz...)),
+                 (zeros(sz...), zeros(sz...)))
+    @test isequal(promote(trues(sz...), ones(sz...)),
+                 (ones(sz...), ones(sz...)))
+    ae = falses(1, sz...)
+    ex = (@test_throws ErrorException promote(ae, ones(sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
+    ex = (@test_throws ErrorException promote(ae, falses(sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
+end
+
+timesofar("promotions")
+
 @testset "utility functions" begin
     b1 = bitrand(v1)
     @test isequal(fill!(b1, true), trues(size(b1)))
@@ -1710,4 +1724,61 @@ end
     @test typeof([a ;;; a]) <: BitArray
     @test typeof([a a ;;; a a]) <: BitArray
     @test typeof([a a ;;; [a a]]) <: BitArray
+end
+
+@testset "deleteat! additional tests" begin
+    for v in ([1, 2, 3], [true, true, true], trues(3))
+        @test_throws BoundsError deleteat!(v, true:true)
+    end
+
+    for v in ([1], [true], trues(1))
+        @test length(deleteat!(v, false:false)) == 1
+        @test isempty(deleteat!(v, true:true))
+    end
+
+    x = trues(3)
+    x[3] = false
+    @test deleteat!(x, [UInt8(2)]) == [true, false]
+    @test_throws ArgumentError deleteat!(x, Any[true])
+    @test_throws ArgumentError deleteat!(x, Any[1, true])
+    @test_throws ArgumentError deleteat!(x, Any[2, 1])
+    @test_throws BoundsError deleteat!(x, Any[4])
+    @test_throws BoundsError deleteat!(x, Any[2, 4])
+
+    function test_equivalence(n::Int)
+        x1 = rand(Bool, n)
+        x2 = BitVector(x1)
+        inds1 = rand(Bool, n)
+        inds2 = BitVector(inds1)
+        return deleteat!(copy(x1), findall(inds1)) ==
+               deleteat!(copy(x1), inds1) ==
+               deleteat!(copy(x2), inds1) ==
+               deleteat!(copy(x1), inds2) ==
+               deleteat!(copy(x2), inds2)
+    end
+
+    Random.seed!(1234)
+    for n in 1:20, _ in 1:100
+        @test test_equivalence(n)
+    end
+end
+
+@testset "fill! for BitArray with contiguous view (#42795)" begin
+    # change values in range `rangein`, `rangeout` should stay unchanged
+    for (rangein, rangeout) in ((1:5, 6:10), (5:10, 1:4))
+        bitvector = trues(10)
+        bitarray  = trues(10, 10)
+        viewvector = view(bitvector, rangein)
+        viewarray  = view(bitarray, rangein, rangein)
+        @test which(fill!, (typeof(viewvector), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}}}, Any}
+        @test which(fill!, (typeof(viewarray), Bool)).sig == Tuple{typeof(fill!), SubArray{Bool, <:Any, <:BitArray, <:Tuple{AbstractUnitRange{Int}, Vararg{Union{Int,AbstractUnitRange{Int}}}}}, Any}
+        fill!(viewvector, false)
+        fill!(viewarray, false)
+        @test all(bitvector[rangein] .== false)
+        @test all(bitvector[rangeout] .== true)
+        @test all(bitarray[rangein, rangein] .== false)
+        @test all(bitarray[rangeout, rangeout] .== true)
+        @test all(bitarray[rangeout, rangein] .== true)
+        @test all(bitarray[rangein, rangeout] .== true)
+    end
 end

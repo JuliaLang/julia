@@ -13,7 +13,7 @@ import Core.Intrinsics:
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import ..no_op_err, ..@_inline_meta, ..@_noinline_meta, ..checked_length
+import ..no_op_err, ..@inline, ..@noinline, ..checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -86,7 +86,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_neg(x::T) where T<:Integer
     checked_sub(T(0), x)
 end
-throw_overflowerr_negation(x) = (@_noinline_meta;
+throw_overflowerr_negation(x) = (@noinline;
     throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
 if BrokenSignedInt != Union{}
 function checked_neg(x::BrokenSignedInt)
@@ -150,7 +150,7 @@ end
 end
 
 
-throw_overflowerr_binaryop(op, x, y) = (@_noinline_meta;
+throw_overflowerr_binaryop(op, x, y) = (@noinline;
     throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
@@ -161,7 +161,7 @@ Calculates `x+y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_add(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = add_with_overflow(x, y)
     b && throw_overflowerr_binaryop(:+, x, y)
     z
@@ -218,7 +218,7 @@ Calculates `x-y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_sub(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = sub_with_overflow(x, y)
     b && throw_overflowerr_binaryop(:-, x, y)
     z
@@ -283,7 +283,7 @@ Calculates `x*y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_mul(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = mul_with_overflow(x, y)
     b && throw_overflowerr_binaryop(:*, x, y)
     z

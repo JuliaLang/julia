@@ -1,4 +1,4 @@
-# Proper maintenance and care of multi-threading locks
+# [Proper maintenance and care of multi-threading locks](@id Proper-maintenance-and-care-of-multi-threading-locks)
 
 The following strategies are used to ensure that the code is dead-lock free (generally by addressing
 the 4th Coffman condition: circular wait).
@@ -28,6 +28,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * gc_perm_lock
 >   * flisp
 >   * jl_in_stackwalk (Win32)
+>   * PM_mutex[i]
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
 

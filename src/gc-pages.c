@@ -82,7 +82,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
             block_pg_cnt = pg_cnt = min_block_pg_alloc;
         }
         else {
-            JL_UNLOCK_NOGC(&gc_perm_lock);
+            uv_mutex_unlock(&gc_perm_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -159,7 +159,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
                GC_PAGE_SZ * pg_cnt - LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size));
 #endif
         if (pg == 0) {
-            JL_UNLOCK_NOGC(&gc_perm_lock);
+            uv_mutex_unlock(&gc_perm_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -171,7 +171,7 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
 {
     struct jl_gc_metadata_ext info;
-    JL_LOCK_NOGC(&gc_perm_lock);
+    uv_mutex_lock(&gc_perm_lock);
 
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
@@ -255,7 +255,7 @@ have_free_page:
     errno = last_errno;
     current_pg_count++;
     gc_final_count_page(current_pg_count);
-    JL_UNLOCK_NOGC(&gc_perm_lock);
+    uv_mutex_unlock(&gc_perm_lock);
     return info.meta;
 }
 

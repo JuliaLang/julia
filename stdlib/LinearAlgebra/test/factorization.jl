@@ -6,7 +6,7 @@ using Test, LinearAlgebra
 @testset "equality for factorizations - $f" for f in Any[
     bunchkaufman,
     cholesky,
-    x -> cholesky(x, Val(true)),
+    x -> cholesky(x, RowMaximum()),
     eigen,
     hessenberg,
     lq,
@@ -40,6 +40,27 @@ using Test, LinearAlgebra
     @test F == G broken=!(f === eigen || f === qr)
     @test isequal(F, G) broken=!(f === eigen || f === qr)
     @test hash(F) == hash(G)
+end
+
+@testset "size for factorizations - $f" for f in Any[
+    bunchkaufman,
+    cholesky,
+    x -> cholesky(x, RowMaximum()),
+    hessenberg,
+    lq,
+    lu,
+    qr,
+    x -> qr(x, ColumnNorm()),
+    svd,
+]
+    A = randn(3, 3)
+    A = A * A' # ensure A is pos. def. and symmetric
+    F = f(A)
+    tF = Transpose(F)
+    aF = Adjoint(F)
+    @test size(F) == size(A)
+    @test size(tF) == size(Transpose(A))
+    @test size(aF) == size(Adjoint(A))
 end
 
 @testset "equality of QRCompactWY" begin

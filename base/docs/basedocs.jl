@@ -23,6 +23,9 @@ as well as many great tutorials and learning resources:
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
+
+To exit the interactive session, type `CTRL-D` (press the
+control key together with the `d` key), or type `exit()`.
 """
 kw"help", kw"Julia", kw"julia", kw""
 
@@ -127,7 +130,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -179,8 +182,8 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
-code instead simply becomes part of the surrounding program.
+Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
@@ -362,7 +365,7 @@ julia> push!(a, 2, 3)
 Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
-ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
@@ -974,12 +977,22 @@ kw"..."
     ;
 
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
-end of the previous statement. `;` is not necessary after new lines, but can be used to
+end of the previous statement.
+
+`;` is not necessary at the end of a line, but can be used to
 separate statements on a single line or to join statements into a single expression.
-`;` is also used to suppress output printing in the REPL and similar interfaces.
+
+Adding `;` at the end of a line in the REPL will suppress printing the result of that expression.
+
+In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
+
+While constructing arrays, if the arguments inside the square brackets are separated by `;`
+then their contents are vertically concatenated together.
+
+In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
 # Examples
-```julia
+```jldoctest
 julia> function foo()
            x = "Hello, "; x *= "World!"
            return x
@@ -993,6 +1006,19 @@ julia> foo();
 
 julia> bar()
 "Hello, Mars!"
+
+julia> function plot(x, y; style="solid", width=1, color="black")
+           ###
+       end
+
+julia> [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+shell> echo hello
+hello
 ```
 """
 kw";"
@@ -1162,10 +1188,10 @@ fields of the type to be set after construction. See the manual section on
 kw"mutable struct"
 
 """
-    new
+    new, or new{A,B,...}
 
-Special function available to inner constructors which created a new object
-of the type.
+Special function available to inner constructors which creates a new object
+of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -1507,8 +1533,9 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
-callable with no arguments). The task exits when this function returns.
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which
+must be callable with no arguments). The task exits when this function returns.
+The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
 # Examples
 ```jldoctest
@@ -1980,24 +2007,23 @@ setfield!
 
 These atomically perform the operations to simultaneously get and set a field:
 
-    y = getfield!(value, name)
+    y = getfield(value, name)
     setfield!(value, name, x)
     return y
-```
 """
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol])
-    modifyfield!(value, i::Int, op, x, [order::Symbol])
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
 These atomically perform the operations to get and set a field after applying
 the function `op`.
 
-    y = getfield!(value, name)
+    y = getfield(value, name)
     z = op(y, x)
     setfield!(value, name, z)
-    return y, z
+    return y => z
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
@@ -2006,18 +2032,19 @@ modifyfield!
 
 """
     replacefield!(value, name::Symbol, expected, desired,
-        [success_order::Symbol, [fail_order::Symbol=success_order]) =>
-        (old, Bool)
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+    replacefield!(value, i::Int, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
 These atomically perform the operations to get and conditionally set a field to
 a given value.
 
-    y = getfield!(value, name, fail_order)
+    y = getfield(value, name, fail_order)
     ok = y === expected
     if ok
         setfield!(value, name, desired, success_order)
     end
-    return y, ok
+    return (; old = y, success = ok)
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
@@ -2529,10 +2556,20 @@ UnionAll
 """
     ::
 
-With the `::`-operator type annotations are attached to expressions and variables in programs.
-See the manual section on [Type Declarations](@ref).
+The `::` operator either asserts that a value has the given type, or declares that
+a local variable or function return always has the given type.
 
-Outside of declarations `::` is used to assert that expressions and variables in programs have a given type.
+Given `expression::T`, `expression` is first evaluated. If the result is of type
+`T`, the value is simply returned. Otherwise, a [`TypeError`](@ref) is thrown.
+
+In local scope, the syntax `local x::T` or `x::T = expression` declares that local variable
+`x` always has type `T`. When a value is assigned to the variable, it will be
+converted to type `T` by calling [`convert`](@ref).
+
+In a method declaration, the syntax `function f(x)::T` causes any value returned by
+the method to be converted to type `T`.
+
+See the manual section on [Type Declarations](@ref).
 
 # Examples
 ```jldoctest
@@ -2541,6 +2578,13 @@ ERROR: TypeError: typeassert: expected AbstractFloat, got a value of type Int64
 
 julia> (1+2)::Int
 3
+
+julia> let
+           local x::Int
+           x = 2.0
+           x
+       end
+2
 ```
 """
 kw"::"
@@ -2687,6 +2731,9 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
+!!! compat "Julia 1.8"
+    `setproperty!` on modules requires at least Julia 1.8.
+
 See also [`setfield!`](@ref Core.setfield!),
 [`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
@@ -2769,6 +2816,13 @@ StridedVecOrMat
     Module
 
 A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+
+    Module(name::Symbol=:anonymous, std_imports=true, default_names=true)
+
+Return a module with the specified name. A `baremodule` corresponds to `Module(:ModuleName, false)`
+
+An empty module containing no names at all can be created with `Module(:ModuleName, false, false)`.
+This module will not import `Base` or `Core` and does not contain a reference to itself.
 """
 Module
 
@@ -2845,5 +2899,40 @@ julia> \"""
 See also [`"`](@ref \")
 """
 kw"\"\"\""
+
+"""
+    donotdelete(args...)
+
+This function prevents dead-code elimination (DCE) of itself and any arguments
+passed to it, but is otherwise the lightest barrier possible. In particular,
+it is not a GC safepoint, does model an observable heap effect, does not expand
+to any code itself and may be re-ordered with respect to other side effects
+(though the total number of executions may not change).
+
+A useful model for this function is that it hashes all memory `reachable` from
+args and escapes this information through some observable side-channel that does
+not otherwise impact program behavior. Of course that's just a model. The
+function does nothing and returns `nothing`.
+
+This is intended for use in benchmarks that want to guarantee that `args` are
+actually computed. (Otherwise DCE may see that the result of the benchmark is
+unused and delete the entire benchmark code).
+
+**Note**: `donotdelete` does not affect constant folding. For example, in
+          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+          the code is semantically equivalent to `donotdelete(2).`
+
+# Examples
+
+function loop()
+    for i = 1:1000
+        # The complier must guarantee that there are 1000 program points (in the correct
+        # order) at which the value of `i` is in a register, but has otherwise
+        # total control over the program.
+        donotdelete(i)
+    end
+end
+"""
+Base.donotdelete
 
 end

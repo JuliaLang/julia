@@ -242,8 +242,9 @@ The former is a single character value of type `Char`, while the latter is a str
 happens to contain only a single character. In Julia these are very different things.
 
 Range indexing makes a copy of the selected part of the original string.
-Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
-for example:
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref).
+More simply, using the [`@views`](@ref) macro on a block of code converts all string slices
+into substrings.  For example:
 
 ```jldoctest
 julia> str = "long string"
@@ -253,6 +254,9 @@ julia> substr = SubString(str, 1, 4)
 "long"
 
 julia> typeof(substr)
+SubString{String}
+
+julia> @views typeof(str[1:4]) # @views converts slices to SubStrings
 SubString{String}
 ```
 
@@ -482,17 +486,17 @@ of the concatenated strings, e.g.:
 julia> a, b = "\xe2\x88", "\x80"
 ("\xe2\x88", "\x80")
 
-julia> c = a*b
+julia> c = string(a, b)
 "∀"
 
 julia> collect.([a, b, c])
-3-element Array{Array{Char,1},1}:
+3-element Vector{Vector{Char}}:
  ['\xe2\x88']
  ['\x80']
  ['∀']
 
 julia> length.([a, b, c])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  1
@@ -687,29 +691,29 @@ You can search for the index of a particular character using the
 [`findfirst`](@ref) and [`findlast`](@ref) functions:
 
 ```jldoctest
-julia> findfirst(isequal('o'), "xylophone")
+julia> findfirst('o', "xylophone")
 4
 
-julia> findlast(isequal('o'), "xylophone")
+julia> findlast('o', "xylophone")
 7
 
-julia> findfirst(isequal('z'), "xylophone")
+julia> findfirst('z', "xylophone")
 ```
 
 You can start the search for a character at a given offset by using
 the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
-julia> findnext(isequal('o'), "xylophone", 1)
+julia> findnext('o', "xylophone", 1)
 4
 
-julia> findnext(isequal('o'), "xylophone", 5)
+julia> findnext('o', "xylophone", 5)
 7
 
-julia> findprev(isequal('o'), "xylophone", 5)
+julia> findprev('o', "xylophone", 5)
 4
 
-julia> findnext(isequal('o'), "xylophone", 8)
+julia> findnext('o', "xylophone", 8)
 ```
 
 You can use the [`occursin`](@ref) function to check if a substring is found within a string:
@@ -767,8 +771,8 @@ Further documentation is given in the [Metaprogramming](@ref meta-non-standard-s
 
 ## [Regular Expressions](@id man-regex-literals)
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
-library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
+Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
+library (a description of the syntax can be found [here](https://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -899,7 +903,7 @@ julia> m.offsets
 ```
 
 It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables. As a convinience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
+to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
 julia> first, second, third = m; first
@@ -939,7 +943,7 @@ julia> replace("a", r"." => s"\g<0>1")
 
 You can modify the behavior of regular expressions by some combination of the flags `i`, `m`,
 `s`, and `x` after the closing double quote mark. These flags have the same meaning as they do
-in Perl, as explained in this excerpt from the [perlre manpage](http://perldoc.perl.org/perlre.html#Modifiers):
+in Perl, as explained in this excerpt from the [perlre manpage](https://perldoc.perl.org/perlre#Modifiers):
 
 ```
 i   Do case-insensitive pattern matching.
@@ -1088,7 +1092,7 @@ julia> x[1]
 0x31
 
 julia> x[1] = 0x32
-ERROR: setindex! not defined for Base.CodeUnits{UInt8, String}
+ERROR: CanonicalIndexError: setindex! not defined for Base.CodeUnits{UInt8, String}
 [...]
 
 julia> Vector{UInt8}(x)

@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
-sizehint!(s::AbstractSet, n) = nothing
+sizehint!(s::AbstractSet, n) = s
 
-copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
+function copy!(dst::AbstractSet, src::AbstractSet)
+    dst === src && return dst
+    union!(empty!(dst), src)
+end
 
 ## set operations (union, intersection, symmetric difference)
 
@@ -11,30 +14,36 @@ copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
     union(s, itrs...)
     ∪(s, itrs...)
 
-Construct the union of sets. Maintain order with arrays.
+Construct an object containing all distinct elements from all of the arguments.
 
-See also: [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
+The first argument controls what kind of container is returned.
+If this is an array, it maintains the order in which elements first appear.
+
+Unicode `∪` can be typed by writing `\\cup` then pressing tab in the Julia REPL, and in many editors.
+This is an infix operator, allowing `s ∪ itr`.
+
+See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
 ```jldoctest
-julia> union([1, 2], [3, 4])
-4-element Vector{Int64}:
+julia> union([1, 2], [3])
+3-element Vector{Int64}:
  1
  2
  3
- 4
 
-julia> union([1, 2], [2, 4])
-3-element Vector{Int64}:
- 1
- 2
- 4
+julia> union([4 2 3 4 4], 1:3, 3.0)
+4-element Vector{Float64}:
+ 4.0
+ 2.0
+ 3.0
+ 1.0
 
-julia> union([4, 2], 1:2)
-3-element Vector{Int64}:
- 4
- 2
- 1
+julia> (0, 0.0) ∪ (-0.0, NaN)
+3-element Vector{Real}:
+   0
+  -0.0
+ NaN
 
 julia> union(Set([1, 2]), 2:3)
 Set{Int64} with 3 elements:
@@ -45,8 +54,6 @@ Set{Int64} with 3 elements:
 """
 function union end
 
-_in(itr) = x -> x in itr
-
 union(s, sets...) = union!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
 union(s::AbstractSet) = copy(s)
 
@@ -55,14 +62,14 @@ const ∪ = union
 """
     union!(s::Union{AbstractSet,AbstractVector}, itrs...)
 
-Construct the union of passed in sets and overwrite `s` with the result.
+Construct the [`union`](@ref) of passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 
 # Examples
 ```jldoctest
-julia> a = Set([1, 3, 4, 5]);
+julia> a = Set([3, 4, 5]);
 
-julia> union!(a, 1:2:8);
+julia> union!(a, 1:2:7);
 
 julia> a
 Set{Int64} with 5 elements:
@@ -104,10 +111,19 @@ end
     intersect(s, itrs...)
     ∩(s, itrs...)
 
-Construct the intersection of sets.
-Maintain order with arrays.
+Construct the set containing those elements which appear in all of the arguments.
 
-See also: [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
+The first argument controls what kind of container is returned.
+If this is an array, it maintains the order in which elements first appear.
+
+Unicode `∩` can be typed by writing `\\cap` then pressing tab in the Julia REPL, and in many editors.
+This is an infix operator, allowing `s ∩ itr`.
+
+See also [`setdiff`](@ref), [`isdisjoint`](@ref), [`issubset`](@ref Base.issubset), [`issetequal`](@ref).
+
+!!! compat "Julia 1.8"
+    As of Julia 1.8 intersect returns a result with the eltype of the
+    type-promoted eltypes of the two inputs
 
 # Examples
 ```jldoctest
@@ -115,19 +131,49 @@ julia> intersect([1, 2, 3], [3, 4, 5])
 1-element Vector{Int64}:
  3
 
-julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
+julia> intersect([1, 4, 4, 5, 6], [6, 4, 6, 7, 8])
 2-element Vector{Int64}:
  4
  6
 
-julia> intersect(Set([1, 2]), BitSet([2, 3]))
-Set{Int64} with 1 element:
-  2
+julia> intersect(1:16, 7:99)
+7:16
+
+julia> (0, 0.0) ∩ (-0.0, 0)
+1-element Vector{Real}:
+ 0
+
+julia> intersect(Set([1, 2]), BitSet([2, 3]), 1.0:10.0)
+Set{Float64} with 1 element:
+  2.0
 ```
 """
-intersect(s::AbstractSet, itr, itrs...) = intersect!(intersect(s, itr), itrs...)
+function intersect(s::AbstractSet, itr, itrs...)
+    # heuristics to try to `intersect` with the shortest Set on the left
+    if length(s)>50 && haslength(itr) && all(haslength, itrs)
+        min_length, min_idx = findmin(length, itrs)
+        if length(itr) > min_length
+            new_itrs = setindex(itrs, itr, min_idx)
+            return intersect(s, itrs[min_idx], new_itrs...)
+        end
+    end
+    T = promote_eltype(s, itr, itrs...)
+    if T == promote_eltype(s, itr)
+        out = intersect(s, itr)
+    else
+        out = union!(emptymutable(s, T), s)
+        intersect!(out, itr)
+    end
+    return intersect!(out, itrs...)
+end
 intersect(s) = union(s)
-intersect(s::AbstractSet, itr) = mapfilter(_in(s), push!, itr, emptymutable(s))
+function intersect(s::AbstractSet, itr)
+    if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
+        return mapfilter(in(itr), push!, s, emptymutable(s, promote_eltype(s, itr)))
+    else
+        return mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
+    end
+end
 
 const ∩ = intersect
 
@@ -143,7 +189,7 @@ function intersect!(s::AbstractSet, itrs...)
     end
     return s
 end
-intersect!(s::AbstractSet, s2::AbstractSet) = filter!(_in(s2), s)
+intersect!(s::AbstractSet, s2::AbstractSet) = filter!(in(s2), s)
 intersect!(s::AbstractSet, itr) =
     intersect!(s, union!(emptymutable(s, eltype(itr)), itr))
 
@@ -276,21 +322,21 @@ issubset, ⊆, ⊇
 
 const FASTIN_SET_THRESHOLD = 70
 
-function issubset(l, r)
-    if haslength(r) && (isa(l, AbstractSet) || !hasfastin(r))
-        rlen = length(r) # conditions above make this length computed only when needed
-        # check l for too many unique elements
-        if isa(l, AbstractSet) && length(l) > rlen
+function issubset(a, b)
+    if haslength(b) && (isa(a, AbstractSet) || !hasfastin(b))
+        blen = length(b) # conditions above make this length computed only when needed
+        # check a for too many unique elements
+        if isa(a, AbstractSet) && length(a) > blen
             return false
         end
-        # when `in` would be too slow and r is big enough, convert it to a Set
+        # when `in` would be too slow and b is big enough, convert it to a Set
         # this threshold was empirically determined (cf. #26198)
-        if !hasfastin(r) && rlen > FASTIN_SET_THRESHOLD
-            return issubset(l, Set(r))
+        if !hasfastin(b) && blen > FASTIN_SET_THRESHOLD
+            return issubset(a, Set(b))
         end
     end
-    for elt in l
-        elt in r || return false
+    for elt in a
+        elt in b || return false
     end
     return true
 end
@@ -308,7 +354,7 @@ hasfastin(::Type) = false
 hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}}) = true
 hasfastin(x) = hasfastin(typeof(x))
 
-⊇(l, r) = r ⊆ l
+⊇(a, b) = b ⊆ a
 
 ## strict subset comparison
 
@@ -333,9 +379,11 @@ false
 """
 ⊊, ⊋
 
-⊊(l::AbstractSet, r) = length(l) < length(r) && l ⊆ r
-⊊(l, r) = Set(l) ⊊ r
-⊋(l, r) = r ⊊ l
+⊊(a::AbstractSet, b::AbstractSet) = length(a) < length(b) && a ⊆ b
+⊊(a::AbstractSet, b) = a ⊊ Set(b)
+⊊(a, b::AbstractSet) = Set(a) ⊊ b
+⊊(a, b) = Set(a) ⊊ Set(b)
+⊋(a, b) = b ⊊ a
 
 function ⊈ end
 function ⊉ end
@@ -358,8 +406,8 @@ false
 """
 ⊈, ⊉
 
-⊈(l, r) = !⊆(l, r)
-⊉(l, r) = r ⊈ l
+⊈(a, b) = !⊆(a, b)
+⊉(a, b) = b ⊈ a
 
 ## set equality comparison
 
@@ -380,56 +428,65 @@ julia> issetequal([1, 2], [2, 1])
 true
 ```
 """
-issetequal(l::AbstractSet, r::AbstractSet) = l == r
-issetequal(l::AbstractSet, r) = issetequal(l, Set(r))
+issetequal(a::AbstractSet, b::AbstractSet) = a == b
+issetequal(a::AbstractSet, b) = issetequal(a, Set(b))
 
-function issetequal(l, r::AbstractSet)
-    if haslength(l)
-        # check r for too many unique elements
-        length(l) < length(r) && return false
+function issetequal(a, b::AbstractSet)
+    if haslength(a)
+        # check b for too many unique elements
+        length(a) < length(b) && return false
     end
-    return issetequal(Set(l), r)
+    return issetequal(Set(a), b)
 end
 
-function issetequal(l, r)
-    haslength(l) && return issetequal(l, Set(r))
-    haslength(r) && return issetequal(r, Set(l))
-    return issetequal(Set(l), Set(r))
+function issetequal(a, b)
+    haslength(a) && return issetequal(a, Set(b))
+    haslength(b) && return issetequal(b, Set(a))
+    return issetequal(Set(a), Set(b))
 end
 
 ## set disjoint comparison
 """
-    isdisjoint(v1, v2) -> Bool
+    isdisjoint(a, b) -> Bool
 
-Return whether the collections `v1` and `v2` are disjoint, i.e. whether
-their intersection is empty.
+Determine whether the collections `a` and `b` are disjoint.
+Equivalent to `isempty(a ∩ b)` but more efficient when possible.
 
-See also: [`issetequal`](@ref), [`intersect`](@ref).
+See also: [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
+
+# Examples
+```jldoctest
+julia> isdisjoint([1, 2], [2, 3, 4])
+false
+
+julia> isdisjoint([3, 1], [2, 4])
+true
+```
 """
-function isdisjoint(l, r)
-    function _isdisjoint(l, r)
-        hasfastin(r) && return !any(in(r), l)
-        hasfastin(l) && return !any(in(l), r)
-        haslength(r) && length(r) < FASTIN_SET_THRESHOLD &&
-            return !any(in(r), l)
-        return !any(in(Set(r)), l)
+function isdisjoint(a, b)
+    function _isdisjoint(a, b)
+        hasfastin(b) && return !any(in(b), a)
+        hasfastin(a) && return !any(in(a), b)
+        haslength(b) && length(b) < FASTIN_SET_THRESHOLD &&
+            return !any(in(b), a)
+        return !any(in(Set(b)), a)
     end
-    if haslength(l) && haslength(r) && length(r) < length(l)
-        return _isdisjoint(r, l)
+    if haslength(a) && haslength(b) && length(b) < length(a)
+        return _isdisjoint(b, a)
     end
-    _isdisjoint(l, r)
+    _isdisjoint(a, b)
 end
 
 ## partial ordering of sets by containment
 
-==(l::AbstractSet, r::AbstractSet) = length(l) == length(r) && l ⊆ r
+==(a::AbstractSet, b::AbstractSet) = length(a) == length(b) && a ⊆ b
 # convenience functions for AbstractSet
 # (if needed, only their synonyms ⊊ and ⊆ must be specialized)
-<( l::AbstractSet, r::AbstractSet) = l ⊊ r
-<=(l::AbstractSet, r::AbstractSet) = l ⊆ r
+<( a::AbstractSet, b::AbstractSet) = a ⊊ b
+<=(a::AbstractSet, b::AbstractSet) = a ⊆ b
 
 ## filtering sets
 

@@ -6,22 +6,10 @@ using Test
 
 function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...;
                         kwargs...)
-    keydict = Dict(:up => "\e[A",
-                   :down => "\e[B",
-                   :enter => "\r")
-    vimdict = Dict(:up => "k",
-                   :down => "j",
-                   :enter => " ")
-    errs = []
-    got = _simulate_input(keydict, deepcopy(menu), keys...; kwargs...)
-    got == expected || push!(errs, :arrows => got)
-    got = _simulate_input(vimdict, menu, keys...; kwargs...)
-    got == expected || push!(errs, :vim => got)
-    isempty(errs) || return errs
-end
+    keydict =  Dict(:up => "\e[A",
+                    :down => "\e[B",
+                    :enter => "\r")
 
-function _simulate_input(keydict, menu::TerminalMenus.AbstractMenu, keys...;
-                         kwargs...)
     for key in keys
         if isa(key, Symbol)
             write(stdin.buffer, keydict[key])
@@ -30,7 +18,7 @@ function _simulate_input(keydict, menu::TerminalMenus.AbstractMenu, keys...;
         end
     end
 
-    request(menu; suppress_output=true, kwargs...)
+    request(menu; suppress_output=true, kwargs...) == expected
 end
 
 include("radio_menu.jl")

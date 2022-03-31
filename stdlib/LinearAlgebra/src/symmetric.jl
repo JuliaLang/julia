@@ -7,6 +7,7 @@ struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
 
     function Symmetric{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
         require_one_based_indexing(data)
+        (uplo != 'U' && uplo != 'L') && throw_uplo()
         new{T,S}(data, uplo)
     end
 end
@@ -88,6 +89,7 @@ struct Hermitian{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
 
     function Hermitian{T,S}(data, uplo) where {T,S<:AbstractMatrix{<:T}}
         require_one_based_indexing(data)
+        (uplo != 'U' && uplo != 'L') && throw_uplo()
         new{T,S}(data, uplo)
     end
 end

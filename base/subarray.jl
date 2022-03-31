@@ -17,22 +17,22 @@ struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     offset1::Int       # for linear indexing and pointer, only valid when L==true
     stride1::Int       # used only for linear indexing
     function SubArray{T,N,P,I,L}(parent, indices, offset1, stride1) where {T,N,P,I,L}
-        @_inline_meta
+        @inline
         check_parent_index_match(parent, indices)
         new(parent, indices, offset1, stride1)
     end
 end
 # Compute the linear indexability of the indices, and combine it with the linear indexing of the parent
 function SubArray(parent::AbstractArray, indices::Tuple)
-    @_inline_meta
+    @inline
     SubArray(IndexStyle(viewindexing(indices), IndexStyle(parent)), parent, ensure_indexable(indices), index_dimsum(indices...))
 end
 function SubArray(::IndexCartesian, parent::P, indices::I, ::NTuple{N,Any}) where {P,I,N}
-    @_inline_meta
+    @inline
     SubArray{eltype(P), N, P, I, false}(parent, indices, 0, 0)
 end
 function SubArray(::IndexLinear, parent::P, indices::I, ::NTuple{N,Any}) where {P,I,N}
-    @_inline_meta
+    @inline
     # Compute the stride and offset
     stride1 = compute_stride1(parent, indices)
     SubArray{eltype(P), N, P, I, true}(parent, indices, compute_offset1(parent, stride1, indices), stride1)
@@ -46,9 +46,9 @@ check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
 # This computes the linear indexing compatibility for a given tuple of indices
 viewindexing(I::Tuple{}) = IndexLinear()
 # Leading scalar indices simply increase the stride
-viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
+viewindexing(I::Tuple{ScalarIndex, Vararg{Any}}) = (@inline; viewindexing(tail(I)))
 # Slices may begin a section which may be followed by any number of Slices
-viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@_inline_meta; viewindexing(tail(I)))
+viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@inline; viewindexing(tail(I)))
 # A UnitRange can follow Slices, but only if all other indices are scalar
 viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
@@ -60,7 +60,7 @@ viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 viewindexing(I::Tuple{AbstractArray, Vararg{Any}}) = IndexCartesian()
 
 # Simple utilities
-size(V::SubArray) = (@_inline_meta; map(length, axes(V)))
+size(V::SubArray) = (@inline; map(length, axes(V)))
 
 similar(V::SubArray, T::Type, dims::Dims) = similar(V.parent, T, dims)
 
@@ -172,7 +172,7 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 ```
 """
 function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
-    @_inline_meta
+    @inline
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
@@ -204,8 +204,14 @@ function view(r1::LinRange, r2::OrdinalRange{<:Integer})
     getindex(r1, r2)
 end
 
+# getindex(r::AbstractRange, ::Colon) returns a copy of the range, and we may do the same for a view
+function view(r1::AbstractRange, c::Colon)
+    @_propagate_inbounds_meta
+    getindex(r1, c)
+end
+
 function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
-    @_inline_meta
+    @inline
     SubArray(A, I)
 end
 # When we take the view of a view, it's often possible to "reindex" the parent
@@ -215,16 +221,16 @@ end
 # So we use _maybe_reindex to figure out if there are any arrays of
 # `CartesianIndex`, and if so, we punt and keep two layers of indirection.
 unsafe_view(V::SubArray, I::Vararg{ViewIndex,N}) where {N} =
-    (@_inline_meta; _maybe_reindex(V, I))
-_maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
+    (@inline; _maybe_reindex(V, I))
+_maybe_reindex(V, I) = (@inline; _maybe_reindex(V, I, I))
 _maybe_reindex(V, I, ::Tuple{AbstractArray{<:AbstractCartesianIndex}, Vararg{Any}}) =
-    (@_inline_meta; SubArray(V, I))
+    (@inline; SubArray(V, I))
 # But allow arrays of CartesianIndex{1}; they behave just like arrays of Ints
 _maybe_reindex(V, I, A::Tuple{AbstractArray{<:AbstractCartesianIndex{1}}, Vararg{Any}}) =
-    (@_inline_meta; _maybe_reindex(V, I, tail(A)))
-_maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@_inline_meta; _maybe_reindex(V, I, tail(A)))
+    (@inline; _maybe_reindex(V, I, tail(A)))
+_maybe_reindex(V, I, A::Tuple{Any, Vararg{Any}}) = (@inline; _maybe_reindex(V, I, tail(A)))
 function _maybe_reindex(V, I, ::Tuple{})
-    @_inline_meta
+    @inline
     @inbounds idxs = to_indices(V.parent, reindex(V.indices, I))
     SubArray(V.parent, idxs)
 end
@@ -271,7 +277,7 @@ end
 # In general, we simply re-index the parent indices by the provided ones
 SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}
 function getindex(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, I...)
     @inbounds r = V.parent[reindex(V.indices, I)...]
     r
@@ -280,7 +286,7 @@ end
 # But SubArrays with fast linear indexing pre-compute a stride and offset
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
 function getindex(V::FastSubArray, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[V.offset1 + V.stride1*i]
     r
@@ -290,7 +296,7 @@ end
 FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
                                       Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
 function getindex(V::FastContiguousSubArray, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[V.offset1 + i]
     r
@@ -298,13 +304,13 @@ end
 # For vector views with linear indexing, we disambiguate to favor the stride/offset
 # computation as that'll generally be faster than (or just as fast as) re-indexing into a range.
 function getindex(V::FastSubArray{<:Any, 1}, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[V.offset1 + V.stride1*i]
     r
 end
 function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[V.offset1 + i]
     r
@@ -312,31 +318,31 @@ end
 
 # Indexed assignment follows the same pattern as `getindex` above
 function setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, I...)
     @inbounds V.parent[reindex(V.indices, I)...] = x
     V
 end
 function setindex!(V::FastSubArray, x, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + V.stride1*i] = x
     V
 end
 function setindex!(V::FastContiguousSubArray, x, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + i] = x
     V
 end
 function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + V.stride1*i] = x
     V
 end
 function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + i] = x
     V
@@ -358,11 +364,11 @@ substrides(strds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
 compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
-    (@_inline_meta; compute_stride1(1, fill_to_length(axes(parent), OneTo(1), Val(N)), I))
+    (@inline; compute_stride1(1, fill_to_length(axes(parent), OneTo(1), Val(N)), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{Vararg{ScalarIndex}}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
-    (@_inline_meta; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
+    (@inline; compute_stride1(s*length(inds[1]), tail(inds), tail(I)))
 compute_stride1(s, inds, I::Tuple{AbstractRange, Vararg{Any}}) = s*step(I[1])
 compute_stride1(s, inds, I::Tuple{Slice, Vararg{Any}}) = s
 compute_stride1(s, inds, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("invalid strided index type $(typeof(I[1]))"))
@@ -385,42 +391,42 @@ end
 # The running sum is `f`; the cumulative stride product is `s`.
 # If the parent is a vector, then we offset the parent's own indices with parameters of I
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{AbstractRange}) =
-    (@_inline_meta; first(I[1]) - stride1*first(axes1(I[1])))
+    (@inline; first(I[1]) - stride1*first(axes1(I[1])))
 # If the result is one-dimensional and it's a Colon, then linear
 # indexing uses the indices along the given dimension.
 # If the result is one-dimensional and it's a range, then linear
 # indexing might be offset if the index itself is offset
 # Otherwise linear indexing always matches the parent.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
-    (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
+    (@inline; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
+    (@inline; compute_linindex(parent, I) - stride1*first(axes(parent, dims[1])))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds::Tuple{AbstractRange}, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
+    (@inline; compute_linindex(parent, I) - stride1*first(axes1(inds[1]))) # potentially index-offsetting case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
-    (@_inline_meta; compute_linindex(parent, I) - stride1)
+    (@inline; compute_linindex(parent, I) - stride1)
 function compute_linindex(parent, I::NTuple{N,Any}) where N
-    @_inline_meta
+    @inline
     IP = fill_to_length(axes(parent), OneTo(1), Val(N))
     compute_linindex(first(LinearIndices(parent)), 1, IP, I)
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{ScalarIndex, Vararg{Any}})
-    @_inline_meta
+    @inline
     Δi = I[1]-first(IP[1])
     compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
-    @_inline_meta
+    @inline
     Δi = first(I[1])-first(IP[1])
     compute_linindex(f + Δi*s, s*length(IP[1]), tail(IP), tail(I))
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
-find_extended_dims(dim, ::ScalarIndex, I...) = (@_inline_meta; find_extended_dims(dim + 1, I...))
-find_extended_dims(dim, i1, I...) = (@_inline_meta; (dim, find_extended_dims(dim + 1, I...)...))
+find_extended_dims(dim, ::ScalarIndex, I...) = (@inline; find_extended_dims(dim + 1, I...))
+find_extended_dims(dim, i1, I...) = (@inline; (dim, find_extended_dims(dim + 1, I...)...))
 find_extended_dims(dim) = ()
-find_extended_inds(::ScalarIndex, I...) = (@_inline_meta; find_extended_inds(I...))
-find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...))
+find_extended_inds(::ScalarIndex, I...) = (@inline; find_extended_inds(I...))
+find_extended_inds(i1, I...) = (@inline; (i1, find_extended_inds(I...)...))
 find_extended_inds() = ()
 
 function unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P}
@@ -442,10 +448,10 @@ end
 # indices are taken from the range/vector
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
-axes(S::SubArray) = (@_inline_meta; _indices_sub(S.indices...))
-_indices_sub(::Real, I...) = (@_inline_meta; _indices_sub(I...))
+axes(S::SubArray) = (@inline; _indices_sub(S.indices...))
+_indices_sub(::Real, I...) = (@inline; _indices_sub(I...))
 _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
-    @_inline_meta
+    @inline
     (axes(i1)..., _indices_sub(I...)...)
 end

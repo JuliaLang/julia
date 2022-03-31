@@ -216,6 +216,8 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)::Rational{T}
 rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
+rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re, kvs...)::Rational{T}, rationalize(T, x.im, kvs...)::Rational{T})
+rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re, kvs...), rationalize(Int, x.im, kvs...))
 
 """
     numerator(x)
@@ -532,4 +534,22 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
     h = hash_integer(pow, h)
     h = hash_integer(num, h)
     return h
+end
+
+# These methods are only needed for performance. Since `first(r)` and `last(r)` have the
+# same denominator (because their difference is an integer), `length(r)` can be calulated
+# without calling `gcd`.
+function length(r::AbstractUnitRange{T}) where T<:Rational
+    @inline
+    f = first(r)
+    l = last(r)
+    return div(l.num - f.num + f.den, f.den)
+end
+function checked_length(r::AbstractUnitRange{T}) where T<:Rational
+    f = first(r)
+    l = last(r)
+    if isempty(r)
+        return f.num - f.num
+    end
+    return div(checked_add(checked_sub(l.num, f.num), f.den), f.den)
 end

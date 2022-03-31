@@ -194,7 +194,7 @@ end
             "Ireland", "Sinead O'Connor", "Éire", "Sinéad O'Connor",
             "Israel", "Yehoram Gaon", "ישראל", "יהורם גאון",
             "Italy", "Fabrizio DeAndre", "Italia", "Fabrizio De André",
-            "Japan", "KUBOTA Toshinobu", "日本", "久保田    利伸",
+            "Japan", "KUBOTA Toshinobu", "日本", "久保田    利伸",
             "Japan", "HAYASHIBARA Megumi", "日本", "林原 めぐみ",
             "Japan", "Mori Ogai", "日本", "森鷗外",
             "Japan", "Tex Texin", "日本", "テクス テクサン",
@@ -321,10 +321,10 @@ end
 # issue #11484: useful error message for invalid readdlm filepath arguments
 @test_throws ArgumentError readdlm(tempdir())
 
-# displaying as text/csv
-let d = TextDisplay(IOBuffer())
-    display(d, "text/csv", [3 1 4])
-    @test String(take!(d.io)) == "3,1,4\n"
+# showing as text/csv
+let d = TextDisplay(PipeBuffer())
+    show(d.io, "text/csv", [3 1 4])
+    @test read(d.io, String) == "3,1,4\n"
 end
 
 @testset "complex" begin

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector
+using Core: CodeInfo, SimpleVector, donotdelete
 
 const Callable = Union{Function,Type}
 
@@ -181,7 +181,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
+If `T` is a [`AbstractFloat`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
@@ -191,11 +191,8 @@ julia> x = 1/3
 julia> convert(Float32, x)
 0.33333334f0
 
-julia> convert(Rational{Int32}, x)
-1//3
-
-julia> convert(Rational{Int64}, x)
-6004799503160661//18014398509481984
+julia> convert(BigFloat, x)
+0.333333333333333314829616256247390992939472198486328125
 ```
 
 If `T` is a collection type and `x` a collection, the result of
@@ -213,9 +210,7 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 """
 function convert end
 
-convert(::Type{Union{}}, x) = throw(MethodError(convert, (Union{}, x)))
-convert(::Type{Any}, x) = x
-convert(::Type{T}, x::T) where {T} = x
+convert(::Type{Union{}}, @nospecialize x) = throw(MethodError(convert, (Union{}, x)))
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
@@ -331,7 +326,7 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-_tuple_error(T::Type, x) = (@_noinline_meta; throw(MethodError(convert, (T, x))))
+_tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
 function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
@@ -340,7 +335,7 @@ function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
     if typeintersect(NTuple{N,Any}, T) === Union{}
         _tuple_error(T, x)
     end
-    cvt1(n) = (@_inline_meta; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
+    cvt1(n) = (@inline; convert(fieldtype(T, n), getfield(x, n, #=boundscheck=#false)))
     return ntuple(cvt1, Val(N))::NTuple{N,Any}
 end
 
@@ -476,6 +471,22 @@ Stacktrace:
 ```
 """
 sizeof(x) = Core.sizeof(x)
+
+"""
+    ifelse(condition::Bool, x, y)
+
+Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
+that it is an ordinary function, so all the arguments are evaluated first. In some cases,
+using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
+provide higher performance in tight loops.
+
+# Examples
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
+"""
+ifelse(condition::Bool, x, y) = Core.ifelse(condition, x, y)
 
 # simple Array{Any} operations needed for bootstrap
 @eval setindex!(A::Array{Any}, @nospecialize(x), i::Int) = arrayset($(Expr(:boundscheck)), A, x, i)
@@ -713,7 +724,7 @@ call obsolete versions of a function `f`.
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    kwargs = Base.merge(NamedTuple(), kwargs)
+    kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end
@@ -755,12 +766,19 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
 end
 
 # TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
 
 """
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
+
+!!! warning
+
+    `isempty(itr)` may consume the next element of a stateful iterator `itr`
+    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
+    Use of `isempty` should therefore be avoided when writing generic
+    code which should support any iterator type.
 
 # Examples
 ```jldoctest

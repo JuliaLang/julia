@@ -490,6 +490,8 @@ end
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
     @test isa(sign(2//3 + 2//3im), ComplexF64)
+    @test sign(pi) === 1.0
+    @test sign(pi) === -sign(-pi)
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
@@ -2414,6 +2416,12 @@ zero(::Type{TestNumber{Inner}}) where {Inner} = TestNumber(zero(Inner))
 big(test_number::TestNumber) = TestNumber(big(test_number.inner))
 @test big(TestNumber{Int}) == TestNumber{BigInt}
 
+# abstract abs2
+Base.:*(x::TestNumber, y::TestNumber) = TestNumber(x.inner*y.inner)
+Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
+Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
+@test abs2(TestNumber(3+4im)) == TestNumber(25)
+
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
         for d in denrange
@@ -2523,6 +2531,17 @@ end
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp]
+        @test isnan(rem(T(1), T(0), mode))
+        @test isnan(rem(T(Inf), T(2), mode))
+        @test isnan(rem(T(1), T(NaN), mode))
+        # FIXME: The broken case erroneously returns -Inf
+        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode == RoundUp)
+    end
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),    0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
@@ -2536,6 +2555,41 @@ end
         @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//T(1), T(-5)//T(1), RoundNearest)
         @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//T(1), T(-5)//T(1), RoundNearest)
     end
+end
+
+@testset "divrem rounded" begin
+    #rounded Floats
+    for T in (Float16, Float32, Float64, BigFloat)
+        @test divrem(T(1.5), T(2), RoundToZero)[2]  == 1.5
+        @test divrem(T(1.5), T(2), RoundNearest)[2] == -0.5
+        @test divrem(T(1.5), T(2), RoundDown)[2]    == 1.5
+        @test divrem(T(1.5), T(2), RoundUp)[2]      == -0.5
+        @test divrem(T(-1.5), T(2), RoundToZero)[2]  == -1.5
+        @test divrem(T(-1.5), T(2), RoundNearest)[2] == 0.5
+        @test divrem(T(-1.5), T(2), RoundDown)[2]    == 0.5
+        @test divrem(T(-1.5), T(2), RoundUp)[2]      == -1.5
+    end
+    #rounded Integers
+    for (a, b) in (
+            (3, 2),
+            (5, 3),
+            (-3, 2),
+            (5, 2),
+            (-5, 2),
+            (-5, 3),
+            (5, -3))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test divrem(a, b, RoundNearest) == (div(a, b, RoundNearest),rem(a, b, RoundNearest))
+        end
+    end
+
+    a = 122322388883338838388383888823233122323
+    b = 343443
+    c = 122322388883338838388383888823233122333
+    @test divrem(a, b) == (div(a,b), rem(a,b))
+    @test divrem(a, c) == (div(a,c), rem(a,c))
+    @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
@@ -2641,6 +2695,10 @@ end
     @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
+    @test !isone(view(rand(5,5), [1,3,4], :))
+    Dv = view(Diagonal([1,1, 1]), [1,2], 1:2)
+    @test isone(Dv)
+    @test (@allocated isone(Dv)) == 0
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
@@ -2760,4 +2818,46 @@ end
     b = MyRealFld(3.0)
     @test_throws MethodError fld(a, b)
     @test_throws MethodError cld(a, b)
+end
+
+@testset "Bool rounding (#25074)" begin
+    @testset "round Bool" begin
+        @test_throws InexactError round(Bool, -4.1)
+        @test_throws InexactError round(Bool, 1.5)
+        @test true == round(Bool, 1.0)
+        @test false == round(Bool, 0.0)
+        @test true == round(Bool, 0.6)
+        @test false == round(Bool, 0.4)
+        @test false == round(Bool, 0.5)
+        @test false == round(Bool, -0.5)
+    end
+
+    @testset "trunc Bool" begin
+        @test_throws InexactError trunc(Bool, -4.1)
+        @test_throws InexactError trunc(Bool, 2.5)
+        @test true == trunc(Bool, 1.0)
+        @test false == trunc(Bool, 0.0)
+        @test false == trunc(Bool, 0.6)
+        @test false == trunc(Bool, 0.4)
+        @test true == trunc(Bool, 1.8)
+        @test false == trunc(Bool, -0.5)
+    end
+
+    @testset "floor Bool" begin
+        @test_throws InexactError floor(Bool, -0.1)
+        @test_throws InexactError floor(Bool, 2.5)
+        @test true == floor(Bool, 1.0)
+        @test false == floor(Bool, 0.0)
+        @test false == floor(Bool, 0.6)
+        @test true == floor(Bool, 1.8)
+    end
+
+    @testset "ceil Bool" begin
+        @test_throws InexactError ceil(Bool, -1.4)
+        @test_throws InexactError ceil(Bool, 1.5)
+        @test true == ceil(Bool, 1.0)
+        @test false == ceil(Bool, 0.0)
+        @test true == ceil(Bool, 0.6)
+        @test false == ceil(Bool, -0.7)
+    end
 end

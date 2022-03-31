@@ -1,11 +1,12 @@
-; RUN: opt -load libjulia-internal%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame),FinalLowerGC' -S %s | FileCheck %s
 
 
 declare {}*** @julia.ptls_states()
 declare {}*** @julia.get_pgcstack()
 declare void @jl_safepoint()
 declare void @one_arg_boxed({} addrspace(10)*)
-declare {} addrspace(10)* @jl_box_int64(i64)
+declare {} addrspace(10)* @ijl_box_int64(i64)
 
 define void @argument_refinement({} addrspace(10)* %a) {
 ; CHECK-LABEL: @argument_refinement
@@ -26,7 +27,7 @@ define void @heap_refinement1(i64 %a) {
 ; CHECK:   %gcframe = alloca {} addrspace(10)*, i32 3
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
-    %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+    %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
     %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
 ; CHECK: store {} addrspace(10)* %aboxed
@@ -43,7 +44,7 @@ define void @heap_refinement2(i64 %a) {
 ; CHECK:   %gcframe = alloca {} addrspace(10)*, i32 3
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
-    %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+    %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
     %casted1 = bitcast {} addrspace(10)* %aboxed to {} addrspace(10)* addrspace(10)*
     %loaded1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %casted1, !tbaa !1
 ; CHECK: store {} addrspace(10)* %loaded1
@@ -211,7 +212,7 @@ declare void @julia.write_barrier({} addrspace(10)*, {} addrspace(10)*) #1
 define {} addrspace(10)* @setfield({} addrspace(10)* %p) {
 ; CHECK-LABEL: @setfield(
 ; CHECK-NOT: %gcframe
-; CHECK: call void @jl_gc_queue_root
+; CHECK: call void @ijl_gc_queue_root
   %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %c = call {} addrspace(10)* @allocate_some_value()

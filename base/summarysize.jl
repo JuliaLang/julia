@@ -140,7 +140,7 @@ function (ss::SummarySize)(obj::Array)
             dsize += length(obj)
         end
         size += dsize
-        if !isempty(obj) && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
+        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end

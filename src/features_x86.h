@@ -33,7 +33,7 @@ JL_FEATURE_DEF(bmi, 32 * 2 + 3, 0)
 // JL_FEATURE_DEF(hle, 32 * 2 + 4, 0) // Not used and gone in LLVM 5.0
 JL_FEATURE_DEF(avx2, 32 * 2 + 5, 0)
 JL_FEATURE_DEF(bmi2, 32 * 2 + 8, 0)
-// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Priviledged instruction
+// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Privileged instruction
 JL_FEATURE_DEF(rtm, 32 * 2 + 11, 0)
 // JL_FEATURE_DEF(mpx, 32 * 2 + 14, 0) // Deprecated in LLVM 10.0
 JL_FEATURE_DEF(avx512f, 32 * 2 + 16, 0)

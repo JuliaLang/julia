@@ -2,8 +2,12 @@
 
 module TestDiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
-using LinearAlgebra: mul!, mul!, rmul!, lmul!, ldiv!, rdiv!, BlasFloat, BlasComplex, SingularException
+using Test, LinearAlgebra, Random
+using LinearAlgebra: BlasFloat, BlasComplex
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
@@ -147,7 +151,6 @@ Random.seed!(1)
                 @test_throws DimensionMismatch ldiv!(D, fill(elty(1), n + 1))
                 @test_throws SingularException ldiv!(Diagonal(zeros(relty, n)), copy(v))
                 b = rand(elty, n, n)
-                b = sparse(b)
                 @test ldiv!(D, copy(b)) ≈ Array(D)\Array(b)
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), copy(b))
                 b = view(rand(elty, n), Vector(1:n))
@@ -157,7 +160,6 @@ Random.seed!(1)
                 @test c ≈ d
                 @test_throws SingularException ldiv!(Diagonal(zeros(elty, n)), b)
                 b = rand(elty, n+1, n+1)
-                b = sparse(b)
                 @test_throws DimensionMismatch ldiv!(D, copy(b))
                 b = view(rand(elty, n+1), Vector(1:n+1))
                 @test_throws DimensionMismatch ldiv!(D, b)
@@ -190,7 +192,7 @@ Random.seed!(1)
         end
 
         if relty <: BlasFloat
-            for b in (rand(elty,n,n), sparse(rand(elty,n,n)), rand(elty,n), sparse(rand(elty,n)))
+            for b in (rand(elty,n,n), rand(elty,n))
                 @test lmul!(copy(D), copy(b)) ≈ Array(D)*Array(b)
                 @test lmul!(transpose(copy(D)), copy(b)) ≈ transpose(Array(D))*Array(b)
                 @test lmul!(adjoint(copy(D)), copy(b)) ≈ Array(D)'*Array(b)
@@ -346,8 +348,12 @@ Random.seed!(1)
 
     @testset "Eigensystem" begin
         eigD = eigen(D)
-        @test Diagonal(eigD.values) ≈ D
+        @test Diagonal(eigD.values) == D
         @test eigD.vectors == Matrix(I, size(D))
+        eigsortD = eigen(D, sortby=LinearAlgebra.eigsortby)
+        @test eigsortD.values !== D.diag
+        @test eigsortD.values == sort(D.diag, by=LinearAlgebra.eigsortby)
+        @test Matrix(eigsortD) == D
     end
 
     @testset "ldiv" begin
@@ -388,8 +394,8 @@ Random.seed!(1)
     @testset "similar" begin
         @test isa(similar(D), Diagonal{elty})
         @test isa(similar(D, Int), Diagonal{Int})
-        @test isa(similar(D, (3,2)), SparseMatrixCSC{elty})
-        @test isa(similar(D, Int, (3,2)), SparseMatrixCSC{Int})
+        @test isa(similar(D, (3,2)), Matrix{elty})
+        @test isa(similar(D, Int, (3,2)), Matrix{Int})
     end
 
     # Issue number 10036
@@ -413,6 +419,22 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "svd/eigen with Diagonal{Furlong}" begin
+        Du = Furlong.(D)
+        @test Du isa Diagonal{<:Furlong{1}}
+        F = svd(Du)
+        U, s, V = F
+        @test map(x -> x.val, Matrix(F)) ≈ map(x -> x.val, Du)
+        @test svdvals(Du) == s
+        @test U isa AbstractMatrix{<:Furlong{0}}
+        @test V isa AbstractMatrix{<:Furlong{0}}
+        @test s isa AbstractVector{<:Furlong{1}}
+        E = eigen(Du)
+        vals, vecs = E
+        @test Matrix(E) == Du
+        @test vals isa AbstractVector{<:Furlong{1}}
+        @test vecs isa AbstractMatrix{<:Furlong{0}}
+    end
 end
 
 @testset "rdiv! (#40887)" begin
@@ -578,6 +600,41 @@ let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
     @test LinearAlgebra.lmul!(adjoint(D1),copy(D2)) == adjoint(D1)*D2
 end
 
+@testset "multiplication of a Diagonal with a Matrix" begin
+    A = collect(reshape(1:8, 4, 2));
+    B = BigFloat.(A);
+    DL = Diagonal(collect(axes(A, 1)));
+    DR = Diagonal(Float16.(collect(axes(A, 2))));
+
+    @test DL * A == collect(DL) * A
+    @test A * DR == A * collect(DR)
+    @test DL * B == collect(DL) * B
+    @test B * DR == B * collect(DR)
+
+    A = reshape([ones(2,2), ones(2,2)*2, ones(2,2)*3, ones(2,2)*4], 2, 2)
+    Ac = collect(A)
+    D = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
+    Dc = collect(D)
+    @test A * D == Ac * Dc
+    @test D * A == Dc * Ac
+    @test D * D == Dc * Dc
+
+    AS = similar(A)
+    mul!(AS, A, D, true, false)
+    @test AS == A * D
+
+    D2 = similar(D)
+    mul!(D2, D, D)
+    @test D2 == D * D
+
+    copyto!(D2, D)
+    lmul!(D, D2)
+    @test D2 == D * D
+    copyto!(D2, D)
+    rmul!(D2, D)
+    @test D2 == D * D
+end
+
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
     D = Diagonal(randn(5))
     Q = qr(randn(5, 5)).Q
@@ -616,13 +673,6 @@ end
 
     @test tr(D) == 10
     @test det(D) == 4
-
-    # sparse matrix block diagonals
-    s = SparseArrays.sparse([1 2; 3 4])
-    D = Diagonal([s, s])
-    @test D[1, 1] == s
-    @test D[1, 2] == zero(s)
-    @test isa(D[2, 1], SparseMatrixCSC)
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -686,12 +736,35 @@ end
     xt = transpose(x)
     A = reshape([[1 2; 3 4], zeros(Int,2,2), zeros(Int, 2, 2), [5 6; 7 8]], 2, 2)
     D = Diagonal(A)
-    @test x'*D == x'*A == copy(x')*D == copy(x')*A
-    @test xt*D == xt*A == copy(xt)*D == copy(xt)*A
+    @test x'*D == x'*A == collect(x')*D == collect(x')*A
+    @test xt*D == xt*A == collect(xt)*D == collect(xt)*A
+    outadjxD = similar(x'*D); outtrxD = similar(xt*D);
+    mul!(outadjxD, x', D)
+    @test outadjxD == x'*D
+    mul!(outtrxD, xt, D)
+    @test outtrxD == xt*D
+
+    D1 = Diagonal([[1 2; 3 4]])
+    @test D1 * x' == D1 * collect(x') == collect(D1) * collect(x')
+    @test D1 * xt == D1 * collect(xt) == collect(D1) * collect(xt)
+    outD1adjx = similar(D1 * x'); outD1trx = similar(D1 * xt);
+    mul!(outadjxD, D1, x')
+    @test outadjxD == D1*x'
+    mul!(outtrxD, D1, xt)
+    @test outtrxD == D1*xt
+
     y = [x, x]
     yt = transpose(y)
     @test y'*D*y == (y'*D)*y == (y'*A)*y
     @test yt*D*y == (yt*D)*y == (yt*A)*y
+    outadjyD = similar(y'*D); outtryD = similar(yt*D);
+    outadjyD2 = similar(collect(y'*D)); outtryD2 = similar(collect(yt*D));
+    mul!(outadjyD, y', D)
+    mul!(outadjyD2, y', D)
+    @test outadjyD == outadjyD2 == y'*D
+    mul!(outtryD, yt, D)
+    mul!(outtryD2, yt, D)
+    @test outtryD == outtryD2 == yt*D
 end
 
 @testset "Multiplication of single element Diagonal (#36746, #40726)" begin
@@ -716,6 +789,63 @@ end
         @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
         @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
+end
+
+@testset "(Sym)Tridiagonal division by Diagonal" begin
+    for K in (5, 1), elty in (Float64, ComplexF32), overlength in (1, 0)
+        S = SymTridiagonal(randn(elty, K), randn(elty, K-overlength))
+        T = Tridiagonal(randn(elty, K-1), randn(elty, K), randn(elty, K-1))
+        D = Diagonal(randn(elty, K))
+        D0 = Diagonal(zeros(elty, K))
+        @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
+        @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
+        @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
+        @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+        @test_throws SingularException D0 \ S
+        @test_throws SingularException D0 \ T
+        @test_throws SingularException S / D0
+        @test_throws SingularException T / D0
+    end
+    # 0-length case
+    S = SymTridiagonal(Float64[], Float64[])
+    T = Tridiagonal(Float64[], Float64[], Float64[])
+    D = Diagonal(Float64[])
+    @test (D \ S)::Tridiagonal{Float64} == T
+    @test (D \ T)::Tridiagonal{Float64} == T
+    @test (S / D)::Tridiagonal{Float64} == T
+    @test (T / D)::Tridiagonal{Float64} == T
+    # matrix eltype case
+    K = 5
+    for elty in (Float64, ComplexF32), overlength in (1, 0)
+        S = SymTridiagonal([rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-overlength])
+        T = Tridiagonal([rand(elty, 2, 2) for _ in 1:K-1], [rand(elty, 2, 2) for _ in 1:K], [rand(elty, 2, 2) for _ in 1:K-1])
+        D = Diagonal(randn(elty, K))
+        SM = fill(zeros(elty, 2, 2), K, K)
+        TM = copy(SM)
+        SM[1,1] = S[1,1]; TM[1,1] = T[1,1]
+        for j in 2:K
+            SM[j,j-1] = S[j,j-1]; SM[j,j] = S[j,j]; SM[j-1,j] = S[j-1,j]
+            TM[j,j-1] = T[j,j-1]; TM[j,j] = T[j,j]; TM[j-1,j] = T[j-1,j]
+        end
+        for (M, Mm) in ((S, SM), (T, TM))
+            DS = D \ M
+            @test DS isa Tridiagonal
+            DM = D \ Mm
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+            DS = M / D
+            @test DS isa Tridiagonal
+            DM = Mm / D
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+        end
+    end
+    # eltype promotion case
+    S = SymTridiagonal(rand(-20:20, K), rand(-20:20, K-1))
+    T = Tridiagonal(rand(-20:20, K-1), rand(-20:20, K), rand(-20:20, K-1))
+    D = Diagonal(rand(1:20, K))
+    @test (D \ S)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(S))
+    @test (D \ T)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(T))
+    @test (S / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(S) / Matrix(D))
+    @test (T / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(T) / Matrix(D))
 end
 
 @testset "eigenvalue sorting" begin
@@ -824,6 +954,81 @@ end
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
     @test \(x, B) == /(B, x)
+end
+
+@testset "promotion" begin
+    for (v1, v2) in (([true], [1]), ([zeros(2,2)], [zeros(Int, 2,2)]))
+        T = promote_type(eltype(v1), eltype(v2))
+        V = promote_type(typeof(v1), typeof(v2))
+        d1 = Diagonal(v1)
+        d2 = Diagonal(v2)
+        v = [d1, d2]
+        @test (@inferred eltype(v)) == Diagonal{T, V}
+    end
+    # test for a type for which promote_type doesn't lead to a concrete eltype
+    struct MyArrayWrapper{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+       a :: A
+    end
+    Base.size(M::MyArrayWrapper) = size(M.a)
+    Base.axes(M::MyArrayWrapper) = axes(M.a)
+    Base.length(M::MyArrayWrapper) = length(M.a)
+    Base.getindex(M::MyArrayWrapper, i::Int...) = M.a[i...]
+    Base.setindex!(M::MyArrayWrapper, v, i::Int...) = M.a[i...] = v
+    d1 = Diagonal(MyArrayWrapper(1:3))
+    d2 = Diagonal(MyArrayWrapper(1.0:3.0))
+    c = [d1, d2]
+    @test c[1] == d1
+    @test c[2] == d2
+end
+
+@testset "zero and one" begin
+    D1 = Diagonal(rand(3))
+    @test D1 + zero(D1) == D1
+    @test D1 * one(D1) == D1
+    @test D1 * oneunit(D1) == D1
+    @test oneunit(D1) isa typeof(D1)
+    D2 = Diagonal([collect(reshape(1:4, 2, 2)), collect(reshape(5:8, 2, 2))])
+    @test D2 + zero(D2) == D2
+    @test D2 * one(D2) == D2
+    @test D2 * oneunit(D2) == D2
+    @test oneunit(D2) isa typeof(D2)
+    D3 = Diagonal([D2, D2]);
+    @test D3 + zero(D3) == D3
+    @test D3 * one(D3) == D3
+    @test D3 * oneunit(D3) == D3
+    @test oneunit(D3) isa typeof(D3)
+end
+
+@testset "AbstractTriangular" for (Tri, UTri) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+    A = randn(4, 4)
+    TriA = Tri(A)
+    UTriA = UTri(A)
+    D = Diagonal(1.0:4.0)
+    DM = Matrix(D)
+    DMF = factorize(DM)
+    outTri = similar(TriA)
+    out = similar(A)
+    # 2 args
+    for fun in (*, rmul!, rdiv!, /)
+        @test fun(copy(TriA), D)::Tri == fun(Matrix(TriA), D)
+        @test fun(copy(UTriA), D)::Tri == fun(Matrix(UTriA), D)
+    end
+    for fun in (*, lmul!, ldiv!, \)
+        @test fun(D, copy(TriA))::Tri == fun(D, Matrix(TriA))
+        @test fun(D, copy(UTriA))::Tri == fun(D, Matrix(UTriA))
+    end
+    # 3 args
+    @test outTri === ldiv!(outTri, D, TriA)::Tri == ldiv!(out, D, Matrix(TriA))
+    @test outTri === ldiv!(outTri, D, UTriA)::Tri == ldiv!(out, D, Matrix(UTriA))
+    @test outTri === mul!(outTri, D, TriA)::Tri == mul!(out, D, Matrix(TriA))
+    @test outTri === mul!(outTri, D, UTriA)::Tri == mul!(out, D, Matrix(UTriA))
+    @test outTri === mul!(outTri, TriA, D)::Tri == mul!(out, Matrix(TriA), D)
+    @test outTri === mul!(outTri, UTriA, D)::Tri == mul!(out, Matrix(UTriA), D)
+    # 5 args
+    @test outTri === mul!(outTri, D, TriA, 2, 1)::Tri == mul!(out, D, Matrix(TriA), 2, 1)
+    @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
+    @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
+    @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
 end
 
 end # module TestDiagonal

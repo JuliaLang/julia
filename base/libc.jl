@@ -400,40 +400,40 @@ rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
 
 Interface to the C `srand(seed)` function.
 """
-srand(seed=floor(Int, time()) % Cuint) = ccall(:srand, Cvoid, (Cuint,), seed)
+srand(seed=Base._make_uint_seed()) = ccall(:srand, Cvoid, (Cuint,), seed)
 
 struct Cpasswd
    username::Cstring
-   uid::Clong
-   gid::Clong
+   uid::Culong
+   gid::Culong
    shell::Cstring
    homedir::Cstring
    gecos::Cstring
-   Cpasswd() = new(C_NULL, -1, -1, C_NULL, C_NULL, C_NULL)
+   Cpasswd() = new(C_NULL, typemax(Culong), typemax(Culong), C_NULL, C_NULL, C_NULL)
 end
 mutable struct Cgroup
-    groupname::Cstring     # group name
-    gid::Clong        # group ID
-    mem::Ptr{Cstring} # group members
-    Cgroup() = new(C_NULL, -1, C_NULL)
+    groupname::Cstring # group name
+    gid::Culong        # group ID
+    mem::Ptr{Cstring}  # group members
+    Cgroup() = new(C_NULL, typemax(Culong), C_NULL)
 end
 struct Passwd
     username::String
-    uid::Int
-    gid::Int
+    uid::UInt
+    gid::UInt
     shell::String
     homedir::String
     gecos::String
 end
 struct Group
     groupname::String
-    gid::Int
+    gid::UInt
     mem::Vector{String}
 end
 
 function getpwuid(uid::Unsigned, throw_error::Bool=true)
     ref_pd = Ref(Cpasswd())
-    ret = ccall(:jl_os_get_passwd, Cint, (Ref{Cpasswd}, UInt), ref_pd, uid)
+    ret = ccall(:uv_os_get_passwd2, Cint, (Ref{Cpasswd}, Culong), ref_pd, uid)
     if ret != 0
         throw_error && Base.uv_error("getpwuid", ret)
         return
@@ -452,7 +452,7 @@ function getpwuid(uid::Unsigned, throw_error::Bool=true)
 end
 function getgrgid(gid::Unsigned, throw_error::Bool=true)
     ref_gp = Ref(Cgroup())
-    ret = ccall(:jl_os_get_group, Cint, (Ref{Cgroup}, UInt), ref_gp, gid)
+    ret = ccall(:uv_os_get_group, Cint, (Ref{Cgroup}, Culong), ref_gp, gid)
     if ret != 0
         throw_error && Base.uv_error("getgrgid", ret)
         return
@@ -471,9 +471,12 @@ function getgrgid(gid::Unsigned, throw_error::Bool=true)
          gp.gid,
          members,
     )
-    ccall(:jl_os_free_group, Cvoid, (Ref{Cgroup},), ref_gp)
+    ccall(:uv_os_free_group, Cvoid, (Ref{Cgroup},), ref_gp)
     return gp
 end
+
+getuid() = ccall(:jl_getuid, Culong, ())
+geteuid() = ccall(:jl_geteuid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")

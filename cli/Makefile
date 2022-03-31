@@ -65,7 +65,6 @@ $(DIRS):
 	@mkdir -p $@
 
 ifeq ($(OS),WINNT)
-ifneq ($(USEMSVC), 1)
 $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
@@ -74,7 +73,6 @@ $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERS
 	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
 EXE_OBJS += $(BUILDDIR)/julia_res.o
 EXE_DOBJS += $(BUILDDIR)/julia_res.o
-endif
 endif
 
 # Embed an Info.plist in the julia executable
