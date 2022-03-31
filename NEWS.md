@@ -92,7 +92,7 @@ Standard library changes
 
 #### Unicode
 
-* `graphemes(s, m, n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
+* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
 
 #### Mmap
 
