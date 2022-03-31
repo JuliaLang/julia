@@ -79,19 +79,25 @@ function Effects(e::Effects = EFFECTS_UNKNOWN′;
         inbounds_taints_consistency)
 end
 
+is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
+is_effect_free(effects::Effects)  = effects.effect_free === ALWAYS_TRUE
+is_nothrow(effects::Effects)      = effects.nothrow === ALWAYS_TRUE
+is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
+is_nonoverlayed(effects::Effects) = effects.nonoverlayed
+
 is_total_or_error(effects::Effects) =
-    effects.consistent === ALWAYS_TRUE &&
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE
+    is_consistent(effects) &&
+    is_effect_free(effects) &&
+    is_terminates(effects)
 
 is_total(effects::Effects) =
     is_total_or_error(effects) &&
-    effects.nothrow === ALWAYS_TRUE
+    is_nothrow(effects)
 
 is_removable_if_unused(effects::Effects) =
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE &&
-    effects.nothrow === ALWAYS_TRUE
+    is_effect_free(effects) &&
+    is_terminates(effects) &&
+    is_nothrow(effects)
 
 function encode_effects(e::Effects)
     return (e.consistent.state << 0) |
