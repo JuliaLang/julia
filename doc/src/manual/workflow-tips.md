@@ -65,7 +65,7 @@ line. A common pattern includes the following elements:
 ## Browser-based workflow
 
 There are a few ways to interact with Julia in a browser:
-- Using Pluto notebooks with [Pluto.jl](https://github.com/fonsp/Pluto.jl)
+- Using Pluto notebooks through [Pluto.jl](https://github.com/fonsp/Pluto.jl)
 - Using Jupyter notebooks through [IJulia.jl](https://github.com/JuliaLang/IJulia.jl)
 
 ## Revise-based workflows
