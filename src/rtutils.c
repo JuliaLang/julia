@@ -628,21 +628,27 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
     return (jl_value_t*)dt;
 }
 
+static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv)
+{
+    jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
+    if (globname && dv->name->module && jl_binding_resolved_p(dv->name->module, globname)) {
+        jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
+        // The `||` makes this function work for both function instances and function types.
+        if (b && b->value && (b->value == v || jl_typeof(b->value) == v)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int is_globfunction(jl_value_t *v, jl_datatype_t *dv, jl_sym_t **globname_out)
 {
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     *globname_out = globname;
-    int globfunc = 0;
-    if (globname && !strchr(jl_symbol_name(globname), '#') &&
-        !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
-        jl_binding_resolved_p(dv->name->module, globname)) {
-        jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
-        // The `||` makes this function work for both function instances and function types.
-        if (b && b->value && (b->value == v || jl_typeof(b->value) == v)) {
-            globfunc = 1;
-        }
+    if (globname && !strchr(jl_symbol_name(globname), '#') && !strchr(jl_symbol_name(globname), '@')) {
+        return 1;
     }
-    return globfunc;
+    return 0;
 }
 
 static size_t jl_static_show_x_sym_escaped(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPOINT
@@ -773,7 +779,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         // `Base.Set{Int}`, and function types are printed as e.g. `typeof(Main.f)`
         jl_datatype_t *dv = (jl_datatype_t*)v;
         jl_sym_t *globname;
-        int globfunc = is_globfunction(v, dv, &globname);
+        int globfunc = is_globname_binding(v, dv) && is_globfunction(v, dv, &globname);
         jl_sym_t *sym = globfunc ? globname : dv->name->name;
         char *sn = jl_symbol_name(sym);
         size_t quote = 0;
@@ -1065,20 +1071,18 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_x(out, *(jl_value_t**)v, depth);
         n += jl_printf(out, ")");
     }
-    else if (jl_static_is_function_(vt)) {
+    else if (jl_static_is_function_(vt) && is_globname_binding(v, (jl_datatype_t*)vt)) {
         // v is function instance (an instance of a Function type).
         jl_datatype_t *dv = (jl_datatype_t*)vt;
-        jl_sym_t *sym = dv->name->mt->name;
-        char *sn = jl_symbol_name(sym);
-
-        jl_sym_t *globname;
-        int globfunc = is_globfunction(v, dv, &globname);
+        jl_sym_t *sym;
+        int globfunc = is_globfunction(v, dv, &sym);
         int quote = 0;
         if (jl_core_module && (dv->name->module != jl_core_module || !jl_module_exports_p(jl_core_module, sym))) {
             n += jl_static_show_x(out, (jl_value_t*)dv->name->module, depth);
             n += jl_printf(out, ".");
 
             size_t i = 0;
+            char *sn = jl_symbol_name(sym);
             if (globfunc && !jl_id_start_char(u8_nextchar(sn, &i))) {
                 n += jl_printf(out, ":(");
                 quote = 1;

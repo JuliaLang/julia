@@ -43,7 +43,7 @@ end
 
 An abstract type for IO streams handled by libuv.
 
-If`stream isa LibuvStream`, it must obey the following interface:
+If `stream isa LibuvStream`, it must obey the following interface:
 
 - `stream.handle`, if present, must be a `Ptr{Cvoid}`
 - `stream.status`, if present, must be an `Int`
