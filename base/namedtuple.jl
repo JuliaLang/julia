@@ -316,8 +316,8 @@ end
 keys(nt::NamedTuple{names}) where {names} = names
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
-get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
-get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
+get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
+get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key) ? getfield(nt, key) : f()
 tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
 

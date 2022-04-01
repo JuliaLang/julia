@@ -13,7 +13,7 @@ The functions should take arguments, instead of operating directly on global var
 
 ## Avoid untyped global variables
 
-An untyped global variable might have its value, and therefore possibly its type, changed at any point. This makes
+The value of an untyped global variable might change at any point, possibly leading to a change of its type. This makes
 it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables,
 i.e. type aliases on the global level. Variables should be local, or passed as arguments to functions, whenever possible.
 

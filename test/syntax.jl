@@ -1452,6 +1452,14 @@ invalid assignment location "function (s, o...)
 end\""""
 end
 
+let ex = Meta.lower(@__MODULE__, :(function g end = 1))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function g
+end\""""
+end
+
+
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")
@@ -1909,7 +1917,12 @@ f31404(a, b; kws...) = (a, b, values(kws))
 # issue #28992
 macro id28992(x) x end
 @test @id28992(1 .+ 2) == 3
-@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
+@test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
+let m = @__MODULE__
+    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\"")
+    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\"")
+end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
@@ -2297,6 +2310,9 @@ h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
+# issue #44343
+f44343(;kw...) = NamedTuple(kw)
+@test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
     # Test these evals shouldnt segfault
@@ -2514,6 +2530,7 @@ end
 end
 
 module Mod2
+import ..Mod.x as x_from_mod
 const y = 2
 end
 
@@ -2554,6 +2571,11 @@ import .Mod.@mac as @m
 @test_throws ErrorException eval(:(import .Mod.func as @notmacro))
 @test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
 @test_throws ErrorException eval(:(using .Mod: func as @notmacro))
+
+import .Mod2.x_from_mod
+
+@test @isdefined(x_from_mod)
+@test x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
@@ -2972,15 +2994,15 @@ end
 end
 
 @testset "slurping into function def" begin
-    x, f()... = [1, 2, 3]
+    x, f1()... = [1, 2, 3]
     @test x == 1
-    @test f() == [2, 3]
+    @test f1() == [2, 3]
     # test that call to `Base.rest` is outside the definition of `f`
-    @test f() === f()
+    @test f1() === f1()
 
-    x, f()... = 1, 2, 3
+    x, f2()... = 1, 2, 3
     @test x == 1
-    @test f() == (2, 3)
+    @test f2() == (2, 3)
 end
 
 @testset "long function bodies" begin
@@ -3259,3 +3281,7 @@ end
     @test m.Foo.bar === 1
     @test Core.get_binding_type(m.Foo, :bar) == Any
 end
+
+# issue 44723
+demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
+@test demo44723()() == 1

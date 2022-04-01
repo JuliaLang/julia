@@ -257,6 +257,8 @@ Vector `kv.second` will be placed on the `kv.first` diagonal.
 By default the matrix is square and its size is inferred
 from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
 can be specified by passing `m,n` as the first arguments.
+For repeated diagonal indices `kv.first` the values in the corresponding
+vectors `kv.second` will be added.
 
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
@@ -276,6 +278,13 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  1  0  0
  4  0  2  0
  0  5  0  3
+ 0  0  0  0
+
+julia> diagm(1 => [1,2,3], 1 => [1,2,3])
+4×4 Matrix{Int64}:
+ 0  2  0  0
+ 0  0  4  0
+ 0  0  0  6
  0  0  0  0
 ```
 """
@@ -491,7 +500,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
-        retmat = copy_oftype(A, TT)
+        retmat = copymutable_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end

@@ -16,7 +16,9 @@ export
     FileMonitor,
     FolderMonitor,
     PollingFileWatcher,
-    FDWatcher
+    FDWatcher,
+    # pidfile:
+    mkpidlock
 
 import Base: @handle_as, wait, close, eventloop, notify_error, IOError,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close, uv_error, _UVError,
@@ -861,5 +863,8 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
         @isdefined(timer) && close(timer)
     end
 end
+
+include("pidfile.jl")
+import .Pidfile: mkpidlock
 
 end

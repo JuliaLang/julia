@@ -79,7 +79,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    153
+#define NUM_TAGS    155
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -164,13 +164,13 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_int64_type);
         INSERT_TAG(jl_bool_type);
         INSERT_TAG(jl_uint8_type);
+        INSERT_TAG(jl_uint16_type);
         INSERT_TAG(jl_uint32_type);
         INSERT_TAG(jl_uint64_type);
         INSERT_TAG(jl_char_type);
         INSERT_TAG(jl_weakref_type);
         INSERT_TAG(jl_int8_type);
         INSERT_TAG(jl_int16_type);
-        INSERT_TAG(jl_uint16_type);
         INSERT_TAG(jl_float16_type);
         INSERT_TAG(jl_float32_type);
         INSERT_TAG(jl_float64_type);
@@ -252,6 +252,9 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_ifelse);
         INSERT_TAG(jl_builtin__typebody);
         INSERT_TAG(jl_builtin_donotdelete);
+        INSERT_TAG(jl_builtin_getglobal);
+        INSERT_TAG(jl_builtin_setglobal);
+        // n.b. must update NUM_TAGS when you add something here
 
         // All optional tags must be placed at the end, so that we
         // don't accidentally have a `NULL` in the middle
@@ -310,6 +313,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete,
+    &jl_f_getglobal, &jl_f_setglobal,
     NULL };
 
 typedef struct {

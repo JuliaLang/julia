@@ -93,8 +93,6 @@ struct AllocOpt : public JuliaPassContext {
     Function *lifetime_start;
     Function *lifetime_end;
 
-    Type *T_int64;
-
     bool doInitialization(Module &m);
     bool runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT);
 };
@@ -519,8 +517,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
         assert(res == Intrinsic::MatchIntrinsicTypes_Match);
         (void)res;
-        bool matchvararg = Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
-        assert(!matchvararg);
+        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(matchvararg);
         (void)matchvararg;
     }
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
@@ -555,8 +553,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
     AllocaInst *buff;
     Instruction *ptr;
     if (sz == 0) {
-        buff = prolog_builder.CreateAlloca(pass.T_int8, ConstantInt::get(pass.T_int64, 0));
-        ptr = buff;
+        ptr = buff = prolog_builder.CreateAlloca(Type::getInt8Ty(prolog_builder.getContext()), ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), 0));
     }
     else if (has_ref) {
         // Allocate with the correct type so that the GC frame lowering pass will
@@ -565,7 +562,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         // the alloca isn't optimized out.
         buff = prolog_builder.CreateAlloca(pass.T_prjlvalue);
         buff->setAlignment(Align(align));
-        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
+        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
     }
     else {
         Type *buffty;
@@ -575,10 +572,10 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
         buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(Align(align));
-        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, pass.T_pint8));
+        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
     }
-    insertLifetime(ptr, ConstantInt::get(pass.T_int64, sz), orig_inst);
-    auto new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, pass.T_pjlvalue));
+    insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
+    auto new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext())));
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -643,7 +640,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_func == callee ||
+                pass.write_barrier_binding_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -747,7 +745,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_func == callee ||
+                pass.write_barrier_binding_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -838,8 +837,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
-        insertLifetime(prolog_builder.CreateBitCast(slot.slot, pass.T_pint8),
-                       ConstantInt::get(pass.T_int64, field.size), orig_inst);
+        insertLifetime(prolog_builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(prolog_builder.getContext())),
+                       ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
         slots.push_back(std::move(slot));
     }
     const auto nslots = slots.size();
@@ -895,8 +894,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             }
         }
         else {
-            addr = builder.CreateBitCast(slot.slot, pass.T_pint8);
-            addr = builder.CreateConstInBoundsGEP1_32(pass.T_int8, addr, offset);
+            addr = builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(builder.getContext()));
+            addr = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), addr, offset);
             addr = builder.CreateBitCast(addr, elty->getPointerTo());
         }
         return addr;
@@ -946,13 +945,14 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             StoreInst *newstore;
             if (slot.isref) {
                 assert(slot.offset == offset);
+                auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
                 if (!isa<PointerType>(store_ty)) {
-                    store_val = builder.CreateBitCast(store_val, pass.T_size);
-                    store_val = builder.CreateIntToPtr(store_val, pass.T_pjlvalue);
-                    store_ty = pass.T_pjlvalue;
+                    store_val = builder.CreateBitCast(store_val, getSizeTy(builder.getContext()));
+                    store_val = builder.CreateIntToPtr(store_val, T_pjlvalue);
+                    store_ty = T_pjlvalue;
                 }
                 else {
-                    store_ty = PointerType::getWithSamePointeeType(pass.T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
+                    store_ty = PointerType::getWithSamePointeeType(T_pjlvalue, cast<PointerType>(store_ty)->getAddressSpace());
                     store_val = builder.CreateBitCast(store_val, store_ty);
                 }
                 if (cast<PointerType>(store_ty)->getAddressSpace() != AddressSpace::Tracked)
@@ -1010,17 +1010,17 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                                 else {
                                     uint64_t intval;
                                     memset(&intval, val, 8);
-                                    Constant *val = ConstantInt::get(pass.T_size, intval);
-                                    val = ConstantExpr::getIntToPtr(val, pass.T_pjlvalue);
+                                    Constant *val = ConstantInt::get(getSizeTy(builder.getContext()), intval);
+                                    val = ConstantExpr::getIntToPtr(val, JuliaType::get_pjlvalue_ty(builder.getContext()));
                                     ptr = ConstantExpr::getAddrSpaceCast(val, pass.T_prjlvalue);
                                 }
                                 StoreInst *store = builder.CreateAlignedStore(ptr, slot.slot, Align(sizeof(void*)));
                                 store->setOrdering(AtomicOrdering::NotAtomic);
                                 continue;
                             }
-                            auto ptr8 = builder.CreateBitCast(slot.slot, pass.T_pint8);
+                            auto ptr8 = builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(builder.getContext()));
                             if (offset > slot.offset)
-                                ptr8 = builder.CreateConstInBoundsGEP1_32(pass.T_int8, ptr8,
+                                ptr8 = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptr8,
                                                                           offset - slot.offset);
                             auto sub_size = std::min(slot.offset + slot.size, offset + size) -
                                 std::max(offset, slot.offset);
@@ -1039,7 +1039,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_func == callee ||
+                pass.write_barrier_binding_func == callee) {
                 call->eraseFromParent();
                 return;
             }
@@ -1138,10 +1139,8 @@ bool AllocOpt::doInitialization(Module &M)
 
     DL = &M.getDataLayout();
 
-    T_int64 = Type::getInt64Ty(getLLVMContext());
-
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
+    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { Type::getInt8PtrTy(M.getContext()) });
+    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { Type::getInt8PtrTy(M.getContext()) });
 
     return true;
 }

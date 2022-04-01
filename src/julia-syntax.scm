@@ -441,6 +441,11 @@
          (block
           ,(scopenest (cdr names) (cdr vals) expr)))))
 
+(define (make-assignments names vals expr)
+  `(block
+    ,@(map make-assignment names vals)
+    ,expr))
+
 (define (keywords-method-def-expr name sparams argl body rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)))))
@@ -487,6 +492,15 @@
                                              (lambda (x) (eq? x v))
                                              vals))
                                 keynames))
+         ;; if keyword args don't depend on each other and the default
+         ;; values don't have embedded assignments (ick) then we can use
+         ;; ssavalues instead of slots in the sorter method.
+         (ssa-keyvars? (and (not ordered-defaults)
+                            (not (contains assignment? vals))))
+         (keyvars (if ssa-keyvars?
+                      (map (lambda (x) (make-ssavalue)) keynames)
+                      keynames))
+         (tempslot (gensy))
          ;; list of function's initial line number and meta nodes (empty if none)
          (prologue (extract-method-prologue body))
          ;; body statements
@@ -554,11 +568,16 @@
                      `(meta ,(cadr m) ,@(filter (lambda (v) (not (memq v keynames)))
                                                 (cddr m))))
                    (filter nospecialize-meta? prologue))
-            ,(scopenest
-              keynames
+            ;; If not using slots for the keyword argument values, still declare them
+            ;; for reflection purposes.
+            ,@(if ssa-keyvars?
+                  (map (lambda (v) `(local ,v)) (reverse keynames))
+                  '())
+            ,((if ssa-keyvars? make-assignments scopenest)
+              keyvars
               (map (lambda (v dflt)
                      (let* ((k     (decl-var v))
-                            (rval0 `(call (top getindex) ,kw (inert ,k)))
+                            (rval0 `(call (core getfield) ,kw (inert ,k)))
                             ;; note: if the "declared" type of a KW arg includes something
                             ;; from keyword-sparams then don't assert it here, since those
                             ;; static parameters don't have values yet. instead, the type
@@ -580,9 +599,10 @@
                                                                ,temp)))
                                                 ,temp))
                                       rval0)))
-                       `(if (call (top haskey) ,kw (quote ,k))
-                            ,rval
-                            ,dflt)))
+                       `(block (if (call (core isdefined) ,kw (quote ,k))
+                                   (= ,tempslot ,rval)
+                                   (= ,tempslot ,dflt))
+                               ,tempslot)))
                    vars vals)
               `(block
                 (= ,rkw (call (top pairs)
@@ -596,7 +616,7 @@
                             (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
                       '())
                 (return (call ,mangled  ;; finally, call the core function
-                              ,@keynames
+                              ,@keyvars
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
                               ,@splatted-vararg))))))
@@ -1540,7 +1560,7 @@
 ;; for example a[f(x)] => (temp=f(x); a[temp])
 ;; returns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
-(define (remove-argument-side-effects e (tup #f))
+(define (remove-argument-side-effects e)
   (if (not (pair? e))
       (cons e '())
       (let ((a '()))
@@ -1548,14 +1568,8 @@
           (cond ((effect-free? x)  x)
                 ((or (eq? (car x) '...) (eq? (car x) '&))
                  `(,(car x) ,(arg-to-temp (cadr x))))
-                ((or (eq? (car x) 'kw) (and tup (eq? (car x) '=)))
+                ((eq? (car x) 'kw)
                  `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
-                ((eq? (car x) 'parameters)
-                 `(parameters ,@(map arg-to-temp (cdr x))))
-                ((eq? (car x) 'tuple)
-                 (let ((tmp (remove-argument-side-effects x #t)))
-                   (set! a (revappend (cdr tmp) a))
-                   (car tmp)))
                 (else
                  (let ((g (make-ssavalue)))
                    (begin (set! a (cons `(= ,g ,x) a))
@@ -3862,7 +3876,7 @@ f(x) = yt(x)
                                            v)))
                                    cvs)))
                `(new_opaque_closure
-                 ,(cadr e) (call (core apply_type) Union) (core Any)
+                 ,(cadr e) (call (core apply_type) (core Union)) (core Any)
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
                  ,@var-exprs))))
           ((method)
@@ -4105,7 +4119,7 @@ f(x) = yt(x)
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals))))))))
 
-(define (closure-convert e) (cl-convert e #f #f #f #f #f #f #f))
+(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
 ;; pass 5: convert to linear IR
 
@@ -4205,17 +4219,21 @@ f(x) = yt(x)
                                      (loop (cdr s))))))
             `(pop_exception ,restore-token))))
     (define (emit-return x)
-      (define (actually-return x)
-        (let* ((x   (if rett
-                        (compile (convert-for-type-decl x rett) '() #t #f)
-                        x))
-               (tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
+      (define (emit- x)
+        (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
                         #f
                         (make-ssavalue))))
-          (if tmp (emit `(= ,tmp ,x)))
+          (if tmp
+              (begin (emit `(= ,tmp ,x)) tmp)
+              x)))
+      (define (actually-return x)
+        (let* ((x (if rett
+                      (compile (convert-for-type-decl (emit- x) rett) '() #t #f)
+                      x))
+               (x (emit- x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
             (if pexc (emit pexc)))
-          (emit `(return ,(or tmp x)))))
+          (emit `(return ,x))))
       (if x
           (if (> handler-level 0)
               (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)

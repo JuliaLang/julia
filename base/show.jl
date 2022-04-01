@@ -727,11 +727,11 @@ function show_typealias(io::IO, @nospecialize(x::Type))
 end
 
 function make_typealiases(@nospecialize(x::Type))
-    Any === x && return Core.svec(), Union{}
-    x <: Tuple && return Core.svec(), Union{}
+    aliases = SimpleVector[]
+    Any === x && return aliases, Union{}
+    x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
     Core in mods && push!(mods, Base)
-    aliases = SimpleVector[]
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -783,23 +783,24 @@ function make_typealiases(@nospecialize(x::Type))
         end
     end
     if isempty(aliases)
-        return Core.svec(), Union{}
+        return aliases, Union{}
     end
-    sort!(aliases, by = x -> x[4], rev = true) # heuristic sort by "best" environment
+    sort!(aliases, by = x -> x[4]::Tuple{Int,Int}, rev = true) # heuristic sort by "best" environment
     let applied = Union{}
         applied1 = Union{}
         keep = SimpleVector[]
         prev = (0, 0)
         for alias in aliases
-            if alias[4][1] < 2
+            alias4 = alias[4]::Tuple{Int,Int}
+            if alias4[1] < 2
                 if !(alias[3] <: applied)
                     applied1 = Union{applied1, alias[3]}
                     push!(keep, alias)
                 end
-            elseif alias[4] == prev || !(alias[3] <: applied)
+            elseif alias4 == prev || !(alias[3] <: applied)
                 applied = applied1 = Union{applied1, alias[3]}
                 push!(keep, alias)
-                prev = alias[4]
+                prev = alias4
             end
         end
         return keep, applied1
@@ -825,16 +826,17 @@ function show_unionaliases(io::IO, x::Union)
     end
     if first && !tvar && length(aliases) == 1
         alias = aliases[1]
-        wheres = make_wheres(io, alias[2], x)
-        show_typealias(io, alias[1], x, alias[2], wheres)
+        env = alias[2]::SimpleVector
+        wheres = make_wheres(io, env, x)
+        show_typealias(io, alias[1], x, env, wheres)
         show_wheres(io, wheres)
     else
         for alias in aliases
             print(io, first ? "Union{" : ", ")
             first = false
-            env = alias[2]
-            wheres = make_wheres(io, alias[2], x)
-            show_typealias(io, alias[1], x, alias[2], wheres)
+            env = alias[2]::SimpleVector
+            wheres = make_wheres(io, env, x)
+            show_typealias(io, alias[1], x, env, wheres)
             show_wheres(io, wheres)
         end
         if tvar
@@ -879,7 +881,7 @@ end
 show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
 function _show_type(io::IO, @nospecialize(x::Type))
     if print_without_params(x)
-        show_type_name(io, unwrap_unionall(x).name)
+        show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true) && show_typealias(io, x)
         return
@@ -1006,7 +1008,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         end
     else
         show_type_name(io, x.name)
-        show_typeparams(io, parameters, unwrap_unionall(x.name.wrapper).parameters, wheres)
+        show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
     end
 end
 
@@ -1919,7 +1921,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             na = length(func_args)
             if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " $func "
+                sep = func === :(:) ? "$func" : " " * convert(String, string(func))::String * " "   # if func::Any, avoid string interpolation (invalidation)
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
@@ -2289,7 +2291,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :meta && nargs == 1 && args[1] === :pop_loc
         print(io, "# meta: pop location")
     elseif head === :meta && nargs == 2 && args[1] === :pop_loc
-        print(io, "# meta: pop locations ($(args[2]))")
+        print(io, "# meta: pop locations ($(args[2]::Int))")
     # print anything else as "Expr(head, args...)"
     else
         unhandled = true

@@ -142,7 +142,7 @@ function choosetests(choices = [])
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["compiler/inference", "compiler/validation",
         "compiler/ssair", "compiler/irpasses", "compiler/codegen",
-        "compiler/inline", "compiler/contextual",
+        "compiler/inline", "compiler/contextual", "compiler/AbstractInterpreter",
         "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])

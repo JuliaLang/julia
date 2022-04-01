@@ -8,8 +8,7 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false :
-    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
@@ -1142,9 +1141,6 @@ function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
-# \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
-# /(x::Number,A::StridedMatrix) = x*inv(A)
-/(x::Number, v::AbstractVector) = x*pinv(v)
 
 cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
@@ -1542,9 +1538,9 @@ julia> det(M)
 2.0
 ```
 """
-function det(A::AbstractMatrix{T}) where T
+function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
-        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
         return convert(S, det(UpperTriangular(A)))
     end
     return det(lu(A; check = false))
@@ -1783,7 +1779,7 @@ julia> normalize(a)
 function normalize(a::AbstractArray, p::Real = 2)
     nrm = norm(a, p)
     if !isempty(a)
-        aa = copy_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, typeof(first(a)/nrm))
         return __normalize!(aa, nrm)
     else
         T = typeof(zero(eltype(a))/nrm)
