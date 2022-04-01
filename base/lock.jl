@@ -77,9 +77,9 @@ end
 ## Implementation
 
 A lock implementation is advised to define `islocked` with the following properties and note
-it in their docstring.
+it in its docstring.
 
-* `islocked(lock)` is data-race-free
+* `islocked(lock)` is data-race-free.
 * If `islocked(lock)` returns `true`, an immediate invocation of `trylock(lock)` must
   succeeds (returns `true`) if there is no interference from other tasks.
 """
