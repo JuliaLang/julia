@@ -533,6 +533,7 @@ default_addprocs_params() = Dict{Symbol,Any}(
     :dir      => pwd(),
     :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,
+    :env      => [],
     :enable_threaded_blas => false,
     :lazy => true)
 

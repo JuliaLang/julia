@@ -298,9 +298,55 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    t = ignorelimited(t)
     return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
+end
+
+# A simplified type_more_complex query over the extended lattice
+# (assumes typeb ⊑ typea)
+function issimplertype(@nospecialize(typea), @nospecialize(typeb))
+    typea = ignorelimited(typea)
+    typeb = ignorelimited(typeb)
+    typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
+    typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
+    typea === typeb && return true
+    if typea isa PartialStruct
+        aty = widenconst(typea)
+        for i = 1:length(typea.fields)
+            ai = typea.fields[i]
+            bi = fieldtype(aty, i)
+            is_lattice_equal(ai, bi) && continue
+            tni = _typename(widenconst(ai))
+            if tni isa Const
+                bi = (tni.val::Core.TypeName).wrapper
+                is_lattice_equal(ai, bi) && continue
+            end
+            bi = getfield_tfunc(typeb, Const(i))
+            is_lattice_equal(ai, bi) && continue
+            # It is not enough for ai to be simpler than bi: it must exactly equal
+            # (for this, an invariant struct field, by contrast to
+            # type_more_complex above which handles covariant tuples).
+            return false
+        end
+    elseif typea isa Type
+        return issimpleenoughtype(typea)
+    # elseif typea isa Const # fall-through good
+    elseif typea isa Conditional # follow issubconditional query
+      typeb isa Const && return true
+      typeb isa Conditional || return false
+      is_same_conditionals(typea, typeb) || return false
+      issimplertype(typea.vtype, typeb.vtype) || return false
+      issimplertype(typea.elsetype, typeb.elsetype) || return false
+    elseif typea isa InterConditional # ibid
+      typeb isa Const && return true
+      typeb isa InterConditional || return false
+      is_same_conditionals(typea, typeb) || return false
+      issimplertype(typea.vtype, typeb.vtype) || return false
+      issimplertype(typea.elsetype, typeb.elsetype) || return false
+    elseif typea isa PartialOpaque
+        # TODO
+    end
+    return true
 end
 
 # pick a wider type that contains both typea and typeb,
@@ -310,11 +356,13 @@ end
 function tmerge(@nospecialize(typea), @nospecialize(typeb))
     typea === Union{} && return typeb
     typeb === Union{} && return typea
+    typea === typeb && return typea
+
     suba = typea ⊑ typeb
-    suba && issimpleenoughtype(typeb) && return typeb
+    suba && issimplertype(typeb, typea) && return typeb
     subb = typeb ⊑ typea
     suba && subb && return typea
-    subb && issimpleenoughtype(typea) && return typea
+    subb && issimplertype(typea, typeb) && return typea
 
     # type-lattice for LimitedAccuracy wrapper
     # the merge create a slightly narrower type than needed, but we can't
@@ -404,6 +452,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         aty = widenconst(typea)
         bty = widenconst(typeb)
         if aty === bty
+            # must have egal here, since we do not create PartialStruct for non-concrete types
             typea_nfields = nfields_tfunc(typea)
             typeb_nfields = nfields_tfunc(typeb)
             isa(typea_nfields, Const) || return aty
@@ -412,18 +461,40 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
             type_nfields === typeb_nfields.val::Int || return aty
             type_nfields == 0 && return aty
             fields = Vector{Any}(undef, type_nfields)
-            anyconst = false
+            anyrefine = false
             for i = 1:type_nfields
                 ai = getfield_tfunc(typea, Const(i))
                 bi = getfield_tfunc(typeb, Const(i))
-                ity = tmerge(ai, bi)
-                if ai === Union{} || bi === Union{}
-                    ity = widenconst(ity)
+                ft = fieldtype(aty, i)
+                if is_lattice_equal(ai, bi) || is_lattice_equal(ai, ft)
+                    # Since ai===bi, the given type has no restrictions on complexity.
+                    # and can be used to refine ft
+                    tyi = ai
+                elseif is_lattice_equal(bi, ft)
+                    tyi = bi
+                else
+                    # Otherwise choose between using the fieldtype or some other simple merged type.
+                    # The wrapper type never has restrictions on complexity,
+                    # so try to use that to refine the estimated type too.
+                    tni = _typename(widenconst(ai))
+                    if tni isa Const && tni === _typename(widenconst(bi))
+                        # A tmeet call may cause tyi to become complex, but since the inputs were
+                        # strictly limited to being egal, this has no restrictions on complexity.
+                        # (Otherwise, we would need to use <: and take the narrower one without
+                        # intersection. See the similar comment in abstract_call_method.)
+                        tyi = typeintersect(ft, (tni.val::Core.TypeName).wrapper)
+                    else
+                        # Since aty===bty, the fieldtype has no restrictions on complexity.
+                        tyi = ft
+                    end
                 end
-                fields[i] = ity
-                anyconst |= has_nontrivial_const_info(ity)
+                fields[i] = tyi
+                if !anyrefine
+                    anyrefine = has_nontrivial_const_info(tyi) || # constant information
+                                tyi ⋤ ft                          # just a type-level information, but more precise than the declared type
+                end
             end
-            return anyconst ? PartialStruct(aty, fields) : aty
+            return anyrefine ? PartialStruct(aty, fields) : aty
         end
     end
     if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
@@ -609,45 +680,4 @@ function tuplemerge(a::DataType, b::DataType)
         p[lt + 1] = Vararg{tail}
     end
     return Tuple{p...}
-end
-
-# compute typeintersect over the extended inference lattice
-# where v is in the extended lattice, and t is a Type
-function tmeet(@nospecialize(v), @nospecialize(t))
-    if isa(v, Const)
-        if !has_free_typevars(t) && !isa(v.val, t)
-            return Bottom
-        end
-        return v
-    elseif isa(v, PartialStruct)
-        has_free_typevars(t) && return v
-        widev = widenconst(v)
-        if widev <: t
-            return v
-        end
-        ti = typeintersect(widev, t)
-        valid_as_lattice(ti) || return Bottom
-        @assert widev <: Tuple
-        new_fields = Vector{Any}(undef, length(v.fields))
-        for i = 1:length(new_fields)
-            vfi = v.fields[i]
-            if isvarargtype(vfi)
-                new_fields[i] = vfi
-            else
-                new_fields[i] = tmeet(vfi, widenconst(getfield_tfunc(t, Const(i))))
-                if new_fields[i] === Bottom
-                    return Bottom
-                end
-            end
-        end
-        return tuple_tfunc(new_fields)
-    elseif isa(v, Conditional)
-        if !(Bool <: t)
-            return Bottom
-        end
-        return v
-    end
-    ti = typeintersect(widenconst(v), t)
-    valid_as_lattice(ti) || return Bottom
-    return ti
 end

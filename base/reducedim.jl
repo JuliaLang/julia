@@ -44,7 +44,7 @@ function reduced_indices0(inds::Indices{N}, d::Int) where N
 end
 
 function reduced_indices(inds::Indices{N}, region) where N
-    rinds = [inds...]
+    rinds = collect(inds)
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = Int(i)
@@ -58,7 +58,7 @@ function reduced_indices(inds::Indices{N}, region) where N
 end
 
 function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = [inds...]
+    rinds = collect(inds)
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = Int(i)

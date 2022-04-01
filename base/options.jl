@@ -20,6 +20,7 @@ struct JLOptions
     compile_enabled::Int8
     code_coverage::Int8
     malloc_log::Int8
+    tracked_path::Ptr{UInt8}
     opt_level::Int8
     opt_level_min::Int8
     debug_level::Int8
@@ -87,4 +88,8 @@ function unsafe_load_commands(v::Ptr{Ptr{UInt8}})
         i += 1
     end
     return cmds
+end
+
+function is_file_tracked(file::Symbol)
+    return ccall(:jl_is_file_tracked, Cint, (Any,), file) == 1
 end

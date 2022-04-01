@@ -227,6 +227,15 @@ const GLOBAL_OPAQUE_CLOSURE = @opaque () -> 123
 call_global_opaque_closure() = GLOBAL_OPAQUE_CLOSURE()
 @test call_global_opaque_closure() == 123
 
+let foo::Int = 42
+    Base.Experimental.@force_compile
+    oc = Base.Experimental.@opaque a::Int->sin(a) + cos(foo)
+
+    @test only(Base.return_types(oc, (Int,))) === Float64
+    code, rt = first(code_typed(oc, (Int,)))
+    @test rt === Float64
+end
+
 let oc = @opaque a->sin(a)
     @test length(code_typed(oc, (Int,))) == 1
 end

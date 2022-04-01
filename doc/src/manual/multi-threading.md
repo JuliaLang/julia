@@ -19,8 +19,8 @@ The number of execution threads is controlled either by using the
 specified, then `-t`/`--threads` takes precedence.
 
 The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
-(`--threads=auto`), where `auto` sets the number of threads to the number of local CPU
-threads.
+(`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
+(see [Command-line Options](@ref command-line-options) for more details).
 
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
@@ -364,7 +364,7 @@ There are a few approaches to dealing with this problem:
 
 3. A related third strategy is to use a yield-free queue. We don't currently
    have a lock-free queue implemented in Base, but
-   `Base.InvasiveLinkedListSynchronized{T}` is suitable. This can frequently be a
+   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This can frequently be a
    good strategy to use for code with event loops. For example, this strategy is
    employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
    don't do any explicit work inside the `finalizer`, and instead add it to a queue

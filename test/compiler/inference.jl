@@ -1562,6 +1562,15 @@ end
 @test arraysize_tfunc(Vector, Float64) === Union{}
 @test arraysize_tfunc(String, Int) === Union{}
 
+let tuple_tfunc
+    function tuple_tfunc(@nospecialize xs...)
+        return Core.Compiler.tuple_tfunc(Any[xs...])
+    end
+    @test Core.Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
+    # https://github.com/JuliaLang/julia/issues/44705
+    @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
+end
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -2032,6 +2041,13 @@ end
         end
         @test ts == Any[Any]
     end
+
+    # a tricky case: if constant inference derives `Const` while non-constant inference has
+    # derived `InterConditional`, we should not discard that constant information
+    iszero_simple(x) = x === 0
+    @test Base.return_types() do
+        iszero_simple(0) ? nothing : missing
+    end |> only === Nothing
 end
 
 @testset "branching on conditional object" begin
@@ -2075,7 +2091,7 @@ let M = Module()
             obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
             r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
             a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
             return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
         end |> only
     end
@@ -3999,15 +4015,33 @@ end
     @test ⊑(a, c)
     @test ⊑(b, c)
 
-    @test @eval Module() begin
-        const ginit = Base.ImmutableDict{Any,Any}()
-        Base.return_types() do
-            g = ginit
+    init = Base.ImmutableDict{Number,Number}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c) && ⊑(b, c)
+    @test c === typeof(init)
+
+    a = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c) && ⊑(b, c)
+    @test c.fields[2] === Any # or Number
+    @test c.fields[3] === ComplexF64
+
+    b = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+    @test c.fields[2] === Complex
+    @test c.fields[3] === Complex
+
+    global const ginit43784 = Base.ImmutableDict{Any,Any}()
+    @test Base.return_types() do
+            g = ginit43784
             while true
                 g = Base.ImmutableDict(g, 1=>2)
             end
         end |> only === Union{}
-    end
 end
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
@@ -4028,3 +4062,114 @@ function f_boundscheck_elim(n)
     ntuple(x->(@inbounds getfield(sin, x)), n)
 end
 @test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+
+# Test that max_methods works as expected
+@Base.Experimental.max_methods 1 function f_max_methods end
+f_max_methods(x::Int) = 1
+f_max_methods(x::Float64) = 2
+g_max_methods(x) = f_max_methods(x)
+@test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
+@test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
+
+# Unit tests for BitSetBoundedMinPrioritySet
+let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
+    Core.Compiler.push!(bsbmp, 2)
+    Core.Compiler.push!(bsbmp, 2)
+    @test Core.Compiler.popfirst!(bsbmp) == 2
+    Core.Compiler.push!(bsbmp, 1)
+    @test Core.Compiler.popfirst!(bsbmp) == 1
+    @test Core.Compiler.isempty(bsbmp)
+end
+
+# Make sure return_type_tfunc doesn't accidentally cause bad inference if used
+# at top level.
+@test let
+    Base.Experimental.@force_compile
+    Core.Compiler.return_type(+, NTuple{2, Rational})
+end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44763
+global x44763::Int = 0
+increase_x44763!(n) = (global x44763; x44763 += n)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
+@test Base.return_types() do
+    invoke44763(42)
+end |> only === Int
+@test x44763 == 0
+
+Base.@assume_effects :terminates_locally function pow(x::Int)
+    res = 1
+    1 < x < 20 || error("bad pow")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+maybe_effectful(x::Int) = 42
+maybe_effectful(x::Any) = unknown_operation()
+function f_no_methods end
+
+function nothing_or_missing(f, tt; pred=Core.Compiler.is_terminates)
+    @nospecialize f tt
+    effects = Core.Compiler.infer_effects(f, tt)
+    if pred(effects)
+        return nothing
+    else
+        return missing
+    end
+end
+
+@testset "Core.Compiler.infer_effects" begin
+    # basic
+    @test Core.Compiler.is_terminates(Core.Compiler.infer_effects(pow, Tuple{Int}))
+    @test Base.return_types() do
+        nothing_or_missing(pow, Tuple{Int})
+    end |> only === Nothing
+    @test Base.return_types() do
+        nothing_or_missing(Tuple{Int}) do x
+            pow(x)
+        end
+    end |> only === Nothing
+
+    # union split
+    let effects = Core.Compiler.infer_effects(maybe_effectful, Tuple{Any}) # union split
+        @test !Core.Compiler.is_consistent(effects)
+        @test !Core.Compiler.is_effect_free(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test !Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nonoverlayed(effects)
+    end
+    @test Base.return_types() do
+        nothing_or_missing(maybe_effectful, Tuple{Any})
+    end |> only === Missing
+
+    # no matching methods
+    let effects = Core.Compiler.infer_effects(f_no_methods, Tuple{Any})
+        @test Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+    end
+    @test Base.return_types() do
+        nothing_or_missing(f_no_methods, Tuple{Any})
+    end |> only === Nothing
+    @test Base.return_types() do
+        nothing_or_missing(f_no_methods, Tuple{Any}; pred=Core.Compiler.is_nothrow)
+    end |> only === Missing
+
+    # unknown arguments
+    @test Base.return_types((Any,Any)) do f, tt
+        nothing_or_missing(f, tt)
+    end |> only === Union{Nothing,Missing}
+
+    # builtins
+    @test Core.Compiler.infer_effects(typeof, Tuple{Any}) |> Core.Compiler.is_total
+    @test Base.return_types() do
+        nothing_or_missing(typeof, Tuple{Any}; pred=Core.Compiler.is_total)
+    end |> only === Nothing
+    @test Core.Compiler.infer_effects(===, Tuple{Any,Any}) |> Core.Compiler.is_total
+    @test Base.return_types() do
+        nothing_or_missing(===, Tuple{Any,Any}; pred=Core.Compiler.is_total)
+    end |> only === Nothing
+end

@@ -123,12 +123,10 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> endswith_julia = endswith("Julia");
-
-julia> endswith_julia("Julia")
+julia> endswith("Julia")("Ends with Julia")
 true
 
-julia> endswith_julia("JuliaLang")
+julia> endswith("Julia")("JuliaLang")
 false
 ```
 """
@@ -148,12 +146,10 @@ used to implement specialized methods.
 
 # Examples
 ```jldoctest
-julia> startswith_julia = startswith("Julia");
-
-julia> startswith_julia("Julia")
+julia> startswith("Julia")("JuliaLang")
 true
 
-julia> startswith_julia("NotJulia")
+julia> startswith("Julia")("Ends with Julia")
 false
 ```
 """

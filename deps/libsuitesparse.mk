@@ -80,13 +80,13 @@ $(build_prefix)/manifest/libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARS
 	echo $(UNINSTALL_libsuitesparse) > $@
 
 clean-libsuitesparse: uninstall-libsuitesparse
-	-rm $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
+	-rm -f $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/lib
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/include
 	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) clean
 
 distclean-libsuitesparse:
-	-rm -rf $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz \
+	rm -rf $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz \
 		$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)
 
 get-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
@@ -107,6 +107,6 @@ endif
 
 define manual_libsuitesparse
 uninstall-libsuitesparse:
-	-rm $(build_prefix)/manifest/libsuitesparse
-	-rm $(addprefix $(build_shlibdir)/lib,$3)
+	-rm -f $(build_prefix)/manifest/libsuitesparse
+	-rm -f $(addprefix $(build_shlibdir)/lib,$3)
 endef

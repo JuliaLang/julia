@@ -1,5 +1,35 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#############
+# constants #
+#############
+
+# The slot has uses that are not statically dominated by any assignment
+# This is implied by `SLOT_USEDUNDEF`.
+# If this is not set, all the uses are (statically) dominated by the defs.
+# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
+const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
+const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
+const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
+# const SLOT_CALLED      = 64
+
+# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
+
+const IR_FLAG_NULL        = 0x00
+# This statement is marked as @inbounds by user.
+# Ff replaced by inlining, any contained boundschecks may be removed.
+const IR_FLAG_INBOUNDS    = 0x01 << 0
+# This statement is marked as @inline by user
+const IR_FLAG_INLINE      = 0x01 << 1
+# This statement is marked as @noinline by user
+const IR_FLAG_NOINLINE    = 0x01 << 2
+const IR_FLAG_THROW_BLOCK = 0x01 << 3
+# This statement may be removed if its result is unused. In particular it must
+# thus be both pure and effect free.
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
+
+const TOP_TUPLE = GlobalRef(Core, :tuple)
+
 #####################
 # OptimizationState #
 #####################
@@ -21,10 +51,10 @@ function push!(et::EdgeTracker, ci::CodeInstance)
     push!(et, ci.def)
 end
 
-struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter}
+struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInterpreter}
     params::OptimizationParams
     et::S
-    mi_cache::T
+    mi_cache::MICache # TODO move this to `OptimizationState` (as used by EscapeAnalysis as well)
     interp::I
 end
 
@@ -121,36 +151,6 @@ function ir_to_codeinf!(opt::OptimizationState)
     return src
 end
 
-#############
-# constants #
-#############
-
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
-const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
-# const SLOT_CALLED      = 64
-
-# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
-
-const IR_FLAG_NULL        = 0x00
-# This statement is marked as @inbounds by user.
-# Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = 0x01 << 0
-# This statement is marked as @inline by user
-const IR_FLAG_INLINE      = 0x01 << 1
-# This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = 0x01 << 2
-const IR_FLAG_THROW_BLOCK = 0x01 << 3
-# This statement may be removed if its result is unused. In particular it must
-# thus be both pure and effect free.
-const IR_FLAG_EFFECT_FREE = 0x01 << 4
-
-const TOP_TUPLE = GlobalRef(Core, :tuple)
-
 #########
 # logic #
 #########
@@ -202,7 +202,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return false
-            is_return_type(f) && return true
+            (is_return_type(f) || is_infer_effects(f)) && return true
             if isa(f, IntrinsicFunction)
                 intrinsic_effect_free_if_nothrow(f) || return false
                 return intrinsic_nothrow(f,
@@ -502,11 +502,37 @@ end
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState,
                   params::OptimizationParams, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes(opt.src, opt)
+    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
     return finish(interp, opt, params, ir, caller)
 end
 
-function run_passes(ci::CodeInfo, sv::OptimizationState)
+using .EscapeAnalysis
+import .EscapeAnalysis: EscapeState, ArgEscapeCache, is_ipo_profitable
+
+"""
+    cache_escapes!(caller::InferenceResult, estate::EscapeState)
+
+Transforms escape information of call arguments of `caller`,
+and then caches it into a global cache for later interprocedural propagation.
+"""
+cache_escapes!(caller::InferenceResult, estate::EscapeState) =
+    caller.argescapes = ArgEscapeCache(estate)
+
+function ipo_escape_cache(mi_cache::MICache) where MICache
+    return function (linfo::Union{InferenceResult,MethodInstance})
+        if isa(linfo, InferenceResult)
+            argescapes = linfo.argescapes
+        else
+            codeinst = get(mi_cache, linfo, nothing)
+            isa(codeinst, CodeInstance) || return nothing
+            argescapes = codeinst.argescapes
+        end
+        return argescapes !== nothing ? argescapes::ArgEscapeCache : nothing
+    end
+end
+null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
+
+function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
@@ -532,12 +558,21 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
-    labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
+    if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
+        for line in ci.linetable
+            if is_file_tracked(line.file)
+                # if any line falls in a tracked file enable coverage for all
+                coverage = true
+                break
+            end
+        end
+    end
+    labelmap = coverage ? fill(0, length(code)) : changemap
     while idx <= length(code)
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -649,7 +684,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
-            if f === Core.getfield || f === Core.tuple
+            if f === Core.getfield || f === Core.tuple || f === Core.getglobal
                 # we might like to penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)

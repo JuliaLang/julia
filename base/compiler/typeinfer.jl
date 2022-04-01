@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Tracking of newly-inferred MethodInstances during precompilation
+const track_newly_inferred = RefValue{Bool}(false)
+const newly_inferred = MethodInstance[]
+
 # build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
     frame = InferenceState(result, cache, interp)
@@ -313,7 +317,7 @@ function CodeInstance(
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects
-        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects),
+	    encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
         relocatability)
 end
 
@@ -352,7 +356,8 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result))
+                                    valid_worlds::WorldRange, @nospecialize(inferred_result),
+                                    ipo_effects::Effects)
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
@@ -387,8 +392,14 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        if track_newly_inferred[]
+            m = linfo.def
+            if isa(m, Method)
+                m.module != Core && push!(newly_inferred, linfo)
+            end
+        end
     end
     unlock_mi_inference(interp, linfo)
     nothing
@@ -421,7 +432,7 @@ function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
     # but we don't currently model idempontency using dataflow, so we don't notice.
     # Fix that up here to improve precision.
     if !ipo_effects.inbounds_taints_consistency && rt === Union{}
-        return Effects(ipo_effects, consistent=ALWAYS_TRUE)
+        return Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
     return ipo_effects
 end
@@ -484,7 +495,25 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
-    me.result.ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
+    ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
+    # override the analyzed effects using manually annotated effect settings
+    def = me.linfo.def
+    if isa(def, Method)
+        override = decode_effects_override(def.purity)
+        if is_effect_overridden(override, :consistent)
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :effect_free)
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :nothrow)
+            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :terminates_globally)
+            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
+        end
+    end
+    me.ipo_effects = me.result.ipo_effects = ipo_effects
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -727,11 +756,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    tristate_merge!(parent, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
+    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        tristate_merge!(child, Effects(EFFECTS_TOTAL, terminates=TRISTATE_UNKNOWN))
+        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -787,15 +816,18 @@ end
 
 generating_sysimg() = ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
 
-function tristate_merge!(caller::InferenceState, callee::Effects)
-    caller.ipo_effects = tristate_merge(caller.ipo_effects, callee)
-end
-
-function tristate_merge!(caller::InferenceState, callee::InferenceState)
-    tristate_merge!(caller, Effects(callee))
-end
-
 ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
+
+struct EdgeCallResult
+    rt #::Type
+    edge::Union{Nothing,MethodInstance}
+    edge_effects::Effects
+    function EdgeCallResult(@nospecialize(rt),
+                            edge::Union{Nothing,MethodInstance},
+                            edge_effects::Effects)
+        return new(rt, edge, edge_effects)
+    end
+end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::InferenceState)
@@ -815,23 +847,22 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 # the second subtyping conditions are necessary to distinguish usual cases
                 # from rare cases when `Const` wrapped those extended lattice type objects
                 if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-                    return PartialStruct(rettype, rettype_const), mi, effects
+                    rettype = PartialStruct(rettype, rettype_const)
                 elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
-                    return rettype_const, mi, effects
+                    rettype = rettype_const
                 elseif isa(rettype_const, InterConditional) && !(InterConditional <: rettype)
-                    return rettype_const, mi, effects
+                    rettype = rettype_const
                 else
-                    return Const(rettype_const), mi, effects
+                    rettype = Const(rettype_const)
                 end
-            else
-                return rettype, mi, effects
             end
+            return EdgeCallResult(rettype, mi, effects)
         end
     else
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
-        return Any, nothing, Effects()
+        return EdgeCallResult(Any, nothing, Effects())
     end
     if !caller.cached && caller.parent === nothing
         # this caller exists to return to the user
@@ -848,37 +879,49 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         if frame === nothing
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
-            return Any, nothing, Effects()
+            return EdgeCallResult(Any, nothing, Effects())
         end
         if caller.cached || caller.parent !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
-        return frame.bestguess, frame.inferred ? mi : nothing, rt_adjust_effects(frame.bestguess, Effects(frame))
+        edge = frame.inferred ? mi : nothing
+        edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
+        return EdgeCallResult(frame.bestguess, edge, edge_effects)
     elseif frame === true
         # unresolvable cycle
-        return Any, nothing, Effects()
+        return EdgeCallResult(Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
-    return frame.bestguess, nothing, rt_adjust_effects(frame.bestguess, Effects(frame))
+    edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
+    return EdgeCallResult(frame.bestguess, nothing, edge_effects)
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
 
 # compute an inferred AST and return type
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
+    frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
+    frame === nothing && return nothing, Any
+    frame.inferred || return nothing, Any
+    code = frame.src
+    rt = widenconst(ignorelimited(frame.result.result))
+    return code, rt
+end
+
+# compute an inferred frame
+function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
-    frame === nothing && return (nothing, Any)
+    frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
-    frame.inferred || return (nothing, Any)
-    return (frame.src, widenconst(ignorelimited(result.result)))
+    return frame
 end
 
 # compute (and cache) an inferred AST and return type
@@ -986,26 +1029,10 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
     return src
 end
 
-function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
-    world = ccall(:jl_get_tls_world_age, UInt, ())
-    args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
-    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
-end
-
-function return_type(@nospecialize(f), t::DataType, world::UInt)
-    return return_type(Tuple{Core.Typeof(f), t.parameters...}, world)
-end
-
-function return_type(t::DataType)
-    world = ccall(:jl_get_tls_world_age, UInt, ())
-    return return_type(t, world)
-end
-
-function return_type(t::DataType, world::UInt)
-    args = Any[_return_type, NativeInterpreter(world), t]
-    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
-end
-
+return_type(@nospecialize(f), t::DataType) = return_type(f, t, get_tls_world_counter()) # this method has a special tfunc
+return_type(@nospecialize(f), t::DataType, world::UInt) = return_type(Tuple{Core.Typeof(f), t.parameters...}, world)
+return_type(t::DataType) = return_type(t, get_tls_world_counter())
+return_type(t::DataType, world::UInt) = call_in_typeinf_world(Any[_return_type, NativeInterpreter(world), t])
 function _return_type(interp::AbstractInterpreter, t::DataType)
     rt = Union{}
     f = singleton_type(t.parameters[1])
@@ -1026,49 +1053,38 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
     return rt
 end
 
-function infer_effects(@nospecialize(f), @nospecialize(t))
-    world = ccall(:jl_get_tls_world_age, UInt, ())
-    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_infer_effects, f, t, world], 4)
-end
-
-_infer_effects(@nospecialize(f), @nospecialize(t), world) = _infer_effects(NativeInterpreter(world), f, t)
-
-function _infer_effects(interp::AbstractInterpreter, @nospecialize(f), @nospecialize(t))
+infer_effects(@nospecialize(f), t::DataType) = infer_effects(f, t, get_tls_world_counter())
+infer_effects(@nospecialize(f), t::DataType, world::UInt) = infer_effects(Tuple{Core.Typeof(f), t.parameters...}, world)
+infer_effects(t::DataType) = infer_effects(t, get_tls_world_counter())
+infer_effects(t::DataType, world::UInt) = call_in_typeinf_world(Any[_infer_effects, NativeInterpreter(world), t])
+function _infer_effects(interp::AbstractInterpreter, t::DataType)
+    f = singleton_type(t.parameters[1])
     if isa(f, Builtin)
-        argtypes = Any[t.parameters...]
-        rt = builtin_tfunction(interp, f, argtypes, nothing)
-        return builtin_effect(interp, f, argtypes, widenconst(rt))
+        args = Any[t.parameters...]
+        popfirst!(args)
+        rt = builtin_tfunction(interp, f, args, nothing)
+        return builtin_effects(f, args, rt)
     else
-        eff = nothing
-        for match in _methods(f, t, -1, get_world_counter(interp))::Vector
-            match = match::MethodMatch
-            ans = _infer_effects(interp, match.method, match.spec_types, match.sparams)
-            eff = (eff === nothing ? ans : tristate_merge(eff::Effects, ans))::Effects
-            eff == Effects() && return eff
+        effects = EFFECTS_TOTAL
+        matches = _methods_by_ftype(t, -1, get_world_counter(interp))::Vector
+        if isempty(matches)
+            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
+            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
+            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
+            return Effects(effects; nothrow=TRISTATE_UNKNOWN)
         end
-        eff === nothing && return Effects()
-        return eff
+        for match in matches
+            match = match::MethodMatch
+            frame = typeinf_frame(interp, match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+            frame === nothing && return Effects()
+            effects = tristate_merge(effects, frame.ipo_effects)
+        end
     end
+    return effects
 end
 
-# like `typeinf_type` but for effects
-function _infer_effects(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
-    if contains_is(unwrap_unionall(atype).parameters, Union{})
-        return Effects()
-    end
-    mi = specialize_method(method, atype, sparams)::MethodInstance
-    for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this CodeInstance already exists in the cache
-            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-            return ipo_effects(code)
-        end
-    end
-    result = InferenceResult(mi)
-    typeinf(interp, result, :global)
-    ccall(:jl_typeinf_end, Cvoid, ())
-    result.result isa InferenceState && return Effects()
-    return result.ipo_effects
+get_tls_world_counter() = ccall(:jl_get_tls_world_age, UInt, ())
+
+function call_in_typeinf_world(args::Vector{Any})
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
 end

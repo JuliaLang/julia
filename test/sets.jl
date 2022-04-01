@@ -151,6 +151,9 @@ end
             @test s === copy!(s, BitSet(a)) == S(a)
         end
     end
+    s = Set([1, 2])
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "sizehint, empty" begin
@@ -849,4 +852,15 @@ end
 @testset "⊊, ⊋" begin
     @test !((1, 2) ⊊ (1, 2, 2))
     @test !((1, 2, 2) ⊋ (1, 2))
+end
+
+@testset "AbstractSet & Fallback" begin
+    mutable struct TestSet{T} <: AbstractSet{T}
+        set::Set{T}
+        function TestSet{T}() where T
+            new{T}(Set{T}())
+        end
+    end
+    set = TestSet{Any}()
+    @test sizehint!(set, 1) === set
 end

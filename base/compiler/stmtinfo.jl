@@ -49,9 +49,10 @@ end
 
 struct ConstResult
     mi::MethodInstance
+    effects::Effects
     result
-    ConstResult(mi::MethodInstance) = new(mi)
-    ConstResult(mi::MethodInstance, @nospecialize val) = new(mi, val)
+    ConstResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
+    ConstResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
 
 """
@@ -165,13 +166,13 @@ end
 # the AbstractInterpreter.
 
 """
-    info::ReturnTypeCallInfo
+    info::VirtualCallInfo
 
-Represents a resolved call of `Core.Compiler.return_type`.
-`info.call` wraps the info corresponding to the call that `Core.Compiler.return_type` call
-was supposed to analyze.
+Represents a resolved call of `Core.Compiler.return_type` or `Core.Compiler.infer_effects`.
+`info.call` wraps the info corresponding to the call that the reflection function was
+supposed to analyze.
 """
-struct ReturnTypeCallInfo
+struct VirtualCallInfo
     info::Any
 end
 

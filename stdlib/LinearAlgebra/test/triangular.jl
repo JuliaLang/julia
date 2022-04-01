@@ -332,7 +332,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1 + A2 == Matrix(A1) + Matrix(A2)
                 @test A1 - A2 == Matrix(A1) - Matrix(A2)
 
-                # Triangular-Triangualar multiplication and division
+                # Triangular-Triangular multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
                 @test transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
                 @test transpose(A1)*adjoint(A2) ≈ transpose(Matrix(A1))*adjoint(Matrix(A2))
@@ -823,6 +823,17 @@ end
     test_one_oneunit_triangular(b)
     c = UpperTriangular(Diagonal(rand(2)))
     test_one_oneunit_triangular(c)
+end
+
+@testset "LowerTriangular(Diagonal(...)) and friends (issue #28869)" begin
+    for elty in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+        V = elty ≡ Int ? rand(1:10, 5) : elty.(randn(5))
+        D = Diagonal(V)
+        for dty in (UpperTriangular, LowerTriangular)
+            A = dty(D)
+            @test A * A' == D * D'
+        end
+    end
 end
 
 end # module TestTriangular

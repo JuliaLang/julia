@@ -40,7 +40,9 @@ include("options.jl")
 
 # core operations & types
 function return_type end # promotion.jl expects this to exist
-is_return_type(@Core.nospecialize(f)) = f === return_type
+function infer_effects end
+is_return_type(@nospecialize f) = f === return_type
+is_infer_effects(@nospecialize f) = f === infer_effects
 include("promotion.jl")
 include("tuple.jl")
 include("pair.jl")
@@ -57,6 +59,9 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+
+# the same constructor as defined in float.jl, but with a different name to avoid redefinition
+_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 # checked arithmetic
 const checked_add = +
@@ -98,6 +103,8 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core docsystem
 include("docs/core.jl")
+import Core.Compiler.CoreDocs
+Core.atdoc!(CoreDocs.docm)
 
 # sorting
 function sort end

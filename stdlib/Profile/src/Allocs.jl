@@ -123,7 +123,7 @@ struct Alloc
     type::Any
     stacktrace::StackTrace
     size::Int
-    task::Ptr{Cvoid}
+    task::Ptr{Cvoid} # N.B. unrooted, may not be valid
     timestamp::UInt64
 end
 

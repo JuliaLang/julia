@@ -98,6 +98,20 @@ end
 
 timesofar("conversions")
 
+@testset "Promotions for size $sz" for (sz, T) in allsizes
+    @test isequal(promote(falses(sz...), zeros(sz...)),
+                 (zeros(sz...), zeros(sz...)))
+    @test isequal(promote(trues(sz...), ones(sz...)),
+                 (ones(sz...), ones(sz...)))
+    ae = falses(1, sz...)
+    ex = (@test_throws ErrorException promote(ae, ones(sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
+    ex = (@test_throws ErrorException promote(ae, falses(sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
+end
+
+timesofar("promotions")
+
 @testset "utility functions" begin
     b1 = bitrand(v1)
     @test isequal(fill!(b1, true), trues(size(b1)))
