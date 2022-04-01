@@ -7,8 +7,7 @@ Return `true` if `f(args...)` with `args::t` is consdiered to be `:effect_free`
 as defined in `@assume_effects`.
 """
 function _is_effect_free(f::F, t) where {F}
-    eff = Core.Compiler.infer_effects(f, t)
-    return eff.effect_free == Core.Compiler.ALWAYS_TRUE
+    return Core.Compiler.is_effect_free(Core.Compiler.infer_effects(f, t))
 end
 
 # Choosing a rather very conservative bound for parallelism to avoid slowing
