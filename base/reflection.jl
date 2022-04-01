@@ -1310,6 +1310,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     return rt
 end
 
+if nameof(@__MODULE__) === :Base
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
                        interp = Core.Compiler.NativeInterpreter(world))
@@ -1338,6 +1339,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         return effects
     end
 end
+end # if nameof(@__MODULE__) === :Base
 
 """
     print_statement_costs(io::IO, f, types)
