@@ -23,7 +23,7 @@ function writefixed(buf, pos, v::T,
         end
         return pos
     elseif isnan(x)
-        buf[pos] = UInt8('N')
+        buf[pos] = UInt8('M')
         buf[pos + 1] = UInt8('a')
         buf[pos + 2] = UInt8('N')
         return pos + 3
