@@ -1616,6 +1616,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif is_return_type(f)
         tristate_merge!(sv, EFFECTS_UNKNOWN) # TODO
         return return_type_tfunc(interp, argtypes, sv)
+    elseif is_infer_effects(f)
+        tristate_merge!(sv, EFFECTS_UNKNOWN) # TODO
+        return infer_effects_tfunc(interp, argtypes, sv)
     elseif la == 2 && istopfunction(f, :!)
         # handle Conditional propagation through !Bool
         aty = argtypes[2]

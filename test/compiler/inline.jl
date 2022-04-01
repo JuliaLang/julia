@@ -1234,3 +1234,18 @@ g_call_peel(x) = f_peel(x)
 let src = code_typed1(g_call_peel, Tuple{Any})
     @test count(isinvoke(:f_peel), src.code) == 2
 end
+
+@test fully_eliminated((Any,); retval=true) do f
+    tt = Tuple{Int}
+    rt = Core.Compiler.return_type(sin, tt)
+    effects = Core.Compiler.infer_effects(sin, tt)
+    rt === Float64 && Core.Compiler.is_effect_free(effects)
+end
+@test fully_eliminated((Any,)) do f
+    tt = Tuple{Int}
+    Core.Compiler.return_type(sin, tt)
+    Core.Compiler.infer_effects(sin, tt)
+    Core.Compiler.return_type(f, tt)
+    Core.Compiler.infer_effects(f, tt)
+    nothing
+end
