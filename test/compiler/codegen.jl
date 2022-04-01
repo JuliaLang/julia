@@ -364,16 +364,16 @@ macro aliasscope(body)
     end)
 end
 
-struct Const{T<:Array}
+struct ConstAliasScope{T<:Array}
     a::T
 end
 
-@eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::ConstAliasScope, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
+@eval Base.getindex(A::ConstAliasScope, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
-        a[i] = Const(b)[i]
+        a[i] = ConstAliasScope(b)[i]
     end
 end
 io = IOBuffer()
@@ -588,7 +588,9 @@ struct A40855
     b::Union{Nothing, Int}
 end
 g() = string(A40855(X40855, 1))
-@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+let mod_prefix = (@__MODULE__) == Core.Main ? "" : "$(@__MODULE__)."
+    @test g() == "$(mod_prefix)A40855($(mod_prefix)X40855, 1)"
+end
 
 # issue #40612
 f40612(a, b) = a|b === a|b
@@ -672,11 +674,11 @@ mktempdir() do pfx
     libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
     libs_deleted = 0
     for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
-        rm(f; force=true, recursive=true)
+        rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
-    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
 end
 
 # issue #42645
@@ -709,3 +711,9 @@ end
 @test !cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(-))
 @test cmp43123(Function[+], Union{typeof(+), typeof(-)}[+])
 @test !cmp43123(Function[+], Union{typeof(+), typeof(-)}[-])
+
+# Test that donotdelete survives through to LLVM time
+f_donotdelete_input(x) = Base.donotdelete(x+1)
+f_donotdelete_const() = Base.donotdelete(1+1)
+@test occursin("call void (...) @jl_f_donotdelete(i64", get_llvm(f_donotdelete_input, Tuple{Int64}, true, false, false))
+@test occursin("call void (...) @jl_f_donotdelete()", get_llvm(f_donotdelete_const, Tuple{}, true, false, false))

@@ -372,6 +372,188 @@ macro constprop(setting, ex)
 end
 
 """
+    @assume_effects setting... ex
+    @assume_effects(setting..., ex)
+
+`@assume_effects` overrides the compiler's effect modeling for the given method.
+`ex` must be a method definition or `@ccall` expression.
+
+!!! warning
+    Improper use of this macro causes undefined behavior (including crashes,
+    incorrect answers, or other hard to track bugs). Use with care and only if
+    absolutely required.
+
+In general, each `setting` value makes an assertion about the behavior of the
+function, without requiring the compiler to prove that this behavior is indeed
+true. These assertions are made for all world ages. It is thus advisable to limit
+the use of generic functions that may later be extended to invalidate the
+assumption (which would cause undefined behavior).
+
+The following `setting`s are supported.
+- `:consistent`
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
+- `:terminates_locally`
+- `:total`
+
+---
+# `:consistent`
+
+The `:consistent` setting asserts that for egal (`===`) inputs:
+- The manner of termination (return value, exception, non-termination) will always be the same.
+- If the method returns, the results will always be egal.
+
+!!! note
+    This in particular implies that the return value of the method must be
+    immutable. Multiple allocations of mutable objects (even with identical
+    contents) are not egal.
+
+!!! note
+    The `:consistent`-cy assertion is made world-age wise. More formally, write
+    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then we require:
+    ```math
+    ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
+    ```
+    However, for two world ages ``i``, ``j`` s.t. ``i ≠ j``, we may have ``fᵢ(x) ≢ fⱼ(y)``.
+
+    A further implication is that `:consistent` functions may not make their
+    return value dependent on the state of the heap or any other global state
+    that is not constant for a given world age.
+
+!!! note
+    The `:consistent`-cy includes all legal rewrites performed by the optimizer.
+    For example, floating-point fastmath operations are not considered `:consistent`,
+    because the optimizer may rewrite them causing the output to not be `:consistent`,
+    even for the same world age (e.g. because one ran in the interpreter, while
+    the other was optimized).
+
+!!! note
+    If `:consistent` functions terminate by throwing an exception, that exception
+    itself is not required to meet the egality requirement specified above.
+
+---
+# `:effect_free`
+
+The `:effect_free` setting asserts that the method is free of externally semantically
+visible side effects. The following is an incomplete list of externally semantically
+visible side effects:
+- Changing the value of a global variable.
+- Mutating the heap (e.g. an array or mutable value), except as noted below
+- Changing the method table (e.g. through calls to eval)
+- File/Network/etc. I/O
+- Task switching
+
+However, the following are explicitly not semantically visible, even if they
+may be observable:
+- Memory allocations (both mutable and immutable)
+- Elapsed time
+- Garbage collection
+- Heap mutations of objects whose lifetime does not exceed the method (i.e.
+  were allocated in the method and do not escape).
+- The returned value (which is externally visible, but not a side effect)
+
+The rule of thumb here is that an externally visible side effect is anything
+that would affect the execution of the remainder of the program if the function
+were not executed.
+
+!!! note
+    The `:effect_free` assertion is made both for the method itself and any code
+    that is executed by the method. Keep in mind that the assertion must be
+    valid for all world ages and limit use of this assertion accordingly.
+
+---
+# `:nothrow`
+
+The `:nothrow` settings asserts that this method does not terminate abnormally
+(i.e. will either always return a value or never return).
+
+!!! note
+    It is permissible for `:nothrow` annotated methods to make use of exception
+    handling internally as long as the exception is not rethrown out of the
+    method itself.
+
+!!! note
+    `MethodErrors` and similar exceptions count as abnormal termination.
+
+---
+# `:terminates_globally`
+
+The `:terminates_globally` settings asserts that this method will eventually terminate
+(either normally or abnormally), i.e. does not loop indefinitely.
+
+!!! note
+    This `:terminates_globally` assertion covers any other methods called by the annotated method.
+
+!!! note
+    The compiler will consider this a strong indication that the method will
+    terminate relatively *quickly* and may (if otherwise legal), call this
+    method at compile time. I.e. it is a bad idea to annotate this setting
+    on a method that *technically*, but not *practically*, terminates.
+
+---
+# `:terminates_locally`
+
+The `:terminates_locally` setting is like `:terminates_globally`, except that it only
+applies to syntactic control flow *within* the annotated method. It is thus
+a much weaker (and thus safer) assertion that allows for the possibility of
+non-termination if the method calls some other method that does not terminate.
+
+!!! note
+    `:terminates_globally` implies `:terminates_locally`.
+
+---
+# `:total`
+
+This `setting` combines the following other assertions:
+- `:consistent`
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
+and is a convenient shortcut.
+
+!!! note
+    `@assume_effects :total` is similar to `@Base.pure` with the primary
+    distinction that the `:consistent`-cy requirement applies world-age wise rather
+    than globally as described above. However, in particular, a method annotated
+    `@Base.pure` is always `:total`.
+"""
+macro assume_effects(args...)
+    (consistent, effect_free, nothrow, terminates_globally, terminates_locally) =
+        (false, false, false, false, false, false)
+    for setting in args[1:end-1]
+        if isa(setting, QuoteNode)
+            setting = setting.value
+        end
+        if setting === :consistent
+            consistent = true
+        elseif setting === :effect_free
+            effect_free = true
+        elseif setting === :nothrow
+            nothrow = true
+        elseif setting === :terminates_globally
+            terminates_globally = true
+        elseif setting === :terminates_locally
+            terminates_locally = true
+        elseif setting === :total
+            consistent = effect_free = nothrow = terminates_globally = true
+        else
+            throw(ArgumentError("@assume_effects $setting not supported"))
+        end
+    end
+    ex = args[end]
+    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in @constprop [settings] ex"))
+    if ex.head === :macrocall && ex.args[1] == Symbol("@ccall")
+        ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally
+        )))
+        return esc(ex)
+    end
+    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally))
+end
+
+"""
     @propagate_inbounds
 
 Tells the compiler to inline a function while retaining the caller's inbounds context.
@@ -574,6 +756,7 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
+        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,
@@ -581,8 +764,8 @@ macro generated(f)
                               Expr(:if, Expr(:generated),
                                    # https://github.com/JuliaLang/julia/issues/25678
                                    Expr(:block,
-                                        :(local tmp = $body),
-                                        :(if tmp isa Core.CodeInfo; return tmp; else tmp; end)),
+                                        :(local $tmp = $body),
+                                        :(if $tmp isa $(GlobalRef(Core, :CodeInfo)); return $tmp; else $tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))

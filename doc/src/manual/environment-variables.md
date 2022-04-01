@@ -262,6 +262,8 @@ over `$EDITOR`. If none of these environment variables is set, then the editor
 is taken to be `open` on Windows and OS X, or `/etc/alternatives/editor` if it
 exists, or `emacs` otherwise.
 
+To use Visual Studio Code on Windows, set `$JULIA_EDITOR` to `code.cmd`.
+
 ## Parallelization
 
 ### `JULIA_CPU_THREADS`
@@ -422,4 +424,3 @@ On debug builds of Julia this is always enabled. Recommended to use with `-g 2`.
 ### `JULIA_LLVM_ARGS`
 
 Arguments to be passed to the LLVM backend.
-

@@ -18,7 +18,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p
+             exp10, expm1, log1p, @constprop, @assume_effects
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
@@ -30,13 +30,14 @@ using Core.Intrinsics: sqrt_llvm
 using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
-    throw(DomainError(x, string("$f will only return a complex result if called with a ",
-                                "complex argument. Try $f(Complex(x)).")))
+    throw(DomainError(x,
+        LazyString(f," will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
 @noinline function throw_exp_domainerror(x)
-    throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
-                                "complex argument.\nReplace x^y with (x+0im)^y, ",
-                                "Complex(x)^y, or similar.")))
+    throw(DomainError(x, LazyString(
+        "Exponentiation yielding a complex result requires a ",
+        "complex argument.\nReplace x^y with (x+0im)^y, ",
+        "Complex(x)^y, or similar.")))
 end
 
 # non-type specific math functions
@@ -670,7 +671,8 @@ true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...))...)
+hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
@@ -682,7 +684,7 @@ function _hypot(x, y)
 
     # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(ax) || isinf(ay)
-        return oftype(axu, Inf)
+        return typeof(axu)(Inf)
     end
 
     # Order the operands
@@ -742,10 +744,10 @@ end
 end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
-function _hypot(x...)
+function _hypot(x::NTuple{N,<:Number}) where {N}
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
-        return oftype(maxabs, Inf)
+        return typeof(maxabs)(Inf)
     elseif (iszero(maxabs) || isinf(maxabs))
         return maxabs
     else
@@ -783,7 +785,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
-    k = Int(xs >> significand_bits(T))
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x # +-0
         m = leading_zeros(xs) - exponent_bits(T)
@@ -816,7 +818,8 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
             return flipsign(T(0.0), x)
         end
         k += significand_bits(T)
-        z = T(2.0)^-significand_bits(T)
+        # z = T(2.0) ^ (-significand_bits(T))
+        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
@@ -840,12 +843,27 @@ julia> exponent(16.0)
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
-    @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
+    @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
+        m = leading_zeros(xs) - exponent_bits(T)
+        k = 1 - m
+    end
+    return k - exponent_bias(T)
+end
+
+# Like exponent, but assumes the nothrow precondition. For
+# internal use only. Could be written as
+# @assume_effects :nothrow exponent()
+# but currently this form is easier on the compiler.
+function _exponent_finite_nonzero(x::T) where T<:IEEEFloat
+    # @precond :nothrow !isnan(x) && !isinf(x) && !iszero(x)
+    xs = reinterpret(Unsigned, x) & ~sign_mask(T)
+    k = rem(xs >> significand_bits(T), Int)
+    if k == 0 # x is subnormal
         m = leading_zeros(xs) - exponent_bits(T)
         k = 1 - m
     end
@@ -976,23 +994,38 @@ function modf(x::T) where T<:IEEEFloat
     return (rx, ix)
 end
 
-function ^(x::Float64, y::Float64)
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
+@constprop :aggressive function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     x == 1 && return 1.0
+    return pow_body(x, y)
+end
+
+@inline function pow_body(x::Float64, y::Float64)
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*Inf*(!(y>0))
     logxhi,logxlo = Base.Math._log_ext(x)
-    xyhi = logxhi*y
-    xylo = logxlo*y
+    xyhi, xylo = two_mul(logxhi,y)
+    xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
-function ^(x::T, y::T) where T <: Union{Float16, Float32}
+
+@constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps(T)) && return x^(typemax(Int64)-1)
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    return pow_body(x, y)
+end
+
+@inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
     x == 1 && return one(T)
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
@@ -1000,10 +1033,15 @@ function ^(x::T, y::T) where T <: Union{Float16, Float32}
 end
 
 # compensated power by squaring
-function ^(x::Float64, n::Integer)
+@constprop :aggressive @inline function ^(x::Float64, n::Integer)
     n == 0 && return one(x)
+    return pow_body(x, n)
+end
+
+@assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
+    n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
         n==-2 && return rx*rx #keep compatability with literal_pow
@@ -1011,7 +1049,6 @@ function ^(x::Float64, n::Integer)
         x = rx
         n = -n
     end
-    n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
             err = muladd(y, xnlo, x*ynlo)
@@ -1026,9 +1063,11 @@ function ^(x::Float64, n::Integer)
     !isfinite(x) && return x*y
     return muladd(x, y, muladd(y, xnlo, x*ynlo))
 end
+
 function ^(x::Float32, n::Integer)
-    n < 0 && return inv(x)^(-n)
+    n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
     Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)

@@ -973,14 +973,14 @@ end
     destc = dest.chunks
     cind = 1
     bc′ = preprocess(dest, bc)
-    for P in Iterators.partition(eachindex(bc′), bitcache_size)
+    @inbounds for P in Iterators.partition(eachindex(bc′), bitcache_size)
         ind = 1
         @simd for I in P
-            @inbounds tmp[ind] = bc′[I]
+            tmp[ind] = bc′[I]
             ind += 1
         end
         @simd for i in ind:bitcache_size
-            @inbounds tmp[i] = false
+            tmp[i] = false
         end
         dumpbitcache(destc, cind, tmp)
         cind += bitcache_chunks
@@ -1130,6 +1130,7 @@ broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::LinRange, x::Number) = LinRa
 broadcasted(::DefaultArrayStyle{1}, ::typeof(*), r::OrdinalRange, x::AbstractFloat) =
     Base.range_start_step_length(first(r)*x, step(r)*x, length(r))
 
+#broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, last(r)/x, length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::AbstractRange, x::Number) = range(first(r)/x, step=step(r)/x, length=length(r))
 broadcasted(::DefaultArrayStyle{1}, ::typeof(/), r::StepRangeLen{T}, x::Number) where {T} =
     StepRangeLen{typeof(T(r.ref)/x)}(r.ref/x, r.step/x, length(r), r.offset)

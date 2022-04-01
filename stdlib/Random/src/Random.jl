@@ -307,7 +307,7 @@ include("XoshiroSimd.jl")
 ## rand & rand! & seed! docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=default_rng()], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
@@ -359,7 +359,7 @@ julia> rand(Float64, (2, 3))
 rand
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=default_rng()], A, [S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -383,8 +383,8 @@ julia> rand!(rng, zeros(5))
 rand!
 
 """
-    seed!([rng=GLOBAL_RNG], seed) -> rng
-    seed!([rng=GLOBAL_RNG]) -> rng
+    seed!([rng=default_rng()], seed) -> rng
+    seed!([rng=default_rng()]) -> rng
 
 Reseed the random number generator: `rng` will give a reproducible
 sequence of numbers if and only if a `seed` is provided. Some RNGs

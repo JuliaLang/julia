@@ -8,8 +8,7 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false :
-    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
@@ -462,10 +461,10 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (maxabs == 0 || isinf(maxabs)) && return maxabs
+    (iszero(maxabs) || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
-    if isfinite(length(x)*maxabs*maxabs) && maxabs*maxabs != 0 # Scaling not necessary
+    if isfinite(length(x)*maxabs*maxabs) && !iszero(maxabs*maxabs) # Scaling not necessary
         sum::promote_type(Float64, T) = norm_sqr(v)
         while true
             y = iterate(x, s)
@@ -492,13 +491,13 @@ function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (maxabs == 0 || isinf(maxabs)) && return maxabs
+        (iszero(maxabs) || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
     end
     spp::promote_type(Float64, T) = p
-    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
+    if -1 <= p <= 1 || (isfinite(length(x)*maxabs^spp) && !iszero(maxabs^spp)) # scaling not necessary
         sum::promote_type(Float64, T) = norm(v)^spp
         while true
             y = iterate(x, s)
@@ -634,7 +633,7 @@ julia> norm(-2, Inf)
 @inline function norm(x::Number, p::Real=2)
     afx = abs(float(x))
     if p == 0
-        if x == 0
+        if iszero(x)
             return zero(afx)
         elseif !isnan(x)
             return oneunit(afx)
@@ -886,7 +885,9 @@ function dot(x::AbstractArray, y::AbstractArray)
     s
 end
 
-dot(x::Adjoint, y::Adjoint) = conj(dot(parent(x), parent(y)))
+function dot(x::Adjoint{<:Union{Real,Complex}}, y::Adjoint{<:Union{Real,Complex}})
+    return conj(dot(parent(x), parent(y)))
+end
 dot(x::Transpose, y::Transpose) = dot(parent(x), parent(y))
 
 """
@@ -977,7 +978,7 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
 end
-rank(x::Number) = x == 0 ? 0 : 1
+rank(x::Number) = iszero(x) ? 0 : 1
 
 """
     tr(M)
@@ -1112,15 +1113,36 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = pinv(a) * b
+"""
+    A / B
+
+Matrix right-division: `A / B` is equivalent to `(B' \\ A')'` where [`\\`](@ref) is the left-division operator.
+For square matrices, the result `X` is such that `A == X*B`.
+
+See also: [`rdiv!`](@ref).
+
+# Examples
+```jldoctest
+julia> A = Float64[1 4 5; 3 9 2]; B = Float64[1 4 2; 3 4 2; 8 7 1];
+
+julia> X = A / B
+2×3 Matrix{Float64}:
+ -0.65   3.75  -1.2
+  3.25  -2.75   1.0
+
+julia> isapprox(A, X*B)
+true
+
+julia> isapprox(X, A*pinv(B))
+true
+```
+"""
 function (/)(A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(A,2) != size(B,2) && throw(DimensionMismatch("Both inputs should have the same number of columns"))
     return copy(adjoint(adjoint(B) \ adjoint(A)))
 end
-# \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
-# /(x::Number,A::StridedMatrix) = x*inv(A)
-/(x::Number, v::AbstractVector) = x*pinv(v)
 
-cond(x::Number) = x == 0 ? Inf : 1.0
+cond(x::Number) = iszero(x) ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 #Skeel condition numbers
@@ -1516,9 +1538,9 @@ julia> det(M)
 2.0
 ```
 """
-function det(A::AbstractMatrix{T}) where T
+function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
-        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
         return convert(S, det(UpperTriangular(A)))
     end
     return det(lu(A; check = false))
@@ -1757,7 +1779,7 @@ julia> normalize(a)
 function normalize(a::AbstractArray, p::Real = 2)
     nrm = norm(a, p)
     if !isempty(a)
-        aa = copy_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, typeof(first(a)/nrm))
         return __normalize!(aa, nrm)
     else
         T = typeof(zero(eltype(a))/nrm)

@@ -1,5 +1,35 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#############
+# constants #
+#############
+
+# The slot has uses that are not statically dominated by any assignment
+# This is implied by `SLOT_USEDUNDEF`.
+# If this is not set, all the uses are (statically) dominated by the defs.
+# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
+const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
+const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
+const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
+# const SLOT_CALLED      = 64
+
+# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
+
+const IR_FLAG_NULL        = 0x00
+# This statement is marked as @inbounds by user.
+# Ff replaced by inlining, any contained boundschecks may be removed.
+const IR_FLAG_INBOUNDS    = 0x01 << 0
+# This statement is marked as @inline by user
+const IR_FLAG_INLINE      = 0x01 << 1
+# This statement is marked as @noinline by user
+const IR_FLAG_NOINLINE    = 0x01 << 2
+const IR_FLAG_THROW_BLOCK = 0x01 << 3
+# This statement may be removed if its result is unused. In particular it must
+# thus be both pure and effect free.
+const IR_FLAG_EFFECT_FREE = 0x01 << 4
+
+const TOP_TUPLE = GlobalRef(Core, :tuple)
+
 #####################
 # OptimizationState #
 #####################
@@ -21,10 +51,10 @@ function push!(et::EdgeTracker, ci::CodeInstance)
     push!(et, ci.def)
 end
 
-struct InliningState{S <: Union{EdgeTracker, Nothing}, T, I<:AbstractInterpreter}
+struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInterpreter}
     params::OptimizationParams
     et::S
-    mi_cache::T
+    mi_cache::MICache # TODO move this to `OptimizationState` (as used by EscapeAnalysis as well)
     interp::I
 end
 
@@ -121,46 +151,6 @@ function ir_to_codeinf!(opt::OptimizationState)
     return src
 end
 
-#############
-# constants #
-#############
-
-# The slot has uses that are not statically dominated by any assignment
-# This is implied by `SLOT_USEDUNDEF`.
-# If this is not set, all the uses are (statically) dominated by the defs.
-# In particular, if a slot has `AssignedOnce && !StaticUndef`, it is an SSA.
-const SLOT_STATICUNDEF  = 1 # slot might be used before it is defined (structurally)
-const SLOT_ASSIGNEDONCE = 16 # slot is assigned to only once
-const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
-# const SLOT_CALLED      = 64
-
-# NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
-
-const IR_FLAG_NULL        = 0x00
-# This statement is marked as @inbounds by user.
-# Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = 0x01 << 0
-# This statement is marked as @inline by user
-const IR_FLAG_INLINE      = 0x01 << 1
-# This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = 0x01 << 2
-const IR_FLAG_THROW_BLOCK = 0x01 << 3
-# This statement may be removed if its result is unused. In particular it must
-# thus be both pure and effect free.
-const IR_FLAG_EFFECT_FREE = 0x01 << 4
-
-# known to be always effect-free (in particular nothrow)
-const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
-
-# known to be effect-free if the are nothrow
-const _PURE_OR_ERROR_BUILTINS = [
-    fieldtype, apply_type, isa, UnionAll,
-    getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:)
-]
-
-const TOP_TUPLE = GlobalRef(Core, :tuple)
-
 #########
 # logic #
 #########
@@ -219,7 +209,13 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
                         Any[argextype(args[i], src) for i = 2:length(args)])
             end
             contains_is(_PURE_BUILTINS, f) && return true
-            contains_is(_PURE_OR_ERROR_BUILTINS, f) || return false
+            # `get_binding_type` sets the type to Any if the binding doesn't exist yet
+            if f === Core.get_binding_type
+                length(args) == 3 || return false
+                M, s = argextype(args[2], src), argextype(args[3], src)
+                return get_binding_type_effect_free(M, s)
+            end
+            contains_is(_EFFECT_FREE_BUILTINS, f) || return false
             rt === Bottom && return false
             return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
         elseif head === :new
@@ -237,18 +233,17 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             end
             return true
         elseif head === :foreigncall
-            return foreigncall_effect_free(stmt, rt, src)
+            return foreigncall_effect_free(stmt, src)
         elseif head === :new_opaque_closure
-            length(args) < 5 && return false
+            length(args) < 4 && return false
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ)
             isexact || return false
             typ ⊑ Tuple || return false
-            isva = argextype(args[2], src)
-            rt_lb = argextype(args[3], src)
-            rt_ub = argextype(args[4], src)
-            src = argextype(args[5], src)
-            if !(isva ⊑ Bool && rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+            rt_lb = argextype(args[2], src)
+            rt_ub = argextype(args[3], src)
+            src = argextype(args[4], src)
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
                 return false
             end
             return true
@@ -262,7 +257,7 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
     return true
 end
 
-function foreigncall_effect_free(stmt::Expr, @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
     args = stmt.args
     name = args[1]
     isa(name, QuoteNode) && (name = name.value)
@@ -291,14 +286,14 @@ function alloc_array_ndims(name::Symbol)
     return nothing
 end
 
+const FOREIGNCALL_ARG_START = 6
+
 function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+6 || return false
-    atype = widenconst(argextype(args[6], src))
-    isType(atype) || return false
-    atype = atype.parameters[1]
+    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
+    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
     dims = Csize_t[]
     for i in 1:ndims
-        dim = argextype(args[i+6], src)
+        dim = argextype(args[i+FOREIGNCALL_ARG_START], src)
         isa(dim, Const) || return false
         dimval = dim.val
         isa(dimval, Int) || return false
@@ -308,11 +303,9 @@ function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,I
 end
 
 function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ 7 || return false
-    atype = widenconst(argextype(args[6], src))
-    isType(atype) || return false
-    atype = atype.parameters[1]
-    dims = argextype(args[7], src)
+    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
+    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
+    dims = argextype(args[FOREIGNCALL_ARG_START+1], src)
     isa(dims, Const) || return dims === Tuple{}
     dimsval = dims.val
     isa(dimsval, Tuple{Vararg{Int}}) || return false
@@ -388,7 +381,7 @@ end
 
 """
     finish(interp::AbstractInterpreter, opt::OptimizationState,
-           params::OptimizationParams, ir::IRCode, result) -> analyzed::Union{Nothing,ConstAPI}
+           params::OptimizationParams, ir::IRCode, caller::InferenceResult) -> analyzed::Union{Nothing,ConstAPI}
 
 Post process information derived by Julia-level optimizations for later uses:
 - computes "purity", i.e. side-effect-freeness
@@ -398,7 +391,7 @@ In a case when the purity is proven, `finish` can return `ConstAPI` object wrapp
 value so that the runtime system will use the constant calling convention for the method calls.
 """
 function finish(interp::AbstractInterpreter, opt::OptimizationState,
-                params::OptimizationParams, ir::IRCode, @nospecialize(result))
+                params::OptimizationParams, ir::IRCode, caller::InferenceResult)
     (; src, linfo) = opt
     (; def, specTypes) = linfo
 
@@ -406,13 +399,16 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
+    result = caller.result
+    @assert !(result isa LimitedAccuracy)
+    result = isa(result, InterConditional) ? widenconditional(result) : result
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
         # otherwise we might skip throwing errors (issue #20704)
         # TODO: Improve this analysis; if a function is marked @pure we should really
         # only care about certain errors (e.g. method errors and type errors).
-        if length(ir.stmts) < 10
+        if length(ir.stmts) < 15
             proven_pure = true
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
@@ -504,12 +500,39 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
 end
 
 # run the optimization work
-function optimize(interp::AbstractInterpreter, opt::OptimizationState, params::OptimizationParams, @nospecialize(result))
-    @timeit "optimizer" ir = run_passes(opt.src, opt)
-    return finish(interp, opt, params, ir, result)
+function optimize(interp::AbstractInterpreter, opt::OptimizationState,
+                  params::OptimizationParams, caller::InferenceResult)
+    @timeit "optimizer" ir = run_passes(opt.src, opt, caller)
+    return finish(interp, opt, params, ir, caller)
 end
 
-function run_passes(ci::CodeInfo, sv::OptimizationState)
+using .EscapeAnalysis
+import .EscapeAnalysis: EscapeState, ArgEscapeCache, is_ipo_profitable
+
+"""
+    cache_escapes!(caller::InferenceResult, estate::EscapeState)
+
+Transforms escape information of call arguments of `caller`,
+and then caches it into a global cache for later interprocedural propagation.
+"""
+cache_escapes!(caller::InferenceResult, estate::EscapeState) =
+    caller.argescapes = ArgEscapeCache(estate)
+
+function ipo_escape_cache(mi_cache::MICache) where MICache
+    return function (linfo::Union{InferenceResult,MethodInstance})
+        if isa(linfo, InferenceResult)
+            argescapes = linfo.argescapes
+        else
+            codeinst = get(mi_cache, linfo, nothing)
+            isa(codeinst, CodeInstance) || return nothing
+            argescapes = codeinst.argescapes
+        end
+        return argescapes !== nothing ? argescapes::ArgEscapeCache : nothing
+    end
+end
+null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
+
+function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
@@ -535,12 +558,21 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
-    labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
+    if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
+        for line in ci.linetable
+            if is_file_tracked(line.file)
+                # if any line falls in a tracked file enable coverage for all
+                coverage = true
+                break
+            end
+        end
+    end
+    labelmap = coverage ? fill(0, length(code)) : changemap
     while idx <= length(code)
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -615,21 +647,6 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     return ir
 end
 
-# whether `f` is pure for inference
-function is_pure_intrinsic_infer(f::IntrinsicFunction)
-    return !(f === Intrinsics.pointerref || # this one is volatile
-             f === Intrinsics.pointerset || # this one is never effect-free
-             f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.arraylen ||   # this one is volatile
-             f === Intrinsics.sqrt_llvm ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-             f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-             f === Intrinsics.cglobal)  # cglobal lookup answer changes at runtime
-end
-
-# whether `f` is effect free if nothrow
-intrinsic_effect_free_if_nothrow(f) = f === Intrinsics.pointerref || is_pure_intrinsic_infer(f)
-
 ## Computing the cost of a function body
 
 # saturating sum (inputs are nonnegative), prevents overflow with typemax(Int) below
@@ -667,7 +684,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
-            if f === Core.getfield || f === Core.tuple
+            if f === Core.getfield || f === Core.tuple || f === Core.getglobal
                 # we might like to penalize non-inferrability, but
                 # tuple iteration/destructuring makes that impossible
                 # return plus_saturate(argcost, isknowntype(extyp) ? 1 : params.inline_nonleaf_penalty)

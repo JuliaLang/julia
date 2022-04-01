@@ -358,6 +358,12 @@ floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDo
 ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 
+# Bool
+trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
+floor(::Type{Bool}, x::AbstractFloat) = (0 <= x < 2) ? 1 <= x : throw(InexactError(:floor, Bool, x))
+ceil(::Type{Bool}, x::AbstractFloat)  = (-1 < x <= 1) ? 0 < x : throw(InexactError(:ceil, Bool, x))
+round(::Type{Bool}, x::AbstractFloat) = (-0.5 <= x < 1.5) ? 0.5 < x : throw(InexactError(:round, Bool, x))
+
 round(x::IEEEFloat, r::RoundingMode{:ToZero})  = trunc_llvm(x)
 round(x::IEEEFloat, r::RoundingMode{:Down})    = floor_llvm(x)
 round(x::IEEEFloat, r::RoundingMode{:Up})      = ceil_llvm(x)

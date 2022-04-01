@@ -285,6 +285,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@assume_effects
 Base.@deprecate
 ```
 
@@ -316,6 +317,7 @@ Base.Cmd
 Base.setenv
 Base.addenv
 Base.withenv
+Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
 Base.Libc.gethostname

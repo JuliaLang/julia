@@ -1646,7 +1646,7 @@ end
 throw_eager_redirection_cycle(key::Union{Char, String}) =
     error("Eager redirection cycle detected for key ", repr(key))
 throw_could_not_find_redirected_value(key::Union{Char, String}) =
-    error("Could not find redirected value ", repl(key))
+    error("Could not find redirected value ", repr(key))
 
 function keymap_unify(keymaps)
     ret = Dict{Char,Any}()
@@ -1971,7 +1971,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     parent = mode(s)
 
     transition(s, p) do
-        pss = state(s, p)
+        local pss = state(s, p)
         pss.parent = parent
         pss.histprompt.parent_prompt = parent
         pss.prefix = String(buf.data[1:position(buf)])

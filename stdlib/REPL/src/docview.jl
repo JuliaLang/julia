@@ -283,7 +283,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))
-            for (f, t) in zip(fieldnames(T), T.types)
+            for (f, t) in zip(fieldnames(T), fieldtypes(T))
                 println(io, rpad(f, pad), " :: ", t)
             end
             println(io, "```")

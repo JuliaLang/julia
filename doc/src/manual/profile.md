@@ -336,6 +336,33 @@ and how much garbage it collects each time. This can be enabled with
 [`GC.enable_logging(true)`](@ref), which causes Julia to log to stderr every time
 a garbage collection happens.
 
+### Allocation Profiler
+
+The allocation profiler records the stack trace, type, and size of each
+allocation while it is running. It can be invoked with
+[`Profile.Allocs.@profile`](@ref).
+
+This information about the allocations is returned as an array of `Alloc`
+objects, wrapped in an `AllocResults` object. The best way to visualize
+these is currently with the [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
+library, which can visualize the call stacks which are making the most
+allocations.
+
+The allocation profiler does have significant overhead, so a `sample_rate`
+argument can be passed to speed it up by making it skip some allocations.
+Passing `sample_rate=1.0` will make it record everything (which is slow);
+`sample_rate=0.1` will record only 10% of the allocations (faster), etc.
+
+!!! note
+
+    The current implementation of the Allocations Profiler _does not
+    capture types for all allocations._ Allocations for which the profiler
+    could not capture the type are represented as having type
+    `Profile.Allocs.UnknownType`.
+
+    You can read more about the missing types and the plan to improve this, here:
+    https://github.com/JuliaLang/julia/issues/43688.
+
 ## External Profiling
 
 Currently Julia supports `Intel VTune`, `OProfile` and `perf` as external profiling tools.

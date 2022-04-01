@@ -531,8 +531,9 @@ default_addprocs_params(::ClusterManager) = default_addprocs_params()
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
+    :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,
+    :env      => [],
     :enable_threaded_blas => false,
     :lazy => true)
 

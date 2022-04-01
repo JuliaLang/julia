@@ -365,7 +365,7 @@ julia> push!(a, 2, 3)
 Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
-ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
@@ -2731,6 +2731,9 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
+!!! compat "Julia 1.8"
+    `setproperty!` on modules requires at least Julia 1.8.
+
 See also [`setfield!`](@ref Core.setfield!),
 [`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
@@ -2896,5 +2899,40 @@ julia> \"""
 See also [`"`](@ref \")
 """
 kw"\"\"\""
+
+"""
+    donotdelete(args...)
+
+This function prevents dead-code elimination (DCE) of itself and any arguments
+passed to it, but is otherwise the lightest barrier possible. In particular,
+it is not a GC safepoint, does model an observable heap effect, does not expand
+to any code itself and may be re-ordered with respect to other side effects
+(though the total number of executions may not change).
+
+A useful model for this function is that it hashes all memory `reachable` from
+args and escapes this information through some observable side-channel that does
+not otherwise impact program behavior. Of course that's just a model. The
+function does nothing and returns `nothing`.
+
+This is intended for use in benchmarks that want to guarantee that `args` are
+actually computed. (Otherwise DCE may see that the result of the benchmark is
+unused and delete the entire benchmark code).
+
+**Note**: `donotdelete` does not affect constant folding. For example, in
+          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+          the code is semantically equivalent to `donotdelete(2).`
+
+# Examples
+
+function loop()
+    for i = 1:1000
+        # The complier must guarantee that there are 1000 program points (in the correct
+        # order) at which the value of `i` is in a register, but has otherwise
+        # total control over the program.
+        donotdelete(i)
+    end
+end
+"""
+Base.donotdelete
 
 end

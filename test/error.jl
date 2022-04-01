@@ -81,3 +81,18 @@ end
     # non-Functions
     @test retry(Float64)(1) === 1.0
 end
+
+@testset "SystemError initialization" begin
+    e = SystemError("fail")
+    @test e.extrainfo === nothing
+end
+
+@testset "MethodError for methods without line numbers" begin
+    try
+        eval(Expr(:function, :(f44319()), 0))
+        f44319(1)
+    catch e
+        s = sprint(showerror, e)
+        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\nClosest candidates are:\n  f44319() at none:0"
+    end
+end

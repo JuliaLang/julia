@@ -64,7 +64,7 @@ end
     iobuf = IOBuffer()
     with_logger(NullLogger()) do
         @testset for format in [:flat, :tree]
-            @testset for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
+            @testset for threads in Any[1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
                 @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
                     Profile.print(iobuf; groupby, threads, format)
                     @test !isempty(String(take!(iobuf)))
@@ -170,7 +170,11 @@ let cmd = Base.julia_cmd()
     script = """
         using Profile
         f(::Val) = GC.safepoint()
-        @profile for i = 1:10^3; f(Val(i)); end
+        @profile for i = 1:10^3
+            println(i)
+            f(Val(i))
+        end
+        println("done")
         print(Profile.len_data())
         """
     p = open(`$cmd -e $script`)
@@ -184,7 +188,53 @@ let cmd = Base.julia_cmd()
     s = read(p, String)
     close(t)
     @test success(p)
-    @test parse(Int, s) > 100
+    @test !isempty(s)
+    @test occursin("done", s)
+    @test parse(Int, split(s, '\n')[end]) > 100
+end
+
+if Sys.isbsd() || Sys.islinux()
+    @testset "SIGINFO/SIGUSR1 profile triggering" begin
+        let cmd = Base.julia_cmd()
+            script = """
+                x = rand(1000, 1000)
+                println("started")
+                while true
+                    x * x
+                    yield()
+                end
+                """
+            iob = Base.BufferStream()
+            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            t = Timer(120) do t
+                # should be under 10 seconds, so give it 2 minutes then report failure
+                println("KILLING BY PROFILE TEST WATCHDOG\n")
+                kill(p, Base.SIGTERM)
+                sleep(10)
+                kill(p, Base.SIGKILL)
+                close(iob)
+            end
+            try
+                s = readuntil(iob, "started", keep = true)
+                @assert occursin("started", s)
+                @assert process_running(p)
+                for _ in 1:2
+                    sleep(2.5)
+                    if Sys.isbsd()
+                        kill(p, 29) # SIGINFO
+                    elseif Sys.islinux()
+                        kill(p, 10) # SIGUSR1
+                    end
+                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    @test process_running(p)
+                    @test occursin("Overhead ╎", s)
+                end
+            finally
+                kill(p, Base.SIGKILL)
+                close(t)
+            end
+        end
+    end
 end
 
 @testset "FlameGraphs" begin
@@ -219,3 +269,5 @@ end
     node = root.down[stackframe(:f1, :file1, 2)]
     @test only(node.down).first == lidict[8]
 end
+
+include("allocs.jl")

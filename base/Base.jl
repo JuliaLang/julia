@@ -28,8 +28,7 @@ macro noinline() Expr(:meta, :noinline) end
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v) # to get a decent error
+getproperty(x::Module, f::Symbol) = (@inline; getglobal(x, f))
 getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
@@ -40,8 +39,12 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 
 dotgetproperty(x, f) = getproperty(x, f)
 
-getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x::Module, f::Symbol, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
+function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
+    @inline
+    val::Core.get_binding_type(x, f) = v
+    return setglobal!(x, f, val, order)
+end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
@@ -57,7 +60,8 @@ modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
 replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
-
+convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
@@ -123,6 +127,9 @@ include("refpointer.jl")
 include("checked.jl")
 using .Checked
 
+# Lazy strings
+include("strings/lazy.jl")
+
 # array structures
 include("indices.jl")
 include("array.jl")
@@ -156,6 +163,10 @@ function strcat(x::String, y::String)
 end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+
+# These used to be in build_h.jl and are retained for backwards compatibility
+const libblas_name = "libblastrampoline"
+const liblapack_name = "libblastrampoline"
 
 # numeric operations
 include("hashing.jl")
@@ -200,6 +211,7 @@ include("dict.jl")
 include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
@@ -265,14 +277,12 @@ include("condition.jl")
 include("threads.jl")
 include("lock.jl")
 include("channels.jl")
+include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
 include("env.jl")
-
-# BinaryPlatforms, used by Artifacts
-include("binaryplatforms.jl")
 
 # functions defined in Random
 function rand end
@@ -330,6 +340,9 @@ using .Order
 # Combinatorics
 include("sort.jl")
 using .Sort
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # Fast math
 include("fastmath.jl")
@@ -422,7 +435,7 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
-# Precompiles for Revise
+# Precompiles for Revise and other packages
 # TODO: move these to contrib/generate_precompile.jl
 # The problem is they don't work there
 for match = _methods(+, (Int, Int), -1, get_world_counter())
@@ -456,6 +469,23 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
 
     # Code loading uses this
     sortperm(mtime.(readdir(".")), rev=true)
+    # JLLWrappers uses these
+    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    eachindex(IndexLinear(), Expr[])
+    push!(Expr[], Expr(:return, false))
+    vcat(String[], String[])
+    k, v = (:hello => nothing)
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+    # Preferences uses these
+    precompile(get_preferences, (UUID,))
+    precompile(record_compiletime_preference, (UUID, String))
+    get(Dict{String,Any}(), "missing", nothing)
+    delete!(Dict{String,Any}(), "missing")
+    for (k, v) in Dict{String,Any}()
+        println(k)
+    end
 
     break   # only actually need to do this once
 end
@@ -478,6 +508,10 @@ function __init__()
     nothing
 end
 
+# enable threads support
+@eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
+
 end
+
 
 end # baremodule Base
