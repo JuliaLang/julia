@@ -259,7 +259,7 @@ endif
 	@## clang should have made the dSYM split-debug directory,
 	@## but we are intentionally not going to give it the correct name
 	@## because we want to test the non-default debug configuration
-	@#rm -r $@.dSYM && mv $@.tmp.dSYM $@.dSYM
+	@#rm -rf $@.dSYM && mv $@.tmp.dSYM $@.dSYM
 	mv $@.tmp $@
 	$(INSTALL_NAME_CMD)libccalltest.$(SHLIB_EXT) $@
 

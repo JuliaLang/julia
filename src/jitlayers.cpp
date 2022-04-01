@@ -18,6 +18,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
 
 // target machine computation
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -51,8 +52,6 @@ using namespace llvm;
 #endif
 
 #define DEBUG_TYPE "jitlayers"
-
-void jl_init_jit(void) { }
 
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
@@ -476,7 +475,7 @@ static auto countBasicBlocks(const Function &F)
 }
 
 OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
-    TSM.withModuleDo([&](Module &M){
+    TSM.withModuleDo([&](Module &M) {
         uint64_t start_time = 0;
         if (dump_llvm_opt_stream != NULL) {
             // Print LLVM function statistics _before_ optimization
@@ -500,7 +499,11 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
 
         JL_TIMING(LLVM_OPT);
 
-        PM.run(M);
+        {
+            //Lock around our pass manager
+            std::lock_guard<std::mutex> lock(this->mutex);
+            PM.run(M);
+        }
 
         uint64_t end_time = 0;
         if (dump_llvm_opt_stream != NULL) {
@@ -937,10 +940,10 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
     CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 2))),
     CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 3))),
     OptimizeLayers{
-        {ES, CompileLayer0, OptimizerT(PM0, 0)},
-        {ES, CompileLayer1, OptimizerT(PM1, 1)},
-        {ES, CompileLayer2, OptimizerT(PM2, 2)},
-        {ES, CompileLayer3, OptimizerT(PM3, 3)},
+        {ES, CompileLayer0, OptimizerT(PM0, PM_mutexes[0], 0)},
+        {ES, CompileLayer1, OptimizerT(PM1, PM_mutexes[1], 1)},
+        {ES, CompileLayer2, OptimizerT(PM2, PM_mutexes[2], 2)},
+        {ES, CompileLayer3, OptimizerT(PM3, PM_mutexes[3], 3)},
     },
     OptSelLayer(OptimizeLayers)
 {
@@ -1088,9 +1091,9 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
     return cantFail(addr.getAddress());
 }
 
-static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
+    static int globalUnique = 0;
     std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname->empty()) {
         std::string string_fname;
@@ -1110,7 +1113,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
+        stream_fname << unadorned_name << "_" << globalUnique++;
         *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
     }
@@ -1120,7 +1123,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION < 140000
-#  warning "JIT debugging (GDB integration) not available on LLVM < 14.0 (for JITLink)"
+#  pragma message("JIT debugging (GDB integration) not available on LLVM < 14.0 (for JITLink)")
 void JuliaOJIT::enableJITDebuggingSupport() {}
 # else
 extern "C" orc::shared::CWrapperFunctionResult

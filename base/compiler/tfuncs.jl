@@ -1546,6 +1546,10 @@ function tuple_tfunc(argtypes::Vector{Any})
             params[i] = typeof(x.val)
         else
             x = isvarargtype(x) ? x : widenconst(x)
+            # since there don't exist any values whose runtime type are `Tuple{Type{...}}`,
+            # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
+            # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
+            # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
             if isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
@@ -1554,6 +1558,8 @@ function tuple_tfunc(argtypes::Vector{Any})
                 else
                     params[i] = Type
                 end
+            elseif !isvarargtype(x) && hasintersect(x, Type)
+                params[i] = Union{x, Type}
             else
                 params[i] = x
             end
@@ -1789,11 +1795,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
     if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
         # consistent if the argtype is immutable
         if isvarargtype(argtypes[2])
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
         end
         s = widenconst(argtypes[2])
         if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
@@ -1811,24 +1817,21 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
             nothrow = isvarargtype(argtypes[end]) ? false :
                 builtin_nothrow(f, argtypes[2:end], rt)
         end
-        effect_free = f === isdefined
+        effect_free = true
     elseif f === getglobal && length(argtypes) >= 3
-        nothrow = effect_free = getglobal_nothrow(argtypes[2:end])
+        nothrow = getglobal_nothrow(argtypes[2:end])
         ipo_consistent = nothrow && isconst((argtypes[2]::Const).val, (argtypes[3]::Const).val)
-        #effect_free = nothrow && isbindingresolved((argtypes[2]::Const).val, (argtypes[3]::Const).val)
+        effect_free = true
     else
         ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
         effect_free = contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
         nothrow = isvarargtype(argtypes[end]) ? false : builtin_nothrow(f, argtypes[2:end], rt)
     end
 
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        #=terminates=#ALWAYS_TRUE,
-        #=overlayed=#false,
-        )
+    return Effects(EFFECTS_TOTAL;
+        consistent = ipo_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        effect_free = effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
 function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
@@ -1994,24 +1997,19 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         return Effects()
     end
 
-    ipo_consistent = !(f === Intrinsics.pointerref || # this one is volatile
-        f === Intrinsics.arraylen || # this one is volatile
+    ipo_consistent = !(
+        f === Intrinsics.pointerref ||      # this one is volatile
+        f === Intrinsics.arraylen ||        # this one is volatile
         f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-        f === Intrinsics.cglobal) # cglobal lookup answer changes at runtime
-
+        f === Intrinsics.have_fma ||        # this one depends on the runtime environment
+        f === Intrinsics.cglobal)           # cglobal lookup answer changes at runtime
     effect_free = !(f === Intrinsics.pointerset)
+    nothrow = !isvarargtype(argtypes[end]) && intrinsic_nothrow(f, argtypes[2:end])
 
-    nothrow = isvarargtype(argtypes[end]) ? false :
-        intrinsic_nothrow(f, argtypes[2:end])
-
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        #=terminates=#ALWAYS_TRUE,
-        #=overlayed=#false,
-        )
+    return Effects(EFFECTS_TOTAL;
+        consistent = ipo_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        effect_free = effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function
@@ -2030,7 +2028,13 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if contains_is(argtypes_vec, Union{})
                         return CallMeta(Const(Union{}), false)
                     end
+                    # Run the abstract_call without restricting abstract call
+                    # sites. Otherwise, our behavior model of abstract_call
+                    # below will be wrong.
+                    old_restrict = sv.restrict_abstract_call_sites
+                    sv.restrict_abstract_call_sites = false
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    sv.restrict_abstract_call_sites = old_restrict
                     info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)

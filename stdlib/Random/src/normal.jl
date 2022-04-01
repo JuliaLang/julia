@@ -10,7 +10,7 @@
 ## randn
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng=default_rng()], [T=Float64], [dims...])
 
 Generate a normally-distributed random number of type `T`
 with mean 0 and standard deviation 1.
@@ -93,7 +93,7 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
 ## randexp
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng=default_rng()], [T=Float64], [dims...])
 
 Generate a random number of type `T` according to the
 exponential distribution with scale 1.
@@ -141,7 +141,7 @@ end
 ## arrays & other scalar methods
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng=default_rng()], A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
@@ -162,7 +162,7 @@ julia> randn!(rng, zeros(5))
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng=default_rng()], A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution
 (with scale 1).

@@ -63,6 +63,12 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
             return 0;
         if (dt->name == jl_namedtuple_typename)
             return layout_uses_free_typevars(jl_tparam0(dt), env) || layout_uses_free_typevars(jl_tparam1(dt), env);
+        if (dt->name == jl_tuple_typename)
+            // conservative, since we don't want to inline an abstract tuple,
+            // and we currently declare !has_fixed_layout for these, but that
+            // means we also won't be able to inline a tuple which is concrete
+            // except for the use of free type-vars
+            return 1;
         jl_svec_t *types = jl_get_fieldtypes(dt);
         size_t i, l = jl_svec_len(types);
         for (i = 0; i < l; i++) {
@@ -227,8 +233,10 @@ int jl_has_fixed_layout(jl_datatype_t *dt)
         return 1;
     if (dt->name->abstract)
         return 0;
-    if (jl_is_tuple_type(dt) || jl_is_namedtuple_type(dt))
-        return 0; // TODO: relax more?
+    if (dt->name == jl_namedtuple_typename)
+        return !layout_uses_free_typevars(jl_tparam0(dt), NULL) && !layout_uses_free_typevars(jl_tparam1(dt), NULL);
+    if (dt->name == jl_tuple_typename)
+        return 0;
     jl_svec_t *types = jl_get_fieldtypes(dt);
     size_t i, l = jl_svec_len(types);
     for (i = 0; i < l; i++) {
@@ -2144,6 +2152,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                           jl_any_type, jl_emptysvec, 64);
     jl_uint8_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt8"), core,
                                          jl_any_type, jl_emptysvec, 8);
+    jl_uint16_type = jl_new_primitivetype((jl_value_t*)jl_symbol("UInt16"), core,
+                                          jl_any_type, jl_emptysvec, 16);
 
     jl_ssavalue_type = jl_new_datatype(jl_symbol("SSAValue"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "id"),
@@ -2508,7 +2518,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inferred",
                             //"edges",
                             //"absolute_max",
-	                        "ipo_purity_bits", "purity_bits",
+                            "ipo_purity_bits", "purity_bits",
                             "argescapes",
                             "isspecsig", "precompile", "invoke", "specptr", // function object decls
                             "relocatability"),
@@ -2522,7 +2532,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             //jl_any_type,
                             //jl_bool_type,
-			                jl_uint8_type, jl_uint8_type,
+                            jl_uint32_type, jl_uint32_type,
                             jl_any_type,
                             jl_bool_type,
                             jl_bool_type,
@@ -2602,7 +2612,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(14,
+                        jl_perm_symsvec(15,
                                         "next",
                                         "queue",
                                         "storage",
@@ -2616,8 +2626,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "rngState3",
                                         "_state",
                                         "sticky",
-                                        "_isexception"),
-                        jl_svec(14,
+                                        "_isexception",
+                                        "priority"),
+                        jl_svec(15,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -2631,7 +2642,8 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_uint64_type,
                                 jl_uint8_type,
                                 jl_bool_type,
-                                jl_bool_type),
+                                jl_bool_type,
+                                jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 6);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);

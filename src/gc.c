@@ -355,6 +355,9 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
 // function returns.
 static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
 {
+    // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
+    // of `finalizer`) in a finalizer:
+    uint8_t sticky = ct->sticky;
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -369,6 +372,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     run_finalizer(ct, items[len-2], items[len-1]);
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
+    ct->sticky = sticky;
 }
 
 static void run_finalizers(jl_task_t *ct)
@@ -1642,7 +1646,7 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_N
     }
 }
 
-void gc_queue_binding(jl_binding_t *bnd)
+JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
@@ -2820,7 +2824,6 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
 }
 
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp);
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 
 // mark the initial root set
@@ -2828,9 +2831,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
-
-    // tasks
-    jl_gc_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)

@@ -4119,7 +4119,7 @@ f(x) = yt(x)
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals))))))))
 
-(define (closure-convert e) (cl-convert e #f #f #f #f #f #f #f))
+(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
 ;; pass 5: convert to linear IR
 
@@ -4219,17 +4219,21 @@ f(x) = yt(x)
                                      (loop (cdr s))))))
             `(pop_exception ,restore-token))))
     (define (emit-return x)
-      (define (actually-return x)
-        (let* ((x   (if rett
-                        (compile (convert-for-type-decl x rett) '() #t #f)
-                        x))
-               (tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
+      (define (emit- x)
+        (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
                         #f
                         (make-ssavalue))))
-          (if tmp (emit `(= ,tmp ,x)))
+          (if tmp
+              (begin (emit `(= ,tmp ,x)) tmp)
+              x)))
+      (define (actually-return x)
+        (let* ((x (if rett
+                      (compile (convert-for-type-decl (emit- x) rett) '() #t #f)
+                      x))
+               (x (emit- x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
             (if pexc (emit pexc)))
-          (emit `(return ,(or tmp x)))))
+          (emit `(return ,x))))
       (if x
           (if (> handler-level 0)
               (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)

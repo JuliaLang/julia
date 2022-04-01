@@ -8,8 +8,7 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false :
-    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
@@ -1539,9 +1538,9 @@ julia> det(M)
 2.0
 ```
 """
-function det(A::AbstractMatrix{T}) where T
+function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
-        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
         return convert(S, det(UpperTriangular(A)))
     end
     return det(lu(A; check = false))
@@ -1780,7 +1779,7 @@ julia> normalize(a)
 function normalize(a::AbstractArray, p::Real = 2)
     nrm = norm(a, p)
     if !isempty(a)
-        aa = copy_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, typeof(first(a)/nrm))
         return __normalize!(aa, nrm)
     else
         T = typeof(zero(eltype(a))/nrm)

@@ -474,25 +474,22 @@ static Value *maybe_bitcast(jl_codectx_t &ctx, Value *V, Type *to) {
     return V;
 }
 
-static Value *julia_binding_gv(jl_codectx_t &ctx, Value *bv)
+static Value *julia_binding_pvalue(jl_codectx_t &ctx, Value *bv)
 {
+    bv = emit_bitcast(ctx, bv, ctx.types().T_pprjlvalue);
     Value *offset = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_binding_t, value) / sizeof(size_t));
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, bv, offset);
 }
 
 static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
-    // emit a literal_pointer_val to the value field of a jl_binding_t
+    // emit a literal_pointer_val to a jl_binding_t
     // binding->value are prefixed with *
-    Value *bv;
     if (imaging_mode)
-        bv = emit_bitcast(ctx,
-                tbaa_decorate(ctx.tbaa().tbaa_const,
-                              ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, julia_pgv(ctx, "*", b->name, b->owner, b), Align(sizeof(void*)))),
-                ctx.types().T_pprjlvalue);
+        return tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue,
+                    julia_pgv(ctx, "*", b->name, b->owner, b), Align(sizeof(void*))));
     else
-        bv = ConstantExpr::getBitCast(literal_static_pointer_val(b, ctx.types().T_pjlvalue), ctx.types().T_pprjlvalue);
-    return julia_binding_gv(ctx, bv);
+        return literal_static_pointer_val(b, ctx.types().T_pjlvalue);
 }
 
 // --- mapping between julia and llvm types ---
@@ -3278,6 +3275,14 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
 }
 
+static void emit_write_barrier_binding(jl_codectx_t &ctx, Value *parent, Value *ptr)
+{
+    SmallVector<Value*, 8> decay_ptrs;
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, parent, ctx.types().T_prjlvalue)));
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
+    ctx.builder.CreateCall(prepare_call(jl_write_barrier_binding_func), decay_ptrs);
+}
+
 static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, unsigned offset)
 {
     // This is a inlined field at `offset`.
@@ -3340,7 +3345,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), getInt8PtrTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), fsz));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
-        BasicBlock *ModifyBB;
+        BasicBlock *ModifyBB = NULL;
         if (ismodifyfield) {
             ModifyBB = BasicBlock::Create(ctx.builder.getContext(), "modify_xchg", ctx.f);
             ctx.builder.CreateBr(ModifyBB);

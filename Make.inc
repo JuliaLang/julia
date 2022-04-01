@@ -21,6 +21,9 @@ JULIA_PRECOMPILE ?= 1
 # and LLVM_ASSERTIONS=1.
 FORCE_ASSERTIONS ?= 0
 
+# Set BOOTSTRAP_DEBUG_LEVEL to 1 to enable Julia-level stacktrace during bootstrapping.
+BOOTSTRAP_DEBUG_LEVEL ?= 0
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -647,8 +650,8 @@ ifeq ($(OS),FreeBSD)
 ifneq (,$(findstring gfortran,$(FC)))
 
 # First let's figure out what version of GCC we're dealing with
-_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
-_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
+_GCCMAJOR := $(shell $(FC) -dumpversion 2>/dev/null | cut -d'.' -f1)
+_GCCMINOR := $(shell $(FC) -dumpversion 2>/dev/null | cut -d'.' -f2)
 
 # The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
 ifeq ($(_GCCMAJOR),4)
@@ -897,7 +900,7 @@ USE_BLAS64:=1
 BINARY:=64
 ifeq ($(OS),Darwin)
 # Apple Chips are all at least A12Z
-MCPU:=apple-a12
+MCPU:=apple-m1
 endif
 endif
 
@@ -1391,7 +1394,7 @@ clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
 	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-	-rm -r $$(abspath $(2)/$(3))
+	rm -rf $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
@@ -1399,7 +1402,7 @@ ifeq ($$(BUILD_OS), WINNT)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
-	@rm -r $$@
+	@rm -rf $$@
 	@cp -R $$(abspath $(1)) $$@.tmp
 	@mv $$@.tmp $$@
 else
