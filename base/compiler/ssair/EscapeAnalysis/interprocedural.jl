@@ -3,8 +3,8 @@
 import Core.Compiler:
     MethodInstance, InferenceResult, Signature, ConstResult,
     MethodResultPure, MethodMatchInfo, UnionSplitInfo, ConstCallInfo, InvokeCallInfo,
-    call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction, validate_sparams,
-    specialize_method, invoke_rewrite
+    call_sig, argtypes_to_type, is_builtin, is_return_type, is_infer_effects, istopfunction,
+    validate_sparams, specialize_method, invoke_rewrite
 
 const Linfo = Union{MethodInstance,InferenceResult}
 struct CallInfo
@@ -31,7 +31,7 @@ function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info))
         return true
     elseif f === UnionAll && length(argtypes) == 3 && (argtypes[2] ⊑ TypeVar)
         return true
-    elseif is_return_type(f)
+    elseif is_return_type(f) || is_infer_effects(f)
         return true
     end
     if info isa MethodResultPure
@@ -49,7 +49,7 @@ function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info))
         infos = MethodMatchInfo[info]
     elseif isa(info, UnionSplitInfo)
         infos = info.matches
-    else # isa(info, ReturnTypeCallInfo), etc.
+    else # isa(info, VirtualCallInfo), etc.
         return missing
     end
     return analyze_call(sig, infos)

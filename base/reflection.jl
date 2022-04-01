@@ -1310,6 +1310,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     return rt
 end
 
+if nameof(@__MODULE__) === :Base
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
                        interp = Core.Compiler.NativeInterpreter(world))
@@ -1332,12 +1333,13 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
             match = match::Core.MethodMatch
             frame = Core.Compiler.typeinf_frame(interp,
                 match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
-            frame === nothing && return Core.Compiler.Effects()
+            frame === nothing && return Core.Compiler.Effects() # the effect of this match is unanalyzable
             effects = Core.Compiler.tristate_merge(effects, frame.ipo_effects)
         end
         return effects
     end
 end
+end # if nameof(@__MODULE__) === :Base
 
 """
     print_statement_costs(io::IO, f, types)

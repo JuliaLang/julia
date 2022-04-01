@@ -2012,59 +2012,88 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
-# TODO: this function is a very buggy and poor model of the return_type function
-# since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
+# TODO: this function is a very buggy and poor model of the `return_type` function
+# since `abstract_call_gf_by_type` is a very inaccurate model of `_method` and of `typeinf_type`,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
-    if length(argtypes) == 3
-        tt = argtypes[3]
-        if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
-            aft = argtypes[2]
-            if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
-                   (isconcretetype(aft) && !(aft <: Builtin))
-                af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
-                if isa(af_argtype, DataType) && af_argtype <: Tuple
-                    argtypes_vec = Any[aft, af_argtype.parameters...]
-                    if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), false)
-                    end
-                    # Run the abstract_call without restricting abstract call
-                    # sites. Otherwise, our behavior model of abstract_call
-                    # below will be wrong.
-                    old_restrict = sv.restrict_abstract_call_sites
-                    sv.restrict_abstract_call_sites = false
-                    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
-                    sv.restrict_abstract_call_sites = old_restrict
-                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
-                    rt = widenconditional(call.rt)
-                    if isa(rt, Const)
-                        # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), info)
-                    end
-                    rt = widenconst(rt)
-                    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
-                        # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), info)
-                    elseif !isempty(sv.pclimitations)
-                        # conservatively express uncertainty of this result
-                        # in two ways: both as being a subtype of this, and
-                        # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, info)
-                    elseif (isa(tt, Const) || isconstType(tt)) &&
-                        (isa(aft, Const) || isconstType(aft))
-                        # input arguments were known for certain
-                        # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), info)
-                    elseif isType(rt)
-                        return CallMeta(Type{rt}, info)
-                    else
-                        return CallMeta(Type{<:rt}, info)
-                    end
-                end
-            end
-        end
+    length(argtypes) == 3 || return CallMeta(Type, false)
+    aft = argtypes[2]
+    if !(isa(aft, Const) ||
+         (isType(aft) && !has_free_typevars(aft)) ||
+         (isconcretetype(aft) && !(aft <: Builtin)))
+        return CallMeta(Type, false)
     end
-    return CallMeta(Type, false)
+    tt = argtypes[3]
+    isa(tt, Const) || (isType(tt) && !has_free_typevars(tt)) || return CallMeta(Type, false)
+    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+    (isa(af_argtype, DataType) && af_argtype <: Tuple) || return CallMeta(Type, false)
+    argtypes_vec = Any[aft, af_argtype.parameters...]
+    if contains_is(argtypes_vec, Union{})
+        return CallMeta(Const(Union{}), false)
+    end
+    call, _ = virtual_abstract_call(interp, argtypes_vec, sv)
+    rt = widenconditional(call.rt)
+    info = verbose_stmt_info(interp) ? VirtualCallInfo(call.info) : false
+    if isa(rt, Const)
+        # output was computed to be constant
+        return CallMeta(Const(typeof(rt.val)), info)
+    end
+    rt = widenconst(rt)
+    if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
+        # output cannot be improved so it is known for certain
+        return CallMeta(Const(rt), info)
+    elseif !isempty(sv.pclimitations)
+        # conservatively express uncertainty of this result in two ways:
+        # both as being a subtype of this, and because of LimitedAccuracy causes
+        return CallMeta(Type{<:rt}, info)
+    end
+    aft = argtypes[2]
+    tt = argtypes[3]
+    if (isa(tt, Const) || isconstType(tt)) && (isa(aft, Const) || isconstType(aft))
+        # input arguments were known for certain
+        # XXX: this doesn't imply we know anything about rt
+        return CallMeta(Const(rt), info)
+    elseif isType(rt)
+        return CallMeta(Type{rt}, info)
+    end
+    return CallMeta(Type{<:rt}, info)
+end
+
+# XXX this tfunc has the same unreliability as `return_type_tfunc`, and also some duplications with it
+function infer_effects_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    length(argtypes) == 3 || return CallMeta(Effects, false)
+    aft = argtypes[2]
+    tt = argtypes[3]
+    # models the infer_effects function only when the input arguments are fully known
+    if !((isa(tt, Const) || isconstType(tt)) && (isa(aft, Const) || isconstType(aft)))
+        return CallMeta(Effects, false)
+    end
+    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+    (isa(af_argtype, DataType) && af_argtype <: Tuple) || return CallMeta(Effects, false)
+    argtypes_vec = Any[aft, af_argtype.parameters...]
+    call, effects = virtual_abstract_call(interp, argtypes_vec, sv)
+    info = verbose_stmt_info(interp) ? VirtualCallInfo(call.info) : false
+    if !isempty(sv.pclimitations)
+        # conservatively express uncertainty of this result
+        return CallMeta(Effects, false)
+    end
+    return CallMeta(Const(effects), info)
+end
+
+# first set temporal states, then model inference on this call with the virtual `abstract_call`,
+# and finally reset to the original states
+function virtual_abstract_call(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+    old_restrict = sv.restrict_abstract_call_sites
+    old_effects = sv.ipo_effects
+    # Run the `abstract_call` without restricting abstract call sites.
+    # Otherwise, our behavior model of `abstract_call` below will be wrong.
+    sv.restrict_abstract_call_sites = false
+    sv.ipo_effects = EFFECTS_TOTAL # XXX respect inbounds_taints_consistency?
+    call = abstract_call(interp, ArgInfo(nothing, argtypes), sv, -1)
+    effects = sv.ipo_effects
+    sv.restrict_abstract_call_sites = old_restrict
+    sv.ipo_effects = old_effects
+    return call, effects
 end
 
 # N.B.: typename maps type equivalence classes to a single value

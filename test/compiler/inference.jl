@@ -4098,3 +4098,78 @@ invoke44763(x) = Base.@invoke increase_x44763!(x)
     invoke44763(42)
 end |> only === Int
 @test x44763 == 0
+
+Base.@assume_effects :terminates_locally function pow(x::Int)
+    res = 1
+    1 < x < 20 || error("bad pow")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+maybe_effectful(x::Int) = 42
+maybe_effectful(x::Any) = unknown_operation()
+function f_no_methods end
+
+function nothing_or_missing(f, tt; pred=Core.Compiler.is_terminates)
+    @nospecialize f tt
+    effects = Core.Compiler.infer_effects(f, tt)
+    if pred(effects)
+        return nothing
+    else
+        return missing
+    end
+end
+
+@testset "Core.Compiler.infer_effects" begin
+    # basic
+    @test Core.Compiler.is_terminates(Core.Compiler.infer_effects(pow, Tuple{Int}))
+    @test Base.return_types() do
+        nothing_or_missing(pow, Tuple{Int})
+    end |> only === Nothing
+    @test Base.return_types() do
+        nothing_or_missing(Tuple{Int}) do x
+            pow(x)
+        end
+    end |> only === Nothing
+
+    # union split
+    let effects = Core.Compiler.infer_effects(maybe_effectful, Tuple{Any}) # union split
+        @test !Core.Compiler.is_consistent(effects)
+        @test !Core.Compiler.is_effect_free(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test !Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nonoverlayed(effects)
+    end
+    @test Base.return_types() do
+        nothing_or_missing(maybe_effectful, Tuple{Any})
+    end |> only === Missing
+
+    # no matching methods
+    let effects = Core.Compiler.infer_effects(f_no_methods, Tuple{Any})
+        @test Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+    end
+    @test Base.return_types() do
+        nothing_or_missing(f_no_methods, Tuple{Any})
+    end |> only === Nothing
+    @test Base.return_types() do
+        nothing_or_missing(f_no_methods, Tuple{Any}; pred=Core.Compiler.is_nothrow)
+    end |> only === Missing
+
+    # unknown arguments
+    @test Base.return_types((Any,Any)) do f, tt
+        nothing_or_missing(f, tt)
+    end |> only === Union{Nothing,Missing}
+
+    # builtins
+    @test Core.Compiler.infer_effects(typeof, Tuple{Any}) |> Core.Compiler.is_total
+    @test Base.return_types() do
+        nothing_or_missing(typeof, Tuple{Any}; pred=Core.Compiler.is_total)
+    end |> only === Nothing
+    @test Core.Compiler.infer_effects(===, Tuple{Any,Any}) |> Core.Compiler.is_total
+    @test Base.return_types() do
+        nothing_or_missing(===, Tuple{Any,Any}; pred=Core.Compiler.is_total)
+    end |> only === Nothing
+end
