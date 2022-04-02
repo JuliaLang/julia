@@ -1181,7 +1181,7 @@ julia> flatmap(n->-n:2:n, 1:3) |> collect
   1
   3
 
-julia> flatmap(x -> (x+1)*x % 4 == 0 ? x*x : nothing, 1:11) |> collect
+julia> flatmap(x -> (x+1)*x % 4 == 0 ? (x*x,) : (), 1:11) |> collect
 5-element Vector{Int64}:
    9
   16
