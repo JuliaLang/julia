@@ -2520,7 +2520,10 @@ end
 
 module Mod2
 import ..Mod.x as x_from_mod
+import ..Mod.x as x_from_mod2
 const y = 2
+
+export x_from_mod2
 end
 
 import .Mod: x as x2
@@ -2565,6 +2568,12 @@ import .Mod2.x_from_mod
 
 @test @isdefined(x_from_mod)
 @test x_from_mod == Mod.x
+
+using .Mod2
+
+@test_nowarn @eval x_from_mod2
+@test @isdefined(x_from_mod2)
+@test x_from_mod2 == x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
