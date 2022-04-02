@@ -482,6 +482,23 @@ end
 @test flatmap(1:3) do j flatmap(1:3) do k
     j!=k ? ((j,k),) : ()
 end end |> collect == [(j,k) for j in 1:3 for k in 1:3 if j!=k]
+# Test inspired by the monad associativity law
+fmf(x) = x<0 ? () : (x^2,)
+fmg(x) = x<1 ? () : (x/2,)
+fmdata = -2:0.75:2
+fmv1 = flatmap(tuple.(fmdata)) do h
+    flatmap(h) do x
+        fx = fmg(x)
+        flatmap(fx) do x
+            fmf(x)
+        end
+    end
+end
+fmv2 = flatmap(tuple.(fmdata)) do h
+    fh = flatmap(h) do x fmg(x) end
+    flatmap(fh) do x fmf(x) end
+end
+@test all(fmv1 .== fmv2)
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))
