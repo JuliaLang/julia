@@ -469,8 +469,7 @@ end
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
-@test collect(flatten([Some(1)])) == [1]
-@test collect(flatten([nothing])) == Any[]
+@test collect(flatten(astuple.([1,nothing]))) == [1]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
@@ -480,11 +479,9 @@ end
 
 # flatmap
 # -------
-@test flatmap(1:3) do j
-           flatmap(1:3) do k
-               j>k ? Some((j,k)) : nothing
-           end
-       end |> collect == [(j,k) for j in 1:3 for k in 1:3 if j>k]
+@test flatmap(1:3) do j flatmap(1:3) do k
+    j!=k ? ((j,k),) : ()
+end end |> collect == [(j,k) for j in 1:3 for k in 1:3 if j!=k]
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))
