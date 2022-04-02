@@ -1195,9 +1195,9 @@ julia> [(j,k) for j in 1:3 for k in 1:3 if j>k]
  (3, 1)
  (3, 2)
 
-julia> flatmap(1:3) do j
-           flatmap(1:3) do k
-               j>k ? Some((j,k)) : nothing
+julia> Iterators.flatmap(1:3) do j
+           Iterators.flatmap(1:3) do k
+               j>k ? ((j,k),) : ()
            end
        end |> collect
 3-element Vector{Tuple{Int64, Int64}}:
