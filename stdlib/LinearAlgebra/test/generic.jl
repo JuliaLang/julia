@@ -327,9 +327,20 @@ end
 @testset "LinearAlgebra.axp(b)y! for non strides input" begin
     a = rand(5, 5)
     @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
-    @test_broken LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
     @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
     @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
+@testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test LinearAlgebra.axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test LinearAlgebra.axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test LinearAlgebra.axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test LinearAlgebra.axpy!(1, b, zeros(T, size(b))) == b
+    end
 end
 
 @testset "norm and normalize!" begin
