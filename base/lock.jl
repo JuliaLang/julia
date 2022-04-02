@@ -81,7 +81,7 @@ it in its docstring.
 
 * `islocked(lock)` is data-race-free.
 * If `islocked(lock)` returns `false`, an immediate invocation of `trylock(lock)` must
-  succeeds (returns `true`) if there is no interference from other tasks.
+  succeed (returns `true`) if there is no interference from other tasks.
 """
 function islocked end
 # Above docstring is a documentation for the abstract interface and not the one specific to
