@@ -227,7 +227,6 @@ end
     end
 
     @assert h.age == age0 "Muliple concurent writes to Dict detected!"
-    
     h.age += 1
     h.slots = slots
     h.keys = keys
@@ -235,7 +234,6 @@ end
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
-    
     return h
 end
 
