@@ -720,7 +720,7 @@ accessible(mod::Module) =
            map(names, moduleusings(mod))...;
            collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
-function doc_completions(name) 
+function doc_completions(name)
     res = fuzzysort(name, accessible(Main))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
