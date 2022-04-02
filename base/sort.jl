@@ -10,8 +10,8 @@ using .Base: copymutable, LinearIndices, length, (:),
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing, keytype,
-    UnitRange, min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type
+    length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
+    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned
 
 using .Base: >>>, !==
 
@@ -750,7 +750,7 @@ function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveS
 end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
-maybe_unsigned(x::Union{Int8, Int16, Int32, Int64, Int128}) = unsigned(x)
+maybe_unsigned(x::BitSigned) = unsigned(x)
 function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
     mn = mx = v[lo]
     @inbounds for i in (lo+1):hi
@@ -770,7 +770,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # and to avoid overflow, we check for small inputs before any other runtime checks
     hi <= lo && return v
     lenm1 = maybe_unsigned(hi-lo) # adding 1 would risk overflow
-    # only count sort on a short range can compete with insertion sort fo lenm1 < 40
+    # only count sort on a short range can compete with insertion sort when lenm1 < 40
     # and the optimization is not worth the detection cost, so we use insertion sort.
     lenm1 < 40 && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
@@ -793,7 +793,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
             v_range = maybe_unsigned(v_max-v_min)
             v_range == 0 && return v # all same
 
-            # we know lenm1 ≥ 30, so this will never underflow.
+            # we know lenm1 ≥ 40, so this will never underflow.
             # if lenm1 > 3.7e18 (59 exabytes), then this may incorrectly dispatch to fallback
             if v_range < 5lenm1-100 # count sort will outperform comparison sort if v's range is small
                 return sort_int_range!(v, Int(v_range+1), v_min, o === Forward ? identity : reverse, lo, hi)
@@ -848,7 +848,8 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     # Float32[2.012, 400.0, 12.345] uint_maps to UInt32[0x3fff3b63, 0x3c37ffff, 0x414570a4]
     # which is reduced to UInt32[0x03c73b64, 0x00000000, 0x050d70a5] using only 26 bits.
     # the overhead for this subtraction is small enough that it is worthwhile in many cases.
-    # this is faster than u[lo:hi] .-= u_min
+
+    # this is faster than u[lo:hi] .-= u_min as of v1.9.0-DEV.100
     @inbounds for i in lo:hi
         u[i] -= u_min
     end
