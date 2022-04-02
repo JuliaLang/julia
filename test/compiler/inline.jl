@@ -1185,11 +1185,11 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
-const ___CONST_DICT___ = Dict{Any,Any}(:a => 1, :b => 2)
-Base.@assume_effects :consistent :effect_free :terminates_globally consteval(
+const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
+Base.@assume_effects :total_may_throw concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
-    consteval(getindex, ___CONST_DICT___, :a)
+    concrete_eval(getindex, ___CONST_DICT___, :a)
 end
 
 # https://github.com/JuliaLang/julia/issues/44732

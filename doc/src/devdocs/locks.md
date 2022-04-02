@@ -47,6 +47,11 @@ The following is a level 4 lock, which can only recurse to acquire level 1, 2, o
 
 No Julia code may be called while holding a lock above this point.
 
+orc::ThreadSafeContext locks occupy a special spot in the locking diagram. They are used to protect
+LLVM's global non-threadsafe state, but there may be an arbitrary number of them. For now, there is
+only one global context, and thus acquiring it is a level 5 lock. However, acquiring such a lock
+should only be done at the same time that the codegen lock is acquired.
+
 The following are a level 6 lock, which can only recurse to acquire locks at lower levels:
 
 >   * codegen
