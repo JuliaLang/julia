@@ -556,9 +556,9 @@ foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
 
 """
-    astuple(x::Union{X, Nothing})
+    monuple(x::Union{X, Nothing})
 
-Converts values so that `nothing` becomes `()` and any other values are wrapped into a singleton tuple.
+Converts values so that `nothing` becomes `()` and any other values are wrapped into a singleton tuple, also known as a monuple.
 
 # Example
 
@@ -577,7 +577,7 @@ julia> filter(!isnothing, data)
  RegexMatch("xo", 1="xo")
  RegexMatch("x", 1="x")
 
-julia> collect(Iterators.flatten(astuple.(data)))
+julia> collect(Iterators.flatten(monuple.(data)))
 3-element Vector{RegexMatch}:
  RegexMatch("x", 1="x")
  RegexMatch("xo", 1="xo")
@@ -587,7 +587,7 @@ julia> [optx for optx in data if !isnothing(optx) && optx[1] != "x"]
 1-element Vector{RegexMatch}:
  RegexMatch("xo", 1="xo")
 
-julia> Iterators.flatmap(astuple.(data)) do optx
+julia> Iterators.flatmap(monuple.(data)) do optx
            Iterators.flatmap(optx) do x
                x[1] == "x" ? () : (x,)
            end
@@ -596,4 +596,4 @@ julia> Iterators.flatmap(astuple.(data)) do optx
  RegexMatch("xo", 1="xo")
 ```
 """
-astuple(x::Union{X, Nothing}) where {X} = isnothing(x) ? () : (x,)
+monuple(x::Union{X, Nothing}) where {X} = isnothing(x) ? () : (x,)

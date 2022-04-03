@@ -469,7 +469,7 @@ end
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
-@test collect(flatten(astuple.([1,nothing]))) == [1]
+@test collect(flatten(monuple.([1,nothing]))) == [1]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
@@ -488,15 +488,15 @@ fmg(x) = x<1 ? () : (x/2,)
 fmdata = -2:0.75:2
 fmv1 = flatmap(tuple.(fmdata)) do h
     flatmap(h) do x
-        fx = fmg(x)
-        flatmap(fx) do x
+        gx = fmg(x)
+        flatmap(gx) do x
             fmf(x)
         end
     end
 end
 fmv2 = flatmap(tuple.(fmdata)) do h
-    fh = flatmap(h) do x fmg(x) end
-    flatmap(fh) do x fmf(x) end
+    gh = flatmap(h) do x fmg(x) end
+    flatmap(gh) do x fmf(x) end
 end
 @test all(fmv1 .== fmv2)
 
