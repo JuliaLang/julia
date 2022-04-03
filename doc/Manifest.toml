@@ -26,7 +26,7 @@ version = "0.8.6"
 deps = ["ANSIColoredPrinters", "Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
 git-tree-sha1 = "2c023382ab49c40475fcf59b90ba1c8edd9ff45e"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-version = "0.27.13"
+version = "0.27.15"
 
 [[deps.IOCapture]]
 deps = ["Logging", "Random"]
