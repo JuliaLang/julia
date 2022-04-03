@@ -2787,6 +2787,11 @@ colons go in this expression. The results are concatenated along the remaining d
 For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
 for all `i` and `j`.
 
+Note that `mapslices` makes no guarantees about the order of execution. In addition, `f` is
+assumed to be [pure](https://en.wikipedia.org/wiki/Pure_function) when working with sparse
+data structures. Using an impure function with `mapslices` may cause bugs on sparse or 
+diagonal arrays, as `f` may only be called once on duplicated elements.
+
 See also [`eachcol`](@ref), [`eachslice`](@ref).
 
 # Examples
@@ -2940,10 +2945,10 @@ mapany(f, itr) = Any[f(x) for x in itr]
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise, and stop when when any of them is exhausted.
 
-Note that `f` makes no guarantees about the order in which `f` is called on elements. In
-addition, `f` is assumed to be [pure](https://en.wikipedia.org/wiki/Pure_function). Using
-an impure function together with `f` can cause bugs when working with some data structures,
-e.g. sparse or diagonal arrays, as `f` will only be called once on duplicated elements.
+Note that `map` makes no guarantees about the order of execution. In addition, `f` is assumed
+to be [pure](https://en.wikipedia.org/wiki/Pure_function) when working with sparse data
+structures. Using an impure function with `map` may cause bugs on sparse or diagonal arrays, 
+as `f` may only be called once on duplicated elements.
 
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
@@ -3001,6 +3006,11 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
+
+Note that `map!` makes no guarantees about the order of execution. In addition, `f` is assumed
+to be [pure](https://en.wikipedia.org/wiki/Pure_function) when working with sparse data
+structures. Using an impure function with `map!` may cause bugs on sparse or diagonal arrays, 
+as `f` may only be called once on duplicated elements.
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
