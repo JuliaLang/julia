@@ -556,7 +556,7 @@ foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
 
 """
-    monuple(x::Union{X, Nothing})
+    monuple(x)
 
 Converts values so that `nothing` becomes `()` and any other values are wrapped into a singleton tuple, also known as a monuple.
 
@@ -596,4 +596,5 @@ julia> Iterators.flatmap(monuple.(data)) do optx
  RegexMatch("xo", 1="xo")
 ```
 """
-monuple(x::Union{X, Nothing}) where {X} = isnothing(x) ? () : (x,)
+monuple(x::Any) = tuple(x)
+monuple(::Nothing) = ()
