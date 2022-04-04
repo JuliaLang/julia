@@ -1664,6 +1664,8 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
 #define JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls) do ; while (0)
 #define JL_PROBE_RT_START_TYPEINF() do ; while (0)
 #define JL_PROBE_RT_FINISH_TYPEINF() do ; while (0)
+#define JL_PROBE_RT_START_CODEGEN() do ; while (0)
+#define JL_PROBE_RT_FINISH_CODEGEN() do ; while (0)
 
 #define JL_PROBE_GC_BEGIN_ENABLED() (0)
 #define JL_PROBE_GC_STOP_THE_WORLD_ENABLED() (0)
@@ -1688,6 +1690,8 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
 #define JL_PROBE_RT_SLEEP_CHECK_UV_WAKE_ENABLED() (0)
 #define JL_PROBE_RT_START_TYPEINF_ENABLED() (0)
 #define JL_PROBE_RT_FINISH_TYPEINF_ENABLED() (0)
+#define JL_PROBE_RT_START_CODEGEN_ENABLED() (0)
+#define JL_PROBE_RT_FINISH_CODEGEN_ENABLED() (0)
 #endif
 
 #endif

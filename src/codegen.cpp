@@ -8145,6 +8145,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_codegen_params_t &params)
 {
     JL_TIMING(CODEGEN);
+    JL_PROBE_RT_START_CODEGEN();
     // caller must hold codegen_lock
     jl_llvm_functions_t decls = {};
     assert((params.params == &jl_default_cgparams /* fast path */ || !params.cache ||
@@ -8176,6 +8177,7 @@ jl_llvm_functions_t jl_emit_code(
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
+    JL_PROBE_RT_FINISH_CODEGEN();
 
     return decls;
 }

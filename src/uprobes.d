@@ -26,6 +26,8 @@ provider julia {
 
     probe rt__start__typeinf();
     probe rt__finish__typeinf();
+    probe rt__start__codegen();
+    probe rt__finish__codegen();
 };
 
 #pragma D attributes Evolving/Evolving/Common provider julia provider

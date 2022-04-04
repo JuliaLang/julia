@@ -4,6 +4,7 @@ BEGIN
 {
     @gc_num = 1;
     @ti_num = 1;
+    @cg_num = 1;
     printf("{\"displayTimeUnit\":\"ns\",\"traceEvents\":[\n");
 }
 
@@ -11,6 +12,7 @@ END
 {
     clear(@ti_num);
     clear(@gc_num);
+    clear(@cg_num);
     printf("]}");
 }
 
@@ -101,6 +103,18 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__finish__typeinf
 {
     printf("{\"name\":\"TypeInference\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @ti_num, pid, tid, elapsed);
     @ti_num++;
+}
+
+// Codegen events
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__codegen
+{
+    printf("{\"name\":\"CodeGen\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @cg_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__codegen
+{
+    printf("{\"name\":\"CodeGen\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @cg_num, pid, tid, elapsed);
+    @cg_num++;
 }
 
 /*

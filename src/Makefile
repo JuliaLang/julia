@@ -87,6 +87,7 @@ ifeq ($(WITH_DTRACE),1)
 DTRACE_HEADERS := uprobes.h.gen
 ifneq ($(OS),Darwin)
 SRCS += uprobes
+CODEGEN_SRCS += uprobes
 endif
 else
 DTRACE_HEADERS :=
