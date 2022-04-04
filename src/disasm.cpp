@@ -1198,11 +1198,11 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
         Function *f = dump->F;
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         assert(!f->isDeclaration());
-        dump->TSM.withModuleDo([&](Module &m) {//TODO fix indentation
-        for (auto &f2 : m.functions()) {
-            if (f != &f2 && !f->isDeclaration())
-                f2.deleteBody();
-        }
+        dump->TSM.withModuleDo([&](Module &m) {
+            for (auto &f2 : m.functions()) {
+                if (f != &f2 && !f->isDeclaration())
+                    f2.deleteBody();
+            }
         });
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(&jl_ExecutionEngine->getTargetMachine());
         legacy::PassManager PM;

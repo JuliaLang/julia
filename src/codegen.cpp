@@ -7885,10 +7885,10 @@ static jl_llvm_functions_t
     // so that they don't conflict when they show up in the execution engine.
     for (auto &TSMod : ctx.llvmcall_modules) {
         SmallVector<std::string, 1> Exports;
-        TSMod.withModuleDo([&](Module &Mod) { //TODO fix indentation after review
-        for (const auto &F: Mod.functions())
-            if (!F.isDeclaration())
-                Exports.push_back(F.getName().str());
+        TSMod.withModuleDo([&](Module &Mod) {
+            for (const auto &F: Mod.functions())
+                if (!F.isDeclaration())
+                    Exports.push_back(F.getName().str());
         });
         jl_merge_module(TSM, std::move(TSMod));
         for (auto FN: Exports)
@@ -7898,10 +7898,10 @@ static jl_llvm_functions_t
     // link in opaque closure modules
     for (auto &TSMod : ctx.oc_modules) {
         SmallVector<std::string, 1> Exports;
-        TSMod.withModuleDo([&](Module &Mod) { //TODO fix indentation after review
-        for (const auto &F: Mod.functions())
-            if (!F.isDeclaration())
-                Exports.push_back(F.getName().str());
+        TSMod.withModuleDo([&](Module &Mod) {
+            for (const auto &F: Mod.functions())
+                if (!F.isDeclaration())
+                    Exports.push_back(F.getName().str());
         });
         jl_merge_module(TSM, std::move(TSMod));
         for (auto FN: Exports)
