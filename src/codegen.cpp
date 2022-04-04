@@ -8371,7 +8371,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-    jl_ExecutionEngine = new JuliaOJIT(new LLVMContext());
+    jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
     // Register GDB event listener

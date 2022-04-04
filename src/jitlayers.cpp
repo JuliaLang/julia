@@ -225,16 +225,21 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
+    orc::ThreadSafeContext ctx;
     auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
     if (into == NULL) {
-        backing = jl_create_llvm_module("cextern", pparams ? pparams->tsctx : jl_ExecutionEngine->getContext(), pparams ? pparams->imaging : imaging_default());
+        if (!pparams) {
+            ctx = jl_ExecutionEngine->acquireContext();
+        }
+        backing = jl_create_llvm_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
         into = &backing;
     }
     jl_codegen_params_t params(into->getContext());
     if (pparams == NULL)
         pparams = &params;
+    assert(pparams->tsctx.getContext() == into->getContext().getContext());
     const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
     bool success = true;
     if (!sysimg) {
@@ -252,6 +257,9 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (ctx.getContext()) {
+        jl_ExecutionEngine->releaseContext(std::move(ctx));
+    }
     JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
@@ -306,7 +314,8 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    auto &context = jl_ExecutionEngine->getContext();
+    auto ctx = jl_ExecutionEngine->getContext();
+    auto &context = *ctx;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -363,7 +372,8 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto &context = jl_ExecutionEngine->getContext();
+    auto ctx = jl_ExecutionEngine->getContext();
+    auto &context = *ctx;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -417,7 +427,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            auto &context = jl_ExecutionEngine->getContext();
+            auto ctx = jl_ExecutionEngine->getContext();
+            auto &context = *ctx;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -909,7 +920,7 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
-JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
+JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
     TMs{
@@ -918,7 +929,6 @@ JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
         cantFail(createJTMBFromTM(*TM, 2).createTargetMachine()),
         cantFail(createJTMBFromTM(*TM, 3).createTargetMachine())
     },
-    TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
 #if JL_LLVM_VERSION >= 130000
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),
 #else
@@ -1164,10 +1174,6 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
     this->ObjectLayer.registerJITEventListener(*L);
 }
 #endif
-
-orc::ThreadSafeContext &JuliaOJIT::getContext() {
-    return TSCtx;
-}
 
 const DataLayout& JuliaOJIT::getDataLayout() const
 {

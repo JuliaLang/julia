@@ -253,17 +253,19 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     CompilationPolicy policy = (CompilationPolicy) _policy;
     bool imaging = imaging_default() || policy == CompilationPolicy::ImagingMode;
-    orc::ThreadSafeModule backing;
-    if (!llvmmod) {
-        backing = jl_create_llvm_module("text", jl_ExecutionEngine->getContext(), imaging);
-    }
-    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
-    auto ctxt = clone.getContext();
     jl_workqueue_t emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&jl_codegen_lock);
+    orc::ThreadSafeContext ctx;
+    orc::ThreadSafeModule backing;
+    if (!llvmmod) {
+        ctx = jl_ExecutionEngine->acquireContext();
+        backing = jl_create_llvm_module("text", ctx, imaging);
+    }
+    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
+    auto ctxt = clone.getContext();
     jl_codegen_params_t params(ctxt);
     params.params = cgparams;
     uint64_t compiler_start_time = 0;
@@ -402,6 +404,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (ctx.getContext()) {
+        jl_ExecutionEngine->releaseContext(std::move(ctx));
+    }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
@@ -1020,7 +1025,8 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
         JL_LOCK(&jl_codegen_lock);
-        jl_codegen_params_t output(jl_ExecutionEngine->getContext());
+        auto ctx = jl_ExecutionEngine->getContext();
+        jl_codegen_params_t output(*ctx);
         output.world = world;
         output.params = &params;
         orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx, output.imaging);

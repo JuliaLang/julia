@@ -5,7 +5,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/PassManager.h>
-#include "llvm/IR/LegacyPassManager.h"
+#include <llvm/IR/LegacyPassManager.h>
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
@@ -194,6 +194,83 @@ public:
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 private:
+    template<typename ResourceT, size_t max = 0>
+    struct ResourcePool {
+        public:
+        ResourcePool(function_ref<ResourceT()> creator) : creator(std::move(creator)) {}
+        class OwningResource {
+            public:
+            OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
+            OwningResource(const OwningResource &) = delete;
+            OwningResource &operator=(const OwningResource &) = delete;
+            OwningResource(OwningResource &&) = default;
+            OwningResource &operator=(OwningResource &&) = default;
+            ~OwningResource() {
+                if (resource) pool.release_(std::move(*resource));
+            }
+            ResourceT release() {
+                ResourceT res(std::move(*resource));
+                resource.reset();
+                return res;
+            }
+            void reset(ResourceT res) {
+                *resource = std::move(res);
+            }
+            ResourceT &operator*() {
+                return *resource;
+            }
+            ResourceT *operator->() {
+                return get();
+            }
+            ResourceT *get() {
+                return resource.getPointer();
+            }
+            const ResourceT &operator*() const {
+                return *resource;
+            }
+            const ResourceT *operator->() const {
+                return get();
+            }
+            const ResourceT *get() const {
+                return resource.getPointer();
+            }
+            explicit operator bool() const {
+                return resource;
+            }
+            private:
+            ResourcePool &pool;
+            llvm::Optional<ResourceT> resource;
+        };
+        
+        OwningResource acquire() {
+            return OwningResource(*this, acquire_());
+        }
+
+        ResourceT acquire_() {
+            std::unique_lock<std::mutex> lock(mutex);
+            if (!pool.empty()) {
+                return pool.pop_back_val();
+            }
+            if (!max || created < max) {
+                created++;
+                return creator();
+            }
+            empty.wait(lock, [&](){ return !pool.empty(); });
+            assert(!pool.empty() && "Expected resource pool to have a value!");
+            return pool.pop_back_val();
+        }
+        void release_(ResourceT &&resource) {
+            std::lock_guard<std::mutex> lock(mutex);
+            pool.push_back(std::move(resource));
+            empty.notify_one();
+        }
+        private:
+        llvm::function_ref<ResourceT()> creator;
+        size_t created = 0;
+        llvm::SmallVector<ResourceT, max == 0 ? 8 : max> pool;
+        std::mutex mutex;
+        std::condition_variable empty;
+    };
     struct OptimizerT {
         OptimizerT(legacy::PassManager &PM, std::mutex &mutex, int optlevel) : optlevel(optlevel), PM(PM), mutex(mutex) {}
 
@@ -223,7 +300,7 @@ private:
 
 public:
 
-    JuliaOJIT(LLVMContext *Ctx);
+    JuliaOJIT();
 
     void enableJITDebuggingSupport();
 #ifndef JL_USE_JITLINK
@@ -239,7 +316,15 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
-    orc::ThreadSafeContext &getContext();
+    auto getContext() {
+        return ContextPool.acquire();
+    }
+    orc::ThreadSafeContext acquireContext() {
+        return ContextPool.acquire_();
+    }
+    void releaseContext(orc::ThreadSafeContext &&ctx) {
+        ContextPool.release_(std::move(ctx));
+    }
     const DataLayout& getDataLayout() const;
     TargetMachine &getTargetMachine();
     const Triple& getTargetTriple() const;
@@ -260,10 +345,11 @@ private:
     std::mutex PM_mutexes[4];
     std::unique_ptr<TargetMachine> TMs[4];
 
-    orc::ThreadSafeContext TSCtx;
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
+
+    ResourcePool<orc::ThreadSafeContext> ContextPool{[](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }};
 
 #ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
