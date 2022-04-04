@@ -1081,6 +1081,7 @@ namespace {
 
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
             TSM.withModuleDo([&](Module &M) {
+                JL_PROBE_RT_START_LLVMOPT();
                 uint64_t start_time = 0;
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
@@ -1130,6 +1131,7 @@ namespace {
                         }
                     }
                 }
+                JL_PROBE_RT_FINISH_LLVMOPT();
             });
             switch (optlevel) {
                 case 0:
