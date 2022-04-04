@@ -929,21 +929,24 @@ end
 function traversetree(tree; postorder=false)
     function walk(chan, (value, children))
         if !postorder push!(chan, value) end
-        walk.((chan,), children)
+        for child in children
+            walk(chan, child)
+        end
         if postorder push!(chan, value) end
     end
     Channel(x->walk(x, tree))
 end
 
 prunetree(x, depth::Nothing) = x
-prunetree((value, children), depth::Int) = (value, depth <= 1 ? () : Iterators.map(x->prunetree(x, depth-1), children))
+function prunetree((value, children), depth::Int)
+    newchildren = if depth <= 1 ? () : (prunetree(x, depth-1) for x in children)
+    (value, newchildren)
+end
 
 function _filetree(root; follow_symlinks=true)
     dirs, files = _getdirfiles(root, follow_symlinks=follow_symlinks)
-    (
-        (root, dirs, files),
-        Iterators.map(x->_filetree(x, follow_symlinks=follow_symlinks), joinpath.(root, dirs))
-    )
+    children = (_filetree(joinpath(root, dir), follow_symlinks=follow_symlinks) for dir in dirs)
+    ((root, dirs, files), children)
 end
 
 function _getdirfiles(root; follow_symlinks=true)
