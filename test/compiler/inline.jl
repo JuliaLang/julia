@@ -213,7 +213,7 @@ function f_div(x)
     div(x, 1)
     return x
 end
-@test fully_eliminated(f_div, (Int,)) == 1
+@test fully_eliminated(f_div, (Int,); retval=Core.Argument(2))
 # ...unless we div by an unknown amount
 function f_div(x, y)
     div(x, y)
@@ -1233,4 +1233,12 @@ end
 g_call_peel(x) = f_peel(x)
 let src = code_typed1(g_call_peel, Tuple{Any})
     @test count(isinvoke(:f_peel), src.code) == 2
+end
+
+const my_defined_var = 42
+@test fully_eliminated((); retval=42) do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end
+@test !fully_eliminated() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
 end
