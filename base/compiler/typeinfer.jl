@@ -1076,11 +1076,11 @@ function _infer_effects(interp::AbstractInterpreter, t::DataType)
         for match in matches
             match = match::MethodMatch
             frame = typeinf_frame(interp, match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
-            frame === nothing && return Effects()
+            frame === nothing && return Core.Compiler.Effects() # the effect of this match is unanalyzable
             effects = tristate_merge(effects, frame.ipo_effects)
         end
+        return effects
     end
-    return effects
 end
 
 get_tls_world_counter() = ccall(:jl_get_tls_world_age, UInt, ())

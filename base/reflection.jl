@@ -1333,7 +1333,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
             match = match::Core.MethodMatch
             frame = Core.Compiler.typeinf_frame(interp,
                 match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
-            frame === nothing && return Core.Compiler.Effects()
+            frame === nothing && return Core.Compiler.Effects() # the effect of this match is unanalyzable
             effects = Core.Compiler.tristate_merge(effects, frame.ipo_effects)
         end
         return effects
