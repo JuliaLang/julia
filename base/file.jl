@@ -921,46 +921,46 @@ julia> (root, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
 """
-function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
-    function _walkdir(chnl, root)
-        tryf(f, p) = try
-                f(p)
-            catch err
-                isa(err, IOError) || rethrow()
-                try
-                    onerror(err)
-                catch err2
-                    close(chnl, err2)
-                end
-                return
-            end
-        content = tryf(readdir, root)
-        content === nothing && return
-        dirs = Vector{eltype(content)}()
-        files = Vector{eltype(content)}()
-        for name in content
-            path = joinpath(root, name)
+function walkdir(root; topdown=true, depth=nothing, follow_symlinks=false) #, onerror=throw)
+    tree = _filetree(root, follow_symlinks=follow_symlinks)
+    traversetree(prunetree(tree, depth), postorder=!topdown)
+end
 
-            # If we're not following symlinks, then treat all symlinks as files
-            if (!follow_symlinks && something(tryf(islink, path), true)) || !something(tryf(isdir, path), false)
-                push!(files, name)
-            else
-                push!(dirs, name)
-            end
-        end
-
-        if topdown
-            push!(chnl, (root, dirs, files))
-        end
-        for dir in dirs
-            _walkdir(chnl, joinpath(root, dir))
-        end
-        if !topdown
-            push!(chnl, (root, dirs, files))
-        end
-        nothing
+function traversetree(tree; postorder=false)
+    function walk(chan, (value, children))
+        if !postorder push!(chan, value) end
+        walk.((chan,), children)
+        if postorder push!(chan, value) end
     end
-    return Channel{Tuple{String,Vector{String},Vector{String}}}(chnl -> _walkdir(chnl, root))
+    Channel(x->walk(x, tree))
+end
+
+prunetree(x, depth::Nothing) = x
+prunetree((value, children), depth::Int) = (value, depth <= 1 ? () : Iterators.map(x->prunetree(x, depth-1), children))
+
+function _filetree(root; follow_symlinks=true)
+    dirs, files = _getdirfiles(root, follow_symlinks=follow_symlinks)
+    (
+        (root, dirs, files),
+        Iterators.map(x->_filetree(x, follow_symlinks=follow_symlinks), joinpath.(root, dirs))
+    )
+end
+
+function _getdirfiles(root; follow_symlinks=true)
+    content = readdir(root)
+    dirs = Vector{eltype(content)}()
+    files = Vector{eltype(content)}()
+    for name in content
+        path = joinpath(root, name)
+        
+        # If we're not following symlinks, then treat all symlinks as files        
+        if (!follow_symlinks && islink(path)) || !isdir(path)
+            push!(files, name)
+        else
+            push!(dirs, name)
+        end
+    end
+    dirs, files
 end
 
 function unlink(p::AbstractString)
