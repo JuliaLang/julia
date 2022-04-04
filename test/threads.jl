@@ -304,3 +304,9 @@ close(proc.in)
         end
     end
 end
+
+@testset "bad arguments to @threads" begin
+    @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
+    @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
+    @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+end

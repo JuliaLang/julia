@@ -605,7 +605,6 @@ For instance, you might have some sort of abstract array with an arbitrary eleme
 and want to write your computation on it with a specific element type.
 We must implement a method for each `AbstractArray{T}` subtype that describes how to compute this type transform.
 There is no general transform of one subtype into another subtype with a different parameter.
-(Quick review: do you see why this is?)
 
 The subtypes of `AbstractArray` typically implement two methods to
 achieve this:

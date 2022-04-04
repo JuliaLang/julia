@@ -715,7 +715,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.edge_effects) && return false
     return f !== nothing &&
            result.edge !== nothing &&
-           is_total_or_error(result.edge_effects) &&
+           is_concrete_eval_eligible(result.edge_effects) &&
            is_all_const_arg(arginfo)
 end
 
