@@ -53,13 +53,13 @@ static bool checkCombine(Value *maybeMul)
         ++TotalContracted;
         fmf.setAllowContract(true);
         mulOp->copyFastMathFlags(fmf);
+        return true;
     }
-    return true;
+    return false;
 }
 
 static bool combineMulAdd(Function &F)
 {
-    Module *m = F.getParent();
     bool modified = false;
     for (auto &BB: F) {
         for (auto it = BB.begin(); it != BB.end();) {
@@ -69,15 +69,13 @@ static bool combineMulAdd(Function &F)
             case Instruction::FAdd: {
                 if (!I.isFast())
                     continue;
-                modified |= checkCombine(I.getOperand(0));
-                modified |= checkCombine(I.getOperand(1));
+                modified |= checkCombine(I.getOperand(0)) || checkCombine(I.getOperand(1));
                 break;
             }
             case Instruction::FSub: {
                 if (!I.isFast())
                     continue;
-                modified |= checkCombine(I.getOperand(0));
-                modified |= checkCombine(I.getOperand(1));
+                modified |= checkCombine(I.getOperand(0)) || checkCombine(I.getOperand(1));
                 break;
             }
             default:
