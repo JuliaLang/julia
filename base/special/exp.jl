@@ -278,7 +278,10 @@ end
     power = (N+Int32(127))
     x > MAX_EXP(base, T) && return Inf32
     x < MIN_EXP(base, T) && return 0.0f0
-    x <= -SUBNORM_EXP(base, T) && (power+=Int32(24); small_part*=Float32(0x1p-24))
+    if x <= -SUBNORM_EXP(base, T)
+        power += Int32(24)
+        small_part *= Float32(0x1p-24)
+    end
     N == 128 && (power-=Int32(1); small_part*=2f0)
     return small_part * reinterpret(T, power << Int32(23))
 end
