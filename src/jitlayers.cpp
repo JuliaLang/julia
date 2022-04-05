@@ -174,6 +174,7 @@ static jl_callptr_t _jl_compile_codeinst(
         size_t world,
         orc::ThreadSafeContext context)
 {
+    JL_PROBE_RT_START_COMPILE();
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
@@ -285,6 +286,7 @@ static jl_callptr_t _jl_compile_codeinst(
             jl_printf(stream, "\"\n");
         }
     }
+    JL_PROBE_RT_FINISH_COMPILE();
     return fptr;
 }
 

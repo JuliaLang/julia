@@ -5,6 +5,8 @@ BEGIN
     @gc_num = 1;
     @ti_num = 1;
     @cg_num = 1;
+    @co_num = 1;
+    @lo_num = 1;
     printf("{\"displayTimeUnit\":\"ns\",\"traceEvents\":[\n");
 }
 
@@ -13,6 +15,8 @@ END
     clear(@ti_num);
     clear(@gc_num);
     clear(@cg_num);
+    clear(@co_num);
+    clear(@lo_num);
     printf("]}");
 }
 
@@ -105,7 +109,7 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__finish__typeinf
     @ti_num++;
 }
 
-// Codegen events
+// Compilation events -- codegen, compile, optimize
 usdt:usr/lib/libjulia-internal.so:julia:rt__start__codegen
 {
     printf("{\"name\":\"CodeGen\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @cg_num, pid, tid, elapsed);
@@ -115,6 +119,28 @@ usdt:usr/lib/libjulia-internal.so:julia:rt__finish__codegen
 {
     printf("{\"name\":\"CodeGen\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @cg_num, pid, tid, elapsed);
     @cg_num++;
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__compile
+{
+    printf("{\"name\":\"Compile\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @co_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__compile
+{
+    printf("{\"name\":\"Compile\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @co_num, pid, tid, elapsed);
+    @cg_num++;
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__start__llvmopt
+{
+    printf("{\"name\":\"LLVMOpt\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"B\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @lo_num, pid, tid, elapsed);
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:rt__finish__llvmopt
+{
+    printf("{\"name\":\"LLVMOpt\",\"cat\":\"compiler\",\"id\":%-d,\"ph\":\"E\",\"pid\":%-d,\"tid\":%-d,\"ts\":%lu},\n", @lo_num, pid, tid, elapsed);
+    @lo_num++;
 }
 
 /*
