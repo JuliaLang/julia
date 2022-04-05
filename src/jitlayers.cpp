@@ -1222,110 +1222,109 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 {
     destTSM.withModuleDo([&](Module &dest) {
         srcTSM.withModuleDo([&](Module &src) {
-    //TODO fix indentation after review
-    assert(&dest != &src && "Cannot merge module with itself!");
-    assert(&dest.getContext() == &src.getContext() && "Cannot merge modules with different contexts!");
-    assert(dest.getDataLayout() == src.getDataLayout() && "Cannot merge modules with different data layouts!");
-    assert(dest.getTargetTriple() == src.getTargetTriple() && "Cannot merge modules with different target triples!");
+            assert(&dest != &src && "Cannot merge module with itself!");
+            assert(&dest.getContext() == &src.getContext() && "Cannot merge modules with different contexts!");
+            assert(dest.getDataLayout() == src.getDataLayout() && "Cannot merge modules with different data layouts!");
+            assert(dest.getTargetTriple() == src.getTargetTriple() && "Cannot merge modules with different target triples!");
 
-    for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
-        GlobalVariable *sG = &*I;
-        GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(sG->getName()));
-        ++I;
-        // Replace a declaration with the definition:
-        if (dG) {
-            if (sG->isDeclaration()) {
-                sG->replaceAllUsesWith(dG);
-                sG->eraseFromParent();
-                continue;
+            for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
+                GlobalVariable *sG = &*I;
+                GlobalVariable *dG = cast_or_null<GlobalVariable>(dest.getNamedValue(sG->getName()));
+                ++I;
+                // Replace a declaration with the definition:
+                if (dG) {
+                    if (sG->isDeclaration()) {
+                        sG->replaceAllUsesWith(dG);
+                        sG->eraseFromParent();
+                        continue;
+                    }
+                    //// If we start using llvm.used, we need to enable and test this
+                    //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && sG->hasAppendingLinkage()) {
+                    //    auto *dCA = cast<ConstantArray>(dG->getInitializer());
+                    //    auto *sCA = cast<ConstantArray>(sG->getInitializer());
+                    //    SmallVector<Constant *, 16> Init;
+                    //    for (auto &Op : dCA->operands())
+                    //        Init.push_back(cast_or_null<Constant>(Op));
+                    //    for (auto &Op : sCA->operands())
+                    //        Init.push_back(cast_or_null<Constant>(Op));
+                    //    Type *Int8PtrTy = Type::getInt8PtrTy(dest.getContext());
+                    //    ArrayType *ATy = ArrayType::get(Int8PtrTy, Init.size());
+                    //    GlobalVariable *GV = new GlobalVariable(dest, ATy, dG->isConstant(),
+                    //            GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "",
+                    //            dG->getThreadLocalMode(), dG->getType()->getAddressSpace());
+                    //    GV->copyAttributesFrom(dG);
+                    //    sG->replaceAllUsesWith(GV);
+                    //    dG->replaceAllUsesWith(GV);
+                    //    GV->takeName(sG);
+                    //    sG->eraseFromParent();
+                    //    dG->eraseFromParent();
+                    //    continue;
+                    //}
+                    else {
+                        assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
+                        dG->replaceAllUsesWith(sG);
+                        dG->eraseFromParent();
+                    }
+                }
+                // Reparent the global variable:
+                sG->removeFromParent();
+                dest.getGlobalList().push_back(sG);
+                // Comdat is owned by the Module
+                sG->setComdat(nullptr);
             }
-            //// If we start using llvm.used, we need to enable and test this
-            //else if (!dG->isDeclaration() && dG->hasAppendingLinkage() && sG->hasAppendingLinkage()) {
-            //    auto *dCA = cast<ConstantArray>(dG->getInitializer());
-            //    auto *sCA = cast<ConstantArray>(sG->getInitializer());
-            //    SmallVector<Constant *, 16> Init;
-            //    for (auto &Op : dCA->operands())
-            //        Init.push_back(cast_or_null<Constant>(Op));
-            //    for (auto &Op : sCA->operands())
-            //        Init.push_back(cast_or_null<Constant>(Op));
-            //    Type *Int8PtrTy = Type::getInt8PtrTy(dest.getContext());
-            //    ArrayType *ATy = ArrayType::get(Int8PtrTy, Init.size());
-            //    GlobalVariable *GV = new GlobalVariable(dest, ATy, dG->isConstant(),
-            //            GlobalValue::AppendingLinkage, ConstantArray::get(ATy, Init), "",
-            //            dG->getThreadLocalMode(), dG->getType()->getAddressSpace());
-            //    GV->copyAttributesFrom(dG);
-            //    sG->replaceAllUsesWith(GV);
-            //    dG->replaceAllUsesWith(GV);
-            //    GV->takeName(sG);
-            //    sG->eraseFromParent();
-            //    dG->eraseFromParent();
-            //    continue;
-            //}
-            else {
-                assert(dG->isDeclaration() || dG->getInitializer() == sG->getInitializer());
-                dG->replaceAllUsesWith(sG);
-                dG->eraseFromParent();
-            }
-        }
-        // Reparent the global variable:
-        sG->removeFromParent();
-        dest.getGlobalList().push_back(sG);
-        // Comdat is owned by the Module
-        sG->setComdat(nullptr);
-    }
 
-    for (Module::iterator I = src.begin(), E = src.end(); I != E;) {
-        Function *sG = &*I;
-        Function *dG = cast_or_null<Function>(dest.getNamedValue(sG->getName()));
-        ++I;
-        // Replace a declaration with the definition:
-        if (dG) {
-            if (sG->isDeclaration()) {
-                sG->replaceAllUsesWith(dG);
-                sG->eraseFromParent();
-                continue;
+            for (Module::iterator I = src.begin(), E = src.end(); I != E;) {
+                Function *sG = &*I;
+                Function *dG = cast_or_null<Function>(dest.getNamedValue(sG->getName()));
+                ++I;
+                // Replace a declaration with the definition:
+                if (dG) {
+                    if (sG->isDeclaration()) {
+                        sG->replaceAllUsesWith(dG);
+                        sG->eraseFromParent();
+                        continue;
+                    }
+                    else {
+                        assert(dG->isDeclaration());
+                        dG->replaceAllUsesWith(sG);
+                        dG->eraseFromParent();
+                    }
+                }
+                // Reparent the global variable:
+                sG->removeFromParent();
+                dest.getFunctionList().push_back(sG);
+                // Comdat is owned by the Module
+                sG->setComdat(nullptr);
             }
-            else {
-                assert(dG->isDeclaration());
-                dG->replaceAllUsesWith(sG);
-                dG->eraseFromParent();
-            }
-        }
-        // Reparent the global variable:
-        sG->removeFromParent();
-        dest.getFunctionList().push_back(sG);
-        // Comdat is owned by the Module
-        sG->setComdat(nullptr);
-    }
 
-    for (Module::alias_iterator I = src.alias_begin(), E = src.alias_end(); I != E;) {
-        GlobalAlias *sG = &*I;
-        GlobalAlias *dG = cast_or_null<GlobalAlias>(dest.getNamedValue(sG->getName()));
-        ++I;
-        if (dG) {
-            if (!dG->isDeclaration()) { // aliases are always definitions, so this test is reversed from the above two
-                sG->replaceAllUsesWith(dG);
-                sG->eraseFromParent();
-                continue;
+            for (Module::alias_iterator I = src.alias_begin(), E = src.alias_end(); I != E;) {
+                GlobalAlias *sG = &*I;
+                GlobalAlias *dG = cast_or_null<GlobalAlias>(dest.getNamedValue(sG->getName()));
+                ++I;
+                if (dG) {
+                    if (!dG->isDeclaration()) { // aliases are always definitions, so this test is reversed from the above two
+                        sG->replaceAllUsesWith(dG);
+                        sG->eraseFromParent();
+                        continue;
+                    }
+                    else {
+                        dG->replaceAllUsesWith(sG);
+                        dG->eraseFromParent();
+                    }
+                }
+                sG->removeFromParent();
+                dest.getAliasList().push_back(sG);
             }
-            else {
-                dG->replaceAllUsesWith(sG);
-                dG->eraseFromParent();
-            }
-        }
-        sG->removeFromParent();
-        dest.getAliasList().push_back(sG);
-    }
 
-    // metadata nodes need to be explicitly merged not just copied
-    // so there are special passes here for each known type of metadata
-    NamedMDNode *sNMD = src.getNamedMetadata("llvm.dbg.cu");
-    if (sNMD) {
-        NamedMDNode *dNMD = dest.getOrInsertNamedMetadata("llvm.dbg.cu");
-        for (NamedMDNode::op_iterator I = sNMD->op_begin(), E = sNMD->op_end(); I != E; ++I) {
-            dNMD->addOperand(*I);
-        }
-    }
+            // metadata nodes need to be explicitly merged not just copied
+            // so there are special passes here for each known type of metadata
+            NamedMDNode *sNMD = src.getNamedMetadata("llvm.dbg.cu");
+            if (sNMD) {
+                NamedMDNode *dNMD = dest.getOrInsertNamedMetadata("llvm.dbg.cu");
+                for (NamedMDNode::op_iterator I = sNMD->op_begin(), E = sNMD->op_end(); I != E; ++I) {
+                    dNMD->addOperand(*I);
+                }
+            }
         });
     });
 }
@@ -1393,19 +1392,19 @@ static int jl_add_to_ee(
     }
     int MergeUp = depth;
     // Compute the cycle-id
-    M.withModuleDo([&](Module &m) {//TODO fix indentation
-    for (auto &F : m.global_objects()) {
-        if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-            auto Callee = NewExports.find(F.getName());
-            if (Callee != NewExports.end()) {
-                auto &CM = Callee->second;
-                int Down = jl_add_to_ee(*CM, NewExports, Queued, ToMerge, depth + 1);
-                assert(Down <= depth);
-                if (Down && Down < MergeUp)
-                    MergeUp = Down;
+    M.withModuleDo([&](Module &m) {
+        for (auto &F : m.global_objects()) {
+            if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
+                auto Callee = NewExports.find(F.getName());
+                if (Callee != NewExports.end()) {
+                    auto &CM = Callee->second;
+                    int Down = jl_add_to_ee(*CM, NewExports, Queued, ToMerge, depth + 1);
+                    assert(Down <= depth);
+                    if (Down && Down < MergeUp)
+                        MergeUp = Down;
+                }
             }
         }
-    }
     });
     if (MergeUp == depth) {
         // Not in a cycle (or at the top of it)

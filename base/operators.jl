@@ -940,7 +940,7 @@ struct Returns{V} <: Function
     Returns(value) = new{Core.Typeof(value)}(value)
 end
 
-(obj::Returns)(args...; kw...) = obj.value
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
 function show(io::IO, obj::Returns)
     show(io, typeof(obj))
     print(io, "(")
