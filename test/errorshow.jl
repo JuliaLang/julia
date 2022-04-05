@@ -779,7 +779,7 @@ end
 
 # issue #37587
 # TODO: enable on more platforms
-if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
+if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     single_repeater() = single_repeater()
     pair_repeater_a() = pair_repeater_b()
     pair_repeater_b() = pair_repeater_a()
@@ -803,7 +803,23 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
             @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
         end
     end
-end  # Sys.isapple()
+end
+
+@testset "ScheduledAfterSyncException" begin
+    t = :DummyTask
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t]))
+    @test occursin(":DummyTask is registered after the end of a `@sync` block", msg)
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t, t]))
+    @test occursin(
+        ":DummyTask and one more Symbol are registered after the end of a `@sync` block",
+        msg,
+    )
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t, t, t]))
+    @test occursin(
+        ":DummyTask and 2 more objects are registered after the end of a `@sync` block",
+        msg,
+    )
+end
 
 @testset "error message hints relative modules #40959" begin
     m = Module()

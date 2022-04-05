@@ -114,8 +114,6 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 from_signal_handler = 0;
                 continue;
             }
-            if (sp)
-                sp[n] = thesp;
             // For the purposes of looking up debug info for functions, we want
             // to harvest addresses for the *call* instruction `call_ip` during
             // stack walking.  However, this information isn't directly
@@ -168,6 +166,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 }
             }
             bt_entry->uintptr = call_ip;
+            if (sp)
+                sp[n] = thesp;
             n++;
         }
         // NOTE: if we have some pgcstack entries remaining (because the
@@ -259,8 +259,8 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             jl_array_grow_end(ip, maxincr);
             uintptr_t *sp_ptr = NULL;
             if (returnsp) {
-                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
                 jl_array_grow_end(sp, maxincr);
+                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
             }
             size_t size_incr = 0;
             have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,

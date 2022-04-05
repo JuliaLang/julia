@@ -6,7 +6,7 @@ PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://ftp.pcre.org/pub/pcre/pcre2-$(PCRE_VER).tar.bz2
+	$(JLDOWNLOAD) $@ https://github.com/PhilipHazel/pcre2/releases/download/pcre2-$(PCRE_VER)/pcre2-$(PCRE_VER).tar.bz2
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
@@ -46,15 +46,15 @@ endif
 $(eval $(call staged-install, \
 	pcre,pcre2-$$(PCRE_VER), \
 	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
-	rm $$(build_shlibdir)/libpcre2-posix.* && \
+	rm -f $$(build_shlibdir)/libpcre2-posix.* && \
 	$$(INSTALL_NAME_CMD)libpcre2-8.$$(SHLIB_EXT) $$(build_shlibdir)/libpcre2-8.$$(SHLIB_EXT)))
 
 clean-pcre:
-	-rm $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
+	-rm -f $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
 
 distclean-pcre:
-	-rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
+	rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)
 
 
 get-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2

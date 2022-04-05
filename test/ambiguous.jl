@@ -100,6 +100,24 @@ ambig(x::Union{Char, Int16}) = 's'
 @test ambig(Int16(1)) == 's'
 
 # Automatic detection of ambiguities
+
+const allowed_undefineds = Set([
+    GlobalRef(Base, :active_repl),
+    GlobalRef(Base, :active_repl_backend),
+    GlobalRef(Base.Filesystem, :JL_O_TEMPORARY),
+    GlobalRef(Base.Filesystem, :JL_O_SHORT_LIVED),
+    GlobalRef(Base.Filesystem, :JL_O_SEQUENTIAL),
+    GlobalRef(Base.Filesystem, :JL_O_RANDOM),
+])
+
+let Distributed = get(Base.loaded_modules,
+                      Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
+                      nothing)
+    if Distributed !== nothing
+        push!(allowed_undefineds, GlobalRef(Distributed, :cluster_manager))
+    end
+end
+
 module Ambig1
 ambig(x, y) = 1
 ambig(x::Integer, y) = 2
@@ -153,7 +171,7 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
-    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false)))
+    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds)))
         @test isempty(ambig)
         expect = []
         good = true
@@ -183,7 +201,7 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 
     # List standard libraries. Exclude modules such as Main, Base, and Core.
     let modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing && String(pkg.name) in STDLIBS]
-        @test isempty(detect_ambiguities(modules...; recursive=true))
+        @test isempty(detect_ambiguities(modules...; recursive=true, allowed_undefineds))
     end
 end
 
@@ -313,7 +331,7 @@ end
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
-            Set{Method}(detect_unbound_args(Base; recursive=true))
+            Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))
@@ -347,26 +365,26 @@ f35983(::Type, ::Type) = 2
 @test first(Base.methods_including_ambiguous(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
-let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test length(ms) == 1
-    @test ambig[1] == 0
+    @test ambig[] == 0
 end
 f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
 @test length(Base.methods(f35983, (Type, Type))) == 2
-let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test length(ms) == 2
-    @test ambig[1] == 1
+    @test ambig[] == 1
 end
 
 struct B38280 <: Real; val; end
-let ambig = Int32[0]
-    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, typemax(UInt), false, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
+let ambig = Ref{Int32}(0)
+    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, typemax(UInt), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 1
-    @test ambig[1] == 1
+    @test ambig[] == 1
 end
 
 # issue #11407
@@ -385,5 +403,13 @@ end
 (::Type{T})(x::X) where {T <: A12814, X <: Array} = 1
 @test_throws MethodError B12814{3, Float64}([1, 2, 3]) # ambiguous
 @test B12814{3,Float64}((1, 2, 3)).x === (1.0, 2.0, 3.0)
+
+# issue #43040
+module M43040
+   struct C end
+   stripType(::Type{C}) where {T} = C # where {T} is intentionally incorrect
+end
+
+@test isempty(detect_ambiguities(M43040; recursive=true))
 
 nothing

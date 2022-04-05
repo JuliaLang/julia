@@ -114,6 +114,9 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
+    || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_ARM_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -127,6 +130,37 @@ static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
     }
     jl_set_safe_restore(old_buf);
     return i;
+}
+#endif
+
+static double profile_autostop_time = -1.0;
+static double profile_peek_duration = 1.0; // seconds
+
+double jl_get_profile_peek_duration(void)
+{
+    return profile_peek_duration;
+}
+void jl_set_profile_peek_duration(double t)
+{
+    profile_peek_duration = t;
+}
+
+uintptr_t profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+{
+    profile_show_peek_cond_loc = cond;
+}
+
+static void jl_check_profile_autostop(void)
+{
+    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+        profile_autostop_time = -1.0;
+        jl_profile_stop_timer();
+        jl_safe_printf("\n==============================================================\n");
+        jl_safe_printf("Profile collected. A report will print at the next yield point\n");
+        jl_safe_printf("==============================================================\n\n");
+        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+    }
 }
 
 #if defined(_WIN32)
@@ -243,7 +277,6 @@ void jl_show_sigill(void *_ctx)
 // what to do on a critical error on a thread
 void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
 {
-
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
@@ -254,6 +287,10 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             ct->gcstack = NULL;
             ct->eh = NULL;
             ct->excstack = NULL;
+            ct->ptls->locks.len = 0;
+            ct->ptls->in_pure_callback = 0;
+            ct->ptls->in_finalizer = 1;
+            ct->world_age = 1;
         }
 #ifndef _OS_WINDOWS_
         sigset_t sset;

@@ -27,7 +27,7 @@ lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
 @eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(@nospecialize(t::Tuple), i::Real) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
+@eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
@@ -35,7 +35,7 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
-# returns new tuple; N.B.: becomes no-op if i is out-of-bounds
+# returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
     setindex(c::Tuple, v, i::Integer)
@@ -133,6 +133,7 @@ function rest end
 rest(t::Tuple) = t
 rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
 rest(a::Array, i::Int=1) = a[i:end]
+rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 # Use dispatch to avoid a branch in first
@@ -550,3 +551,6 @@ end
 Returns an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
+
+foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
+foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)

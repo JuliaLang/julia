@@ -301,7 +301,7 @@ JL_DLLEXPORT int16_t jl_threadid(void)
 jl_ptls_t jl_init_threadtls(int16_t tid)
 {
     jl_ptls_t ptls = (jl_ptls_t)calloc(1, sizeof(jl_tls_states_t));
-    ptls->system_id = jl_thread_self();
+    ptls->system_id = (jl_thread_t)(uintptr_t)uv_thread_self();
     seed_cong(&ptls->rngseed);
 #ifdef _OS_WINDOWS_
     if (tid == 0) {
@@ -454,7 +454,7 @@ void jl_init_threading(void)
     // how many threads available, usable
     jl_n_threads = JULIA_NUM_THREADS;
     if (jl_options.nthreads < 0) { // --threads=auto
-        jl_n_threads = jl_cpu_threads();
+        jl_n_threads = jl_effective_threads();
     }
     else if (jl_options.nthreads > 0) { // --threads=N
         jl_n_threads = jl_options.nthreads;
@@ -463,7 +463,7 @@ void jl_init_threading(void)
         if (strcmp(cp, "auto"))
             jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
         else
-            jl_n_threads = jl_cpu_threads(); // ENV[NUM_THREADS_NAME] == "auto"
+            jl_n_threads = jl_effective_threads(); // ENV[NUM_THREADS_NAME] == "auto"
     }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
@@ -500,7 +500,7 @@ void jl_start_threads(void)
         }
         memset(mask, 0, cpumasksize);
         mask[0] = 1;
-        uvtid = (uv_thread_t)uv_thread_self();
+        uvtid = uv_thread_self();
         uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
         mask[0] = 0;
     }
@@ -531,8 +531,7 @@ _Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize 
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
-    return jl_atomic_load_relaxed(&jl_current_task->tid) != 0 ||
-        jl_atomic_load_relaxed(&_threadedregion) != 0;
+    return jl_atomic_load_relaxed(&_threadedregion) != 0;
 }
 
 JL_DLLEXPORT void jl_enter_threaded_region(void)
@@ -542,12 +541,15 @@ JL_DLLEXPORT void jl_enter_threaded_region(void)
 
 JL_DLLEXPORT void jl_exit_threaded_region(void)
 {
-    jl_atomic_fetch_add(&_threadedregion, -1);
-    jl_wake_libuv();
-    // make sure no more callbacks will run while user code continues
-    // outside thread region and might touch an I/O object.
-    JL_UV_LOCK();
-    JL_UV_UNLOCK();
+    if (jl_atomic_fetch_add(&_threadedregion, -1) == 1) {
+        // make sure no more callbacks will run while user code continues
+        // outside thread region and might touch an I/O object.
+        JL_UV_LOCK();
+        JL_UV_UNLOCK();
+        // make sure thread 0 is not using the sleep_lock
+        // so that it may enter the libuv event loop instead
+        jl_wakeup_thread(0);
+    }
 }
 
 

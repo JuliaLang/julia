@@ -76,7 +76,8 @@ Dict{String, Int64} with 2 entries:
 ```
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
-    slots::Array{UInt8,1}
+    # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
+    slots::Vector{UInt8}
     keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
@@ -166,13 +167,24 @@ end
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
-hashindex(key, sz) = (((hash(key)::UInt % Int) & (sz-1)) + 1)::Int
+# Gets 7 most significant bits from the hash (hsh), first bit is 1
+_shorthash7(hsh::UInt32) = (hsh >> UInt(25))%UInt8 | 0x80
+_shorthash7(hsh::UInt64) = (hsh >> UInt(57))%UInt8 | 0x80
 
-@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
-@propagate_inbounds isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
-@propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
+# hashindex (key, sz) - computes optimal position and shorthash7
+#     idx - optimal position in the hash table
+#     sh::UInt8 - short hash (7 highest hash bits)
+function hashindex(key, sz)
+    hsh = hash(key)::UInt
+    idx = (((hsh % Int) & (sz-1)) + 1)::Int
+    return idx, _shorthash7(hsh)
+end
 
-function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
+@propagate_inbounds isslotempty(h::Dict, i::Int) = h.slots[i] == 0x00
+@propagate_inbounds isslotfilled(h::Dict, i::Int) = (h.slots[i] & 0x80) != 0
+@propagate_inbounds isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x7f
+
+@constprop :none function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -182,7 +194,7 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     h.idxfloor = 1
     if h.count == 0
         resize!(h.slots, newsz)
-        fill!(h.slots, 0)
+        fill!(h.slots, 0x0)
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
         h.ndel = 0
@@ -197,35 +209,31 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     maxprobe = 0
 
     for i = 1:sz
-        @inbounds if olds[i] == 0x1
+        @inbounds if (olds[i] & 0x80) != 0
             k = oldk[i]
             v = oldv[i]
-            index0 = index = hashindex(k, newsz)
+            index, sh = hashindex(k, newsz)
+            index0 = index
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
             probe = (index - index0) & (newsz-1)
             probe > maxprobe && (maxprobe = probe)
-            slots[index] = 0x1
+            slots[index] = olds[i]
             keys[index] = k
             vals[index] = v
             count += 1
-
-            if h.age != age0
-                # if `h` is changed by a finalizer, retry
-                return rehash!(h, newsz)
-            end
         end
     end
 
+    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    h.age += 1
     h.slots = slots
     h.keys = keys
     h.vals = vals
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
-    @assert h.age == age0
-
     return h
 end
 
@@ -278,44 +286,44 @@ end
 
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex(h::Dict{K,V}, key) where V where K
+    isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index, sh = hashindex(key, sz)
     keys = h.keys
 
     @inbounds while true
-        if isslotempty(h,index)
-            break
-        end
-        if !isslotmissing(h,index) && (key === keys[index] || isequal(key,keys[index]))
-            return index
+        isslotempty(h,index) && return -1
+        if h.slots[index] == sh
+            k = keys[index]
+            if (key ===  k || isequal(key, k))
+                return index
+            end
         end
 
         index = (index & (sz-1)) + 1
-        iter += 1
-        iter > maxprobe && break
+        (iter += 1) > maxprobe && return -1
     end
-    return -1
+    # This line is unreachable
 end
 
-# get the index where a key is stored, or -pos if not present
-# and the key would be inserted at pos
+# get (index, sh) for the key
+#     index - where a key is stored, or -pos if not present
+#             and the key would be inserted at pos
+#     sh::UInt8 - short hash (7 highest hash bits)
 # This version is for use by setindex! and get!
-function ht_keyindex2!(h::Dict{K,V}, key) where V where K
+function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
-    index = hashindex(key, sz)
+    index, sh = hashindex(key, sz)
     avail = 0
     keys = h.keys
 
     @inbounds while true
         if isslotempty(h,index)
-            if avail < 0
-                return avail
-            end
-            return -index
+            return (avail < 0 ? avail : -index), sh
         end
 
         if isslotmissing(h,index)
@@ -324,8 +332,11 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
                 # in case "key" already exists in a later collided slot.
                 avail = -index
             end
-        elseif key === keys[index] || isequal(key, keys[index])
-            return index
+        elseif h.slots[index] == sh
+            k = keys[index]
+            if key === k || isequal(key, k)
+                return index, sh
+            end
         end
 
         index = (index & (sz-1)) + 1
@@ -333,14 +344,14 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
         iter > maxprobe && break
     end
 
-    avail < 0 && return avail
+    avail < 0 && return avail, sh
 
     maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
         if !isslotfilled(h,index)
             h.maxprobe = iter
-            return -index
+            return -index, sh
         end
         index = (index & (sz-1)) + 1
         iter += 1
@@ -348,11 +359,14 @@ function ht_keyindex2!(h::Dict{K,V}, key) where V where K
 
     rehash!(h, h.count > 64000 ? sz*2 : sz*4)
 
-    return ht_keyindex2!(h, key)
+    return ht_keyindex2_shorthash!(h, key)
 end
 
-@propagate_inbounds function _setindex!(h::Dict, v, key, index)
-    h.slots[index] = 0x1
+# Only for better backward compatibility. It can be removed in the future.
+ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
+
+@propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
+    h.slots[index] = sh
     h.keys[index] = key
     h.vals[index] = v
     h.count += 1
@@ -367,6 +381,7 @@ end
         # > 3/4 deleted or > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
+    nothing
 end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
@@ -379,18 +394,34 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
-    index = ht_keyindex2!(h, key)
+    index, sh = ht_keyindex2_shorthash!(h, key)
 
     if index > 0
         h.age += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
-        @inbounds _setindex!(h, v, key, -index)
+        @inbounds _setindex!(h, v, key, -index, sh)
     end
 
     return h
 end
+
+function setindex!(h::Dict{K,Any}, v, key::K) where K
+    @nospecialize v
+    index, sh = ht_keyindex2_shorthash!(h, key)
+
+    if index > 0
+        h.age += 1
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
+    else
+        @inbounds _setindex!(h, v, key, -index, sh)
+    end
+
+    return h
+end
+
 
 """
     get!(collection, key, default)
@@ -456,25 +487,24 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
 end
 
 function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
-    index = ht_keyindex2!(h, key)
+    index, sh = ht_keyindex2_shorthash!(h, key)
 
     index > 0 && return h.vals[index]
 
     age0 = h.age
     v = convert(V, default())
     if h.age != age0
-        index = ht_keyindex2!(h, key)
+        index, sh = ht_keyindex2_shorthash!(h, key)
     end
     if index > 0
         h.age += 1
         @inbounds h.keys[index] = key
         @inbounds h.vals[index] = v
     else
-        @inbounds _setindex!(h, v, key, -index)
+        @inbounds _setindex!(h, v, key, -index, sh)
     end
     return v
 end
-
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
@@ -626,7 +656,7 @@ function pop!(h::Dict)
 end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
-    @inbounds h.slots[index] = 0x2
+    @inbounds h.slots[index] = 0x7f
     @inbounds _unsetindex!(h.keys, index)
     @inbounds _unsetindex!(h.vals, index)
     h.ndel += 1
@@ -685,7 +715,7 @@ end
 
 @propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted_floor!(t))
+    _iterate(t, skip_deleted(t, t.idxfloor))
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
@@ -703,7 +733,7 @@ end
 function filter!(pred, h::Dict{K,V}) where {K,V}
     h.count == 0 && return h
     @inbounds for i=1:length(h.slots)
-        if h.slots[i] == 0x01 && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
+        if ((h.slots[i] & 0x80) != 0) && !pred(Pair{K,V}(h.keys[i], h.vals[i]))
             _delete!(h, i)
         end
     end
@@ -729,15 +759,16 @@ function map!(f, iter::ValueIterator{<:Dict})
 end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
+    haslength(d2) && sizehint!(d1, length(d1) + length(d2))
     for (k, v) in d2
-        i = ht_keyindex2!(d1, k)
+        i, sh = ht_keyindex2_shorthash!(d1, k)
         if i > 0
             d1.vals[i] = combine(d1.vals[i], v)
         else
             if !isequal(k, convert(K, k))
                 throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
             end
-            @inbounds _setindex!(d1, convert(V, v), k, -i)
+            @inbounds _setindex!(d1, convert(V, v), k, -i, sh)
         end
     end
     return d1

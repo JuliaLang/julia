@@ -158,6 +158,47 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test try unlock(l) finally end === nothing
 end
 
+@testset "Semaphore" begin
+    sem_size = 2
+    n = 100
+    s = Base.Semaphore(sem_size)
+
+    # explicit acquire-release form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            Base.acquire(s)
+            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+            sleep(rand(0:0.01:0.1))
+            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+            Base.release(s)
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
+
+    # do-block syntax
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            @test Base.acquire(s) do
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                return :resultvalue
+            end == :resultvalue
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
+end
+
 # task switching
 
 @noinline function f6597(c)
@@ -242,6 +283,7 @@ v11801, t11801 = @timed sin(1)
 
 @test names(@__MODULE__, all = true) == names_before_timing
 
+redirect_stdout(devnull) do # suppress time prints
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
@@ -308,6 +350,11 @@ end
 after = Base.cumulative_compile_time_ns_after();
 @test after >= before;
 
+# wait for completion of these tasks before restoring stdout, to suppress their @time prints.
+wait(t1); wait(t2)
+
+end # redirect_stdout
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
@@ -352,16 +399,6 @@ let s = Set(1:100)
     @test summarysize([s]) > summarysize(s)
 end
 
-# issue #13021
-let ex = try
-    Main.x13021 = 0
-    nothing
-catch ex
-    ex
-end
-    @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
-end
-
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
 # empty arrays
@@ -392,10 +429,10 @@ V8 = [
     ([0xe1,0x88,0xb4],[0x1234])
     ([0xea,0xaf,0x8d],[0xabcd])
     ([0xed,0x9f,0xbf],[0xd7ff])
-    ([0xed,0xa0,0x80],[0xd800]) # invalid code point – high surrogate
-    ([0xed,0xaf,0xbf],[0xdbff]) # invalid code point – high surrogate
-    ([0xed,0xb0,0x80],[0xdc00]) # invalid code point – low surrogate
-    ([0xed,0xbf,0xbf],[0xdfff]) # invalid code point – low surrogate
+    ([0xed,0xa0,0x80],[0xd800]) # invalid code point – high surrogate
+    ([0xed,0xaf,0xbf],[0xdbff]) # invalid code point – high surrogate
+    ([0xed,0xb0,0x80],[0xdc00]) # invalid code point – low surrogate
+    ([0xed,0xbf,0xbf],[0xdfff]) # invalid code point – low surrogate
     ([0xee,0x80,0x80],[0xe000])
     ([0xef,0xbf,0xbf],[0xffff])
     # 4-byte
@@ -980,10 +1017,11 @@ end
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
-       for v in names(mod)
-           @test isdefined(mod, v)
-       end
-   end
+        mod === Main && continue # Main exports everything
+        for v in names(mod)
+            @test isdefined(mod, v)
+        end
+    end
 end
 
 @testset "ordering UUIDs" begin
@@ -1023,6 +1061,17 @@ end
     GC.gc(true); GC.gc(false)
 
     GC.safepoint()
+
+    mktemp() do tmppath, _
+        open(tmppath, "w") do tmpio
+            redirect_stderr(tmpio) do
+                GC.enable_logging(true)
+                GC.gc()
+                GC.enable_logging(false)
+            end
+        end
+        @test occursin("GC: pause", read(open(tmppath), String))
+    end
 end
 
 @testset "fieldtypes Module" begin
@@ -1060,3 +1109,7 @@ end
 
 # issue #41656
 @test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+
+@testset "Base/timing.jl" begin
+    @test Base.jit_total_bytes() >= 0
+end

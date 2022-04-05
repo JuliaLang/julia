@@ -13,12 +13,14 @@ struct Cmd <: AbstractCmd
     flags::UInt32 # libuv process flags
     env::Union{Vector{String},Nothing}
     dir::String
+    cpus::Union{Nothing,Vector{UInt16}}
     Cmd(exec::Vector{String}) =
-        new(exec, false, 0x00, nothing, "")
-    Cmd(cmd::Cmd, ignorestatus, flags, env, dir) =
+        new(exec, false, 0x00, nothing, "", nothing)
+    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir))
+            dir === cmd.dir ? dir : cstr(dir), cpus)
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
+                 cpus::Union{Nothing,Vector{UInt16}} = cmd.cpus,
                  detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
                  windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
                  windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
@@ -26,7 +28,7 @@ struct Cmd <: AbstractCmd
                 windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide * UV_PROCESS_WINDOWS_HIDE
         new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir))
+            dir === cmd.dir ? dir : cstr(dir), cpus)
     end
 end
 
@@ -34,7 +36,8 @@ has_nondefault_cmd_flags(c::Cmd) =
     c.ignorestatus ||
     c.flags != 0x00 ||
     c.env !== nothing ||
-    c.dir !== ""
+    c.dir !== "" ||
+    c.cpus !== nothing
 
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
@@ -114,6 +117,8 @@ function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
+    print_cpus = cmd.cpus !== nothing
+    print_cpus && print(io, "setcpuaffinity(")
     print(io, '`')
     join(io, map(cmd.exec) do arg
         replace(sprint(context=io) do io
@@ -123,6 +128,11 @@ function show(io::IO, cmd::Cmd)
         end, '`' => "\\`")
     end, ' ')
     print(io, '`')
+    if print_cpus
+        print(io, ", ")
+        show(io, collect(Int, something(cmd.cpus)))
+        print(io, ")")
+    end
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
     (print_dir || print_env) && print(io, ")")
@@ -233,7 +243,7 @@ byteenv(env::Union{AbstractVector{Pair{T,V}}, Tuple{Vararg{Pair{T,V}}}}) where {
     String[cstr(k*"="*string(v)) for (k,v) in env]
 
 """
-    setenv(command::Cmd, env; dir="")
+    setenv(command::Cmd, env; dir)
 
 Set environment variables to use when running the given `command`. `env` is either a
 dictionary mapping strings to strings, an array of strings of the form `"var=val"`, or
@@ -242,13 +252,24 @@ existing environment, create `env` through `copy(ENV)` and then setting `env["va
 as desired, or use [`addenv`](@ref).
 
 The `dir` keyword argument can be used to specify a working directory for the command.
+`dir` defaults to the currently set `dir` for `command` (which is the current working
+directory if not specified already).
 
 See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """
-setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
+setenv(cmd::Cmd, env; dir=cmd.dir) = Cmd(cmd; env=byteenv(env), dir=dir)
+setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir=cmd.dir) =
     setenv(cmd, env; dir=dir)
-setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
+setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
+
+# split environment entry string into before and after first `=` (key and value)
+function splitenv(e::String)
+    i = findnext('=', e, 2)
+    if i === nothing
+        throw(ArgumentError("malformed environment entry"))
+    end
+    e[1:prevind(e, i)], e[nextind(e, i):end]
+end
 
 """
     addenv(command::Cmd, env...; inherit::Bool = true)
@@ -256,6 +277,7 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 Merge new environment mappings into the given [`Cmd`](@ref) object, returning a new `Cmd` object.
 Duplicate keys are replaced.  If `command` does not contain any environment values set already,
 it inherits the current environment at time of `addenv()` call if `inherit` is `true`.
+Keys with value `nothing` are deleted from the env.
 
 See also [`Cmd`](@ref), [`setenv`](@ref), [`ENV`](@ref).
 
@@ -269,12 +291,16 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
             merge!(new_env, ENV)
         end
     else
-        for (k, v) in eachsplit.(cmd.env, "=")
+        for (k, v) in splitenv.(cmd.env)
             new_env[string(k)::String] = string(v)::String
         end
     end
     for (k, v) in env
-        new_env[string(k)::String] = string(v)::String
+        if v === nothing
+            delete!(new_env, string(k)::String)
+        else
+            new_env[string(k)::String] = string(v)::String
+        end
     end
     return setenv(cmd, new_env)
 end
@@ -284,8 +310,41 @@ function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true
 end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
-    return addenv(cmd, Dict(k => v for (k, v) in eachsplit.(env, "=")); inherit)
+    return addenv(cmd, Dict(k => v for (k, v) in splitenv.(env)); inherit)
 end
+
+"""
+    setcpuaffinity(original_command::Cmd, cpus) -> command::Cmd
+
+Set the CPU affinity of the `command` by a list of CPU IDs (1-based) `cpus`.  Passing
+`cpus = nothing` means to unset the CPU affinity if the `original_command` has any.
+
+This function is supported only in Linux and Windows.  It is not supported in macOS because
+libuv does not support affinity setting.
+
+!!! compat "Julia 1.8"
+    This function requires at least Julia 1.8.
+
+# Examples
+
+In Linux, the `taskset` command line program can be used to see how `setcpuaffinity` works.
+
+```julia
+julia> run(setcpuaffinity(`sh -c 'taskset -p \$\$'`, [1, 2, 5]));
+pid 2273's current affinity mask: 13
+```
+
+Note that the mask value `13` reflects that the first, second, and the fifth bits (counting
+from the least significant position) are turned on:
+
+```julia
+julia> 0b010011
+0x13
+```
+"""
+function setcpuaffinity end
+setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpus = nothing)
+setcpuaffinity(cmd::Cmd, cpus) = Cmd(cmd; cpus = collect(UInt16, cpus))
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)

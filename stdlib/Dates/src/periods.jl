@@ -70,9 +70,7 @@ default(p::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
 
 (-)(x::P) where {P<:Period} = P(-value(x))
 ==(x::P, y::P) where {P<:Period} = value(x) == value(y)
-==(x::Period, y::Period) = (==)(promote(x, y)...)
 Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
-Base.isless(x::Period, y::Period) = isless(promote(x, y)...)
 
 # Period Arithmetic, grouped by dimensionality:
 for op in (:+, :-, :lcm, :gcd)
@@ -96,6 +94,11 @@ end
 
 (*)(A::Period, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 (*)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(*, A, B)
+
+for op in (:(==), :isless, :/, :rem, :mod, :lcm, :gcd)
+    @eval ($op)(x::Period, y::Period) = ($op)(promote(x, y)...)
+end
+div(x::Period, y::Period, r::RoundingMode) = div(promote(x, y)..., r)
 
 # intfuncs
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)

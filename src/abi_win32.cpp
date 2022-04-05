@@ -49,11 +49,11 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return true;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     // Use pass by reference for all structs
     if (dt->layout->nfields > 0) {
-        ab.addAttribute(Attribute::ByVal);
+        ab.addByValAttr(Ty);
         return true;
     }
     return false;

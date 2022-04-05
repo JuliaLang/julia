@@ -3,7 +3,7 @@
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(linfo, nothing, false)
+        argtypes, _ = matching_cache_argtypes(linfo, nothing)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
@@ -23,9 +23,7 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
-            stmt.args[1] = block_for_inst(cfg, stmt.args[1])
-            code[i] = stmt
-        else
+            stmt.args[1] = block_for_inst(cfg, stmt.args[1]::Int)
             code[i] = stmt
         end
     end

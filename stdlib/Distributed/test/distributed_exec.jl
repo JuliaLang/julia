@@ -298,7 +298,7 @@ let wid1 = workers()[1],
     end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
     sleep(0.5) # to ensure that wid2 messages have been executed on wid1
-    @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == false
+    @test poll_while(() -> remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid))
 end
 
 # Tests for issue #23109 - should not hang.
@@ -350,6 +350,9 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
+        elseif fld == :lock
+            @test v isa ReentrantLock
+            @test !islocked(v)
         elseif v !== nothing
             error(string("Add test for field ", fld))
         end
@@ -837,6 +840,16 @@ end
 v15406 = remotecall_wait(() -> 1, id_other)
 fetch(v15406)
 remotecall_wait(fetch, id_other, v15406)
+
+
+# issue #43396
+# Covers the remote fetch where the value returned is `nothing`
+# May be caused by attempting to unwrap a non-`Some` type with `something`
+# `call_on_owner` ref fetches return values not wrapped in `Some`
+# and have to be returned directly
+@test nothing === fetch(remotecall(() -> nothing, workers()[1]))
+@test 10 === fetch(remotecall(() -> 10, workers()[1]))
+
 
 # Test various forms of remotecall* invocations
 
@@ -1725,6 +1738,117 @@ end
 for p in procs()
     @test @fetchfrom(p, i27429) == 27429
 end
+
+# Propagation of package environments for local workers (#28781)
+let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
+    project = mkdir(joinpath(tmp, "project"))
+    depots = [mkdir(joinpath(tmp, "depot1")), mkdir(joinpath(tmp, "depot2"))]
+    load_path = [mkdir(joinpath(tmp, "load_path")), "@stdlib", "@"]
+    pathsep = Sys.iswindows() ? ";" : ":"
+    env = Dict(
+        "JULIA_DEPOT_PATH" => join(depots, pathsep),
+        "JULIA_LOAD_PATH" => join(load_path, pathsep),
+        # Explicitly propagate `TMPDIR`, in the event that we're running on a
+        # CI system where `TMPDIR` is special.
+        "TMPDIR" => dirname(tmp),
+    )
+    setupcode = """
+    using Distributed, Test
+    @everywhere begin
+        depot_path() = DEPOT_PATH
+        load_path() = LOAD_PATH
+        active_project() = Base.ACTIVE_PROJECT[]
+    end
+    """
+    testcode = setupcode * """
+    for w in workers()
+        @test remotecall_fetch(depot_path, w)          == DEPOT_PATH
+        @test remotecall_fetch(load_path, w)           == LOAD_PATH
+        @test remotecall_fetch(Base.load_path, w)      == Base.load_path()
+        @test remotecall_fetch(active_project, w)      == Base.ACTIVE_PROJECT[]
+        @test remotecall_fetch(Base.active_project, w) == Base.active_project()
+    end
+    """
+    # No active project
+    extracode = """
+    for w in workers()
+        @test remotecall_fetch(active_project, w) === Base.ACTIVE_PROJECT[] === nothing
+    end
+    """
+    cmd = setenv(`$(julia) -p1 -e $(testcode * extracode)`, env)
+    @test success(cmd)
+    # --project
+    extracode = """
+    for w in workers()
+        @test remotecall_fetch(active_project, w) == Base.ACTIVE_PROJECT[] ==
+              $(repr(project))
+    end
+    """
+    cmd = setenv(`$(julia) --project=$(project) -p1 -e $(testcode * extracode)`, env)
+    @test success(cmd)
+    # JULIA_PROJECT
+    cmd = setenv(`$(julia) -p1 -e $(testcode * extracode)`,
+                 (env["JULIA_PROJECT"] = project; env))
+    @test success(cmd)
+    # Pkg.activate(...)
+    activateish = """
+    Base.ACTIVE_PROJECT[] = $(repr(project))
+    using Distributed
+    addprocs(1)
+    """
+    cmd = setenv(`$(julia) -e $(activateish * testcode * extracode)`, env)
+    @test success(cmd)
+    # JULIA_(LOAD|DEPOT)_PATH
+    shufflecode = """
+    d = reverse(DEPOT_PATH)
+    append!(empty!(DEPOT_PATH), d)
+    l = reverse(LOAD_PATH)
+    append!(empty!(LOAD_PATH), l)
+    """
+    addcode = """
+    using Distributed
+    addprocs(1) # after shuffling
+    """
+    extracode = """
+    for w in workers()
+        @test remotecall_fetch(load_path, w) == $(repr(reverse(load_path)))
+        @test remotecall_fetch(depot_path, w) == $(repr(reverse(depots)))
+    end
+    """
+    cmd = setenv(`$(julia) -e $(shufflecode * addcode * testcode * extracode)`, env)
+    @test success(cmd)
+    # Mismatch when shuffling after proc addition
+    failcode = shufflecode * setupcode * """
+    for w in workers()
+        @test remotecall_fetch(load_path, w) == reverse(LOAD_PATH) == $(repr(load_path))
+        @test remotecall_fetch(depot_path, w) == reverse(DEPOT_PATH) == $(repr(depots))
+    end
+    """
+    cmd = setenv(`$(julia) -p1 -e $(failcode)`, env)
+    @test success(cmd)
+    # Passing env or exeflags to addprocs(...) to override defaults
+    envcode = """
+    using Distributed
+    project = mktempdir()
+    env = Dict(
+        "JULIA_LOAD_PATH" => LOAD_PATH[1],
+        "JULIA_DEPOT_PATH" => DEPOT_PATH[1],
+        "TMPDIR" => ENV["TMPDIR"],
+    )
+    addprocs(1; env = env, exeflags = `--project=\$(project)`)
+    env["JULIA_PROJECT"] = project
+    addprocs(1; env = env)
+    """ * setupcode * """
+    for w in workers()
+        @test remotecall_fetch(depot_path, w)          == [DEPOT_PATH[1]]
+        @test remotecall_fetch(load_path, w)           == [LOAD_PATH[1]]
+        @test remotecall_fetch(active_project, w)      == project
+        @test remotecall_fetch(Base.active_project, w) == joinpath(project, "Project.toml")
+    end
+    """
+    cmd = setenv(`$(julia) -e $(envcode)`, env)
+    @test success(cmd)
+end end
 
 include("splitrange.jl")
 

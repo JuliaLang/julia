@@ -93,6 +93,10 @@ A = Array{Int}(undef, 0, 3)
 @test_throws "reducing over an empty collection is not allowed" maximum(A; dims=1)
 @test maximum(A; dims=1, init=-1) == reshape([-1,-1,-1], 1, 3)
 
+@test maximum(zeros(0, 2); dims=1, init=-1) == fill(-1, 1, 2)
+@test minimum(zeros(0, 2); dims=1, init=1) == ones(1, 2)
+@test extrema(zeros(0, 2); dims=1, init=(1, -1)) == fill((1, -1), 1, 2)
+
 # Test reduction along first dimension; this is special-cased for
 # size(A, 1) >= 16
 Breduc = rand(64, 3)
@@ -445,8 +449,8 @@ end
 
 @testset "argmin/argmax" begin
     B = reshape(3^3:-1:1, (3, 3, 3))
-    @test B[argmax(B, dims=[2, 3])] == maximum(B, dims=[2, 3])
-    @test B[argmin(B, dims=[2, 3])] == minimum(B, dims=[2, 3])
+    @test B[argmax(B, dims=[2, 3])] == @inferred(maximum(B, dims=[2, 3]))
+    @test B[argmin(B, dims=[2, 3])] == @inferred(minimum(B, dims=[2, 3]))
 end
 
 @testset "in-place reductions with mismatched dimensionalities" begin
@@ -454,18 +458,51 @@ end
     for R in (fill(0, 4), fill(0, 4, 1), fill(0, 4, 1, 1))
         @test @inferred(maximum!(R, B)) == reshape(21:24, size(R))
         @test @inferred(minimum!(R, B)) == reshape(1:4, size(R))
+        @test @inferred(extrema!(fill((0,0), size(R)), B)) == reshape(tuple.(1:4, 21:24), size(R))
     end
     for R in (fill(0, 1, 3), fill(0, 1, 3, 1))
         @test @inferred(maximum!(R, B)) == reshape(16:4:24, size(R))
         @test @inferred(minimum!(R, B)) == reshape(1:4:9, size(R))
+        @test @inferred(extrema!(fill((0,0), size(R)), B)) == reshape(tuple.(1:4:9, 16:4:24), size(R))
     end
-    @test_throws DimensionMismatch maximum!(fill(0, 4, 1, 1, 1), B)
-    @test_throws DimensionMismatch minimum!(fill(0, 4, 1, 1, 1), B)
-    @test_throws DimensionMismatch maximum!(fill(0, 1, 3, 1, 1), B)
-    @test_throws DimensionMismatch minimum!(fill(0, 1, 3, 1, 1), B)
-    @test_throws DimensionMismatch maximum!(fill(0, 1, 1, 2, 1), B)
-    @test_throws DimensionMismatch minimum!(fill(0, 1, 1, 2, 1), B)
+    for (ini, f!) in zip((0,0,(0,0)), (maximum!, minimum!, extrema!))
+        @test_throws DimensionMismatch f!(fill(ini, 4, 1, 1, 1), B)
+        @test_throws DimensionMismatch f!(fill(ini, 1, 3, 1, 1), B)
+        @test_throws DimensionMismatch f!(fill(ini, 1, 1, 2, 1), B)
+    end
 end
+
+function unordered_test_for_extrema(a; dims_test = ((), 1, 2, (1,2), 3))
+    for dims in dims_test
+        vext = extrema(a; dims)
+        vmin, vmax = minimum(a; dims), maximum(a; dims)
+        @test isequal(extrema!(copy(vext), a), vext)
+        @test all(x -> isequal(x[1], x[2:3]), zip(vext,vmin,vmax))
+    end
+end
+@testset "0.0,-0.0 test for extrema with dims" begin
+    @test extrema([-0.0;0.0], dims = 1)[1] === (-0.0,0.0)
+    @test tuple(extrema([-0.0;0.0], dims = 2)...) === ((-0.0, -0.0), (0.0, 0.0))
+end
+@testset "NaN/missing test for extrema with dims #43599" begin
+    for sz = (3, 10, 100)
+        for T in (Int, Float64, BigFloat)
+            Aₘ = Matrix{Union{T, Missing}}(rand(-sz:sz, sz, sz))
+            Aₘ[rand(1:sz*sz, sz)] .= missing
+            unordered_test_for_extrema(Aₘ)
+            if T <: AbstractFloat
+                Aₙ = map(i -> ismissing(i) ? T(NaN) : i, Aₘ)
+                unordered_test_for_extrema(Aₙ)
+                p = rand(1:sz*sz, sz)
+                Aₘ[p] .= NaN
+                unordered_test_for_extrema(Aₘ)
+            end
+        end
+    end
+end
+@test_broken minimum([missing;BigInt(1)], dims = 1)
+@test_broken maximum([missing;BigInt(1)], dims = 1)
+@test_broken extrema([missing;BigInt(1)], dims = 1)
 
 # issue #26709
 @testset "dimensional reduce with custom non-bitstype types" begin
@@ -505,4 +542,16 @@ end
         @test eltype(r_red) == T
         @test r_red == [3]
     end
+end
+
+@testset "type stability (issue #43461)" begin
+    @test (@inferred maximum(Float64, reshape(1:4,2,:); dims = 2)) == reshape([3,4],2,1)
+end
+
+@testset "Min/Max initialization test" begin
+    A = Vector{Union{Missing,Int}}(1:4)
+    A[2] = missing
+    @test_broken @inferred(minimum(exp, A; dims = 1))[1] === missing
+    @test_broken @inferred(maximum(exp, A; dims = 1))[1] === missing
+    @test_broken @inferred(extrema(exp, A; dims = 1))[1] === (missing, missing)
 end

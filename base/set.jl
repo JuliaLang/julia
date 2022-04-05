@@ -115,7 +115,7 @@ as determined by [`isequal`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref).
+See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -383,7 +383,7 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
-See also: [`unique`](@ref), [`issorted`](@ref).
+See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -406,18 +406,18 @@ function allunique(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
             v, s = x
-            idx = ht_keyindex2!(seen, v)
+            idx, sh = ht_keyindex2_shorthash!(seen, v)
             idx > 0 && return false
-            _setindex!(seen, nothing, v, -idx)
+            _setindex!(seen, nothing, v, -idx, sh)
             x = iterate(C, s)
         end
         sizehint!(seen, length(C))
     end
     while x !== nothing
         v, s = x
-        idx = ht_keyindex2!(seen, v)
+        idx, sh = ht_keyindex2_shorthash!(seen, v)
         idx > 0 && return false
-        _setindex!(seen, nothing, v, -idx)
+        _setindex!(seen, nothing, v, -idx, sh)
         x = iterate(C, s)
     end
     return true
@@ -426,6 +426,40 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+"""
+    allequal(itr) -> Bool
+
+Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
+
+See also: [`unique`](@ref), [`allunique`](@ref).
+
+!!! compat "Julia 1.8"
+    The `allequal` function requires at least Julia 1.8.
+
+# Examples
+```jldoctest
+julia> allequal([])
+true
+
+julia> allequal([1])
+true
+
+julia> allequal([1, 1])
+true
+
+julia> allequal([1, 2])
+false
+
+julia> allequal(Dict(:a => 1, :b => 1))
+false
+```
+"""
+allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+
+allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+
+allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

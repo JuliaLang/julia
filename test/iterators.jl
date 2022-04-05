@@ -212,6 +212,7 @@ end
     @test collect(takewhile(Returns(true),5:10)) == 5:10
     @test collect(takewhile(isodd,[1,1,2,3])) == [1,1]
     @test collect(takewhile(<(2), takewhile(<(3), [1,1,2,3]))) == [1,1]
+    @test Base.IteratorEltype(typeof(takewhile(<(4),Iterators.map(identity, 1:10)))) isa Base.EltypeUnknown
 end
 
 # dropwhile
@@ -224,6 +225,7 @@ end
     @test isempty(dropwhile(Returns(true), 1:3))
     @test collect(dropwhile(isodd,[1,1,2,3])) == [2,3]
     @test collect(dropwhile(iseven,dropwhile(isodd,[1,1,2,3]))) == [3]
+    @test Base.IteratorEltype(typeof(dropwhile(<(4),Iterators.map(identity, 1:10)))) isa Base.EltypeUnknown
 end
 
 # cycle
@@ -451,6 +453,10 @@ end
 @test length(product(1:2,1:10,4:6)) == 60
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
 
+# intersection
+@test intersect(product(1:3, 4:6), product(2:4, 3:5)) == Iterators.ProductIterator((2:3, 4:5))
+@test intersect(product(1:3, [4 5 ; 6 7]), product(2:4, [7 6 ; 5 4])).iterators == (2:3, [4, 6, 5, 7])
+
 # flatten
 # -------
 @test collect(flatten(Any[1:2, 4:5])) == Any[1,2,4,5]
@@ -548,12 +554,15 @@ end
                                                          (1,1), (8,8), (11, 13),
                                                          (1,1,1), (8, 4, 2), (11, 13, 17)),
                                                 part in (1, 7, 8, 11, 63, 64, 65, 142, 143, 144)
-    P = partition(CartesianIndices(dims), part)
-    for I in P
-        @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
-        @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+    for fun in (i -> 1:i, i -> 1:2:2i, i -> Base.IdentityUnitRange(-i:i))
+        iter = CartesianIndices(map(fun, dims))
+        P = partition(iter, part)
+        for I in P
+            @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
+            @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+        end
+        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
-    @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), CartesianIndices(dims)))
 end
 @testset "empty/invalid partitions" begin
     @test_throws ArgumentError partition(1:10, 0)
@@ -685,17 +694,26 @@ end
     for itr in (2:10, "∀ϵ>0", 1:0, "", (2,3,5,7,11), [2,3,5,7,11], rand(5,6), Z, 3, true, 'x', 4=>5,
                 eachindex("∀ϵ>0"), view(Z), view(rand(5,6),2:4,2:6), (x^2 for x in 1:10),
                 Iterators.Filter(isodd, 1:10), flatten((1:10, 50:60)), enumerate("foo"),
-                pairs(50:60), zip(1:10,21:30,51:60), product(1:3, 10:12), repeated(3.14159, 5))
-        @test squash(collect(Iterators.reverse(itr))) == reverse(squash(collect(itr)))
+                pairs(50:60), zip(1:10,21:30,51:60), product(1:3, 10:12), repeated(3.14159, 5),
+                (a=2, b=3, c=5, d=7, e=11))
+        arr = reverse(squash(collect(itr)))
+        itr = Iterators.reverse(itr)
+        @test squash(collect(itr)) == arr
+        if !isempty(arr)
+            @test first(itr) == first(arr)
+            @test last(itr) == last(arr)
+        end
     end
     @test collect(take(Iterators.reverse(cycle(1:3)), 7)) == collect(take(cycle(3:-1:1), 7))
     let r = repeated(3.14159)
         @test Iterators.reverse(r) === r
+        @test last(r) === 3.14159
     end
-    let t = (2,3,5,7,11)
+    for t in [(1,), (2, 3, 5, 7, 11), (a=1,), (a=2, b=3, c=5, d=7, e=11)]
         @test Iterators.reverse(Iterators.reverse(t)) === t
         @test first(Iterators.reverse(t)) === last(t)
         @test last(Iterators.reverse(t)) === first(t)
+        @test collect(Iterators.reverse(t)) == reverse(collect(t))
     end
 end
 
@@ -882,4 +900,17 @@ end
     @test Iterators.peel(1:10)[2] |> collect == 2:10
     @test Iterators.peel(x^2 for x in 2:4)[1] == 4
     @test Iterators.peel(x^2 for x in 2:4)[2] |> collect == [9, 16]
+end
+
+@testset "last for iterators" begin
+    @test last(Iterators.map(identity, 1:3)) == 3
+    @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
+end
+
+@testset "isempty and isdone for Generators" begin
+    itr = eachline(IOBuffer("foo\n"))
+    gen = (x for x in itr)
+    @test !isempty(gen)
+    @test !Base.isdone(gen)
+    @test collect(gen) == ["foo"]
 end
