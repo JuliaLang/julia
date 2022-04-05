@@ -54,6 +54,7 @@ typedef struct {
     int8_t rr_detach;
     int8_t strip_metadata;
     int8_t strip_ir;
+    int8_t debug_values;
 } jl_options_t;
 
 #endif

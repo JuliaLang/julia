@@ -198,6 +198,8 @@ extern void _chkstk(void);
 // for image reloading
 bool imaging_mode = false;
 
+char jl_using_gdb_jitevents = 0;
+
 // shared llvm state
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
@@ -1333,6 +1335,8 @@ public:
     Value *world_age_field = NULL;
 
     bool debug_enabled = false;
+    // Controls the insertion of llvm.dbg.{value, declare} intrinsics
+    bool debug_value_enabled = false;
     bool use_cache = false;
     const jl_cgparams_t *params = NULL;
 
@@ -6506,6 +6510,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         ctx.debug_enabled = 0;
     if (jl_options.debug_level == 0)
         ctx.debug_enabled = 0;
+    ctx.debug_value_enabled = ctx.debug_enabled && (jl_options.debug_values || imaging_mode || jl_using_gdb_jitevents);
 
     // step 2. process var-info lists to see what vars need boxing
     int n_ssavalues = jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_len(src->ssavaluetypes);
@@ -6866,7 +6871,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             }
             varinfo.value = mark_julia_slot(lv, jt, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
             alloc_def_flag(ctx, varinfo);
-            if (ctx.debug_enabled && varinfo.dinfo) {
+            if (ctx.debug_value_enabled && varinfo.dinfo) {
                 assert((Metadata*)varinfo.dinfo->getType() != debuginfo.jl_pvalue_dillvmt);
                 dbuilder.insertDeclare(lv, varinfo.dinfo, dbuilder.createExpression(),
                                        topdebugloc,
@@ -6883,7 +6888,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.pgcstack);
             varinfo.boxroot = av;
-            if (ctx.debug_enabled && varinfo.dinfo) {
+            if (ctx.debug_value_enabled && varinfo.dinfo) {
                 DIExpression *expr;
                 if ((Metadata*)varinfo.dinfo->getType() == debuginfo.jl_pvalue_dillvmt) {
                     expr = dbuilder.createExpression();
@@ -7044,21 +7049,22 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                 assert(vi.value.V == NULL && "unexpected variable slot created for argument");
                 // keep track of original (possibly boxed) value to avoid re-boxing or moving
                 vi.value = theArg;
-                if (specsig && theArg.V && ctx.debug_enabled && vi.dinfo) {
+                if (specsig && theArg.V && ctx.debug_value_enabled && vi.dinfo) {
                     SmallVector<uint64_t, 8> addr;
                     Value *parg;
                     if (theArg.ispointer()) {
                         parg = theArg.V;
                         if ((Metadata*)vi.dinfo->getType() != debuginfo.jl_pvalue_dillvmt)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
+                        dbuilder.insertDeclare(parg, vi.dinfo, dbuilder.createExpression(addr),
+                                                    topdebugloc,
+                                                    ctx.builder.GetInsertBlock());
                     }
                     else {
-                        parg = ctx.builder.CreateAlloca(theArg.V->getType(), NULL, jl_symbol_name(s));
-                        ctx.builder.CreateStore(theArg.V, parg);
+                        dbuilder.insertDbgValueIntrinsic(parg, vi.dinfo,
+                            dbuilder.createExpression(addr), topdebugloc,
+                            ctx.builder.GetInsertBlock());
                     }
-                    dbuilder.insertDeclare(parg, vi.dinfo, dbuilder.createExpression(addr),
-                                                topdebugloc,
-                                                ctx.builder.GetInsertBlock());
                 }
             }
             else {

@@ -83,6 +83,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // rr-detach
                         0, // strip-metadata
                         0, // strip-ir
+                        0, // debug-values
     };
     jl_options_initialized = 1;
 }
@@ -373,6 +374,8 @@ restart_switch:
                     jl_options.debug_level = 1;
                 else if (!strcmp(optarg,"2"))
                     jl_options.debug_level = 2;
+                else if (!strcmp(optarg,"values"))
+                    jl_options.debug_values = 1;
                 else
                     jl_errorf("julia: invalid argument to -g (%s)", optarg);
                 break;

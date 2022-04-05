@@ -220,6 +220,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
+    if opts.debug_values != 0
+        push!(addflags, "-gvalues")
+    end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
 
