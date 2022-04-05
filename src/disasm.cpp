@@ -108,6 +108,8 @@
 #include <llvm/Support/CodeGen.h>
 #include <llvm/IR/LegacyPassManager.h>
 
+#include <llvm-c/Disassembler.h>
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "jitlayers.h"
@@ -901,7 +903,11 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCCodeEmitter> CE;
     std::unique_ptr<MCAsmBackend> MAB;
     if (ShowEncoding) {
+#if JL_LLVM_VERSION >= 150000
+        CE.reset(TheTarget->createMCCodeEmitter(*MCII, Ctx));
+#else
         CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+#endif
         MAB.reset(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
 
@@ -1233,8 +1239,13 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
-            if (binary) // enable MCAsmStreamer::AddEncodingComment printing
+            if (binary) { // enable MCAsmStreamer::AddEncodingComment printing
+#if JL_LLVM_VERSION >= 150000
+                MCE.reset(TM->getTarget().createMCCodeEmitter(MII, *Context));
+#else
                 MCE.reset(TM->getTarget().createMCCodeEmitter(MII, MRI, *Context));
+#endif
+            }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
                 *Context, std::move(FOut), true,
