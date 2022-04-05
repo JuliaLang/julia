@@ -2087,7 +2087,7 @@ end
 function getglobal_nothrow(argtypes::Vector{Any})
     2 ≤ length(argtypes) ≤ 3 || return false
     if length(argtypes) == 3
-        global_order_nothrow(o, true, false) || return false
+        global_order_nothrow(argtypes[3], true, false) || return false
     end
     M, s = argtypes
     if M isa Const && s isa Const
