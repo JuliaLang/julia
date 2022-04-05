@@ -100,8 +100,6 @@ n = 5 # should be odd
         Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
             MyDual(convert(T, x.val), convert(T, x.eps))
         if elty <: Real
-            @show elty
-            @show istriu(triu(MyDual.(A, zero(A))))
             @test det(triu(MyDual.(A, zero(A)))) isa MyDual
         end
     end
