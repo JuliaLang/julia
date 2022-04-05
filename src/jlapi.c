@@ -22,15 +22,6 @@ extern "C" {
 #include <fenv.h>
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char * __cdecl dirname(char *);
-#else
-#include <libgen.h>
-#endif
-#ifndef _OS_WINDOWS_
-#include <dlfcn.h>
-#endif
-
 JL_DLLEXPORT int jl_is_initialized(void)
 {
     return jl_main_module != NULL;

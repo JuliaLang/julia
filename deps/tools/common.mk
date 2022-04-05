@@ -156,7 +156,7 @@ endif
 
 reinstall-$(strip $1):
 	+$$(MAKE) uninstall-$(strip $1)
-	-rm $$(build_staging)/$2.tgz
+	-rm -f $$(build_staging)/$2.tgz
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
@@ -180,7 +180,7 @@ endef
 define staged-uninstaller
 uninstall-$(strip $1):
 	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz | grep -v '/$$$$')
-	-rm $$(build_prefix)/manifest/$(strip $1)
+	-rm -f $$(build_prefix)/manifest/$(strip $1)
 endef
 
 
@@ -216,9 +216,9 @@ uninstall-$1:
 ifeq ($$(BUILD_OS), WINNT)
 	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
 else
-	-rm -r $3/$1
+	rm -rf $3/$1
 endif
-	-rm $$(build_prefix)/manifest/$1
+	-rm -f $$(build_prefix)/manifest/$1
 endef
 
 

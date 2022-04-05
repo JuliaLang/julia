@@ -70,6 +70,7 @@ Random.shuffle!
 ## Generators (creation and seeding)
 
 ```@docs
+Random.default_rng
 Random.seed!
 Random.AbstractRNG
 Random.TaskLocalRNG

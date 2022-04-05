@@ -1071,6 +1071,7 @@ static void serialize_htable_keys(jl_serializer_state *s, htable_t *ht, int nite
     write_int32(s->s, nitems);
     void **table = ht->table;
     size_t i, n = 0, sz = ht->size;
+    (void)n;
     for (i = 0; i < sz; i += 2) {
         if (table[i+1] != HT_NOTFOUND) {
             jl_serialize_value(s, (jl_value_t*)table[i]);
@@ -2535,8 +2536,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
                 jl_module_t *mod = (jl_module_t*)v;
                 if (mod->parent == mod) // top level modules handled by loader
                     break;
-                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
-                jl_declare_constant(b); // this can throw
+                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1); // this can throw
+                jl_declare_constant(b); // this can also throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
                         jl_errorf("Invalid redefinition of constant %s.",

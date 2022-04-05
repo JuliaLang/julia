@@ -64,6 +64,7 @@ done by `get_item_for_reloc`.
 #include "julia_internal.h"
 #include "builtin_proto.h"
 #include "processor.h"
+#include "serialize.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
@@ -79,7 +80,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    154
+#define NUM_TAGS    155
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -253,6 +254,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin__typebody);
         INSERT_TAG(jl_builtin_donotdelete);
         INSERT_TAG(jl_builtin_getglobal);
+        INSERT_TAG(jl_builtin_setglobal);
+        // n.b. must update NUM_TAGS when you add something here
 
         // All optional tags must be placed at the end, so that we
         // don't accidentally have a `NULL` in the middle
@@ -361,25 +364,6 @@ typedef enum {
 // this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 // if a larger size is required, will need to add support for writing larger relocations in many cases below
 #define RELOC_TAG_OFFSET 29
-
-
-/* read and write in host byte order */
-
-#define write_uint8(s, n) ios_putc((n), (s))
-#define read_uint8(s) ((uint8_t)ios_getc((s)))
-
-static void write_uint32(ios_t *s, uint32_t i) JL_NOTSAFEPOINT
-{
-    ios_write(s, (char*)&i, 4);
-}
-
-static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
-{
-    uint32_t x = 0;
-    ios_read(s, (char*)&x, 4);
-    return x;
-}
-
 
 // --- Static Compile ---
 

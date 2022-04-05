@@ -46,7 +46,7 @@ getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::
 Find all methods in the given method table `view` that are applicable to the given signature `sig`.
 If no applicable methods are found, an empty result is returned.
 If the number of applicable methods exceeded the specified limit, `missing` is returned.
-`overlayed` indicates if any matching method is defined in an overlayed method table.
+`overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
 function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=Int(typemax(Int32)))
     result = _findall(sig, nothing, table.world, limit)
@@ -101,7 +101,7 @@ It is possible that no method is an upper bound of `sig`, or
 it is possible that among the upper bounds, there is no least element.
 In both cases `nothing` is returned.
 
-`overlayed` indicates if the matching method is defined in an overlayed method table.
+`overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
 function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
     return (_findsup(sig, nothing, table.world)..., false)
