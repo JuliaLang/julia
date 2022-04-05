@@ -5,6 +5,7 @@
 
 #include "options.h"
 #include "julia_locks.h"
+#include "gc-alloc-profiler.h"
 #include <uv.h>
 #if !defined(_WIN32)
 #include <unistd.h>
@@ -225,8 +226,8 @@ extern jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
 
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
-                                          int osize);
+jl_value_t *jl_gc_pool_alloc_wrapper(jl_ptls_t ptls, int pool_offset,
+                                   int osize);
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
@@ -336,7 +337,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-        v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
+        v = jl_gc_pool_alloc_wrapper(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
@@ -344,6 +345,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         v = jl_gc_big_alloc(ptls, allocsz);
     }
     jl_set_typeof(v, ty);
+    maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
     return v;
 }
 

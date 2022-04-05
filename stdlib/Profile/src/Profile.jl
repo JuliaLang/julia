@@ -865,4 +865,6 @@ warning_empty() = @warn """
             running it multiple times), or adjust the delay between samples with
             `Profile.init()`."""
 
+include("Allocs.jl")
+
 end # module
