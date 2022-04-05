@@ -267,10 +267,9 @@ end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
 end
-            
+
 @inline function exp_impl(x::Float32, base)
     T = Float32
-    bad = (abs(x) <= SUBNORM_EXP(base, T))
     N_float = round(x*LogBINV(base, T))
     N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, LogBU(base, T), x)
