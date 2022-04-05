@@ -469,6 +469,7 @@ end
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
+@test collect(flatten(monuple.([1,nothing]))) == [1]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
