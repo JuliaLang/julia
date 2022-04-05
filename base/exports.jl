@@ -716,7 +716,6 @@ export
     something,
     isnothing,
     nonmissingtype,
-    monuple,
 
 # time
     sleep,
