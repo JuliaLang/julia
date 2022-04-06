@@ -149,8 +149,8 @@ the fallback case is not lazy, but is collected eagerly into a vector.
 Can be overloaded for user-defined collection types to customize the behavior of [slurping
 in assignments](@ref destructuring-assignment) in non-final position, like `a, b..., c = collection`.
 
-!!! compat "Julia 1.8"
-    `Base.split_rest` requires at least Julia 1.8.
+!!! compat "Julia 1.9"
+    `Base.split_rest` requires at least Julia 1.9.
 
 See also: [`Base.rest`](@ref).
 

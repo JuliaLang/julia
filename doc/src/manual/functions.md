@@ -475,8 +475,8 @@ Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.
 
 See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
-!!! compat "Julia 1.8"
-    `...` in non-final position of an assignment requires Julia 1.8
+!!! compat "Julia 1.9"
+    `...` in non-final position of an assignment requires Julia 1.9
 
 Slurping in assignments can also occur in any other position. As opposed to slurping the end
 of a collection however, this will always be eager.
