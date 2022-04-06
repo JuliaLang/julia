@@ -679,4 +679,3 @@ $ JULIA_NUM_THREADS=2 ./thread_example
 ```
 
 As can be seen, Julia thread 1 corresponds to pthread ID 3bfd9c00, and Julia thread 2 corresponds to ID 23938640, showing that indeed multiple threads are used at the C level, and that we can safely call Julia C API routines from those threads.
-
