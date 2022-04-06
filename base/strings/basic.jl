@@ -787,7 +787,7 @@ function _split_rest(s::AbstractString, n::Int)
         prevind(s, lastind, n)
     catch e
         e isa BoundsError || rethrow()
-        @assert _check_length_split_rest(length(s), n)
+        _check_length_split_rest(length(s), n)
     end
     last_n = SubString(s, nextind(s, i), lastind)
     front = s[begin:i]
