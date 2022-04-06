@@ -4,6 +4,7 @@
 #include "platform.h"
 
 #include "llvm/IR/Mangler.h"
+#include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
@@ -52,6 +53,30 @@ using namespace llvm;
 #endif
 
 #define DEBUG_TYPE "jitlayers"
+// Uncomment this to collect very detailed instruction stats before optimization
+// #define COLLECT_DETAILED_PRE_OPT_STATS
+// Uncomment this to collect very detailed instruction stats after optimization
+// #define COLLECT_DETAILED_POST_OPT_STATS
+
+#ifdef COLLECT_DETAILED_PRE_OPT_STATS
+FunctionPass *createJuliaPreOptimizationInstructionCountingPass();
+
+#ifndef LLVM_ENABLE_STATS
+#error "Cannot collect pre-optimization statistics without LLVM statistics enabled!"
+#endif
+#endif
+#ifdef COLLECT_DETAILED_POST_OPT_STATS
+FunctionPass *createJuliaPostOptimizationInstructionCountingPass();
+
+#ifndef LLVM_ENABLE_STATS
+#error "Cannot collect post-optimization statistics without LLVM statistics enabled!"
+#endif
+#endif
+
+STATISTIC(LinkedGlobals, "Number of globals linked");
+STATISTIC(AddedModules, "Number of modules added to the JIT");
+STATISTIC(CompiledModules, "Number of modules compiled by the JIT");
+STATISTIC(MergedModules, "Number of modules merged");
 
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
@@ -73,6 +98,7 @@ static uint64_t getAddressForFunction(StringRef fname);
 
 void jl_link_global(GlobalVariable *GV, void *addr)
 {
+    ++LinkedGlobals;
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
     if (jl_options.image_codegen) {
@@ -485,6 +511,13 @@ static auto countBasicBlocks(const Function &F)
 
 OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
     TSM.withModuleDo([&](Module &M) {
+#ifdef COLLECT_DETAILED_PRE_OPT_STATS
+        {
+            legacy::PassManager InitialCounter;
+            InitialCounter.add(createJuliaPreOptimizationInstructionCountingPass());
+            InitialCounter.run(M);
+        }
+#endif
         uint64_t start_time = 0;
         if (dump_llvm_opt_stream != NULL) {
             // Print LLVM function statistics _before_ optimization
@@ -531,11 +564,19 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
                 jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
             }
         }
+#ifdef COLLECT_DETAILED_POST_OPT_STATS
+        {
+            legacy::PassManager FinalCounter;
+            FinalCounter.add(createJuliaPostOptimizationInstructionCountingPass());
+            FinalCounter.run(M);
+        }
+#endif
     });
     return Expected<orc::ThreadSafeModule>{std::move(TSM)};
 }
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
+    ++CompiledModules;
     size_t optlevel = ~0ull;
     TSM.withModuleDo([&](Module &M) {
         if (jl_generating_output()) {
@@ -1027,6 +1068,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
+    ++AddedModules;
     JL_TIMING(LLVM_MODULE_FINISH);
     std::vector<std::string> NewExports;
     TSM.withModuleDo([&](Module &M) {
@@ -1226,6 +1268,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
             assert(&dest.getContext() == &src.getContext() && "Cannot merge modules with different contexts!");
             assert(dest.getDataLayout() == src.getDataLayout() && "Cannot merge modules with different data layouts!");
             assert(dest.getTargetTriple() == src.getTargetTriple() && "Cannot merge modules with different target triples!");
+            ++MergedModules;
 
             for (Module::global_iterator I = src.global_begin(), E = src.global_end(); I != E;) {
                 GlobalVariable *sG = &*I;
