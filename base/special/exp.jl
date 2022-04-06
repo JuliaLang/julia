@@ -282,7 +282,10 @@ end
         power += Int32(24)
         small_part *= Float32(0x1p-24)
     end
-    N == 128 && (power-=Int32(1); small_part*=2f0)
+    if N == 128
+        power -= Int32(1)
+        small_part *= 2f0
+    end
     return small_part * reinterpret(T, power << Int32(23))
 end
 
