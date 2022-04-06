@@ -1169,7 +1169,7 @@ Equivalent to `flatten(map(f, iterators...))`.
 
 # Examples
 ```jldoctest
-julia> flatmap(n->-n:2:n, 1:3) |> collect
+julia> Iterators.flatmap(n->-n:2:n, 1:3) |> collect
 9-element Vector{Int64}:
  -1
   1
