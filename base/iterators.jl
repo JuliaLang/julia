@@ -1180,30 +1180,6 @@ julia> Iterators.flatmap(n->-n:2:n, 1:3) |> collect
  -1
   1
   3
-
-julia> Iterators.flatmap(x -> (x+1)*x % 4 == 0 ? (x*x,) : (), 1:11) |> collect
-5-element Vector{Int64}:
-   9
-  16
-  49
-  64
- 121
-
-julia> [(j,k) for j in 1:3 for k in 1:3 if j>k]
-3-element Vector{Tuple{Int64, Int64}}:
- (2, 1)
- (3, 1)
- (3, 2)
-
-julia> Iterators.flatmap(1:3) do j
-           Iterators.flatmap(1:3) do k
-               j>k ? ((j,k),) : ()
-           end
-       end |> collect
-3-element Vector{Tuple{Int64, Int64}}:
- (2, 1)
- (3, 1)
- (3, 2)
 ```
 """
 # flatmap = flatten ∘ map
