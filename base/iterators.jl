@@ -1476,4 +1476,51 @@ only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
 
+
+Base.intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
+
+"""
+    IterableClosure(f)
+
+An iterable object that holds a function with no parameters, `f()`, that returns an optional `Union{Some{X},Nothing}`.
+
+`f()` is supposed to be a closure, or thunk. The iterator will produce the values from the Some objects until `nothing` is returned, signaling the end of the iterator.
+
+## Examples
+
+```jldoctest
+julia> function myrange(a, b)
+           state = a
+           IterableClosure() do
+               if state <= b
+                   prevstate, state = state, state + 1
+                   Some(prevstate)
+               else
+                   nothing
+               end
+           end
+       end
+myrange (generic function with 1 method)
+
+julia> for x in myrange(3,5)
+           println(x)
+       end
+3
+4
+5
+```
+"""
+struct IterableClosure
+    f
+end
+
+function Base.iterate(it::IterableClosure, _=nothing)
+    nextvalue = it.f()
+    if isnothing(nextvalue)
+        return nothing
+    else
+        return something(nextvalue), nothing
+    end
+end
+
 end
