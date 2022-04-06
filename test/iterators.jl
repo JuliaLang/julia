@@ -469,12 +469,36 @@ end
 @test length(flatten(1:6)) == 6
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
+@test collect(flatten(monuple.([1,nothing]))) == [1]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
 @test Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
 # see #29112, #29464, #29548
 @test Base.return_types(Base.IteratorEltype, Tuple{Array}) == [Base.HasEltype]
+
+# flatmap
+# -------
+@test flatmap(1:3) do j flatmap(1:3) do k
+    j!=k ? ((j,k),) : ()
+end end |> collect == [(j,k) for j in 1:3 for k in 1:3 if j!=k]
+# Test inspired by the monad associativity law
+fmf(x) = x<0 ? () : (x^2,)
+fmg(x) = x<1 ? () : (x/2,)
+fmdata = -2:0.75:2
+fmv1 = flatmap(tuple.(fmdata)) do h
+    flatmap(h) do x
+        gx = fmg(x)
+        flatmap(gx) do x
+            fmf(x)
+        end
+    end
+end
+fmv2 = flatmap(tuple.(fmdata)) do h
+    gh = flatmap(h) do x fmg(x) end
+    flatmap(gh) do x fmf(x) end
+end
+@test all(fmv1 .== fmv2)
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))

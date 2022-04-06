@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, flatmap
 
 """
     Iterators.map(f, iterators...)
@@ -1161,6 +1161,53 @@ end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 last(f::Flatten) = last(last(f.it))
+
+"""
+    Iterators.flatmap(f, iterators...)
+
+Equivalent to flatten(map(f, iterators...)).
+
+# Examples
+```jldoctest
+julia> flatmap(n->-n:2:n, 1:3) |> collect
+9-element Vector{Int64}:
+ -1
+  1
+ -2
+  0
+  2
+ -3
+ -1
+  1
+  3
+
+julia> flatmap(x -> (x+1)*x % 4 == 0 ? (x*x,) : (), 1:11) |> collect
+5-element Vector{Int64}:
+   9
+  16
+  49
+  64
+ 121
+
+julia> [(j,k) for j in 1:3 for k in 1:3 if j>k]
+3-element Vector{Tuple{Int64, Int64}}:
+ (2, 1)
+ (3, 1)
+ (3, 2)
+
+julia> Iterators.flatmap(1:3) do j
+           Iterators.flatmap(1:3) do k
+               j>k ? ((j,k),) : ()
+           end
+       end |> collect
+3-element Vector{Tuple{Int64, Int64}}:
+ (2, 1)
+ (3, 1)
+ (3, 2)
+```
+"""
+# flatmap = flatten ∘ map
+flatmap(f, c...) = flatten(map(f, c...))
 
 """
     partition(collection, n)

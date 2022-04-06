@@ -554,3 +554,47 @@ empty(@nospecialize x::Tuple) = ()
 
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
+
+"""
+    monuple(x)
+
+Converts values so that `nothing` becomes `()` and any other values are wrapped into a singleton tuple, also known as a monuple.
+
+# Example
+
+```
+julia> data = match.(r"(x.?)", ["x", "aoeu", "xoxo", ">>=", ";qjkx"])
+5-element Vector{Union{Nothing, RegexMatch}}:
+ RegexMatch("x", 1="x")
+ nothing
+ RegexMatch("xo", 1="xo")
+ nothing
+ RegexMatch("x", 1="x")
+
+julia> filter(!isnothing, data)
+3-element Vector{Union{Nothing, RegexMatch}}:
+ RegexMatch("x", 1="x")
+ RegexMatch("xo", 1="xo")
+ RegexMatch("x", 1="x")
+
+julia> collect(Iterators.flatten(monuple.(data)))
+3-element Vector{RegexMatch}:
+ RegexMatch("x", 1="x")
+ RegexMatch("xo", 1="xo")
+ RegexMatch("x", 1="x")
+
+julia> [optx for optx in data if !isnothing(optx) && optx[1] != "x"]
+1-element Vector{RegexMatch}:
+ RegexMatch("xo", 1="xo")
+
+julia> Iterators.flatmap(monuple.(data)) do optx
+           Iterators.flatmap(optx) do x
+               x[1] == "x" ? () : (x,)
+           end
+       end |> collect
+1-element Vector{RegexMatch}:
+ RegexMatch("xo", 1="xo")
+```
+"""
+monuple(x::Any) = tuple(x)
+monuple(::Nothing) = ()
