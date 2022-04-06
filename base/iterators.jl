@@ -1165,7 +1165,7 @@ last(f::Flatten) = last(last(f.it))
 """
     Iterators.flatmap(f, iterators...)
 
-Equivalent to flatten(map(f, iterators...)).
+Equivalent to `flatten(map(f, iterators...))`.
 
 # Examples
 ```jldoctest
