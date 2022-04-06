@@ -1276,26 +1276,31 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
-        optimize=true,
-        debuginfo::Symbol=:default,
-        interp = Core.Compiler.NativeInterpreter(closure.world))
+function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
+    debuginfo::Symbol=:default, __...)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    m = closure.source
+    m = oc.source
     if isa(m, Method)
         code = _uncompressed_ir(m, m.source)
         debuginfo === :none && remove_linenums!(code)
-        return Any[(code => code.rettype)]
+        # intersect the declared return type and the inferred return type (if available)
+        rt = typeintersect(code.rettype, typeof(oc).parameters[2])
+        return Any[code => rt]
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                      world = get_world_counter(),
+                      interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(f, Core.OpaqueClosure)
+        _, rt = only(code_typed_opaque_closure(f))
+        return Any[rt]
+    end
     types = to_tuple_type(types)
     rt = []
-    world = get_world_counter()
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
@@ -1347,15 +1352,11 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type), world=get_world_counter())
-    min_valid = RefValue{UInt}(typemin(UInt))
-    max_valid = RefValue{UInt}(typemax(UInt))
-    match = ccall(:jl_gf_invoke_lookup_worlds, Any,
-        (Any, UInt, Ptr{Csize_t}, Ptr{Csize_t}),
-        tt, world, min_valid, max_valid)
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
     if match === nothing
         error("no unique matching method found for the specified argument types")
     end
-    return match::Core.MethodMatch
+    return match
 end
 
 """
@@ -1478,7 +1479,7 @@ true
 function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
     t = to_tuple_type(t)
     t = signature_type(f, t)
-    return ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), t, world) !== nothing
+    return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
 end
 
 function hasmethod(@nospecialize(f), @nospecialize(t), kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
@@ -1549,7 +1550,7 @@ Alternatively, in isolation `m1` and `m2` might be ordered, but if a third
 method cannot be sorted with them, they may cause an ambiguity together.
 
 For parametric types, the `ambiguous_bottom` keyword argument controls whether
-`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
 it is considered ambiguous, when `false` it is not.
 
 # Examples

@@ -169,7 +169,7 @@ $$(build_private_libdir)/$$(libname_$2):
 		REALPATH=$$(libpath_$2); \
 		$$(call resolve_path,REALPATH) && \
 		[ -e "$$$$REALPATH" ] && \
-		([ ! -e "$$@" ] || rm "$$@") && \
+		rm -f "$$@" && \
 		echo ln -sf "$$$$REALPATH" "$$@" && \
 		ln -sf "$$$$REALPATH" "$$@"; \
 	else \
@@ -193,7 +193,7 @@ endif
 
 $(build_bindir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
@@ -204,7 +204,11 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
+ifeq ($(APPLE_ARCH),arm64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
@@ -254,7 +258,7 @@ $(build_private_libdir)/libLLVM.$(SHLIB_EXT):
 	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	echo ln -sf "$$REALPATH" "$@" && \
 	ln -sf "$$REALPATH" "$@"
 ifneq ($(USE_SYSTEM_LLVM),0)

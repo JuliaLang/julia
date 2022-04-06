@@ -48,16 +48,16 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern TargetMachine *jl_TargetMachine;
 extern bool imaging_mode;
 
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
 void jl_finalize_module(std::unique_ptr<Module>  m);
 void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name, LLVMContext &ctxt);
+Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
+DataLayout create_jl_data_layout(TargetMachine &TM);
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -167,9 +167,6 @@ static const inline char *name_from_method_instance(jl_method_instance_t *li)
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
-
-void jl_init_jit(void);
-
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
@@ -191,12 +188,13 @@ public:
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 private:
     struct OptimizerT {
-        OptimizerT(legacy::PassManager &PM, int optlevel) : optlevel(optlevel), PM(PM) {}
+        OptimizerT(legacy::PassManager &PM, std::mutex &mutex, int optlevel) : optlevel(optlevel), PM(PM), mutex(mutex) {}
 
         OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
     private:
         int optlevel;
         legacy::PassManager &PM;
+        std::mutex &mutex;
     };
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
@@ -218,7 +216,7 @@ private:
 
 public:
 
-    JuliaOJIT(TargetMachine &TM, LLVMContext *Ctx);
+    JuliaOJIT(LLVMContext *Ctx);
 
     void enableJITDebuggingSupport();
 #ifndef JL_USE_JITLINK
@@ -236,20 +234,23 @@ public:
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     orc::ThreadSafeContext &getContext();
     const DataLayout& getDataLayout() const;
+    TargetMachine &getTargetMachine();
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
+    void shareStrings(Module &M);
 
-    TargetMachine &TM;
-    const DataLayout DL;
+    std::unique_ptr<TargetMachine> TM;
+    DataLayout DL;
     // Should be big enough that in the common case, The
     // object fits in its entirety
     legacy::PassManager PM0;  // per-optlevel pass managers
     legacy::PassManager PM1;
     legacy::PassManager PM2;
     legacy::PassManager PM3;
+    std::mutex PM_mutexes[4];
     std::unique_ptr<TargetMachine> TMs[4];
 
     orc::ThreadSafeContext TSCtx;
@@ -282,7 +283,7 @@ Pass *createPropagateJuliaAddrspaces();
 Pass *createRemoveJuliaAddrspacesPass();
 Pass *createRemoveNIPass();
 Pass *createJuliaLICMPass();
-Pass *createMultiVersioningPass();
+Pass *createMultiVersioningPass(bool external_use);
 Pass *createAllocOptPass();
 Pass *createDemoteFloat16Pass();
 Pass *createCPUFeaturesPass();

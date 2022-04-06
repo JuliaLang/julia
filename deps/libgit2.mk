@@ -80,8 +80,8 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
-	-rm $(build_datarootdir)/julia/cert.pem
-	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
+	-rm -f $(build_datarootdir)/julia/cert.pem
+	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)

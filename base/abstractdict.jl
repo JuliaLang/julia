@@ -217,6 +217,9 @@ Dict{Int64, Int64} with 3 entries:
 """
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
+        if haslength(d) && haslength(other)
+            sizehint!(d, length(d) + length(other))
+        end
         for (k,v) in other
             d[k] = v
         end
@@ -520,6 +523,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     end
     return anymissing ? missing : true
 end
+
+# Fallback implementation
+sizehint!(d::AbstractDict, n) = d
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)

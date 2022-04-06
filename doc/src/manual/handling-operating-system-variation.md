@@ -40,4 +40,3 @@ When nesting conditionals, the `@static` must be repeated for each level
 ```julia
 @static Sys.iswindows() ? :a : (@static Sys.isapple() ? :b : :c)
 ```
-

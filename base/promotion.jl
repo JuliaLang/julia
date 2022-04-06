@@ -29,11 +29,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif a <: Tuple
+    end
+    # a and b are DataTypes
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
+    if a <: Tuple
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        ap, bp = a.parameters, b.parameters
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -77,7 +81,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
@@ -207,16 +210,17 @@ function typejoin_union_tuple(T::DataType)
 end
 
 # Returns length, isfixed
-function full_va_len(p)
+function full_va_len(p::Core.SimpleVector)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        if isdefined(last, :N) && isa(last.N, Int)
-            return length(p)::Int + last.N - 1, true
+        if isdefined(last, :N)
+            N = last.N
+            isa(N, Int) && return length(p) + N - 1, true
         end
-        return length(p)::Int, false
+        return length(p), false
     end
-    return length(p)::Int, true
+    return length(p), true
 end
 
 # reduce typejoin over A[i:end]

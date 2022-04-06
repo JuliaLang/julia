@@ -67,6 +67,8 @@ using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, Blas
 
 include("lbt.jl")
 
+vendor() = :lbt
+
 """
     get_config()
 
@@ -76,17 +78,6 @@ Return an object representing the current `libblastrampoline` configuration.
     `get_config()` requires at least Julia 1.7.
 """
 get_config() = lbt_get_config()
-
-# We hard-lock `vendor()` to `openblas(64)` here to satisfy older code, but all new code should use
-# `get_config()` since it is now possible to have multiple vendors loaded at once.
-function vendor()
-    Base.depwarn("`vendor()` is deprecated, use `BLAS.get_config()` and inspect the output instead", :vendor; force=true)
-    if USE_BLAS64
-        return :openblas64
-    else
-        return :openblas
-    end
-end
 
 if USE_BLAS64
     macro blasfunc(x)
@@ -498,7 +489,9 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!(alpha::Number, x::AbstractArray{T}, y::AbstractArray{T}) where T<:BlasFloat
+
+#TODO: replace with `x::AbstractArray{T}` once we separate `BLAS.axpy!` and `LinearAlgebra.axpy!`
+function axpy!(alpha::Number, x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))
     end
@@ -570,7 +563,8 @@ for (fname, elty) in ((:daxpby_,:Float64), (:saxpby_,:Float32),
     end
 end
 
-function axpby!(alpha::Number, x::AbstractArray{T}, beta::Number, y::AbstractArray{T}) where T<:BlasFloat
+#TODO: replace with `x::AbstractArray{T}` once we separate `BLAS.axpby!` and `LinearAlgebra.axpby!`
+function axpby!(alpha::Number, x::Union{DenseArray{T},AbstractVector{T}}, beta::Number, y::Union{DenseArray{T},AbstractVector{T}},) where T<:BlasFloat
     require_one_based_indexing(x, y)
     if length(x) != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))

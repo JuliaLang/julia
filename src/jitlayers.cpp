@@ -15,15 +15,22 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Bitcode/BitcodeWriter.h>
+
+// target machine computation
+#include <llvm/CodeGen/TargetSubtargetInfo.h>
 #if JL_LLVM_VERSION >= 140000
 #include <llvm/MC/TargetRegistry.h>
 #else
 #include <llvm/Support/TargetRegistry.h>
 #endif
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Target/TargetMachine.h>
-#include <llvm/Transforms/Utils/Cloning.h>
-#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Object/SymbolSize.h>
 
 using namespace llvm;
 
@@ -32,6 +39,7 @@ using namespace llvm;
 #include "codegen_shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+#include "processor.h"
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION >= 140000
@@ -44,8 +52,6 @@ using namespace llvm;
 #endif
 
 #define DEBUG_TYPE "jitlayers"
-
-void jl_init_jit(void) { }
 
 // Snooping on which functions are being compiled, and how long it takes
 JL_STREAM *dump_compiles_stream = NULL;
@@ -61,8 +67,8 @@ void jl_dump_llvm_opt_impl(void *s)
     dump_llvm_opt_stream = (JL_STREAM*)s;
 }
 
-static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
+static void jl_decorate_module(Module &M);
 static uint64_t getAddressForFunction(StringRef fname);
 
 void jl_link_global(GlobalVariable *GV, void *addr)
@@ -123,7 +129,7 @@ static jl_callptr_t _jl_compile_codeinst(
         jl_compile_workqueue(emitted, params, CompilationPolicy::Default, context);
 
         if (params._shared_module)
-            jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
+            jl_ExecutionEngine->addModule(std::unique_ptr<Module>(params._shared_module));
         StringMap<std::unique_ptr<Module>*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -229,10 +235,10 @@ int jl_compile_extern_c_impl(LLVMModuleRef llvmmod, void *p, void *sysimg, jl_va
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
             if (params._shared_module)
-                jl_add_to_ee(std::unique_ptr<Module>(params._shared_module));
+                jl_ExecutionEngine->addModule(std::unique_ptr<Module>(params._shared_module));
         }
         if (success && llvmmod == NULL)
-            jl_add_to_ee(std::unique_ptr<Module>(into));
+            jl_ExecutionEngine->addModule(std::unique_ptr<Module>(into));
     }
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
@@ -469,7 +475,7 @@ static auto countBasicBlocks(const Function &F)
 }
 
 OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
-    TSM.withModuleDo([&](Module &M){
+    TSM.withModuleDo([&](Module &M) {
         uint64_t start_time = 0;
         if (dump_llvm_opt_stream != NULL) {
             // Print LLVM function statistics _before_ optimization
@@ -493,7 +499,11 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
 
         JL_TIMING(LLVM_OPT);
 
-        PM.run(M);
+        {
+            //Lock around our pass manager
+            std::lock_guard<std::mutex> lock(this->mutex);
+            PM.run(M);
+        }
 
         uint64_t end_time = 0;
         if (dump_llvm_opt_stream != NULL) {
@@ -789,6 +799,87 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
     );
 }
 #endif
+namespace {
+    std::unique_ptr<TargetMachine> createTargetMachine() {
+
+        TargetOptions options = TargetOptions();
+#if defined(_OS_WINDOWS_)
+        // use ELF because RuntimeDyld COFF i686 support didn't exist
+        // use ELF because RuntimeDyld COFF X86_64 doesn't seem to work (fails to generate function pointers)?
+#define FORCE_ELF
+#endif
+        //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION < 130000
+        // tell Win32 to assume the stack is always 16-byte aligned,
+        // and to ensure that it is 16-byte aligned for out-going calls,
+        // to ensure compatibility with GCC codes
+        // In LLVM 13 and onwards this has turned into a module option
+        options.StackAlignmentOverride = 16;
+#endif
+#if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION < 130000
+        // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
+        options.StackProtectorGuard = StackProtectorGuards::Global;
+#endif
+        Triple TheTriple(sys::getProcessTriple());
+#if defined(FORCE_ELF)
+        TheTriple.setObjectFormat(Triple::ELF);
+#endif
+        uint32_t target_flags = 0;
+        auto target = jl_get_llvm_target(imaging_mode, target_flags);
+        auto &TheCPU = target.first;
+        SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
+        std::string errorstr;
+        const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
+        if (!TheTarget)
+            jl_errorf("%s", errorstr.c_str());
+        if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
+            std::unique_ptr<MCSubtargetInfo> MSTI(
+                TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
+            if (!MSTI->isCPUStringValid(TheCPU))
+                jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
+            if (jl_processor_print_help) {
+                // This is the only way I can find to print the help message once.
+                // It'll be nice if we can iterate through the features and print our own help
+                // message...
+                MSTI->setDefaultFeatures("help", "", "");
+            }
+        }
+        // Package up features to be passed to target/subtarget
+        std::string FeaturesStr;
+        if (!targetFeatures.empty()) {
+            SubtargetFeatures Features;
+            for (unsigned i = 0; i != targetFeatures.size(); ++i)
+                Features.AddFeature(targetFeatures[i]);
+            FeaturesStr = Features.getString();
+        }
+        // Allocate a target...
+        Optional<CodeModel::Model> codemodel =
+#ifdef _P64
+            // Make sure we are using the large code model on 64bit
+            // Let LLVM pick a default suitable for jitting on 32bit
+            CodeModel::Large;
+#else
+            None;
+#endif
+        auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
+        auto TM = TheTarget->createTargetMachine(
+                TheTriple.getTriple(), TheCPU, FeaturesStr,
+                options,
+                Reloc::Static, // Generate simpler code for JIT
+                codemodel,
+                optlevel,
+                true // JIT
+                );
+        assert(TM && "Failed to select target machine -"
+                                " Is the LLVM backend for this CPU enabled?");
+        #if (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
+        // FastISel seems to be buggy for ARM. Ref #13321
+        if (jl_options.opt_level < 2)
+            TM->setFastISel(true);
+        #endif
+        return std::unique_ptr<TargetMachine>(TM);
+    }
+} // namespace
 
 namespace {
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
@@ -802,14 +893,21 @@ namespace {
     }
 }
 
-JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
-  : TM(TM),
-    DL(TM.createDataLayout()),
+llvm::DataLayout create_jl_data_layout(TargetMachine &TM) {
+    // Mark our address spaces as non-integral
+    auto jl_data_layout = TM.createDataLayout();
+    jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
+    return jl_data_layout;
+}
+
+JuliaOJIT::JuliaOJIT(LLVMContext *LLVMCtx)
+  : TM(createTargetMachine()),
+    DL(create_jl_data_layout(*TM)),
     TMs{
-        cantFail(createJTMBFromTM(TM, 0).createTargetMachine()),
-        cantFail(createJTMBFromTM(TM, 1).createTargetMachine()),
-        cantFail(createJTMBFromTM(TM, 2).createTargetMachine()),
-        cantFail(createJTMBFromTM(TM, 3).createTargetMachine())
+        cantFail(createJTMBFromTM(*TM, 0).createTargetMachine()),
+        cantFail(createJTMBFromTM(*TM, 1).createTargetMachine()),
+        cantFail(createJTMBFromTM(*TM, 2).createTargetMachine()),
+        cantFail(createJTMBFromTM(*TM, 3).createTargetMachine())
     },
     TSCtx(std::unique_ptr<LLVMContext>(LLVMCtx)),
 #if JL_LLVM_VERSION >= 130000
@@ -837,15 +935,15 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM, LLVMContext *LLVMCtx)
             }
         ),
 #endif
-    CompileLayer0(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 0))),
-    CompileLayer1(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 1))),
-    CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 2))),
-    CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, 3))),
+    CompileLayer0(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 0))),
+    CompileLayer1(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 1))),
+    CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 2))),
+    CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 3))),
     OptimizeLayers{
-        {ES, CompileLayer0, OptimizerT(PM0, 0)},
-        {ES, CompileLayer1, OptimizerT(PM1, 1)},
-        {ES, CompileLayer2, OptimizerT(PM2, 2)},
-        {ES, CompileLayer3, OptimizerT(PM3, 3)},
+        {ES, CompileLayer0, OptimizerT(PM0, PM_mutexes[0], 0)},
+        {ES, CompileLayer1, OptimizerT(PM1, PM_mutexes[1], 1)},
+        {ES, CompileLayer2, OptimizerT(PM2, PM_mutexes[2], 2)},
+        {ES, CompileLayer3, OptimizerT(PM3, PM_mutexes[3], 3)},
     },
     OptSelLayer(OptimizeLayers)
 {
@@ -921,6 +1019,8 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 {
     JL_TIMING(LLVM_MODULE_FINISH);
+    jl_decorate_module(*M);
+    shareStrings(*M);
     std::vector<std::string> NewExports;
     for (auto &F : M->global_values()) {
         if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
@@ -991,9 +1091,9 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
     return cantFail(addr.getAddress());
 }
 
-static int globalUniqueGeneratedNames;
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
+    static int globalUnique = 0;
     std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname->empty()) {
         std::string string_fname;
@@ -1013,7 +1113,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUniqueGeneratedNames++;
+        stream_fname << unadorned_name << "_" << globalUnique++;
         *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
     }
@@ -1063,9 +1163,14 @@ const DataLayout& JuliaOJIT::getDataLayout() const
     return DL;
 }
 
+TargetMachine &JuliaOJIT::getTargetMachine()
+{
+    return *TM;
+}
+
 const Triple& JuliaOJIT::getTargetTriple() const
 {
-    return TM.getTargetTriple();
+    return TM->getTargetTriple();
 }
 
 std::string JuliaOJIT::getMangledName(StringRef Name)
@@ -1207,7 +1312,7 @@ void jl_merge_module(Module *dest, std::unique_ptr<Module> src)
 
 // optimize memory by turning long strings into memoized copies, instead of
 // making a copy per object file of output.
-void jl_jit_share_data(Module &M)
+void JuliaOJIT::shareStrings(Module &M)
 {
     std::vector<GlobalVariable*> erase;
     for (auto &GV : M.globals()) {
@@ -1220,7 +1325,7 @@ void jl_jit_share_data(Module &M)
         if (data.size() > 16) { // only for long strings: keep short ones as values
             Type *T_size = Type::getIntNTy(GV.getContext(), sizeof(void*) * 8);
             Constant *v = ConstantExpr::getIntToPtr(
-                ConstantInt::get(T_size, (uintptr_t)data.data()),
+                ConstantInt::get(T_size, (uintptr_t)(*ES.intern(data)).data()),
                 GV.getType());
             GV.replaceAllUsesWith(v);
             erase.push_back(&GV);
@@ -1230,26 +1335,21 @@ void jl_jit_share_data(Module &M)
         GV->eraseFromParent();
 }
 
-static void jl_add_to_ee(std::unique_ptr<Module> m)
-{
+static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
-    Type *T_uint32 = Type::getInt32Ty(m->getContext());
-    ArrayType *atype = ArrayType::get(T_uint32, 3); // want 4-byte alignment of 12-bytes of data
+    ArrayType *atype = ArrayType::get(Type::getInt32Ty(M.getContext()), 3); // want 4-byte alignment of 12-bytes of data
     GlobalVariable *gvs[2] = {
-        new GlobalVariable(*m, atype,
+        new GlobalVariable(M, atype,
             false, GlobalVariable::InternalLinkage,
             ConstantAggregateZero::get(atype), "__UnwindData"),
-        new GlobalVariable(*m, atype,
+        new GlobalVariable(M, atype,
             false, GlobalVariable::InternalLinkage,
             ConstantAggregateZero::get(atype), "__catchjmp") };
     gvs[0]->setSection(".text");
     gvs[1]->setSection(".text");
-    appendToCompilerUsed(*m, makeArrayRef((GlobalValue**)gvs, 2));
+    appendToCompilerUsed(M, makeArrayRef((GlobalValue**)gvs, 2));
 #endif
-    jl_jit_share_data(*m);
-    assert(jl_ExecutionEngine);
-    jl_ExecutionEngine->addModule(std::move(m));
 }
 
 static int jl_add_to_ee(
@@ -1293,7 +1393,7 @@ static int jl_add_to_ee(
             Queued.erase(CM->get());
             jl_merge_module(M.get(), std::move(*CM));
         }
-        jl_add_to_ee(std::move(M));
+        jl_ExecutionEngine->addModule(std::move(M));
         MergeUp = 0;
     }
     else {

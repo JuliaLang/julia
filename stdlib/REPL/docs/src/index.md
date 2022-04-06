@@ -225,7 +225,7 @@ to do so), or pressing Esc and then the key.
 
 | Keybinding          | Description                                                                                                |
 |:------------------- |:---------------------------------------------------------------------------------------------------------- |
-| **Program control** |                                                                                                            |
+| **Program control** |                                                                                                            |
 | `^D`                | Exit (when buffer is empty)                                                                                |
 | `^C`                | Interrupt or cancel                                                                                        |
 | `^L`                | Clear console screen                                                                                       |
@@ -233,7 +233,7 @@ to do so), or pressing Esc and then the key.
 | meta-Return/Enter   | Insert new line without executing it                                                                       |
 | `?` or `;`          | Enter help or shell mode (when at start of a line)                                                         |
 | `^R`, `^S`          | Incremental history search, described above                                                                |
-| **Cursor movement** |                                                                                                            |
+| **Cursor movement** |                                                                                                            |
 | Right arrow, `^F`   | Move right one character                                                                                   |
 | Left arrow, `^B`    | Move left one character                                                                                    |
 | ctrl-Right, `meta-F`| Move right one word                                                                                        |
@@ -251,7 +251,7 @@ to do so), or pressing Esc and then the key.
 | `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
 | `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
-| **Editing**         |                                                                                                            |
+| **Editing**         |                                                                                                            |
 | Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
@@ -633,7 +633,7 @@ Output:
 
 ```
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -659,7 +659,7 @@ For instance, the default multiple-selection menu
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
    [X] orange
    [ ] grape
@@ -673,7 +673,7 @@ can instead be rendered with Unicode selection and navigation characters with
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    ⬚ apple
    ✓ orange
    ⬚ grape
@@ -688,7 +688,7 @@ julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YE
 
 julia> request(menu)
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    NOPE apple
    YEP! orange
    NOPE grape

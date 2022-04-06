@@ -40,7 +40,7 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, LLVMContext &
     else {
         std::string name = "ccalllib_";
         name += llvm::sys::path::filename(f_lib);
-        name += std::to_string(globalUnique++);
+        name += std::to_string(globalUniqueGeneratedNames++);
         runtime_lib = true;
         auto &libgv = emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
@@ -60,7 +60,7 @@ static bool runtime_sym_gvs(jl_codegen_params_t &emission_context, LLVMContext &
         std::string name = "ccall_";
         name += f_name;
         name += "_";
-        name += std::to_string(globalUnique++);
+        name += std::to_string(globalUniqueGeneratedNames++);
         auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
@@ -169,7 +169,7 @@ static Value *runtime_sym_lookup(
         std::string gvname = "libname_";
         gvname += f_name;
         gvname += "_";
-        gvname += std::to_string(globalUnique++);
+        gvname += std::to_string(globalUniqueGeneratedNames++);
         llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), gvname);
@@ -196,7 +196,7 @@ static GlobalVariable *emit_plt_thunk(
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
     std::string fname;
-    raw_string_ostream(fname) << "jlplt_" << f_name << "_" << globalUnique++;
+    raw_string_ostream(fname) << "jlplt_" << f_name << "_" << globalUniqueGeneratedNames++;
     Function *plt = Function::Create(functype,
                                      GlobalVariable::ExternalLinkage,
                                      fname, M);
@@ -799,7 +799,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // Make sure to find a unique name
     std::string ir_name;
     while (true) {
-        raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUnique++;
+        raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUniqueGeneratedNames++;
         if (jl_Module->getFunction(ir_name) == NULL)
             break;
     }
@@ -1098,6 +1098,7 @@ std::string generate_func_sig(const char *fname)
         }
 
         // Whether or not LLVM wants us to emit a pointer to the data
+        assert(t && "LLVM type should not be null");
         bool byRef = abi->needPassByRef((jl_datatype_t*)tti, ab, LLVMCtx, t);
 
         if (jl_is_cpointer_type(tti)) {
@@ -1454,13 +1455,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 #ifdef __MIC__
         // TODO
 #elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
-        static auto pauseinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "pause",
+        auto pauseinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "pause",
                                                "~{memory}", true);
         ctx.builder.CreateCall(pauseinst);
         JL_GC_POP();
         return ghostValue(ctx, jl_nothing_type);
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-        static auto wfeinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
+        auto wfeinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "wfe",
                                              "~{memory}", true);
         ctx.builder.CreateCall(wfeinst);
         JL_GC_POP();
@@ -1478,7 +1479,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return ghostValue(ctx, jl_nothing_type);
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-        static auto sevinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "sev",
+        auto sevinst = InlineAsm::get(FunctionType::get(getVoidTy(ctx.builder.getContext()), false), "sev",
                                              "~{memory}", true);
         ctx.builder.CreateCall(sevinst);
         JL_GC_POP();
@@ -1926,14 +1927,37 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
         else {
             assert(symarg.f_name != NULL);
-            const char* f_name = symarg.f_name;
-            bool f_extern = (strncmp(f_name, "extern ", 7) == 0);
-            if (f_extern)
-                f_name += 7;
-            llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
-            if (!f_extern && (!isa<Function>(llvmf) ||
-                              cast<Function>(llvmf)->getIntrinsicID() ==
-                                      Intrinsic::not_intrinsic)) {
+            StringRef f_name(symarg.f_name);
+            bool f_extern = f_name.consume_front("extern ");
+            llvmf = NULL;
+            if (f_extern) {
+                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
+                    llvmf = NULL;
+            }
+            else if (f_name.startswith("llvm.")) {
+                // compute and verify auto-mangling for intrinsic name
+                auto ID = Function::lookupIntrinsicID(f_name);
+                if (ID != Intrinsic::not_intrinsic) {
+                    // Accumulate an array of overloaded types for the given intrinsic
+                    // and compute the new name mangling schema
+                    SmallVector<Type*, 4> overloadTys;
+                    SmallVector<Intrinsic::IITDescriptor, 8> Table;
+                    getIntrinsicInfoTableEntries(ID, Table);
+                    ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+                    auto res = Intrinsic::matchIntrinsicSignature(functype, TableRef, overloadTys);
+                    if (res == Intrinsic::MatchIntrinsicTypes_Match) {
+                        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
+                        if (matchvararg) {
+                            Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
+                            assert(intrinsic->getFunctionType() == functype);
+                            if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
+                                llvmf = intrinsic;
+                        }
+                    }
+                }
+            }
+            if (llvmf == NULL) {
                 emit_error(ctx, "llvmcall only supports intrinsic calls");
                 return jl_cgval_t(ctx.builder.getContext());
             }

@@ -1748,6 +1748,9 @@ let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
     env = Dict(
         "JULIA_DEPOT_PATH" => join(depots, pathsep),
         "JULIA_LOAD_PATH" => join(load_path, pathsep),
+        # Explicitly propagate `TMPDIR`, in the event that we're running on a
+        # CI system where `TMPDIR` is special.
+        "TMPDIR" => dirname(tmp),
     )
     setupcode = """
     using Distributed, Test
@@ -1830,6 +1833,7 @@ let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
     env = Dict(
         "JULIA_LOAD_PATH" => LOAD_PATH[1],
         "JULIA_DEPOT_PATH" => DEPOT_PATH[1],
+        "TMPDIR" => ENV["TMPDIR"],
     )
     addprocs(1; env = env, exeflags = `--project=\$(project)`)
     env["JULIA_PROJECT"] = project
