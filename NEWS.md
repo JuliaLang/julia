@@ -36,16 +36,8 @@ Build system changes
 New library functions
 ---------------------
 
-<<<<<<< HEAD
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
-* `setcpuaffinity(cmd, cpus)` can be used to set CPU affinity of sub-processes. ([#42469])
-* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
-* `Base.split_rest` for splitting the tail of a collection from an optional iteration
-  state in two, with the latter being of length `n`. ([#42902])
-=======
 Library changes
 ---------------
->>>>>>> origin/master
 
 * A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
   as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
