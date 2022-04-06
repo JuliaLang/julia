@@ -57,7 +57,6 @@ function generate_markdown(basename)
         ```@meta
         EditURL = "https://github.com/JuliaLang/julia/blob/master/$basename.md"
         ```
-    
         """ * replaced_links)
 end
 generate_markdown("NEWS")
