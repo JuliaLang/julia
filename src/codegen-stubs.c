@@ -52,7 +52,7 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT int jl_compile_extern_c_fallback(void *llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     return 0;
 }
@@ -74,7 +74,7 @@ JL_DLLEXPORT void jl_unlock_profile_fallback(void)
 {
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmctxt, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {
@@ -95,13 +95,12 @@ JL_DLLEXPORT jl_value_t *jl_dump_function_asm_fallback(void *F, char raw_mc, con
 JL_DLLEXPORT void jl_get_function_id_fallback(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx) UNAVAILABLE
 
-JL_DLLEXPORT void *jl_get_llvm_context_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx) UNAVAILABLE
 
-JL_DLLEXPORT void *jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
+JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
 
-JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, bool_t *isboxed) UNAVAILABLE
+JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_get_libllvm_fallback(void) JL_NOTSAFEPOINT
 {
@@ -112,6 +111,8 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
 {
     return 0;
 }
+
+JL_DLLEXPORT void jl_add_optimization_passes_fallback(void *PM, int opt_level, int lower_intrinsics) UNAVAILABLE
 
 JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
 

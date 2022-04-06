@@ -211,7 +211,6 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 function convert end
 
 convert(::Type{Union{}}, @nospecialize x) = throw(MethodError(convert, (Union{}, x)))
-convert(::Type{T}, x::T) where {T} = x
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
@@ -767,12 +766,19 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
 end
 
 # TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = Ref{Any}(x)[]
+inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
 
 """
     isempty(collection) -> Bool
 
 Determine whether a collection is empty (has no elements).
+
+!!! warning
+
+    `isempty(itr)` may consume the next element of a stateful iterator `itr`
+    unless an appropriate `Base.isdone(itr)` or `isempty` method is defined.
+    Use of `isempty` should therefore be avoided when writing generic
+    code which should support any iterator type.
 
 # Examples
 ```jldoctest

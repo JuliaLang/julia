@@ -148,6 +148,7 @@ DevDocs = [
         "devdocs/require.md",
         "devdocs/inference.md",
         "devdocs/ssair.md",
+        "devdocs/EscapeAnalysis.md",
         "devdocs/gc-sa.md",
     ],
     "Developing/debugging Julia's C code" => [
@@ -291,6 +292,7 @@ else
         analytics = "UA-28835595-6",
         collapselevel = 1,
         sidebar_sitename = false,
+        ansicolor = true,
     )
 end
 

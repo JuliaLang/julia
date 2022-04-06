@@ -40,20 +40,9 @@ namespace jl_intrinsics {
 // from modules or add them if they're not available yet.
 // Mainly useful for building Julia-specific LLVM passes.
 struct JuliaPassContext {
-    // Standard types.
-    llvm::Type *T_size;
-    llvm::Type *T_int8;
-    llvm::Type *T_int32;
-    llvm::PointerType *T_pint8;
 
     // Types derived from 'jl_value_t'.
-    llvm::Type *T_jlvalue;
     llvm::PointerType *T_prjlvalue;
-    llvm::PointerType *T_pppjlvalue;
-    llvm::PointerType *T_ppjlvalue;
-    llvm::PointerType *T_pjlvalue;
-    llvm::PointerType *T_pjlvalue_der;
-    llvm::PointerType *T_ppjlvalue_der;
 
     // TBAA metadata nodes.
     llvm::MDNode *tbaa_gcframe;
@@ -68,6 +57,7 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
+    llvm::Function *write_barrier_binding_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -133,6 +123,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // `julia.queue_gc_binding`: an intrinsic that queues a binding for GC.
+    extern const IntrinsicDescription queueGCBinding;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
@@ -153,6 +146,9 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_gc_queue_binding`: queues a binding for GC.
+    extern const WellKnownFunctionDescription GCQueueBinding;
 }
 
 #endif

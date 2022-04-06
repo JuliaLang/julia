@@ -352,7 +352,7 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
-        path = manifest_uuid_path(Sys.STDLIB::String, pkg)
+        path = manifest_uuid_path(Sys.STDLIB, pkg)
         path === nothing || return entry_path(path, pkg.name)
     end
     return nothing
@@ -411,6 +411,16 @@ const project_names = ("JuliaProject.toml", "Project.toml")
 const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
 const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
+function locate_project_file(env::String)
+    for proj in project_names
+        project_file = joinpath(env, proj)
+        if isfile_casesensitive(project_file)
+            return project_file
+        end
+    end
+    return true
+end
+
 # classify the LOAD_PATH entry to be one of:
 #  - `false`: nonexistant / nothing to see here
 #  - `true`: `env` is an implicit environment
@@ -423,14 +433,7 @@ function env_project_file(env::String)::Union{Bool,String}
         project_file === nothing || return project_file
     end
     if isdir(env)
-        for proj in project_names
-            maybe_project_file = joinpath(env, proj)
-            if isfile_casesensitive(maybe_project_file)
-                project_file = maybe_project_file
-                break
-            end
-        end
-        project_file =true
+        project_file = locate_project_file(env)
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
     else
@@ -596,7 +599,8 @@ end
 
 function is_v1_format_manifest(raw_manifest::Dict)
     if haskey(raw_manifest, "manifest_format")
-        if raw_manifest["manifest_format"] isa Dict && haskey(raw_manifest["manifest_format"], "uuid")
+        mf = raw_manifest["manifest_format"]
+        if mf isa Dict && haskey(mf, "uuid")
             # the off-chance where an old format manifest has a dep called "manifest_format"
             return true
         end
@@ -612,7 +616,7 @@ function get_deps(raw_manifest::Dict)
         return raw_manifest
     else
         # if the manifest has no deps, there won't be a `deps` field
-        return get(Dict{String, Any}, raw_manifest, "deps")
+        return get(Dict{String, Any}, raw_manifest, "deps")::Dict{String, Any}
     end
 end
 
@@ -748,7 +752,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR::String, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
@@ -893,6 +897,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if staledeps === true
             continue
         end
+        staledeps = staledeps::Vector{Any}
         try
             touch(path_to_try) # update timestamp of precompilation file
         catch # file might be read-only and then we fail to update timestamp, which is fine
@@ -1069,11 +1074,11 @@ function require(into::Module, mod::Symbol)
 end
 
 mutable struct PkgOrigin
-    # version::VersionNumber
     path::Union{String,Nothing}
     cachepath::Union{String,Nothing}
+    version::Union{VersionNumber,Nothing}
 end
-PkgOrigin() = PkgOrigin(nothing, nothing)
+PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
@@ -1147,6 +1152,21 @@ function unreference_module(key::PkgId)
     end
 end
 
+function set_pkgorigin_version_path(pkg, path)
+    pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
+    if path !== nothing
+        project_file = locate_project_file(joinpath(dirname(path), ".."))
+        if project_file isa String
+            d = parsed_toml(project_file)
+            v = get(d, "version", nothing)
+            if v !== nothing
+                pkgorigin.version = VersionNumber(v::AbstractString)
+            end
+        end
+    end
+    pkgorigin.path = path
+end
+
 # Returns `nothing` or the name of the newly-created cachefile
 function _require(pkg::PkgId)
     # handle recursive calls to require
@@ -1163,7 +1183,7 @@ function _require(pkg::PkgId)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         path = locate_package(pkg)
-        get!(PkgOrigin, pkgorigins, pkg).path = path
+        set_pkgorigin_version_path(pkg, path)
         if path === nothing
             throw(ArgumentError("""
                 Package $pkg is required but does not seem to be installed:
@@ -1289,8 +1309,11 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
-        return s[:SOURCE_PATH]::Union{Nothing,String}
+    if s !== nothing
+        s = s::IdDict{Any,Any}
+        if haskey(s, :SOURCE_PATH)
+            return s[:SOURCE_PATH]::Union{Nothing,String}
+        end
     end
     return default
 end
@@ -1395,13 +1418,17 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         task_local_storage()[:SOURCE_PATH] = source
     end
 
+    Core.Compiler.track_newly_inferred.x = true
     try
         Base.include(Base.__toplevel__, input)
     catch ex
         precompilableerror(ex) || rethrow()
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
+    finally
+        Core.Compiler.track_newly_inferred.x = false
     end
+    ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
@@ -1873,7 +1900,7 @@ function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{Str
     for name in prefs_list
         prefs_value = get(prefs, name, nothing)
         if prefs_value !== nothing
-            h = hash(prefs_value, h)
+            h = hash(prefs_value, h)::UInt
         end
     end
     # We always return a `UInt64` so that our serialization format is stable
@@ -1930,11 +1957,11 @@ get_compiletime_preferences(::Nothing) = String[]
             else
                 @label locate_branch
                 path = locate_package(req_key)
-                get!(PkgOrigin, pkgorigins, req_key).path = path
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                     return true # Won't be able to fulfill dependency
                 end
+                set_pkgorigin_version_path(req_key, path)
                 depmods[i] = (path, req_key, req_build_id)
             end
         end
@@ -2033,12 +2060,12 @@ end
 
 Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
 """
-function precompile(@nospecialize(f), args::Tuple)
+function precompile(@nospecialize(f), @nospecialize(args::Tuple))
     precompile(Tuple{Core.Typeof(f), args...})
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
-function precompile(argt::Type)
+function precompile(@nospecialize(argt::Type))
     ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
     if !ret && ENABLE_PRECOMPILE_WARNINGS[]
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0

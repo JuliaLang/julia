@@ -493,7 +493,8 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
     raw_string_ostream stream(code);
 
     {
-        Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
+        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
+        Function *llvmf = dump->F;
         if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
             jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
@@ -505,21 +506,21 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
             delete llvmf;
         }
         else {
-            Module *m = llvmf->getParent();
+            dump->TSM.withModuleDo([&](Module &m) {
             if (strip_ir_metadata) {
                 std::string llvmfn(llvmf->getName());
-                jl_strip_llvm_addrspaces(m);
-                jl_strip_llvm_debug(m, true, &AAW);
+                jl_strip_llvm_addrspaces(&m);
+                jl_strip_llvm_debug(&m, true, &AAW);
                 // rewriting the function type creates a new function, so look it up again
-                llvmf = m->getFunction(llvmfn);
+                llvmf = m.getFunction(llvmfn);
             }
             if (dump_module) {
-                m->print(stream, &AAW);
+                m.print(stream, &AAW);
             }
             else {
                 llvmf->print(stream, &AAW);
             }
-            delete m;
+            });
         }
         JL_UNLOCK(&jl_codegen_lock); // Might GC
     }
@@ -1193,22 +1194,24 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
     { // scope block
-        Function *f = (Function*)F;
+        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(F));
+        Function *f = dump->F;
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         assert(!f->isDeclaration());
-        std::unique_ptr<Module> m(f->getParent());
-        for (auto &f2 : m->functions()) {
-            if (f != &f2 && !f->isDeclaration())
-                f2.deleteBody();
-        }
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(jl_TargetMachine);
+        dump->TSM.withModuleDo([&](Module &m) {
+            for (auto &f2 : m.functions()) {
+                if (f != &f2 && !f->isDeclaration())
+                    f2.deleteBody();
+            }
+        });
+        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(&jl_ExecutionEngine->getTargetMachine());
         legacy::PassManager PM;
         addTargetPasses(&PM, TM);
         if (raw_mc) {
             raw_svector_ostream obj_OS(ObjBufferSV);
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
                 return jl_an_empty_string;
-            PM.run(*m);
+            dump->TSM.withModuleDo([&](Module &m) { PM.run(m); });
         }
         else {
             MCContext *Context = addPassesToGenerateCode(TM, PM);
@@ -1226,7 +1229,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
             if (!strcmp(asm_variant, "intel"))
                 OutputAsmDialect = 1;
             MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
+                jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
@@ -1247,7 +1250,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
                 return jl_an_empty_string;
             PM.add(Printer.release());
             PM.add(createFreeMachineFunctionPass());
-            PM.run(*m);
+            dump->TSM.withModuleDo([&](Module &m){ PM.run(m); });
         }
     }
     return jl_pchar_to_string(ObjBufferSV.data(), ObjBufferSV.size());

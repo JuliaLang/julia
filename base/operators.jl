@@ -901,10 +901,11 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
     |>(x, f)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
+When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> (x->x.^2) |> sum |> inv
+julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 0.01818181818181818
 ```
 """
@@ -939,7 +940,7 @@ struct Returns{V} <: Function
     Returns(value) = new{Core.Typeof(value)}(value)
 end
 
-(obj::Returns)(args...; kw...) = obj.value
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
 function show(io::IO, obj::Returns)
     show(io, typeof(obj))
     print(io, "(")

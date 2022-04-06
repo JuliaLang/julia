@@ -211,6 +211,7 @@ LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 # i.e. libLLVM-6.0jl.so
 # see #32462
 LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
+LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 
 # Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
@@ -233,11 +234,6 @@ LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
-
-# Add a JL prefix to the version map. DO NOT REMOVE
-ifneq ($(LLVM_VER), svn)
-$(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
-endif
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV) $(build_prefix)/manifest/zlib
@@ -285,7 +281,7 @@ $(eval $(call staged-install, \
 	LLVM_INSTALL,,,))
 
 clean-llvm:
-	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
+	-rm -f $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
 
 get-llvm: $(LLVM_SRC_FILE)

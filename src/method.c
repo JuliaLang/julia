@@ -19,7 +19,7 @@ extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
@@ -91,17 +91,19 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == jl_opaque_closure_method_sym) {
-                if (nargs != 4) {
+                if (nargs != 5) {
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
                 jl_value_t *nargs = jl_exprarg(e, 1);
-                jl_value_t *functionloc = jl_exprarg(e, 2);
-                jl_value_t *ci = jl_exprarg(e, 3);
+                int isva = jl_exprarg(e, 2) == jl_true;
+                jl_value_t *functionloc = jl_exprarg(e, 3);
+                jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci, isva);
+                return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
@@ -437,6 +439,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->callbacks = NULL;
     jl_atomic_store_relaxed(&li->cache, NULL);
     li->inInference = 0;
+    li->precompiled = 0;
     return li;
 }
 
@@ -779,14 +782,13 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
     // TODO: Maybe have a signature of (parent method, stmt#)?
     m->sig = (jl_value_t*)jl_anytuple_type;
-    // Unused for opaque closures. va-ness is determined on construction
-    m->isva = 0;
+    m->isva = isva;
     m->is_for_opaque_closure = 1;
     if (name == jl_nothing) {
         m->name = jl_symbol("opaque closure");
@@ -1032,6 +1034,18 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
     blocks[nx2-1] = len;
 }
 
+static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
+{
+    if (!m->roots) {
+        m->roots = jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->roots);
+    }
+    if (!m->root_blocks && modid != 0) {
+        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
+        jl_gc_wb(m, m->root_blocks);
+    }
+}
+
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
 {
     JL_GC_PUSH2(&m, &root);
@@ -1041,17 +1055,21 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
         modid = mod->build_id;
     }
     assert(jl_is_method(m));
-    if (!m->roots) {
-        m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
-    }
-    if (!m->root_blocks && modid != 0) {
-        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
-        jl_gc_wb(m, m->root_blocks);
-    }
+    prepare_method_for_roots(m, modid);
     if (current_root_id(m->root_blocks) != modid)
         add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
     jl_array_ptr_1d_push(m->roots, root);
+    JL_GC_POP();
+}
+
+void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
+{
+    JL_GC_PUSH2(&m, &roots);
+    assert(jl_is_method(m));
+    assert(jl_is_array(roots));
+    prepare_method_for_roots(m, modid);
+    add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    jl_array_ptr_1d_append(m->roots, roots);
     JL_GC_POP();
 }
 
@@ -1081,6 +1099,23 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
     rle_reference rr = {key, index};
     size_t i = rle_reference_to_index(&rr, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
     return jl_array_ptr_ref(m->roots, i);
+}
+
+int nroots_with_key(jl_method_t *m, uint64_t key)
+{
+    size_t nroots = 0;
+    if (m->roots)
+        nroots = jl_array_len(m->roots);
+    if (!m->root_blocks)
+        return key == 0 ? nroots : 0;
+    uint64_t *rletable = (uint64_t*)jl_array_data(m->root_blocks);
+    size_t j, nblocks2 = jl_array_len(m->root_blocks);
+    int nwithkey = 0;
+    for (j = 0; j < nblocks2; j+=2) {
+        if (rletable[j] == key)
+            nwithkey += (j+3 < nblocks2 ? rletable[j+3] : nroots) - rletable[j+1];
+    }
+    return nwithkey;
 }
 
 #ifdef __cplusplus

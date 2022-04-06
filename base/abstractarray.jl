@@ -546,7 +546,13 @@ julia> stride(A,3)
 function stride(A::AbstractArray, k::Integer)
     st = strides(A)
     k ≤ ndims(A) && return st[k]
-    return sum(st .* size(A))
+    ndims(A) == 0 && return 1
+    sz = size(A)
+    s = st[1] * sz[1]
+    for i in 2:ndims(A)
+        s += st[i] * sz[i]
+    end
+    return s
 end
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
@@ -889,6 +895,10 @@ function copy!(dst::AbstractArray, src::AbstractArray)
 end
 
 ## from general iterable to any array
+
+# This is `@Experimental.max_methods 1 function copyto! end`, which is not
+# defined at this point in bootstrap.
+typeof(function copyto! end).name.max_methods = UInt8(1)
 
 function copyto!(dest::AbstractArray, src)
     destiter = eachindex(dest)
@@ -1706,13 +1716,15 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-function dims2cat(::Val{n}) where {n}
-    n <= 0 && throw(ArgumentError("cat dimension must be a positive integer, but got $n"))
-    ntuple(i -> (i == n), Val(n))
+function dims2cat(::Val{dims}) where dims
+    if any(≤(0), dims)
+        throw(ArgumentError("All cat dimensions must be positive integers, but got $dims"))
+    end
+    ntuple(in(dims), maximum(dims))
 end
 
 function dims2cat(dims)
-    if any(dims .<= 0)
+    if any(≤(0), dims)
         throw(ArgumentError("All cat dimensions must be positive integers, but got $dims"))
     end
     ntuple(in(dims), maximum(dims))
@@ -2363,6 +2375,24 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     d2 = row_first ? 1 : 2
 
     outdims = zeros(Int, N)
+
+    # validate shapes for lowest level of concatenation
+    d = findfirst(>(1), dims)
+    if d !== nothing # all dims are 1
+        nblocks = length(as) ÷ dims[d]
+        for b ∈ 1:nblocks
+            offset = ((b - 1) * dims[d])
+            startelementi = offset + 1
+            for i ∈ offset .+ (2:dims[d])
+                for dd ∈ 1:N
+                    dd == d && continue
+                    if size(as[startelementi], dd) != size(as[i], dd)
+                        throw(ArgumentError("incompatible shape in element $i"))
+                    end
+                end
+            end
+        end
+    end
 
     # discover number of rows or columns
     for i ∈ 1:dims[d1]

@@ -35,7 +35,7 @@ getindex(t::Tuple, c::Colon) = t
 get(t::Tuple, i::Integer, default) = i in 1:length(t) ? getindex(t, i) : default
 get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 
-# returns new tuple; N.B.: becomes no-op if i is out-of-bounds
+# returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
     setindex(c::Tuple, v, i::Integer)

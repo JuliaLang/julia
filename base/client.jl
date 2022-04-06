@@ -124,14 +124,14 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
-                istrivialerror(lasterr) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+                istrivialerror(lasterr) || setglobal!(Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -151,7 +151,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = scrub_repl_backtrace(current_exceptions())
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+            setglobal!(Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -323,8 +323,8 @@ end
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
-    BINDIR = Sys.BINDIR::String
-    SYSCONFDIR = Base.SYSCONFDIR::String
+    BINDIR = Sys.BINDIR
+    SYSCONFDIR = Base.SYSCONFDIR
     if !isempty(SYSCONFDIR)
         p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
         isfile(p1) && return p1
@@ -514,10 +514,6 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-        # clear old invalid pointers
-        PCRE.__init__()
-    end
     try
         exec_options(JLOptions())
     catch

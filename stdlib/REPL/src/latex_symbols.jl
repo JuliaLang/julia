@@ -596,6 +596,7 @@ const latex_symbols = Dict(
     "\\triangleq" => "≜",
     "\\questeq" => "≟",
     "\\ne" => "≠",
+    "\\neq" => "≠",
     "\\equiv" => "≡",
     "\\nequiv" => "≢",
     "\\le" => "≤",
@@ -2662,4 +2663,5 @@ const symbols_latex_canonical = Dict(
     "⊻" => "\\xor",
     "⊼" => "\\nand",
     "⊽" => "\\nor",
+    "≠" => "\\ne",
 )
