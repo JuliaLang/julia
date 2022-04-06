@@ -142,8 +142,7 @@ end
 Permute vector `v` in-place, according to permutation `p`. No checking is done
 to verify that `p` is a permutation.
 
-To return a new permutation, use `v[p]`. Note that this is generally faster than
-`permute!(v,p)` for large vectors.
+To return a new permutation, use `v[p]`. Note that this is faster than `permute!(v, p)`.
 
 See also [`invpermute!`](@ref).
 
@@ -163,12 +162,14 @@ julia> A
  1
 ```
 """
-permute!(a, p::AbstractVector) = copyto!(a, a[p])
+permute!(v, p::AbstractVector) = copyto!(v, v[p])
 
 """
     invpermute!(v, p)
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
+
+To return a new permutation, use `v[invperm(p)]`. Note that this is faster than `invpermute!(v, p)`.
 
 # Examples
 ```jldoctest
@@ -186,7 +187,7 @@ julia> A
  1
 ```
 """
-invpermute!(a, p::AbstractVector) = copyto!(a, a[invperm(p)])
+invpermute!(v, p::AbstractVector) = copyto!(v, v[invperm(p)])
 
 """
     invperm(v)
