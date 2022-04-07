@@ -2540,7 +2540,7 @@ end
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
         # FIXME: The broken case erroneously returns -Inf
-        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode == RoundUp)
+        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode in (RoundUp,RoundFromZero))
     end
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
