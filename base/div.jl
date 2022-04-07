@@ -74,7 +74,7 @@ without any intermediate rounding.
   `[0, -y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
 
-!!! compat "Julia 1.8"
+!!! compat "Julia 1.9"
     `RoundFromZero` requires at least Julia 1.9.
 
 # Examples:
