@@ -1480,47 +1480,64 @@ only(x::NamedTuple) = throw(
 Base.intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
 
 """
-    IterableClosure(f)
+    Iterator(f, initialstate)
 
-An iterable object that holds a function with no parameters, `f()`, that returns an optional `Union{Some{X},Nothing}`.
+Iterable object with iterations defined by the function `f(state)`. The function takes the current state at each iteration, and follows the same
+rules as `iterate`. It must return either `(newvalue, newstate)` or `nothing`, in which case the iterator ends.
 
-`f()` is supposed to be a closure, or thunk. The iterator will produce the values from the Some objects until `nothing` is returned, signaling the end of the iterator.
+See also: [`iterate`](@ref)
 
-## Examples
+# Examples
 
 ```jldoctest
-julia> function myrange(a, b)
-           state = a
-           IterableClosure() do
-               if state <= b
-                   prevstate, state = state, state + 1
-                   Some(prevstate)
-               else
-                   nothing
-               end
-           end
-       end
-myrange (generic function with 1 method)
+julia> fib = Iterator((1,1)) do (a,b)
+           b, (a+b, a)
+       end;
 
-julia> for x in myrange(3,5)
-           println(x)
-       end
-3
-4
-5
+julia> reduce(hcat, Iterators.take(fib, 7))
+1×7 Matrix{Int64}:
+ 1  1  2  3  5  8  13
+
+julia> frac(c, z=0.0im) = Iterator{ComplexF64}((c, z)) do (c, z)
+           if real(z * z') < 4
+               z, (c, z^2 + c)
+           else
+               nothing
+           end
+       end;
+
+julia> [length(collect(frac(-0.835-0.2321im, (k+j*im)/6))) for j in -4:4, k in -8:8]
+9×17 Matrix{Int64}:
+  2   2   2   3   3   3   5  41   8   4   3   3   2   2   2   2   1
+  2   3   5   4   5   8  20  11  17  23   4   3   3   3   2   2   2
+  4  10  17  12   7  56  18  58  33  22   6   5   4   5   4   3   2
+ 26  56  15  13  18  23  13  14  27  46   8   9  16  12   8   4   3
+ 10   7  62  17  16  23  11  12  39  12  11  23  16  17  62   7  10
+  3   4   8  12  16   9   8  46  27  14  13  23  18  13  15  56  26
+  2   3   4   5   4   5   6  22  33  58  18  56   7  12  17  10   4
+  2   2   2   3   3   3   4  23  17  11  20   8   5   4   5   3   2
+  1   2   2   2   2   3   3   4   8  41   5   3   3   3   2   2   2
 ```
 """
-struct IterableClosure
-    f
+struct Iterator{FuncType, Eltype, S}
+    f::FuncType
+    initialstate::S
+    Iterator{Eltype}(f::FuncType, initialstate::S) where {Eltype, FuncType, S} = new{FuncType, Eltype, S}(f, initialstate)
 end
+Iterator(f, initialstate) = Iterator{Any}(f, initialstate)
 
-function Base.iterate(it::IterableClosure, _=nothing)
-    nextvalue = it.f()
-    if isnothing(nextvalue)
+Base.eltype(::Type{Iterator{F, Eltype, S}}) where  {F, Eltype, S} = Eltype
+Base.eltype(::Type{Iterator{F, nothing, S}}) where  {F, S} = Base.EltypeUnknown
+Base.IteratorEltype(::Type{<:Iterator}) = Base.HasEltype()
+Base.IteratorSize(::Type{<:Iterator}) = Base.SizeUnknown()
+
+function Base.iterate(it::Iterator{F, Eltype, S}, state=nothing) where {F, Eltype, S}
+    it.f(something(state, it.initialstate))
+    valuestate = it.f(something(state, it.initialstate))
+    if isnothing(valuestate)
         return nothing
     else
-        return something(nextvalue), nothing
+        nextvalue, state = valuestate
+        return nextvalue::Eltype, state::S
     end
-end
-
 end
