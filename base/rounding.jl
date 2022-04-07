@@ -81,8 +81,8 @@ const RoundDown = RoundingMode{:Down}()
 
 Rounds away from zero.
 
-!!! compat "Julia 1.8"
-    `RoundFromZero` requires at least Julia 1.8. Prior versions support
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9. Prior versions support
     `RoundFromZero` for `BigFloat`s only.
 
 # Examples
