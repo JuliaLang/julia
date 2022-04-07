@@ -1098,8 +1098,8 @@ function inline_invoke!(
         return nothing
     end
     result = info.result
-    if isa(result, ConstResult)
-        item = const_result_item(result, state)
+    if isa(result, ConcreteResult)
+        item = concrete_result_item(result, state)
     else
         argtypes = invoke_rewrite(sig.argtypes)
         if isa(result, InferenceResult)
@@ -1285,8 +1285,8 @@ function handle_const_call!(
             j += 1
             result = results[j]
             any_fully_covered |= match.fully_covers
-            if isa(result, ConstResult)
-                case = const_result_item(result, state)
+            if isa(result, ConcreteResult)
+                case = concrete_result_item(result, state)
                 push!(cases, InliningCase(result.mi.specTypes, case))
             elseif isa(result, InferenceResult)
                 handled_all_cases &= handle_inf_result!(result, argtypes, flag, state, cases, true)
@@ -1334,7 +1334,7 @@ function handle_inf_result!(
     return true
 end
 
-function const_result_item(result::ConstResult, state::InliningState)
+function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
         return compileable_specialization(state.et, result.mi, result.effects)
     end
@@ -1412,8 +1412,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
                     ir, idx, stmt, result, flag,
                     sig, state, todo)
             else
-                if isa(result, ConstResult)
-                    item = const_result_item(result, state)
+                if isa(result, ConcreteResult)
+                    item = concrete_result_item(result, state)
                 else
                     item = analyze_method!(info.match, sig.argtypes, flag, state)
                 end

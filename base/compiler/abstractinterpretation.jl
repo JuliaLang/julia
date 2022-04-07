@@ -84,7 +84,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
     any_const_result = false
-    const_results = Union{InferenceResult,Nothing,ConstResult}[]
+    const_results = Union{Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
     if !matches.nonoverlayed
         # currently we don't have a good way to execute the overlayed method definition,
@@ -744,13 +744,13 @@ function concrete_eval_call(interp::AbstractInterpreter,
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConstResult(result.edge, result.edge_effects), result.edge_effects)
+        return ConstCallResults(Union{}, ConcreteResult(result.edge, result.edge_effects), result.edge_effects)
     end
     if is_inlineable_constant(value) || call_result_unused(sv)
         # If the constant is not inlineable, still do the const-prop, since the
         # code that led to the creation of the Const may be inlineable in the same
         # circumstance and may be optimizable.
-        return ConstCallResults(Const(value), ConstResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
+        return ConstCallResults(Const(value), ConcreteResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
     end
     return nothing
 end
@@ -770,10 +770,10 @@ end
 
 struct ConstCallResults
     rt::Any
-    const_result::Union{InferenceResult, ConstResult}
+    const_result::ConstResult
     effects::Effects
     ConstCallResults(@nospecialize(rt),
-                     const_result::Union{InferenceResult, ConstResult},
+                     const_result::ConstResult,
                      effects::Effects) =
         new(rt, const_result, effects)
 end
