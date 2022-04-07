@@ -132,7 +132,7 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
         buf.len = 0;
         req->data = NULL;
         if (uv_write(req, stream, &buf, 1, (uv_write_cb)jl_uv_flush_close_callback) == 0)
-            return;
+            return; // success
     }
     if (!uv_is_closing((uv_handle_t*)stream)) { // avoid double-close on the stream
         if (stream->type == UV_TTY)
@@ -481,7 +481,7 @@ JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
     return err;
 }
 
-JL_DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
+static void jl_uv_writecb(uv_write_t *req, int status) JL_NOTSAFEPOINT
 {
     free(req);
     if (status < 0) {
@@ -608,7 +608,7 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
     static char buf[1000];
     buf[0] = '\0';

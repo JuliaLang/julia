@@ -169,7 +169,7 @@ static inline Constant *literal_static_pointer_val(const void *p, Type *T)
 #endif
 }
 
-static const inline char *name_from_method_instance(jl_method_instance_t *li)
+static const inline char *name_from_method_instance(jl_method_instance_t *li) JL_NOTSAFEPOINT
 {
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }

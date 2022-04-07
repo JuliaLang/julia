@@ -180,7 +180,7 @@ static jl_callptr_t _jl_compile_codeinst(
             addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
             isspecsig = true;
         }
-        if (this_code->invoke == NULL) {
+        if (jl_atomic_load_relaxed(&this_code->invoke) == NULL) {
             // once set, don't change invoke-ptr, as that leads to race conditions
             // with the (not) simultaneous updates to invoke and specptr
             if (!decls.specFunctionObject.empty()) {
@@ -189,7 +189,7 @@ static jl_callptr_t _jl_compile_codeinst(
             }
             jl_atomic_store_release(&this_code->invoke, addr);
         }
-        else if (this_code->invoke == jl_fptr_const_return_addr && !decls.specFunctionObject.empty()) {
+        else if (jl_atomic_load_relaxed(&this_code->invoke) == jl_fptr_const_return_addr && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_disasm
             jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
         }
@@ -352,7 +352,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
                 codeinst->inferred = jl_nothing;
         }
         _jl_compile_codeinst(codeinst, src, world, context);
-        if (codeinst->invoke == NULL)
+        if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
     }
     else {
@@ -378,7 +378,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
-    if (unspec->invoke == NULL) {
+    if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);
         jl_method_t *def = unspec->def->def.method;
@@ -398,7 +398,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         _jl_compile_codeinst(unspec, src, unspec->min_world, context);
-        if (unspec->invoke == NULL) {
+        if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
             jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
         }
