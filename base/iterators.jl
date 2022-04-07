@@ -1167,6 +1167,10 @@ last(f::Flatten) = last(last(f.it))
 
 Equivalent to `flatten(map(f, iterators...))`.
 
+See also [`Iterators.flatten`](@ref), [`Iterators.map`](@ref).
+
+!!! compat: "Julia 1.9"
+
 # Examples
 ```jldoctest
 julia> Iterators.flatmap(n->-n:2:n, 1:3) |> collect
@@ -1182,7 +1186,6 @@ julia> Iterators.flatmap(n->-n:2:n, 1:3) |> collect
   3
 ```
 """
-# flatmap = flatten ∘ map
 flatmap(f, c...) = flatten(map(f, c...))
 
 """
