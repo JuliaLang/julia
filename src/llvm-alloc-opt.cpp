@@ -10,6 +10,7 @@
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SetVector.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -20,6 +21,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
@@ -41,10 +43,19 @@
 using namespace llvm;
 using namespace jl_alloc;
 
+STATISTIC(RemovedAllocs, "Total number of heap allocations elided");
+STATISTIC(DeletedAllocs, "Total number of heap allocations fully deleted");
+STATISTIC(SplitAllocs, "Total number of allocations split into registers");
+STATISTIC(StackAllocs, "Total number of allocations moved to the stack");
+STATISTIC(RemovedTypeofs, "Total number of typeofs removed");
+STATISTIC(RemovedWriteBarriers, "Total number of write barriers removed");
+STATISTIC(RemovedGCPreserve, "Total number of GC preserve instructions removed");
+
 namespace {
 
 static void removeGCPreserve(CallInst *call, Instruction *val)
 {
+    ++RemovedGCPreserve;
     auto replace = Constant::getNullValue(val->getType());
     call->replaceUsesOfWith(val, replace);
     for (auto &arg: call->args()) {
@@ -538,6 +549,8 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
 // all the original safepoints.
 void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
 {
+    ++RemovedAllocs;
+    ++StackAllocs;
     auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     // The allocation does not escape or get used in a phi node so none of the derived
@@ -626,6 +639,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 return;
             }
             if (pass.typeof_func == callee) {
+                ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
@@ -642,6 +656,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             }
             if (pass.write_barrier_func == callee ||
                 pass.write_barrier_binding_func == callee) {
+                ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
             }
@@ -697,6 +712,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
 // all the original safepoints.
 void Optimizer::removeAlloc(CallInst *orig_inst)
 {
+    ++RemovedAllocs;
+    ++DeletedAllocs;
     auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     auto simple_remove = [&] (Instruction *orig_i) {
@@ -741,12 +758,14 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 return;
             }
             if (pass.typeof_func == callee) {
+                ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
             if (pass.write_barrier_func == callee ||
                 pass.write_barrier_binding_func == callee) {
+                ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
             }
@@ -792,6 +811,7 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
         if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
             if (pass.typeof_func == callee) {
+                ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 // Push to the removed instructions to trigger `finalize` to
                 // return the correct result.
@@ -807,6 +827,8 @@ void Optimizer::optimizeTag(CallInst *orig_inst)
 void Optimizer::splitOnStack(CallInst *orig_inst)
 {
     auto tag = orig_inst->getArgOperand(2);
+    ++RemovedAllocs;
+    ++SplitAllocs;
     removed.push_back(orig_inst);
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     struct SplitSlot {
@@ -1035,12 +1057,14 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 }
             }
             if (pass.typeof_func == callee) {
+                ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
                 call->eraseFromParent();
                 return;
             }
             if (pass.write_barrier_func == callee ||
                 pass.write_barrier_binding_func == callee) {
+                ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
             }
@@ -1152,7 +1176,9 @@ bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
     Optimizer optimizer(F, *this, std::move(GetDT));
     optimizer.initialize();
     optimizer.optimizeAll();
-    return optimizer.finalize();
+    bool modified = optimizer.finalize();
+    assert(!verifyFunction(F));
+    return modified;
 }
 
 struct AllocOptLegacy : public FunctionPass {

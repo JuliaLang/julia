@@ -33,6 +33,34 @@ function tristate_merge(old::TriState, new::TriState)
     return new
 end
 
+"""
+    effects::Effects
+
+Represents computational effects of a method call.
+
+The effects are composed of the following set of different properties:
+- `effects.consistent::TriState`: this method is guaranteed to return or terminate consistently
+- `effect_free::TriState`: this method is free from externally semantically visible side effects
+- `nothrow::TriState`: this method is guaranteed to not throw an exception
+- `terminates::TriState`: this method is guaranteed to terminate
+- `nonoverlayed::Bool`: indicates that any methods that may be called within this method
+  are not defined in an [overlayed method table](@ref OverlayMethodTable)
+See [`Base.@assume_effects`](@ref) for more detailed explanation on the definitions of these properties.
+
+Along the abstract interpretation, `Effects` at each statement are analyzed locally and
+they are merged into the single global `Effects` that represents the entire effects of
+the analyzed method (see `tristate_merge!`).
+Each effect property is represented as tri-state and managed separately.
+The tri-state consists of `ALWAYS_TRUE`, `TRISTATE_UNKNOWN` and `ALWAYS_FALSE`.
+An effect property is initialized with `ALWAYS_TRUE` and then transitioned towards
+`TRISTATE_UNKNOWN` or `ALWAYS_FALSE`. When we find a statement that has some effect,
+`ALWAYS_TRUE` is propagated if that effect is known to _always_ happen, otherwise
+`TRISTATE_UNKNOWN` is propagated. If a property is known to be `ALWAYS_FALSE`,
+there is no need to do additional analysis as it can not be refined anyway.
+Note that however, within the current data-flow analysis design, it is hard to derive a global
+conclusion from a local analysis on each statement, and as a result, the effect analysis
+usually propagates `TRISTATE_UNKNOWN` currently.
+"""
 struct Effects
     consistent::TriState
     effect_free::TriState
@@ -59,7 +87,7 @@ function Effects(
 end
 
 const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_FALSE,     ALWAYS_TRUE,      true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true)
 const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
 const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false) # unknown, really
 
@@ -79,19 +107,25 @@ function Effects(e::Effects = EFFECTS_UNKNOWN′;
         inbounds_taints_consistency)
 end
 
-is_total_or_error(effects::Effects) =
-    effects.consistent === ALWAYS_TRUE &&
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE
+is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
+is_effect_free(effects::Effects)  = effects.effect_free === ALWAYS_TRUE
+is_nothrow(effects::Effects)      = effects.nothrow === ALWAYS_TRUE
+is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
+is_nonoverlayed(effects::Effects) = effects.nonoverlayed
+
+is_concrete_eval_eligible(effects::Effects) =
+    is_consistent(effects) &&
+    is_effect_free(effects) &&
+    is_terminates(effects)
 
 is_total(effects::Effects) =
-    is_total_or_error(effects) &&
-    effects.nothrow === ALWAYS_TRUE
+    is_concrete_eval_eligible(effects) &&
+    is_nothrow(effects)
 
 is_removable_if_unused(effects::Effects) =
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE &&
-    effects.nothrow === ALWAYS_TRUE
+    is_effect_free(effects) &&
+    is_terminates(effects) &&
+    is_nothrow(effects)
 
 function encode_effects(e::Effects)
     return (e.consistent.state << 0) |

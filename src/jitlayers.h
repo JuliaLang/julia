@@ -32,7 +32,7 @@
 // for Mac/aarch64.
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
 # if JL_LLVM_VERSION < 130000
-#  warning "On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults"
+#  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
 # define JL_USE_JITLINK
 #endif
@@ -48,16 +48,17 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern bool imaging_mode;
-
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
-void jl_finalize_module(std::unique_ptr<Module>  m);
-void jl_merge_module(Module *dest, std::unique_ptr<Module> src);
-Module *jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout *DL = nullptr, const Triple *triple = nullptr);
+void jl_finalize_module(orc::ThreadSafeModule  m);
+void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
-DataLayout create_jl_data_layout(TargetMachine &TM);
+DataLayout jl_create_datalayout(TargetMachine &TM);
+
+static inline bool imaging_default() {
+    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+}
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -79,10 +80,16 @@ struct jl_returninfo_t {
     unsigned return_roots;
 };
 
+struct jl_llvmf_dump_t {
+    orc::ThreadSafeModule TSM;
+    Function *F;
+};
+
 typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool>> jl_codegen_call_targets_t;
-typedef std::tuple<std::unique_ptr<Module>, jl_llvm_functions_t> jl_compile_result_t;
 
 typedef struct _jl_codegen_params_t {
+    orc::ThreadSafeContext tsctx;
+    orc::ThreadSafeContext::Lock tsctx_lock;
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_codegen_call_targets_t workqueue;
@@ -108,30 +115,28 @@ typedef struct _jl_codegen_params_t {
     DenseMap<AttributeList, std::map<
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
-    Module *_shared_module = NULL;
-    Module *shared_module(LLVMContext &context) {
-        if (!_shared_module)
-            _shared_module = jl_create_llvm_module("globals", context);
-        return _shared_module;
-    }
+    orc::ThreadSafeModule _shared_module;
+    inline orc::ThreadSafeModule &shared_module(Module &from);
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
+    bool imaging;
+    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
 } jl_codegen_params_t;
 
-jl_compile_result_t jl_emit_code(
+jl_llvm_functions_t jl_emit_code(
+        orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params,
-        LLVMContext &context);
+        jl_codegen_params_t &params);
 
-jl_compile_result_t jl_emit_codeinst(
+jl_llvm_functions_t jl_emit_codeinst(
+        orc::ThreadSafeModule &M,
         jl_code_instance_t *codeinst,
         jl_code_info_t *src,
-        jl_codegen_params_t &params,
-        LLVMContext &context);
+        jl_codegen_params_t &params);
 
 enum CompilationPolicy {
     Default = 0,
@@ -139,11 +144,13 @@ enum CompilationPolicy {
     ImagingMode = 2
 };
 
+typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;
+
 void jl_compile_workqueue(
-    std::map<jl_code_instance_t*, jl_compile_result_t> &emitted,
+    jl_workqueue_t &emitted,
+    Module &original,
     jl_codegen_params_t &params,
-    CompilationPolicy policy,
-    LLVMContext &ctxt);
+    CompilationPolicy policy);
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
@@ -225,7 +232,7 @@ public:
 #endif
 
     void addGlobalMapping(StringRef Name, uint64_t Addr);
-    void addModule(std::unique_ptr<Module> M);
+    void addModule(orc::ThreadSafeModule M);
 
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
@@ -272,6 +279,19 @@ private:
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
+
+orc::ThreadSafeModule &jl_codegen_params_t::shared_module(Module &from) {
+    if (!_shared_module) {
+        _shared_module = jl_create_llvm_module("globals", tsctx, imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
+        assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
+    } else {
+        assert(&from.getContext() == _shared_module.getContext().getContext() && "Module context differs from shared module context!");
+        assert(from.getDataLayout() == _shared_module.getModuleUnlocked()->getDataLayout() && "Module data layout differs from shared module data layout!");
+        assert(from.getTargetTriple() == _shared_module.getModuleUnlocked()->getTargetTriple() && "Module target triple differs from shared module target triple!");
+    }
+    return _shared_module;
+}
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createCombineMulAddPass();

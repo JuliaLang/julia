@@ -213,7 +213,7 @@ function f_div(x)
     div(x, 1)
     return x
 end
-@test fully_eliminated(f_div, (Int,)) == 1
+@test fully_eliminated(f_div, (Int,); retval=Core.Argument(2))
 # ...unless we div by an unknown amount
 function f_div(x, y)
     div(x, y)
@@ -1185,11 +1185,11 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
-const ___CONST_DICT___ = Dict{Any,Any}(:a => 1, :b => 2)
-Base.@assume_effects :consistent :effect_free :terminates_globally consteval(
+const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
+Base.@assume_effects :total_may_throw concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
-    consteval(getindex, ___CONST_DICT___, :a)
+    concrete_eval(getindex, ___CONST_DICT___, :a)
 end
 
 # https://github.com/JuliaLang/julia/issues/44732
@@ -1233,4 +1233,12 @@ end
 g_call_peel(x) = f_peel(x)
 let src = code_typed1(g_call_peel, Tuple{Any})
     @test count(isinvoke(:f_peel), src.code) == 2
+end
+
+const my_defined_var = 42
+@test fully_eliminated((); retval=42) do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end
+@test !fully_eliminated() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
 end

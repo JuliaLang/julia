@@ -116,7 +116,13 @@
 #  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
-#if defined(__GNUC__)
+#ifdef _COMPILER_MICROSOFT_
+# ifdef _P64
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
+# else
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
+# endif
+#elif defined(__GNUC__)
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
 #else
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
