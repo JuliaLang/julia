@@ -197,7 +197,7 @@ private:
     template<typename ResourceT, size_t max = 0>
     struct ResourcePool {
         public:
-        ResourcePool(function_ref<ResourceT()> creator) : creator(std::move(creator)) {}
+        ResourcePool(function_ref<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
         class OwningResource {
             public:
             OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
@@ -241,13 +241,13 @@ private:
             ResourcePool &pool;
             llvm::Optional<ResourceT> resource;
         };
-        
+
         OwningResource acquire() {
             return OwningResource(*this, acquire_());
         }
 
         ResourceT acquire_() {
-            std::unique_lock<std::mutex> lock(mutex);
+            std::unique_lock<std::mutex> lock(mutex->mutex);
             if (!pool.empty()) {
                 return pool.pop_back_val();
             }
@@ -255,21 +255,25 @@ private:
                 created++;
                 return creator();
             }
-            empty.wait(lock, [&](){ return !pool.empty(); });
+            mutex->empty.wait(lock, [&](){ return !pool.empty(); });
             assert(!pool.empty() && "Expected resource pool to have a value!");
             return pool.pop_back_val();
         }
         void release_(ResourceT &&resource) {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard<std::mutex> lock(mutex->mutex);
             pool.push_back(std::move(resource));
-            empty.notify_one();
+            mutex->empty.notify_one();
         }
         private:
         llvm::function_ref<ResourceT()> creator;
         size_t created = 0;
         llvm::SmallVector<ResourceT, max == 0 ? 8 : max> pool;
-        std::mutex mutex;
-        std::condition_variable empty;
+        struct WNMutex {
+            std::mutex mutex;
+            std::condition_variable empty;
+        };
+
+        std::unique_ptr<WNMutex> mutex;
     };
     struct OptimizerT {
         OptimizerT(legacy::PassManager &PM, std::mutex &mutex, int optlevel) : optlevel(optlevel), PM(PM), mutex(mutex) {}
@@ -349,7 +353,7 @@ private:
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
 
-    ResourcePool<orc::ThreadSafeContext> ContextPool{[](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }};
+    ResourcePool<orc::ThreadSafeContext> ContextPool;
 
 #ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;

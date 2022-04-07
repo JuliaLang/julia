@@ -936,6 +936,7 @@ JuliaOJIT::JuliaOJIT()
 #endif
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
+    ContextPool([](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }),
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
