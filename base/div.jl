@@ -75,7 +75,7 @@ without any intermediate rounding.
   `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
 
 !!! compat "Julia 1.8"
-    `RoundFromZero` requires at least Julia 1.8.
+    `RoundFromZero` requires at least Julia 1.9.
 
 # Examples:
 ```jldoctest
