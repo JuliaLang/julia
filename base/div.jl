@@ -18,7 +18,7 @@ without any intermediate rounding.
 See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this function.
 
 !!! compat "Julia 1.9"
-    `RoundFromZero` requires at least Julia 1.8.
+    `RoundFromZero` requires at least Julia 1.9.
 
 # Examples:
 ```jldoctest
