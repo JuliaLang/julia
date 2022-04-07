@@ -345,7 +345,7 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
             profile_round_robin_thread_order[i] = i;
         }
     }
-    seed_cong(&profile_cong_rng_seed);
+    profile_cong_rng_seed = jl_rand();
     unbias_cong(jl_n_threads, &profile_cong_rng_unbias);
     bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
     if (bt_data_prof == NULL && maxsize > 0)

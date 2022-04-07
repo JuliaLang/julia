@@ -449,6 +449,7 @@ end
 @testset "rand(Bool) uniform distribution" begin
     for n in [rand(1:8), rand(9:16), rand(17:64)]
         a = zeros(Bool, n)
+        a8 = unsafe_wrap(Array, Ptr{UInt8}(pointer(a)), length(a); own=false) # unsafely observe the actual bit patterns in `a`
         as = zeros(Int, n)
         # we will test statistical properties for each position of a,
         # but also for 3 linear combinations of positions (for the array version)
@@ -466,6 +467,7 @@ end
                         end
                     else
                         as .+= rand!(rng, a)
+                        @test all(x -> x === 0x00 || x === 0x01, a8)
                         aslcs .+= [xor(getindex.(Ref(a), lcs[i])...) for i in 1:3]
                     end
                 end
@@ -912,9 +914,6 @@ end
 
     @testset "RandomDevice" begin
         @test string(RandomDevice()) == "$RandomDevice()"
-        if !Sys.iswindows()
-            @test string(RandomDevice(unlimited=false)) == "$RandomDevice(unlimited=false)"
-        end
     end
 end
 
