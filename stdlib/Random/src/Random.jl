@@ -143,8 +143,10 @@ Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
 
 typeof_rng(rng::AbstractRNG) = typeof(rng)
 
-Sampler(::Type{<:AbstractRNG}, sp::Sampler, ::Repetition) =
-    throw(ArgumentError("Sampler for this object is not defined"))
+# this method is necessary to prevent rand(rng::AbstractRNG, X) from
+# recursively constructing nested Sampler types.
+Sampler(T::Type{<:AbstractRNG}, sp::Sampler, r::Repetition) =
+    throw(MethodError(Sampler, (T, sp, r)))
 
 # default shortcut for the general case
 Sampler(::Type{RNG}, X) where {RNG<:AbstractRNG} = Sampler(RNG, X, Val(Inf))
