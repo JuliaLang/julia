@@ -152,7 +152,7 @@ bounded by a small constant multiple of the number of available worker threads
 iteration space. Thus, `@threads :dynamic for x in xs; f(x); end` is typically more
 efficient than `@sync for x in xs; @spawn f(x); end` if `length(xs)` is significantly
 larger than the number of the worker threads and the run-time of `f(x)` is relatively
-smaller than the cost of spawning and synchronizaing a task (typically less than 10
+smaller than the cost of spawning and synchronizing a task (typically less than 10
 microseconds).
 
 !!! compat "Julia 1.8"

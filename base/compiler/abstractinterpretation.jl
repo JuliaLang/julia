@@ -48,7 +48,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # aren't any in the throw block either to enable other optimizations.
         add_remark!(interp, sv, "Skipped call in throw block")
         nonoverlayed = false
-        if isoverlayed(method_table(interp)) && sv.ipo_effects.nonoverlayed
+        if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
             # as we may want to concrete-evaluate this frame in cases when there are
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
@@ -712,10 +712,10 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     # disable concrete-evaluation since this function call is tainted by some overlayed
     # method and currently there is no direct way to execute overlayed methods
-    isoverlayed(method_table(interp)) && !result.edge_effects.nonoverlayed && return false
+    isoverlayed(method_table(interp)) && !is_nonoverlayed(result.edge_effects) && return false
     return f !== nothing &&
            result.edge !== nothing &&
-           is_total_or_error(result.edge_effects) &&
+           is_concrete_eval_eligible(result.edge_effects) &&
            is_all_const_arg(arginfo)
 end
 
@@ -1868,7 +1868,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                     t = Bottom
                     tristate_merge!(sv, Effects(EFFECTS_TOTAL;
                         # consistent = ALWAYS_TRUE, # N.B depends on !ismutabletype(t) above
-                        nothrow = ALWAYS_FALSE))
+                        nothrow = TRISTATE_UNKNOWN))
                     @goto t_computed
                 elseif !isa(at, Const)
                     allconst = false
@@ -1897,8 +1897,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             is_nothrow = false
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = !ismutabletype(t) ? ALWAYS_TRUE : ALWAYS_FALSE,
-            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
+            consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+            nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = false # TODO: More precision
@@ -1916,8 +1916,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = ismutabletype(t) ? ALWAYS_FALSE : ALWAYS_TRUE,
-            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
+            consistent = ismutabletype(t) ? TRISTATE_UNKNOWN : ALWAYS_TRUE,
+            nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
     elseif ehead === :new_opaque_closure
         tristate_merge!(sv, Effects()) # TODO
         t = Union{}
@@ -2039,9 +2039,11 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     ty = abstract_eval_global(M, s)
     isa(ty, Const) && return ty
     if isdefined(M,s)
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=TRISTATE_UNKNOWN))
     else
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE, nothrow=ALWAYS_FALSE))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL;
+            consistent=TRISTATE_UNKNOWN,
+            nothrow=TRISTATE_UNKNOWN))
     end
     return ty
 end
@@ -2281,7 +2283,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     changes = StateUpdate(lhs, VarState(t, false), changes, false)
                 elseif isa(lhs, GlobalRef)
                     tristate_merge!(frame, Effects(EFFECTS_TOTAL,
-                        effect_free=ALWAYS_FALSE,
+                        effect_free=TRISTATE_UNKNOWN,
                         nothrow=TRISTATE_UNKNOWN))
                 elseif !isa(lhs, SSAValue)
                     tristate_merge!(frame, EFFECTS_UNKNOWN)

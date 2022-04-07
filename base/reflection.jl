@@ -1310,6 +1310,35 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     return rt
 end
 
+function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       world = get_world_counter(),
+                       interp = Core.Compiler.NativeInterpreter(world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    types = to_tuple_type(types)
+    if isa(f, Core.Builtin)
+        args = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
+        return Core.Compiler.builtin_effects(f, args, rt)
+    else
+        effects = Core.Compiler.EFFECTS_TOTAL
+        matches = _methods(f, types, -1, world)::Vector
+        if isempty(matches)
+            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
+            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
+            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
+            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
+        end
+        for match in matches
+            match = match::Core.MethodMatch
+            frame = Core.Compiler.typeinf_frame(interp,
+                match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+            frame === nothing && return Core.Compiler.Effects()
+            effects = Core.Compiler.tristate_merge(effects, frame.ipo_effects)
+        end
+        return effects
+    end
+end
+
 """
     print_statement_costs(io::IO, f, types)
 

@@ -904,15 +904,24 @@ end
 
 # compute an inferred AST and return type
 function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
+    frame = typeinf_frame(interp, method, atype, sparams, run_optimizer)
+    frame === nothing && return nothing, Any
+    frame.inferred || return nothing, Any
+    code = frame.src
+    rt = widenconst(ignorelimited(frame.result.result))
+    return code, rt
+end
+
+# compute an inferred frame
+function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
-    frame === nothing && return (nothing, Any)
+    frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
-    frame.inferred || return (nothing, Any)
-    return (frame.src, widenconst(ignorelimited(result.result)))
+    return frame
 end
 
 # compute (and cache) an inferred AST and return type

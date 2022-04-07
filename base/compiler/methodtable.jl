@@ -104,12 +104,12 @@ In both cases `nothing` is returned.
 `overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
 function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
-    return (_findsup(sig, nothing, table.world)..., true)
+    return (_findsup(sig, nothing, table.world)..., false)
 end
 
 function findsup(@nospecialize(sig::Type), table::OverlayMethodTable)
     match, valid_worlds = _findsup(sig, table.mt, table.world)
-    match !== nothing && return match, valid_worlds, false
+    match !== nothing && return match, valid_worlds, true
     # fall back to the internal method table
     fallback_match, fallback_valid_worlds = _findsup(sig, nothing, table.world)
     return (
@@ -117,7 +117,7 @@ function findsup(@nospecialize(sig::Type), table::OverlayMethodTable)
         WorldRange(
             max(valid_worlds.min_world, fallback_valid_worlds.min_world),
             min(valid_worlds.max_world, fallback_valid_worlds.max_world)),
-        true)
+        false)
 end
 
 function _findsup(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt)

@@ -1829,8 +1829,8 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
     end
 
     return Effects(EFFECTS_TOTAL;
-        consistent = ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free = effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        consistent = ipo_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        effect_free = effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
         nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
@@ -2007,8 +2007,8 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     nothrow = !isvarargtype(argtypes[end]) && intrinsic_nothrow(f, argtypes[2:end])
 
     return Effects(EFFECTS_TOTAL;
-        consistent = ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free = effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+        consistent = ipo_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        effect_free = effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
         nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
@@ -2087,7 +2087,7 @@ end
 function getglobal_nothrow(argtypes::Vector{Any})
     2 ≤ length(argtypes) ≤ 3 || return false
     if length(argtypes) == 3
-        global_order_nothrow(o, true, false) || return false
+        global_order_nothrow(argtypes[3], true, false) || return false
     end
     M, s = argtypes
     if M isa Const && s isa Const
