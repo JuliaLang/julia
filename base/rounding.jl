@@ -41,8 +41,8 @@ Currently supported rounding modes are:
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 
-!!! compat "Julia 1.8"
-    `RoundFromZero` requires at least Julia 1.8. Prior versions support
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9. Prior versions support
     `RoundFromZero` for `BigFloat`s only.
 """
 struct RoundingMode{T} end
