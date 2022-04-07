@@ -923,6 +923,40 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #endif
 }
 
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t max = UINT64_MAX;
+    uint64_t unbias = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, unbias, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
+}
+
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
+
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
+}
+
 #ifdef __cplusplus
 }
 #endif

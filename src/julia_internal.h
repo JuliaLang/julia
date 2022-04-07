@@ -1110,21 +1110,19 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
 //--------------------------------------------------
 // congruential random number generator
 // for a small amount of thread-local randomness
-// we could just use libc:`rand()`, but we want to ensure this is fast
-STATIC_INLINE void seed_cong(uint64_t *seed)
-{
-    *seed = rand();
-}
-STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias)
+STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias) JL_NOTSAFEPOINT
 {
     *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
 }
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed) JL_NOTSAFEPOINT
 {
     while ((*seed = 69069 * (*seed) + 362437) > unbias)
         ;
     return *seed % max;
 }
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_init_rand(void);
 
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
@@ -1156,7 +1154,6 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
-int jl_getpid(void) JL_NOTSAFEPOINT;
 
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;

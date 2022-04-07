@@ -157,7 +157,7 @@ std::string jl_format_filename(StringRef output_pattern)
             }
             switch (c) {
             case 'p':
-                outfile << jl_getpid();
+                outfile << uv_os_getpid();
                 break;
             case 'd':
                 if (got_pwd)
