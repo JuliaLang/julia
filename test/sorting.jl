@@ -35,6 +35,8 @@ end
     @test sort([2,3,1], rev=true) == [3,2,1] == sort([2,3,1], order=Reverse)
     @test sort(['z':-1:'a';]) == ['a':'z';]
     @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
+    @test sort(OffsetVector([3,1,2], -2)) == OffsetVector([1,2,3], -2)
+    @test sort(OffsetVector([3.0,1.0,2.0], 2), rev=true) == OffsetVector([3.0,2.0,1.0], 2)
 end
 
 @testset "sortperm" begin
@@ -46,6 +48,8 @@ end
         @test r === s
     end
     @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
+    @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
 end
 
 @testset "misc sorting" begin
@@ -53,6 +57,8 @@ end
     @test issorted([1,2,3])
     @test reverse([2,3,1]) == [1,3,2]
     @test sum(randperm(6)) == 21
+    @test length(reverse(0x1:0x2)) == 2
+    @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
 end
 
 @testset "partialsort" begin
@@ -217,7 +223,6 @@ end
             end
         end
 
-        @test_broken length(reverse(0x1:0x2)) == 2
         @testset "issue #34408" begin
             r = 1f8-10:1f8
             # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
@@ -260,7 +265,8 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, UInt(1), Forward) == 5
 
     a = rand(1:10000, 1000)
-    for alg in [InsertionSort, MergeSort]
+    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
+
         b = sort(a, alg=alg)
         @test issorted(b)
 
@@ -325,15 +331,17 @@ Base.step(r::ConstantRange) = 0
     end
 
     @testset "unstable algorithms" begin
-        b = sort(a, alg=QuickSort)
-        @test issorted(b)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
-        b = sort(a, alg=QuickSort, rev=true)
-        @test issorted(b, rev=true)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
-        b = sort(a, alg=QuickSort, by=x->1/x)
-        @test issorted(b, by=x->1/x)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
+        for alg in [QuickSort, Base.DEFAULT_UNSTABLE]
+            b = sort(a, alg=alg)
+            @test issorted(b)
+            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+            b = sort(a, alg=alg, rev=true)
+            @test issorted(b, rev=true)
+            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+            b = sort(a, alg=alg, by=x->1/x)
+            @test issorted(b, by=x->1/x)
+            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
+        end
     end
 end
 @testset "insorted" begin
@@ -459,7 +467,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort]
+            for alg in [MergeSort, Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -472,7 +480,7 @@ end
             end
 
             # unstable algorithms
-            for alg in [QuickSort, PartialQuickSort(1:n)]
+            for alg in [QuickSort, PartialQuickSort(1:n), Base.DEFAULT_UNSTABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -504,8 +512,9 @@ end
 
         v = randn_with_nans(n,0.1)
         # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort],
+        for alg in [InsertionSort, QuickSort, MergeSort, Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
+            alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
             s = sort(v, alg=alg, rev=rev)
             @test issorted(s, rev=rev)
@@ -565,7 +574,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort]
+    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
@@ -662,6 +671,147 @@ end
     a = OffsetArray([9:-1:0;], -5)
     Base.Sort.sort_int_range!(a, 10, 0, identity)
     @test issorted(a)
+end
+
+@testset "sort!(::OffsetMatrix; dims)" begin
+    x = OffsetMatrix(rand(5,5), 5, -5)
+    sort!(x; dims=1)
+    for i in axes(x, 2)
+        @test issorted(x[:,i])
+    end
+end
+
+@testset "searchsortedfirst/last with generalized indexing" begin
+    o = OffsetVector(1:3, -2)
+    @test searchsortedfirst(o, 4) == lastindex(o) + 1
+    @test searchsortedfirst(o, 1.5) == 0
+    @test searchsortedlast(o, 0) == firstindex(o) - 1
+    @test searchsortedlast(o, 1.5) == -1
+end
+
+function adaptive_sort_test(v; trusted=InsertionSort, kw...)
+    sm = sum(hash.(v))
+    truth = sort!(deepcopy(v); alg=trusted, kw...)
+    return (
+        v === sort!(v; kw...) &&
+        issorted(v; kw...) &&
+        sum(hash.(v)) == sm &&
+        all(v .=== truth))
+end
+@testset "AdaptiveSort" begin
+    len = 70
+
+    @testset "Bool" begin
+        @test sort([false, true, false]) == [false, false, true]
+        @test sort([false, true, false], by=x->0) == [false, true, false]
+        @test sort([false, true, false], rev=true) == [true, false, false]
+    end
+
+    @testset "fallback" begin
+        @test adaptive_sort_test(rand(1:typemax(Int32), len), by=x->x^2)# fallback
+        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=QuickSort)
+    end
+
+    @test adaptive_sort_test(rand(Int, 20)) # InsertionSort
+
+    @testset "large eltype" begin
+        for rev in [true, false]
+            @test adaptive_sort_test(rand(Int128, len), rev=rev) # direct ordered int
+            @test adaptive_sort_test(fill(rand(UInt128), len), rev=rev) # all same
+            @test adaptive_sort_test(rand(Int128.(1:len), len), rev=rev) # short int range
+        end
+    end
+
+    @test adaptive_sort_test(fill(rand(), len)) # All same
+
+    @testset "count sort" begin
+        @test adaptive_sort_test(rand(1:20, len))
+        @test adaptive_sort_test(rand(1:20, len), rev=true)
+    end
+
+    @testset "post-serialization count sort" begin
+        v = reinterpret(Float64, rand(1:20, len))
+        @test adaptive_sort_test(copy(v))
+        @test adaptive_sort_test(copy(v), rev=true)
+    end
+
+    @testset "presorted" begin
+        @test adaptive_sort_test(sort!(rand(len)))
+        @test adaptive_sort_test(sort!(rand(Float32, len), rev=true))
+        @test adaptive_sort_test(vcat(sort!(rand(Int16, len)), Int16(0)))
+        @test adaptive_sort_test(vcat(sort!(rand(UInt64, len), rev=true), 0))
+    end
+
+    @testset "lenm1 < 3bits fallback" begin
+        @test adaptive_sort_test(rand(len)) # InsertionSort
+        @test adaptive_sort_test(rand(130)) # QuickSort
+    end
+
+    @test adaptive_sort_test(rand(1000)) # RadixSort
+end
+
+@testset "uint mappings" begin
+
+    #Construct value lists
+    floats = [T[-π, -1.0, -1/π, 1/π, 1.0, π, -0.0, 0.0, Inf, -Inf, NaN, -NaN,
+                prevfloat(T(0)), nextfloat(T(0)), prevfloat(T(Inf)), nextfloat(T(-Inf))]
+        for T in [Float16, Float32, Float64]]
+
+    ints = [T[17, -T(17), 0, -one(T), 1, typemax(T), typemin(T), typemax(T)-1, typemin(T)+1]
+        for T in Base.BitInteger_types]
+
+    char = Char['\n', ' ', Char(0), Char(8), Char(17), typemax(Char)]
+
+    vals = vcat(floats, ints, [char])
+
+    #Add random values
+    UIntN(::Val{1}) = UInt8
+    UIntN(::Val{2}) = UInt16
+    UIntN(::Val{4}) = UInt32
+    UIntN(::Val{8}) = UInt64
+    UIntN(::Val{16}) = UInt128
+    map(vals) do x
+        T = eltype(x)
+        U = UIntN(Val(sizeof(T)))
+        append!(x, rand(T, 4))
+        append!(x, reinterpret.(T, rand(U, 4)))
+        if T <: AbstractFloat
+            mask = reinterpret(U, T(NaN))
+            append!(x, reinterpret.(T, mask .| rand(U, 4)))
+        end
+    end
+
+    for x in vals
+        T = eltype(x)
+        U = UIntN(Val(sizeof(T)))
+        for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
+            if order isa Base.Order.By || T === Float16 ||
+                ((T <: AbstractFloat) == (order isa DirectOrdering))
+                @test Base.Sort.UIntMappable(T, order) === nothing
+                continue
+            end
+
+            @test Base.Sort.UIntMappable(T, order) === U
+            x2 = deepcopy(x)
+            u = Base.Sort.uint_map!(x2, 1, length(x), order)
+            @test eltype(u) === U
+            @test all(Base.Sort.uint_map.(x, (order,)) .=== u)
+            mn = rand(U)
+            u .-= mn
+            @test x2 === Base.Sort.uint_unmap!(x2, u, 1, length(x), order, mn)
+            @test all(x2 .=== x)
+
+            for a in x
+                for b in x
+                    if order === Base.Sort.Float.Left() || order === Base.Sort.Float.Right()
+                        # Left and Right orderings guarantee homogeneous sign and no NaNs
+                        (isnan(a) || isnan(b) || signbit(a) != signbit(b)) && continue
+                    end
+                    @test Base.Order.lt(order, a, b) === Base.Order.lt(Forward, Base.Sort.uint_map(a, order), Base.Sort.uint_map(b, order))
+                end
+            end
+        end
+    end
 end
 
 end

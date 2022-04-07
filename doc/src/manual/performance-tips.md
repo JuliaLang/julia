@@ -11,12 +11,11 @@ The use of functions is not only important for performance: functions are more r
 
 The functions should take arguments, instead of operating directly on global variables, see the next point.
 
-## Avoid global variables
+## Avoid untyped global variables
 
-A global variable might have its value, and therefore its type, change at any point. This makes
-it difficult for the compiler to optimize code using global variables. Variables should be local,
-or passed as arguments to functions, whenever possible.
-
+The value of an untyped global variable might change at any point, possibly leading to a change of its type. This makes
+it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables,
+i.e. type aliases on the global level. Variables should be local, or passed as arguments to functions, whenever possible.
 
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
@@ -25,7 +24,9 @@ performance:
 const DEFAULT_VAL = 0
 ```
 
-Uses of non-constant globals can be optimized by annotating their types at the point of use:
+If a global is known to always be of the same type, [the type should be annotated](@ref man-typed-globals).
+
+Uses of untyped globals can be optimized by annotating their types at the point of use:
 
 ```julia
 global x = rand(1000)
@@ -77,12 +78,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.010414 seconds (9.07 k allocations: 373.448 KiB, 98.40% compilation time)
-493.6199223951192
+  0.011539 seconds (9.08 k allocations: 373.386 KiB, 98.69% compilation time)
+523.0007221951678
 
 julia> @time sum_global()
-  0.000108 seconds (3.49 k allocations: 70.156 KiB)
-493.6199223951192
+  0.000091 seconds (3.49 k allocations: 70.156 KiB)
+523.0007221951678
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -113,12 +114,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.007971 seconds (3.96 k allocations: 200.171 KiB, 99.83% compilation time)
-493.6199223951192
+  0.007551 seconds (3.98 k allocations: 200.548 KiB, 99.77% compilation time)
+523.0007221951678
 
 julia> @time sum_arg(x)
-  0.000003 seconds (1 allocation: 16 bytes)
-493.6199223951192
+  0.000006 seconds (1 allocation: 16 bytes)
+523.0007221951678
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -128,8 +129,8 @@ the timing in a function, we can see that indeed no allocations are performed:
 julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
-  0.000001 seconds
-493.6199223951192
+  0.000002 seconds
+523.0007221951678
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -1025,7 +1026,7 @@ consider the two functions:
 ```jldoctest dotfuse
 julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3; # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing. However, `fdot`

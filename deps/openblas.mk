@@ -1,7 +1,7 @@
 ## OpenBLAS ##
 ifneq ($(USE_BINARYBUILDER_OPENBLAS), 1)
 # LAPACK is built into OpenBLAS by default
-OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
+OPENBLAS_GIT_URL := https://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
@@ -12,20 +12,7 @@ ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
 OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
 # Maximum number of threads for parallelism
-ifneq ($(ARCH),x86_64)
-# Assume we can't address much memory to spawn many threads
-# It is also unlikely that 32-bit architectures have too many cores
-OPENBLAS_BUILD_OPTS += NUM_THREADS=8
-else ifeq ($(OS),WINNT)
-# Windows seems unable to handle very many
-OPENBLAS_BUILD_OPTS += NUM_THREADS=16
-else ifeq ($(OS),Darwin)
-# This should suffice for the largest macs
-OPENBLAS_BUILD_OPTS += NUM_THREADS=16
-else
-# On linux, try to provision for the largest possible machine currently
-OPENBLAS_BUILD_OPTS += NUM_THREADS=16
-endif
+OPENBLAS_BUILD_OPTS += NUM_THREADS=512
 else
 OPENBLAS_BUILD_OPTS += USE_THREAD=0
 endif
@@ -42,8 +29,8 @@ endif
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
-OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(BUILDDIR)/objconv/objconv)
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-compiled
+OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(build_bindir)/objconv)
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(build_prefix)/manifest/objconv
 endif
 endif
 
@@ -105,7 +92,7 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/openblas-exshift.patch
+		patch -p1 -f < $(SRCDIR)/patches/neoverse-generic-kernels.patch
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied
@@ -128,7 +115,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $$(build_shlibdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT)))
 
 clean-openblas:
-	-rm $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean
 
 
@@ -199,11 +186,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)liblapack.$$(SHLIB_EXT) $$(build_shlibdir)/liblapack.$$(SHLIB_EXT)))
 
 clean-lapack:
-	-rm $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
+	-rm -f $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
-	-rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
 get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz

@@ -156,10 +156,10 @@ Base.copysign
 Base.sign
 Base.signbit
 Base.flipsign
-Base.sqrt(::Real)
+Base.sqrt(::Number)
 Base.isqrt
 Base.Math.cbrt
-Base.real(::Complex)
+Base.real
 Base.imag
 Base.reim
 Base.conj

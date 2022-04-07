@@ -1971,3 +1971,8 @@ end
 @testintersect(Tuple{Type{T}, T} where T<:(Tuple{Vararg{_A, _B}} where _B where _A),
                Tuple{Type{Tuple{Vararg{_A, N}} where _A<:F}, Pair{N, F}} where F where N,
                Bottom)
+
+# issue #42409
+@testintersect(Tuple{Type{Pair{_A, S} where S<:AbstractArray{<:_A, 2}}, Dict} where _A,
+               Tuple{Type{Pair{_A, S} where S<:AbstractArray{<:_A, 2}} where _A, Union{Array, Pair}},
+               Bottom)

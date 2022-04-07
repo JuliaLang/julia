@@ -23,7 +23,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
-    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, cconv, args..., roots...
+    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects), args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:1,
     :code_coverage_effect => 0:0,
@@ -48,10 +48,12 @@ const EMPTY_SLOTNAMES = "slotnames field is empty"
 const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
+const SSAFLAGS_MISMATCH = "not all SSAValues have a corresponding `ssaflags`"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
 const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
+const INVALID_SIGNATURE_OPAQUE_CLOSURE = "invalid signature of method for opaque closure - `sig` field must always be set to `Tuple`"
 
 struct InvalidCodeError <: Exception
     kind::String
@@ -183,13 +185,16 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
     nssavals = length(c.code)
     !is_top_level && nslotnames == 0 && push!(errors, InvalidCodeError(EMPTY_SLOTNAMES))
     nslotnames < nslotflags && push!(errors, InvalidCodeError(SLOTFLAGS_MISMATCH, (nslotnames, nslotflags)))
-    if c.inferred
-        nssavaluetypes = length(c.ssavaluetypes::Vector{Any})
+    ssavaluetypes = c.ssavaluetypes
+    if isa(ssavaluetypes, Vector{Any})
+        nssavaluetypes = length(ssavaluetypes)
         nssavaluetypes < nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH, (nssavals, nssavaluetypes)))
     else
-        ssavaluetypes = c.ssavaluetypes::Int
-        ssavaluetypes != nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, ssavaluetypes)))
+        nssavaluetypes = ssavaluetypes::Int
+        nssavaluetypes ≠ nssavals && push!(errors, InvalidCodeError(SSAVALUETYPES_MISMATCH_UNINFERRED, (nssavals, nssavaluetypes)))
     end
+    nssaflags = length(c.ssaflags)
+    nssavals ≠ nssaflags && push!(errors, InvalidCodeError(SSAFLAGS_MISMATCH, (nssavals, nssaflags)))
     return errors
 end
 
@@ -211,7 +216,9 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInsta
         m = mi.def::Method
         mnargs = m.nargs
         n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
-        if (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
+        if m.is_for_opaque_closure
+            m.sig === Tuple || push!(errors, InvalidCodeError(INVALID_SIGNATURE_OPAQUE_CLOSURE, (m.sig, m.isva)))
+        elseif (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
             push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs)))
         end
     end

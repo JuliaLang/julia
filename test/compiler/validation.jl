@@ -19,7 +19,7 @@ function f22938(a, b, x...)
 end
 
 msig = Tuple{typeof(f22938),Int,Int,Int,Int}
-world = typemax(UInt)
+world = Base.get_world_counter()
 match = Base._methods_by_ftype(msig, -1, world)[]
 mi = Core.Compiler.specialize_method(match)
 c0 = Core.Compiler.retrieve_code_info(mi)
@@ -103,6 +103,14 @@ end
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.SSAVALUETYPES_MISMATCH_UNINFERRED
+end
+
+@testset "SSAFLAGS_MISMATCH" begin
+    c = copy(c0)
+    empty!(c.ssaflags)
+    errors = Core.Compiler.validate_code(c)
+    @test length(errors) == 1
+    @test errors[1].kind === Core.Compiler.SSAFLAGS_MISMATCH
 end
 
 @testset "SIGNATURE_NARGS_MISMATCH" begin

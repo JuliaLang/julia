@@ -314,3 +314,23 @@ end
 # Issue #41975 - SSA conversion drops type check
 f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
 @test_throws TypeError f_if_typecheck()
+
+@test let # https://github.com/JuliaLang/julia/issues/42258
+    code = quote
+        function foo()
+            a = @noinline rand(rand(0:10))
+            if isempty(a)
+                err = BoundsError(a)
+                throw(err)
+                return nothing
+            end
+            return a
+        end
+        code_typed(foo; optimize=true)
+
+        code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
+    end |> string
+    cmd = `$(Base.julia_cmd()) -g 2 -e $code`
+    stderr = IOBuffer()
+    success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+end

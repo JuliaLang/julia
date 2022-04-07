@@ -171,11 +171,11 @@ Let's consider some of the abstract types that make up Julia's numerical hierarc
 
 ```julia
 abstract type Number end
-abstract type Real     <: Number end
+abstract type Real          <: Number end
 abstract type AbstractFloat <: Real end
-abstract type Integer  <: Real end
-abstract type Signed   <: Integer end
-abstract type Unsigned <: Integer end
+abstract type Integer       <: Real end
+abstract type Signed        <: Integer end
+abstract type Unsigned      <: Integer end
 ```
 
 The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
@@ -458,6 +458,30 @@ To recap, two essential properties define immutability in Julia:
     * Mutable values, on the other hand are heap-allocated and passed to
       functions as pointers to heap-allocated values except in cases where the compiler
       is sure that there's no way to tell that this is not what is happening.
+
+In cases where one or more fields of an otherwise mutable struct is known to be immutable,
+one can declare these fields as such using `const` as shown below. This enables some,
+but not all of the optimizations of immutable structs, and can be used to enforce invariants
+on the particular fields marked as `const`.
+
+!!! compat "Julia 1.8"
+    `const` annotating fields of mutable structs requires at least Julia 1.8.
+
+```jldoctest baztype
+julia> mutable struct Baz
+           a::Int
+           const b::Float64
+       end
+
+julia> baz = Baz(1, 1.5);
+
+julia> baz.a = 2
+2
+
+julia> baz.b = 2.0
+ERROR: setfield!: const field .b of type Baz cannot be changed
+[...]
+```
 
 ## [Declared Types](@id man-declared-types)
 
@@ -1132,7 +1156,7 @@ true
 
 Types of functions defined at top-level are singletons. When necessary, you can compare them with [`===`](@ref).
 
-[Closures](@id man-anonymous-functions) also have their own type, which is usually printed with names that end in `#<number>`. Names and types for functions defined at different locations are distinct, but not guaranteed to be printed the same way across sessions.
+[Closures](@ref man-anonymous-functions) also have their own type, which is usually printed with names that end in `#<number>`. Names and types for functions defined at different locations are distinct, but not guaranteed to be printed the same way across sessions.
 
 ```jldoctest; filter = r"[0-9\.]+"
 julia> typeof(x -> x + 1)
@@ -1226,7 +1250,7 @@ While `Type` is part of Julia's type hierarchy like any other abstract parametri
 is not commonly used outside method signatures except in some special cases. Another
 important use case for `Type` is sharpening field types which would otherwise be captured
 less precisely, e.g. as [`DataType`](@ref man-declared-types) in the example below where the
-default constuctor could lead to performance problems in code relying on the precise wrapped
+default constructor could lead to performance problems in code relying on the precise wrapped
 type (similarly to [abstract type parameters](@ref man-performance-abstract-container)).
 
 ```jldoctest
@@ -1386,7 +1410,7 @@ REPL and other interactive environments, and also a more compact single-line for
 [`print`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
 by default the `show(io, z)` function is called in both cases, you can define a *different* multi-line
 format for displaying an object by overloading a three-argument form of `show` that takes the
-`text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
+`text/plain` MIME type as its second argument (see [Multimedia I/O](@ref Multimedia-I/O)), for example:
 
 ```jldoctest polartype
 julia> Base.show(io::IO, ::MIME"text/plain", z::Polar{T}) where{T} =
@@ -1409,7 +1433,7 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
 the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
 which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
-methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
+methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref Multimedia-I/O)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
 (HTML, images, etcetera) of objects in environments that support this (e.g. IJulia).   For example,

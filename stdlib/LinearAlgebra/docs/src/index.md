@@ -1,7 +1,7 @@
 # [Linear Algebra](@id man-linalg)
 
 ```@meta
-DocTestSetup = :(using LinearAlgebra, SparseArrays, SuiteSparse)
+DocTestSetup = :(using LinearAlgebra)
 ```
 
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
@@ -60,7 +60,7 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LU{Float64, Matrix{Float64}}
+LU{Float64, Matrix{Float64}, Vector{Int64}}
 L factor:
 3×3 Matrix{Float64}:
   1.0    0.0       0.0
@@ -84,7 +84,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 3×3 Tridiagonal{Float64, Vector{Float64}}:
  -1.64286   0.0   ⋅
@@ -183,10 +183,10 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 |:----------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
 | [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
 | [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`UnitLowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
+| [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
+| [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
+| [`UnitLowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`UpperHessenberg`](@ref)     |     |     |     | MM  | [`inv`](@ref), [`det`](@ref)                                |
 | [`SymTridiagonal`](@ref)      | M   | M   | MS  | MV  | [`eigmax`](@ref), [`eigmin`](@ref)                          |
 | [`Tridiagonal`](@ref)         | M   | M   | MS  | MV  |                                                             |
@@ -266,7 +266,7 @@ julia> b = [1 2 3; 4 5 6]
  4  5  6
 
 julia> b - U
-ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
+ERROR: DimensionMismatch: matrix is not square: dimensions are (2, 3)
 Stacktrace:
 [...]
 ```
@@ -308,17 +308,22 @@ of the Linear Algebra documentation.
 
 ## Standard functions
 
-Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/). Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com). Other sparse solvers are available as Julia packages.
+Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
+Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com).
+Other sparse solvers are available as Julia packages.
 
 ```@docs
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
+Base.:/(::AbstractVecOrMat, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
+LinearAlgebra.axpy!
+LinearAlgebra.axpby!
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
 LinearAlgebra.Bidiagonal
@@ -414,7 +419,7 @@ Base.cis(::AbstractMatrix)
 Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
-LinearAlgebra.sqrt(::StridedMatrix{<:Real})
+LinearAlgebra.sqrt(::StridedMatrix)
 LinearAlgebra.cos(::StridedMatrix{<:Real})
 LinearAlgebra.sin(::StridedMatrix{<:Real})
 LinearAlgebra.sincos(::StridedMatrix{<:Real})
@@ -529,8 +534,8 @@ LinearAlgebra.BLAS.dotc
 LinearAlgebra.BLAS.blascopy!
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
-LinearAlgebra.axpy!
-LinearAlgebra.axpby!
+LinearAlgebra.BLAS.axpy!
+LinearAlgebra.BLAS.axpby!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax

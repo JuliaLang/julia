@@ -82,9 +82,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
               wc == 0x22a4 || wc == 0x22a5 ||   // ⊤ ⊥
 
-              (wc >= 0x2202 && wc <= 0x2233 &&
+              (wc >= 0x2200 && wc <= 0x2233 &&
                (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆
                 wc == 0x2207 || wc == 0x220e || wc == 0x220f || // ∇, ∎, ∏
+                wc == 0x2200 || wc == 0x2203 || wc == 0x2204 || // ∀, ∃, ∄
                 wc == 0x2210 || wc == 0x2211 || // ∐, ∑
                 wc == 0x221e || wc == 0x221f || // ∞, ∟
                 wc >= 0x222b)) || // ∫, ∬, ∭, ∮, ∯, ∰, ∱, ∲, ∳
@@ -327,22 +328,22 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     ios_t *s = fl_toiostream(fl_ctx, args[1], "accum-julia-symbol");
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
         type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
-    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0])); // peek the first character we'll read
     ios_t str;
     int allascii = 1;
     ios_mem(&str, 0);
     do {
-        allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
         if (wc == '!') {
             uint32_t nwc = 0;
             ios_peekutf8(s, &nwc);
             // make sure != is always an operator
             if (nwc == '=') {
-                ios_ungetc('!', s);
+                ios_skip(s, -1);
                 break;
             }
         }
+        allascii &= (wc <= 0x7f);
         ios_pututf8(&str, wc);
         if (safe_peekutf8(fl_ctx, s, &wc) == IOS_EOF)
             break;

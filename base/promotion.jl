@@ -29,11 +29,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif a <: Tuple
+    end
+    # a and b are DataTypes
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
+    if a <: Tuple
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        ap, bp = a.parameters, b.parameters
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -77,7 +81,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
@@ -168,19 +171,17 @@ function promote_typejoin_union(::Type{T}) where T
         return Any # TODO: compute more precise bounds
     elseif T isa Union
         return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
-    elseif T <: Tuple
-        return typejoin_union_tuple(T)
-    else
+    elseif T isa DataType
+        T <: Tuple && return typejoin_union_tuple(T)
         return T
+    else
+        error("unreachable") # not a type??
     end
 end
 
-function typejoin_union_tuple(T::Type)
+function typejoin_union_tuple(T::DataType)
     @_pure_meta
     u = Base.unwrap_unionall(T)
-    u isa Union && return typejoin(
-            typejoin_union_tuple(Base.rewrap_unionall(u.a, T)),
-            typejoin_union_tuple(Base.rewrap_unionall(u.b, T)))
     p = (u::DataType).parameters
     lr = length(p)::Int
     if lr == 0
@@ -194,8 +195,10 @@ function typejoin_union_tuple(T::Type)
             ci = Union{}
         elseif U isa Union
             ci = typejoin(U.a, U.b)
+        elseif U isa UnionAll
+            return Any # TODO: compute more precise bounds
         else
-            ci = U
+            ci = promote_typejoin_union(U)
         end
         if i == lr && Core.Compiler.isvarargtype(pi)
             c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
@@ -207,16 +210,17 @@ function typejoin_union_tuple(T::Type)
 end
 
 # Returns length, isfixed
-function full_va_len(p)
+function full_va_len(p::Core.SimpleVector)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        if isdefined(last, :N) && isa(last.N, Int)
-            return length(p)::Int + last.N - 1, true
+        if isdefined(last, :N)
+            N = last.N
+            isa(N, Int) && return length(p) + N - 1, true
         end
-        return length(p)::Int, false
+        return length(p), false
     end
-    return length(p)::Int, true
+    return length(p), true
 end
 
 # reduce typejoin over A[i:end]
@@ -303,9 +307,9 @@ it for new types as appropriate.
 """
 function promote_rule end
 
-promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::Type, ::Type) = Bottom
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))

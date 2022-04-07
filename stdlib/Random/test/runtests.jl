@@ -688,7 +688,7 @@ end
 @testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
     if RNG == Xoshiro
-        push!(seeds, rand(UInt64, rand(1:4)), Tuple(rand(UInt64, 4)))
+        push!(seeds, rand(UInt64, rand(1:4)))
     end
     for seed=seeds
         m = RNG(seed)
@@ -699,7 +699,7 @@ end
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
-    seeds = Any[0, rand(UInt128), rand(UInt64, 4), Tuple(rand(UInt64, 4))]
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4)]
 
     for seed=seeds
         Random.seed!(seed)
@@ -885,28 +885,37 @@ end
 end
 
 @testset "show" begin
-    m = MersenneTwister(123)
-    @test string(m) == "MersenneTwister(123)"
-    Random.jump!(m, 2*big(10)^20)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
-    @test m == MersenneTwister(123, (200000000000000000000, 0))
-    rand(m)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+    @testset "MersenneTwister" begin
+        m = MersenneTwister(123)
+        @test string(m) == "MersenneTwister(123)"
+        Random.jump!(m, 2*big(10)^20)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
+        @test m == MersenneTwister(123, (200000000000000000000, 0))
+        rand(m)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
 
-    @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
-    rand(m, Int64)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
-    @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
+        @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
+        @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
 
-    m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
-    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
-    rand(m, Int64)
-    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
-    @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
+        m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
+        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
+        @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
 
-    m = MersenneTwister(0); rand(m, Int64); rand(m)
-    @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
-    @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+        m = MersenneTwister(0); rand(m, Int64); rand(m)
+        @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
+        @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+    end
+
+    @testset "RandomDevice" begin
+        @test string(RandomDevice()) == "$RandomDevice()"
+        if !Sys.iswindows()
+            @test string(RandomDevice(unlimited=false)) == "$RandomDevice(unlimited=false)"
+        end
+    end
 end
 
 @testset "rand[!] for BigInt/BigFloat" begin

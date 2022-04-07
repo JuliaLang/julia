@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # highlighting settings
-highlighting = Dict{Symbol, Bool}(
+const highlighting = Dict{Symbol, Bool}(
     :warntype => true,
     :llvm => true,
     :native => true,
 )
 
-llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
+const llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
     :default     => (false, :normal), # e.g. comma, equal sign, unknown token
     :comment     => (false, :light_black),
     :label       => (false, :light_red),
@@ -57,11 +57,16 @@ Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to sp
 
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(t);
+function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     for (src, rettype) in code_typed(f, t; optimize, kwargs...)
+        if !(src isa Core.CodeInfo)
+            println(io, src)
+            println(io, "  failed to infer")
+            continue
+        end
         lambda_io::IOContext = io
         p = src.parent
         nargs::Int = 0
@@ -134,7 +139,7 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t);
     end
     nothing
 end
-code_warntype(@nospecialize(f), @nospecialize(t); kwargs...) =
+code_warntype(@nospecialize(f), @nospecialize(t=Base.default_tt(f)); kwargs...) =
     code_warntype(stdout, f, t; kwargs...)
 
 import Base.CodegenParams
@@ -149,7 +154,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    world = typemax(UInt)
+    world = Base.get_world_counter()
     match = Base._which(signature_type(f, t), world)
     linfo = Core.Compiler.specialize_method(match)
     # get the code for it
@@ -224,22 +229,25 @@ function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
         print(io, d)
     end
 end
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
     code_llvm(io, f, types, raw, dump_module, optimize, debuginfo)
-code_llvm(@nospecialize(f), @nospecialize(types=Tuple); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
+code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
     code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
-
 
 """
     code_native([io=stdout,], f, types; syntax=:att, debuginfo=:default, binary=false, dump_module=true)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
-Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
-If `binary` is `true`, it also prints the binary machine code for each instruction precedented by an abbreviated address.
+
+* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+
+See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
-function code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple);
+function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
     if highlighting[:native] && get(io, :color, false)
@@ -248,7 +256,7 @@ function code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple);
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Tuple); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
+code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false) =
     code_native(stdout, f, types; dump_module, syntax, debuginfo, binary)
 code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
 

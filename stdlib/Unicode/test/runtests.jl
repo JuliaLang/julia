@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned
+using Unicode: normalize, isassigned, julia_chartransform
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -25,6 +25,11 @@ using Unicode: normalize, isassigned
     @test normalize("\t\r", stripcc=true) == "  "
     @test normalize("\t\r", stripcc=true, newline2ls=true) == " \u2028"
     @test normalize("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
+
+    # julia_chartransform identifier normalization
+    @test normalize("julia\u025B\u00B5\u00B7\u0387\u2212", chartransform=julia_chartransform) ==
+        "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+    @test julia_chartransform('\u00B5') === '\u03BC'
 end
 
 @testset "unicode sa#15" begin
@@ -266,6 +271,16 @@ end
 
     @test Base.Unicode.isgraphemebreak('α', 'β')
     @test !Base.Unicode.isgraphemebreak('α', '\u0302')
+
+    for pre in ("","ä"), post in ("","x̂")
+        prelen = length(graphemes(pre))
+        @test graphemes(pre * "öü" * post, (1:2) .+ prelen) == "öü"
+        @test graphemes(pre * "ö" * post, (1:1) .+ prelen) == "ö"
+    end
+    @test graphemes("äöüx", 6:5)::SubString{String} == ""
+    @test_throws BoundsError graphemes("äöüx", 2:5)
+    @test_throws BoundsError graphemes("äöüx", 5:5)
+    @test_throws ArgumentError graphemes("äöüx", 0:1)
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -416,4 +431,17 @@ end
     @test one(String) == ""
     @test prod(["*" for i in 1:3]) == "***"
     @test prod(["*" for i in 1:0]) == ""
+end
+
+@testset "Unicode equivalence" begin
+    @test isequal_normalized("no\u00EBl", "noe\u0308l")
+    @test !isequal_normalized("no\u00EBl", "noe\u0308l ")
+    @test isequal_normalized("", "")
+    @test !isequal_normalized("", " ")
+    @test !isequal_normalized("no\u00EBl", "NOËL")
+    @test isequal_normalized("no\u00EBl", "NOËL", casefold=true)
+    @test !isequal_normalized("no\u00EBl", "noel")
+    @test isequal_normalized("no\u00EBl", "noel", stripmark=true)
+    @test isequal_normalized("no\u00EBl", "NOEL", stripmark=true, casefold=true)
+    @test isequal_normalized("\u00B5\u0302m", "\u03BC\u0302m", chartransform=julia_chartransform)
 end

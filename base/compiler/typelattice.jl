@@ -73,16 +73,6 @@ struct MaybeUndef
     MaybeUndef(@nospecialize(typ)) = new(typ)
 end
 
-# The type of a variable load is either a value or an UndefVarError
-# (only used in abstractinterpret, doesn't appear in optimize)
-struct VarState
-    typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
-end
-
-const VarTable = Array{Any,1}
-
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
@@ -102,14 +92,15 @@ struct LimitedAccuracy
     end
 end
 
-@inline function collect_limitations!(@nospecialize(typ), sv::InferenceState)
-    if isa(typ, LimitedAccuracy)
-        union!(sv.pclimitations, typ.causes)
-        return typ.typ
-    end
-    return typ
-end
+"""
+    struct NotFound end
+    const NOT_FOUND = NotFound()
 
+A special sigleton that represents a variable has not been analyzed yet.
+Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a new `InferenceState`.
+Note that this is only used for `smerge`, which updates abstract state `VarTable`,
+and thus we don't define the lattice for this.
+"""
 struct NotFound end
 
 const NOT_FOUND = NotFound()
@@ -149,7 +140,12 @@ function maybe_extract_const_bool(c::AnyConditional)
 end
 maybe_extract_const_bool(@nospecialize c) = nothing
 
-function ⊑(@nospecialize(a), @nospecialize(b))
+"""
+    a ⊑ b -> Bool
+
+The non-strict partial order over the type inference lattice.
+"""
+@nospecialize(a) ⊑ @nospecialize(b) = begin
     if isa(b, LimitedAccuracy)
         if !isa(a, LimitedAccuracy)
             return false
@@ -204,7 +200,7 @@ function ⊑(@nospecialize(a), @nospecialize(b))
             end
             for i in 1:nfields(a.val)
                 # XXX: let's handle varargs later
-                isdefined(a.val, i) || return false
+                isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
                 ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
             end
             return true
@@ -240,6 +236,22 @@ function ⊑(@nospecialize(a), @nospecialize(b))
         return a === b
     end
 end
+
+"""
+    a ⊏ b -> Bool
+
+The strict partial order over the type inference lattice.
+This is defined as the irreflexive kernel of `⊑`.
+"""
+@nospecialize(a) ⊏ @nospecialize(b) = a ⊑ b && !⊑(b, a)
+
+"""
+    a ⋤ b -> Bool
+
+This order could be used as a slightly more efficient version of the strict order `⊏`,
+where we can safely assume `a ⊑ b` holds.
+"""
+@nospecialize(a) ⋤ @nospecialize(b) = !⊑(b, a)
 
 # Check if two lattice elements are partial order equivalent. This is basically
 # `a ⊑ b && b ⊑ a` but with extra performance optimizations.
@@ -277,24 +289,57 @@ function is_lattice_equal(@nospecialize(a), @nospecialize(b))
     return a ⊑ b && b ⊑ a
 end
 
-widenconst(c::AnyConditional) = Bool
-function widenconst(c::Const)
-    if isa(c.val, Type)
-        if isvarargtype(c.val)
-            return Type
+# compute typeintersect over the extended inference lattice,
+# as precisely as we can,
+# where v is in the extended lattice, and t is a Type.
+function tmeet(@nospecialize(v), @nospecialize(t))
+    if isa(v, Const)
+        if !has_free_typevars(t) && !isa(v.val, t)
+            return Bottom
         end
-        return Type{c.val}
-    else
-        return typeof(c.val)
+        return v
+    elseif isa(v, PartialStruct)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        end
+        ti = typeintersect(widev, t)
+        valid_as_lattice(ti) || return Bottom
+        @assert widev <: Tuple
+        new_fields = Vector{Any}(undef, length(v.fields))
+        for i = 1:length(new_fields)
+            vfi = v.fields[i]
+            if isvarargtype(vfi)
+                new_fields[i] = vfi
+            else
+                new_fields[i] = tmeet(vfi, widenconst(getfield_tfunc(t, Const(i))))
+                if new_fields[i] === Bottom
+                    return Bottom
+                end
+            end
+        end
+        return tuple_tfunc(new_fields)
+    elseif isa(v, Conditional)
+        if !(Bool <: t)
+            return Bottom
+        end
+        return v
     end
+    ti = typeintersect(widenconst(v), t)
+    valid_as_lattice(ti) || return Bottom
+    return ti
 end
+
+widenconst(c::AnyConditional) = Bool
+widenconst((; val)::Const) = isa(val, Type) ? Type{val} : typeof(val)
 widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(c::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
-widenconst(t::TypeVar) = t
-widenconst(t::Core.TypeofVararg) = t
+widenconst(t::TypeVar) = error("unhandled TypeVar")
+widenconst(t::TypeofVararg) = error("unhandled Vararg")
 widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
@@ -311,15 +356,17 @@ end
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))
 @inline schanged(@nospecialize(n), @nospecialize(o)) = (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !issubstate(n::VarState, o::VarState)))
 
-widenconditional(@nospecialize typ) = typ
-function widenconditional(typ::AnyConditional)
-    if typ.vtype === Union{}
-        return Const(false)
-    elseif typ.elsetype === Union{}
-        return Const(true)
-    else
-        return Bool
+function widenconditional(@nospecialize typ)
+    if isa(typ, AnyConditional)
+        if typ.vtype === Union{}
+            return Const(false)
+        elseif typ.elsetype === Union{}
+            return Const(true)
+        else
+            return Bool
+        end
     end
+    return typ
 end
 widenconditional(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 

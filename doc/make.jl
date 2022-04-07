@@ -148,6 +148,7 @@ DevDocs = [
         "devdocs/require.md",
         "devdocs/inference.md",
         "devdocs/ssair.md",
+        "devdocs/EscapeAnalysis.md",
         "devdocs/gc-sa.md",
     ],
     "Developing/debugging Julia's C code" => [
@@ -155,7 +156,16 @@ DevDocs = [
         "devdocs/debuggingtips.md",
         "devdocs/valgrind.md",
         "devdocs/sanitizers.md",
-        "devdocs/probes.md"
+        "devdocs/probes.md",
+    ],
+    "Building Julia" => [
+        "devdocs/build/build.md",
+        "devdocs/build/linux.md",
+        "devdocs/build/macos.md",
+        "devdocs/build/windows.md",
+        "devdocs/build/freebsd.md",
+        "devdocs/build/arm.md",
+        "devdocs/build/distributing.md",
     ]
 ]
 
@@ -282,11 +292,13 @@ else
         analytics = "UA-28835595-6",
         collapselevel = 1,
         sidebar_sitename = false,
+        ansicolor = true,
     )
 end
 
+const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
 makedocs(
-    build     = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en"),
+    build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],
     clean     = true,
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
@@ -299,6 +311,32 @@ makedocs(
     authors   = "The Julia Project",
     pages     = PAGES,
 )
+
+# Update URLs to external stdlibs (JuliaLang/julia#43199)
+for (root, _, files) in walkdir(output_path), file in joinpath.(root, files)
+    endswith(file, ".html") || continue
+    local str
+    str = read(file, String)
+    # Index page links, update
+    #   https://github.com/JuliaLang/julia/blob/master/stdlib/${STDLIB_NAME}-${STDLIB_COMMIT}/path/to.md
+    # to
+    #   https://github.com/JuliaLang/${STDLIB_NAME}.jl/blob/master/docs/src/index.md
+    str = replace(str, r"https://github.com/JuliaLang/julia/blob/master/stdlib/(.*)-\w{40}/(.*\.md)" =>
+                       s"https://github.com/JuliaLang/\1.jl/blob/master/\2")
+    # Link to source links, update
+    #   https://github.com/JuliaLang/julia/blob/${JULIA_COMMIT}/stdlib/${STDLIB_NAME}-${STDLIB_COMMIT}/path/to.jl#${LINES}
+    # to
+    #   https://github.com/JuliaLang/${STDLIB_NAME}.jl/blob/${STDLIB_COMMIT}/path/to.jl#${LINES}
+    str = replace(str, r"https://github\.com/JuliaLang/julia/blob/\w{40}/stdlib/(.*)-(\w{40})/(.*\.jl#L\d+(?:-L\d+)?)" =>
+                       s"https://github.com/JuliaLang/\1.jl/blob/\2/\3")
+    # Some stdlibs are not hosted by JuliaLang
+    str = replace(str, r"(https://github\.com)/JuliaLang/(ArgTools\.jl/blob)" => s"\1/JuliaIO/\2")
+    str = replace(str, r"(https://github\.com)/JuliaLang/(LibCURL\.jl/blob)" => s"\1/JuliaWeb/\2")
+    str = replace(str, r"(https://github\.com)/JuliaLang/(SHA\.jl/blob)" => s"\1/JuliaCrypto/\2")
+    str = replace(str, r"(https://github\.com)/JuliaLang/(Tar\.jl/blob)" => s"\1/JuliaIO/\2")
+    # Write back to the file
+    write(file, str)
+end
 
 # Define our own DeployConfig
 struct BuildBotConfig <: Documenter.DeployConfig end

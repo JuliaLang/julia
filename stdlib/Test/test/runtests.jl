@@ -5,7 +5,7 @@ using Test: guardseed
 using Serialization
 using Distributed: RemoteException
 
-import Logging: Debug, Info, Warn
+import Logging: Debug, Info, Warn, with_logger
 
 @testset "@test" begin
     atol = 1
@@ -300,11 +300,17 @@ let fails = @testset NoThrowTestSet begin
 
 end
 
+struct BadError <: Exception end
+Base.show(io::IO, ::BadError) = throw("I am a bad error")
 let errors = @testset NoThrowTestSet begin
         # 1 - Error - unexpected pass
         @test_broken true
         # 2 - Error - converting a call into a comparison
         @test ==(1, 1:2...)
+        # 3 - Error - objects with broken show
+        @test throw(BadError())
+        @test BadError()
+        throw(BadError())
     end
 
     for err in errors
@@ -319,6 +325,18 @@ let errors = @testset NoThrowTestSet begin
     let str = sprint(show, errors[2])
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
+    end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression: throw(BadError())\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression: BadError()\n       Value: #=ERROR showing error of type $BadError=# \"I am a bad error\"\nStacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Got exception outside of a @test\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
     end
 end
 
@@ -742,13 +760,13 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
                 @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=devnull), String)
-    @test occursin("""
-        Test Summary: | Pass  Fail  Total
-        Foo Tests     |    2     2      4
-          Animals     |    1     1      2
-            Felines   |    1            1
-            Canines   |          1      1
-          Arrays      |    1     1      2
+    @test occursin(r"""
+        Test Summary: | Pass  Fail  Total  Time
+        Foo Tests     |    2     2      4  \s*\d*.\ds
+          Animals     |    1     1      2  \s*\d*.\ds
+            Felines   |    1            1  \s*\d*.\ds
+            Canines   |          1      1  \s*\d*.\ds
+          Arrays      |    1     1      2  \s*\d*.\ds
         """, msg)
 end
 
@@ -819,6 +837,8 @@ end
     @test occursin("Evaluated: 0.9 ≈ 0.1 (nans=true, atol=0.01)", msg)
 end
 
+erronce() = @error "an error" maxlog=1
+
 @testset "@test_logs" begin
     function foo(n)
         @info "Doing foo with n=$n"
@@ -846,6 +866,17 @@ end
     @test_logs (Info,"Doing foo with n=2") (Debug,"Iteration 1") (Debug,"Iteration 2") min_level=Debug foo(2)
 
     @test_logs (Debug,"Iteration 5") min_level=Debug match_mode=:any foo(10)
+
+    # Respect `maxlog` (#41625). We check we only find one logging message.
+    @test_logs (:error, "an error") (erronce(); erronce())
+
+    # Test `respect_maxlog=false`:
+    test_logger = Test.TestLogger(; respect_maxlog=false)
+    with_logger(test_logger) do
+        erronce()
+        erronce()
+    end
+    @test length(test_logger.logs) == 2
 
     # Test failures
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
@@ -905,6 +936,29 @@ end
     Random.seed!(seed)
     @test a == rand()
     @test b == rand()
+
+    # Even when seed!() is called within a testset A, subsequent testsets
+    # should start with the same "global RNG state" as what A started with,
+    # such that the test `refvalue == rand(Int)` below succeeds.
+    # Currently, this means that Random.GLOBAL_SEED has to be restored,
+    # in addition to the state of Random.default_rng().
+    GLOBAL_SEED_orig = Random.GLOBAL_SEED
+    local refvalue
+    @testset "GLOBAL_SEED is also preserved (setup)" begin
+        @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+        refvalue = rand(Int)
+        Random.seed!()
+        @test GLOBAL_SEED_orig != Random.GLOBAL_SEED
+    end
+    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "GLOBAL_SEED is also preserved (forloop)" for _=1:3
+        @test refvalue == rand(Int)
+        Random.seed!()
+    end
+    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "GLOBAL_SEED is also preserved (beginend)" begin
+        @test refvalue == rand(Int)
+    end
 end
 
 @testset "InterruptExceptions #21043" begin
@@ -1037,18 +1091,18 @@ let ex = :(something_complex + [1, 2, 3])
 end
 
 @testset "verbose option" begin
-    expected = """
-    Test Summary: | Pass  Total
-    Parent        |    9      9
-      Child 1     |    3      3
-        Child 1.1 |    1      1
-        Child 1.2 |    1      1
-        Child 1.3 |    1      1
-      Child 2     |    3      3
-      Child 3     |    3      3
-        Child 3.1 |    1      1
-        Child 3.2 |    1      1
-        Child 3.3 |    1      1
+    expected = r"""
+    Test Summary:             | Pass  Total  Time
+    Parent                    |    9      9  \s*\d*.\ds
+      Child 1                 |    3      3  \s*\d*.\ds
+        Child 1.1 (long name) |    1      1  \s*\d*.\ds
+        Child 1.2             |    1      1  \s*\d*.\ds
+        Child 1.3             |    1      1  \s*\d*.\ds
+      Child 2                 |    3      3  \s*\d*.\ds
+      Child 3                 |    3      3  \s*\d*.\ds
+        Child 3.1             |    1      1  \s*\d*.\ds
+        Child 3.2             |    1      1  \s*\d*.\ds
+        Child 3.3             |    1      1  \s*\d*.\ds
     """
 
     mktemp() do f, _
@@ -1058,7 +1112,7 @@ end
 
         @testset "Parent" verbose = true begin
             @testset "Child 1" verbose = true begin
-                @testset "Child 1.1" begin
+                @testset "Child 1.1 (long name)" begin
                     @test 1 == 1
                 end
 
@@ -1238,4 +1292,27 @@ Test.finish(ts::PassInformationTestSet) = ts
     @test ts.results[2].data == ErrorException
     @test ts.results[2].value == ErrorException("Msg")
     @test ts.results[2].source == LineNumberNode(test_throws_line_number, @__FILE__)
+end
+
+let
+    f(x) = @test isone(x)
+    function h(x)
+        @testset f(x)
+        @testset "success" begin @test true end
+        @testset for i in 1:3
+            @test !iszero(i)
+        end
+    end
+    tret = @testset h(1)
+    tdesc = @testset "description" h(1)
+    @testset "Function calls" begin
+        @test tret.description == "h"
+        @test tdesc.description == "description"
+        @test length(tret.results) == 5
+        @test tret.results[1].description == "f"
+        @test tret.results[2].description == "success"
+        for i in 1:3
+            @test tret.results[2+i].description == "i = $i"
+        end
+    end
 end

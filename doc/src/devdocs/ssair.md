@@ -3,12 +3,12 @@
 ## Background
 
 Beginning in Julia 0.7, parts of the compiler use a new [SSA-form](https://en.wikipedia.org/wiki/Static_single_assignment_form)
-intermediate representation. Historically, the compiler used to directly generate LLVM IR, from a lowered form of the Julia
+intermediate representation. Historically, the compiler would directly generate LLVM IR from a lowered form of the Julia
 AST. This form had most syntactic abstractions removed, but still looked a lot like an abstract syntax tree.
 Over time, in order to facilitate optimizations, SSA values were introduced to this IR and the IR was
-linearized (i.e. a form where function arguments may only be SSA values or constants). However, non-SSA values
+linearized (i.e. turned into a form where function arguments could only be SSA values or constants). However, non-SSA values
 (slots) remained in the IR due to the lack of Phi nodes in the IR (necessary for back-edges and re-merging of
-conditional control flow), negating much of the usefulness of the SSA form representation to perform
+conditional control flow). This negated much of the usefulness of SSA form representation when performing
 middle end optimizations. Some heroic effort was put into making these optimizations work without a complete SSA
 form representation, but the lack of such a representation ultimately proved prohibitive.
 
@@ -23,7 +23,7 @@ Phi nodes are part of generic SSA abstraction (see the link above if you're not 
 the concept). In the Julia IR, these nodes are represented as:
 ```
 struct PhiNode
-    edges::Vector{Int}
+    edges::Vector{Int32}
     values::Vector{Any}
 end
 ```
@@ -74,7 +74,7 @@ that is generally done for most optimizations that care about these conditions a
 
 Exception handling complicates the SSA story moderately, because exception handling
 introduces additional control flow edges into the IR across which values must be tracked.
-One approach to do so, which is followed by LLVM is to make calls which may throw exceptions
+One approach to do so, which is followed by LLVM, is to make calls which may throw exceptions
 into basic block terminators and add an explicit control flow edge to the catch handler:
 
 ```
@@ -87,16 +87,16 @@ catch:
 # Exceptions go here
 ```
 
-However, this is problematic in a language like julia where at the start of the optimization
+However, this is problematic in a language like Julia, where at the start of the optimization
 pipeline, we do not know which calls throw. We would have to conservatively assume that every
-call (which in julia is every statement) throws. This would have several negative effects.
+call (which in Julia is every statement) throws. This would have several negative effects.
 On the one hand, it would essentially reduce the scope of every basic block to a single call,
 defeating the purpose of having operations be performed at the basic block level. On the other
 hand, every catch basic block would have `n*m` phi node arguments (`n`, the number of statements
-in the critical region, `m` the number of live values through the catch block). To work around
-this, we use a combination of `Upsilon` and `PhiC` (the C standing for `catch`,
-written `φᶜ` in the IR pretty printer, because
-unicode subscript c is not available) nodes. There are several ways to think of these nodes, but
+in the critical region, `m` the number of live values through the catch block).
+
+To work around this, we use a combination of `Upsilon` and `PhiC` nodes (the C standing for `catch`,
+written `φᶜ` in the IR pretty printer, because unicode subscript c is not available). There are several ways to think of these nodes, but
 perhaps the easiest is to think of each `PhiC` as a load from a unique store-many, read-once slot,
 with `Upsilon` being the corresponding store operation. The `PhiC` has an operand list of all the
 upsilon nodes that store to its implicit slot. The `Upsilon` nodes however, do not record which `PhiC`

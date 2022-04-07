@@ -19,6 +19,8 @@ function _any(@nospecialize(f), a)
     end
     return false
 end
+any(@nospecialize(f), itr) = _any(f, itr)
+any(itr) = _any(identity, itr)
 
 function _all(@nospecialize(f), a)
     for x in a
@@ -26,6 +28,8 @@ function _all(@nospecialize(f), a)
     end
     return true
 end
+all(@nospecialize(f), itr) = _all(f, itr)
+all(itr) = _all(identity, itr)
 
 function contains_is(itr, @nospecialize(x))
     for y in itr
@@ -48,7 +52,7 @@ function istopfunction(@nospecialize(f), name::Symbol)
     tn = typeof(f).name
     if tn.mt.name === name
         top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getfield(top, name)
+        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
     end
     return false
 end
@@ -100,9 +104,8 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::CodeInstance)
-    return ccall(:jl_invoke_api, Cint, (Any,), li)
-end
+invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
+use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
@@ -137,27 +140,27 @@ function retrieve_code_info(linfo::MethodInstance)
     return nothing
 end
 
-# Get at the nonfunction_mt, which happens to be the mt of SimpleVector
-const nonfunction_mt = typename(SimpleVector).mt
-
-function get_compileable_sig(method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    isa(atypes, DataType) || return nothing
-    mt = ccall(:jl_method_table_for, Any, (Any,), atypes)
+function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
+    isa(atype, DataType) || return nothing
+    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
-        mt, atypes, sparams, method)
+        mt, atype, sparams, method)
 end
+
+isa_compileable_sig(@nospecialize(atype), method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
-function subst_trivial_bounds(@nospecialize(atypes))
-    if !isa(atypes, UnionAll)
-        return atypes
+function subst_trivial_bounds(@nospecialize(atype))
+    if !isa(atype, UnionAll)
+        return atype
     end
-    v = atypes.var
+    v = atype.var
     if isconcretetype(v.ub) || v.lb === v.ub
         subst = try
-            atypes{v.ub}
+            atype{v.ub}
         catch
             # Note in rare cases a var bound might not be valid to substitute.
             nothing
@@ -166,39 +169,39 @@ function subst_trivial_bounds(@nospecialize(atypes))
             return subst_trivial_bounds(subst)
         end
     end
-    return UnionAll(v, subst_trivial_bounds(atypes.body))
+    return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
-# If removing trivial vars from atypes results in an equivalent type, use that
+# If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
 # gets cached and matches a concrete dispatch case.
-function normalize_typevars(method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    at2 = subst_trivial_bounds(atypes)
-    if at2 !== atypes && at2 == atypes
-        atypes = at2
+function normalize_typevars(method::Method, @nospecialize(atype), sparams::SimpleVector)
+    at2 = subst_trivial_bounds(atype)
+    if at2 !== atype && at2 == atype
+        atype = at2
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atypes, sparams
+    return atype, sparams
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
-function specialize_method(method::Method, @nospecialize(atypes), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
-    if isa(atypes, UnionAll)
-        atypes, sparams = normalize_typevars(method, atypes, sparams)
+function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false, compilesig::Bool=false)
+    if isa(atype, UnionAll)
+        atype, sparams = normalize_typevars(method, atype, sparams)
     end
     if compilesig
-        new_atypes = get_compileable_sig(method, atypes, sparams)
-        new_atypes === nothing && return nothing
-        atypes = new_atypes
+        new_atype = get_compileable_sig(method, atype, sparams)
+        new_atype === nothing && return nothing
+        atype = new_atype
     end
     if preexisting
         # check cached specializations
         # for an existing result stored there
-        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atypes)::Union{Nothing,MethodInstance}
+        return ccall(:jl_specializations_lookup, Any, (Any, Any), method, atype)::Union{Nothing,MethodInstance}
     end
-    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atypes, sparams)
+    return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any), method, atype, sparams)
 end
 
 function specialize_method(match::MethodMatch; kwargs...)
@@ -222,41 +225,19 @@ function method_for_inference_heuristics(method::Method, @nospecialize(sig), spa
     return nothing
 end
 
-argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
+#########
+# types #
+#########
 
-const empty_slottypes = Any[]
-
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = empty_slottypes)
-    if isa(x, Expr)
-        if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
-        elseif x.head === :boundscheck
-            return Bool
-        elseif x.head === :copyast
-            return argextype(x.args[1], src, sptypes, slottypes)
-        end
-        @assert false "argextype only works on argument-position values"
-    elseif isa(x, SlotNumber)
-        return slottypes[(x::SlotNumber).id]
-    elseif isa(x, TypedSlot)
-        return (x::TypedSlot).typ
-    elseif isa(x, SSAValue)
-        return abstract_eval_ssavalue(x::SSAValue, src)
-    elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
-            isa(src, IRCode) ? src.argtypes[x.n] :
-            slottypes[x.n]
-    elseif isa(x, QuoteNode)
-        return Const((x::QuoteNode).value)
-    elseif isa(x, GlobalRef)
-        return abstract_eval_global(x.mod, (x::GlobalRef).name)
-    elseif isa(x, PhiNode)
-        return Any
-    elseif isa(x, PiNode)
-        return x.typ
-    else
-        return Const(x)
+function singleton_type(@nospecialize(ft))
+    if isa(ft, Const)
+        return ft.val
+    elseif isconstType(ft)
+        return ft.parameters[1]
+    elseif ft isa DataType && isdefined(ft, :instance)
+        return ft.instance
     end
+    return nothing
 end
 
 ###################
@@ -378,12 +359,12 @@ inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
     ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
     cov = JLOptions().code_coverage
-    if cov == 1
+    if cov == 1 # user
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false
         return true
-    elseif cov == 2
+    elseif cov == 2 # all
         return true
     end
     return false

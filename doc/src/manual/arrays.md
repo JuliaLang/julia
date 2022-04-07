@@ -223,7 +223,7 @@ julia> [1:2; 4;; 1; 3:4]
 
 Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
 extends this same general scheme. The number of semicolons in the separator specifies the
-particular dimension, so `;;;` concetenates in the third dimension, `;;;;` in the 4th, and
+particular dimension, so `;;;` concatenates in the third dimension, `;;;;` in the 4th, and
 so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
 first.
 

@@ -150,12 +150,6 @@ end
     @test_throws BoundsError getindex((1,2), 0)
     @test_throws BoundsError getindex((1,2), -1)
 
-    @test getindex((1,), 1.0) === 1
-    @test getindex((1,2), 2.0) === 2
-    @test_throws BoundsError getindex((), 1.0)
-    @test_throws BoundsError getindex((1,2), 0.0)
-    @test_throws BoundsError getindex((1,2), -1.0)
-
     @test getindex((5,6,7,8), [1,2,3]) === (5,6,7)
     @test_throws BoundsError getindex((1,2), [3,4])
 
@@ -274,6 +268,42 @@ end
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
         @test_throws BoundsError map(foo, (), (1,), (1,))
         @test_throws BoundsError map(foo, (1,), (1,), ())
+    end
+end
+
+@testset "foreach" begin
+    longtuple = ntuple(identity, 20)
+
+    @testset "1 argument" begin
+        foo(x) = push!(a, x)
+
+        a = []
+        foreach(foo, ())
+        @test a == []
+
+        a = []
+        foreach(foo, (1,))
+        @test a == [1]
+
+        a = []
+        foreach(foo, longtuple)
+        @test a == [longtuple...]
+    end
+
+    @testset "n arguments" begin
+        foo(x, y) = push!(a, (x, y))
+
+        a = []
+        foreach(foo, (), ())
+        @test a == []
+
+        a = []
+        foreach(foo, (1,), (2,))
+        @test a == [(1, 2)]
+
+        a = []
+        foreach(foo, longtuple, longtuple)
+        @test a == [(x, x) for x in longtuple]
     end
 end
 
@@ -524,6 +554,20 @@ end
         @test findnext(isequal(1), (1, 1), UInt(2)) isa Int
         @test findprev(isequal(1), (1, 1), UInt(1)) isa Int
     end
+
+    # recursive implementation should allow constant-folding for small tuples
+    @test Base.return_types() do
+        findfirst(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findfirst(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
+    @test Base.return_types() do
+        findlast(==(2), (1.0,2,3f0))
+    end == Any[Int]
+    @test Base.return_types() do
+        findlast(==(0), (1.0,2,3f0))
+    end == Any[Nothing]
 end
 
 @testset "properties" begin
@@ -657,3 +701,12 @@ end
 
 # https://github.com/JuliaLang/julia/issues/40814
 @test Base.return_types(NTuple{3,Int}, (Vector{Int},)) == Any[NTuple{3,Int}]
+
+# issue #42457
+f42457(a::NTuple{3,Int}, b::Tuple)::Bool = Base.isequal(a, Base.inferencebarrier(b)::Tuple)
+@test f42457((1, 1, 1), (1, 1, 1))
+@test !isempty(methods(Base._isequal, (NTuple{3, Int}, Tuple)))
+g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
+@test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
+@test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64

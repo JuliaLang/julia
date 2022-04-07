@@ -70,6 +70,38 @@ n = 5 # should be odd
         else
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
+        # logabsdet for Number"
+        x = A[1, 1] # getting a number of type elty
+        X = fill(x, 1, 1)
+        @test logabsdet(x)[1] ≈ logabsdet(X)[1]
+        @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+    end
+
+    @testset "det with nonstandard Number type" begin
+        struct MyDual{T<:Real} <: Real
+            val::T
+            eps::T
+        end
+        Base.:+(x::MyDual, y::MyDual) = MyDual(x.val + y.val, x.eps + y.eps)
+        Base.:*(x::MyDual, y::MyDual) = MyDual(x.val * y.val, x.eps * y.val + y.eps * x.val)
+        Base.:/(x::MyDual, y::MyDual) = x.val / y.val
+        Base.:(==)(x::MyDual, y::MyDual) = x.val == y.val && x.eps == y.eps
+        Base.zero(::MyDual{T}) where {T} = MyDual(zero(T), zero(T))
+        Base.zero(::Type{MyDual{T}}) where {T} = MyDual(zero(T), zero(T))
+        Base.one(::MyDual{T}) where {T} = MyDual(one(T), zero(T))
+        Base.one(::Type{MyDual{T}}) where {T} = MyDual(one(T), zero(T))
+        # the following line is required for BigFloat, IDK why it doesn't work via
+        # promote_rule like for all other types
+        Base.promote_type(::Type{MyDual{BigFloat}}, ::Type{BigFloat}) = MyDual{BigFloat}
+        Base.promote_rule(::Type{MyDual{T}}, ::Type{S}) where {T,S<:Real} =
+            MyDual{promote_type(T, S)}
+        Base.promote_rule(::Type{MyDual{T}}, ::Type{MyDual{S}}) where {T,S} =
+            MyDual{promote_type(T, S)}
+        Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
+            MyDual(convert(T, x.val), convert(T, x.eps))
+        if elty <: Real
+            @test det(triu(MyDual.(A, zero(A)))) isa MyDual
+        end
     end
 end
 
@@ -256,6 +288,18 @@ end
     @test_throws DimensionMismatch reflect!([x; x], y, c, s)
 end
 
+@testset "LinearAlgebra.reflectorApply!" begin
+    for T in (Float64, ComplexF64)
+        x = rand(T, 6)
+        τ = rand(T)
+        A = rand(T, 6)
+        B = LinearAlgebra.reflectorApply!(x, τ, copy(A))
+        C = LinearAlgebra.reflectorApply!(x, τ, reshape(copy(A), (length(A), 1)))
+        @test B[1] ≈ C[1] ≈ A[1] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))
+        @test B[2:end] ≈ C[2:end] ≈ A[2:end] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))*x[2:end]
+    end
+end
+
 @testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
@@ -276,6 +320,25 @@ end
     rx = [1 4]
     ry = [2 8]
     @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
+end
+
+@testset "LinearAlgebra.axp(b)y! for non strides input" begin
+    a = rand(5, 5)
+    @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
+@testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test LinearAlgebra.axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test LinearAlgebra.axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test LinearAlgebra.axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test LinearAlgebra.axpy!(1, b, zeros(T, size(b))) == b
+    end
 end
 
 @testset "norm and normalize!" begin
@@ -480,20 +543,21 @@ end
 end
 
 @testset "adjtrans dot" begin
-    for t in (transpose, adjoint)
-        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
+    for t in (transpose, adjoint), T in (ComplexF64, Quaternion{Float64})
+        x, y = t(rand(T, 10)), t(rand(T, 10))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        x, y = t(rand(T, 10, 5)), t(rand(T, 10, 5))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
-        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        x = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
     end
 end
 

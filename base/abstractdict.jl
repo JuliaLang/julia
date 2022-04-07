@@ -136,6 +136,38 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+
+# Examples
+```jldoctest
+julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> pairs(a)
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> foreach(println, pairs(["a", "b", "c"]))
+1 => "a"
+2 => "b"
+3 => "c"
+
+julia> (;a=1, b=2, c=3) |> pairs |> collect
+3-element Vector{Pair{Symbol, Int64}}:
+ :a => 1
+ :b => 2
+ :c => 3
+
+julia> (;a=1, b=2, c=3) |> collect
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 
@@ -157,7 +189,10 @@ empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
 copy(a::AbstractDict) = merge!(empty(a), a)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
+function copy!(dst::AbstractDict, src::AbstractDict)
+    dst === src && return dst
+    merge!(empty!(dst), src)
+end
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)
@@ -182,6 +217,9 @@ Dict{Int64, Int64} with 3 entries:
 """
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
+        if haslength(d) && haslength(other)
+            sizehint!(d, length(d) + length(other))
+        end
         for (k,v) in other
             d[k] = v
         end
@@ -485,6 +523,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     end
     return anymissing ? missing : true
 end
+
+# Fallback implementation
+sizehint!(d::AbstractDict, n) = d
 
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)

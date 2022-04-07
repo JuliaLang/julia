@@ -130,7 +130,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -182,8 +182,8 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
-code instead simply becomes part of the surrounding program.
+Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
@@ -365,7 +365,7 @@ julia> push!(a, 2, 3)
 Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
-ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
@@ -992,7 +992,7 @@ then their contents are vertically concatenated together.
 In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
 # Examples
-```julia
+```jldoctest
 julia> function foo()
            x = "Hello, "; x *= "World!"
            return x
@@ -1188,10 +1188,10 @@ fields of the type to be set after construction. See the manual section on
 kw"mutable struct"
 
 """
-    new
+    new, or new{A,B,...}
 
-Special function available to inner constructors which created a new object
-of the type.
+Special function available to inner constructors which creates a new object
+of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -1533,8 +1533,9 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
-callable with no arguments). The task exits when this function returns.
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which
+must be callable with no arguments). The task exits when this function returns.
+The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
 # Examples
 ```jldoctest
@@ -2730,6 +2731,9 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
+!!! compat "Julia 1.8"
+    `setproperty!` on modules requires at least Julia 1.8.
+
 See also [`setfield!`](@ref Core.setfield!),
 [`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
@@ -2812,6 +2816,13 @@ StridedVecOrMat
     Module
 
 A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+
+    Module(name::Symbol=:anonymous, std_imports=true, default_names=true)
+
+Return a module with the specified name. A `baremodule` corresponds to `Module(:ModuleName, false)`
+
+An empty module containing no names at all can be created with `Module(:ModuleName, false, false)`.
+This module will not import `Base` or `Core` and does not contain a reference to itself.
 """
 Module
 
@@ -2888,5 +2899,40 @@ julia> \"""
 See also [`"`](@ref \")
 """
 kw"\"\"\""
+
+"""
+    donotdelete(args...)
+
+This function prevents dead-code elimination (DCE) of itself and any arguments
+passed to it, but is otherwise the lightest barrier possible. In particular,
+it is not a GC safepoint, does model an observable heap effect, does not expand
+to any code itself and may be re-ordered with respect to other side effects
+(though the total number of executions may not change).
+
+A useful model for this function is that it hashes all memory `reachable` from
+args and escapes this information through some observable side-channel that does
+not otherwise impact program behavior. Of course that's just a model. The
+function does nothing and returns `nothing`.
+
+This is intended for use in benchmarks that want to guarantee that `args` are
+actually computed. (Otherwise DCE may see that the result of the benchmark is
+unused and delete the entire benchmark code).
+
+**Note**: `donotdelete` does not affect constant folding. For example, in
+          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+          the code is semantically equivalent to `donotdelete(2).`
+
+# Examples
+
+function loop()
+    for i = 1:1000
+        # The complier must guarantee that there are 1000 program points (in the correct
+        # order) at which the value of `i` is in a register, but has otherwise
+        # total control over the program.
+        donotdelete(i)
+    end
+end
+"""
+Base.donotdelete
 
 end

@@ -292,7 +292,8 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
-    x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
+    neg = arg2 < 0
+    x = arg2 isa Base.BitSigned ? unsigned(abs(arg2)) : abs(arg2)
     arglen = n + (neg || (plus | space)) +
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
@@ -879,8 +880,8 @@ julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
 
-!!! compat "Julia 1.7"
-    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+!!! compat "Julia 1.8"
+    Starting in Julia 1.8, `%s` (string) and `%c` (character) widths are computed
     using [`textwidth`](@ref), which e.g. ignores zero-width characters
     (such as combining characters for diacritical marks) and treats certain
     "wide" characters (e.g. emoji) as width `2`.

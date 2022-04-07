@@ -7,28 +7,29 @@ to generically build upon those behaviors.
 
 ## [Iteration](@id man-interface-iteration)
 
-| Required methods               |                        | Brief description                                                                     |
+| Required methods               |                        | Brief description                                                                     |
 |:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
-| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
+| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
+| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
-| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
+| `Base.IteratorSize(IterType)`  | `Base.HasLength()`     | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
+| `Base.IteratorEltype(IterType)`| `Base.HasEltype()`     | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                    |
 | `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
+| `Base.isdone(iter[, state])`   | `missing`              | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
 
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
-| `HasLength()`                              | [`length(iter)`](@ref)                     |
-| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim])`    |
-| `IsInfinite()`                             | (*none*)                                   |
-| `SizeUnknown()`                            | (*none*)                                   |
+| `Base.HasLength()`                         | [`length(iter)`](@ref)                     |
+| `Base.HasShape{N}()`                       | `length(iter)`  and `size(iter, [dim])`    |
+| `Base.IsInfinite()`                        | (*none*)                                   |
+| `Base.SizeUnknown()`                       | (*none*)                                   |
 
 | Value returned by `IteratorEltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
-| `HasEltype()`                                | `eltype(IterType)` |
-| `EltypeUnknown()`                            | (*none*)           |
+| `Base.HasEltype()`                           | `eltype(IterType)` |
+| `Base.EltypeUnknown()`                       | (*none*)           |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
@@ -220,13 +221,13 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 
 ## [Abstract Arrays](@id man-interface-array)
 
-| Methods to implement                            |                                        | Brief description                                                                     |
+| Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
-| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
-| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
-| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
-| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
-| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
+| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
+| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
+| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
+| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
@@ -238,7 +239,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
@@ -257,7 +258,7 @@ provides a traits-based mechanism to enable efficient generic code for all array
 
 This distinction determines which scalar indexing methods the type must define. `IndexLinear()`
 arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array is subsequently
-indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
+indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
 `ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard

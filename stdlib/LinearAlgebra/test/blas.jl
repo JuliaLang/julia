@@ -4,20 +4,31 @@ module TestBLAS
 
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasReal, BlasComplex
+fabs(x::Real) = abs(x)
+fabs(x::Complex) = abs(real(x)) + abs(imag(x))
 
+# help function to build packed storage
+function pack(A, uplo)
+    AP = eltype(A)[]
+    n = size(A, 1)
+    for j in 1:n, i in (uplo==:L ? (j:n) : (1:j))
+        push!(AP, A[i,j])
+    end
+    return AP
+end
+
+@testset "vec_pointer_stride" begin
+    a = zeros(4,4,4)
+    @test BLAS.asum(view(a,1:2:4,:,:)) == 0 # vector like
+    @test_throws ArgumentError BLAS.asum(view(a,1:3:4,:,:)) # non-vector like
+end
 Random.seed!(100)
 ## BLAS tests - testing the interface code to BLAS routines
 @testset for elty in [Float32, Float64, ComplexF32, ComplexF64]
 
     @testset "syr2k!" begin
-        U = randn(5,2)
-        V = randn(5,2)
-        if elty == ComplexF32 || elty == ComplexF64
-            U = complex.(U, U)
-            V = complex.(V, V)
-        end
-        U = convert(Array{elty, 2}, U)
-        V = convert(Array{elty, 2}, V)
+        U = randn(elty, 5, 2)
+        V = randn(elty, 5, 2)
         @test tril(LinearAlgebra.BLAS.syr2k('L','N',U,V)) ≈ tril(U*transpose(V) + V*transpose(U))
         @test triu(LinearAlgebra.BLAS.syr2k('U','N',U,V)) ≈ triu(U*transpose(V) + V*transpose(U))
         @test tril(LinearAlgebra.BLAS.syr2k('L','T',U,V)) ≈ tril(transpose(U)*V + transpose(V)*U)
@@ -26,12 +37,8 @@ Random.seed!(100)
 
     if elty in (ComplexF32, ComplexF64)
         @testset "her2k!" begin
-            U = randn(5,2)
-            V = randn(5,2)
-            U = complex.(U, U)
-            V = complex.(V, V)
-            U = convert(Array{elty, 2}, U)
-            V = convert(Array{elty, 2}, V)
+            U = randn(elty, 5, 2)
+            V = randn(elty, 5, 2)
             @test tril(LinearAlgebra.BLAS.her2k('L','N',U,V)) ≈ tril(U*V' + V*U')
             @test triu(LinearAlgebra.BLAS.her2k('U','N',U,V)) ≈ triu(U*V' + V*U')
             @test tril(LinearAlgebra.BLAS.her2k('L','C',U,V)) ≈ tril(U'*V + V'*U)
@@ -48,21 +55,21 @@ Random.seed!(100)
     U4 = triu(fill(elty(1), 4,4))
     Z4 = zeros(elty, (4,4))
 
-    elm1 = convert(elty, -1)
-    el2 = convert(elty, 2)
-    v14 = convert(Vector{elty}, [1:4;])
-    v41 = convert(Vector{elty}, [4:-1:1;])
+    elm1 = elty(-1)
+    el2 = elty(2)
+    v14 = elty[1:4;]
+    v41 = elty[4:-1:1;]
 
     let n = 10
         @testset "dot products" begin
             if elty <: Real
-                x1 = convert(Vector{elty}, randn(n))
-                x2 = convert(Vector{elty}, randn(n))
+                x1 = randn(elty, n)
+                x2 = randn(elty, n)
                 @test BLAS.dot(x1,x2) ≈ sum(x1.*x2)
                 @test_throws DimensionMismatch BLAS.dot(x1,rand(elty, n + 1))
             else
-                z1 = convert(Vector{elty}, complex.(randn(n),randn(n)))
-                z2 = convert(Vector{elty}, complex.(randn(n),randn(n)))
+                z1 = randn(elty, n)
+                z2 = randn(elty, n)
                 @test BLAS.dotc(z1,z2) ≈ sum(conj(z1).*z2)
                 @test BLAS.dotu(z1,z2) ≈ sum(z1.*z2)
                 @test_throws DimensionMismatch BLAS.dotc(z1,rand(elty, n + 1))
@@ -70,92 +77,60 @@ Random.seed!(100)
             end
         end
         @testset "iamax" begin
-            if elty <: Real
-                x = convert(Vector{elty}, randn(n))
-                @test BLAS.iamax(x) == argmax(abs.(x))
-            else
-                z = convert(Vector{elty}, complex.(randn(n),randn(n)))
-                @test BLAS.iamax(z) == argmax(map(x -> abs(real(x)) + abs(imag(x)), z))
-            end
+            x = randn(elty, n)
+            @test BLAS.iamax(x) == findmax(fabs, x)[2]
         end
         @testset "rot!" begin
-            if elty <: Real
-                x = convert(Vector{elty}, randn(n))
-                y = convert(Vector{elty}, randn(n))
-                c = rand(elty)
-                s = rand(elty)
+            x = randn(elty, n)
+            y = randn(elty, n)
+            c = rand(real(elty))
+            for sty in unique!([real(elty), elty])
+                s = rand(sty)
                 x2 = copy(x)
                 y2 = copy(y)
                 BLAS.rot!(n, x, 1, y, 1, c, s)
                 @test x ≈ c*x2 + s*y2
-                @test y ≈ -s*x2 + c*y2
-            else
-                x = convert(Vector{elty}, complex.(randn(n),rand(n)))
-                y = convert(Vector{elty}, complex.(randn(n),rand(n)))
-                cty = (elty == ComplexF32) ? Float32 : Float64
-                c = rand(cty)
-                for sty in [cty, elty]
-                    s = rand(sty)
-                    x2 = copy(x)
-                    y2 = copy(y)
-                    BLAS.rot!(n, x, 1, y, 1, c, s)
-                    @test x ≈ c*x2 + s*y2
-                    @test y ≈ -conj(s)*x2 + c*y2
-                end
+                @test y ≈ -conj(s)*x2 + c*y2
             end
         end
         @testset "axp(b)y" begin
-            if elty <: Real
-                x1 = convert(Vector{elty}, randn(n))
-                x2 = convert(Vector{elty}, randn(n))
-                α  = rand(elty)
-                β  = rand(elty)
-                @test BLAS.axpy!(α,copy(x1),copy(x2)) ≈ α*x1 + x2
-                @test BLAS.axpby!(α,copy(x1),β,copy(x2)) ≈ α*x1 + β*x2
-                @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), rand(elty, n + 1))
-                @test_throws DimensionMismatch BLAS.axpby!(α, copy(x1), β, rand(elty, n + 1))
-                @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 1:n)
-                @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
-                @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
-                @test BLAS.axpy!(α,copy(x1),1:n,copy(x2),1:n) ≈ x2 + α*x1
-            else
-                z1 = convert(Vector{elty}, complex.(randn(n), randn(n)))
-                z2 = convert(Vector{elty}, complex.(randn(n), randn(n)))
-                α  = rand(elty)
-                @test BLAS.axpy!(α, copy(z1), copy(z2)) ≈ z2 + α * z1
-                @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), rand(elty, n + 1))
-                @test_throws DimensionMismatch BLAS.axpy!(α, copy(z1), 1:div(n, 2), copy(z2), 1:(div(n, 2) + 1))
-                @test_throws ArgumentError BLAS.axpy!(α, copy(z1), 0:div(n,2), copy(z2), 1:(div(n, 2) + 1))
-                @test_throws ArgumentError BLAS.axpy!(α, copy(z1), 1:div(n,2), copy(z2), 0:(div(n, 2) - 1))
-                @test BLAS.axpy!(α,copy(z1),1:n,copy(z2),1:n) ≈ z2 + α*z1
+            x1 = randn(elty, n)
+            x2 = randn(elty, n)
+            α  = rand(elty)
+            β  = rand(elty)
+            for X1 in (x1, view(x1,n:-1:1)), X2 in (x2, view(x2, n:-1:1))
+                @test BLAS.axpy!(α,deepcopy(X1),deepcopy(X2)) ≈ α*X1 + X2
+                @test BLAS.axpby!(α,deepcopy(X1),β,deepcopy(X2)) ≈ α*X1 + β*X2
             end
+            for ind1 in (1:n, n:-1:1), ind2 in (1:n, n:-1:1)
+                @test BLAS.axpy!(α,copy(x1),ind1,copy(x2),ind2) ≈ x2 + α*(ind1 == ind2 ? x1 : reverse(x1))
+            end
+            @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), rand(elty, n + 1))
+            @test_throws DimensionMismatch BLAS.axpby!(α, copy(x1), β, rand(elty, n + 1))
+            @test_throws DimensionMismatch BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 1:n)
+            @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 0:div(n,2), copy(x2), 1:(div(n, 2) + 1))
+            @test_throws ArgumentError BLAS.axpy!(α, copy(x1), 1:div(n,2), copy(x2), 0:(div(n, 2) - 1))
         end
         @testset "nrm2, iamax, and asum for StridedVectors" begin
             a = rand(elty,n)
-            b = view(a,2:2:n,1)
-            @test BLAS.nrm2(b) ≈ norm(b)
-            if elty <: Real
-                @test BLAS.asum(b) ≈ sum(abs.(b))
-                @test BLAS.iamax(b) ≈ argmax(abs.(b))
-            else
-                @test BLAS.asum(b) ≈ sum(abs.(real(b))) + sum(abs.(imag(b)))
-                @test BLAS.iamax(b) == argmax(map(x -> abs(real(x)) + abs(imag(x)), b))
+            for ind in (2:2:n, n:-2:2)
+                b = view(a, ind, 1)
+                @test BLAS.nrm2(b) ≈ sqrt(sum(abs2, b))
+                @test BLAS.asum(b) ≈ sum(fabs, b)
+                @test BLAS.iamax(b) == findmax(fabs, b)[2] * (step(ind) >= 0)
             end
         end
-        # scal
-        α = rand(elty)
-        a = rand(elty,n)
-        @test BLAS.scal(n,α,a,1) ≈ α * a
+        @testset "scal" begin
+            α = rand(elty)
+            a = rand(elty,n)
+            @test BLAS.scal(n,α,a,1) ≈ α * a
+            for v in (a, view(a, n:-1:1))
+                @test BLAS.scal!(α, deepcopy(v)) ≈ α * v
+            end
+        end
 
-        @testset "trsv" begin
-            A = triu(rand(elty,n,n))
-            @testset "Vector and SubVector" for x in (rand(elty, n), view(rand(elty,2n),1:2:2n))
-                @test A\x ≈ BLAS.trsv('U','N','N',A,x)
-                @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,Vector{elty}(undef,n+1))
-            end
-        end
-        @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n)),
-            y in (rand(elty,n), view(rand(elty,3n), 1:3:3n))
+        @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n), view(rand(elty,n), n:-1:1)),
+            y in (rand(elty,n), view(rand(elty,3n), 1:3:3n), view(rand(elty,2n), 2n:-2:2))
 
             A = rand(elty,n,n)
             α = rand(elty)
@@ -178,32 +153,66 @@ Random.seed!(100)
             end
         end
         @testset "copy" begin
-            x1 = convert(Vector{elty}, randn(n))
-            x2 = convert(Vector{elty}, randn(n))
-            BLAS.copyto!(x2, 1:n, x1, 1:n)
-            @test x2 == x1
+            x1 = randn(elty, n)
+            x2 = randn(elty, n)
+            for ind1 in (1:n, n:-1:1), ind2 in (1:n, n:-1:1)
+                @test x2 === BLAS.copyto!(x2, ind1, x1, ind2) == (ind1 == ind2 ? x1 : reverse(x1))
+            end
             @test_throws DimensionMismatch BLAS.copyto!(x2, 1:n, x1, 1:(n - 1))
             @test_throws ArgumentError BLAS.copyto!(x1, 0:div(n, 2), x2, 1:(div(n, 2) + 1))
             @test_throws ArgumentError BLAS.copyto!(x1, 1:(div(n, 2) + 1), x2, 0:div(n, 2))
         end
-        # trmv
-        A = triu(rand(elty,n,n))
-        x = rand(elty,n)
-        @test BLAS.trmv('U','N','N',A,x) ≈ A*x
+        @testset "trmv and trsv" begin
+            A = rand(elty,n,n)
+            x = rand(elty,n)
+            xerr = Vector{elty}(undef,n+1)
+            for uplo in ('U', 'L'), diag in ('U','N'), trans in ('N', 'T', 'C')
+                Wrapper = if uplo == 'U'
+                    diag == 'U' ? UnitUpperTriangular : UpperTriangular
+                else
+                    diag == 'U' ? UnitLowerTriangular : LowerTriangular
+                end
+                fun = trans == 'N' ? identity : trans == 'T' ? transpose : adjoint
+                fullA = collect(fun(Wrapper(A)))
+                @testset "trmv" begin
+                    @test BLAS.trmv(uplo,trans,diag,A,x) ≈ fullA * x
+                    @test_throws DimensionMismatch BLAS.trmv(uplo,trans,diag,A,xerr)
+                    for xx in (x, view(x, n:-1:1))
+                        @test BLAS.trmv!(uplo,trans,diag,A,deepcopy(xx)) ≈ fullA * xx
+                    end
+                end
+                @testset "trsv" begin
+                    @test BLAS.trsv(uplo,trans,diag,A,x) ≈ fullA \ x
+                    @test_throws DimensionMismatch BLAS.trsv(uplo,trans,diag,A,xerr)
+                    for xx in (x, view(x, n:-1:1))
+                        @test BLAS.trsv!(uplo,trans,diag,A,deepcopy(xx)) ≈ fullA \ xx
+                    end
+                end
+            end
+        end
         @testset "symmetric/Hermitian multiplication" begin
             x = rand(elty,n)
             A = rand(elty,n,n)
+            y = rand(elty, n)
+            α = randn(elty)
+            β = randn(elty)
             Aherm = A + A'
             Asymm = A + transpose(A)
-            @testset "symv and hemv" begin
-                @test BLAS.symv('U',Asymm,x) ≈ Asymm*x
-                offsizevec, offsizemat = Array{elty}.(undef,(n+1, (n,n+1)))
-                @test_throws DimensionMismatch BLAS.symv!('U',one(elty),Asymm,x,one(elty),offsizevec)
-                @test_throws DimensionMismatch BLAS.symv('U',offsizemat,x)
+            offsizevec, offsizemat = Array{elty}.(undef,(n+1, (n,n+1)))
+            @testset "symv and hemv" for uplo in ('U', 'L')
+                @test BLAS.symv(uplo,Asymm,x) ≈ Asymm*x
+                for xx in (x, view(x, n:-1:1)), yy in (y, view(y, n:-1:1))
+                    @test BLAS.symv!(uplo,α,Asymm,xx,β,deepcopy(yy)) ≈ α * Asymm * xx + β * yy
+                end
+                @test_throws DimensionMismatch BLAS.symv!(uplo,α,Asymm,x,β,offsizevec)
+                @test_throws DimensionMismatch BLAS.symv(uplo,offsizemat,x)
                 if elty <: BlasComplex
-                    @test BLAS.hemv('U',Aherm,x) ≈ Aherm*x
-                    @test_throws DimensionMismatch BLAS.hemv('U',offsizemat,x)
-                    @test_throws DimensionMismatch BLAS.hemv!('U',one(elty),Aherm,x,one(elty),offsizevec)
+                    @test BLAS.hemv(uplo,Aherm,x) ≈ Aherm*x
+                    for xx in (x, view(x, n:-1:1)), yy in (y, view(y, n:-1:1))
+                        @test BLAS.hemv!(uplo,α,Aherm,xx,β,deepcopy(yy)) ≈ α * Aherm * xx + β * yy
+                    end
+                    @test_throws DimensionMismatch BLAS.hemv(uplo,offsizemat,x)
+                    @test_throws DimensionMismatch BLAS.hemv!(uplo,one(elty),Aherm,x,one(elty),offsizevec)
                 end
             end
 
@@ -233,40 +242,24 @@ Random.seed!(100)
                 # Both matrix dimensions n coincide, as we have Hermitian matrices.
                 # Define the inputs and outputs of hpmv!, y = α*A*x+β*y
                 α = rand(elty)
-                M = rand(elty, n, n)
-                AL = Hermitian(M, :L)
-                AU = Hermitian(M, :U)
+                A = rand(elty, n, n)
                 x = rand(elty, n)
                 β = rand(elty)
                 y = rand(elty, n)
-
-                y_result_julia_lower = α*AL*x + β*y
-
-                # Create lower triangular packing of AL
-                AP = typeof(AL[1,1])[]
-                for j in 1:n
-                    for i in j:n
-                        push!(AP, AL[i,j])
+                for uplo in (:L, :U)
+                    Cuplo = String(uplo)[1]
+                    AH = Hermitian(A, uplo)
+                    # Create lower/upper triangular packing of AL
+                    AP = pack(AH, uplo)
+                    for xx in (x, view(x,n:-1:1)), yy in (y, view(y,n:-1:1))
+                        @test BLAS.hpmv!(Cuplo, α, AP, xx, β, deepcopy(yy)) ≈ α*AH*xx + β*yy
                     end
+                    AP′ = view(zeros(elty, n*(n+1)),1:2:n*(n+1))
+                    @test_throws ErrorException BLAS.hpmv!(Cuplo, α, AP′, x, β, y)
+                    AP′ = view(AP, 1:length(AP′) - 1)
+                    @test_throws DimensionMismatch BLAS.hpmv!(Cuplo, α, AP′, x, β, y)
+                    @test_throws DimensionMismatch BLAS.hpmv!(Cuplo, α, AP′, x, β, view(y,1:n-1))
                 end
-
-                y_result_blas_lower = copy(y)
-                BLAS.hpmv!('L', α, AP, x, β, y_result_blas_lower)
-                @test y_result_julia_lower ≈ y_result_blas_lower
-
-                y_result_julia_upper = α*AU*x + β*y
-
-                # Create upper triangular packing of AU
-                AP = typeof(AU[1,1])[]
-                for j in 1:n
-                    for i in 1:j
-                        push!(AP, AU[i,j])
-                    end
-                end
-
-                y_result_blas_upper = copy(y)
-                BLAS.hpmv!('U', α, AP, x, β, y_result_blas_upper)
-                @test y_result_julia_upper ≈ y_result_blas_upper
             end
         end
 
@@ -276,41 +269,57 @@ Random.seed!(100)
                 # Both matrix dimensions n coincide, as we have symmetric matrices.
                 # Define the inputs and outputs of spmv!, y = α*A*x+β*y
                 α = rand(elty)
-                M = rand(elty, n, n)
-                AL = Symmetric(M, :L)
-                AU = Symmetric(M, :U)
+                A = rand(elty, n, n)
                 x = rand(elty, n)
                 β = rand(elty)
                 y = rand(elty, n)
-
-                y_result_julia_lower = α*AL*x + β*y
-
-                # Create lower triangular packing of AL
-                AP = typeof(M[1,1])[]
-                for j in 1:n
-                    for i in j:n
-                        push!(AP, AL[i,j])
+                for uplo in (:L, :U)
+                    Cuplo = String(uplo)[1]
+                    AS = Symmetric(A, uplo)
+                    # Create lower/upper triangular packing of AL
+                    AP = pack(AS, uplo)
+                    for xx in (x, view(x,n:-1:1)), yy in (y, view(y,n:-1:1))
+                        @test BLAS.spmv!(Cuplo, α, AP, xx, β, deepcopy(yy)) ≈ α*AS*xx + β*yy
                     end
+                    AP′ = view(zeros(elty, n*(n+1)),1:2:n*(n+1))
+                    @test_throws ErrorException BLAS.spmv!(Cuplo, α, AP′, x, β, y)
+                    AP′ = view(AP, 1:length(AP′) - 1)
+                    @test_throws DimensionMismatch BLAS.spmv!(Cuplo, α, AP′, x, β, y)
+                    @test_throws DimensionMismatch BLAS.spmv!(Cuplo, α, AP′, x, β, view(y,1:n-1))
                 end
+            end
+        end
 
-                y_result_blas_lower = copy(y)
-                BLAS.spmv!('L', α, AP, x, β, y_result_blas_lower)
-                @test y_result_julia_lower ≈ y_result_blas_lower
+        # spr!
+        if elty in (Float32, Float64)
+            @testset "spr! $elty" begin
+                α = rand(elty)
+                M = rand(elty, n, n)
+                AL = Symmetric(M, :L)
+                AU = Symmetric(M, :U)
+                for x in (rand(elty, n), view(rand(elty, n), n:-1:1))
+                    ALP_result_julia_lower = pack(α*x*x' + AL, :L)
+                    ALP_result_blas_lower = pack(AL, :L)
+                    BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                    @test ALP_result_julia_lower ≈ ALP_result_blas_lower
+                    ALP_result_blas_lower = append!(pack(AL, :L), ones(elty, 10))
+                    BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                    @test ALP_result_julia_lower ≈ ALP_result_blas_lower[1:end-10]
+                    ALP_result_blas_lower = reshape(pack(AL, :L), 1, length(ALP_result_julia_lower), 1)
+                    BLAS.spr!('L', α, x, ALP_result_blas_lower)
+                    @test ALP_result_julia_lower ≈ vec(ALP_result_blas_lower)
 
-
-                y_result_julia_upper = α*AU*x + β*y
-
-                # Create upper triangular packing of AU
-                AP = typeof(M[1,1])[]
-                for j in 1:n
-                    for i in 1:j
-                        push!(AP, AU[i,j])
-                    end
+                    AUP_result_julia_upper = pack(α*x*x' + AU, :U)
+                    AUP_result_blas_upper = pack(AU, :U)
+                    BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                    @test AUP_result_julia_upper ≈ AUP_result_blas_upper
+                    AUP_result_blas_upper = append!(pack(AU, :U), ones(elty, 10))
+                    BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                    @test AUP_result_julia_upper ≈ AUP_result_blas_upper[1:end-10]
+                    AUP_result_blas_upper = reshape(pack(AU, :U), 1, length(AUP_result_julia_upper), 1)
+                    BLAS.spr!('U', α, x, AUP_result_blas_upper)
+                    @test AUP_result_julia_upper ≈ vec(AUP_result_blas_upper)
                 end
-
-                y_result_blas_upper = copy(y)
-                BLAS.spmv!('U', α, AP, x, β, y_result_blas_upper)
-                @test y_result_julia_upper ≈ y_result_blas_upper
             end
         end
 
@@ -322,33 +331,51 @@ Random.seed!(100)
         #will work for SymTridiagonal,Tridiagonal,Bidiagonal!
         @testset "banded matrix mv" begin
             @testset "gbmv" begin
-                TD  = Tridiagonal(rand(elty,n-1),rand(elty,n),rand(elty,n-1))
-                x   = rand(elty,n)
+                TD = Tridiagonal(rand(elty,n-1),rand(elty,n),rand(elty,n-1))
+                x  = rand(elty, n)
                 #put TD into the BLAS format!
                 fTD = zeros(elty,3,n)
                 fTD[1,2:n] = TD.du
                 fTD[2,:] = TD.d
                 fTD[3,1:n-1] = TD.dl
                 @test BLAS.gbmv('N',n,1,1,fTD,x) ≈ TD*x
+                y = rand(elty, n)
+                α = randn(elty)
+                β = randn(elty)
+                for xx in (x, view(x, n:-1:1)), yy in (y, view(y, n:-1:1))
+                    @test BLAS.gbmv!('N',n,1,1,α,fTD,xx,β,deepcopy(yy)) ≈ α * TD * xx + β * yy
+                end
             end
             #will work for SymTridiagonal only!
-            @testset "sbmv" begin
+            @testset "sbmv and hbmv" begin
+                x = rand(elty,n)
                 if elty <: BlasReal
                     ST  = SymTridiagonal(rand(elty,n),rand(elty,n-1))
-                    x   = rand(elty,n)
                     #put TD into the BLAS format!
                     fST = zeros(elty,2,n)
                     fST[1,2:n] = ST.ev
                     fST[2,:] = ST.dv
                     @test BLAS.sbmv('U',1,fST,x) ≈ ST*x
+                    y = rand(elty, n)
+                    α = randn(elty)
+                    β = randn(elty)
+                    for xx in (x, view(x, n:-1:1)), yy in (y, view(y, n:-1:1))
+                        @test BLAS.sbmv!('U',1,α,fST,xx,β,deepcopy(yy)) ≈ α * ST * xx + β * yy
+                    end
                 else
-                    dv = real(rand(elty,n))
+                    dv = rand(real(elty),n)
                     ev = rand(elty,n-1)
                     bH = zeros(elty,2,n)
                     bH[1,2:n] = ev
                     bH[2,:] = dv
                     fullH = diagm(0 => dv, -1 => conj(ev), 1 => ev)
                     @test BLAS.hbmv('U',1,bH,x) ≈ fullH*x
+                    y = rand(elty, n)
+                    α = randn(elty)
+                    β = randn(elty)
+                    for xx in (x, view(x, n:-1:1)), yy in (y, view(y, n:-1:1))
+                        @test BLAS.hbmv!('U',1,α,bH,xx,β,deepcopy(yy)) ≈ α * fullH * xx + β * yy
+                    end
                 end
             end
         end
@@ -371,38 +398,38 @@ Random.seed!(100)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
         @test all(BLAS.gemv('N', U4, o4) .== v41)
         @testset "non-standard strides" begin
-            if elty <: Complex
-                A = elty[1+2im 3+4im 5+6im 7+8im; 2+3im 4+5im 6+7im 8+9im; 3+4im 5+6im 7+8im 9+10im]
-                v = elty[1+2im, 2+3im, 3+4im, 4+5im, 5+6im]
-                dest = view(ones(elty, 7), 6:-2:2)
-                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(v, 1:3:4), elty(3), dest) == elty[-31+154im, -35+178im, -39+202im]
-                @test BLAS.gemv('N', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[15-41im, 17-49im]
-                @test BLAS.gemv('N', view(A, 1:0, 1:2), view(v, 1:2)) == elty[]
-                dest = view(ones(elty, 5), 4:-2:2)
-                @test BLAS.gemv!('T', elty(2), view(A, :, 2:2:4), view(v, 1:2:5), elty(3), dest) == elty[-45+202im, -69+370im]
-                @test BLAS.gemv('T', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[14-38im, 18-54im]
-                @test BLAS.gemv('T', view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
-                dest = view(ones(elty, 5), 4:-2:2)
-                @test BLAS.gemv!('C', elty(2), view(A, :, 2:2:4), view(v, 5:-2:1), elty(3), dest) == elty[179+6im, 347+30im]
-                @test BLAS.gemv('C', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-40-6im, -56-10im]
-                @test BLAS.gemv('C', view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
-            else
-                A = elty[1 2 3 4; 5 6 7 8; 9 10 11 12]
-                v = elty[1, 2, 3, 4, 5]
-                dest = view(ones(elty, 7), 6:-2:2)
-                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(v, 1:3:4), elty(3), dest) == elty[39, 79, 119]
-                @test BLAS.gemv('N', elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-19, -31]
-                @test BLAS.gemv('N', view(A, 1:0, 1:2), view(v, 1:2)) == elty[]
-                for trans = ('T', 'C')
-                    dest = view(ones(elty, 5), 4:-2:2)
-                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(v, 1:2:5), elty(3), dest) == elty[143, 179]
-                    @test BLAS.gemv(trans, elty(-1), view(A, 2:3, 2:3), view(v, 2:-1:1)) == elty[-22, -25]
-                    @test BLAS.gemv(trans, view(A, 2:3, 2:1), view(v, 1:2)) == elty[]
+            A = rand(elty, 3, 4)
+            x = rand(elty, 5)
+            for y = (view(ones(elty, 5), 1:2:5), view(ones(elty, 7), 6:-2:2))
+                ycopy = copy(y)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(x, 1:3:4), elty(3), y) ≈ 2*A[:,2:2:4]*x[1:3:4] + 3*ycopy
+                ycopy = copy(y)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 4:-2:2), view(x, 1:3:4), elty(3), y) ≈ 2*A[:,4:-2:2]*x[1:3:4] + 3*ycopy
+                ycopy = copy(y)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 2:2:4), view(x, 4:-3:1), elty(3), y) ≈ 2*A[:,2:2:4]*x[4:-3:1] + 3*ycopy
+                ycopy = copy(y)
+                @test BLAS.gemv!('N', elty(2), view(A, :, 4:-2:2), view(x, 4:-3:1), elty(3), y) ≈ 2*A[:,4:-2:2]*x[4:-3:1] + 3*ycopy
+                ycopy = copy(y)
+                @test BLAS.gemv!('N', elty(2), view(A, :, StepRangeLen(1,0,1)), view(x, 1:1), elty(3), y) ≈ 2*A[:,1:1]*x[1:1] + 3*ycopy # stride(A,2) == 0
+            end
+            @test BLAS.gemv!('N', elty(1), zeros(elty, 0, 5), zeros(elty, 5), elty(1), zeros(elty, 0)) == elty[] # empty matrix, stride(A,2) == 0
+            @test BLAS.gemv('N', elty(-1), view(A, 2:3, 1:2:3), view(x, 2:-1:1)) ≈ -1*A[2:3,1:2:3]*x[2:-1:1]
+            @test BLAS.gemv('N', view(A, 2:3, 3:-2:1), view(x, 1:2:3)) ≈ A[2:3,3:-2:1]*x[1:2:3]
+            for (trans, f) = (('T',transpose), ('C',adjoint))
+                for y = (view(ones(elty, 3), 1:2:3), view(ones(elty, 5), 4:-2:2))
+                    ycopy = copy(y)
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(x, 1:2:5), elty(3), y) ≈ 2*f(A[:,2:2:4])*x[1:2:5] + 3*ycopy
+                    ycopy = copy(y)
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 4:-2:2), view(x, 1:2:5), elty(3), y) ≈ 2*f(A[:,4:-2:2])*x[1:2:5] + 3*ycopy
+                    ycopy = copy(y)
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 2:2:4), view(x, 5:-2:1), elty(3), y) ≈ 2*f(A[:,2:2:4])*x[5:-2:1] + 3*ycopy
+                    ycopy = copy(y)
+                    @test BLAS.gemv!(trans, elty(2), view(A, :, 4:-2:2), view(x, 5:-2:1), elty(3), y) ≈ 2*f(A[:,4:-2:2])*x[5:-2:1] + 3*ycopy
                 end
+                @test BLAS.gemv!(trans, elty(2), view(A, :, StepRangeLen(1,0,1)), view(x, 1:2:5), elty(3), elty[1]) ≈ 2*f(A[:,1:1])*x[1:2:5] + elty[3] # stride(A,2) == 0
             end
             for trans = ('N', 'T', 'C')
-                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2:3, 1:2), view(v, 1:2))
-                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2, 2:-1:1), view(v, 1:2))
+                @test_throws ErrorException BLAS.gemv(trans, view(A, 1:2:3, 1:2), view(x, 1:2)) # stride(A,1) must be 1
             end
         end
     end
@@ -535,7 +562,7 @@ end
 
 @testset "strided interface blas" begin
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
-    # Level 1
+    # Level 1
         x = WrappedArray(elty[1, 2, 3, 4])
         y = WrappedArray(elty[5, 6, 7, 8])
         BLAS.blascopy!(2, x, 1, y, 2)
@@ -552,8 +579,8 @@ end
         @test BLAS.iamax(x) == 2
 
         M = fill(elty(1.0), 3, 3)
-        BLAS.scal!(elty(2), view(M,:,2))
-        BLAS.scal!(elty(3), view(M,3,:))
+        @test BLAS.scal!(elty(2), view(M,:,2)) === view(M,:,2)
+        @test BLAS.scal!(elty(3), view(M,3,:)) === view(M,3,:)
         @test M == elty[1. 2. 1.; 1. 2. 1.; 3. 6. 3.]
     # Level 2
         A = WrappedArray(elty[1 2; 3 4])
@@ -595,7 +622,7 @@ end
         x = WrappedArray(elty[1, 2, 3, 4])
         y = WrappedArray(elty[5, 6, 7, 8])
         @test BLAS.dot(2, x, 1, y, 2) == elty(19)
-    # Level 2
+    # Level 2
         A = WrappedArray(elty[1 2; 3 4])
         x = WrappedArray(elty[1, 2])
         y = WrappedArray(elty[3, 4])
@@ -641,8 +668,36 @@ end
     @test BLAS.get_num_threads() === default
 end
 
-# https://github.com/JuliaLang/julia/pull/39845
-@test LinearAlgebra.BLAS.libblas == "libblastrampoline"
-@test LinearAlgebra.BLAS.liblapack == "libblastrampoline"
+@testset "test for 0-strides" for elty in (Float32, Float64, ComplexF32, ComplexF64)
+    A = randn(elty, 10, 10);
+    a = view([randn(elty)], 1 .+ 0(1:10))
+    b = view([randn(elty)], 1 .+ 0(1:10))
+    α, β = randn(elty), randn(elty)
+    @testset "dot/dotc/dotu" begin
+        if elty <: Real
+            @test BLAS.dot(a,b) ≈ sum(a.*b)
+        else
+            @test BLAS.dotc(a,b) ≈ sum(conj(a).*b)
+            @test BLAS.dotu(a,b) ≈ sum(a.*b)
+        end
+    end
+    @testset "axp(b)y!" begin
+        @test BLAS.axpy!(α,a,copy(b)) ≈ α*a + b
+        @test BLAS.axpby!(α,a,β,copy(b)) ≈ α*a + β*b
+        @test_throws "dest" BLAS.axpy!(α,a,b)
+        @test_throws "dest" BLAS.axpby!(α,a,β,b)
+    end
+    @test BLAS.iamax(a) == 0
+    @test_throws "dest" BLAS.scal!(b[1], a)
+    @testset "nrm2/asum" begin # OpenBLAS allways return 0.0
+        @test_throws "input" BLAS.nrm2(a)
+        @test_throws "input" BLAS.asum(a)
+    end
+    # All level2 reject 0-stride array.
+    @testset "gemv!" begin
+        @test_throws "input" BLAS.gemv!('N', true, A, a, false, copy(b))
+        @test_throws "dest" BLAS.gemv!('N', true, A, copy(a), false, b)
+    end
+end
 
 end # module TestBLAS

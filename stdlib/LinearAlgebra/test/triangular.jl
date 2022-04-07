@@ -3,7 +3,7 @@
 module TestTriangular
 
 debug = false
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
@@ -332,7 +332,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1 + A2 == Matrix(A1) + Matrix(A2)
                 @test A1 - A2 == Matrix(A1) - Matrix(A2)
 
-                # Triangular-Triangualar multiplication and division
+                # Triangular-Triangular multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
                 @test transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
                 @test transpose(A1)*adjoint(A2) ≈ transpose(Matrix(A1))*adjoint(Matrix(A2))
@@ -376,7 +376,8 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
                 if (uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
-                    @test rdiv!(copy(A1), copy(A2)) ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
+                    @test rdiv!(copy(A1), copy(A2))::t1 ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
+                    @test ldiv!(copy(A2), copy(A1))::t1 ≈ A2\A1 ≈ Matrix(A2)\Matrix(A1)
                 end
                 if (uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
                     @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
@@ -689,18 +690,6 @@ let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
     @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
 end
 
-@testset "similar should preserve underlying storage type" begin
-    local m, n = 4, 3
-    sparsemat = sprand(m, m, 0.5)
-    for TriType in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
-        trisparsemat = TriType(sparsemat)
-        @test isa(similar(trisparsemat), typeof(trisparsemat))
-        @test isa(similar(trisparsemat, Float32), TriType{Float32,<:SparseMatrixCSC{Float32}})
-        @test isa(similar(trisparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(trisparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
-    end
-end
-
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
 using .Main.ImmutableArrays
 
@@ -812,4 +801,39 @@ let A = [0.9999999999999998 4.649058915617843e-16 -1.3149405273715513e-16 9.9959
     B = [0.09648289218436859 0.023497875751503007 0.0 0.0; 0.023497875751503007 0.045787575150300804 0.0 0.0; 0.0 0.0 0.0 0.0; 0.0 0.0 0.0 0.0]
     @test sqrt(A*B*A')^2 ≈ A*B*A'
 end
+
+@testset "one and oneunit for triangular" begin
+    m = rand(4,4)
+    function test_one_oneunit_triangular(a)
+        b = Matrix(a)
+        @test (@inferred a^1) == b^1
+        @test (@inferred a^-1) == b^-1
+        @test one(a) == one(b)
+        @test one(a)*a == a
+        @test a*one(a) == a
+        @test oneunit(a) == oneunit(b)
+        @test oneunit(a) isa typeof(a)
+    end
+    for T in [UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular]
+        a = T(m)
+        test_one_oneunit_triangular(a)
+    end
+    # more complicated examples
+    b = UpperTriangular(LowerTriangular(m))
+    test_one_oneunit_triangular(b)
+    c = UpperTriangular(Diagonal(rand(2)))
+    test_one_oneunit_triangular(c)
+end
+
+@testset "LowerTriangular(Diagonal(...)) and friends (issue #28869)" begin
+    for elty in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+        V = elty ≡ Int ? rand(1:10, 5) : elty.(randn(5))
+        D = Diagonal(V)
+        for dty in (UpperTriangular, LowerTriangular)
+            A = dty(D)
+            @test A * A' == D * D'
+        end
+    end
+end
+
 end # module TestTriangular

@@ -257,6 +257,8 @@ Vector `kv.second` will be placed on the `kv.first` diagonal.
 By default the matrix is square and its size is inferred
 from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
 can be specified by passing `m,n` as the first arguments.
+For repeated diagonal indices `kv.first` the values in the corresponding
+vectors `kv.second` will be added.
 
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
@@ -276,6 +278,13 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  1  0  0
  4  0  2  0
  0  5  0  3
+ 0  0  0  0
+
+julia> diagm(1 => [1,2,3], 1 => [1,2,3])
+4×4 Matrix{Int64}:
+ 0  2  0  0
+ 0  0  4  0
+ 0  0  0  6
  0  0  0  0
 ```
 """
@@ -491,7 +500,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
-        retmat = copy_oftype(A, TT)
+        retmat = copymutable_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end
@@ -565,7 +574,10 @@ exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 """
     cis(A::AbstractMatrix)
 
-Compute ``\\exp(i A)`` for a square matrix ``A``.
+More efficient method for `exp(im*A)` of square matrix `A`
+(especially if `A` is `Hermitian` or real-`Symmetric`).
+
+See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref).
 
 !!! compat "Julia 1.7"
     Support for using `cis` with matrices was added in Julia 1.7.
@@ -799,7 +811,7 @@ that is the unique matrix ``X`` with eigenvalues having positive real part such 
 
 If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used to compute the square root.   For such matrices, eigenvalues λ that
-appear to be slightly negative due to roundoff errors are treated as if they were zero
+appear to be slightly negative due to roundoff errors are treated as if they were zero.
 More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
 (yielding a Hermitian square root), with negative eigenvalues taken to be zero.
 `rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
@@ -836,6 +848,8 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
+sqrt(::StridedMatrix)
+
 function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
@@ -1378,6 +1392,7 @@ function factorize(A::StridedMatrix{T}) where T
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))
+factorize(a::Number)    = a # same as how factorize behaves on Diagonal types
 
 ## Moore-Penrose pseudoinverse
 
@@ -1462,7 +1477,7 @@ end
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
+vectors of `M` whose singular values have magnitudes smaller than `max(atol, rtol*σ₁)`,
 where `σ₁` is `M`'s largest singular value.
 
 By default, the relative tolerance `rtol` is `n*ϵ`, where `n`

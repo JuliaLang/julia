@@ -141,6 +141,55 @@ parsing the file once it reaches to the `exec` statement.
     ```
     instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
+### Why doesn't `run` support `*` or pipes for scripting external programs?
+
+Julia's [`run`](@ref) function launches external programs *directly*, without
+invoking an [operating-system shell](https://en.wikipedia.org/wiki/Shell_(computing))
+(unlike the `system("...")` function in other languages like Python, R, or C).
+That means that `run` does not perform wildcard expansion of `*` (["globbing"](https://en.wikipedia.org/wiki/Glob_(programming))),
+nor does it interpret [shell pipelines](https://en.wikipedia.org/wiki/Pipeline_(Unix)) like `|` or `>`.
+
+You can still do globbing and pipelines using Julia features, however.  For example, the built-in
+[`pipeline`](@ref) function allows you to chain external programs and files, similar to shell pipes, and
+the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
+
+You can, of course, run programs through the shell by explicitly passing a shell and a command string to `run`,
+e.g. ```run(`sh -c "ls > files.txt"`)``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell),
+but you should generally prefer pure-Julia scripting like ```run(pipeline(`ls`, "files.txt"))```.
+The reason why we avoid the shell by default is that [shelling out sucks](https://julialang.org/blog/2012/03/shelling-out-sucks/):
+launching processes via the shell is slow, fragile to quoting of special characters,  has poor error handling, and is
+problematic for portability.  (The Python developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
+
+## Variables and Assignments
+
+### Why am I getting `UndefVarError` from a simple loop?
+
+You might have something like:
+```
+x = 0
+while x < 10
+    x += 1
+end
+```
+and notice that it works fine in an interactive environment (like the Julia REPL),
+but gives `UndefVarError: x not defined` when you try to run it in script or other
+file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
+
+Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
+an assignment to a global in that local scope.
+
+As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
+keyword for code in the REPL (and many other interactive environments), to simplify
+exploration (e.g. copy-pasting code from a function to run interactively).
+However, once you move to code in files, Julia requires a more disciplined approach
+to global variables.  You have least three options:
+
+1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
+2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
+3. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
+
+More explanation can be found in the manual section [on soft scope](@ref on-soft-scope).
+
 ## Functions
 
 ### I passed an argument `x` to a function, modified it inside that function, but on the outside, the variable `x` is still unchanged. Why?
@@ -394,7 +443,7 @@ julia> sqrt(-2.0+0im)
 ### How can I constrain or compute type parameters?
 
 The parameters of a [parametric type](@ref Parametric-Types) can hold either
-types or bits values, and the type itself chooses how it makes use of these parameters.
+types or bits values, and the type itself chooses how it makes use of these parameters.
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
 element type and the integer value `2` to express its number of dimensions.  When
 defining your own parametric type, you can use subtype constraints to declare that a
@@ -834,9 +883,10 @@ no values and no subtypes (except itself). You will generally not need to use th
 
 ### Why does `x += y` allocate memory when `x` and `y` are arrays?
 
-In Julia, `x += y` gets replaced during parsing by `x = x + y`. For arrays, this has the consequence
+In Julia, `x += y` gets replaced during lowering by `x = x + y`. For arrays, this has the consequence
 that, rather than storing the result in the same location in memory as `x`, it allocates a new
-array to store the result.
+array to store the result. If you prefer to mutate `x`, use `x .+= y` to update each element
+individually.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
 of immutable objects within Julia, which cannot change their value once created.  Indeed, a
@@ -869,8 +919,8 @@ After a call like `x = 5; y = power_by_squaring(x, 4)`, you would get the expect
     `x`, after the call you'd have (in general) `y != x`, but for mutable `x` you'd have `y == x`.
 
 Because supporting generic programming is deemed more important than potential performance optimizations
-that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
-work by rebinding new values.
+that can be achieved by other means (e.g., using broadcasting or explicit loops), operators like `+=` and
+`*=` work by rebinding new values.
 
 ## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 

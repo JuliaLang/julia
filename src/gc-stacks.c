@@ -23,7 +23,7 @@
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
-static uint32_t num_stack_mappings = 0;
+static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
