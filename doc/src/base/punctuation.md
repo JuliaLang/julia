@@ -30,7 +30,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `a[]`       | [array indexing](@ref man-array-indexing) (calling [`getindex`](@ref) or [`setindex!`](@ref)) |
 | `[,]`       | [vector literal constructor](@ref man-array-literals) (calling [`vect`](@ref Base.vect))    |
 | `[;]`       | [vertical concatenation](@ref man-array-concatenation) (calling [`vcat`](@ref) or [`hvcat`](@ref)) |
-| `[    ]`    | with space-separated expressions, [horizontal concatenation](@ref man-concatenation) (calling [`hcat`](@ref) or [`hvcat`](@ref)) |
+| `[    ]`    | with space-separated expressions, [horizontal concatenation](@ref man-concatenation) (calling [`hcat`](@ref) or [`hvcat`](@ref)) |
 | `T{ }`      | curly braces following a type list that type's [parameters](@ref Parametric-Types)          |
 | `{}`        | curly braces can also be used to group multiple [`where`](@ref) expressions in function declarations |
 | `;`         | semicolons separate statements, begin a list of keyword arguments in function declarations or calls, or are used to separate array literals for vertical concatenation |

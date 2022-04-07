@@ -1618,9 +1618,51 @@ end
         @test x == [0.0, 0.2, 0.4, 0.6, 0.8]
     end
 
-    let x = @inferred range(stop=1, step=0.2, length=5)
+    let x = @inferred range(0.0, step=2, length=5)
         @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
-        @test x == [0.2, 0.4, 0.6, 0.8, 1.0]
+        @test x == [0.0, 2.0, 4.0, 6.0, 8.0]
+        @test x === range(0.0, step=2.0, length=5)
+        @test x === range(0.0f0, step=2e0, length=5)
+        @test x === range(0e0, step=2.0f0, length=5)
+    end
+
+    # start::IEEEFloat and step::Complex
+    let x = @inferred range(2.0, step=1im, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, Float64, Complex{Int}, Int}
+        @test x == range(2, step=1im, length=3)  # compare with integer range
+        @test x == 2.0 .+ [0im, 1im, 2im]
+    end
+
+    # start::Complex and step::IEEEFloat
+    let x = @inferred range(2im, step=1.0, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, Complex{Int}, Float64, Int}
+        @test x == range(2im, step=1, length=3)  # compare with integer range
+    end
+
+    # stop::IEEEFloat and step::Complex
+    let x = @inferred range(stop=2.0, step=1im, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Complex{Int}, Int}
+        @test x == range(stop=2, step=1im, length=3)  # compare with integer range
+        @test x == 2.0 .- [2im, 1im, 0im]
+    end
+
+    # stop::Complex and step::IEEEFloat
+    let x = @inferred range(stop=2im, step=1.0, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Float64, Int}
+        @test x == range(stop=2im, step=1, length=3)  # compare with integer range
+    end
+
+    let x = @inferred range(stop=10, step=2.0, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x === @inferred range(stop=10.0, step=2.0, length=5)
+        @test x === @inferred range(stop=10f0, step=2.0, length=5)
+        @test x === @inferred range(stop=10e0, step=2.0f0, length=5)
+        @test x == [2, 4, 6, 8, 10]
+    end
+
+    let x = @inferred range(stop=10.0, step=2, length=4)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [4.0, 6.0, 8.0, 10.0]
     end
 end
 

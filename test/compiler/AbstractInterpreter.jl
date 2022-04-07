@@ -41,25 +41,71 @@ import Base.Experimental: @MethodTable, @overlay
 @MethodTable(OverlayedMT)
 CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
 
-@overlay OverlayedMT sin(x::Float64) = 1
-@test Base.return_types((Int,), MTOverlayInterp()) do x
-    sin(x)
-end == Any[Int]
-@test Base.return_types((Any,), MTOverlayInterp()) do x
-    Base.@invoke sin(x::Float64)
-end == Any[Int]
+strangesin(x) = sin(x)
+@overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
+
+# inference should use the overlayed method table
+@test Base.return_types((Float64,); interp=MTOverlayInterp()) do x
+    strangesin(x)
+end |> only === Union{Float64,Nothing}
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
+    Base.@invoke strangesin(x::Float64)
+end |> only === Union{Float64,Nothing}
+
+# effect analysis should figure out that the overlayed method is used
+@test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
+    strangesin(x)
+end |> !Core.Compiler.is_nonoverlayed
+@test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
+    Base.@invoke strangesin(x::Float64)
+end |> !Core.Compiler.is_nonoverlayed
+
+# but it should never apply for the native compilation
+@test Base.infer_effects((Float64,)) do x
+    strangesin(x)
+end |> Core.Compiler.is_nonoverlayed
+@test Base.infer_effects((Any,)) do x
+    Base.@invoke strangesin(x::Float64)
+end |> Core.Compiler.is_nonoverlayed
 
 # fallback to the internal method table
-@test Base.return_types((Int,), MTOverlayInterp()) do x
+@test Base.return_types((Int,); interp=MTOverlayInterp()) do x
     cos(x)
-end == Any[Float64]
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+end |> only === Float64
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     Base.@invoke cos(x::Float64)
-end == Any[Float64]
+end |> only === Float64
 
 # not fully covered overlay method match
 overlay_match(::Any) = nothing
 @overlay OverlayedMT overlay_match(::Int) = missing
-@test Base.return_types((Any,), MTOverlayInterp()) do x
+@test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     overlay_match(x)
-end == Any[Union{Nothing,Missing}]
+end |> only === Union{Nothing,Missing}
+
+# partial pure/concrete evaluation
+@test Base.return_types(; interp=MTOverlayInterp()) do
+    isbitstype(Int) ? nothing : missing
+end |> only === Nothing
+Base.@assume_effects :terminates_globally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+@test Base.return_types(; interp=MTOverlayInterp()) do
+    issue41694(3) == 6 ? nothing : missing
+end |> only === Nothing
+
+# disable partial pure/concrete evaluation when tainted by any overlayed call
+Base.@assume_effects :total totalcall(f, args...) = f(args...)
+@test Base.return_types(; interp=MTOverlayInterp()) do
+    if totalcall(strangesin, 1.0) == cos(1.0)
+        return nothing
+    else
+        return missing
+    end
+end |> only === Nothing

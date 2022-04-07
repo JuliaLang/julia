@@ -748,7 +748,7 @@ static void *signal_listener(void *arg)
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#if _POSIX_C_SOURCE >= 199309L
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         if (profile && !(info.si_code == SI_TIMER &&
 	            info.si_value.sival_ptr == &timerprof))
             profile = 0;

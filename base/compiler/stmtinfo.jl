@@ -49,9 +49,10 @@ end
 
 struct ConstResult
     mi::MethodInstance
+    effects::Effects
     result
-    ConstResult(mi::MethodInstance) = new(mi)
-    ConstResult(mi::MethodInstance, @nospecialize val) = new(mi, val)
+    ConstResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
+    ConstResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
 
 """

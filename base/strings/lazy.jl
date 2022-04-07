@@ -9,6 +9,15 @@ of functions).
 This type is designed to be cheap to construct at runtime, trying to offload
 as much work as possible to either the macro or later printing operations.
 
+# Examples
+
+```jldoctest
+julia> n = 5; str = LazyString("n is ", n)
+"n is 5"
+```
+
+See also [`lazy"str"`](@ref).
+
 !!! compat "Julia 1.8"
     `LazyString` requires Julia 1.8 or later.
 """
@@ -25,6 +34,16 @@ end
 Create a [`LazyString`](@ref) using regular string interpolation syntax.
 Note that interpolations are *evaluated* at LazyString construction time,
 but *printing* is delayed until the first access to the string.
+
+# Examples
+
+```
+julia> n = 5; str = lazy"n is \$n"
+"n is 5"
+
+julia> typeof(str)
+LazyString
+```
 
 !!! compat "Julia 1.8"
     `lazy"str"` requires Julia 1.8 or later.
@@ -61,3 +80,6 @@ iterate(s::LazyString, i::Integer) = iterate(String(s), i)
 isequal(a::LazyString, b::LazyString) = isequal(String(a), String(b))
 ==(a::LazyString, b::LazyString) = (String(a) == String(b))
 ncodeunits(s::LazyString) = ncodeunits(String(s))
+codeunit(s::LazyString) = codeunit(String(s))
+codeunit(s::LazyString, i::Integer) = codeunit(String(s), i)
+isvalid(s::LazyString, i::Integer) = isvalid(String(s), i)

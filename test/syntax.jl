@@ -1452,6 +1452,14 @@ invalid assignment location "function (s, o...)
 end\""""
 end
 
+let ex = Meta.lower(@__MODULE__, :(function g end = 1))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function g
+end\""""
+end
+
+
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")
@@ -1909,7 +1917,12 @@ f31404(a, b; kws...) = (a, b, values(kws))
 # issue #28992
 macro id28992(x) x end
 @test @id28992(1 .+ 2) == 3
-@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
+@test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
+let m = @__MODULE__
+    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\"")
+    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\"")
+end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
@@ -2518,7 +2531,10 @@ end
 
 module Mod2
 import ..Mod.x as x_from_mod
+import ..Mod.x as x_from_mod2
 const y = 2
+
+export x_from_mod2
 end
 
 import .Mod: x as x2
@@ -2563,6 +2579,12 @@ import .Mod2.x_from_mod
 
 @test @isdefined(x_from_mod)
 @test x_from_mod == Mod.x
+
+using .Mod2
+
+@test_nowarn @eval x_from_mod2
+@test @isdefined(x_from_mod2)
+@test x_from_mod2 == x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
@@ -3268,3 +3290,7 @@ end
     @test m.Foo.bar === 1
     @test Core.get_binding_type(m.Foo, :bar) == Any
 end
+
+# issue 44723
+demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
+@test demo44723()() == 1
