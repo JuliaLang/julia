@@ -460,11 +460,11 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine> TM(
-        jl_ExecutionEngine->getTargetMachine().getTarget().createTargetMachine(
+        jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_ExecutionEngine->getTargetMachine().getTargetCPU(),
-            jl_ExecutionEngine->getTargetMachine().getTargetFeatureString(),
-            jl_ExecutionEngine->getTargetMachine().Options,
+            jl_ExecutionEngine->getTargetCPU(),
+            jl_ExecutionEngine->getTargetFeatureString(),
+            jl_ExecutionEngine->getTargetOptions(),
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
             Reloc::PIC_,
 #else
@@ -481,7 +481,7 @@ void jl_dump_native_impl(void *native_code,
             ));
 
     legacy::PassManager PM;
-    addTargetPasses(&PM, TM.get());
+    addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -502,7 +502,7 @@ void jl_dump_native_impl(void *native_code,
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
+        addMachinePasses(&PM, jl_options.opt_level);
     }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
@@ -595,14 +595,14 @@ void jl_dump_native_impl(void *native_code,
     delete data;
 }
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
 {
-    PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
-    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
@@ -857,9 +857,9 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
+        addTargetPasses(&Adapter, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
         addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
-        addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
+        addMachinePasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -993,9 +993,9 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     static legacy::PassManager *PM;
     if (!PM) {
         PM = new legacy::PassManager();
-        addTargetPasses(PM, &jl_ExecutionEngine->getTargetMachine());
+        addTargetPasses(PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level);
+        addMachinePasses(PM, jl_options.opt_level);
     }
 
     // get the source code for this function

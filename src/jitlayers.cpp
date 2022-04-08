@@ -480,13 +480,6 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 #endif
 }
 
-static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, int optlevel)
-{
-    addTargetPasses(&PM, &TM);
-    addOptimizationPasses(&PM, optlevel);
-    addMachinePasses(&PM, &TM, optlevel);
-}
-
 static auto countBasicBlocks(const Function &F)
 {
     return std::distance(F.begin(), F.end());
@@ -885,7 +878,9 @@ namespace {
         }
         std::unique_ptr<legacy::PassManager> operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
-            addPassesForOptLevel(*PM, *TM, optlevel);
+            addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
+            addOptimizationPasses(PM.get(), optlevel);
+            addMachinePasses(PM.get(), optlevel);
             return PM;
         }
     };
@@ -1218,16 +1213,6 @@ const DataLayout& JuliaOJIT::getDataLayout() const
     return DL;
 }
 
-TargetMachine &JuliaOJIT::getTargetMachine()
-{
-    return *TM;
-}
-
-const Triple& JuliaOJIT::getTargetTriple() const
-{
-    return TM->getTargetTriple();
-}
-
 std::string JuliaOJIT::getMangledName(StringRef Name)
 {
     SmallString<128> FullName;
@@ -1396,6 +1381,40 @@ void JuliaOJIT::shareStrings(Module &M)
     }
     for (auto GV : erase)
         GV->eraseFromParent();
+}
+
+//TargetMachine pass-through methods
+
+std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
+{
+    return std::unique_ptr<TargetMachine>(getTarget()
+        .createTargetMachine(
+            getTargetTriple().str(),
+            getTargetCPU(),
+            getTargetFeatureString(),
+            getTargetOptions(),
+            TM->getRelocationModel(),
+            TM->getCodeModel(),
+            TM->getOptLevel()));
+}
+
+const Triple& JuliaOJIT::getTargetTriple() const {
+    return TM->getTargetTriple();
+}
+StringRef JuliaOJIT::getTargetFeatureString() const {
+    return TM->getTargetFeatureString();
+}
+StringRef JuliaOJIT::getTargetCPU() const {
+    return TM->getTargetCPU();
+}
+const TargetOptions &JuliaOJIT::getTargetOptions() const {
+    return TM->Options;
+}
+const Target &JuliaOJIT::getTarget() const {
+    return TM->getTarget();
+}
+TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
+    return TM->getTargetIRAnalysis();
 }
 
 static void jl_decorate_module(Module &M) {
