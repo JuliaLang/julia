@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base # hello world. There is trailing whitespace at the end of this line               
+baremodule Base # hello world
 
 using Core.Intrinsics, Core.IR
 
