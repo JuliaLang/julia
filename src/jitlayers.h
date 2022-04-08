@@ -49,9 +49,9 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel);
 void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
@@ -336,8 +336,16 @@ public:
         ContextPool.release(std::move(ctx));
     }
     const DataLayout& getDataLayout() const;
-    TargetMachine &getTargetMachine();
+
+    // TargetMachine pass-through methods
+    std::unique_ptr<TargetMachine> cloneTargetMachine() const;
     const Triple& getTargetTriple() const;
+    StringRef getTargetFeatureString() const;
+    StringRef getTargetCPU() const;
+    const TargetOptions &getTargetOptions() const;
+    const Target &getTarget() const;
+    TargetIRAnalysis getTargetIRAnalysis() const;
+
     size_t getTotalBytes() const;
 
     JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
