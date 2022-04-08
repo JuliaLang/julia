@@ -2231,6 +2231,16 @@
            lhss)
        (unnecessary ,xx))))
 
+;; implement tuple destructuring, possibly with slurping
+;;
+;; `i`:    index of the current lhs arg
+;; `lhss`: remaining lhs args
+;; `xx`:   the rhs, already either an ssavalue or something simple
+;; `st`:   empty list if i=1, otherwise contains the iteration state
+;; `n`:    total nr of lhs args
+;; `end`:  car collects statements to be executed afterwards.
+;;         In general, actual assignments should only happen after
+;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
 (define (destructure- i lhss xx n st end)
   (if (null? lhss)
       '()
