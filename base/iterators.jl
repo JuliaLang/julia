@@ -1169,7 +1169,8 @@ Equivalent to `flatten(map(f, iterators...))`.
 
 See also [`Iterators.flatten`](@ref), [`Iterators.map`](@ref).
 
-!!! compat: "Julia 1.9"
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
 
 # Examples
 ```jldoctest
