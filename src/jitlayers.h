@@ -205,7 +205,7 @@ public:
             OwningResource(OwningResource &&) = default;
             OwningResource &operator=(OwningResource &&) = default;
             ~OwningResource() {
-                if (resource) pool.release_(std::move(*resource));
+                if (resource) pool.release(std::move(*resource));
             }
             ResourceT release() {
                 ResourceT res(std::move(*resource));
@@ -240,12 +240,16 @@ public:
             ResourcePool &pool;
             llvm::Optional<ResourceT> resource;
         };
-
-        OwningResource acquire() {
-            return OwningResource(*this, acquire_());
+        
+        OwningResource operator*() {
+            return OwningResource(*this, acquire());
         }
 
-        ResourceT acquire_() {
+        OwningResource get() {
+            return **this;
+        }
+
+        ResourceT acquire() {
             std::unique_lock<std::mutex> lock(mutex->mutex);
             if (!pool.empty()) {
                 return pool.pop_back_val();
@@ -258,7 +262,7 @@ public:
             assert(!pool.empty() && "Expected resource pool to have a value!");
             return pool.pop_back_val();
         }
-        void release_(ResourceT &&resource) {
+        void release(ResourceT &&resource) {
             std::lock_guard<std::mutex> lock(mutex->mutex);
             pool.push_back(std::move(resource));
             mutex->empty.notify_one();
@@ -318,13 +322,13 @@ public:
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     auto getContext() {
-        return ContextPool.acquire();
+        return *ContextPool;
     }
     orc::ThreadSafeContext acquireContext() {
-        return ContextPool.acquire_();
+        return ContextPool.acquire();
     }
     void releaseContext(orc::ThreadSafeContext &&ctx) {
-        ContextPool.release_(std::move(ctx));
+        ContextPool.release(std::move(ctx));
     }
     const DataLayout& getDataLayout() const;
     TargetMachine &getTargetMachine();

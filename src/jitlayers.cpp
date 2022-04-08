@@ -921,7 +921,7 @@ namespace {
                 JL_TIMING(LLVM_OPT);
 
                 {
-                    (**PMs.acquire()).run(M);
+                    (***PMs).run(M);
                 }
 
                 uint64_t end_time = 0;
@@ -955,7 +955,7 @@ namespace {
         : orc::IRCompileLayer::IRCompiler(MO), TMs(TMCreator(TM, optlevel)) {}
 
         Expected<std::unique_ptr<MemoryBuffer>> operator()(Module &M) override {
-            return orc::SimpleCompiler(**TMs.acquire())(M);
+            return orc::SimpleCompiler(***TMs)(M);
         }
 
         JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
