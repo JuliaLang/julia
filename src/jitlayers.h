@@ -240,7 +240,7 @@ public:
             ResourcePool &pool;
             llvm::Optional<ResourceT> resource;
         };
-        
+
         OwningResource operator*() {
             return OwningResource(*this, acquire());
         }

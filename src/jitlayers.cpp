@@ -862,7 +862,7 @@ namespace {
 
     struct TMCreator {
         orc::JITTargetMachineBuilder JTMB;
-        
+
         TMCreator(TargetMachine &TM, int optlevel) : JTMB(createJTMBFromTM(TM, optlevel)) {}
 
         std::unique_ptr<TargetMachine> operator()() {
