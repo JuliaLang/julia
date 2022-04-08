@@ -193,7 +193,6 @@ public:
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-private:
     template<typename ResourceT, size_t max = 0>
     struct ResourcePool {
         public:
@@ -277,22 +276,9 @@ private:
     };
     struct PipelineT {
         PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
-        ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
         CompileLayerT CompileLayer;
         OptimizeLayerT OptimizeLayer;
-        int optlevel;
     };
-    struct OptimizerT {
-        OptimizerT(ResourcePool<std::unique_ptr<legacy::PassManager>> &PMs, int optlevel) : optlevel(optlevel), PMs(PMs) {}
-
-        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
-    private:
-        int optlevel;
-        ResourcePool<std::unique_ptr<legacy::PassManager>> &PMs;
-    };
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(const ObjT &Obj, const LoadResult &LO);
 
     struct OptSelLayerT : orc::IRLayer {
 
@@ -307,6 +293,11 @@ private:
         std::unique_ptr<PipelineT> *optimizers;
         size_t count;
     };
+
+private:
+    // Custom object emission notification handler for the JuliaOJIT
+    template <typename ObjT, typename LoadResult>
+    void registerObject(const ObjT &Obj, const LoadResult &LO);
 
 public:
 

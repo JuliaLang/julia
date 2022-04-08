@@ -494,56 +494,6 @@ static auto countBasicBlocks(const Function &F)
     return std::distance(F.begin(), F.end());
 }
 
-OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
-    TSM.withModuleDo([&](Module &M) {
-        uint64_t start_time = 0;
-        if (dump_llvm_opt_stream != NULL) {
-            // Print LLVM function statistics _before_ optimization
-            // Print all the information about this invocation as a YAML object
-            jl_printf(dump_llvm_opt_stream, "- \n");
-            // We print the name and some statistics for each function in the module, both
-            // before optimization and again afterwards.
-            jl_printf(dump_llvm_opt_stream, "  before: \n");
-            for (auto &F : M.functions()) {
-                if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                    continue;
-                }
-                // Each function is printed as a YAML object with several attributes
-                jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-                jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-                jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
-            }
-
-            start_time = jl_hrtime();
-        }
-
-        JL_TIMING(LLVM_OPT);
-
-        {
-            (**PMs.acquire()).run(M);
-        }
-
-        uint64_t end_time = 0;
-        if (dump_llvm_opt_stream != NULL) {
-            end_time = jl_hrtime();
-            jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
-            jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
-
-            // Print LLVM function statistics _after_ optimization
-            jl_printf(dump_llvm_opt_stream, "  after: \n");
-            for (auto &F : M.functions()) {
-                if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                    continue;
-                }
-                jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-                jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-                jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
-            }
-        }
-    });
-    return Expected<orc::ThreadSafeModule>{std::move(TSM)};
-}
-
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
     size_t optlevel = ~0ull;
     TSM.withModuleDo([&](Module &M) {
@@ -931,6 +881,63 @@ namespace {
             return PM;
         }
     };
+
+    struct OptimizerT {
+        OptimizerT(TargetMachine &TM, int optlevel) : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
+
+        OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
+            TSM.withModuleDo([&](Module &M) {
+                uint64_t start_time = 0;
+                if (dump_llvm_opt_stream != NULL) {
+                    // Print LLVM function statistics _before_ optimization
+                    // Print all the information about this invocation as a YAML object
+                    jl_printf(dump_llvm_opt_stream, "- \n");
+                    // We print the name and some statistics for each function in the module, both
+                    // before optimization and again afterwards.
+                    jl_printf(dump_llvm_opt_stream, "  before: \n");
+                    for (auto &F : M.functions()) {
+                        if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            continue;
+                        }
+                        // Each function is printed as a YAML object with several attributes
+                        jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+                        jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+                        jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                    }
+
+                    start_time = jl_hrtime();
+                }
+
+                JL_TIMING(LLVM_OPT);
+
+                {
+                    (**PMs.acquire()).run(M);
+                }
+
+                uint64_t end_time = 0;
+                if (dump_llvm_opt_stream != NULL) {
+                    end_time = jl_hrtime();
+                    jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+                    jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
+
+                    // Print LLVM function statistics _after_ optimization
+                    jl_printf(dump_llvm_opt_stream, "  after: \n");
+                    for (auto &F : M.functions()) {
+                        if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            continue;
+                        }
+                        jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
+                        jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
+                        jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                    }
+                }
+            });
+            return Expected<orc::ThreadSafeModule>{std::move(TSM)};
+        }
+    private:
+        int optlevel;
+        JuliaOJIT::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
+    };
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -941,10 +948,9 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
 }
 
 JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
-: PMs(PMCreator(TM, optlevel)),
-  CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
+: CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
     std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, optlevel))),
-  OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(PMs, optlevel)) {}
+  OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(TM, optlevel)) {}
 
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
