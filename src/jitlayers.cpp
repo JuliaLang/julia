@@ -860,6 +860,16 @@ namespace {
         .setCodeGenOptLevel(CodeGenOptLevelFor(optlevel));
     }
 
+    struct TMCreator {
+        orc::JITTargetMachineBuilder JTMB;
+        
+        TMCreator(TargetMachine &TM, int optlevel) : JTMB(createJTMBFromTM(TM, optlevel)) {}
+
+        std::unique_ptr<TargetMachine> operator()() {
+            return cantFail(JTMB.createTargetMachine());
+        }
+    };
+
     struct PMCreator {
         std::unique_ptr<TargetMachine> TM;
         int optlevel;
@@ -938,6 +948,18 @@ namespace {
         int optlevel;
         JuliaOJIT::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
     };
+
+    struct CompilerT : orc::IRCompileLayer::IRCompiler {
+
+        CompilerT(orc::IRSymbolMapper::ManglingOptions MO, TargetMachine &TM, int optlevel)
+        : orc::IRCompileLayer::IRCompiler(MO), TMs(TMCreator(TM, optlevel)) {}
+
+        Expected<std::unique_ptr<MemoryBuffer>> operator()(Module &M) override {
+            return orc::SimpleCompiler(**TMs.acquire())(M);
+        }
+
+        JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
+    };
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -949,7 +971,7 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
 
 JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
 : CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
-    std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, optlevel))),
+    std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM.Options), TM, optlevel)),
   OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(TM, optlevel)) {}
 
 JuliaOJIT::JuliaOJIT()
