@@ -1506,7 +1506,7 @@ julia> frac(c, z=0.0im) = Iterator{ComplexF64}((c, z)) do (c, z)
            end
        end;
 
-julia> [length(collect(frac(-0.835-0.2321im, (k+j*im)/6))) for j in -4:4, k in -8:8]
+julia> [count(Returns(true), frac(-0.835-0.2321im, (k+j*im)/6)) for j in -4:4, k in -8:8]
 9×17 Matrix{Int64}:
   2   2   2   3   3   3   5  41   8   4   3   3   2   2   2   2   1
   2   3   5   4   5   8  20  11  17  23   4   3   3   3   2   2   2
