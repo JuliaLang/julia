@@ -48,8 +48,6 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-extern bool imaging_mode;
-
 void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
 void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
@@ -57,6 +55,10 @@ void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 DataLayout jl_create_datalayout(TargetMachine &TM);
+
+static inline bool imaging_default() {
+    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+}
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -119,7 +121,8 @@ typedef struct _jl_codegen_params_t {
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()) {}
+    bool imaging;
+    _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
 } jl_codegen_params_t;
 
 jl_llvm_functions_t jl_emit_code(
@@ -276,11 +279,11 @@ private:
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
 
 orc::ThreadSafeModule &jl_codegen_params_t::shared_module(Module &from) {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", tsctx, from.getDataLayout(), Triple(from.getTargetTriple()));
+        _shared_module = jl_create_llvm_module("globals", tsctx, imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
         assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
     } else {
         assert(&from.getContext() == _shared_module.getContext().getContext() && "Module context differs from shared module context!");
