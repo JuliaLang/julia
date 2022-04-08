@@ -1491,7 +1491,7 @@ See also: [`iterate`](@ref)
 
 ```jldoctest
 julia> fib = Iterator((1,1)) do (a,b)
-           b, (a+b, a)
+           a, (b, a+b)
        end;
 
 julia> reduce(hcat, Iterators.take(fib, 7))
