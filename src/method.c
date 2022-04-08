@@ -51,11 +51,14 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
     else if (jl_is_returnnode(expr)) {
-        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
-        if (val != jl_returnnode_value(expr)) {
-            JL_GC_PUSH1(&val);
-            expr = jl_new_struct(jl_returnnode_type, val);
-            JL_GC_POP();
+        jl_value_t *retval = jl_returnnode_value(expr);
+        if (retval) {
+            jl_value_t *val = resolve_globals(retval, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != retval) {
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct(jl_returnnode_type, val);
+                JL_GC_POP();
+            }
         }
         return expr;
     }

@@ -244,21 +244,41 @@ end
 using Core.Compiler: IRCode
 using Core: CodeInfo
 
-function OC(ir::IRCode, env...)
-    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ());
+function OC(ir::IRCode, nargs::Int, isva::Bool, env...)
+    if (isva && nargs > length(ir.argtypes)) || (!isva && nargs != length(ir.argtypes)-1)
+        throw(ArgumentError("invalid argument count"))
+    end
+    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     src.slotflags = UInt8[]
-    nargs = length(ir.argtypes)
-    src.slotnames = fill(:none, nargs)
-    Core.Compiler.replace_code_newstyle!(src, ir, nargs);
-    Core.Compiler.widen_all_consts!(src);
+    src.slotnames = fill(:none, nargs+1)
+    Core.Compiler.replace_code_newstyle!(src, ir, nargs+1)
+    Core.Compiler.widen_all_consts!(src)
     src.inferred = true
     # NOTE: we need ir.argtypes[1] == typeof(env)
 
     ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
-          Tuple{ir.argtypes[2:end]...}, Union{}, Any, @__MODULE__, src, 0, nothing, nargs-1, false, env)
+          Tuple{ir.argtypes[2:end]...}, Union{}, Any, @__MODULE__, src, 0, nothing, nargs, isva, env)
+end
+
+function OC(src::CodeInfo, env...)
+    M = src.parent.def
+    sig = Base.tuple_type_tail(src.parent.specTypes)
+
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
+          sig, Union{}, Any, @__MODULE__, src, 0, nothing, M.nargs - 1, M.isva, env)
 end
 
 let ci = code_typed(+, (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
-    @test OC(ir)(40, 2) == 42
+    @test OC(ir, 2, false)(40, 2) == 42
+end
+
+let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test OC(ir, 2, true)(40, 2) === (40, (2,))
+end
+
+let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
+    @test OC(ci)(1, 2) === (1, (2,))
+    @test_throws MethodError OC(ci)(1, 2, 3)
 end
