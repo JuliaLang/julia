@@ -287,14 +287,18 @@ public:
     struct OptSelLayerT : orc::IRLayer {
 
         template<size_t N>
-        OptSelLayerT(std::unique_ptr<PipelineT> (&optimizers)[N]) : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(), optimizers[0]->OptimizeLayer.getManglingOptions()), optimizers(optimizers), count(N) {
+        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers)
+            : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
+                optimizers[0]->OptimizeLayer.getManglingOptions()),
+            optimizers(optimizers.data()),
+            count(N) {
             static_assert(N > 0, "Expected array with at least one optimizer!");
         }
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
 
         private:
-        std::unique_ptr<PipelineT> *optimizers;
+        const std::unique_ptr<PipelineT> * const optimizers;
         size_t count;
     };
 
@@ -339,8 +343,8 @@ private:
     std::string getMangledName(const GlobalValue *GV);
     void shareStrings(Module &M);
 
-    std::unique_ptr<TargetMachine> TM;
-    DataLayout DL;
+    const std::unique_ptr<TargetMachine> TM;
+    const DataLayout DL;
 
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
@@ -349,13 +353,16 @@ private:
     ResourcePool<orc::ThreadSafeContext> ContextPool;
 
 #ifndef JL_USE_JITLINK
-    std::shared_ptr<RTDyldMemoryManager> MemMgr;
+    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    std::unique_ptr<PipelineT> Pipelines[4];
+    const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
 
+    //Map and inc are guarded by RLST_mutex
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+    int RLST_inc = 0;
+    std::mutex RLST_mutex;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());

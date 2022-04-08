@@ -1152,7 +1152,7 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
-    static int globalUnique = 0;
+    std::lock_guard<std::mutex> lock(RLST_mutex);
     std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname->empty()) {
         std::string string_fname;
@@ -1172,7 +1172,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUnique++;
+        stream_fname << unadorned_name << "_" << RLST_inc++;
         *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
     }
