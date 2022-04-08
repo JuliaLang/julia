@@ -197,7 +197,7 @@ private:
     template<typename ResourceT, size_t max = 0>
     struct ResourcePool {
         public:
-        ResourcePool(function_ref<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
+        ResourcePool(std::function<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
         class OwningResource {
             public:
             OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
@@ -265,7 +265,7 @@ private:
             mutex->empty.notify_one();
         }
         private:
-        llvm::function_ref<ResourceT()> creator;
+        std::function<ResourceT()> creator;
         size_t created = 0;
         llvm::SmallVector<ResourceT, max == 0 ? 8 : max> pool;
         struct WNMutex {
@@ -276,13 +276,12 @@ private:
         std::unique_ptr<WNMutex> mutex;
     };
     struct OptimizerT {
-        OptimizerT(legacy::PassManager &PM, std::mutex &mutex, int optlevel) : optlevel(optlevel), PM(PM), mutex(mutex) {}
+        OptimizerT(ResourcePool<std::unique_ptr<legacy::PassManager>> &PMs, int optlevel) : optlevel(optlevel), PMs(PMs) {}
 
         OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
     private:
         int optlevel;
-        legacy::PassManager &PM;
-        std::mutex &mutex;
+        ResourcePool<std::unique_ptr<legacy::PassManager>> &PMs;
     };
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
@@ -340,20 +339,16 @@ private:
 
     std::unique_ptr<TargetMachine> TM;
     DataLayout DL;
-    // Should be big enough that in the common case, The
-    // object fits in its entirety
-    legacy::PassManager PM0;  // per-optlevel pass managers
-    legacy::PassManager PM1;
-    legacy::PassManager PM2;
-    legacy::PassManager PM3;
-    std::mutex PM_mutexes[4];
-    std::unique_ptr<TargetMachine> TMs[4];
 
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
 
     ResourcePool<orc::ThreadSafeContext> ContextPool;
+    ResourcePool<std::unique_ptr<legacy::PassManager>> PM0s;
+    ResourcePool<std::unique_ptr<legacy::PassManager>> PM1s;
+    ResourcePool<std::unique_ptr<legacy::PassManager>> PM2s;
+    ResourcePool<std::unique_ptr<legacy::PassManager>> PM3s;
 
 #ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;

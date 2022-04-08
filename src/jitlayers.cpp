@@ -520,9 +520,7 @@ OptimizerResultT JuliaOJIT::OptimizerT::operator()(orc::ThreadSafeModule TSM, or
         JL_TIMING(LLVM_OPT);
 
         {
-            //Lock around our pass manager
-            std::lock_guard<std::mutex> lock(this->mutex);
-            PM.run(M);
+            (**PMs.acquire()).run(M);
         }
 
         uint64_t end_time = 0;
@@ -911,6 +909,28 @@ namespace {
         .setCodeModel(TM.getCodeModel())
         .setCodeGenOptLevel(CodeGenOptLevelFor(optlevel));
     }
+
+    struct PMCreator {
+        std::unique_ptr<TargetMachine> TM;
+        int optlevel;
+        PMCreator(TargetMachine &TM, int optlevel) : TM(cantFail(createJTMBFromTM(TM, optlevel).createTargetMachine())), optlevel(optlevel) {}
+        PMCreator(const PMCreator &other) : PMCreator(*other.TM, other.optlevel) {}
+        PMCreator(PMCreator &&other) : TM(std::move(other.TM)), optlevel(other.optlevel) {}
+        friend void swap(PMCreator &self, PMCreator &other) {
+            using std::swap;
+            swap(self.TM, other.TM);
+            swap(self.optlevel, other.optlevel);
+        }
+        PMCreator &operator=(PMCreator other) {
+            swap(*this, other);
+            return *this;
+        }
+        std::unique_ptr<legacy::PassManager> operator()() {
+            auto PM = std::make_unique<legacy::PassManager>();
+            addPassesForOptLevel(*PM, *TM, optlevel);
+            return PM;
+        }
+    };
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -923,12 +943,6 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
-    TMs{
-        cantFail(createJTMBFromTM(*TM, 0).createTargetMachine()),
-        cantFail(createJTMBFromTM(*TM, 1).createTargetMachine()),
-        cantFail(createJTMBFromTM(*TM, 2).createTargetMachine()),
-        cantFail(createJTMBFromTM(*TM, 3).createTargetMachine())
-    },
 #if JL_LLVM_VERSION >= 130000
     ES(cantFail(orc::SelfExecutorProcessControl::Create())),
 #else
@@ -937,6 +951,10 @@ JuliaOJIT::JuliaOJIT()
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ContextPool([](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }),
+    PM0s(PMCreator(*TM, 0)),
+    PM1s(PMCreator(*TM, 1)),
+    PM2s(PMCreator(*TM, 2)),
+    PM3s(PMCreator(*TM, 3)),
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
@@ -960,10 +978,10 @@ JuliaOJIT::JuliaOJIT()
     CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 2))),
     CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 3))),
     OptimizeLayers{
-        {ES, CompileLayer0, OptimizerT(PM0, PM_mutexes[0], 0)},
-        {ES, CompileLayer1, OptimizerT(PM1, PM_mutexes[1], 1)},
-        {ES, CompileLayer2, OptimizerT(PM2, PM_mutexes[2], 2)},
-        {ES, CompileLayer3, OptimizerT(PM3, PM_mutexes[3], 3)},
+        {ES, CompileLayer0, OptimizerT(PM0s, 0)},
+        {ES, CompileLayer1, OptimizerT(PM1s, 1)},
+        {ES, CompileLayer2, OptimizerT(PM2s, 2)},
+        {ES, CompileLayer3, OptimizerT(PM3s, 3)},
     },
     OptSelLayer(OptimizeLayers)
 {
@@ -987,10 +1005,6 @@ JuliaOJIT::JuliaOJIT()
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
-    addPassesForOptLevel(PM0, *TMs[0], 0);
-    addPassesForOptLevel(PM1, *TMs[1], 1);
-    addPassesForOptLevel(PM2, *TMs[2], 2);
-    addPassesForOptLevel(PM3, *TMs[3], 3);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
