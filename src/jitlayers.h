@@ -275,6 +275,13 @@ private:
 
         std::unique_ptr<WNMutex> mutex;
     };
+    struct PipelineT {
+        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
+        ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
+        CompileLayerT CompileLayer;
+        OptimizeLayerT OptimizeLayer;
+        int optlevel;
+    };
     struct OptimizerT {
         OptimizerT(ResourcePool<std::unique_ptr<legacy::PassManager>> &PMs, int optlevel) : optlevel(optlevel), PMs(PMs) {}
 
@@ -290,14 +297,14 @@ private:
     struct OptSelLayerT : orc::IRLayer {
 
         template<size_t N>
-        OptSelLayerT(OptimizeLayerT (&optimizers)[N]) : orc::IRLayer(optimizers[0].getExecutionSession(), optimizers[0].getManglingOptions()), optimizers(optimizers), count(N) {
+        OptSelLayerT(std::unique_ptr<PipelineT> (&optimizers)[N]) : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(), optimizers[0]->OptimizeLayer.getManglingOptions()), optimizers(optimizers), count(N) {
             static_assert(N > 0, "Expected array with at least one optimizer!");
         }
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
 
         private:
-        OptimizeLayerT *optimizers;
+        std::unique_ptr<PipelineT> *optimizers;
         size_t count;
     };
 
@@ -345,20 +352,12 @@ private:
     orc::JITDylib &JD;
 
     ResourcePool<orc::ThreadSafeContext> ContextPool;
-    ResourcePool<std::unique_ptr<legacy::PassManager>> PM0s;
-    ResourcePool<std::unique_ptr<legacy::PassManager>> PM1s;
-    ResourcePool<std::unique_ptr<legacy::PassManager>> PM2s;
-    ResourcePool<std::unique_ptr<legacy::PassManager>> PM3s;
 
 #ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    CompileLayerT CompileLayer0;
-    CompileLayerT CompileLayer1;
-    CompileLayerT CompileLayer2;
-    CompileLayerT CompileLayer3;
-    OptimizeLayerT OptimizeLayers[4];
+    std::unique_ptr<PipelineT> Pipelines[4];
     OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;

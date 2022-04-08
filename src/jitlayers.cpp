@@ -568,7 +568,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
         }
     });
     assert(optlevel != ~0ull && "Failed to select a valid optimization level!");
-    this->optimizers[optlevel].emit(std::move(R), std::move(TSM));
+    this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
 }
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
@@ -940,6 +940,12 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
+JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
+: PMs(PMCreator(TM, optlevel)),
+  CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
+    std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(TM, optlevel))),
+  OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(PMs, optlevel)) {}
+
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
     DL(jl_create_datalayout(*TM)),
@@ -951,10 +957,6 @@ JuliaOJIT::JuliaOJIT()
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ContextPool([](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }),
-    PM0s(PMCreator(*TM, 0)),
-    PM1s(PMCreator(*TM, 1)),
-    PM2s(PMCreator(*TM, 2)),
-    PM3s(PMCreator(*TM, 3)),
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
@@ -973,17 +975,13 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #endif
-    CompileLayer0(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 0))),
-    CompileLayer1(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 1))),
-    CompileLayer2(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 2))),
-    CompileLayer3(ES, ObjectLayer, std::make_unique<orc::ConcurrentIRCompiler>(createJTMBFromTM(*TM, 3))),
-    OptimizeLayers{
-        {ES, CompileLayer0, OptimizerT(PM0s, 0)},
-        {ES, CompileLayer1, OptimizerT(PM1s, 1)},
-        {ES, CompileLayer2, OptimizerT(PM2s, 2)},
-        {ES, CompileLayer3, OptimizerT(PM3s, 3)},
+    Pipelines{
+        std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, 1),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
     },
-    OptSelLayer(OptimizeLayers)
+    OptSelLayer(Pipelines)
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
