@@ -1526,7 +1526,7 @@ struct Iterator{Eltype, FuncType, S}
         new{Eltype, typeof(f), Core.Typeof(initialstate)}(f, initialstate)
 
 end
-Iterator(f, initialstate) = Iterator{Any}(f, initialstate)
+Iterator(f, initialstate) = Iterator{nothing}(f, initialstate)
 
 Base.eltype(::Type{Iterator{F, Eltype, S}}) where  {F, Eltype, S} = Eltype
 Base.eltype(::Type{Iterator{F, nothing, S}}) where  {F, S} = Base.EltypeUnknown
