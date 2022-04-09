@@ -1,0 +1,26 @@
+
+%% pkg for make title page BEGIN
+\usepackage{geometry}
+\usepackage[some]{background}
+
+% ---- define heading background
+\backgroundsetup{
+scale=1,
+angle=0,
+opacity=1,
+contents={
+\begin{tikzpicture}[remember picture,overlay]
+  \draw [path picture={
+    \node at (path picture bounding box.center){
+      % remember to adjust bg img height
+      %   when you changed the box size
+      % now: 11cm - 4cm = 7cm
+      \includegraphics[height=7cm]{./assets/title-bg}
+  };}] (-0.5\paperwidth,4cm) rectangle (0.5\paperwidth,11cm);
+\end{tikzpicture}
+}}%
+
+% ---- Heading font style
+\DeclareFixedFont{\MainHeading}{T1}{phv}{b}{n}{1.5cm}
+\DeclareFixedFont{\SecondaryHeading}{T1}{phv}{b}{n}{0.8cm}
+%% title page END

@@ -1,0 +1,34 @@
+
+%% ---- reset page geometry for cover page
+\newgeometry{left=2cm,right=2cm,bottom=3cm}
+% ref: P65 - http://mirrors.ctan.org/macros/latex/contrib/memoir/memman.pdf
+\begin{titlingpage}
+    % set background image
+    \BgThispage
+    \vspace*{2cm}\noindent
+
+    %% Main Heading & Secondary Heading
+    \textcolor{white}{ \MainHeading  \DocMainTitle } 
+    \\[0.6cm]
+    \textcolor{white}{
+        \SecondaryHeading A fresh approach to technical computing.
+    }
+    \vspace*{3cm}\par\noindent
+
+    %% Centering other content
+    \begin{center}
+        % logo
+        \includegraphics[width=0.3\textwidth]{./assets/logo} 
+        \\[1.5cm]
+        % git tag or doc version
+        { \SecondaryHeading Julia \DocVersion Documentation } 
+        \vfill
+        
+        { \huge  \DocAuthors }
+        \\[0.5cm]
+        % build time
+        { \huge \today }
+    \end{center} 
+\end{titlingpage}
+\restoregeometry
+%% ---- restore geometry
