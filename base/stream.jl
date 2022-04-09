@@ -1568,3 +1568,5 @@ function flush(s::BufferStream)
         nothing
     end
 end
+
+skip(s::BufferStream, n) = skip(s.buffer, n)
