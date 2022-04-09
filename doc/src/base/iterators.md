@@ -22,4 +22,5 @@ Base.Iterators.accumulate
 Base.Iterators.reverse
 Base.Iterators.only
 Base.Iterators.peel
+Base.Iterators.Unfold
 ```
