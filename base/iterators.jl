@@ -1519,10 +1519,12 @@ julia> [count(Returns(true), frac(-0.835-0.2321im, (k+j*im)/6)) for j in -4:4, k
   1   2   2   2   2   3   3   4   8  41   5   3   3   3   2   2   2
 ```
 """
-struct Iterator{FuncType, Eltype, S}
+struct Iterator{Eltype, FuncType, S}
     f::FuncType
     initialstate::S
-    Iterator{Eltype}(f::FuncType, initialstate::S) where {Eltype, FuncType, S} = new{FuncType, Eltype, S}(f, initialstate)
+    Iterator{Eltype}(f, initialstate) where {Eltype} =
+        new{Eltype, typeof(f), Core.Typeof(initialstate)}(f, initialstate)
+
 end
 Iterator(f, initialstate) = Iterator{Any}(f, initialstate)
 
