@@ -203,12 +203,12 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
 
     if (lt->isFloatTy()) {
         uint32_t data32 = *(const uint32_t*)ptr;
-        return ConstantFP::get(ctx.builder.getContext(),
+        return ConstantFP::get(getLLVMContext(ctx),
                 APFloat(lt->getFltSemantics(), APInt(32, data32)));
     }
     if (lt->isDoubleTy()) {
         uint64_t data64 = *(const uint64_t*)ptr;
-        return ConstantFP::get(ctx.builder.getContext(),
+        return ConstantFP::get(getLLVMContext(ctx),
                 APFloat(lt->getFltSemantics(), APInt(64, data64)));
     }
     if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
@@ -218,11 +218,11 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         assert(sys::IsLittleEndianHost);
         memcpy(bits, ptr, nb);
         if (lt->isFloatingPointTy()) {
-            return ConstantFP::get(ctx.builder.getContext(),
+            return ConstantFP::get(getLLVMContext(ctx),
                     APFloat(lt->getFltSemantics(), val));
         }
         if (lt->isPointerTy()) {
-            Type *Ty = IntegerType::get(ctx.builder.getContext(), 8 * nb);
+            Type *Ty = IntegerType::get(getLLVMContext(ctx), 8 * nb);
             Constant *addr = ConstantInt::get(Ty, val);
             return ConstantExpr::getIntToPtr(addr, lt);
         }
@@ -252,7 +252,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
             uint8_t sel = ((const uint8_t*)ptr)[offs + fsz - 1];
             jl_value_t *active_ty = jl_nth_union_component(ft, sel);
             size_t active_sz = jl_datatype_size(active_ty);
-            Type *AlignmentType = IntegerType::get(ctx.builder.getContext(), 8 * al);
+            Type *AlignmentType = IntegerType::get(getLLVMContext(ctx), 8 * al);
             unsigned NumATy = (fsz - 1) / al;
             unsigned remainder = (fsz - 1) % al;
             while (NumATy--) {
@@ -405,7 +405,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     if (jt == (jl_value_t*)jl_bool_type || to == getInt1Ty(ctx)) {
         Instruction *unbox_load = tbaa_decorate(x.tbaa, ctx.builder.CreateLoad(getInt8Ty(ctx), maybe_bitcast(ctx, p, getInt8PtrTy(ctx))));
         if (jt == (jl_value_t*)jl_bool_type)
-            unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
+            unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(getLLVMContext(ctx), {
                 ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx), 0)),
                 ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx), 2)) }));
         Value *unboxed;
@@ -485,7 +485,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     if (!bt)
         return emit_runtime_call(ctx, bitcast, argv, 2);
 
-    Type *llvmt = bitstype_to_llvm(bt, ctx.builder.getContext());
+    Type *llvmt = bitstype_to_llvm(bt, getLLVMContext(ctx));
     int nb = jl_datatype_size(bt);
 
     // Examine the second argument //
@@ -571,8 +571,8 @@ static jl_cgval_t generic_cast(
     jl_value_t *jlto = staticeval_bitstype(targ);
     if (!jlto || !jl_is_primitivetype(v.typ))
         return emit_runtime_call(ctx, f, argv, 2);
-    Type *to = bitstype_to_llvm(jlto, ctx.builder.getContext());
-    Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext());
+    Type *to = bitstype_to_llvm(jlto, getLLVMContext(ctx));
+    Type *vt = bitstype_to_llvm(v.typ, getLLVMContext(ctx));
     if (toint)
         to = INTT(to);
     else
@@ -633,8 +633,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         return jl_cgval_t(ctx);
     }
 
-    Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), i, (jl_value_t*)jl_long_type);
-    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+    Value *idx = emit_unbox(ctx, getSizeTy(getLLVMContext(ctx)), i, (jl_value_t*)jl_long_type);
+    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(getLLVMContext(ctx)), 1));
 
     if (ety == (jl_value_t*)jl_any_type) {
         Value *thePtr = emit_unbox(ctx, ctx.types().T_pprjlvalue, e, e.typ);
@@ -647,7 +647,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         uint64_t size = jl_datatype_size(ety);
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val(ctx, ety));
-        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
+        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(getLLVMContext(ctx)),
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx), e, e.typ);
         thePtr = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx), emit_bitcast(ctx, thePtr, getInt8PtrTy(ctx)), im1);
@@ -702,22 +702,22 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
     }
     emit_typecheck(ctx, x, ety, "pointerset");
 
-    Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), i, (jl_value_t*)jl_long_type);
-    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+    Value *idx = emit_unbox(ctx, getSizeTy(getLLVMContext(ctx)), i, (jl_value_t*)jl_long_type);
+    Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(getSizeTy(getLLVMContext(ctx)), 1));
 
     Value *thePtr;
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
-        thePtr = emit_unbox(ctx, getSizePtrTy(ctx.builder.getContext()), e, e.typ);
+        thePtr = emit_unbox(ctx, getSizePtrTy(getLLVMContext(ctx)), e, e.typ);
         Instruction *store = ctx.builder.CreateAlignedStore(
-          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), getSizeTy(ctx.builder.getContext())),
-            ctx.builder.CreateInBoundsGEP(getSizeTy(ctx.builder.getContext()), thePtr, im1), Align(align_nb));
+          ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), getSizeTy(getLLVMContext(ctx))),
+            ctx.builder.CreateInBoundsGEP(getSizeTy(getLLVMContext(ctx)), thePtr, im1), Align(align_nb));
         tbaa_decorate(ctx.tbaa().tbaa_data, store);
     }
     else if (!jl_isbits(ety)) {
         thePtr = emit_unbox(ctx, getInt8PtrTy(ctx), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
-        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(ctx.builder.getContext()),
+        im1 = ctx.builder.CreateMul(im1, ConstantInt::get(getSizeTy(getLLVMContext(ctx)),
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         emit_memcpy(ctx, ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx), thePtr, im1), nullptr, x, size, align_nb);
     }
@@ -792,7 +792,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val(ctx, ety));
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx), e, e.typ);
-        Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
+        Type *loadT = Type::getIntNTy(getLLVMContext(ctx), nb * 8);
         thePtr = emit_bitcast(ctx, thePtr, loadT->getPointerTo());
         MDNode *tbaa = best_tbaa(ctx.tbaa(), ety);
         LoadInst *load = ctx.builder.CreateAlignedLoad(loadT, thePtr, Align(nb));
@@ -829,7 +829,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     bool isreplacefield = f == atomic_pointerreplace;
     bool isswapfield = f == atomic_pointerswap;
     bool ismodifyfield = f == atomic_pointermodify;
-    const jl_cgval_t undefval(ctx.builder.getContext());
+    const jl_cgval_t undefval(getLLVMContext(ctx));
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
     const jl_cgval_t &y = isreplacefield || ismodifyfield ? argv[1] : undefval;
@@ -908,9 +908,9 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
     raise_exception_unless(ctx,
             ctx.builder.CreateICmpNE(den, ConstantInt::get(t, 0)),
             literal_pointer_val(ctx, jl_diverror_exception));
-    BasicBlock *m1BB = BasicBlock::Create(ctx.builder.getContext(), "minus1", ctx.f);
-    BasicBlock *okBB = BasicBlock::Create(ctx.builder.getContext(), "oksrem", ctx.f);
-    BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_srem", ctx.f);
+    BasicBlock *m1BB = BasicBlock::Create(getLLVMContext(ctx), "minus1", ctx.f);
+    BasicBlock *okBB = BasicBlock::Create(getLLVMContext(ctx), "oksrem", ctx.f);
+    BasicBlock *cont = BasicBlock::Create(getLLVMContext(ctx), "after_srem", ctx.f);
     PHINode *ret = PHINode::Create(t, 2);
     ctx.builder.CreateCondBr(ctx.builder.CreateICmpEQ(den ,ConstantInt::get(t, -1, true)),
                          m1BB, okBB);
@@ -1035,7 +1035,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     // LLVM won't return a TBAA result for the root, but mark_julia_struct requires it: make it now
                     auto *OffsetNode = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(ctx), 0));
                     Metadata *Ops[] = {ctx.tbaa().tbaa_root, ctx.tbaa().tbaa_root, OffsetNode};
-                    ifelse_tbaa = MDNode::get(ctx.builder.getContext(), Ops);
+                    ifelse_tbaa = MDNode::get(getLLVMContext(ctx), Ops);
                 }
             }
             Value *tindex;
@@ -1050,8 +1050,8 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             }
             else {
                 PHINode *ret = PHINode::Create(getInt8Ty(ctx), 2);
-                BasicBlock *post = BasicBlock::Create(ctx.builder.getContext(), "post", ctx.f);
-                BasicBlock *compute = BasicBlock::Create(ctx.builder.getContext(), "compute_tindex", ctx.f);
+                BasicBlock *post = BasicBlock::Create(getLLVMContext(ctx), "post", ctx.f);
+                BasicBlock *compute = BasicBlock::Create(getLLVMContext(ctx), "compute_tindex", ctx.f);
                 // compute tindex if we select the previously-boxed value
                 if (x_tindex) {
                     assert(y.isboxed && y.V);
@@ -1196,7 +1196,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         const jl_cgval_t &x = argv[0];
         if (!jl_is_primitivetype(x.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
-        Type *xt = INTT(bitstype_to_llvm(x.typ, ctx.builder.getContext()));
+        Type *xt = INTT(bitstype_to_llvm(x.typ, getLLVMContext(ctx)));
         Value *from = emit_unbox(ctx, xt, x, x.typ);
         Value *ans;
         if (x.typ == (jl_value_t*)jl_bool_type)
@@ -1235,7 +1235,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         // verify argument types
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
-        Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext());
+        Type *xtyp = bitstype_to_llvm(xinfo.typ, getLLVMContext(ctx));
         if (float_func()[f])
             xtyp = FLOATT(xtyp);
         else
@@ -1258,7 +1258,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (f == shl_int || f == lshr_int || f == ashr_int) {
             if (!jl_is_primitivetype(argv[1].typ))
                 return emit_runtime_call(ctx, f, argv, nargs);
-            argt[1] = INTT(bitstype_to_llvm(argv[1].typ, ctx.builder.getContext()));
+            argt[1] = INTT(bitstype_to_llvm(argv[1].typ, getLLVMContext(ctx)));
         }
         else {
             for (size_t i = 1; i < nargs; ++i) {
