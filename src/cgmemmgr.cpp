@@ -27,6 +27,10 @@
 #endif
 #include "julia_assert.h"
 
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+
 namespace {
 
 static size_t get_block_size(size_t size)
@@ -763,8 +767,10 @@ class RTDyldMemoryManagerJL : public SectionMemoryManager {
     RWAllocator rw_alloc;
     std::unique_ptr<ROAllocator<false>> ro_alloc;
     std::unique_ptr<ROAllocator<true>> exe_alloc;
-    bool code_allocated;
+    std::thread::id allocating_thread;
     size_t total_allocated;
+    std::mutex mutex;
+    std::condition_variable freed;
 
 public:
     RTDyldMemoryManagerJL()
@@ -773,8 +779,9 @@ public:
           rw_alloc(),
           ro_alloc(),
           exe_alloc(),
-          code_allocated(false),
-          total_allocated(0)
+          allocating_thread(),
+          total_allocated(0),
+          mutex()
     {
 #ifdef _OS_LINUX_
         if (!ro_alloc && get_self_mem_fd() != -1) {
@@ -790,7 +797,10 @@ public:
     ~RTDyldMemoryManagerJL() override
     {
     }
-    size_t getTotalBytes() { return total_allocated; }
+    size_t getTotalBytes() {
+        std::lock_guard<std::mutex> lock(mutex);
+        return total_allocated;
+    }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
 #if 0
@@ -811,6 +821,7 @@ public:
     template <typename DL, typename Alloc>
     void mapAddresses(DL &Dyld, Alloc &&allocator)
     {
+        std::lock_guard<std::mutex> lock(mutex);
         for (auto &alloc: allocator->allocations) {
             if (alloc.rt_addr == alloc.wr_addr || alloc.relocated)
                 continue;
@@ -830,6 +841,7 @@ public:
     template <typename Alloc>
     void *lookupWriteAddressFor(void *rt_addr, Alloc &&allocator)
     {
+        std::lock_guard<std::mutex> lock(mutex);
         for (auto &alloc: allocator->allocations) {
             if (alloc.rt_addr == rt_addr) {
                 return alloc.wr_addr;
@@ -855,9 +867,13 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
                                                     unsigned SectionID,
                                                     StringRef SectionName)
 {
-    // allocating more than one code section can confuse libunwind.
-    assert(!code_allocated);
-    code_allocated = true;
+    std::unique_lock<std::mutex> lock(mutex);
+    if (allocating_thread != std::thread::id()) {
+        assert(allocating_thread != std::this_thread::get_id() && "allocating more than one code section can confuse libunwind!");
+        //Will deadlock if the above assert is removed
+        freed.wait(lock, [&](){ return allocating_thread == std::thread::id(); });
+    }
+    allocating_thread = std::this_thread::get_id();
     total_allocated += Size;
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);
@@ -871,6 +887,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                     StringRef SectionName,
                                                     bool isReadOnly)
 {
+    std::lock_guard<std::mutex> lock(mutex);
     total_allocated += Size;
     if (!isReadOnly)
         return (uint8_t*)rw_alloc.alloc(Size, Alignment);
@@ -885,6 +902,7 @@ void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
 {
     if (!ro_alloc) {
         assert(!exe_alloc);
+        std::lock_guard<std::mutex> lock(mutex);
         SectionMemoryManager::notifyObjectLoaded(Dyld, Obj);
         return;
     }
@@ -894,7 +912,9 @@ void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
 
 bool RTDyldMemoryManagerJL::finalizeMemory(std::string *ErrMsg)
 {
-    code_allocated = false;
+    std::lock_guard<std::mutex> lock(mutex);
+    bool failure;
+    allocating_thread = std::thread::id();
     if (ro_alloc) {
         ro_alloc->finalize();
         assert(exe_alloc);
@@ -902,18 +922,21 @@ bool RTDyldMemoryManagerJL::finalizeMemory(std::string *ErrMsg)
         for (auto &frame: pending_eh)
             register_eh_frames(frame.addr, frame.size);
         pending_eh.clear();
-        return false;
+        failure = false;
     }
     else {
         assert(!exe_alloc);
-        return SectionMemoryManager::finalizeMemory(ErrMsg);
+        failure = SectionMemoryManager::finalizeMemory(ErrMsg);
     }
+    freed.notify_one();
+    return failure;
 }
 
 void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
                                              uint64_t LoadAddr,
                                              size_t Size)
 {
+    std::lock_guard<std::mutex> lock(mutex);
     if (uintptr_t(Addr) == LoadAddr) {
         register_eh_frames(Addr, Size);
     }
@@ -927,6 +950,7 @@ void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
                                                uint64_t LoadAddr,
                                                size_t Size)
 {
+    std::lock_guard<std::mutex> lock(mutex);
     deregister_eh_frames((uint8_t*)LoadAddr, Size);
 }
 #endif
