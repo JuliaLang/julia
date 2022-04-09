@@ -1480,17 +1480,18 @@ only(x::NamedTuple) = throw(
 Base.intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
 
 """
-    Iterator(f, initialstate)
+    Unfold(f, initialstate)
 
-Iterable object with iterations defined by the function `f(state)`. The function takes the current state at each iteration, and follows the same
-rules as `iterate`. It must return either `(newvalue, newstate)` or `nothing`, in which case the iterator ends.
+Iterable object with iterations defined by the function `f(state)`. The function takes the
+current state at each iteration, and follows the same rules as `iterate`. It must return
+either `(newvalue, newstate)` or `nothing`, in which case the iterator ends.
 
 See also: [`iterate`](@ref)
 
 # Examples
 
 ```jldoctest
-julia> fib = Iterator((1,1)) do (a,b)
+julia> fib = Unfold((1,1)) do (a,b)
            a, (b, a+b)
        end;
 
@@ -1498,7 +1499,7 @@ julia> reduce(hcat, Iterators.take(fib, 7))
 1×7 Matrix{Int64}:
  1  1  2  3  5  8  13
 
-julia> frac(c, z=0.0im) = Iterator{ComplexF64}((c, z)) do (c, z)
+julia> frac(c, z=0.0im) = Unfold{ComplexF64}((c, z)) do (c, z)
            if real(z * z') < 4
                z, (c, z^2 + c)
            else
@@ -1519,20 +1520,22 @@ julia> [count(Returns(true), frac(-0.835-0.2321im, (k+j*im)/6)) for j in -4:4, k
   1   2   2   2   2   3   3   4   8  41   5   3   3   3   2   2   2
 ```
 """
-struct Iterator{Eltype, FuncType, S}
+struct Unfold{Eltype, FuncType, StateType}
     f::FuncType
-    initialstate::S
-    Iterator{Eltype}(f, initialstate) where {Eltype} =
+    initialstate::StateType
+    Unfold{Eltype}(f, initialstate) where {Eltype} =
         new{Eltype, typeof(f), Core.Typeof(initialstate)}(f, initialstate)
 
 end
-Iterator(f, initialstate) = Iterator{nothing}(f, initialstate)
+Unfold(f, initialstate) = Unfold{nothing}(f, initialstate)
 
-Base.eltype(::Type{Iterator{F, Eltype, S}}) where  {F, Eltype, S} = Eltype
-Base.eltype(::Type{<:Iterator{nothing}}) = Any
-Base.IteratorEltype(::Type{<:Iterator{nothing}}) = EltypeUnknown()
-Base.IteratorEltype(::Type{<:Iterator}) = HasEltype()
-Base.IteratorSize(::Type{<:Iterator}) = SizeUnknown()
+Base.eltype(::Type{Unfold{Eltype, F, S}}) where {Eltype, F, S} = Eltype
+Base.eltype(::Type{<:Unfold{nothing}}) = Any
+Base.IteratorEltype(::Type{<:Unfold{nothing}}) = EltypeUnknown()
+Base.IteratorEltype(::Type{<:Unfold}) = HasEltype()
+Base.IteratorSize(::Type{<:Unfold}) = SizeUnknown()
 
-Base.iterate(it::Iterator) = it.f(it.initialstate)
-Base.iterate(it::Iterator, state) = it.f(state)
+Base.iterate(it::Unfold) = it.f(it.initialstate)
+Base.iterate(it::Unfold, state) = it.f(state)
+
+end
