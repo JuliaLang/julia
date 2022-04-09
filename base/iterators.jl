@@ -1534,5 +1534,5 @@ Base.IteratorEltype(::Type{<:Iterator{nothing}}) = EltypeUnknown()
 Base.IteratorEltype(::Type{<:Iterator}) = HasEltype()
 Base.IteratorSize(::Type{<:Iterator}) = SizeUnknown()
 
-Base.iterate(it::Iterator{F, Eltype, S}) where {F, Eltype, S} = it.f(it.initialstate)
-Base.iterate(it::Iterator{F, Eltype, S}, state) where {F, Eltype, S} = it.f(state)
+Base.iterate(it::Iterator) = it.f(it.initialstate)
+Base.iterate(it::Iterator, state) = it.f(state)
