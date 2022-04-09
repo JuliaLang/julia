@@ -988,7 +988,16 @@ end
 
 @testset "Unfold" begin
     @test isempty(Iterators.Unfold(identity, nothing))
-    @test all(2 .^ (0:61) .== Iterators.Unfold(x -> x < 2^62 ? (x, (x+x)) : nothing, 1))
+    unfold61 = Iterators.Unfold(1) do x
+         if x < 2^26
+            return x, x+x
+         else
+            return nothing
+         end
+    end
+    @test all(enumerate(unfold61)) do (i,x)
+        2^(i-1) == x
+    end
 
     aa, bb = eachcol(randn(11,2))
     vals = map(aa, bb) do a, b iterate(Iterators.Unfold(a) do x x, b end) end
