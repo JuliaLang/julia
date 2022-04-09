@@ -1529,9 +1529,10 @@ end
 Iterator(f, initialstate) = Iterator{nothing}(f, initialstate)
 
 Base.eltype(::Type{Iterator{F, Eltype, S}}) where  {F, Eltype, S} = Eltype
-Base.eltype(::Type{Iterator{F, nothing, S}}) where  {F, S} = Base.EltypeUnknown
-Base.IteratorEltype(::Type{<:Iterator}) = Base.HasEltype()
-Base.IteratorSize(::Type{<:Iterator}) = Base.SizeUnknown()
+Base.eltype(::Type{<:Iterator{nothing}}) = Any
+Base.IteratorEltype(::Type{<:Iterator{nothing}}) = EltypeUnknown()
+Base.IteratorEltype(::Type{<:Iterator}) = HasEltype()
+Base.IteratorSize(::Type{<:Iterator}) = SizeUnknown()
 
 Base.iterate(it::Iterator{F, Eltype, S}) where {F, Eltype, S} = it.f(it.initialstate)
 Base.iterate(it::Iterator{F, Eltype, S}, state) where {F, Eltype, S} = it.f(state)
