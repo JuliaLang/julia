@@ -1482,16 +1482,16 @@ Base.intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(interse
 """
     Unfold(f, initialstate)
 
-Iterable object with iterations defined by the function `f(state)`. The function takes the
-current state at each iteration, and follows the same rules as `iterate`. It must return
-either `(newvalue, newstate)` or `nothing`, in which case the iterator ends.
+Iterable object with transitions defined by the function `f(state)`. The function takes the
+current state at each iteration and follows the same rules as `iterate`. It must return
+either `(newvalue, newstate)` or `nothing`, in which case the sequence ends.
 
 See also: [`iterate`](@ref)
 
 # Examples
 
 ```jldoctest
-julia> fib = Unfold((1,1)) do (a,b)
+julia> fib = Iterators.Unfold((1,1)) do (a,b)
            a, (b, a+b)
        end;
 
@@ -1499,7 +1499,7 @@ julia> reduce(hcat, Iterators.take(fib, 7))
 1×7 Matrix{Int64}:
  1  1  2  3  5  8  13
 
-julia> frac(c, z=0.0im) = Unfold{ComplexF64}((c, z)) do (c, z)
+julia> frac(c, z=0.0im) = Iterators.Unfold{ComplexF64}((c, z)) do (c, z)
            if real(z * z') < 4
                z, (c, z^2 + c)
            else
