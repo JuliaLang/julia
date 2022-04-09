@@ -987,18 +987,25 @@ end
 end
 
 @testset "Unfold" begin
-    @test isempty(Unfold(identity, nothing))
-    @test all(2 .^(0:61) .== Unfold(x->x<2^62 ? (x,(x+x)) : nothing , 1))
+    @test isempty(Iterators.Unfold(identity, nothing))
+    @test all(2 .^ (0:61) .== Iterators.Unfold(x -> x < 2^62 ? (x, (x+x)) : nothing, 1))
 
     aa, bb = eachcol(randn(11,2))
-    vals = map(aa, bb) do a, b iterate(Unfold(a) do x x, b end) end
+    vals = map(aa, bb) do a, b iterate(Iterators.Unfold(a) do x x, b end) end
     @test all(zip(aa, bb) .== vals)
 
-    fibs = Unfold(Int64.((1,1))) do (a,b) a, (b, a+b) end
+    abc = ((randn(), rand()/3, randn()) for _ in 1:22)
+    myrange(a,b,c) = Iterators.Unfold(0) do x
+        v = a + x * b
+        a <= v <= c ? (v, x+1) : nothing
+    end
+    @test all(a > c || all(a:b:c .== myrange(a,b,c)) for (a,b,c) in abc)
+
+    fibs = Iterators.Unfold(Int64.((1,1))) do (a,b) a, (b, a+b) end
     fibO1(n::Int64)::Float64 = (MathConstants.φ^n - (1-MathConstants.φ)^n) / √5
-    @test 93 == findfirst(collect(Iterators.take(Iterators.map(
+    @test 93 == Iterators.take(Iterators.map(
         !isapprox,
         fibs,
         (fibO1(x) for x in Iterators.countfrom(1))
-    ), 111)))
+    ), 111) |> collect |> findfirst
 end
