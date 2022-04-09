@@ -2170,7 +2170,7 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 {
     Value *pv = ConstantExpr::getIntToPtr(
         ConstantInt::get(getSizeTy(ctx.builder.getContext()), (uintptr_t)ptr),
-        getInt64PtrTy(ctx.builder.getContext()));
+        getInt64PtrTy(ctx));
     Value *v = ctx.builder.CreateLoad(getInt64Ty(ctx), pv, true, name);
     v = ctx.builder.CreateAdd(v, addend);
     ctx.builder.CreateStore(v, pv, true); // volatile, not atomic, so this might be an underestimate,
@@ -2676,8 +2676,8 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 nroots++;
             OperandBundleDef OpBundle("jl_roots", makeArrayRef(gc_uses, nroots));
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
-                        ctx.builder.CreateBitCast(varg1, getInt8PtrTy(ctx.builder.getContext())),
-                        ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx.builder.getContext())),
+                        ctx.builder.CreateBitCast(varg1, getInt8PtrTy(ctx)),
+                        ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx)),
                         ConstantInt::get(getSizeTy(ctx.builder.getContext()), sz) },
                     ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
             MDNode *tbaa = nullptr;
@@ -3170,7 +3170,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
                         data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
                     }
-                    ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
+                    ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx));
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx), ptindex, offset);
                     ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx), ptindex, idx);
                     *ret = emit_unionload(ctx, data, ptindex, ety, elsz, al, ctx.tbaa().tbaa_arraybuf, true, union_max, ctx.tbaa().tbaa_arrayselbyte);
@@ -3277,7 +3277,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             ptindex = ctx.builder.CreateInBoundsGEP(AT, data, selidx);
                             data = ctx.builder.CreateInBoundsGEP(AT, data, idx);
                         }
-                        ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx.builder.getContext()));
+                        ptindex = emit_bitcast(ctx, ptindex, getInt8PtrTy(ctx));
                         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx), ptindex, offset);
                         ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx), ptindex, idx);
                         tbaa_decorate(ctx.tbaa().tbaa_arrayselbyte, ctx.builder.CreateStore(tindex, ptindex));
@@ -3716,7 +3716,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         *ret = mark_julia_const(ctx, jl_nothing);
-        FunctionType *Fty = FunctionType::get(getVoidTy(ctx.builder.getContext()), true);
+        FunctionType *Fty = FunctionType::get(getVoidTy(ctx), true);
         Function *dnd = prepare_call(it->second);
         SmallVector<Value*, 1> call_args;
 
@@ -4474,8 +4474,8 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             ctx.builder.CreateMemCpy(phi, MaybeAlign(min_align), dest, MaybeAlign(0), nbytes, false);
             ctx.builder.CreateLifetimeEnd(dest);
             Value *ptr = ctx.builder.CreateSelect(isboxed,
-                maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), getInt8PtrTy(ctx.builder.getContext())),
-                maybe_bitcast(ctx, decay_derived(ctx, phi), getInt8PtrTy(ctx.builder.getContext())));
+                maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), getInt8PtrTy(ctx)),
+                maybe_bitcast(ctx, decay_derived(ctx, phi), getInt8PtrTy(ctx)));
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ctx.tbaa(), ctx.tbaa().tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
@@ -6008,7 +6008,7 @@ static Function* gen_cfun_wrapper(
     if (nest) {
         funcName += "make";
         Function *cw_make = Function::Create(
-                FunctionType::get(getInt8PtrTy(ctx.builder.getContext()), { getInt8PtrTy(ctx.builder.getContext()), ctx.types().T_ppjlvalue }, false),
+                FunctionType::get(getInt8PtrTy(ctx), { getInt8PtrTy(ctx), ctx.types().T_ppjlvalue }, false),
                 GlobalVariable::ExternalLinkage,
                 funcName, M);
         jl_init_function(cw_make);
@@ -6021,8 +6021,8 @@ static Function* gen_cfun_wrapper(
         Function *adjust_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
         cwbuilder.CreateCall(init_trampoline, {
                 Tramp,
-                cwbuilder.CreateBitCast(cw, getInt8PtrTy(ctx.builder.getContext())),
-                cwbuilder.CreateBitCast(NVal, getInt8PtrTy(ctx.builder.getContext()))
+                cwbuilder.CreateBitCast(cw, getInt8PtrTy(ctx)),
+                cwbuilder.CreateBitCast(NVal, getInt8PtrTy(ctx))
             });
         cwbuilder.CreateRet(cwbuilder.CreateCall(adjust_trampoline, { Tramp }));
         cw = cw_make;
@@ -6161,7 +6161,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
                  fobj,
                  literal_pointer_val(ctx, output_type),
-                 ctx.builder.CreateBitCast(cache, getInt8PtrTy(ctx.builder.getContext())),
+                 ctx.builder.CreateBitCast(cache, getInt8PtrTy(ctx)),
                  literal_pointer_val(ctx, (jl_value_t*)fill),
                  F,
                  closure_types ? literal_pointer_val(ctx, (jl_value_t*)unionall_env) : Constant::getNullValue(ctx.types().T_pjlvalue),
@@ -6386,7 +6386,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
     Type *rt = NULL;
     Type *srt = NULL;
     if (jl_is_structtype(jlrettype) && jl_is_datatype_singleton((jl_datatype_t*)jlrettype)) {
-        rt = getVoidTy(ctx.builder.getContext());
+        rt = getVoidTy(ctx);
         props.cc = jl_returninfo_t::Register;
     }
     else if (jl_is_uniontype(jlrettype)) {
@@ -6411,7 +6411,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
         bool retboxed;
         rt = julia_type_to_llvm(ctx, jlrettype, &retboxed);
         assert(!retboxed);
-        if (rt != getVoidTy(ctx.builder.getContext()) && deserves_sret(jlrettype, rt)) {
+        if (rt != getVoidTy(ctx) && deserves_sret(jlrettype, rt)) {
             auto tracked = CountTrackedPointers(rt);
             assert(!tracked.derived);
             if (tracked.count && !tracked.all)
@@ -6419,7 +6419,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
             props.cc = jl_returninfo_t::SRet;
             fsig.push_back(rt->getPointerTo());
             srt = rt;
-            rt = getVoidTy(ctx.builder.getContext());
+            rt = getVoidTy(ctx);
         }
         else {
             props.cc = jl_returninfo_t::Register;
@@ -7127,7 +7127,7 @@ static jl_llvm_functions_t
             // the world age.
             if (i == 0 && ctx.is_opaque_closure) {
                 // Load closure world
-                Value *argaddr = emit_bitcast(ctx, maybe_decay_tracked(ctx, data_pointer(ctx, theArg)), getInt8PtrTy(ctx.builder.getContext()));
+                Value *argaddr = emit_bitcast(ctx, maybe_decay_tracked(ctx, data_pointer(ctx, theArg)), getInt8PtrTy(ctx));
                 Value *worldaddr = ctx.builder.CreateInBoundsGEP(
                         getInt8Ty(ctx), argaddr,
                         ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_opaque_closure_t, world)));
