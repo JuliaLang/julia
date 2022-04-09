@@ -41,7 +41,7 @@ Library changes
   as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
   now be called on a dictionary or set shared by arbitrary tasks provided that there are no
   tasks mutating the dictionary or set ([#44534]).
-* `RoundFromZero` now works for non-`BigFloat` types ([#41246]). 
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 
 
 Standard library changes
