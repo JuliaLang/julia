@@ -239,7 +239,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
         if (type_is_ghost(lft))
             continue;
         assert(!jl_field_isptr(bt, i));
-        unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(jl_Module->getDataLayout(), lt, offs) : i;
+        unsigned llvm_idx = isa<StructType>(lt) ? convert_struct_offset(getLLVMModule(ctx)->getDataLayout(), lt, offs) : i;
         while (fields.size() < llvm_idx)
             fields.push_back(
                 UndefValue::get(GetElementPtrInst::getTypeAtIndex(lt, fields.size())));
@@ -327,7 +327,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
         return unboxed;
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
-    const DataLayout &DL = jl_Module->getDataLayout();
+    const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
     if (ty == getInt1Ty(ctx) && to == getInt8Ty(ctx)) {
         // bools may be stored internally as int8
         unboxed = ctx.builder.CreateZExt(unboxed, getInt8Ty(ctx));
@@ -346,7 +346,7 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     }
     else if (!ty->isIntOrPtrTy() && !ty->isFloatingPointTy()) {
 #ifndef JL_NDEBUG
-        const DataLayout &DL = jl_Module->getDataLayout();
+        const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
 #endif
         assert(DL.getTypeSizeInBits(ty) == DL.getTypeSizeInBits(to));
         AllocaInst *cast = ctx.builder.CreateAlloca(ty);
@@ -436,7 +436,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             // appropriate coercion manually.
             AllocaInst *AI = cast<AllocaInst>(p);
             Type *AllocType = AI->getAllocatedType();
-            const DataLayout &DL = jl_Module->getDataLayout();
+            const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
             if (!AI->isArrayAllocation() &&
                     (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
                     (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
@@ -1223,7 +1223,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         else
             return emit_runtime_call(ctx, f, argv, nargs);
 
-        FunctionCallee intr = jl_Module->getOrInsertFunction(intr_name, getInt1Ty(ctx));
+        FunctionCallee intr = getLLVMModule(ctx)->getOrInsertFunction(intr_name, getInt1Ty(ctx));
         auto ret = ctx.builder.CreateCall(intr);
         return mark_julia_type(ctx, ret, false, jl_bool_type);
     }
@@ -1341,7 +1341,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     case fma_float: {
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
-        FunctionCallee fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
+        FunctionCallee fmaintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::fma, makeArrayRef(t));
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
@@ -1371,7 +1371,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                 (f == checked_smul_int ?
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
-        FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
+        FunctionCallee intr = Intrinsic::getDeclaration(getLLVMModule(ctx), intr_id, makeArrayRef(t));
         Value *res = ctx.builder.CreateCall(intr, {x, y});
         Value *val = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
         Value *obit = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
@@ -1488,30 +1488,30 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         }
     }
     case bswap_int: {
-        FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, makeArrayRef(t));
+        FunctionCallee bswapintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::bswap, makeArrayRef(t));
         return ctx.builder.CreateCall(bswapintr, x);
     }
     case ctpop_int: {
-        FunctionCallee ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, makeArrayRef(t));
+        FunctionCallee ctpopintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::ctpop, makeArrayRef(t));
         return ctx.builder.CreateCall(ctpopintr, x);
     }
     case ctlz_int: {
-        FunctionCallee ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
+        FunctionCallee ctlz = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::ctlz, makeArrayRef(t));
         y = ConstantInt::get(getInt1Ty(ctx), 0);
         return ctx.builder.CreateCall(ctlz, {x, y});
     }
     case cttz_int: {
-        FunctionCallee cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
+        FunctionCallee cttz = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::cttz, makeArrayRef(t));
         y = ConstantInt::get(getInt1Ty(ctx), 0);
         return ctx.builder.CreateCall(cttz, {x, y});
     }
 
     case abs_float: {
-        FunctionCallee absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
+        FunctionCallee absintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::fabs, makeArrayRef(t));
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
-        FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, makeArrayRef(t));
+        FunctionCallee copyintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::copysign, makeArrayRef(t));
         return ctx.builder.CreateCall(copyintr, {x, y});
     }
     case flipsign_int: {
@@ -1530,27 +1530,27 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);
     }
     case ceil_llvm: {
-        FunctionCallee ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, makeArrayRef(t));
+        FunctionCallee ceilintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::ceil, makeArrayRef(t));
         return ctx.builder.CreateCall(ceilintr, x);
     }
     case floor_llvm: {
-        FunctionCallee floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, makeArrayRef(t));
+        FunctionCallee floorintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::floor, makeArrayRef(t));
         return ctx.builder.CreateCall(floorintr, x);
     }
     case trunc_llvm: {
-        FunctionCallee truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, makeArrayRef(t));
+        FunctionCallee truncintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::trunc, makeArrayRef(t));
         return ctx.builder.CreateCall(truncintr, x);
     }
     case rint_llvm: {
-        FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
+        FunctionCallee rintintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::rint, makeArrayRef(t));
         return ctx.builder.CreateCall(rintintr, x);
     }
     case sqrt_llvm: {
-        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
     }
     case sqrt_llvm_fast: {
-        FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
+        FunctionCallee sqrtintr = Intrinsic::getDeclaration(getLLVMModule(ctx), Intrinsic::sqrt, makeArrayRef(t));
         return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 

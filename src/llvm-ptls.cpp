@@ -31,8 +31,6 @@
 
 using namespace llvm;
 
-typedef Instruction TerminatorInst;
-
 namespace {
 
 struct LowerPTLS {
@@ -180,8 +178,8 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, bool *CFGModified)
                                     Constant::getNullValue(offset->getType()));
             MDBuilder MDB(pgcstack->getContext());
             SmallVector<uint32_t, 2> Weights{9, 1};
-            TerminatorInst *fastTerm;
-            TerminatorInst *slowTerm;
+            Instruction *fastTerm;
+            Instruction *slowTerm;
             SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
                                           MDB.createBranchWeights(Weights));
             if (CFGModified)

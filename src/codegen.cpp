@@ -129,6 +129,9 @@ static LLVMContext &getLLVMContext(LLVMT *llvmv) {
     return getLLVMContext(*llvmv);
 }
 
+static Module *getLLVMModule(IRBuilder<> &builder) {
+    return builder.GetInsertBlock()->getParent()->getParent();
+}
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
 
@@ -224,8 +227,6 @@ auto getSizePtrTy(LLVMContext &ctxt) {
     }
 }
 
-typedef Instruction TerminatorInst;
-
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX
 #endif
@@ -271,10 +272,7 @@ extern void _chkstk(void);
 #endif
 }
 
-// shared llvm state
-#define jl_Module ctx.f->getParent()
-#define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
-#define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
+#define prepare_call(Callee) prepare_call_in(getLLVMModule(ctx), (Callee))
 
 // types
 struct jl_typecache_t {
@@ -1441,8 +1439,12 @@ public:
     }
 };
 
+static Module *getLLVMModule(jl_codectx_t &ctx) {
+    return ctx.f->getParent();
+}
+
 GlobalVariable *JuliaVariable::realize(jl_codectx_t &ctx) {
-    return realize(jl_Module);
+    return realize(getLLVMModule(ctx));
 }
 
 static LLVMContext &getLLVMContext(jl_codectx_t &ctx) {
@@ -1639,7 +1641,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
+        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *getLLVMModule(ctx));
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());
@@ -3778,7 +3780,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     ++EmittedSpecfunCalls;
     // emit specialized call site
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
-    jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, specFunctionObject, mi->specTypes, jlretty, is_opaque_closure);
+    jl_returninfo_t returninfo = get_specsig_function(ctx, getLLVMModule(ctx), specFunctionObject, mi->specTypes, jlretty, is_opaque_closure);
     FunctionType *cft = returninfo.decl->getFunctionType();
     *cc = returninfo.cc;
     *return_roots = returninfo.return_roots;
@@ -3893,7 +3895,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
                                           const jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
     auto theFptr = cast<Function>(
-        jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee());
+        getLLVMModule(ctx)->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee());
     addRetAttr(theFptr, Attribute::NonNull);
     theFptr->addFnAttr(Attribute::get(getLLVMContext(ctx), "thunk"));
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, JLCALL_F_CC);
@@ -3980,7 +3982,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
                     handled = true;
                     if (need_to_emit) {
-                        Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
+                        Function *trampoline_decl = cast<Function>(getLLVMModule(ctx)->getNamedValue(protoname));
                         ctx.call_targets.push_back(std::make_tuple(codeinst, cc, return_roots, trampoline_decl, specsig));
                     }
                 }
@@ -4314,7 +4316,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
                 ctx.builder.CreateAlignedStore(unbox, ssaslot, ssaslot->getAlign());
             }
             else {
-                const DataLayout &DL = jl_Module->getDataLayout();
+                const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
                 uint64_t sz = DL.getTypeStoreSize(T);
                 emit_memcpy(ctx, ssaslot, ctx.tbaa().tbaa_stack, vi.value, sz, ssaslot->getAlign().value());
             }
@@ -4780,7 +4782,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
             // TODO: inference is invalid if this has any effect (which it often does)
             LoadInst *world = ctx.builder.CreateAlignedLoad(getSizeTy(getLLVMContext(ctx)),
-                prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+                prepare_global_in(getLLVMModule(ctx), jlgetworld_global), Align(sizeof(size_t)));
             world->setOrdering(AtomicOrdering::Acquire);
             ctx.builder.CreateAlignedStore(world, ctx.world_age_field, Align(sizeof(size_t)));
         }
@@ -4819,7 +4821,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     orc::ThreadSafeModule closure_m = jl_create_llvm_module(
             name_from_method_instance(mi), ctx.emission_context.tsctx,
             ctx.emission_context.imaging,
-            jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
+            getLLVMModule(ctx)->getDataLayout(), Triple(getLLVMModule(ctx)->getTargetTriple()));
     jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
 
     assert(closure_decls.functionObject != "jl_fptr_sparam");
@@ -4829,12 +4831,12 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     std::string fname = isspecsig ?
         closure_decls.functionObject :
         closure_decls.specFunctionObject;
-    if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
+    if (GlobalValue *V = getLLVMModule(ctx)->getNamedValue(fname)) {
         F = cast<Function>(V);
     } else {
         F = Function::Create(get_func_sig(getLLVMContext(ctx)),
                              Function::ExternalLinkage,
-                             fname, jl_Module);
+                             fname, getLLVMModule(ctx));
         F->setAttributes(get_func_attrs(getLLVMContext(ctx)));
     }
     Function *specF = NULL;
@@ -4844,7 +4846,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         //emission context holds context lock so can get module
         specF = closure_m.getModuleUnlocked()->getFunction(closure_decls.specFunctionObject);
         if (specF) {
-            jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module,
+            jl_returninfo_t returninfo = get_specsig_function(ctx, getLLVMModule(ctx),
                 closure_decls.specFunctionObject, sigtype, rettype, true);
             specF = returninfo.decl;
         }
@@ -5336,7 +5338,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     jl_init_function(f);
     f->addFnAttr(Attribute::get(M->getContext(), "thunk"));
     //f->setAlwaysInline();
-    ctx.f = f; // for jl_Module
+    ctx.f = f; // for getLLVMModule(ctx)
     BasicBlock *b0 = BasicBlock::Create(getLLVMContext(ctx), "top", f);
     ctx.builder.SetInsertPoint(b0);
     Function *theFunc;
@@ -5619,7 +5621,7 @@ static Function* gen_cfun_wrapper(
     ctx.world_age_field = ctx.builder.CreateSelect(have_tls, ctx.world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(ctx.tbaa().tbaa_gcframe, ctx.builder.CreateAlignedLoad(getSizeTy(getLLVMContext(ctx)), ctx.world_age_field, Align(sizeof(size_t))));
     Value *world_v = ctx.builder.CreateAlignedLoad(getSizeTy(getLLVMContext(ctx)),
-        prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+        prepare_global_in(getLLVMModule(ctx), jlgetworld_global), Align(sizeof(size_t)));
     cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
 
     Value *age_ok = NULL;
@@ -5808,10 +5810,10 @@ static Function* gen_cfun_wrapper(
         Function *theFptr = NULL;
         if (calltype == 1) {
             StringRef fname = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)callptr, codeinst);
-            theFptr = cast_or_null<Function>(jl_Module->getNamedValue(fname));
+            theFptr = cast_or_null<Function>(getLLVMModule(ctx)->getNamedValue(fname));
             if (!theFptr) {
                 theFptr = Function::Create(ctx.types().T_jlfunc, GlobalVariable::ExternalLinkage,
-                                           fname, jl_Module);
+                                           fname, getLLVMModule(ctx));
                 jl_init_function(theFptr);
             }
             else {
@@ -6135,7 +6137,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     // try to look up this function for direct invoking
     jl_method_instance_t *lam = sigt ? jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0) : NULL;
     Value *F = gen_cfun_wrapper(
-            jl_Module, ctx.emission_context,
+            getLLVMModule(ctx), ctx.emission_context,
             sig, fexpr_rt.constant, NULL,
             declrt, lam,
             unionall_env, sparam_vals, &closure_types);
@@ -6155,7 +6157,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             jl_add_method_root(ctx, (jl_value_t*)fill);
         }
         Type *T_htable = ArrayType::get(getSizeTy(getLLVMContext(ctx)), sizeof(htable_t) / sizeof(void*));
-        Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
+        Value *cache = new GlobalVariable(*getLLVMModule(ctx), T_htable, false,
                                GlobalVariable::PrivateLinkage,
                                ConstantAggregateZero::get(T_htable));
         F = ctx.builder.CreateCall(prepare_call(jlgetcfunctiontrampoline_func), {
@@ -7728,7 +7730,7 @@ static jl_llvm_functions_t
                 continue;
             }
             assert(std::find(pred_begin(PhiBB), pred_end(PhiBB), FromBB) != pred_end(PhiBB)); // consistency check
-            TerminatorInst *terminator = FromBB->getTerminator();
+            Instruction *terminator = FromBB->getTerminator();
             if (!terminator->getParent()->getUniqueSuccessor()) {
                 // Can't use `llvm::SplitCriticalEdge` here because
                 // we may have invalid phi nodes in the destination.
@@ -7994,7 +7996,7 @@ static jl_llvm_functions_t
         });
         jl_merge_module(TSM, std::move(TSMod));
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
+            getLLVMModule(ctx)->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     // link in opaque closure modules
@@ -8007,7 +8009,7 @@ static jl_llvm_functions_t
         });
         jl_merge_module(TSM, std::move(TSMod));
         for (auto FN: Exports)
-            jl_Module->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
+            getLLVMModule(ctx)->getFunction(FN)->setLinkage(GlobalVariable::InternalLinkage);
     }
 
     JL_GC_POP();

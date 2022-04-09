@@ -115,7 +115,7 @@ static Value *stringConstPtr(
         IRBuilder<> &irbuilder,
         const std::string &txt)
 {
-    Module *M = jl_builderModule(irbuilder);
+    Module *M = getLLVMModule(irbuilder);
     StringRef ctxt(txt.c_str(), txt.size() + 1);
     Constant *Data = ConstantDataArray::get(irbuilder.getContext(), arrayRefFromStringRef(ctxt));
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str", *M);
@@ -295,7 +295,7 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     // store the name given so we can reuse it (facilitating merging later)
     // so first see if there already is a GlobalVariable for this address
     GlobalVariable* &gv = ctx.global_targets[addr];
-    Module *M = jl_Module;
+    Module *M = getLLVMModule(ctx);
     StringRef localname;
     std::string gvname;
     if (!gv) {
@@ -357,7 +357,7 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
     if (!ctx.emission_context.imaging) {
         // TODO: this is an optimization, but is it useful or premature
         // (it'll block any attempt to cache these, but can be simply deleted)
-        Module *M = jl_Module;
+        Module *M = getLLVMModule(ctx);
         GlobalVariable *gv = new GlobalVariable(
                 *M, ctx.types().T_pjlvalue, true, GlobalVariable::PrivateLinkage,
                 literal_static_pointer_val(p, ctx.types().T_pjlvalue));
@@ -366,7 +366,7 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
     }
     if (JuliaVariable *gv = julia_const_gv(p)) {
         // if this is a known special object, use the existing GlobalValue
-        return prepare_global_in(jl_Module, gv);
+        return prepare_global_in(getLLVMModule(ctx), gv);
     }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
@@ -1581,7 +1581,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return ghostValue(ctx, jltype);
     AllocaInst *intcast = NULL;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
-        const DataLayout &DL = jl_Module->getDataLayout();
+        const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
         unsigned nb = DL.getTypeSizeInBits(elty);
         intcast = ctx.builder.CreateAlloca(elty);
         elty = Type::getIntNTy(getLLVMContext(ctx), nb);
@@ -1693,7 +1693,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     }
     AllocaInst *intcast = nullptr;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
-        const DataLayout &DL = jl_Module->getDataLayout();
+        const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
         unsigned nb = DL.getTypeSizeInBits(elty);
         if (!issetfield)
             intcast = ctx.builder.CreateAlloca(elty);
@@ -2019,7 +2019,7 @@ static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
         if (val)
-            data = get_pointer_to_constant(ctx.emission_context, val, "_j_const", *jl_Module);
+            data = get_pointer_to_constant(ctx.emission_context, val, "_j_const", *getLLVMModule(ctx));
         else
             data = literal_pointer_val(ctx, x.constant);
     }
@@ -2038,7 +2038,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     if (sz <= 64) {
         // The size limit is arbitrary but since we mainly care about floating points and
         // machine size vectors this should be enough.
-        const DataLayout &DL = jl_Module->getDataLayout();
+        const DataLayout &DL = getLLVMModule(ctx)->getDataLayout();
         auto srcty = cast<PointerType>(src->getType());
         //TODO unsafe nonopaque pointer
         auto srcel = srcty->getElementType();
@@ -2917,7 +2917,7 @@ static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
 static Value *load_i8box(jl_codectx_t &ctx, Value *v, jl_datatype_t *ty)
 {
     auto jvar = ty == jl_int8_type ? jlboxed_int8_cache : jlboxed_uint8_cache;
-    GlobalVariable *gv = prepare_global_in(jl_Module, jvar);
+    GlobalVariable *gv = prepare_global_in(getLLVMModule(ctx), jvar);
     Value *idx[] = {ConstantInt::get(getInt32Ty(ctx), 0), ctx.builder.CreateZExt(v, getInt32Ty(ctx))};
     auto slot = ctx.builder.CreateInBoundsGEP(gv->getValueType(), gv, idx);
     return tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(
@@ -2937,7 +2937,7 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
 
     if (ctx.linfo && jl_is_method(ctx.linfo->def.method) && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
-            jl_value_t *s = static_constant_instance(jl_Module->getDataLayout(), c, jt);
+            jl_value_t *s = static_constant_instance(getLLVMModule(ctx)->getDataLayout(), c, jt);
             if (s) {
                 jl_add_method_root(ctx, s);
                 return track_pjlvalue(ctx, literal_pointer_val(ctx, s));

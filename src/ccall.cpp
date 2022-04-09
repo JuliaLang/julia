@@ -57,7 +57,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
+    auto &TSM = ctx.emission_context.shared_module(*getLLVMModule(ctx));
     //Safe b/c emission context holds context lock
     auto M = TSM.getModuleUnlocked();
     bool runtime_lib = false;
@@ -160,7 +160,7 @@ static Value *runtime_sym_lookup(
     Value *nameval = stringConstPtr(emission_context, irbuilder, f_name);
     if (lib_expr) {
         jl_cgval_t libval = emit_expr(*ctx, lib_expr);
-        llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jllazydlsym_func),
+        llvmf = irbuilder.CreateCall(prepare_call_in(getLLVMModule(irbuilder), jllazydlsym_func),
                     { boxed(*ctx, libval), nameval });
     }
     else {
@@ -172,7 +172,7 @@ static Value *runtime_sym_lookup(
             // f_lib is actually one of the special sentinel values
             libname = ConstantExpr::getIntToPtr(ConstantInt::get(getSizeTy(irbuilder.getContext()), (uintptr_t)f_lib), getInt8PtrTy(irbuilder.getContext()));
         }
-        llvmf = irbuilder.CreateCall(prepare_call_in(jl_builderModule(irbuilder), jldlsym_func),
+        llvmf = irbuilder.CreateCall(prepare_call_in(getLLVMModule(irbuilder), jldlsym_func),
                     { libname, nameval, libptrgv });
     }
     StoreInst *store = irbuilder.CreateAlignedStore(llvmf, llvmgv, Align(sizeof(void*)));
@@ -216,15 +216,15 @@ static Value *runtime_sym_lookup(
         gvname += f_name;
         gvname += "_";
         gvname += std::to_string(globalUniqueGeneratedNames++);
-        llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc, false,
+        llvmgv = new GlobalVariable(*getLLVMModule(ctx), T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), gvname);
     }
     else {
         runtime_lib = runtime_sym_gvs(ctx, f_lib, f_name, libptrgv, llvmgv);
-        libptrgv = prepare_global_in(jl_Module, libptrgv);
+        libptrgv = prepare_global_in(getLLVMModule(ctx), libptrgv);
     }
-    llvmgv = prepare_global_in(jl_Module, llvmgv);
+    llvmgv = prepare_global_in(getLLVMModule(ctx), llvmgv);
     return runtime_sym_lookup(ctx, funcptype, f_lib, lib_expr, f_name, f, libptrgv, llvmgv, runtime_lib);
 }
 
@@ -238,7 +238,7 @@ static GlobalVariable *emit_plt_thunk(
         bool runtime_lib)
 {
     ++PLTThunks;
-    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
+    auto &TSM = ctx.emission_context.shared_module(*getLLVMModule(ctx));
     Module *M = TSM.getModuleUnlocked();
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
@@ -325,7 +325,7 @@ static Value *emit_plt(
         sharedgot = emit_plt_thunk(ctx,
                 functype, attrs, cc, f_lib, f_name, libptrgv, llvmgv, runtime_lib);
     }
-    GlobalVariable *got = prepare_global_in(jl_Module, sharedgot);
+    GlobalVariable *got = prepare_global_in(getLLVMModule(ctx), sharedgot);
     LoadInst *got_val = ctx.builder.CreateAlignedLoad(got->getValueType(), got, Align(sizeof(void*)));
     // See comment in `runtime_sym_lookup` above. This in principle needs a
     // consume ordering too. This is even less likely to cause issues though
@@ -851,7 +851,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     std::string ir_name;
     while (true) {
         raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUniqueGeneratedNames++;
-        if (jl_Module->getFunction(ir_name) == NULL)
+        if (getLLVMModule(ctx)->getFunction(ir_name) == NULL)
             break;
     }
 
@@ -944,11 +944,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     }
 
     // copy module properties that should always match
-    Mod->setTargetTriple(jl_Module->getTargetTriple());
-    Mod->setDataLayout(jl_Module->getDataLayout());
+    Mod->setTargetTriple(getLLVMModule(ctx)->getTargetTriple());
+    Mod->setDataLayout(getLLVMModule(ctx)->getDataLayout());
 #if JL_LLVM_VERSION >= 130000
-    Mod->setStackProtectorGuard(jl_Module->getStackProtectorGuard());
-    Mod->setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
+    Mod->setStackProtectorGuard(getLLVMModule(ctx)->getStackProtectorGuard());
+    Mod->setOverrideStackAlignment(getLLVMModule(ctx)->getOverrideStackAlignment());
 #endif
 
     // verify the definition
@@ -965,7 +965,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // generate a call
     FunctionType *decl_typ = FunctionType::get(rettype, argtypes, def->isVarArg());
     Function *decl = Function::Create(decl_typ, def->getLinkage(), def->getAddressSpace(),
-                                      def->getName(), jl_Module);
+                                      def->getName(), getLLVMModule(ctx));
     decl->setAttributes(def->getAttributes());
     CallInst *inst = ctx.builder.CreateCall(decl, ArrayRef<Value *>(&argvals[0], nargt));
 
@@ -2005,7 +2005,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             bool f_extern = f_name.consume_front("extern ");
             llvmf = NULL;
             if (f_extern) {
-                llvmf = jl_Module->getOrInsertFunction(f_name, functype).getCallee();
+                llvmf = getLLVMModule(ctx)->getOrInsertFunction(f_name, functype).getCallee();
                 if (!isa<Function>(llvmf) || cast<Function>(llvmf)->isIntrinsic() || cast<Function>(llvmf)->getFunctionType() != functype)
                     llvmf = NULL;
             }
@@ -2023,7 +2023,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     if (res == Intrinsic::MatchIntrinsicTypes_Match) {
                         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
                         if (matchvararg) {
-                            Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
+                            Function *intrinsic = Intrinsic::getDeclaration(getLLVMModule(ctx), ID, overloadTys);
                             assert(intrinsic->getFunctionType() == functype);
                             if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
                                 llvmf = intrinsic;
