@@ -2,8 +2,8 @@
 
 """
 Utilities for reading and writing delimited files, for example ".csv".
-See [`readdlm`](@ref) and [`writedlm`](@ref). See also external package
-CSV.jl as an alternative.
+See [`readdlm`](@ref) and [`writedlm`](@ref). Also see [CSV.jl](https://csv.juliadata.org/stable/),
+an external package that provides more features.
 """
 module DelimitedFiles
 
@@ -24,9 +24,9 @@ const offs_chunk_size = 5000
     readdlm(source, T::Type; options...)
 
 The columns are assumed to be separated by one or more whitespaces. The end of line
-delimiter is taken as `\\n`. See also external package CSV.jl as an alternative,
-escpecially for large files, and it handles some corner-cases better where readdlm
-(currently) fails. It can be faster to use readdlm for smaller files, and writedlm.
+delimiter is taken as `\\n`. CSV.jl[https://csv.juliadata.org/stable/]
+is an alternative package with more features, should `readdlm` be too slow or unable
+to load particular files.
 
 # Examples
 ```jldoctest
