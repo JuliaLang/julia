@@ -1291,7 +1291,7 @@ struct jl_cgval_t {
         assert(TIndex == NULL || TIndex->getType() == getInt8Ty(TIndex->getContext()));
     }
     explicit jl_cgval_t(jl_value_t *typ) : // ghost value constructor
-        // mark explicit to avoid being used implicitly for conversion from NULL (use jl_cgval_t(ctx.builder.getContext()) instead)
+        // mark explicit to avoid being used implicitly for conversion from NULL (use jl_cgval_t(ctx) instead)
         V(NULL),
         Vboxed(NULL),
         TIndex(NULL),
@@ -1336,6 +1336,8 @@ struct jl_cgval_t {
         tbaa(nullptr)
     {
     }
+
+    explicit jl_cgval_t(jl_codectx_t &ctx) : jl_cgval_t(getLLVMContext(ctx)) {}
 };
 
 // per-local-variable information
@@ -1575,7 +1577,7 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
 static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
 {
     if (typ == jl_bottom_type)
-        return jl_cgval_t(ctx.builder.getContext()); // Undef{}
+        return jl_cgval_t(ctx); // Undef{}
     if (typ == (jl_value_t*)jl_typeofbottom_type) {
         // normalize TypeofBottom to Type{Union{}}
         typ = (jl_value_t*)jl_typeofbottom_type->super;
@@ -1691,7 +1693,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
         if (jl_is_concrete_type(typ) && !jl_is_kind(typ)) {
             // type mismatch: changing from one leaftype to another
             CreateTrap(ctx.builder);
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t(ctx);
         }
         return v; // doesn't improve type info
     }
@@ -1711,7 +1713,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
                 else {
                     // type mismatch (there weren't any boxed values in the union)
                     CreateTrap(ctx.builder);
-                    return jl_cgval_t(ctx.builder.getContext());
+                    return jl_cgval_t(ctx);
                 }
             }
         }
@@ -1976,14 +1978,14 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             else {
                 // type mismatch: there weren't any boxed values in the union
                 CreateTrap(ctx.builder);
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t(ctx);
             }
         }
         if (jl_is_concrete_type(v.typ) && !jl_is_kind(v.typ)) {
             if (jl_is_concrete_type(typ) && !jl_is_kind(typ)) {
                 // type mismatch: changing from one leaftype to another
                 CreateTrap(ctx.builder);
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t(ctx);
             }
         }
     }
@@ -2013,12 +2015,12 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             else if (skip) {
                 // undef
                 *skip = ConstantInt::get(getInt1Ty(ctx), 1);
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t(ctx);
             }
             else {
                 // unreachable
                 CreateTrap(ctx.builder);
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t(ctx);
             }
         }
         else if (!v.isboxed) {
@@ -2518,7 +2520,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false);
     if (bp == NULL)
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t(ctx);
     bp = julia_binding_pvalue(ctx, bp);
     if (bnd && bnd->value != NULL) {
         if (bnd->constp) {
@@ -2835,7 +2837,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     if (order == jl_memory_order_invalid || order == jl_memory_order_notatomic) {
         emit_atomic_error(ctx, order == jl_memory_order_invalid ? "invalid atomic ordering" : "setglobal!: module binding cannot be written non-atomically");
-        *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+        *ret = jl_cgval_t(ctx); // unreachable
         return true;
     }
 
@@ -2849,7 +2851,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 *ret = val;
             }
             else {
-                *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+                *ret = jl_cgval_t(ctx); // unreachable
             }
             return true;
         }
@@ -2890,7 +2892,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
     if (order == jl_memory_order_invalid || fail_order == jl_memory_order_invalid || fail_order > order) {
         emit_atomic_error(ctx, "invalid atomic ordering");
-        *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+        *ret = jl_cgval_t(ctx); // unreachable
         return true;
     }
 
@@ -2916,7 +2918,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 bool isboxed = jl_field_isptr(uty, idx);
                 bool isatomic = jl_field_isatomic(uty, idx);
                 bool needlock = isatomic && !isboxed && jl_datatype_size(jl_field_type(uty, idx)) > MAX_ATOMIC_SIZE;
-                *ret = jl_cgval_t(ctx.builder.getContext());
+                *ret = jl_cgval_t(ctx);
                 if (isatomic == (order == jl_memory_order_notatomic)) {
                     emit_atomic_error(ctx,
                             issetfield ?
@@ -3067,7 +3069,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     else if (f == jl_builtin_throw && nargs == 1) {
         Value *arg1 = boxed(ctx, argv[1]);
         raise_exception(ctx, arg1);
-        *ret = jl_cgval_t(ctx.builder.getContext());
+        *ret = jl_cgval_t(ctx);
         return true;
     }
 
@@ -3287,7 +3289,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     else {
                         typed_store(ctx,
                                     emit_arrayptr(ctx, ary, ary_ex, isboxed),
-                                    idx, val, jl_cgval_t(ctx.builder.getContext()), ety,
+                                    idx, val, jl_cgval_t(ctx), ety,
                                     isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
                                     ctx.aliasscope,
                                     data_owner,
@@ -3339,7 +3341,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (order == jl_memory_order_invalid) {
             emit_atomic_error(ctx, "invalid atomic ordering");
-            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+            *ret = jl_cgval_t(ctx); // unreachable
             return true;
         }
 
@@ -3410,7 +3412,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     if (obj.ispointer()) {
                         if (order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
                             emit_atomic_error(ctx, "getfield: non-atomic field cannot be accessed atomically");
-                            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+                            *ret = jl_cgval_t(ctx); // unreachable
                             return true;
                         }
                         // Determine which was the type that was homogenous
@@ -3459,7 +3461,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
         if (order == jl_memory_order_invalid || order == jl_memory_order_notatomic) {
             emit_atomic_error(ctx, order == jl_memory_order_invalid ? "invalid atomic ordering" : "getglobal: module binding cannot be read non-atomically");
-            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+            *ret = jl_cgval_t(ctx); // unreachable
             return true;
         }
 
@@ -3641,14 +3643,14 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (order == jl_memory_order_invalid) {
             emit_atomic_error(ctx, "invalid atomic ordering");
-            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+            *ret = jl_cgval_t(ctx); // unreachable
             return true;
         }
         ssize_t nf = jl_datatype_nfields(stt);
         if (fieldidx < 0 || fieldidx >= nf) {
             if (order != jl_memory_order_unspecified) {
                 emit_atomic_error(ctx, "isdefined: atomic ordering cannot be specified for nonexistent field");
-                *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+                *ret = jl_cgval_t(ctx); // unreachable
                 return true;
             }
             *ret = mark_julia_const(ctx, jl_false);
@@ -3657,12 +3659,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         bool isatomic = jl_field_isatomic(stt, fieldidx);
         if (!isatomic && order != jl_memory_order_notatomic && order != jl_memory_order_unspecified) {
             emit_atomic_error(ctx, "isdefined: non-atomic field cannot be accessed atomically");
-            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+            *ret = jl_cgval_t(ctx); // unreachable
             return true;
         }
         if (isatomic && order == jl_memory_order_notatomic) {
             emit_atomic_error(ctx, "isdefined: atomic field cannot be accessed non-atomically");
-            *ret = jl_cgval_t(ctx.builder.getContext()); // unreachable
+            *ret = jl_cgval_t(ctx); // unreachable
             return true;
         }
         else if (fieldidx < nf - stt->name->n_uninitialized) {
@@ -3840,7 +3842,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
             if (!val) {
                 // There was a type mismatch of some sort - exit early
                 CreateTrap(ctx.builder);
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t(ctx);
             }
             argvals[idx] = val;
         }
@@ -3910,7 +3912,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     for (size_t i = 0; i < nargs; ++i) {
         argv[i] = emit_expr(ctx, args[i + 1]);
         if (argv[i].typ == jl_bottom_type)
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t(ctx);
     }
     return emit_invoke(ctx, lival, argv, nargs, rt);
 }
@@ -4006,7 +4008,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
     for (size_t i = 0; i < nargs; ++i) {
         argv[i] = emit_expr(ctx, args[i + 1]);
         if (argv[i].typ == jl_bottom_type)
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t(ctx);
     }
     const jl_cgval_t &f = argv[0];
     jl_cgval_t ret(ctx.builder.getContext());
@@ -4055,7 +4057,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     for (size_t i = 1; i < nargs; ++i) {
         argv[i] = emit_expr(ctx, args[i]);
         if (argv[i].typ == jl_bottom_type)
-            return jl_cgval_t(ctx.builder.getContext()); // anything past here is unreachable
+            return jl_cgval_t(ctx); // anything past here is unreachable
     }
 
     if (f.constant && jl_isa(f.constant, (jl_value_t*)jl_builtin_type)) {
@@ -4192,7 +4194,7 @@ static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
     jl_binding_t *jbp = NULL;
     Value *bp = global_binding_pointer(ctx, ctx.module, sym, &jbp, false);
     if (bp == NULL)
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t(ctx);
     if (jbp && jbp->value != NULL) {
         if (jbp->constp)
             return mark_julia_const(ctx, jbp->value);
@@ -4868,7 +4870,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         assert(idx >= 0);
         if (!ctx.ssavalue_assigned.at(idx)) {
             ctx.ssavalue_assigned.at(idx) = true; // (assignment, not comparison test)
-            return jl_cgval_t(ctx.builder.getContext()); // dead code branch
+            return jl_cgval_t(ctx); // dead code branch
         }
         else {
             return ctx.SAvalues.at(idx); // at this point, SAvalues[idx] actually contains the SAvalue
@@ -5041,7 +5043,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 return gf;
             }
             emit_error(ctx, "method: invalid declaration");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t(ctx);
         }
         assert(nargs == 3);
         Value *a1 = boxed(ctx, emit_expr(ctx, args[1]));
@@ -5093,7 +5095,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         return mark_julia_type(ctx, val, true, (jl_value_t*)jl_any_type);
     }
     else if (head == jl_splatnew_sym) {
-        jl_cgval_t argv[2] = {jl_cgval_t(ctx.builder.getContext()), jl_cgval_t(ctx.builder.getContext())};
+        jl_cgval_t argv[2] = {jl_cgval_t(ctx), jl_cgval_t(ctx)};
         assert(nargs == 2);
         argv[0] = emit_expr(ctx, args[0]);
         argv[1] = emit_expr(ctx, args[1]);
@@ -5106,7 +5108,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == jl_new_opaque_closure_sym) {
         assert(nargs >= 4 && "Not enough arguments in new_opaque_closure");
-        SmallVector<jl_cgval_t, 4> argv(nargs, jl_cgval_t(ctx.builder.getContext()));
+        SmallVector<jl_cgval_t, 4> argv(nargs, jl_cgval_t(ctx));
         for (size_t i = 0; i < nargs; ++i) {
             argv[i] = emit_expr(ctx, args[i]);
         }
@@ -5118,7 +5120,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             // For now, we require non-constant source to be handled by using
             // eval. This should probably be a verifier error and an abort here.
             emit_error(ctx, "(internal error) invalid IR: opaque closure source be constant");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t(ctx);
         }
         bool can_optimize = argt.constant != NULL && lb.constant != NULL && ub.constant != NULL &&
             jl_is_tuple_type(argt.constant) &&
@@ -5209,7 +5211,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         MDNode* MD = MDNode::get(ctx.builder.getContext(), MDs);
         CallInst *I = ctx.builder.CreateCall(prepare_call(jl_loopinfo_marker_func));
         I->setMetadata("julia.loopinfo", MD);
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t(ctx);
     }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
             || head == jl_pop_exception_sym || head == jl_enter_sym || head == jl_inbounds_sym
@@ -5271,7 +5273,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         jl_errorf("unsupported or misplaced expression \"%s\" in function %s",
                   jl_symbol_name(head), ctx.name);
     }
-    return jl_cgval_t(ctx.builder.getContext());
+    return jl_cgval_t(ctx);
 }
 JL_GCC_IGNORE_STOP
 
@@ -6045,7 +6047,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
         if (!verify_ref_type(ctx, declrt, unionall_env, 0, "cfunction")) {
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t(ctx);
         }
         if (unionall_env)
             declrt = jl_rewrap_unionall(declrt, (jl_value_t*)unionall_env);
@@ -6074,7 +6076,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (!err.empty()) {
         emit_error(ctx, "cfunction " + err);
         JL_GC_POP();
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t(ctx);
     }
     if (rt != declrt && rt != (jl_value_t*)jl_any_type)
         jl_add_method_root(ctx, rt);
@@ -6084,7 +6086,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     if (!sig.err_msg.empty()) {
         emit_error(ctx, sig.err_msg);
         JL_GC_POP();
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t(ctx);
     }
 
     // compute+verify the dispatch signature, and see if it depends on the environment sparams
@@ -6099,7 +6101,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             jargty = jl_tparam0(jargty);
             if (!verify_ref_type(ctx, jargty, unionall_env, i + 1, "cfunction")) {
                 JL_GC_POP();
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t(ctx);
             }
         }
         if (unionall_env && jl_has_typevar_from_unionall(jargty, unionall_env)) {
@@ -6124,7 +6126,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 #if defined(_CPU_AARCH64_) || defined(_CPU_ARM_) || defined(_CPU_PPC64_)
     if (nest) {
         emit_error(ctx, "cfunction: closures are not supported on this platform");
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t(ctx);
     }
 #endif
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
@@ -6619,7 +6621,7 @@ static jl_llvm_functions_t
 
     // create SAvalue locations for SSAValue objects
     ctx.ssavalue_assigned.assign(n_ssavalues, false);
-    ctx.SAvalues.assign(n_ssavalues, jl_cgval_t(ctx.builder.getContext()));
+    ctx.SAvalues.assign(n_ssavalues, jl_cgval_t(ctx));
 
     bool specsig, needsparams;
     std::tie(specsig, needsparams) = uses_specsig(lam, jlrettype, params.params->prefer_specsig);
