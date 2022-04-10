@@ -60,10 +60,7 @@ void jl_mach_gc_end(void)
 static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
-    uv_mutex_lock(&safepoint_lock);
-    int gc_running = jl_atomic_load_relaxed(&jl_gc_running);
-    uv_mutex_unlock(&safepoint_lock);
-    return gc_running;
+    return jl_atomic_load_relaxed(&jl_gc_running);;
 }
 
 static mach_port_t segv_port = 0;
