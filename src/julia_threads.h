@@ -185,7 +185,7 @@ typedef struct {
     int offset, version;
 } jl_gc_ws_top_t;
 
-// Bottom of gc public mark queue. Two offsets are used because size of pc/data queues
+// Bottom of gc public mark queue. Two offsets are used because number of items in pc/data queues
 // may differ (TODO: sizes are different only after popping from pc stack and before dispatching into
 // the right mark loop label/popping from data stack. Can we keep a single offset?)
 typedef struct {
@@ -194,8 +194,6 @@ typedef struct {
 
 // Fixed size work-stealing deque used for marking in gc
 typedef struct {
-    // Whether elements must be pushed/popped into/from the private queue
-    uint8_t overflow;
     // Whether this queue has enough elements so that work-stealing is worth it (see
     // comments in `gc.c`)
     uint8_t ws_enabled;

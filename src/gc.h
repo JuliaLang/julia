@@ -219,10 +219,10 @@ union _jl_gc_mark_data {
 // case of public queue overflow)
 STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
-    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
-    if (public_sp->overflow) {
+    if (sp->data != gc_cache->data_stack) {
         return sp->data; 
     }
+    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
     return &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
 }
@@ -233,17 +233,18 @@ STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_mark_cache_t *gc_cache, jl_gc_m
 STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
 {
     jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
-    if (public_sp->overflow) {
+    if (sp->data != gc_cache->data_stack) {
         jl_gc_mark_data_t *data = sp->data;
         sp->pc++;
         sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + size);
         return data;
     }
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
-    jl_gc_mark_data_t *old_data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
-    jl_gc_ws_bottom_t new_bottom = {bottom.pc_offset + 1, bottom.data_offset + 1};
-    jl_atomic_store_relaxed(&public_sp->bottom, new_bottom);
-    return old_data;
+    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    bottom.pc_offset++;
+    bottom.data_offset++;
+    jl_atomic_store_relaxed(&public_sp->bottom, bottom);
+    return data;
 }
 #define gc_repush_markdata(gc_cache, sp, type) ((type*)gc_repush_markdata_(gc_cache, sp, sizeof(type)))
 

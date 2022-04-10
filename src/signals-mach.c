@@ -55,14 +55,6 @@ void jl_mach_gc_end(void)
     suspended_threads.len = 0;
 }
 
-// Suspend the thread and return `1` if the GC is running.
-// Otherwise return `0`
-static int jl_mach_gc_wait(jl_ptls_t ptls2,
-                           mach_port_t thread, int16_t tid)
-{
-    return jl_atomic_load_relaxed(&jl_gc_running);;
-}
-
 static mach_port_t segv_port = 0;
 
 extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
@@ -283,7 +275,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     uint64_t fault_addr = exc_state.__far;
 #endif
     if (jl_addr_is_safepoint(fault_addr)) {
-        if (jl_mach_gc_wait(ptls2, thread, tid))
+        if (jl_atomic_load_relaxed(&jl_gc_running))
             return KERN_FAILURE;
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
