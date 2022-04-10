@@ -63,7 +63,7 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
     uv_mutex_lock(&safepoint_lock);
     int gc_running = jl_atomic_load_relaxed(&jl_gc_running);
     uv_mutex_unlock(&safepoint_lock);
-    return 1;
+    return gc_running;
 }
 
 static mach_port_t segv_port = 0;
