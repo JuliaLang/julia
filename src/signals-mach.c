@@ -18,6 +18,7 @@
 #endif
 
 #include "julia_assert.h"
+#include "julia_internal.h"
 
 // private keymgr stuff
 #define KEYMGR_GCC3_DW2_OBJ_LIST 302
@@ -60,19 +61,7 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
                            mach_port_t thread, int16_t tid)
 {
     uv_mutex_lock(&safepoint_lock);
-    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
-        // relaxed, since gets set to zero only while the safepoint_lock was held
-        // this means we can tell if GC is done before we got the message or
-        // the safepoint was enabled for SIGINT.
-        uv_mutex_unlock(&safepoint_lock);
-        return 0;
-    }
-    // Otherwise, set the gc state of the thread, suspend and record it
-    int8_t gc_state = ptls2->gc_state;
-    jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
-    arraylist_push(&suspended_threads, (void*)item);
-    thread_suspend(thread);
+    int gc_running = jl_atomic_load_relaxed(&jl_gc_running);
     uv_mutex_unlock(&safepoint_lock);
     return 1;
 }
@@ -229,11 +218,24 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
+    jl_task_t *ct = jl_get_current_task();
     if (jl_get_safe_restore()) { // restarting jl_ or jl_unwind_stepn
-        jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
     }
+    else if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
+        jl_set_gc_and_wait();
+        // Do not raise sigint on worker thread
+        if (jl_atomic_load_relaxed(&ct->tid) != 0)
+            return;
+        if (ct->ptls->defer_signal) {
+            jl_safepoint_defer_sigint();
+        }
+        else if (jl_safepoint_consume_sigint()) {
+            jl_clear_force_sigint();
+            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
+        }
+    } 
     else {
         sigdie_handler(sig, info, context);
     }
@@ -285,7 +287,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 #endif
     if (jl_addr_is_safepoint(fault_addr)) {
         if (jl_mach_gc_wait(ptls2, thread, tid))
-            return KERN_SUCCESS;
+            return KERN_FAILURE;
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
         if (ptls2->defer_signal) {
