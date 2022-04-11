@@ -63,14 +63,14 @@ macro lazy_str(text)
 end
 
 function String(l::LazyString)
-    old = @atomic :acquire l.str
+    old = getfield(l, :str, :acquire)
     old === nothing || return old
     str = sprint() do io
         for p in l.parts
             print(io, p)
         end
     end
-    old = @atomicswap :acquire_release l.str = str
+    old = swapfield!(l, :str, str, :acquire_release)
     return something(old, str)
 end
 
