@@ -185,6 +185,11 @@ function decode_effects_override(e::UInt8)
         (e & 0x10) != 0x00)
 end
 
+is_concrete_eval_eligible(eo::EffectsOverride) =
+    eo.consistent &&
+    eo.effect_free &&
+    eo.terminates_globally
+
 """
     InferenceResult
 

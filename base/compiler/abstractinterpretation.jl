@@ -158,6 +158,19 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     sv.ssavalue_uses[sv.currpc] = saved_uses
                 end
             end
+            this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
+            this_arginfo = ArgInfo(fargs, this_argtypes)
+
+            early_const_call_result = abstract_call_method_with_const_args_early(interp,
+                f, match, this_arginfo, sv)
+            if early_const_call_result !== nothing
+                this_conditional = this_rt = early_const_call_result.rt
+                (; effects, const_result) = early_const_call_result
+                tristate_merge!(sv, effects)
+                push!(const_results, const_result)
+                any_const_result = true
+                @goto call_computed
+            end
 
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             this_conditional = ignorelimited(result.rt)
@@ -166,8 +179,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             edge !== nothing && push!(edges, edge)
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
-            this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
-            this_arginfo = ArgInfo(fargs, this_argtypes)
             const_call_result = abstract_call_method_with_const_args(interp, result,
                 f, this_arginfo, match, sv)
             effects = result.edge_effects
@@ -187,6 +198,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             push!(const_results, const_result)
             any_const_result |= const_result !== nothing
         end
+        @label call_computed
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
         rettype = tmerge(rettype, this_rt)
@@ -682,10 +694,11 @@ end
 function pure_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), applicable::Vector{Any}, arginfo::ArgInfo, sv::InferenceState)
     # XXX we need to check that this pure function doesn't call any overlayed method
-    return f !== nothing &&
-           length(applicable) == 1 &&
-           is_method_pure(applicable[1]::MethodMatch) &&
-           is_all_const_arg(arginfo)
+    f !== nothing || return false
+    length(applicable) == 1 || return false
+    match = applicable[1]::MethodMatch
+    is_method_pure(match) || return false
+    return is_all_const_arg(arginfo)
 end
 
 function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
@@ -718,16 +731,17 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
-    # disable concrete-evaluation since this function call is tainted by some overlayed
-    # method and currently there is no direct way to execute overlayed methods
+    # disable concrete-evaluation if this function call is tainted by some overlayed
+    # method since currently there is no direct way to execute overlayed methods
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.edge_effects) && return false
-    return f !== nothing &&
-           result.edge !== nothing &&
-           is_concrete_eval_eligible(result.edge_effects) &&
-           is_all_const_arg(arginfo)
+    f !== nothing || return false
+    result.edge !== nothing || return false
+    is_concrete_eval_eligible(result.edge_effects) || return false
+    return is_all_const_arg(arginfo)
 end
 
-function is_all_const_arg((; argtypes)::ArgInfo)
+is_all_const_arg((; argtypes)::ArgInfo) = is_all_const_arg(argtypes)
+function is_all_const_arg(argtypes::Vector{Any})
     for i = 2:length(argtypes)
         a = widenconditional(argtypes[i])
         isa(a, Const) || isconstType(a) || issingletontype(a) || return false
@@ -746,26 +760,61 @@ end
 function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     concrete_eval_eligible(interp, f, result, arginfo, sv) || return nothing
+    return _concrete_eval_call(interp, f, arginfo, result.edge, sv)
+end
+
+function _concrete_eval_call(interp::AbstractInterpreter,
+    @nospecialize(f), arginfo::ArgInfo, edge::MethodInstance, sv::InferenceState)
     args = collect_const_args(arginfo)
     world = get_world_counter(interp)
     value = try
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConcreteResult(result.edge, result.edge_effects), result.edge_effects)
+        return ConstCallResults(Union{}, ConcreteResult(edge, EFFECTS_THROWS), EFFECTS_THROWS)
     end
     if is_inlineable_constant(value) || call_result_unused(sv)
         # If the constant is not inlineable, still do the const-prop, since the
         # code that led to the creation of the Const may be inlineable in the same
         # circumstance and may be optimizable.
-        return ConstCallResults(Const(value), ConcreteResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
+        return ConstCallResults(Const(value), ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
     end
+    return nothing
+end
+
+function early_concrete_eval_eligible(interp::AbstractInterpreter,
+    @nospecialize(f), match::MethodMatch, arginfo::ArgInfo, sv::InferenceState)
+    # the effects for this match may not be derived yet, so disable concrete-evaluation
+    # immediately when the interpreter can use overlayed methods
+    isoverlayed(method_table(interp)) && return false
+    f !== nothing || return false
+    is_concrete_eval_eligible(decode_effects_override(match.method.purity)) || return false
+    return is_all_const_arg(arginfo)
+end
+
+function early_concrete_eval(interp::AbstractInterpreter,
+    @nospecialize(f), match::MethodMatch, arginfo::ArgInfo, sv::InferenceState)
+    early_concrete_eval_eligible(interp, f, match, arginfo, sv) || return nothing
+    edge = specialize_method(match.method, match.spec_types, match.sparams)
+    edge === nothing && return nothing
+    return _concrete_eval_call(interp, f, arginfo, edge, sv)
+end
+
+function abstract_call_method_with_const_args_early(interp::AbstractInterpreter,
+    @nospecialize(f), match::MethodMatch, arginfo::ArgInfo, sv::InferenceState)
+    const_prop_enabled(interp, sv, match) || return nothing
+    val = early_concrete_eval(interp, f, match, arginfo, sv)
+    if val !== nothing
+        add_backedge!(val.const_result.mi, sv)
+        return val
+    end
+    # TODO early constant prop' for `@nospecialize`d methods?
     return nothing
 end
 
 function const_prop_enabled(interp::AbstractInterpreter, sv::InferenceState, match::MethodMatch)
     if !InferenceParams(interp).ipo_constant_propagation
-        add_remark!(interp, sv, "[constprop] Disabled by parameter")
+        add_remark!(interp, sv, "[constprop] Disabled by inference parameter")
         return false
     end
     method = match.method
@@ -789,12 +838,10 @@ end
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
                                               @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
                                               sv::InferenceState)
-    if !const_prop_enabled(interp, sv, match)
-        return nothing
-    end
+    const_prop_enabled(interp, sv, match) || return nothing
     val = concrete_eval_call(interp, f, result, arginfo, sv)
     if val !== nothing
-        add_backedge!(result.edge, sv)
+        add_backedge!(val.const_result.mi, sv)
         return val
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
