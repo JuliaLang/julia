@@ -988,6 +988,7 @@ end
 
 @testset "Unfold" begin
     @test isempty(Iterators.Unfold(identity, nothing))
+
     unfold61 = Iterators.Unfold(1) do x
          if x < 2^26
             return x, x+x
@@ -1003,19 +1004,17 @@ end
     vals = map(aa, bb) do a, b iterate(Iterators.Unfold(a) do x x, b end) end
     @test all(zip(aa, bb) .== vals)
 
-    abc = ((randn(), rand()/3, randn()) for _ in 1:22)
-    myrange(a,b,c) = Iterators.Unfold(0) do x
-        v = a + x * b
-        a <= v <= c ? (v, x+1) : nothing
+    struct init_sentinel end
+    @testset "Unfold replicates `iterate` calls" for myitr in [1:2:4, (-5:5)*π, (), (1,2), randn(5)]
+        myUnfold = Iterators.Unfold(init_sentinel()) do state
+            if state isa init_sentinel
+                return iterate(myitr)
+            else
+                return iterate(myitr, state)
+            end
+        end
+        @test Iterators.map(==, myUnfold, myitr) |> all
     end
-    @test all(a > c || all(a:b:c .== myrange(a,b,c)) for (a,b,c) in abc)
-
-    mytree = Iterators.Unfold(()) do x x,(x,x) end
-    treetest = Iterators.map(
-        ==,
-        Iterators.map(tuple, mytree, mytree),
-        Iterators.drop(mytree, 1))
-    @test all(Iterators.take(treetest, 10))
 
     fibs = Iterators.Unfold(Int64.((1,1))) do (a,b) a, (b, a+b) end
     fibO1(n::Int64)::Float64 = (MathConstants.φ^n - (1-MathConstants.φ)^n) / √5
