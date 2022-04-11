@@ -682,7 +682,7 @@ end
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                      t::AbstractVector{U}, chunk_size=radix_chunk_size_heuristic(lo, hi, bits)) where U <: Unsigned
     # bits is unsigned for performance reasons.
-    mask = UInt(1) << chunk_size - 0x1
+    mask = UInt(1) << chunk_size - 1
     counts = Vector{UInt}(undef, mask+2)
 
     @inbounds for shift in 0:chunk_size:bits-1
@@ -723,7 +723,7 @@ function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
     # the chunk size the fewer passes we need. Theoretically, chunk size should be based on
     # the Lambert W function applied to length. Empirically, we use this heuristic:
     guess = min(10, log(maybe_unsigned(hi-lo))*3/4+3)
-    # TODO the maximum chunk size should be based on archetecture cache size.
+    # TODO the maximum chunk size should be based on architecture cache size.
 
     # We need iterations * chunk size ≥ bits, and these cld's
     # make an effort to get iterations * chunk size ≈ bits
