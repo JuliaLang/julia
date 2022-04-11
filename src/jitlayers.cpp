@@ -920,9 +920,8 @@ namespace {
 
                 JL_TIMING(LLVM_OPT);
 
-                {
-                    (***PMs).run(M);
-                }
+                //Run the optimization
+                (***PMs).run(M);
 
                 uint64_t end_time = 0;
                 if (dump_llvm_opt_stream != NULL) {
