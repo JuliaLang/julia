@@ -22,10 +22,10 @@ See also [`lazy"str"`](@ref).
     `LazyString` requires Julia 1.8 or later.
 """
 mutable struct LazyString <: AbstractString
-    parts::Tuple
+    const parts::Tuple
     # Created on first access
-    str::String
-    LazyString(args...) = new(args)
+    @atomic str::Union{String,Nothing}
+    LazyString(args...) = new(args, nothing)
 end
 
 """
@@ -63,14 +63,15 @@ macro lazy_str(text)
 end
 
 function String(l::LazyString)
-    if !isdefined(l, :str)
-        l.str = sprint() do io
-            for p in l.parts
-                print(io, p)
-            end
+    old = @atomic :acquire l.str
+    old === nothing || return old
+    str = sprint() do io
+        for p in l.parts
+            print(io, p)
         end
     end
-    return l.str
+    old = @atomicswap :acquire_release l.str = str
+    return something(old, str)
 end
 
 hash(s::LazyString, h::UInt64) = hash(String(s), h)
