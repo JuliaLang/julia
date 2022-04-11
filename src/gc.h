@@ -232,13 +232,13 @@ STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_mark_cache_t *gc_cache, jl_gc_m
 // Mainly useful to pause the current scanning in order to scan an new object.
 STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
 {
-    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     if (sp->data != gc_cache->data_stack) {
         jl_gc_mark_data_t *data = sp->data;
         sp->pc++;
         sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + size);
         return data;
     }
+    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
     jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
     bottom.pc_offset++;

@@ -590,8 +590,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             uv_mutex_lock(&sleep_locks[ptls->tid]);
             while (may_sleep(ptls)) {
                 uv_cond_wait(&wake_signals[ptls->tid], &sleep_locks[ptls->tid]);
-                if (jl_gc_try_recruit(ptls))
-                    break;
+                jl_gc_try_recruit(ptls);
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&sleep_locks[ptls->tid]);

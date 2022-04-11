@@ -41,19 +41,6 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
-void jl_mach_gc_end(void)
-{
-    // Requires the safepoint lock to be held
-    for (size_t i = 0; i < suspended_threads.len; i++) {
-        uintptr_t item = (uintptr_t)suspended_threads.items[i];
-        int16_t tid = (int16_t)item;
-        int8_t gc_state = (int8_t)(item >> 8);
-        jl_ptls_t ptls2 = jl_all_tls_states[tid];
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
-    }
-    suspended_threads.len = 0;
-}
 
 static mach_port_t segv_port = 0;
 

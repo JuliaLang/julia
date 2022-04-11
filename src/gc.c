@@ -2201,15 +2201,13 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 void jl_gc_set_recruit(jl_ptls_t ptls, void *addr)
 {
     jl_fence();
-    // Should this have a stricter memory order?
-    if (!jl_atomic_exchange_relaxed(&jl_gc_recruiting_location, addr)) {
-        if (jl_n_threads > 1)
-            jl_wake_libuv();
-        for (int i = 0; i < jl_n_threads; i++) {
-            if (i == ptls->tid)
-                continue;
-            jl_wakeup_thread(i);
-        }
+    jl_atomic_exchange_relaxed(&jl_gc_recruiting_location, addr);
+    if (jl_n_threads > 1)
+        jl_wake_libuv();
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_wakeup_thread(i);
     }
 }
 
@@ -2378,7 +2376,7 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     void *pc;
-    uint8_t ws_enabled = 0;
+    int ws_enabled = 0;
  
     jl_value_t *new_obj = NULL;
     uintptr_t tag = 0;
@@ -2405,9 +2403,8 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
 pop: {
         pc = gc_pop_pc(public_sp, &sp);
         if (GC_MARK_L_marked_obj <= (uint64_t)pc && (uint64_t)pc < _GC_MARK_L_MAX) {
-            // Try to recruit other threads for parallel marking (and wait for them
-            // before sweeping) only if there are enough items in the queue of
-            // whoever started marking
+            // `ws_enabled` is set if there are enough items in the public mark queue.
+            //  See comment in `gc_public_mark_stack_try_push`
             if (!ws_enabled && public_sp->ws_enabled) {
                 ws_enabled = 1;
                 jl_gc_set_recruit(ptls, (void *)gc_mark_loop_recruited);

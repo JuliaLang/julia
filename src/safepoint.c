@@ -147,10 +147,6 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(2);
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
-#  ifdef __APPLE__
-    // This wakes up other threads on mac.
-    jl_mach_gc_end();
-#  endif
     uv_mutex_unlock(&safepoint_lock);
 }
 
@@ -159,10 +155,8 @@ void jl_safepoint_wait_gc(void)
     jl_ptls_t ptls = jl_current_task->ptls;   
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
-    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
-        if (jl_gc_try_recruit(ptls))
-            break;
-    }
+    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running))
+        jl_gc_try_recruit(ptls);
 }
 
 void jl_safepoint_enable_sigint(void)
