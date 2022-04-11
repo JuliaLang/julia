@@ -510,7 +510,7 @@ julia> identity("Well, what did you expect?")
 "Well, what did you expect?"
 ```
 """
-identity(x) = x
+identity(@nospecialize x) = x
 
 +(x::Number) = x
 *(x::Number) = x
