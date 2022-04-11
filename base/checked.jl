@@ -152,7 +152,7 @@ end
 
 
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
-    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
+    throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)

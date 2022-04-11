@@ -151,7 +151,7 @@ is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args..
 
     @testset "effects" begin
         @test is_effect_free(gcd, Tuple{Int,Int})
-        # @test is_effect_free(lcm, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
     end
 end
 
