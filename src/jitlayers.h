@@ -60,6 +60,34 @@ static inline bool imaging_default() {
     return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
 }
 
+struct jl_locked_stream {
+    JL_STREAM *stream = nullptr;
+    std::mutex mutex;
+
+    struct lock {
+        std::unique_lock<std::mutex> lck;
+        JL_STREAM *&stream;
+
+        lock(std::mutex &mutex, JL_STREAM *&stream) : lck(mutex), stream(stream) {}
+
+        JL_STREAM *&operator*() {
+            return stream;
+        }
+
+        explicit operator bool() {
+            return !!stream;
+        }
+
+        operator JL_STREAM *() {
+            return stream;
+        }
+    };
+
+    lock operator*() {
+        return lock(mutex, stream);
+    }
+};
+
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
     std::string specFunctionObject; // specialized llvm Function name
