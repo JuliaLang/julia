@@ -30,6 +30,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * jl_in_stackwalk (Win32)
 >   * ResourcePool<?>::mutex
 >   * RLST_mutex
+>   * jl_locked_stream::mutex
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
 >     > likewise, the ResourcePool<?>::mutexes just protect the associated resource pool
