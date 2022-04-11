@@ -40,15 +40,8 @@ julia> supertype(Int32)
 Signed
 ```
 """
-function supertype(T::DataType)
-    @_pure_meta
-    T.super
-end
-
-function supertype(T::UnionAll)
-    @_pure_meta
-    UnionAll(T.var, supertype(T.body))
-end
+supertype(T::DataType) = (@_total_meta; T.super)
+supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -247,14 +240,8 @@ isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
 isunordered(x::Missing) = true
 
-function ==(T::Type, S::Type)
-    @_pure_meta
-    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
-end
-function !=(T::Type, S::Type)
-    @_pure_meta
-    return !(T == S)
-end
+==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
+!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 

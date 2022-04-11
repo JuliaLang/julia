@@ -154,7 +154,7 @@ size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::D
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(T::Type) = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
