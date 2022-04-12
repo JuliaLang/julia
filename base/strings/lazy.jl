@@ -28,7 +28,7 @@ A lazy string itself does not introduce any concurrency problems even if it is p
 multiple Julia tasks.  However, if `print` methods on a captured value can have a
 concurrency issue when invoked without synchronizations, printing the lazy string may cause
 an issue.  Furthermore, the `print` methods on the captured values may be invoked multiple
-times.
+times, though only exactly one result will be returned.
 
 !!! compat "Julia 1.9"
     `LazyString` is safe in the above sense in Julia 1.9 and later.
