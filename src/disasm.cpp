@@ -494,7 +494,6 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
 
     {
         std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
-        JL_LOCK(&jl_codegen_lock); // Might GC
         dump->TSM.withModuleDo([&](Module &m) {
             Function *llvmf = dump->F;
             if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
@@ -522,7 +521,6 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
                 }
             }
         });
-        JL_UNLOCK(&jl_codegen_lock); // Might GC
     }
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());

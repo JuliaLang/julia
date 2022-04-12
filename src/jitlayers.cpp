@@ -281,10 +281,8 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
     // compute / validate return type
     if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
         jl_error("@ccallable: return type must be concrete and correspond to a C type");
-    JL_LOCK(&jl_codegen_lock);
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
-    JL_UNLOCK(&jl_codegen_lock);
 
     // validate method signature
     size_t i, nargs = jl_nparams(sigt);
