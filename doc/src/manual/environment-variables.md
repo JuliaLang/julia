@@ -149,7 +149,9 @@ or if it must have a value, set it to the string `:`.
 
 !!! note
     `JULIA_DEPOT_PATH` must be defined before starting julia; defining it in
-    `startup.jl` is too late in the startup process.
+    `startup.jl` is too late in the startup process; at that point you can instead
+    directly modify the `LOAD_PATH` array, which is populated from the environment
+    variable.
 
 ### `JULIA_HISTORY`
 
