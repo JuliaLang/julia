@@ -151,9 +151,37 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
-macro _pure_meta()
-    return Expr(:meta, :pure)
+function _is_internal(__module__)
+    if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
+       nameof(__module__) === :Base
+        return true
+    end
+    return false
 end
+
+# can be used in place of `@pure` (supposed to be used for bootstrapping)
+macro _pure_meta()
+    return _is_internal(__module__) && Expr(:meta, :pure)
+end
+# can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
+macro _total_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false))
+end
+# can be used in place of `@assume_effects :total_may_throw` (supposed to be used for bootstrapping)
+macro _total_may_throw_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false))
+end
+
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)

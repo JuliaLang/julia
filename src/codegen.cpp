@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#define DEBUG_TYPE "julia_irgen_codegen"
+#undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
 #if defined(_CPU_X86_)
@@ -86,6 +88,28 @@
 #include <llvm/Linker/Linker.h>
 
 using namespace llvm;
+
+STATISTIC(EmittedAllocas, "Number of allocas emitted");
+STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
+STATISTIC(ModulesCreated, "Number of LLVM Modules created");
+STATISTIC(EmittedBoxCompares, "Number of box compares emitted");
+STATISTIC(EmittedBitsUnionCompares, "Number of bitsunion compares emitted");
+STATISTIC(EmittedBitsCompares, "Number of bits compares emitted");
+STATISTIC(EmittedEgals, "Number of egals emitted");
+STATISTIC(EmittedOpfields, "Number of opfields emitted");
+STATISTIC(EmittedBuiltinCalls, "Number of builtin calls emitted");
+STATISTIC(EmittedJLCalls, "Number of jlcalls emitted");
+STATISTIC(EmittedSpecfunCalls, "Number of specialized calls emitted");
+STATISTIC(EmittedInvokes, "Number of invokes emitted");
+STATISTIC(EmittedCalls, "Number of calls emitted");
+STATISTIC(EmittedUndefVarErrors, "Number of undef var errors emitted");
+STATISTIC(EmittedOpaqueClosureFunctions, "Number of opaque closures emitted");
+STATISTIC(EmittedToJLInvokes, "Number of tojlinvoke calls emitted");
+STATISTIC(EmittedCFuncInvalidates, "Number of C function invalidates emitted");
+STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");
+STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
+STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
+STATISTIC(EmittedFunctions, "Number of functions emitted");
 
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
@@ -194,9 +218,6 @@ extern void _chkstk(void);
 //}
 #endif
 }
-
-// for image reloading
-bool imaging_mode = false;
 
 // shared llvm state
 #define jl_Module ctx.f->getParent()
@@ -1459,6 +1480,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
 {
+    ++EmittedAllocas;
     return new AllocaInst(lty, 0, "", /*InsertBefore=*/ctx.pgcstack);
 }
 
@@ -1490,6 +1512,7 @@ static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
         else if (cast<PointerType>(ty)->hasSameElementTypeAs(cast<PointerType>(ptr->getType())))
             return ctx.builder.CreateAddrSpaceCast(ptr, ty);
     }
+    ++EmittedIntToPtrs;
     return ctx.builder.CreateIntToPtr(v, ty);
 }
 
@@ -1841,14 +1864,15 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 boxv = ctx.builder.CreateSelect(
                     ctx.builder.CreateAnd(wasboxed, isboxed), v.Vboxed, boxv);
             }
+            Value *slotv;
+            MDNode *tbaa;
             if (v.V == NULL) {
                 // v.V might be NULL if it was all ghost objects before
-                return jl_cgval_t(boxv, NULL, false, typ, new_tindex, ctx.tbaa());
+                slotv = NULL;
+                tbaa = ctx.tbaa().tbaa_const;
             }
             else {
                 Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
-                Value *slotv;
-                MDNode *tbaa;
                 if (v.ispointer()) {
                     slotv = v.V;
                     tbaa = v.tbaa;
@@ -1861,12 +1885,12 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 slotv = ctx.builder.CreateSelect(isboxv,
                             decay_derived(ctx, boxv),
                             decay_derived(ctx, emit_bitcast(ctx, slotv, boxv->getType())));
-                jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex, ctx.tbaa());
-                assert(boxv->getType() == ctx.types().T_prjlvalue);
-                newv.Vboxed = boxv;
-                newv.tbaa = tbaa;
-                return newv;
             }
+            jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex, ctx.tbaa());
+            assert(boxv->getType() == ctx.types().T_prjlvalue);
+            newv.Vboxed = boxv;
+            newv.tbaa = tbaa;
+            return newv;
         }
     }
     else {
@@ -1953,8 +1977,9 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const DataLayout &DL, const Triple &triple)
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
 {
+    ++ModulesCreated;
     auto lock = context.getLock();
     Module *m = new Module(name, *context.getContext());
     orc::ThreadSafeModule TSM(std::unique_ptr<Module>(m), std::move(context));
@@ -2099,7 +2124,7 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    assert(!imaging_mode);
+    assert(!ctx.emission_context.imaging);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
@@ -2109,7 +2134,7 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
-    assert(!imaging_mode);
+    assert(!ctx.emission_context.imaging);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     Value *addend = sync
@@ -2470,6 +2495,7 @@ static void emit_globalset(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, cons
 static Value *emit_box_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                                Value *nullcheck1, Value *nullcheck2)
 {
+    ++EmittedBoxCompares;
     if (jl_pointer_egal(arg1.typ) || jl_pointer_egal(arg2.typ)) {
         // if we can be certain we won't try to load from the pointer (because
         // we know boxed is trivial), we can skip the separate null checks
@@ -2499,6 +2525,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 
 static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2)
 {
+    ++EmittedBitsUnionCompares;
     assert(jl_egal(arg1.typ, arg2.typ) && arg1.TIndex && arg2.TIndex && jl_is_uniontype(arg1.typ) && "unimplemented");
     Value *tindex = arg1.TIndex;
     tindex = ctx.builder.CreateAnd(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
@@ -2541,6 +2568,7 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
 
 static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t arg2)
 {
+    ++EmittedBitsCompares;
     bool isboxed;
     Type *at = julia_type_to_llvm(ctx, arg1.typ, &isboxed);
     assert(jl_is_datatype(arg1.typ) && arg1.typ == arg2.typ && !isboxed);
@@ -2647,6 +2675,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1, Value *nullcheck2)
 {
+    ++EmittedEgals;
     // handle simple static expressions with no side-effects
     if (arg1.constant && arg2.constant)
         return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), jl_egal(arg1.constant, arg2.constant));
@@ -2777,6 +2806,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                            const jl_cgval_t *argv, size_t nargs, const jl_cgval_t *modifyop)
 {
+    ++EmittedOpfields;
     bool issetfield = f == jl_builtin_setfield;
     bool isreplacefield = f == jl_builtin_replacefield;
     bool isswapfield = f == jl_builtin_swapfield;
@@ -2896,6 +2926,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               jl_expr_t *ex)
 // returns true if the call has been handled
 {
+    ++EmittedBuiltinCalls;
     if (f == jl_builtin_is && nargs == 2) {
         // emit comparison test
         Value *ans = emit_f_is(ctx, argv[1], argv[2]);
@@ -3655,6 +3686,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              const jl_cgval_t *argv, size_t nargs, CallingConv::ID cc)
 {
+    ++EmittedJLCalls;
     // emit arguments
     SmallVector<Value*, 3> theArgs;
     SmallVector<Type*, 3> argsT;
@@ -3686,6 +3718,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject,
                                           const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
 {
+    ++EmittedSpecfunCalls;
     // emit specialized call site
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, specFunctionObject, mi->specTypes, jlretty, is_opaque_closure);
@@ -3829,6 +3862,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt)
 {
+    ++EmittedInvokes;
     bool handled = false;
     jl_cgval_t result(ctx.builder.getContext());
     if (lival.constant) {
@@ -3907,6 +3941,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
 
 static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
+    ++EmittedInvokes;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t arglen = jl_array_dim0(ex->args);
     size_t nargs = arglen - 1;
@@ -3941,6 +3976,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
 
 static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
+    ++EmittedCalls;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_dim0(ex->args);
     assert(nargs >= 1);
@@ -3993,6 +4029,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 
 static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
 {
+    ++EmittedUndefVarErrors;
     BasicBlock *err = BasicBlock::Create(ctx.builder.getContext(), "err", ctx.f);
     BasicBlock *ifok = BasicBlock::Create(ctx.builder.getContext(), "ok");
     ctx.builder.CreateCondBr(ok, ifok, err);
@@ -4717,12 +4754,14 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         JL_GC_POP();
         return std::make_pair((Function*)NULL, (Function*)NULL);
     }
+    ++EmittedOpaqueClosureFunctions;
 
     ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)ci->inferred);
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
     orc::ThreadSafeModule closure_m = jl_create_llvm_module(
             name_from_method_instance(mi), ctx.emission_context.tsctx,
+            ctx.emission_context.imaging,
             jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
     jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
 
@@ -5230,6 +5269,7 @@ static Value *get_current_signal_page(jl_codectx_t &ctx)
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
 {
+    ++EmittedToJLInvokes;
     jl_codectx_t ctx(M->getContext(), params);
     std::string name;
     raw_string_ostream(name) << "tojlinvoke" << globalUniqueGeneratedNames++;
@@ -5278,6 +5318,7 @@ static void emit_cfunc_invalidate(
         jl_codegen_params_t &params,
         Function *target)
 {
+    ++EmittedCFuncInvalidates;
     jl_codectx_t ctx(gf_thunk->getParent()->getContext(), params);
     ctx.f = gf_thunk;
 
@@ -5385,6 +5426,7 @@ static Function* gen_cfun_wrapper(
     jl_value_t *declrt, jl_method_instance_t *lam,
     jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, jl_array_t **closure_types)
 {
+    ++GeneratedCFuncWrappers;
     // Generate a c-callable wrapper
     assert(into);
     size_t nargs = sig.nccallargs;
@@ -6098,6 +6140,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 // restore one from a loaded system image.
 const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
+    ++GeneratedCCallables;
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = ft->instance;
     assert(ff);
@@ -6150,6 +6193,7 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
 static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlretty, const jl_returninfo_t &f, int retarg, StringRef funcName,
         Module *M, jl_codegen_params_t &params)
 {
+    ++GeneratedInvokeWrappers;
     Function *w = Function::Create(JuliaType::get_jlfunc_ty(M->getContext()), GlobalVariable::ExternalLinkage, funcName, M);
     addRetAttr(w, Attribute::NonNull);
     w->addFnAttr(Attribute::get(M->getContext(), "thunk"));
@@ -6440,6 +6484,7 @@ static jl_llvm_functions_t
         jl_value_t *jlrettype,
         jl_codegen_params_t &params)
 {
+    ++EmittedFunctions;
     // step 1. unpack AST and allocate codegen context for this function
     jl_llvm_functions_t declarations;
     jl_codectx_t ctx(*params.tsctx.getContext(), params);
@@ -8026,7 +8071,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                      // don't delete inlineable code, unless it is constant
                      (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
-                     !(imaging_mode || jl_options.incremental)) {
+                     !(params.imaging || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
                 codeinst->inferred = jl_nothing;
             }
@@ -8084,7 +8129,8 @@ void jl_compile_workqueue(
                     if (src) {
                         orc::ThreadSafeModule result_m =
                         jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, original.getDataLayout(), Triple(original.getTargetTriple()));
+                            params.tsctx, params.imaging,
+                            original.getDataLayout(), Triple(original.getTargetTriple()));
                         result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
                         result.first = std::move(result_m);
                     }
@@ -8092,7 +8138,8 @@ void jl_compile_workqueue(
                 else {
                     orc::ThreadSafeModule result_m =
                         jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, original.getDataLayout(), Triple(original.getTargetTriple()));
+                            params.tsctx, params.imaging,
+                            original.getDataLayout(), Triple(original.getTargetTriple()));
                     result.second = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     result.first = std::move(result_m);
                 }
@@ -8286,7 +8333,6 @@ extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
-    imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.generic_context = jl_nothing;
     jl_init_debuginfo();
 
@@ -8327,7 +8373,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-    jl_ExecutionEngine = new JuliaOJIT(new LLVMContext());
+    jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
     // Register GDB event listener

@@ -1913,3 +1913,10 @@ function read!(s::IO, B::BitArray)
 end
 
 sizeof(B::BitArray) = sizeof(B.chunks)
+
+function _split_rest(a::Union{Vector, BitVector}, n::Int)
+    _check_length_split_rest(length(a), n)
+    last_n = a[end-n+1:end]
+    resize!(a, length(a) - n)
+    return a, last_n
+end
