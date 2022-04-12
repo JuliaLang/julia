@@ -93,7 +93,7 @@ end
 Create a new `String` from an existing `AbstractString`.
 """
 String(s::AbstractString) = print_to_string(s)
-@pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+@assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 

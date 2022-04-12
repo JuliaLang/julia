@@ -494,34 +494,34 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
 
     {
         std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
-        Function *llvmf = dump->F;
-        if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
-            jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
-
         JL_LOCK(&jl_codegen_lock); // Might GC
-        LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
-        if (!llvmf->getParent()) {
-            // print the function declaration as-is
-            llvmf->print(stream, &AAW);
-            delete llvmf;
-        }
-        else {
-            dump->TSM.withModuleDo([&](Module &m) {
-            if (strip_ir_metadata) {
-                std::string llvmfn(llvmf->getName());
-                jl_strip_llvm_addrspaces(&m);
-                jl_strip_llvm_debug(&m, true, &AAW);
-                // rewriting the function type creates a new function, so look it up again
-                llvmf = m.getFunction(llvmfn);
-            }
-            if (dump_module) {
-                m.print(stream, &AAW);
+        dump->TSM.withModuleDo([&](Module &m) {
+            Function *llvmf = dump->F;
+            if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
+                jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
+
+            LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
+            if (!llvmf->getParent()) {
+                // print the function declaration as-is
+                llvmf->print(stream, &AAW);
+                delete llvmf;
             }
             else {
-                llvmf->print(stream, &AAW);
+                if (strip_ir_metadata) {
+                    std::string llvmfn(llvmf->getName());
+                    jl_strip_llvm_addrspaces(&m);
+                    jl_strip_llvm_debug(&m, true, &AAW);
+                    // rewriting the function type creates a new function, so look it up again
+                    llvmf = m.getFunction(llvmfn);
+                }
+                if (dump_module) {
+                    m.print(stream, &AAW);
+                }
+                else {
+                    llvmf->print(stream, &AAW);
+                }
             }
-            });
-        }
+        });
         JL_UNLOCK(&jl_codegen_lock); // Might GC
     }
 
