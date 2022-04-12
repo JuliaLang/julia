@@ -427,13 +427,34 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
+function adjust_effects(sv::InferenceState)
+    ipo_effects = Effects(sv)
+
     # Always throwing an error counts or never returning both count as consistent,
     # but we don't currently model idempontency using dataflow, so we don't notice.
     # Fix that up here to improve precision.
-    if !ipo_effects.inbounds_taints_consistency && rt === Union{}
-        return Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    if !ipo_effects.inbounds_taints_consistency && sv.bestguess === Union{}
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
+
+    # override the analyzed effects using manually annotated effect settings
+    def = sv.linfo.def
+    if isa(def, Method)
+        override = decode_effects_override(def.purity)
+        if is_effect_overridden(override, :consistent)
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :effect_free)
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :nothrow)
+            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :terminates_globally)
+            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
+        end
+    end
+
     return ipo_effects
 end
 
@@ -495,25 +516,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
-    ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
-    # override the analyzed effects using manually annotated effect settings
-    def = me.linfo.def
-    if isa(def, Method)
-        override = decode_effects_override(def.purity)
-        if is_effect_overridden(override, :consistent)
-            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :nothrow)
-            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :terminates_globally)
-            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
-        end
-    end
-    me.ipo_effects = me.result.ipo_effects = ipo_effects
+    me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -887,8 +890,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
         edge = frame.inferred ? mi : nothing
-        edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
-        return EdgeCallResult(frame.bestguess, edge, edge_effects)
+        return EdgeCallResult(frame.bestguess, edge, Effects(frame)) # effects are adjusted already within `finish`
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())
@@ -896,8 +898,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
-    edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
-    return EdgeCallResult(frame.bestguess, nothing, edge_effects)
+    return EdgeCallResult(frame.bestguess, nothing, adjust_effects(frame))
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
