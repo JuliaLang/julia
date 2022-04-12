@@ -1,10 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete
+using Core: CodeInfo, SimpleVector, donotdelete, arrayref
 
 const Callable = Union{Function,Type}
 
 const Bottom = Union{}
+
+# Define minimal array interface here to help code used in macros:
+length(a::Array) = arraylen(a)
+
+# This is more complicated than it needs to be in order to get Win64 through bootstrap
+eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
+eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
 
 """
     AbstractSet{T}

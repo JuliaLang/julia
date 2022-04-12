@@ -120,7 +120,7 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
-import Core: arraysize, arrayset, arrayref, const_arrayref
+using Core: arraysize, arrayset, const_arrayref
 
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
@@ -212,7 +212,6 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-length(a::Array) = arraylen(a)
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
@@ -919,10 +918,6 @@ julia> getindex(A, "a")
 ```
 """
 function getindex end
-
-# This is more complicated than it needs to be in order to get Win64 through bootstrap
-@eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})

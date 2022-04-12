@@ -78,16 +78,14 @@ macro lazy_str(text)
 end
 
 function String(l::LazyString)
-    # Note: Not using `@atomic*` macros since they cannot be invoked due to a missing
-    # `length` method.
-    old = getfield(l, :str, :acquire)
+    old = @atomic :acquire l.str
     old === nothing || return old
     str = sprint() do io
         for p in l.parts
             print(io, p)
         end
     end
-    old, ok = replacefield!(l, :str, nothing, str, :acquire_release, :acquire)
+    old, ok = @atomicreplace :acquire_release :acquire l.str nothing => str
     return ok ? str : (old::String)
 end
 
