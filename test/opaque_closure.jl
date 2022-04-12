@@ -271,14 +271,17 @@ end
 let ci = code_typed(+, (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
     @test OC(ir, 2, false)(40, 2) == 42
+    @test OC(ci)(40, 2) == 42
 end
 
 let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
     @test OC(ir, 2, true)(40, 2) === (40, (2,))
+    @test OC(ci)(40, 2) === (40, (2,))
 end
 
 let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
-    @test OC(ci)(1, 2) === (1, (2,))
+    ir = Core.Compiler.inflate_ir(ci)
+    @test_throws MethodError OC(ir, 2, true)(1, 2, 3)
     @test_throws MethodError OC(ci)(1, 2, 3)
 end
