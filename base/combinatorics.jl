@@ -184,7 +184,7 @@ julia> A
  1
 ```
 """
-permute!(v, p::AbstractVector) = (v = v[p])
+permute!(v, p::AbstractVector) = (v .= v[p])
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
