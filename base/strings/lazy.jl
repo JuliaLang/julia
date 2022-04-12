@@ -79,8 +79,8 @@ function String(l::LazyString)
             print(io, p)
         end
     end
-    old = swapfield!(l, :str, str, :acquire_release)
-    return something(old, str)
+    old, ok = replacefield!(l, :str, nothing, str, :acquire_release, :acquire)
+    return ok ? str : (old::String)
 end
 
 hash(s::LazyString, h::UInt64) = hash(String(s), h)
