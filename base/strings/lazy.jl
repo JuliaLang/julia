@@ -72,6 +72,8 @@ macro lazy_str(text)
 end
 
 function String(l::LazyString)
+    # Note: Not using `@atomic*` macros since they cannot be invoked due to a missing
+    # `length` method.
     old = getfield(l, :str, :acquire)
     old === nothing || return old
     str = sprint() do io
