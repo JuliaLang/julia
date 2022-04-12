@@ -184,7 +184,7 @@ julia> A
  1
 ```
 """
-permute!(v, p::AbstractVector) = copyto!(v, v[p])
+permute!(v, p::AbstractVector) = (v = v[p])
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
@@ -215,8 +215,6 @@ end
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
-To return a new permutation, use `v[invperm(p)]`. Note that this is faster than `invpermute!(v, p)`.
-
 # Examples
 ```jldoctest
 julia> A = [1, 1, 3, 4];
@@ -233,7 +231,7 @@ julia> A
  1
 ```
 """
-invpermute!(v, p::AbstractVector) = copyto!(v, v[invperm(p)])
+invpermute!(v, p::AbstractVector) = (v[p] = v; v)
 
 """
     invperm(v)
