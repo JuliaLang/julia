@@ -20,6 +20,18 @@ See also [`lazy"str"`](@ref).
 
 !!! compat "Julia 1.8"
     `LazyString` requires Julia 1.8 or later.
+
+# Extended help
+## Safety properties for concurrent programs
+
+A lazy string itself does not introduce any concurrency problems even if it is printed in
+multiple Julia tasks.  However, if `print` methods on a captured value can have a
+concurrency issue when invoked without synchronizations, printing the lazy string may cause
+an issue.  Furthermore, the `print` methods on the captured values may be invoked multiple
+times.
+
+!!! compat "Julia 1.9"
+    `LazyString` is safe in the above sense in Julia 1.9 and later.
 """
 mutable struct LazyString <: AbstractString
     const parts::Tuple
@@ -35,6 +47,8 @@ Create a [`LazyString`](@ref) using regular string interpolation syntax.
 Note that interpolations are *evaluated* at LazyString construction time,
 but *printing* is delayed until the first access to the string.
 
+See [`LazyString`](@ref) documentation for the safety properties for concurrent programs.
+
 # Examples
 
 ```
@@ -47,15 +61,6 @@ LazyString
 
 !!! compat "Julia 1.8"
     `lazy"str"` requires Julia 1.8 or later.
-
-# Extended help
-## Safety properties for concurrent programs
-
-A lazy string itself does not introduce any concurrency problems even if it is printed in
-multiple Julia tasks.  However, if `print` methods on a captured value can have a
-concurrency issue when invoked without synchronizations, printing the lazy string may cause
-an issue.  Furthermore, the `print` methods on the captured values may be invoked multiple
-times.
 """
 macro lazy_str(text)
     parts = Any[]
