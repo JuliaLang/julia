@@ -3225,6 +3225,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
+    uint64_t max_memory = last_live_bytes + gc_num.allocd;
+    if (max_memory > gc_num.max_memory) {
+        gc_num.max_memory = max_memory;
+    }
+    
     gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
@@ -3246,9 +3251,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.freed = 0;
     if (pause > gc_num.max_pause) {
         gc_num.max_pause = pause;
-    }
-    if (live_bytes > gc_num.max_memory) {
-        gc_num.max_memory = live_bytes;
     }
     reset_thread_gc_counts();
 
