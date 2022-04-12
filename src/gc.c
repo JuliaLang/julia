@@ -3244,6 +3244,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.total_time += pause;
     gc_num.since_sweep = 0;
     gc_num.freed = 0;
+    if (pause > gc_num.max_pause) {
+        gc_num.max_pause = pause;
+    }
+    if (live_bytes > gc_num.max_memory) {
+        gc_num.max_memory = live_bytes;
+    }
     reset_thread_gc_counts();
 
     return recollect;
@@ -3393,6 +3399,8 @@ void jl_gc_init(void)
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
+    gc_num.max_pause = 0;
+    gc_num.max_memory = 0;
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2

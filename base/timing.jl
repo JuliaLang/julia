@@ -16,6 +16,8 @@ struct GC_Num
     collect         ::Csize_t # GC internal
     pause           ::Cint
     full_sweep      ::Cint
+    max_pause       ::Int64
+    max_memory      ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
