@@ -1022,16 +1022,41 @@ end
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.outer)
+    c.outer isa ComposedFunction ? show(io, c.outer) : _showcomposed(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.inner)
+    _showcomposed(io, c.inner)
+end
+
+#shows !f instead of (!) ∘ f when ! is the outermost function
+function show(io::IO, c::ComposedFunction{typeof(!)})
+    print(io, '!')
+    _showcomposed(io, c.inner)
+end
+
+_showcomposed(io::IO, x) = show(io, x)
+#display operators like + and - inside parens
+_showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); show(io, f); print(io, ')')) : show(io, f)
+#nesting for chained composition
+_showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
+#no nesting when ! is the outer function in a composition chain
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
+
+function show_function(io::IO, c::ComposedFunction, compact::Bool)
+    if compact
+        show(io, c)
+    else
+        print(io, "ComposedFunction(")
+        show_function(io, c.outer, false)
+        print(io, ", ")
+        show_function(io, c.inner, false)
+        print(io, ')')
+    end
 end
 
 """
     !f::Function
 
-Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`.
+Predicate function negation: when the argument of `!` is a function, it returns a composed function which computes the boolean negation of `f`.
 
 See also [`∘`](@ref).
 
@@ -1046,8 +1071,12 @@ julia> filter(isletter, str)
 julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
+
+!!! compat "Julia 1.9"
+    Starting with Julia 1.9, `!f` returns a [`ComposedFunction`](@ref) instead of an anonymous function.
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (!) ∘ f
+!(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
     Fix1(f, x)
