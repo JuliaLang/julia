@@ -221,7 +221,7 @@ When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
 
 !!! compat "Julia 1.7"
-    Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
+    Using a [`Function`](@ref) as the first argument requires Julia 1.7 or later.
 """
 function lock(f, l::AbstractLock)
     lock(l)
@@ -258,6 +258,9 @@ end
 ```
 This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
 and thus can improve the performance.
+
+!!! compat "Julia 1.7"
+    This macro requires Julia 1.7 or later.
 """
 macro lock(l, expr)
     quote
