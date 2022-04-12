@@ -3229,7 +3229,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (max_memory > gc_num.max_memory) {
         gc_num.max_memory = max_memory;
     }
-    
+
     gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
