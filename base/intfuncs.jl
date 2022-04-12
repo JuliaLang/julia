@@ -54,7 +54,8 @@ function gcd(a::T, b::T) where T<:BitInteger
     signbit(r) && __throw_gcd_overflow(a, b)
     return r
 end
-@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
+@noinline __throw_gcd_overflow(a, b) =
+    throw(OverflowError(LazyString("gcd(", a, ", ", b, ") overflows")))
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
