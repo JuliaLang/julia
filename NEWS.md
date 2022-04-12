@@ -60,8 +60,7 @@ Standard library changes
   system image with other BLAS/LAPACK libraries is not
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
-* `normalize(x)` and `normalize(x, p::Real)` fallback methods created,
-  allowing use on any normed vector space, including scalars.
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
 
 #### Markdown
 
