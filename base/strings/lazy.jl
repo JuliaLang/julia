@@ -37,6 +37,7 @@ mutable struct LazyString <: AbstractString
     const parts::Tuple
     # Created on first access
     @atomic str::Union{String,Nothing}
+    global _LazyString(parts, str) = new(parts, str)
     LazyString(args...) = new(args, nothing)
 end
 
