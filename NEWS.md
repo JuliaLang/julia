@@ -44,6 +44,7 @@ Library changes
   now be called on a dictionary or set shared by arbitrary tasks provided that there are no
   tasks mutating the dictionary or set ([#44534]).
 * Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 
 
 Standard library changes
