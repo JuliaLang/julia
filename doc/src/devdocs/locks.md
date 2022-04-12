@@ -28,11 +28,10 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * gc_perm_lock
 >   * flisp
 >   * jl_in_stackwalk (Win32)
->   * PM_mutex[i]
->   * ContextPool::mutex
+>   * ResourcePool<?>::mutex
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
->     > likewise, orc::ThreadSafeContexts carry their own lock, the ContextPool::mutex just protects the pool
+>     > likewise, the ResourcePool<?>::mutexes just protect the associated resource pool
 
 The following is a leaf lock (level 2), and only acquires level 1 locks (safepoint) internally:
 

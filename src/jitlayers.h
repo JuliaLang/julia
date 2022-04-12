@@ -193,11 +193,10 @@ public:
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-private:
     template<typename ResourceT, size_t max = 0>
     struct ResourcePool {
         public:
-        ResourcePool(function_ref<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
+        ResourcePool(std::function<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
         class OwningResource {
             public:
             OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
@@ -206,7 +205,7 @@ private:
             OwningResource(OwningResource &&) = default;
             OwningResource &operator=(OwningResource &&) = default;
             ~OwningResource() {
-                if (resource) pool.release_(std::move(*resource));
+                if (resource) pool.release(std::move(*resource));
             }
             ResourceT release() {
                 ResourceT res(std::move(*resource));
@@ -242,11 +241,15 @@ private:
             llvm::Optional<ResourceT> resource;
         };
 
-        OwningResource acquire() {
-            return OwningResource(*this, acquire_());
+        OwningResource operator*() {
+            return OwningResource(*this, acquire());
         }
 
-        ResourceT acquire_() {
+        OwningResource get() {
+            return **this;
+        }
+
+        ResourceT acquire() {
             std::unique_lock<std::mutex> lock(mutex->mutex);
             if (!pool.empty()) {
                 return pool.pop_back_val();
@@ -259,13 +262,13 @@ private:
             assert(!pool.empty() && "Expected resource pool to have a value!");
             return pool.pop_back_val();
         }
-        void release_(ResourceT &&resource) {
+        void release(ResourceT &&resource) {
             std::lock_guard<std::mutex> lock(mutex->mutex);
             pool.push_back(std::move(resource));
             mutex->empty.notify_one();
         }
         private:
-        llvm::function_ref<ResourceT()> creator;
+        std::function<ResourceT()> creator;
         size_t created = 0;
         llvm::SmallVector<ResourceT, max == 0 ? 8 : max> pool;
         struct WNMutex {
@@ -275,32 +278,30 @@ private:
 
         std::unique_ptr<WNMutex> mutex;
     };
-    struct OptimizerT {
-        OptimizerT(legacy::PassManager &PM, std::mutex &mutex, int optlevel) : optlevel(optlevel), PM(PM), mutex(mutex) {}
-
-        OptimizerResultT operator()(orc::ThreadSafeModule M, orc::MaterializationResponsibility &R);
-    private:
-        int optlevel;
-        legacy::PassManager &PM;
-        std::mutex &mutex;
+    struct PipelineT {
+        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
+        CompileLayerT CompileLayer;
+        OptimizeLayerT OptimizeLayer;
     };
-    // Custom object emission notification handler for the JuliaOJIT
-    template <typename ObjT, typename LoadResult>
-    void registerObject(const ObjT &Obj, const LoadResult &LO);
 
     struct OptSelLayerT : orc::IRLayer {
 
         template<size_t N>
-        OptSelLayerT(OptimizeLayerT (&optimizers)[N]) : orc::IRLayer(optimizers[0].getExecutionSession(), optimizers[0].getManglingOptions()), optimizers(optimizers), count(N) {
+        OptSelLayerT(std::unique_ptr<PipelineT> (&optimizers)[N]) : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(), optimizers[0]->OptimizeLayer.getManglingOptions()), optimizers(optimizers), count(N) {
             static_assert(N > 0, "Expected array with at least one optimizer!");
         }
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
 
         private:
-        OptimizeLayerT *optimizers;
+        std::unique_ptr<PipelineT> *optimizers;
         size_t count;
     };
+
+private:
+    // Custom object emission notification handler for the JuliaOJIT
+    template <typename ObjT, typename LoadResult>
+    void registerObject(const ObjT &Obj, const LoadResult &LO);
 
 public:
 
@@ -321,13 +322,13 @@ public:
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     auto getContext() {
-        return ContextPool.acquire();
+        return *ContextPool;
     }
     orc::ThreadSafeContext acquireContext() {
-        return ContextPool.acquire_();
+        return ContextPool.acquire();
     }
     void releaseContext(orc::ThreadSafeContext &&ctx) {
-        ContextPool.release_(std::move(ctx));
+        ContextPool.release(std::move(ctx));
     }
     const DataLayout& getDataLayout() const;
     TargetMachine &getTargetMachine();
@@ -340,14 +341,6 @@ private:
 
     std::unique_ptr<TargetMachine> TM;
     DataLayout DL;
-    // Should be big enough that in the common case, The
-    // object fits in its entirety
-    legacy::PassManager PM0;  // per-optlevel pass managers
-    legacy::PassManager PM1;
-    legacy::PassManager PM2;
-    legacy::PassManager PM3;
-    std::mutex PM_mutexes[4];
-    std::unique_ptr<TargetMachine> TMs[4];
 
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
@@ -359,11 +352,7 @@ private:
     std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    CompileLayerT CompileLayer0;
-    CompileLayerT CompileLayer1;
-    CompileLayerT CompileLayer2;
-    CompileLayerT CompileLayer3;
-    OptimizeLayerT OptimizeLayers[4];
+    std::unique_ptr<PipelineT> Pipelines[4];
     OptSelLayerT OptSelLayer;
 
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
