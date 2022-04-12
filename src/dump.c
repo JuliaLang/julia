@@ -591,6 +591,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
         return;
     }
+    assert(codeinst != NULL); // handle by jl_serialize_generic, but this makes clang-sa happy
 
     int validate = 0;
     if (codeinst->max_world == ~(size_t)0)

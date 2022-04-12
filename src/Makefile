@@ -41,25 +41,20 @@ ifeq ($(OS),FreeBSD)
 FLAGS += -I$(LOCALBASE)/include
 endif
 
-RUNTIME_SRCS := \
+SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
-	simplevector runtime_intrinsics precompile \
+	simplevector runtime_intrinsics precompile jloptions \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
-	jlapi signal-handling safepoint timing subtype \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage
-SRCS := jloptions runtime_ccall rtutils
-ifeq ($(OS),WINNT)
-SRCS += win32_ucontext
-endif
+	jlapi signal-handling safepoint timing subtype rtutils \
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
 
 RT_LLVMLINK :=
 CG_LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
-CODEGEN_SRCS := codegen llvm-ptls
-RUNTIME_CODEGEN_SRCS := jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
-	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering \
+CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop llvm-muladd \
+	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering llvm-ptls \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures
@@ -85,9 +80,9 @@ endif
 
 RT_LLVM_LIBS := support
 
-SRCS += $(RUNTIME_SRCS)
-
-CODEGEN_SRCS += $(RUNTIME_CODEGEN_SRCS)
+ifeq ($(OS),WINNT)
+SRCS += win32_ucontext
+endif
 
 ifeq ($(WITH_DTRACE),1)
 DTRACE_HEADERS := uprobes.h.gen
@@ -438,53 +433,55 @@ endif
 
 clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 clangsa: $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
-# TODO: clangsa: $(build_shlibdir)/libImplicitAtomics2Plugin.$(SHLIB_EXT)
+
+# optarg is a required_argument for these
+SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.NonNullParamChecker;unix.cstring.NullArg"
+ # clang doesn't understand that e->vars has the same value in save_env (NULL) and restore_env (assumed non-NULL)
+SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
+SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
+ # these need to be annotated (and possibly fixed)
+SKIP_IMPLICIT_ATOMICS := dump.c module.c staticdata.c codegen.cpp
+ # these need to be annotated (and possibly fixed)
+SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -x c $<)
 clang-sagc-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
+		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -x c++ $<)
 
- # optarg is a required_argument for these
-SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-disable-checker=core.NonNullParamChecker,unix.cstring.NullArg
- # clang doesn't understand that e->vars has the same value in save_env (NULL) and restore_env (assumed non-NULL)
-SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-disable-checker=core.uninitialized.Assign,core.UndefinedBinaryOperatorResult
- # these need to be annotated (and possibly fixed)
-SKIP_IMPLICIT_ATOMICS := dump.c gf.c jitlayers.cpp module.c precompile.c rtutils.c staticdata.c toplevel.c codegen.cpp
-
-clang-sa-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sa-%: $(SRCDIR)/%.c .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
-		$(if $(findstring $(notdir $<),$(SKIP_IMPLICIT_ATOMICS)),,-Xclang -load -Xclang $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=julia.ImplicitAtomics) \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
-		 --analyzer-no-default-checks  \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c $<)
-clang-sa-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-sa-%: $(SRCDIR)/%.cpp .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
-		$(if $(findstring $(notdir $<),$(SKIP_IMPLICIT_ATOMICS)),,-Xclang -load -Xclang $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=julia.ImplicitAtomics) \
 		-Xanalyzer -analyzer-disable-checker=deadcode.DeadStores \
-		 --analyzer-no-default-checks  \
 		$(SA_EXCEPTIONS-$(notdir $<)) \
 		$(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -Werror -x c++ $<)
 
-clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomics2Plugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-tidy-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
-		-load $(build_shlibdir)/libImplicitAtomics2Plugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
+		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
 		-- $(CLANGSA_FLAGS) $(JCPPFLAGS) $(JCFLAGS) $(JL_CFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics -fno-caret-diagnostics -x c)
-clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomics2Plugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
+clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang-tidy $< -header-filter='.*' --quiet \
-		-load $(build_shlibdir)/libImplicitAtomics2Plugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
+		-load $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) --checks='-clang-analyzer-*$(COMMA)-clang-diagnostic-*$(COMMA)concurrency-implicit-atomics' --warnings-as-errors='*' \
 		-- $(CLANGSA_FLAGS) $(CLANGSA_CXXFLAGS) $(LLVM_CXXFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(JL_CXXFLAGS) $(DEBUGFLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
-tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)), $(SRCS)))
-analyzesrc: $(addprefix clang-sa-,$(SRCS))
-analyzegc: analyzesrc $(addprefix clang-sagc-,$(RUNTIME_SRCS))
+tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)),$(CODEGEN_SRCS) $(SRCS)))
+analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
+analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
+analyzegc: analyzesrc tidysrc # TODO: remove me (depended on by CI currently)
+analyze: analyzesrc analyzegc tidysrc
 
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
