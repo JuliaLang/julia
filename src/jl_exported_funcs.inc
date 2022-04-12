@@ -548,6 +548,7 @@
     YY(jl_dump_fptr_asm) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
+    YY(jl_tag_llvm_module) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_add_optimization_passes) \

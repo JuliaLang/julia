@@ -1977,12 +1977,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
-{
-    ++ModulesCreated;
-    auto lock = context.getLock();
-    Module *m = new Module(name, *context.getContext());
-    orc::ThreadSafeModule TSM(std::unique_ptr<Module>(m), std::move(context));
+static void _jl_tag_llvm_module(Module *m, bool imaging_mode, const DataLayout &DL, StringRef triple) {
     // Some linkers (*cough* OS X) don't understand DWARF v4, so we use v2 in
     // imaging mode. The structure of v4 is slightly nicer for debugging JIT
     // code.
@@ -1998,7 +1993,7 @@ orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeConte
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
             llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(DL);
-    m->setTargetTriple(triple.str());
+    m->setTargetTriple(triple);
 
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_) && JL_LLVM_VERSION >= 130000
     // tell Win32 to assume the stack is always 16-byte aligned,
@@ -2009,6 +2004,20 @@ orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeConte
 #if defined(JL_DEBUG_BUILD) && JL_LLVM_VERSION >= 130000
     m->setStackProtectorGuard("global");
 #endif
+}
+
+extern "C" JL_DLLEXPORT
+void jl_tag_llvm_module_impl(LLVMModuleRef mod, int imaging_mode, LLVMTargetDataRef DL, const char *triple) {
+    _jl_tag_llvm_module(unwrap(mod), imaging_mode, *unwrap(DL), triple);
+}
+
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
+{
+    ++ModulesCreated;
+    auto lock = context.getLock();
+    Module *m = new Module(name, *context.getContext());
+    orc::ThreadSafeModule TSM(std::unique_ptr<Module>(m), std::move(context));
+    _jl_tag_llvm_module(m, imaging_mode, DL, triple.getTriple());
     return TSM;
 }
 
