@@ -378,6 +378,7 @@ end
 @testset "normalize for scalars" begin
     @test normalize(8.0) == 1.0
     @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
     @test isnan(normalize(0.0))
 end
 
