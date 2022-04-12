@@ -1258,20 +1258,21 @@ in future releases.
 ## Noteworthy external packages
 
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
-For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, or
-[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl), as presented in [Shared Arrays](@ref).
+For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, [Dagger.jl](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to Python's [Dask](https://dask.org/), and
+[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl) provides array operations distributed across workers, as presented in [Shared Arrays](@ref).
+
 A mention must be made of Julia's GPU programming ecosystem, which includes:
 
-1. Low-level (C kernel) based operations [OpenCL.jl](https://github.com/JuliaGPU/OpenCL.jl) and [CUDAdrv.jl](https://github.com/JuliaGPU/CUDAdrv.jl) which are respectively an OpenCL interface and a CUDA wrapper.
+1. [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) wraps the various CUDA libraries and supports compiling Julia kernels for Nvidia GPUs.
 
-2. Low-level (Julia Kernel) interfaces like [CUDAnative.jl](https://github.com/JuliaGPU/CUDAnative.jl) which is a Julia native CUDA implementation.
+2. [oneAPI.jl](https://github.com/JuliaGPU/oneAPI.jl) wraps the oneAPI unified programming model, and supports executing Julia kernels on supported accelerators. Currently only Linux is supported.
 
-3. High-level vendor-specific abstractions like [CuArrays.jl](https://github.com/JuliaGPU/CuArrays.jl) and [CLArrays.jl](https://github.com/JuliaGPU/CLArrays.jl)
+3. [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) wraps the AMD ROCm libraries and supports compiling Julia kernels for AMD GPUs. Currently only Linux is supported.
 
-4. High-level libraries like [ArrayFire.jl](https://github.com/JuliaComputing/ArrayFire.jl) and [GPUArrays.jl](https://github.com/JuliaGPU/GPUArrays.jl)
+4. High-level libraries like [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl), [Tullio.jl](https://github.com/mcabbott/Tullio.jl) and [ArrayFire.jl](https://github.com/JuliaComputing/ArrayFire.jl).
 
 
-In the following example we will use both `DistributedArrays.jl` and `CuArrays.jl` to distribute an array across multiple
+In the following example we will use both `DistributedArrays.jl` and `CUDA.jl` to distribute an array across multiple
 processes by first casting it through `distribute()` and `CuArray()`.
 
 Remember when importing `DistributedArrays.jl` to import it across all processes using [`@everywhere`](@ref)
@@ -1284,7 +1285,7 @@ julia> addprocs()
 
 julia> @everywhere using DistributedArrays
 
-julia> using CuArrays
+julia> using CUDA
 
 julia> B = ones(10_000) ./ 2;
 
@@ -1322,9 +1323,8 @@ true
 julia> typeof(cuC)
 CuArray{Float64,1}
 ```
-Keep in mind that some Julia features are not currently supported by CUDAnative.jl[^2] , especially some functions like `sin` will need to be replaced with `CUDAnative.sin`(cc: @maleadt).
 
-In the following example we will use both `DistributedArrays.jl` and `CuArrays.jl` to distribute an array across multiple
+In the following example we will use both `DistributedArrays.jl` and `CUDA.jl` to distribute an array across multiple
 processes and call a generic function on it.
 
 ```julia
@@ -1407,6 +1407,3 @@ mpirun -np 4 ./julia example.jl
     introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
     (RMA). The motivation for adding rma to the MPI standard was to facilitate one-sided communication
     patterns. For additional information on the latest MPI standard, see <https://mpi-forum.org/docs>.
-
-[^2]:
-    [Julia GPU man pages](https://juliagpu.github.io/CUDAnative.jl/stable/man/usage.html#Julia-support-1)
