@@ -162,7 +162,7 @@ julia> S \\ b
 """
 function ldlt(M::SymTridiagonal{T}; shift::Number=false) where T
     S = typeof((zero(T)+shift)/one(T))
-    Mₛ = SymTridiagonal{S}(copy_oftype(M.dv, S), copy_oftype(M.ev, S))
+    Mₛ = SymTridiagonal{S}(copymutable_oftype(M.dv, S), copymutable_oftype(M.ev, S))
     if !iszero(shift)
         Mₛ.dv .+= shift
     end

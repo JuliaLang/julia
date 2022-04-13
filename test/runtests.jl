@@ -78,6 +78,11 @@ move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
+# TODO: remove `REPL` from the "move to node 1" tests.
+# We first need to fix the underlying bugs that are causing the `REPL` tests to frequently
+# fail on the `test x86_64-apple-darwin` tester on Buildkite.
+move_to_node1("REPL")
+
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
@@ -123,6 +128,15 @@ cd(@__DIR__) do
         Base.invokelatest(revise_trackall)
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
+
+    println("""
+        Running parallel tests with:
+          nworkers() = $(nworkers())
+          nthreads() = $(Threads.nthreads())
+          Sys.CPU_THREADS = $(Sys.CPU_THREADS)
+          Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
+          Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+        """)
 
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
