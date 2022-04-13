@@ -398,7 +398,7 @@ private:
     //Map and inc are guarded by RLST_mutex
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
     int RLST_inc = 0;
-    std::mutex RLST_mutex;
+    std::mutex RLST_mutex{};
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
