@@ -276,10 +276,14 @@ f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
 @testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> (@inline; x))).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) @inline; x end)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x @inline; x end).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x x end).source)
 end
 
 const _a_global_array = [1]
