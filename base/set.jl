@@ -406,18 +406,18 @@ function allunique(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
             v, s = x
-            idx = ht_keyindex2!(seen, v)
+            idx, sh = ht_keyindex2_shorthash!(seen, v)
             idx > 0 && return false
-            _setindex!(seen, nothing, v, -idx)
+            _setindex!(seen, nothing, v, -idx, sh)
             x = iterate(C, s)
         end
         sizehint!(seen, length(C))
     end
     while x !== nothing
         v, s = x
-        idx = ht_keyindex2!(seen, v)
+        idx, sh = ht_keyindex2_shorthash!(seen, v)
         idx > 0 && return false
-        _setindex!(seen, nothing, v, -idx)
+        _setindex!(seen, nothing, v, -idx, sh)
         x = iterate(C, s)
     end
     return true

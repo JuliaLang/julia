@@ -179,8 +179,8 @@ Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
 
 # make a copy that allow inplace Cholesky factorization
 @inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
-@inline cholcopy(A::StridedMatrix) = copy_oftype(A, choltype(A))
-@inline cholcopy(A::RealHermSymComplexHerm) = copy_oftype(A, choltype(A))
+@inline cholcopy(A::StridedMatrix) = copymutable_oftype(A, choltype(A))
+@inline cholcopy(A::RealHermSymComplexHerm) = copymutable_oftype(A, choltype(A))
 @inline cholcopy(A::AbstractMatrix) = copy_similar(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky

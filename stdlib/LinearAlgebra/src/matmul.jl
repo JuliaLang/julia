@@ -11,8 +11,8 @@ matprod(x, y) = x*y + x*y
 
 # dot products
 
-dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
-dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
+dot(x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasReal} = BLAS.dot(x, y)
+dot(x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
 function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
@@ -171,7 +171,7 @@ end
 function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
-         copy_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
+         copymutable_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
          wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
 end
 # the following case doesn't seem to benefit from the translation A*B = (B' * A')'
