@@ -45,10 +45,10 @@ end
 
 # Test using stdin
 radio_menu = RadioMenu(string.(1:10); charset=:ascii)
-@test simulate_input(radio_menu, :down, :down, :enter) == 3
+@test simulate_input(3, radio_menu, :down, :down, :enter)
 radio_menu = RadioMenu(["single option"], charset=:ascii)
-@test simulate_input(radio_menu, :up, :up, :down, :up, :enter) == 1
+@test simulate_input(1, radio_menu, :up, :up, :down, :up, :enter)
 radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
-@test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3
+@test simulate_input(3, radio_menu, :down, :down, :down, :down, :enter)
 radio_menu = RadioMenu(["apple", "banana", "cherry"]; keybindings=collect('a':'c'), charset=:ascii)
-@test simulate_input(radio_menu, 'b') == 2
+@test simulate_input(2, radio_menu, 'b')
