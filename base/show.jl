@@ -1481,8 +1481,6 @@ function operator_associativity(s::Symbol)
     return :left
 end
 
-const is_expr = isexpr
-
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
 is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
