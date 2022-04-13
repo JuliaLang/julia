@@ -18,7 +18,7 @@ Language changes
   `+(x) = x`, unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
   binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
   left- and right-division fall back to multiplication with the inverse from left and right,
-  resp., as stated in the docstring. ([#44564])
+  respectively, as stated in the docstring. ([#44564])
 
 Compiler/Runtime improvements
 -----------------------------
