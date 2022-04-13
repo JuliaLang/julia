@@ -194,6 +194,8 @@ typedef struct {
 
 // Fixed size work-stealing deque used for marking in gc
 typedef struct {
+    // Whether elements must be pushed/popped into/from the private queue
+    uint8_t overflow;
     // Whether this queue has enough elements so that work-stealing is worth it (see
     // comments in `gc.c`)
     uint8_t ws_enabled;

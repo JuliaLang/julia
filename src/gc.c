@@ -1722,6 +1722,7 @@ STATIC_INLINE void *gc_pop_pc(jl_gc_public_mark_sp_t *public_sp, jl_gc_mark_sp_t
         sp->pc--;
         return *sp->pc;
     }
+    public_sp->overflow = 0;
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
     int b = bottom.pc_offset - 1;
     jl_gc_ws_bottom_t bottom2 = {b, bottom.data_offset};
@@ -1758,13 +1759,13 @@ STATIC_INLINE void *gc_pop_pc(jl_gc_public_mark_sp_t *public_sp, jl_gc_mark_sp_t
 STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, size_t size)
 {
     // Try to pop from private queue first
-    if (sp->data != gc_cache->data_stack) {
+    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
+    if (public_sp->overflow) {
         jl_gc_mark_data_t *data = (jl_gc_mark_data_t *)(((char*)sp->data) - size);
         sp->data = data;
         return data;
     }
     // Pop from public queue if there are no items in private queue
-    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
     bottom.data_offset--;
     jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
@@ -1814,9 +1815,11 @@ STATIC_INLINE void gc_mark_stack_push(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_s
 {
     assert(data_size <= sizeof(jl_gc_mark_data_t));
     jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
-    if (gc_public_mark_stack_try_push(public_sp, pc, data, data_size, pm)) { 
+    if (!public_sp->overflow &&
+        gc_public_mark_stack_try_push(public_sp, pc, data, data_size, pm)) {
         return;
     }
+    public_sp->overflow = 1;
     if (__unlikely(sp->pc == sp->pc_end))
         gc_mark_stack_resize(gc_cache, sp);
     *sp->pc = pc;
@@ -3581,7 +3584,8 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     
     jl_gc_ws_top_t initial_top = {0, 0};
     jl_gc_ws_bottom_t initial_bottom = {0, 0};
- 
+    
+    public_sp->overflow = 0;
     public_sp->ws_enabled = 0;
     public_sp->top = initial_top;
     public_sp->bottom = initial_bottom;
