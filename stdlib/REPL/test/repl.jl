@@ -271,17 +271,21 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         try
             write(stdin_write, '\n')
             s = readuntil(stdout_read, "\n", keep=true)
+            @info "" s
             if s == "\n"
                 # if shell width is precisely the text width,
                 # we may print some extra characters to fix the cursor state
                 s = readuntil(stdout_read, "\n", keep=true)
+                @info "" s
                 @test occursin("shell> ", s)
                 s = readuntil(stdout_read, "\n", keep=true)
+                @info "" s
                 @test s == "\r\r\n"
             else
                 @test occursin("shell> ", s)
             end
             s = readuntil(stdout_read, "\n", keep=true)
+            @info "" s
             @test s == "\e[0m\n" # the child has exited
         finally
             redirect_stdout(old_stdout)
