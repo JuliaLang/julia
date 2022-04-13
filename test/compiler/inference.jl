@@ -4056,6 +4056,11 @@ end
 
 @test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
 
+# https://github.com/JuliaLang/julia/issues/44965
+let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
+    @test Core.Compiler.issimplertype(t, t)
+end
+
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
 increase_x44763!(n) = (global x44763; x44763 += n)
