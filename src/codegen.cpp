@@ -217,6 +217,11 @@ extern void _chkstk(void);
 //    return alloca(40960);
 //}
 #endif
+
+extern float __gnu_h2f_ieee(uint16_t param);
+extern float __extendhfsf2(uint16_t param);
+extern uint16_t __gnu_f2h_ieee(float param);
+extern uint16_t __truncdfhf2(double param);
 }
 
 // shared llvm state
@@ -8304,6 +8309,11 @@ static void init_jit_functions(void)
 #endif
 #endif
 #endif
+
+    add_named_global("__extendhfsf2", &__extendhfsf2);
+    add_named_global("__truncdfhf2", &__truncdfhf2);
+    add_named_global("__gnu_h2f_ieee", &__gnu_h2f_ieee);
+    add_named_global("__gnu_f2h_ieee", &__gnu_f2h_ieee);
 
 #define BOX_F(ct) add_named_global(XSTR(jl_box_##ct), &jl_box_##ct);
     BOX_F(int8); BOX_F(uint8);
