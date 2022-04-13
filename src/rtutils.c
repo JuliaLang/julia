@@ -785,6 +785,37 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         jl_sym_t *sym = globfunc ? globname : dv->name->name;
         char *sn = jl_symbol_name(sym);
         size_t quote = 0;
+        if (dv->name == jl_tuple_typename) {
+            if (dv == jl_tuple_type)
+                return jl_printf(out, "Tuple");
+            int taillen = 1, tlen = jl_nparams(dv), i;
+            for (i = tlen-2; i >= 0; i--) {
+                if (jl_tparam(dv, i) == jl_tparam(dv, tlen-1))
+                    taillen++;
+                else
+                    break;
+            }
+            if (taillen == tlen && taillen > 3) {
+                n += jl_printf(out, "NTuple{%d, ", tlen);
+                n += jl_static_show_x(out, jl_tparam0(dv), depth);
+                n += jl_printf(out, "}");
+            }
+            else {
+                n += jl_printf(out, "Tuple{");
+                for (i = 0; i < (taillen > 3 ? tlen-taillen : tlen); i++) {
+                    if (i > 0)
+                        n += jl_printf(out, ", ");
+                    n += jl_static_show_x(out, jl_tparam(dv, i), depth);
+                }
+                if (taillen > 3) {
+                    n += jl_printf(out, ", Vararg{");
+                    n += jl_static_show_x(out, jl_tparam(dv, tlen-1), depth);
+                    n += jl_printf(out, ", %d}", taillen);
+                }
+                n += jl_printf(out, "}");
+            }
+            return n;
+        }
         if (globfunc) {
             n += jl_printf(out, "typeof(");
         }
@@ -804,9 +835,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, ")");
             }
         }
-        if (dv->parameters && (jl_value_t*)dv != dv->name->wrapper &&
-            (jl_has_free_typevars(v) ||
-             (jl_value_t*)dv != (jl_value_t*)jl_tuple_type)) {
+        if (dv->parameters && (jl_value_t*)dv != dv->name->wrapper) {
             size_t j, tlen = jl_nparams(dv);
             if (tlen > 0) {
                 n += jl_printf(out, "{");
@@ -817,9 +846,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                         n += jl_printf(out, ", ");
                 }
                 n += jl_printf(out, "}");
-            }
-            else if (dv->name == jl_tuple_typename) {
-                n += jl_printf(out, "{}");
             }
         }
     }
