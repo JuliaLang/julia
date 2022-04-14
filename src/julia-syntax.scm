@@ -3391,9 +3391,9 @@ f(x) = yt(x)
                             (call (core svec) ,@(map quotify fields))
                             (call (core svec))
                             (false) ,(length fields)))
+                (call (core _setsuper!) ,s ,super)
                 (= (outerref ,name) ,s)
-                (call (core _setsuper!) ,name ,super)
-                (call (core _typebody!) ,name (call (core svec) ,@types))
+                (call (core _typebody!) ,s (call (core svec) ,@types))
                 (return (null))))))))
 
 (define (type-for-closure name fields super)
@@ -3405,9 +3405,9 @@ f(x) = yt(x)
                                   (call (core svec) ,@(map quotify fields))
                                   (call (core svec))
                                   (false) ,(length fields)))
+                      (call (core _setsuper!) ,s ,super)
                       (= (outerref ,name) ,s)
-                      (call (core _setsuper!) ,name ,super)
-                      (call (core _typebody!) ,name
+                      (call (core _typebody!) ,s
                             (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
                       (return (null))))))))
 
