@@ -47,6 +47,10 @@ function nmatches(info::UnionSplitInfo)
     return n
 end
 
+struct ConstPropResult
+    result::InferenceResult
+end
+
 struct ConcreteResult
     mi::MethodInstance
     effects::Effects
@@ -55,7 +59,7 @@ struct ConcreteResult
     ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
 
-const ConstResult = Union{InferenceResult,ConcreteResult}
+const ConstResult = Union{ConstPropResult,ConcreteResult}
 
 """
     info::ConstCallInfo

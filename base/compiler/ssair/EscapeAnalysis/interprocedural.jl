@@ -1,7 +1,7 @@
 # TODO this file contains many duplications with the inlining analysis code, factor them out
 
 import Core.Compiler:
-    MethodInstance, InferenceResult, Signature, ConcreteResult,
+    MethodInstance, InferenceResult, Signature, ConstPropResult, ConcreteResult,
     MethodResultPure, MethodMatchInfo, UnionSplitInfo, ConstCallInfo, InvokeCallInfo,
     call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction, validate_sparams,
     specialize_method, invoke_rewrite
@@ -62,8 +62,8 @@ function analyze_invoke_call(sig::Signature, info::InvokeCallInfo)
         return missing
     end
     result = info.result
-    if isa(result, InferenceResult)
-        return CallInfo(Linfo[result], true)
+    if isa(result, ConstPropResult)
+        return CallInfo(Linfo[result.result], true)
     else
         argtypes = invoke_rewrite(sig.argtypes)
         mi = analyze_match(match, length(argtypes))
@@ -98,8 +98,8 @@ function analyze_const_call(sig::Signature, cinfo::ConstCallInfo)
             elseif isa(result, ConcreteResult)
                 # TODO we may want to feedback information that this call always throws if !isdefined(result, :result)
                 push!(linfos, result.mi)
-            else
-                push!(linfos, result)
+            elseif isa(result, ConstPropResult)
+                push!(linfos, result.result)
             end
             nothrow &= match.fully_covers
         end

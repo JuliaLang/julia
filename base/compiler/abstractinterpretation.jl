@@ -823,7 +823,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return nothing
     add_backedge!(mi, sv)
-    return ConstCallResults(result, inf_result, inf_result.ipo_effects)
+    return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects)
 end
 
 # if there's a possibility we could get a better result (hopefully without doing too much work)

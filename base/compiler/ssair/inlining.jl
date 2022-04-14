@@ -1102,8 +1102,8 @@ function inline_invoke!(
         item = concrete_result_item(result, state)
     else
         argtypes = invoke_rewrite(sig.argtypes)
-        if isa(result, InferenceResult)
-            (; mi) = item = InliningTodo(result, argtypes)
+        if isa(result, ConstPropResult)
+            (; mi) = item = InliningTodo(result.result, argtypes)
             validate_sparams(mi.sparam_vals) || return nothing
             if argtypes_to_type(argtypes) <: mi.def.sig
                 state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
@@ -1288,8 +1288,8 @@ function handle_const_call!(
             if isa(result, ConcreteResult)
                 case = concrete_result_item(result, state)
                 push!(cases, InliningCase(result.mi.specTypes, case))
-            elseif isa(result, InferenceResult)
-                handled_all_cases &= handle_inf_result!(result, argtypes, flag, state, cases, true)
+            elseif isa(result, ConstPropResult)
+                handled_all_cases &= handle_const_prop_result!(result, argtypes, flag, state, cases, true)
             else
                 @assert result === nothing
                 handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, true)
@@ -1321,10 +1321,10 @@ function handle_match!(
     return true
 end
 
-function handle_inf_result!(
-    result::InferenceResult, argtypes::Vector{Any}, flag::UInt8, state::InliningState,
+function handle_const_prop_result!(
+    result::ConstPropResult, argtypes::Vector{Any}, flag::UInt8, state::InliningState,
     cases::Vector{InliningCase}, allow_abstract::Bool = false)
-    (; mi) = item = InliningTodo(result, argtypes)
+    (; mi) = item = InliningTodo(result.result, argtypes)
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
@@ -1361,9 +1361,9 @@ function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
 end
 
 function handle_const_opaque_closure_call!(
-    ir::IRCode, idx::Int, stmt::Expr, result::InferenceResult, flag::UInt8,
+    ir::IRCode, idx::Int, stmt::Expr, result::ConstPropResult, flag::UInt8,
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
-    item = InliningTodo(result, sig.argtypes)
+    item = InliningTodo(result.result, sig.argtypes)
     isdispatchtuple(item.mi.specTypes) || return
     validate_sparams(item.mi.sparam_vals) || return
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
@@ -1407,7 +1407,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
 
         if isa(info, OpaqueClosureCallInfo)
             result = info.result
-            if isa(result, InferenceResult)
+            if isa(result, ConstPropResult)
                 handle_const_opaque_closure_call!(
                     ir, idx, stmt, result, flag,
                     sig, state, todo)
