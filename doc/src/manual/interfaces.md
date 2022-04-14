@@ -464,8 +464,8 @@ it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
 support `axes` and indexing.
 
-If a type does *not* act like an indexable container, then it should typically be defined to act as a
-0-dimensional "scalar" for the purposes of broadcasting.  This is accomplished by defining a method:
+If a type is intended to act like a "0-dimensional scalar" (a single object) rather than as a
+container for broadcasting, then the following method should be defined:
 ```julia
 Base.broadcastable(o::MyType) = Ref(o)
 ```
