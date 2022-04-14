@@ -993,19 +993,31 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     istuple = x.name === Tuple.name
     n = length(parameters)
 
-    # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
+    # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
+    max_n = 3
     if istuple
-        if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
+        taillen = 1
+        for i in (n-1):-1:1
+            if parameters[i] === parameters[n]
+                taillen += 1
+            else
+                break
+            end
+        end
+        if n == taillen > max_n
             print(io, "NTuple{", n, ", ")
             show(io, parameters[1])
             print(io, "}")
         else
             print(io, "Tuple{")
-            # join(io, params, ", ") params but `show` it
-            first = true
-            for param in parameters
-                first ? (first = false) : print(io, ", ")
-                show(io, param)
+            for i = 1:(taillen > max_n ? n-taillen : n)
+                i > 1 && print(io, ", ")
+                show(io, parameters[i])
+            end
+            if taillen > max_n
+                print(io, ", Vararg{")
+                show(io, parameters[n])
+                print(io, ", ", taillen, "}")
             end
             print(io, "}")
         end
