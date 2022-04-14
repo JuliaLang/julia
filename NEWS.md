@@ -24,6 +24,8 @@ Command-line option changes
 
 * In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
   process affinity which is set typically in HPC and cloud environments ([#42340]).
+* `--math-mode=fast` is now a no-op ([#41638]). local fastmath annotations (eg `@fastmath`)
+  give the same performance without breaking your code as much.
 
 Multi-threading changes
 -----------------------
