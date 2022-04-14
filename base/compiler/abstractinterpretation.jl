@@ -1950,7 +1950,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
         cconv = e.args[5]
         if isa(cconv, QuoteNode) && isa(cconv.value, Tuple{Symbol, UInt8})
-            effects = cconv.value[2]
+            effects = cconv.value[2]::UInt8
             effects = decode_effects_override(effects)
             tristate_merge!(sv, Effects(
                 effects.consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,

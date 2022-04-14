@@ -531,7 +531,7 @@ JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"));
-    return stdout_obj ? stdout_obj->value : NULL;
+    return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
@@ -539,7 +539,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"));
-    return stderr_obj ? stderr_obj->value : NULL;
+    return stderr_obj ? jl_atomic_load_relaxed(&stderr_obj->value) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -628,20 +628,22 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
     return (jl_value_t*)dt;
 }
 
-static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv)
+static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 {
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module && jl_binding_resolved_p(dv->name->module, globname)) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname);
-        // The `||` makes this function work for both function instances and function types.
-        if (b && b->value && (b->value == v || jl_typeof(b->value) == v)) {
-            return 1;
+        if (b && b->constp) {
+            jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
+            // The `||` makes this function work for both function instances and function types.
+            if (bv == v || jl_typeof(bv) == v)
+                return 1;
         }
     }
     return 0;
 }
 
-static int is_globfunction(jl_value_t *v, jl_datatype_t *dv, jl_sym_t **globname_out)
+static int is_globfunction(jl_value_t *v, jl_datatype_t *dv, jl_sym_t **globname_out) JL_NOTSAFEPOINT
 {
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     *globname_out = globname;
@@ -1148,7 +1150,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
             if (vt == jl_typemap_entry_type) {
                 n += jl_printf(out, ", next=↩︎\n  ");
-                n += jl_static_show_next_(out, (jl_value_t*)((jl_typemap_entry_t*)v)->next, v, depth);
+                jl_value_t *next = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)v)->next);
+                n += jl_static_show_next_(out, next, v, depth);
             }
         }
         n += jl_printf(out, ")");
@@ -1197,12 +1200,12 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
                 }
                 // verify that we aren't trying to follow a circular list
                 // by following the list again, and ensuring this is the only link to next
-                jl_value_t *mnext = (jl_value_t*)((jl_typemap_entry_t*)m)->next;
+                jl_value_t *mnext = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)m)->next);
                 jl_value_t *m2 = p->v;
                 if (m2 == mnext)
                     break;
                 while (m2 && jl_typeis(m2, jl_typemap_entry_type)) {
-                    jl_value_t *mnext2 = (jl_value_t*)((jl_typemap_entry_t*)m2)->next;
+                    jl_value_t *mnext2 = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)m2)->next);
                     if (mnext2 == mnext) {
                         if (m2 != m)
                             mnext = NULL;

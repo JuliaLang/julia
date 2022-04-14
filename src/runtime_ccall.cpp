@@ -246,13 +246,13 @@ static void *trampoline_alloc() JL_NOTSAFEPOINT // lock taken by caller
     return tramp;
 }
 
-static void trampoline_free(void *tramp)    // lock taken by caller
+static void trampoline_free(void *tramp) JL_NOTSAFEPOINT    // lock taken by caller
 {
     *(void**)tramp = trampoline_freelist;
     trampoline_freelist = tramp;
 }
 
-static void trampoline_deleter(void **f)
+static void trampoline_deleter(void **f) JL_NOTSAFEPOINT
 {
     void *tramp = f[0];
     void *fobj = f[1];

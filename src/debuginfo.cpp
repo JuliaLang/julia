@@ -60,7 +60,7 @@ void jl_init_debuginfo(void)
         jl_error("fatal: pthread_key_create failed");
 }
 
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void)
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
 {
     uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
     if (held++ == 0)
@@ -68,7 +68,7 @@ extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void)
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 }
 
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void)
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 {
     uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
     assert(held);

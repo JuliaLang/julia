@@ -77,11 +77,10 @@ move_to_node1("threads")
 move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
-# Move `Pkg` tests to node 1 to fix stdin-related woes
-# TODO: fix the Pkg tests so that they can run on any worker
-# X-ref: https://github.com/JuliaLang/julia/pull/44828
-move_to_node1("Pkg")
-# TODO: fix the REPL tests so they can run on any worker
+
+# TODO: remove `REPL` from the "move to node 1" tests.
+# We first need to fix the underlying bugs that are causing the `REPL` tests to frequently
+# fail on the `test x86_64-apple-darwin` tester on Buildkite.
 move_to_node1("REPL")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
