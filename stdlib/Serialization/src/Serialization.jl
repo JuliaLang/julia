@@ -1565,5 +1565,7 @@ function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCond
     return cond
 end
 
+serialize(s::AbstractSerializer, l::LazyString) =
+    invoke(serialize, Tuple{AbstractSerializer,Any}, s, Base._LazyString((), string(l)))
 
 end
