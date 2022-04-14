@@ -838,8 +838,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
-            # we already inferred this edge previously and decided to discarded the inferred code
-            # but the inlinear will request to use it, we re-infer it here and keep it around in the local cache
+            # we already inferred this edge before and decided to discard the inferred code,
+            # nevertheless we re-infer it here again and keep it around in the local cache
+            # since the inliner will request to use it later
             cache = :local
         else
             effects = ipo_effects(code)
