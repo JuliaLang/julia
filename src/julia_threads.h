@@ -196,9 +196,6 @@ typedef struct {
 typedef struct {
     // Whether elements must be pushed/popped into/from the private queue
     uint8_t overflow;
-    // Whether this queue has enough elements so that work-stealing is worth it (see
-    // comments in `gc.c`)
-    uint8_t ws_enabled;
     _Atomic(jl_gc_ws_top_t) top;
     _Atomic(jl_gc_ws_bottom_t) bottom;
     void **pc_start;

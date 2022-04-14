@@ -1793,10 +1793,6 @@ STATIC_INLINE int gc_public_mark_stack_try_push(jl_gc_public_mark_sp_t *public_s
     jl_gc_ws_bottom_t bottom = jl_atomic_load_acquire(&public_sp->bottom);
     jl_gc_ws_top_t top = jl_atomic_load_acquire(&public_sp->top);
     int64_t size = bottom.pc_offset - top.offset;
-    // Enough items so that the benefit of work-stealing outweights the cost of waiting for 
-    // all threads at the end of marking
-    if (size >= GC_SP_MIN_STEAL_SZ)
-        public_sp->ws_enabled = 1;
     // Public queue overflow
     if (__unlikely(size >= GC_PUBLIC_MARK_SP_SZ))
         return 0;
@@ -2215,6 +2211,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 // running gc)
 void jl_gc_set_recruit(jl_ptls_t ptls, void *addr)
 {
+    // fprintf(stderr, "[%d] set the recruitment location\n", ptls->tid);
     jl_fence();
     jl_atomic_exchange_relaxed(&jl_gc_recruiting_location, addr);
     if (jl_n_threads > 1)
@@ -2391,7 +2388,6 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     void *pc;
-    int ws_enabled = 0;
  
     jl_value_t *new_obj = NULL;
     uintptr_t tag = 0;
@@ -2417,24 +2413,16 @@ JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
 
 pop: {
         pc = gc_pop_pc(public_sp, &sp);
-        if (GC_MARK_L_marked_obj <= (uint64_t)pc && (uint64_t)pc < _GC_MARK_L_MAX) {
-            // `ws_enabled` is set if there are enough items in the public mark queue.
-            //  See comment in `gc_public_mark_stack_try_push`
-            if (!ws_enabled && public_sp->ws_enabled) {
-                ws_enabled = 1;
-                jl_gc_set_recruit(ptls, (void *)gc_mark_loop_recruited);
-            }
+        if (GC_MARK_L_marked_obj <= (uint64_t)pc && (uint64_t)pc < _GC_MARK_L_MAX)
             gc_mark_jmp(pc);
-        }
+        // Empty mark queue: try to steal from other thread
         for (int i = 0; i < jl_n_threads; i++) {
             uint64_t victim = rand() % jl_n_threads;
             if (victim == ptls->tid)
                 continue;
-            if (gc_mark_stack_steal(gc_cache, &jl_all_tls_states[victim]->gc_cache)) {
+            if (gc_mark_stack_steal(gc_cache, &jl_all_tls_states[victim]->gc_cache))
                 goto pop;
-            }
         }
-        public_sp->ws_enabled = 0;
         return;
     }
 
@@ -3286,6 +3274,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             gc_cblist_root_scanner, (collection));
         import_gc_state(ptls, &sp);
     }
+    jl_gc_set_recruit(ptls, (void *)gc_mark_loop_recruited);
     uint8_t old_state = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
     gc_mark_loop(ptls, sp);
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_PARALLEL);
@@ -3608,13 +3597,12 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     
     jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
     
-    jl_gc_ws_top_t initial_top = {0, 0};
-    jl_gc_ws_bottom_t initial_bottom = {0, 0};
+    jl_gc_ws_top_t top0 = {0, 0};
+    jl_gc_ws_bottom_t bottom0 = {0, 0};
     
     public_sp->overflow = 0;
-    public_sp->ws_enabled = 0;
-    public_sp->top = initial_top;
-    public_sp->bottom = initial_bottom;
+    public_sp->top = top0;
+    public_sp->bottom = bottom0;
     public_sp->pc_start = (void**)malloc_s(GC_PUBLIC_MARK_SP_SZ * sizeof(void*));
     public_sp->data_start = (jl_gc_mark_data_t *)malloc_s(GC_PUBLIC_MARK_SP_SZ * sizeof(jl_gc_mark_data_t));
 
