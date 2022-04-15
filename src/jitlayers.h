@@ -48,6 +48,11 @@
 # include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #endif
 
+//COD works with 64-bit linux/freebsd or if we're on an M1 CPU
+#if ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_P64)) || (defined(JL_USE_JITLINK) && defined(_OS_DARWIN_))
+#define JL_COMPILE_ON_DEMAND
+#endif
+
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
@@ -242,18 +247,22 @@ public:
             OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
             OwningResource(const OwningResource &) = delete;
             OwningResource &operator=(const OwningResource &) = delete;
-            OwningResource(OwningResource &&) = default;
-            OwningResource &operator=(OwningResource &&) = default;
+            OwningResource(OwningResource &&other) : pool(other.pool), resource(std::move(other.resource)) {
+                other.resource.reset();
+            }
+            OwningResource &operator=(OwningResource &&other) {
+                assert(&other.pool == &pool && "Tried to move from one pool to another!");
+                resource = std::move(other.resource);
+                other.resource.reset();
+            }
             ~OwningResource() {
-                if (resource) pool.release(std::move(*resource));
+                reset();
             }
-            ResourceT release() {
-                ResourceT res(std::move(*resource));
-                resource.reset();
-                return res;
-            }
-            void reset(ResourceT res) {
-                *resource = std::move(res);
+            void reset() {
+                if (resource) {
+                    pool.release(std::move(**this));
+                    resource.reset();
+                }
             }
             ResourceT &operator*() {
                 return *resource;
@@ -274,7 +283,7 @@ public:
                 return resource.getPointer();
             }
             explicit operator bool() const {
-                return resource;
+                return !!resource;
             }
             private:
             ResourcePool &pool;
@@ -330,6 +339,13 @@ public:
 
         std::unique_ptr<WNMutex> mutex;
     };
+
+    template<typename ResourceT, size_t max = 0>
+    using QueuedResourcePool = ResourcePool<ResourceT, max, std::queue<ResourceT>>;
+
+#ifdef JL_COMPILE_ON_DEMAND
+    typedef QueuedResourcePool<std::unique_ptr<RTDyldMemoryManager>> MemMgrPoolT;
+#endif
     struct PipelineT {
         PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
         CompileLayerT CompileLayer;
@@ -436,10 +452,14 @@ private:
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
-    ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
+    QueuedResourcePool<orc::ThreadSafeContext> ContextPool;
 
 #ifndef JL_USE_JITLINK
+#ifndef JL_COMPILE_ON_DEMAND
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
+#else
+    MemMgrPoolT MemMgrs;
+#endif
 #endif
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;

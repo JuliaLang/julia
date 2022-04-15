@@ -678,10 +678,25 @@ RTDyldMemoryManager* createRTDyldMemoryManager(void);
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
 private:
-    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr;
+#ifndef JL_COMPILE_ON_DEMAND
+    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr_;
+#else
+    JuliaOJIT::MemMgrPoolT::OwningResource MemMgr_;
+#endif
 
 public:
-    ForwardingMemoryManager(std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr) : MemMgr(MemMgr) {}
+    ForwardingMemoryManager(
+#ifndef JL_COMPILE_ON_DEMAND
+        std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr
+#else
+        decltype(MemMgr_) MemMgr
+#endif
+    ) : MemMgr_(std::move(MemMgr)) {}
+#ifdef JL_COMPILE_ON_DEMAND
+#define MemMgr (*MemMgr_)
+#else
+#define MemMgr MemMgr_
+#endif
     virtual ~ForwardingMemoryManager() = default;
     virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                      unsigned SectionID,
@@ -712,12 +727,19 @@ public:
         return MemMgr->deregisterEHFrames();
     }
     virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
-        return MemMgr->finalizeMemory(ErrMsg);
+        auto error = MemMgr->finalizeMemory(ErrMsg);
+#ifdef JL_COMPILE_ON_DEMAND
+        MemMgr_.reset();
+#endif
+        return error;
     }
     virtual void notifyObjectLoaded(RuntimeDyld &RTDyld,
                                     const object::ObjectFile &Obj) override {
         return MemMgr->notifyObjectLoaded(RTDyld, Obj);
     }
+
+#undef MemMgr
+
 };
 
 
@@ -1006,6 +1028,7 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
 # endif
 #else
+#ifndef JL_COMPILE_ON_DEMAND
     MemMgr(createRTDyldMemoryManager()),
     ObjectLayer(
             ES,
@@ -1014,6 +1037,16 @@ JuliaOJIT::JuliaOJIT()
                 return result;
             }
         ),
+#else
+    MemMgrs([](){ return std::unique_ptr<RTDyldMemoryManager>(createRTDyldMemoryManager()); }),
+    ObjectLayer(
+            ES,
+            [this]() {
+                std::unique_ptr<RuntimeDyld::MemoryManager> result(new ForwardingMemoryManager(*MemMgrs));
+                return result;
+            }
+        ),
+#endif
 #endif
     Pipelines{
         std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
@@ -1040,6 +1073,9 @@ JuliaOJIT::JuliaOJIT()
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LO) {
+#ifdef JL_COMPILE_ON_DEMAND
+            auto MemMgr = nullptr;
+#endif
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
@@ -1256,7 +1292,11 @@ size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
 
 size_t JuliaOJIT::getTotalBytes() const
 {
+#ifndef JL_COMPILE_ON_DEMAND
     return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
+#else
+    return 0;
+#endif
 }
 #endif
 
