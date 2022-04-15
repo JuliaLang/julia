@@ -788,6 +788,30 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
     jlbacktrace();
 }
 
+JL_DLLEXPORT void jl_thread_print_all_task_backtraces(void)
+{
+    jl_safe_printf("Wassup!\n");
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    arraylist_t *live_tasks = &ptls->heap.live_tasks;
+    size_t i, l;
+    l = live_tasks->len;
+    jl_safe_printf("%zu live tasks\n", 1 + l);
+    void **lst = live_tasks->items;
+    jl_safe_printf("==== Task Root\n");
+    jlbacktracet(ptls->root_task);
+    // Note: length of live tasks might change?
+    for (i = 0; i < live_tasks->len; i++) {
+        jl_safe_printf("==== Task %lu\n", i+1);
+        if (((jl_task_t*)lst[i])->stkbuf != NULL) {
+            jlbacktracet((jl_task_t*)lst[i]);
+        } else {
+            jl_safe_printf("stkbuf == NULL\n");
+        }
+    }
+    jl_safe_printf("==== Done ==== \n", i+1);
+}
+
 #ifdef __cplusplus
 }
 #endif
