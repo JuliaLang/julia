@@ -307,7 +307,7 @@ function Base.close(lock::LockMonitor)
     if pathstat !== nothing && samefile(stat(lock.fd), pathstat)
         # try not to delete someone else's lock
         try
-            rm(path)
+            tryrmopenfile(path)
             removed = true
         catch ex
             ex isa IOError || rethrow()
