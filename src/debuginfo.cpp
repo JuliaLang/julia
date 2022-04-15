@@ -215,11 +215,6 @@ public:
                            std::function<uint64_t(const StringRef &)> getLoadAddress,
                            std::function<void*(void*)> lookupWriteAddress)
     {
-        jl_ptls_t ptls = jl_current_task->ptls;
-        // This function modify codeinst->fptr in GC safe region.
-        // This should be fine since the GC won't scan this field.
-        int8_t gc_state = jl_gc_safe_enter(ptls);
-
         object::section_iterator EndSection = Object.section_end();
 
 #ifdef _CPU_ARM_
@@ -378,7 +373,6 @@ public:
                 }
             });
         }
-        jl_gc_safe_leave(ptls, gc_state);
     }
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap() JL_NOTSAFEPOINT
