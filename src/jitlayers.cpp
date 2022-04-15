@@ -1038,6 +1038,8 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #else
+    //TODO set an actual COD error handler address
+    LCTM(cantFail(orc::createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0))),
     MemMgrs([](){ return std::unique_ptr<RTDyldMemoryManager>(createRTDyldMemoryManager()); }),
     ObjectLayer(
             ES,
@@ -1055,6 +1057,9 @@ JuliaOJIT::JuliaOJIT()
         std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
     },
     OptSelLayer(Pipelines)
+#ifdef JL_COMPILE_ON_DEMAND
+    , CODLayer(ES, OptSelLayer, *LCTM, orc::createLocalIndirectStubsManagerBuilder(TM->getTargetTriple()))
+#endif
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -1158,12 +1163,15 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 #endif
     });
     // TODO: what is the performance characteristics of this?
+#ifdef JL_COMPILE_ON_DEMAND
+    cantFail(CODLayer.add(JD, std::move(TSM)));
+#else
     cantFail(OptSelLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
         cantFail(ES.lookup({&JD}, Name));
-
+#endif
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)

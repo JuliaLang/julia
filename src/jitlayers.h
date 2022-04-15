@@ -9,6 +9,7 @@
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
+#include <llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -229,6 +230,7 @@ public:
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::CompileOnDemandLayer CODLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -458,12 +460,16 @@ private:
 #ifndef JL_COMPILE_ON_DEMAND
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #else
+    std::unique_ptr<orc::LazyCallThroughManager> LCTM;
     MemMgrPoolT MemMgrs;
 #endif
 #endif
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
+#ifdef JL_COMPILE_ON_DEMAND
+    CODLayerT CODLayer;
+#endif
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
