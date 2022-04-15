@@ -300,45 +300,30 @@ function Timer(cb::Function, timeout::Real; interval::Real=0.0)
 end
 
 """
-    timedwait(callback::Function, timeout::Real; pollint::Real=0.1)
+    timedwait(testcb, timeout::Real; pollint::Real=0.1)
 
-Waits until `callback` returns `true` or `timeout` seconds have passed, whichever is earlier.
-`callback` is polled every `pollint` seconds. The minimum value for `timeout` and `pollint`
-is `0.001`, that is, 1 millisecond.
+Waits until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
+The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
+that is, 1 millisecond.
 
 Returns :ok or :timed_out
 """
-function timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
     start = time_ns()
     ns_timeout = 1e9 * timeout
-    done = Channel(1)
-    function timercb(aw)
-        try
-            if testcb()
-                put!(done, (:ok, nothing))
-            elseif (time_ns() - start) > ns_timeout
-                put!(done, (:timed_out, nothing))
-            end
-        catch e
-            put!(done, (:error, CapturedException(e, catch_backtrace())))
-        finally
-            isready(done) && close(aw)
+
+    testcb() && return :ok
+
+    t = Timer(pollint, interval=pollint)
+    while _trywait(t) # stop if we ever get closed
+        if testcb()
+            close(t)
+            return :ok
+        elseif (time_ns() - start) > ns_timeout
+            close(t)
+            break
         end
-        nothing
     end
-
-    try
-        testcb() && return :ok
-    catch e
-        throw(CapturedException(e, catch_backtrace()))
-    end
-
-    t = Timer(timercb, pollint, interval = pollint)
-    ret, e = fetch(done)
-    close(t)
-
-    ret === :error && throw(e)
-
-    return ret
+    return :timed_out
 end
