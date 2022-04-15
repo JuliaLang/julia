@@ -508,7 +508,7 @@ be an `Integer`.
 ```jldoctest
 julia> LinRange(1.5, 5.5, 9)
 9-element LinRange{Float64, Int64}:
- 1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
+ 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5
 ```
 
 Compared to using [`range`](@ref), directly constructing a `LinRange` should
@@ -592,7 +592,7 @@ as if it were `collect(r)`, dependent on the size of the
 terminal, and taking into account whether compact numbers should be shown.
 It figures out the width in characters of each element, and if they
 end up too wide, it shows the first and last elements separated by a
-horizontal ellipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
+horizontal ellipsis. Typical output will look like `1.0, 2.0, …, 5.0, 6.0`.
 
 `print_range(io, r, pre, sep, post, hdots)` uses optional
 parameters `pre` and `post` characters for each printed row,
@@ -601,9 +601,9 @@ parameters `pre` and `post` characters for each printed row,
 """
 function print_range(io::IO, r::AbstractRange,
                      pre::AbstractString = " ",
-                     sep::AbstractString = ",",
+                     sep::AbstractString = ", ",
                      post::AbstractString = "",
-                     hdots::AbstractString = ",\u2026,") # horiz ellipsis
+                     hdots::AbstractString = ", \u2026, ") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
     # and should be called by show and display
     sz = displaysize(io)

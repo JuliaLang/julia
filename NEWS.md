@@ -36,6 +36,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `Iterators.flatmap` was added ([#44792]).
+
 Library changes
 ---------------
 

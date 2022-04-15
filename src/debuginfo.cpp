@@ -60,7 +60,7 @@ void jl_init_debuginfo(void)
         jl_error("fatal: pthread_key_create failed");
 }
 
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void)
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
 {
     uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
     if (held++ == 0)
@@ -68,7 +68,7 @@ extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void)
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 }
 
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void)
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 {
     uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
     assert(held);
@@ -215,11 +215,6 @@ public:
                            std::function<uint64_t(const StringRef &)> getLoadAddress,
                            std::function<void*(void*)> lookupWriteAddress)
     {
-        jl_ptls_t ptls = jl_current_task->ptls;
-        // This function modify codeinst->fptr in GC safe region.
-        // This should be fine since the GC won't scan this field.
-        int8_t gc_state = jl_gc_safe_enter(ptls);
-
         object::section_iterator EndSection = Object.section_end();
 
 #ifdef _CPU_ARM_
@@ -378,7 +373,6 @@ public:
                 }
             });
         }
-        jl_gc_safe_leave(ptls, gc_state);
     }
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap() JL_NOTSAFEPOINT

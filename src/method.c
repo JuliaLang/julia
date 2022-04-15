@@ -767,7 +767,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
-    jl_atomic_store_relaxed(&m->invokes, NULL);
+    jl_atomic_store_relaxed(&m->invokes, jl_nothing);
     m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;

@@ -1280,7 +1280,6 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
                     # This is vararg, we're not gonna be able to do any inling,
                     # drop the info
                     info = nothing
-
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
                     push!(ctypes´, push!(ct[1:(end - 1)], tail))
                 else
@@ -1300,8 +1299,9 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
         lct = length(ct)
         # truncate argument list at the first Vararg
         for i = 1:lct-1
-            if isvarargtype(ct[i])
-                ct[i] = tuple_tail_elem(ct[i], ct[(i+1):lct])
+            cti = ct[i]
+            if isvarargtype(cti)
+                ct[i] = tuple_tail_elem(unwrapva(cti), ct[(i+1):lct])
                 resize!(ct, i)
                 break
             end
