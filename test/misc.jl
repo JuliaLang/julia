@@ -1070,7 +1070,7 @@ end
                 GC.enable_logging(false)
             end
         end
-        @test occursin("GC: pause", read(open(tmppath), String))
+        @test occursin("GC: pause", read(tmppath, String))
     end
 end
 
