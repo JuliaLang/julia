@@ -65,7 +65,7 @@ mutable struct LockMonitor
             lock = new(at, fd, update)
             finalizer(close, lock)
         catch ex
-            rm(at)
+            tryrmopenfile(at)
             close(fd)
             rethrow(ex)
         end
