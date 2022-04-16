@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "julia_irgen_codegen"
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
@@ -86,6 +85,8 @@
 #include "llvm/Support/Path.h" // for llvm::sys::path
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
+
+#define DEBUG_TYPE "julia_irgen_codegen"
 
 using namespace llvm;
 
