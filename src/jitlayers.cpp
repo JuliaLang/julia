@@ -1073,6 +1073,10 @@ JuliaOJIT::JuliaOJIT()
         });
 #endif
 
+#if defined(JL_COMPILE_ON_DEMAND) && !defined(JL_USE_JITLINK)
+    CODLayer.setPartitionFunction(CODLayerT::compileWholeModule);
+#endif
+
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
     // tells DynamicLibrary to load the program, not a library.
