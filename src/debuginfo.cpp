@@ -34,6 +34,7 @@ using namespace llvm;
 #include <map>
 #include <vector>
 #include <set>
+#include <mutex>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
@@ -111,7 +112,10 @@ struct ObjectInfo {
 // Maintain a mapping of unrealized function names -> linfo objects
 // so that when we see it get emitted, we can add a link back to the linfo
 // that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> codeinst_in_flight;
+static auto &codeinst_in_flight() {
+    static std::pair<std::mutex, StringMap<jl_code_instance_t*>> codeinst_in_flight_;
+    return codeinst_in_flight_;
+}
 static std::string mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
@@ -123,7 +127,9 @@ static std::string mangle(StringRef Name, const DataLayout &DL)
 }
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    codeinst_in_flight[mangle(name, DL)] = codeinst;
+    auto &ciif = codeinst_in_flight();
+    std::lock_guard<std::mutex> lock(ciif.first);
+    ciif.second[mangle(name, DL)] = codeinst;
 }
 
 
@@ -352,11 +358,15 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (codeinst_it != codeinst_in_flight.end()) {
-                codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
+            {
+                auto &ciif = codeinst_in_flight();
+                std::lock_guard<std::mutex> lock(ciif.first);
+                auto codeinst_it = ciif.second.find(sName);
+                if (codeinst_it != ciif.second.end()) {
+                    codeinst = codeinst_it->second;
+                    ciif.second.erase(codeinst_it);
+                }
             }
             jl_profile_atomic([&]() {
                 if (codeinst)
