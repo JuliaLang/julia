@@ -2231,7 +2231,21 @@ static void jl_insert_method_instances(jl_array_t *list)
             jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
             if (entry) {
                 jl_value_t *mworld = entry->func.value;
-                if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
+                // If a newer method would now be selected by dispatch, we need to
+                // invalidate.
+                //
+                // Note: the check of the module primary_world is a hack to prevent
+                //     invoke(f, Tuple{AbstractType, ...}, args...)
+                // calls from a more specific method of `f` being spuriously invalidated.
+                // (An example is `copyto!(::BitArray, ::Broadcasted)` which calls the
+                // fallback `copyto!(::AbstractArray, ::Broadcasted)` for small outputs.)
+                // But this only works if the caller is from the same module as the
+                // fallback method. To do better we need the ability to mark specific
+                // MethodInstances as having been called from `invoke`.
+                if (jl_is_method(mworld) &&
+                    mi->def.method != (jl_method_t*)mworld &&
+                    mi->def.method->module->primary_world < ((jl_method_t*)mworld)->module->primary_world &&
+                    jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
                     jl_array_uint8_set(valids, i, 0);
                     invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
                     // The codeinst of this mi haven't yet been removed
