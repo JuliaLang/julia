@@ -1149,7 +1149,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             // So for now we inject a definition of these functions that calls our runtime
             // functions. We do so after optimization to avoid cloning these functions.
             // Float16 conversion routines
-#if defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000
+#if defined(_CPU_RISCV64_) || (defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000)
             // LLVM 16 reverted to soft-float ABI for passing half on x86_64 Darwin
             // https://github.com/llvm/llvm-project/commit/2bcf51c7f82ca7752d1bba390a2e0cb5fdd05ca9
             injectCRTAlias(M, "__gnu_h2f_ieee", "julia_half_to_float",
@@ -1664,7 +1664,8 @@ void jl_dump_native_impl(void *native_code,
     }
 
     CodeModel::Model CMModel = CodeModel::Small;
-    if (TheTriple.isPPC() || (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())) {
+    if (TheTriple.isPPC() || TheTriple.isRISCV() ||
+        (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())) {
         // On PPC the small model is limited to 16bit offsets. For very large images the small code model
         CMModel = CodeModel::Medium; //  isn't good enough on x86 so use Medium, it has no cost because only the image goes in .ldata
     }

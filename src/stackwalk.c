@@ -1066,6 +1066,33 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT
     mc->regs[0] = 1;
     assert(mc->sp % 16 == 0);
     return 1;
+    #elif defined(_CPU_RISCV_)
+    // https://github.com/bminor/glibc/blob/master/sysdeps/riscv/setjmp.S
+    mc->__gregs[REG_RA] = (*_ctx)[0];   // ra (return address)
+    mc->__gregs[REG_S0] = (*_ctx)[1];   // s0/fp
+    mc->__gregs[REG_S1] = (*_ctx)[2];   // s1
+    mc->__gregs[REG_S2] = (*_ctx)[3];   // s2
+    mc->__gregs[REG_S3] = (*_ctx)[4];   // s3
+    mc->__gregs[REG_S4] = (*_ctx)[5];   // s4
+    mc->__gregs[REG_S5] = (*_ctx)[6];   // s5
+    mc->__gregs[REG_S6] = (*_ctx)[7];   // s6
+    mc->__gregs[REG_S7] = (*_ctx)[8];   // s7
+    mc->__gregs[REG_S8] = (*_ctx)[9];   // s8
+    mc->__gregs[REG_S9] = (*_ctx)[10];  // s9
+    mc->__gregs[REG_S10] = (*_ctx)[11]; // s10
+    mc->__gregs[REG_S11] = (*_ctx)[12]; // s11
+    mc->__gregs[REG_SP] = (*_ctx)[13];  // sp
+    #ifndef __riscv_float_abi_soft
+    for (int i = 0; i < 12; i++)
+        mc->__fpregs[REG_FS0 + i] = (*_ctx)[14 + i];  // fs0-fs11
+    #endif
+    // ifdef PTR_DEMANGLE ?
+    mc->__gregs[REG_SP] = ptr_demangle(mc->__gregs[REG_SP]);
+    mc->__gregs[REG_RA] = ptr_demangle(mc->__gregs[REG_RA]);
+    mc->__gregs[REG_PC] = mc->__gregs[REG_RA];
+    mc->__gregs[REG_A0] = 1;
+    assert(mc->__gregs[REG_SP] % 16 == 0);
+    return 1;
     #else
     #pragma message("jl_record_backtrace not defined for ASM/SETJMP on unknown linux")
     (void)mc;

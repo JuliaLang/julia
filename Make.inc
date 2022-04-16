@@ -995,6 +995,9 @@ endif
 ifneq (,$(findstring arm,$(ARCH)))
 DIST_ARCH:=arm
 endif
+ifneq (,$(findstring riscv64,$(ARCH)))
+DIST_ARCH:=riscv64
+endif
 
 JULIA_BINARYDIST_FILENAME := julia-$(JULIA_COMMIT)-$(DIST_OS)$(DIST_ARCH)
 endif
@@ -1011,6 +1014,14 @@ endif
 ifneq (,$(findstring aarch64,$(ARCH)))
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
+USE_BLAS64:=1
+BINARY:=64
+endif
+
+# If we are running on riscv64, set certain options automatically
+ifneq (,$(findstring $(ARCH),riscv64))
+OPENBLAS_DYNAMIC_ARCH:=0
+OPENBLAS_TARGET_ARCH:=RISCV64_GENERIC
 USE_BLAS64:=1
 BINARY:=64
 endif

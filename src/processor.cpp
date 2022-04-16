@@ -1016,6 +1016,10 @@ static std::string jl_get_cpu_features_llvm(void)
 
 #include "processor_arm.cpp"
 
+#elif defined(_CPU_RISCV64_)
+
+#include "processor_riscv.cpp"
+
 #else
 
 #include "processor_fallback.cpp"

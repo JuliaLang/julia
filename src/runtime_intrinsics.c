@@ -355,7 +355,7 @@ float julia_bfloat_to_float(uint16_t param) {
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \
      (defined(__clang__) && __clang_major__ > 16)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
-    !defined(_OS_WINDOWS_)
+    !defined(_OS_WINDOWS_) && !defined(_CPU_RISCV64_)
     #define BFLOAT16_TYPE __bf16
     #define BFLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
     #define BFLOAT16_FROM_UINT16(x) (*(__bf16*)&(x))

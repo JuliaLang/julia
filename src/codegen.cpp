@@ -5368,7 +5368,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     }
     CallInst *call = ctx.builder.CreateCall(cft, TheCallee, argvals);
     call->setAttributes(returninfo.attrs);
-    if (gcstack_arg)
+    if (gcstack_arg && !ctx.emission_context.TargetTriple.isRISCV())
         call->setCallingConv(CallingConv::Swift);
 
     jl_cgval_t retval;
@@ -8186,7 +8186,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
 
     if (gcstack_arg){
         AttrBuilder param(ctx.builder.getContext());
-        param.addAttribute(Attribute::SwiftSelf);
+        if (!ctx.emission_context.TargetTriple.isRISCV())
+            param.addAttribute(Attribute::SwiftSelf);
         param.addAttribute(Attribute::NonNull);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(PointerType::get(JuliaType::get_ppjlvalue_ty(ctx.builder.getContext()), 0));
@@ -8278,7 +8279,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             fval = emit_inttoptr(ctx, fval, ftype->getPointerTo());
     }
     if (auto F = dyn_cast<Function>(fval)) {
-        if (gcstack_arg)
+        if (gcstack_arg && !ctx.emission_context.TargetTriple.isRISCV())
             F->setCallingConv(CallingConv::Swift);
         assert(F->arg_size() >= argnames.size());
         for (size_t i = 0; i < argnames.size(); i++) {

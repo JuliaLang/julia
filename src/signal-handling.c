@@ -256,7 +256,8 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
     || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
-    || (defined(_OS_LINUX_) && defined(_CPU_ARM_))
+    || (defined(_OS_LINUX_) && defined(_CPU_ARM_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_RISCV64_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -344,6 +345,8 @@ static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
     return ((ucontext_t*)_ctx)->uc_mcontext.mc_gpregs.gp_elr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     return ((ucontext_t*)_ctx)->uc_mcontext.arm_pc;
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.__gregs[REG_PC];
 #else
     // TODO for PPC
     return 0;
@@ -420,6 +423,22 @@ void jl_show_sigill(void *_ctx)
         else {
             jl_safe_printf("Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
         }
+    }
+#elif defined(_OS_LINUX_) && defined(_CPU_RISCV64_)
+    uint32_t inst = 0;
+    size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
+    if (len < 2)
+        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
+    if (inst == 0x00100073 || inst == 0xc0001073 || (inst & ((1 << 16) - 1)) == 0x0000) { 
+        // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
+        // gcc emit ebreak
+        // https://github.com/gcc-mirror/gcc/blob/2c867232df70d3de304714906b4198ecb262eb32/gcc/config/riscv/riscv.md#L2776
+        // llvm and asm manual uses unimp or c.unimp
+        // https://reviews.llvm.org/D69390
+        jl_safe_printf("Unreachable reached at %p\n", pc);
+    }
+    else {
+        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
     }
 #else
     // TODO for PPC

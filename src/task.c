@@ -1491,6 +1491,14 @@ CFI_NORETURN
                     // because all our addresses are word-aligned.
         " udf #0" // abort
         : : "r" (stk), "r"(fn) : "memory" );
+#elif defined(_CPU_RISCV64_)
+    asm volatile(
+        " mv sp, %0;\n"
+        " mv ra, zero;\n" // Clear return address register
+        " mv fp, zero;\n" // Clear frame pointer
+        " jr %1;\n" // call `fn` with fake stack frame
+        " ebreak" // abort
+        : : "r"(stk), "r"(fn) : "memory" );
 #elif defined(_CPU_PPC64_)
     // N.B.: There is two iterations of the PPC64 ABI.
     // v2 is current and used here. Make sure you have the

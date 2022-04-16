@@ -999,6 +999,19 @@ namespace {
         options.EmulatedTLS = true;
         options.ExplicitEmulatedTLS = true;
 #endif
+        // set this manually to avoid llvm defaulting to soft float and
+        // resulting in linker error: `can't link double-float modules
+        // with soft-float modules` on riscv
+        // ref: https://github.com/llvm/llvm-project/blob/afa520ab34803c82587ea6759bfd352579f741b4/llvm/lib/Target/RISCV/RISCVTargetMachine.cpp#L90
+#if defined(_CPU_RISCV64_)
+#if defined(__riscv_float_abi_double)
+        options.MCOptions.ABIName = "lp64d";
+#elif defined(__riscv_float_abi_single)
+        options.MCOptions.ABIName = "lp64f";
+#else
+        options.MCOptions.ABIName = "lp64";
+#endif
+#endif
         uint32_t target_flags = 0;
         auto target = jl_get_llvm_target(imaging_default(), target_flags);
         auto &TheCPU = target.first;
@@ -1042,11 +1055,23 @@ namespace {
 #endif
         if (TheTriple.isAArch64())
             codemodel = CodeModel::Small;
+        else if (TheTriple.isRISCV()) {
+            // RISC-V will support large code model in LLVM 21
+            // https://github.com/llvm/llvm-project/pull/70308
+            codemodel = CodeModel::Medium;
+        }
+        // Generate simpler code for JIT
+        Reloc::Model relocmodel = Reloc::Static;
+        if (TheTriple.isRISCV()) {
+            // until large code model is supported, use PIC for RISC-V
+            // https://github.com/llvm/llvm-project/issues/106203
+            relocmodel = Reloc::PIC_;
+        }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
                 TheTriple.getTriple(), TheCPU, FeaturesStr,
                 options,
-                Reloc::Static, // Generate simpler code for JIT
+                relocmodel,
                 codemodel,
                 optlevel,
                 true // JIT
@@ -1067,7 +1092,7 @@ namespace {
             .setCPU(TM.getTargetCPU().str())
             .setFeatures(TM.getTargetFeatureString())
             .setOptions(TM.Options)
-            .setRelocationModel(Reloc::Static)
+            .setRelocationModel(TM.getRelocationModel())
             .setCodeModel(TM.getCodeModel())
             .setCodeGenOptLevel(CodeGenOptLevelFor(optlevel));
     }
