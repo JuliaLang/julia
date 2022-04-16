@@ -5,6 +5,8 @@ New language features
 ---------------------
 
 * It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
+* Slurping in assignments is now also allowed in non-final position. This is
+  handled via `Base.split_rest`. ([#42902])
 
 Language changes
 ----------------
@@ -34,6 +36,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `Iterators.flatmap` was added ([#44792]).
+
 Library changes
 ---------------
 
@@ -41,7 +45,9 @@ Library changes
   as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
   now be called on a dictionary or set shared by arbitrary tasks provided that there are no
   tasks mutating the dictionary or set ([#44534]).
-* `Dict` can be now shrunk manually by calling `sizehint!()` ([TBD]).
+* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 
 Standard library changes
 ------------------------
@@ -64,6 +70,8 @@ Standard library changes
 #### Printf
 
 #### Random
+
+* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
 
 #### REPL
 
@@ -89,6 +97,10 @@ Standard library changes
   remote workers ([#43270]).
 
 #### UUIDs
+
+#### Unicode
+
+* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
 
 #### Mmap
 

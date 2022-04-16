@@ -255,7 +255,7 @@ time() = ccall(:jl_clock_now, Float64, ())
 
 Get Julia's process ID.
 """
-getpid() = ccall(:jl_getpid, Int32, ())
+getpid() = ccall(:uv_os_getpid, Int32, ())
 
 ## network functions ##
 
@@ -376,31 +376,35 @@ free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 ## Random numbers ##
 
-# To limit dependency on rand functionality implemented in the Random module,
-# Libc.rand is used in file.jl, and could be used in error.jl (but it breaks a test)
-"""
-    rand([T::Type])
-
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
-"""
-rand() = ccall(:rand, Cint, ())
-@static if Sys.iswindows()
-    # Windows RAND_MAX is 2^15-1
-    rand(::Type{UInt32}) = ((rand() % UInt32) << 17) ⊻ ((rand() % UInt32) << 8) ⊻ (rand() % UInt32)
-else
-    # RAND_MAX is at least 2^15-1 in theory, but we assume 2^16-1
-    # on non-Windows systems (in practice, it's 2^31-1)
-    rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
+# Access to very high quality (kernel) randomness
+function getrandom!(A::Union{Array,Base.RefValue})
+    ret = ccall(:uv_random, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t,   Cuint, Ptr{Cvoid}),
+                                   C_NULL,     C_NULL,     A,          sizeof(A), 0,     C_NULL)
+    Base.uv_error("getrandom", ret)
+    return A
 end
-rand(::Type{Float64}) = rand(UInt32) * 2.0^-32
+_make_uint64_seed() = getrandom!(Base.RefValue{UInt64}())[]
+
+# To limit dependency on rand functionality implemented in the Random module,
+# Libc.rand is used in Base (it also is independent from Random.seed, so is
+# only affected by `Libc.srand(seed)` calls)
+"""
+    rand([T::Type]=UInt32)
+
+Generate a random number of type `T`. `T` can be `UInt32` or `Float64`.
+"""
+rand() = ccall(:jl_rand, UInt64, ()) % UInt32
+rand(::Type{UInt32}) = rand()
+rand(::Type{Float64}) = rand() * 2.0^-32
 
 """
     srand([seed])
 
-Interface to the C `srand(seed)` function.
+Set a value for the current global `seed`.
 """
-srand(seed=Base._make_uint_seed()) = ccall(:srand, Cvoid, (Cuint,), seed)
+function srand(seed::Integer=_make_uint64_seed())
+    ccall(:jl_srand, Cvoid, (UInt64,), seed % UInt64)
+end
 
 struct Cpasswd
    username::Cstring
