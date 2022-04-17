@@ -42,63 +42,15 @@ using namespace llvm;
 
 typedef object::SymbolRef SymRef;
 
-// Any function that acquires this lock must be either a unmanaged thread
-// or in the GC safe region and must NOT allocate anything through the GC
-// while holding this lock.
-// Certain functions in this file might be called from an unmanaged thread
-// and cannot have any interaction with the julia runtime
-// They also may be re-entrant, and operating while threads are paused, so we
-// separately manage the re-entrant count behavior for safety across platforms
-// Note that we cannot safely upgrade read->write
-static uv_rwlock_t debuginfo_asyncsafe;
-static pthread_key_t debuginfo_asyncsafe_held;
+struct revcomp {
+    bool operator() (const size_t& lhs, const size_t& rhs) const
+    { return lhs>rhs; }
+};
 
-void jl_init_debuginfo(void)
-{
-    uv_rwlock_init(&debuginfo_asyncsafe);
-    if (pthread_key_create(&debuginfo_asyncsafe_held, NULL))
-        jl_error("fatal: pthread_key_create failed");
-}
-
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
-{
-    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
-    if (held++ == 0)
-        uv_rwlock_rdlock(&debuginfo_asyncsafe);
-    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
-}
-
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
-{
-    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
-    assert(held);
-    if (--held == 0)
-        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
-    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
-}
-
-// some actions aren't signal (especially profiler) safe so we acquire a lock
-// around them to establish a mutual exclusion with unwinding from a signal
-template <typename T>
-static void jl_profile_atomic(T f)
-{
-    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
-    uv_rwlock_wrlock(&debuginfo_asyncsafe);
-#ifndef _OS_WINDOWS_
-    sigset_t sset;
-    sigset_t oset;
-    sigfillset(&sset);
-    pthread_sigmask(SIG_BLOCK, &sset, &oset);
-#endif
-    f();
-#ifndef _OS_WINDOWS_
-    pthread_sigmask(SIG_SETMASK, &oset, NULL);
-#endif
-    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
-}
-
-
-// --- storing and accessing source location metadata ---
+struct debug_link_info {
+    StringRef filename;
+    uint32_t crc32;
+};
 
 struct ObjectInfo {
     const object::ObjectFile *object;
@@ -108,83 +60,20 @@ struct ObjectInfo {
     DIContext *context;
 };
 
-// Maintain a mapping of unrealized function names -> linfo objects
-// so that when we see it get emitted, we can add a link back to the linfo
-// that it came from (providing name, type signature, file info, etc.)
-static StringMap<jl_code_instance_t*> codeinst_in_flight;
-static std::string mangle(StringRef Name, const DataLayout &DL)
-{
-    std::string MangledName;
-    {
-        raw_string_ostream MangledNameStream(MangledName);
-        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
-    }
-    return MangledName;
-}
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
-{
-    codeinst_in_flight[mangle(name, DL)] = codeinst;
-}
+typedef struct {
+    const llvm::object::ObjectFile *obj;
+    DIContext *ctx;
+    int64_t slide;
+} objfileentry_t;
+typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
 
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
 
-#if defined(_OS_WINDOWS_)
-static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
-                                     uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
-{
-    // GC safe
-    DWORD mod_size = 0;
-#if defined(_CPU_X86_64_)
-    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
-    tbl->BeginAddress = (DWORD)(Code - Section);
-    tbl->EndAddress = (DWORD)(Code - Section + Size);
-    tbl->UnwindData = (DWORD)(UnwindData - Section);
-    assert(Code >= Section && Code + Size <= Section + Allocated);
-    assert(UnwindData >= Section && UnwindData <= Section + Allocated);
-#else // defined(_CPU_X86_64_)
-    Section += (uintptr_t)Code;
-    mod_size = Size;
-#endif
-    if (0) {
-        uv_mutex_lock(&jl_in_stackwalk);
-        if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
-            static int warned = 0;
-            if (!warned) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert module info for backtrace: %lu\n", GetLastError());
-                warned = 1;
-            }
-        }
-        else {
-            size_t len = fnname.size()+1;
-            if (len > MAX_SYM_NAME)
-                len = MAX_SYM_NAME;
-            char *name = (char*)alloca(len);
-            memcpy(name, fnname.data(), len-1);
-            name[len-1] = 0;
-            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
-                        (DWORD64)Code, (DWORD)Size, 0)) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
-            }
-        }
-        uv_mutex_unlock(&jl_in_stackwalk);
-    }
-#if defined(_CPU_X86_64_)
-    jl_profile_atomic([&]() {
-        if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
-            static int warned = 0;
-            if (!warned) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
-                warned = 1;
-            }
-        }
-    });
-#endif
-}
-#endif
+template <typename T>
+static void jl_profile_atomic(T f);
 
-struct revcomp {
-    bool operator() (const size_t& lhs, const size_t& rhs) const
-    { return lhs>rhs; }
-};
+static std::string mangle(StringRef Name, const DataLayout &DL);
 
 
 // Central registry for resolving function addresses to `jl_method_instance_t`s and
@@ -199,7 +88,17 @@ class JITObjectRegistry
     std::map<size_t, ObjectInfo, revcomp> objectmap;
     std::map<size_t, std::pair<size_t, jl_method_instance_t *>, revcomp> linfomap;
 
+    // Maintain a mapping of unrealized function names -> linfo objects
+    // so that when we see it get emitted, we can add a link back to the linfo
+    // that it came from (providing name, type signature, file info, etc.)
+    StringMap<jl_code_instance_t*> codeinst_in_flight;
+
 public:
+
+    void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
+        codeinst_in_flight[mangle(name, DL)] = codeinst;
+    }
+
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
     {
         jl_lock_profile_impl();
@@ -381,7 +280,155 @@ public:
     }
 };
 
+
+#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+
+static void (*libc_register_frame)(void*)   = NULL;
+static void (*libc_deregister_frame)(void*) = NULL;
+
+#endif
+
+struct unw_table_entry
+{
+    int32_t start_ip_offset;
+    int32_t fde_offset;
+};
+
+static obfiletype objfilemap;
+
+// Any function that acquires this lock must be either a unmanaged thread
+// or in the GC safe region and must NOT allocate anything through the GC
+// while holding this lock.
+// Certain functions in this file might be called from an unmanaged thread
+// and cannot have any interaction with the julia runtime
+// They also may be re-entrant, and operating while threads are paused, so we
+// separately manage the re-entrant count behavior for safety across platforms
+// Note that we cannot safely upgrade read->write
+static uv_rwlock_t debuginfo_asyncsafe;
+static pthread_key_t debuginfo_asyncsafe_held;
+
+static uint64_t jl_sysimage_base;
+static jl_sysimg_fptrs_t sysimg_fptrs;
+static jl_method_instance_t **sysimg_fvars_linfo;
+static size_t sysimg_fvars_n;
+
 static JITObjectRegistry jl_jit_object_registry;
+
+void jl_init_debuginfo(void)
+{
+    uv_rwlock_init(&debuginfo_asyncsafe);
+    if (pthread_key_create(&debuginfo_asyncsafe_held, NULL))
+        jl_error("fatal: pthread_key_create failed");
+}
+
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
+{
+    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+    if (held++ == 0)
+        uv_rwlock_rdlock(&debuginfo_asyncsafe);
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+}
+
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
+{
+    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+    assert(held);
+    if (--held == 0)
+        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+}
+
+// some actions aren't signal (especially profiler) safe so we acquire a lock
+// around them to establish a mutual exclusion with unwinding from a signal
+template <typename T>
+static void jl_profile_atomic(T f)
+{
+    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    uv_rwlock_wrlock(&debuginfo_asyncsafe);
+#ifndef _OS_WINDOWS_
+    sigset_t sset;
+    sigset_t oset;
+    sigfillset(&sset);
+    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+#endif
+    f();
+#ifndef _OS_WINDOWS_
+    pthread_sigmask(SIG_SETMASK, &oset, NULL);
+#endif
+    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
+}
+
+
+// --- storing and accessing source location metadata ---
+static std::string mangle(StringRef Name, const DataLayout &DL)
+{
+    std::string MangledName;
+    {
+        raw_string_ostream MangledNameStream(MangledName);
+        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+    }
+    return MangledName;
+}
+void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
+{
+    jl_jit_object_registry.add_code_in_flight(name, codeinst, DL);
+}
+
+
+#if defined(_OS_WINDOWS_)
+static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
+                                     uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
+{
+    // GC safe
+    DWORD mod_size = 0;
+#if defined(_CPU_X86_64_)
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
+    tbl->BeginAddress = (DWORD)(Code - Section);
+    tbl->EndAddress = (DWORD)(Code - Section + Size);
+    tbl->UnwindData = (DWORD)(UnwindData - Section);
+    assert(Code >= Section && Code + Size <= Section + Allocated);
+    assert(UnwindData >= Section && UnwindData <= Section + Allocated);
+#else // defined(_CPU_X86_64_)
+    Section += (uintptr_t)Code;
+    mod_size = Size;
+#endif
+    if (0) {
+        uv_mutex_lock(&jl_in_stackwalk);
+        if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+            static int warned = 0;
+            if (!warned) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert module info for backtrace: %lu\n", GetLastError());
+                warned = 1;
+            }
+        }
+        else {
+            size_t len = fnname.size()+1;
+            if (len > MAX_SYM_NAME)
+                len = MAX_SYM_NAME;
+            char *name = (char*)alloca(len);
+            memcpy(name, fnname.data(), len-1);
+            name[len-1] = 0;
+            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
+                        (DWORD64)Code, (DWORD)Size, 0)) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
+            }
+        }
+        uv_mutex_unlock(&jl_in_stackwalk);
+    }
+#if defined(_CPU_X86_64_)
+    jl_profile_atomic([&]() {
+        if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
+            static int warned = 0;
+            if (!warned) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
+                warned = 1;
+            }
+        }
+    });
+#endif
+}
+#endif
+
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             std::function<void *(void *)> lookupWriteAddress)
@@ -528,13 +575,6 @@ static int lookup_pointer(
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
 #endif
-typedef struct {
-    const llvm::object::ObjectFile *obj;
-    DIContext *ctx;
-    int64_t slide;
-} objfileentry_t;
-typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
-static obfiletype objfilemap;
 
 static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
 {
@@ -547,11 +587,6 @@ static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_
     }
     return false;
 }
-
-struct debug_link_info {
-    StringRef filename;
-    uint32_t crc32;
-};
 static debug_link_info getDebuglink(const object::ObjectFile &Obj) JL_NOTSAFEPOINT
 {
     debug_link_info info = {};
@@ -662,11 +697,6 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
             std::move(error_splitobj.get()),
             std::move(SplitFile.get()));
 }
-
-static uint64_t jl_sysimage_base;
-static jl_sysimg_fptrs_t sysimg_fptrs;
-static jl_method_instance_t **sysimg_fvars_linfo;
-static size_t sysimg_fvars_n;
 extern "C" JL_DLLEXPORT
 void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
     jl_method_instance_t **linfos, size_t n)
@@ -1242,9 +1272,6 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
  * ourselves to ensure the right one gets picked.
  */
 
-static void (*libc_register_frame)(void*)   = NULL;
-static void (*libc_deregister_frame)(void*) = NULL;
-
 // This implementation handles frame registration for local targets.
 void register_eh_frames(uint8_t *Addr, size_t Size)
 {
@@ -1280,12 +1307,6 @@ void deregister_eh_frames(uint8_t *Addr, size_t Size)
     defined(JL_UNW_HAS_FORMAT_IP) && \
     !defined(_CPU_ARM_) // ARM does not have/use .eh_frame, so we handle this elsewhere
 #include <type_traits>
-
-struct unw_table_entry
-{
-    int32_t start_ip_offset;
-    int32_t fde_offset;
-};
 
 // Skip over an arbitrary long LEB128 encoding.
 // Return the pointer to the first unprocessed byte.
