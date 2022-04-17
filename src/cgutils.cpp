@@ -3164,6 +3164,33 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
+static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsigned ToAS)
+{
+    for (auto *User : Val->users()) {
+        if (isa<GetElementPtrInst>(User)) {
+            GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
+            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            recursively_adjust_ptr_type(Inst, FromAS, ToAS);
+        }
+        else if (isa<IntrinsicInst>(User)) {
+            IntrinsicInst *II = cast<IntrinsicInst>(User);
+            SmallVector<Type*, 3> ArgTys;
+            Intrinsic::getIntrinsicSignature(II->getCalledFunction(), ArgTys);
+            assert(ArgTys.size() <= II->arg_size());
+            for (size_t i = 0; i < ArgTys.size(); ++i)
+                ArgTys[i] = II->getArgOperand(i)->getType();
+            II->setCalledFunction(Intrinsic::getDeclaration(II->getModule(), II->getIntrinsicID(), ArgTys));
+        }
+#ifndef JL_LLVM_OPAQUE_POINTERS
+        else if (isa<BitCastInst>(User)) {
+            BitCastInst *Inst = cast<BitCastInst>(User);
+            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            recursively_adjust_ptr_type(Inst, FromAS, ToAS);
+        }
+#endif
+    }
+}
+
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
@@ -3197,8 +3224,27 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
         box = _boxed_special(ctx, vinfo, t);
         if (!box) {
-            box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
-            init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+            bool do_promote = vinfo.promotion_point;
+            if (do_promote) {
+                auto IP = ctx.builder.saveIP();
+                ctx.builder.SetInsertPoint(vinfo.promotion_point);
+                box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
+                Value *decayed = decay_derived(ctx, box);
+                AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
+#ifndef JL_LLVM_OPAQUE_POINTERS
+                decayed = maybe_bitcast(ctx, decayed, PointerType::get(originalAlloca->getType()->getPointerElementType(), AddressSpace::Derived));
+#endif
+                // Warning: Very illegal IR here temporarily
+                originalAlloca->mutateType(decayed->getType());
+                recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
+                originalAlloca->replaceAllUsesWith(decayed);
+                // end illegal IR
+                cast<Instruction>(vinfo.V)->eraseFromParent();
+                ctx.builder.restoreIP(IP);
+            } else {
+                box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
+                init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+            }
         }
     }
     return box;
@@ -3505,7 +3551,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     }
 }
 
-static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv)
+static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable)
 {
     ++EmittedNewStructs;
     assert(jl_is_datatype(ty));
@@ -3528,6 +3574,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 init_as_value = true;
             }
 
+            Instruction *promotion_point = nullptr;
             Value *strct;
             if (type_is_ghost(lt)) {
                 strct = NULL;
@@ -3547,8 +3594,16 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             for (unsigned i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i); // n.b. ty argument must be concrete
                 jl_cgval_t fval_info = argv[i];
+
+                IRBuilderBase::InsertPoint savedIP;
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 fval_info = update_julia_type(ctx, fval_info, jtype);
+                // TODO: Use (post-)domination instead.
+                bool field_promotable = !init_as_value && fval_info.promotion_point && fval_info.promotion_point->getParent() == ctx.builder.GetInsertBlock();
+                if (field_promotable) {
+                    savedIP = ctx.builder.saveIP();
+                    ctx.builder.SetInsertPoint(fval_info.promotion_point);
+                }
                 if (type_is_ghost(lt))
                     continue;
                 Type *fty = julia_type_to_llvm(ctx, jtype);
@@ -3560,7 +3615,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (!init_as_value) {
                     // avoid unboxing the argument explicitly
                     // and use memcpy instead
-                    dest = ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, llvm_idx);
+                    Instruction *inst;
+                    dest = inst = cast<Instruction>(ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, llvm_idx));
+                    // Our promotion point needs to come before
+                    //  A) All of our arguments' promotion points
+                    //  B) Any instructions we insert at any of our arguments' promotion points
+                    if (!promotion_point || (field_promotable && fval_info.promotion_point->comesBefore(promotion_point)))
+                        promotion_point = inst;
+                    dest = inst;
                 }
                 Value *fval = NULL;
                 if (jl_field_isptr(sty, i)) {
@@ -3571,6 +3633,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 ->setOrdering(AtomicOrdering::Unordered);
                 }
                 else if (jl_is_uniontype(jtype)) {
+                    assert(!field_promotable);
                     // compute tindex from rhs
                     jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
                     if (rhs_union.typ == jl_bottom_type)
@@ -3623,7 +3686,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     }
                 }
                 else {
-                    fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa().tbaa_stack);
+                    if (field_promotable) {
+                        fval_info.V->replaceAllUsesWith(dest);
+                        cast<Instruction>(fval_info.V)->eraseFromParent();
+                    } else {
+                        fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa().tbaa_stack);
+                    }
                 }
                 if (init_as_value) {
                     assert(fval);
@@ -3635,6 +3703,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         strct = ctx.builder.CreateInsertValue(strct, fval, makeArrayRef(llvm_idx));
                     else
                         assert(false);
+                }
+                if (field_promotable) {
+                    ctx.builder.restoreIP(savedIP);
                 }
             }
             for (size_t i = nargs; i < nf; i++) {
@@ -3655,8 +3726,13 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 return mark_julia_const(ctx, sty->instance);
             else if (init_as_value)
                 return mark_julia_type(ctx, strct, false, ty);
-            else
-                return mark_julia_slot(strct, ty, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
+            else {
+                jl_cgval_t ret = mark_julia_slot(strct, ty, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
+                if (is_promotable && promotion_point) {
+                    ret.promotion_point = promotion_point;
+                }
+                return ret;
+            }
         }
         Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
                                      literal_pointer_val(ctx, (jl_value_t*)ty));
