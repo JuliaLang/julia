@@ -500,7 +500,7 @@ static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
     FnAttrs = FnAttrs.addAttribute(C, Attribute::NoUnwind);
     return AttributeList::get(C,
             FnAttrs,
-            Attributes(C, {Attribute::NonNull}),
+            Attributes(C, {}),
             None);
 }
 
