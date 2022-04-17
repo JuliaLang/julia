@@ -43,11 +43,6 @@ using namespace llvm;
 
 typedef object::SymbolRef SymRef;
 
-struct revcomp {
-    bool operator() (const size_t& lhs, const size_t& rhs) const
-    { return lhs>rhs; }
-};
-
 struct debug_link_info {
     StringRef filename;
     uint32_t crc32;
@@ -66,7 +61,7 @@ typedef struct {
     DIContext *ctx;
     int64_t slide;
 } objfileentry_t;
-typedef std::map<uint64_t, objfileentry_t, revcomp> obfiletype;
+typedef std::map<uint64_t, objfileentry_t, std::greater<uint64_t>> obfiletype;
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
 extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
@@ -87,39 +82,66 @@ class JITObjectRegistry
 public:
     template<typename ResourceT>
     struct Locked {
+        
+        template<typename CResourceT>
         struct Lock {
             std::unique_lock<std::mutex> lock;
-            ResourceT &resource;
+            CResourceT &resource;
 
-            Lock(std::mutex &mutex, ResourceT &resource) : lock(mutex), resource(resource) {}
+            Lock(std::mutex &mutex, CResourceT &resource) : lock(mutex), resource(resource) {}
 
-            ResourceT &operator*() {
+            CResourceT &operator*() {
                 return resource;
             }
 
-            operator const ResourceT &() const {
+            const CResourceT &operator*() const {
+                return resource;
+            }
+
+            CResourceT *operator->() {
+                return &**this;
+            }
+
+            const CResourceT *operator->() const {
+                return &**this;
+            }
+
+            operator const CResourceT &() const {
                 return resource;
             }
         };
     private:
 
-        std::mutex mutex;
+        mutable std::mutex mutex;
         ResourceT resource;
     public:
         Locked(ResourceT resource = ResourceT()) : mutex(), resource(std::move(resource)) {}
 
-        Lock operator*() {
-            return Lock(mutex, resource);
+        Lock<ResourceT> operator*() {
+            return Lock<ResourceT>(mutex, resource);
+        }
+
+        Lock<const ResourceT> operator*() const {
+            return Lock<const ResourceT>(mutex, resource);
         }
     };
+
+    struct sysimg_info_t {
+        uint64_t jl_sysimage_base;
+        jl_sysimg_fptrs_t sysimg_fptrs;
+        jl_method_instance_t **sysimg_fvars_linfo;
+        size_t sysimg_fvars_n;
+    };
 private:
-    std::map<size_t, ObjectInfo, revcomp> objectmap;
-    std::map<size_t, std::pair<size_t, jl_method_instance_t *>, revcomp> linfomap;
+    std::map<size_t, ObjectInfo, std::greater<size_t>> objectmap;
+    std::map<size_t, std::pair<size_t, jl_method_instance_t *>, std::greater<size_t>> linfomap;
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
     // that it came from (providing name, type signature, file info, etc.)
     Locked<StringMap<jl_code_instance_t*>> codeinst_in_flight;
+
+    Locked<sysimg_info_t> sysimg_info;
 
     static std::string mangle(StringRef Name, const DataLayout &DL)
     {
@@ -316,9 +338,18 @@ public:
         }
     }
 
-    std::map<size_t, ObjectInfo, revcomp>& getObjectMap() JL_NOTSAFEPOINT
+    //Protected by debuginfo_asyncsafe
+    auto& getObjectMap() JL_NOTSAFEPOINT
     {
         return objectmap;
+    }
+
+    void set_sysimg_info(sysimg_info_t info) {
+        (**this->sysimg_info) = info;
+    }
+
+    auto get_sysimg_info() const {
+        return *this->sysimg_info;
     }
 };
 
@@ -348,11 +379,6 @@ static obfiletype objfilemap;
 // Note that we cannot safely upgrade read->write
 static uv_rwlock_t debuginfo_asyncsafe;
 static pthread_key_t debuginfo_asyncsafe_held;
-
-static uint64_t jl_sysimage_base;
-static jl_sysimg_fptrs_t sysimg_fptrs;
-static jl_method_instance_t **sysimg_fvars_linfo;
-static size_t sysimg_fvars_n;
 
 static JITObjectRegistry jl_jit_object_registry;
 
@@ -734,10 +760,7 @@ extern "C" JL_DLLEXPORT
 void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
     jl_method_instance_t **linfos, size_t n)
 {
-    jl_sysimage_base = (uintptr_t)sysimage_base;
-    sysimg_fptrs = *fptrs;
-    sysimg_fvars_linfo = linfos;
-    sysimg_fvars_n = n;
+    jl_jit_object_registry.set_sysimg_info({(uintptr_t) sysimage_base, *fptrs, linfos, n});
 }
 
 template<typename T>
@@ -752,7 +775,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
     // Assume we only need base address for sysimg for now
-    if (!insysimage || !sysimg_fptrs.base)
+    if (!insysimage || !jl_jit_object_registry.get_sysimg_info()->sysimg_fptrs.base)
         saddr = nullptr;
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
     bool needs_name = name && (!*name || untrusted_dladdr);
@@ -1100,7 +1123,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (fname.empty()) // empirically, LoadedImageName might be missing
         fname = ModuleInfo.ImageName;
     DWORD64 fbase = ModuleInfo.BaseOfImage;
-    bool insysimage = (fbase == jl_sysimage_base);
+    bool insysimage = (fbase == jl_jit_object_registry.get_sysimg_info()->jl_sysimage_base);
     if (isSysImg)
         *isSysImg = insysimage;
     if (onlySysImg && !insysimage)
@@ -1140,7 +1163,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     fbase = (uintptr_t)dlinfo.dli_fbase;
 #endif
     StringRef fname;
-    bool insysimage = (fbase == jl_sysimage_base);
+    bool insysimage = (fbase == jl_jit_object_registry.get_sysimg_info()->jl_sysimage_base);
     if (saddr && !(insysimage && untrusted_dladdr))
         *saddr = dlinfo.dli_saddr;
     if (isSysImg)
@@ -1196,20 +1219,23 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         return 1;
     }
     frame0->fromC = !isSysImg;
-    if (isSysImg && sysimg_fptrs.base && saddr) {
-        intptr_t diff = (uintptr_t)saddr - (uintptr_t)sysimg_fptrs.base;
-        for (size_t i = 0; i < sysimg_fptrs.nclones; i++) {
-            if (diff == sysimg_fptrs.clone_offsets[i]) {
-                uint32_t idx = sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
-                if (idx < sysimg_fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
-                    frame0->linfo = sysimg_fvars_linfo[idx];
-                break;
+    {
+        auto sysimg_locked = jl_jit_object_registry.get_sysimg_info();
+        if (isSysImg && sysimg_locked->sysimg_fptrs.base && saddr) {
+            intptr_t diff = (uintptr_t)saddr - (uintptr_t)sysimg_locked->sysimg_fptrs.base;
+            for (size_t i = 0; i < sysimg_locked->sysimg_fptrs.nclones; i++) {
+                if (diff == sysimg_locked->sysimg_fptrs.clone_offsets[i]) {
+                    uint32_t idx = sysimg_locked->sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
+                    if (idx < sysimg_locked->sysimg_fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
+                        frame0->linfo = sysimg_locked->sysimg_fvars_linfo[idx];
+                    break;
+                }
             }
-        }
-        for (size_t i = 0; i < sysimg_fvars_n; i++) {
-            if (diff == sysimg_fptrs.offsets[i]) {
-                frame0->linfo = sysimg_fvars_linfo[i];
-                break;
+            for (size_t i = 0; i < sysimg_locked->sysimg_fvars_n; i++) {
+                if (diff == sysimg_locked->sysimg_fptrs.offsets[i]) {
+                    frame0->linfo = sysimg_locked->sysimg_fvars_linfo[i];
+                    break;
+                }
             }
         }
     }
@@ -1222,11 +1248,11 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
     int found = 0;
     assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
     uv_rwlock_wrlock(&debuginfo_asyncsafe);
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_object_registry.getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
-
     if (symsize)
         *symsize = 0;
+
+    auto &objmap = jl_jit_object_registry.getObjectMap();
+    auto fit = objmap.lower_bound(fptr);
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         *slide = fit->second.slide;
         *Section = fit->second.Section;
@@ -1678,8 +1704,8 @@ uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
     jl_lock_profile_impl();
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_object_registry.getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
+    auto &objmap = jl_jit_object_registry.getObjectMap();
+    auto it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
         ipstart = (uint64_t)(uintptr_t)(*it).first;
