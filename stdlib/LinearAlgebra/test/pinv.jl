@@ -89,13 +89,19 @@ end
 function test_pinv(a,m,n,tol1,tol2)
     apinv = @inferred pinv(a)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
-    x0 = randn(n); b = a*x0; x = apinv*b
-    @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
+    for _ in 1:100
+        b = a*randn(n)
+        x = apinv*b
+        @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
+    end
 
     apinv = @inferred pinv(a,sqrt(eps(real(one(eltype(a))))))
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol2
-    x0 = randn(n); b = a*x0; x = apinv*b
-    @test norm(a*x-b)/norm(b) ≈ 0 atol=tol2
+    for _ in 1:100
+        b = a*randn(n)
+        x = apinv*b
+        @test norm(a*x-b)/norm(b) ≈ 0 atol=tol2
+    end
 end
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
