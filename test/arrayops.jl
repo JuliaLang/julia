@@ -1654,6 +1654,12 @@ end
     @test isdiag([1 0 0; 0 4 0])
     @test istril([1 0 0; 3 4 0])
     @test istriu([1 2 0; 0 4 0])
+    @test !isdiag([1 2 0; 3 4 1])
+    @test !istril([1 2 0; 3 4 1])
+    @test !istriu([1 2 0; 3 4 1])
+    @test !isdiag([1 0 0; 0 4 1])
+    @test !istril([1 0 0; 3 4 1])
+    @test istriu([1 2 0; 0 4 1])
 end
 
 # issue 4228
