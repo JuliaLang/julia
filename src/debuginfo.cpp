@@ -35,6 +35,7 @@ using namespace llvm;
 #include <vector>
 #include <set>
 #include <mutex>
+#include <type_traits>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
@@ -61,6 +62,32 @@ typedef struct {
     DIContext *ctx;
     int64_t slide;
 } objfileentry_t;
+
+template<typename datatype>
+struct jl_pthread_key_t {
+    static_assert(std::is_trivially_default_constructible<datatype>::value, "Invalid datatype for pthread key!");
+    static_assert(std::is_trivially_destructible<datatype>::value, "Expected datatype to be trivially destructible!");
+    static_assert(sizeof(datatype) == sizeof(void*), "Expected datatype to be like a void*!");
+    pthread_key_t key;
+
+    void init() {
+        if (pthread_key_create(&key, NULL))
+            jl_error("fatal: pthread_key_create failed");
+    }
+
+    operator datatype() {
+        return reinterpret_cast<datatype>(pthread_getspecific(key));
+    }
+
+    jl_pthread_key_t &operator=(datatype val) {
+        pthread_setspecific(key, reinterpret_cast<void*>(val));
+        return *this;
+    }
+
+    void destroy() {
+        pthread_key_delete(key);
+    }
+};
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
 extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
@@ -384,32 +411,31 @@ struct unw_table_entry
 // separately manage the re-entrant count behavior for safety across platforms
 // Note that we cannot safely upgrade read->write
 static uv_rwlock_t debuginfo_asyncsafe;
-static pthread_key_t debuginfo_asyncsafe_held;
+static jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
 
 static JITObjectRegistry jl_jit_object_registry;
 
 void jl_init_debuginfo(void)
 {
     uv_rwlock_init(&debuginfo_asyncsafe);
-    if (pthread_key_create(&debuginfo_asyncsafe_held, NULL))
-        jl_error("fatal: pthread_key_create failed");
+    debuginfo_asyncsafe_held.init();
 }
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
 {
-    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+    uintptr_t held = debuginfo_asyncsafe_held;
     if (held++ == 0)
         uv_rwlock_rdlock(&debuginfo_asyncsafe);
-    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+    debuginfo_asyncsafe_held = held;
 }
 
 extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 {
-    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+    uintptr_t held = debuginfo_asyncsafe_held;
     assert(held);
     if (--held == 0)
         uv_rwlock_rdunlock(&debuginfo_asyncsafe);
-    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+    debuginfo_asyncsafe_held = held;
 }
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
@@ -417,7 +443,7 @@ extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 template <typename T>
 static void jl_profile_atomic(T f)
 {
-    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    assert(0 == debuginfo_asyncsafe_held);
     uv_rwlock_wrlock(&debuginfo_asyncsafe);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
@@ -568,7 +594,7 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    assert(0 == debuginfo_asyncsafe_held);
     uv_rwlock_wrlock(&debuginfo_asyncsafe);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     uv_rwlock_wrunlock(&debuginfo_asyncsafe);
@@ -1256,7 +1282,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    assert(0 == debuginfo_asyncsafe_held);
     uv_rwlock_wrlock(&debuginfo_asyncsafe);
     if (symsize)
         *symsize = 0;
