@@ -149,6 +149,18 @@ end
         @test C ≈ ones(2,2)
     end
 
+    @testset "non-square diagonal matrices" begin
+        A = eltya[1 0 ; 0 1 ; 0 0]
+        B = pinv(A)
+        @test A*B*A ≈ A
+        @test B*A*B ≈ B
+
+        A = eltya[1 0 0 ; 0 1 0]
+        B = pinv(A)
+        @test A*B*A ≈ A
+        @test B*A*B ≈ B
+    end
+
     if eltya <: LinearAlgebra.BlasReal
         @testset "sub-normal numbers/vectors/matrices" begin
             a = pinv(floatmin(eltya)/100)
