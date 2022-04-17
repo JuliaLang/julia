@@ -95,6 +95,66 @@ extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
 template <typename T>
 static void jl_profile_atomic(T f);
 
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
+extern "C" void __register_frame(void*);
+extern "C" void __deregister_frame(void*);
+
+template <typename callback>
+static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
+{
+    const char *P = EHFrameAddr;
+    const char *End = P + EHFrameSize;
+    do {
+        const char *Entry = P;
+        P += 4;
+        assert(P <= End);
+        uint32_t Length = *(const uint32_t*)Entry;
+        // Length == 0: Terminator
+        if (Length == 0)
+            break;
+        assert(P + Length <= End);
+        uint32_t Offset = *(const uint32_t*)P;
+        // Offset == 0: CIE
+        if (Offset != 0)
+            f(Entry);
+        P += Length;
+    } while (P != End);
+}
+#endif
+
+struct libc_frames_t {
+#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+    std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
+    std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
+
+    void libc_register_frame(const char *Entry) {
+        auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
+        if (!libc_register_frame_) {
+          libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
+          jl_atomic_store_relaxed(&this->libc_register_frame_, libc_register_frame_);
+        }
+        assert(libc_register_frame_);
+        jl_profile_atomic([&]() {
+            libc_register_frame_(const_cast<char *>(Entry));
+            __register_frame(const_cast<char *>(Entry));
+        });
+    }
+
+    void libc_deregister_frame(const char *Entry) {
+        auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
+        if (!libc_deregister_frame_) {
+          libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
+          jl_atomic_store_relaxed(&this->libc_deregister_frame_, libc_deregister_frame_);
+        }
+        assert(libc_deregister_frame_);
+        jl_profile_atomic([&]() {
+            libc_deregister_frame_(const_cast<char *>(Entry));
+            __deregister_frame(const_cast<char *>(Entry));
+        });
+    }
+#endif
+};
+
 
 // Central registry for resolving function addresses to `jl_method_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
@@ -197,6 +257,7 @@ public:
     // Note that we cannot safely upgrade read->write
     uv_rwlock_t debuginfo_asyncsafe;
     jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
+    libc_frames_t libc_frames;
 
     void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
         (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
@@ -404,14 +465,6 @@ public:
         debuginfo_asyncsafe_held.init();
     }
 };
-
-
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
-
-static void (*libc_register_frame)(void*)   = NULL;
-static void (*libc_deregister_frame)(void*) = NULL;
-
-#endif
 
 struct unw_table_entry
 {
@@ -1335,33 +1388,6 @@ extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
     return jl_jit_object_registry.lookupLinfo((size_t)p);
 }
 
-#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
-extern "C" void __register_frame(void*);
-extern "C" void __deregister_frame(void*);
-
-template <typename callback>
-static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
-{
-    const char *P = EHFrameAddr;
-    const char *End = P + EHFrameSize;
-    do {
-        const char *Entry = P;
-        P += 4;
-        assert(P <= End);
-        uint32_t Length = *(const uint32_t*)Entry;
-        // Length == 0: Terminator
-        if (Length == 0)
-            break;
-        assert(P + Length <= End);
-        uint32_t Offset = *(const uint32_t*)P;
-        // Offset == 0: CIE
-        if (Offset != 0)
-            f(Entry);
-        P += Length;
-    } while (P != End);
-}
-#endif
-
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
 
 /*
@@ -1378,28 +1404,14 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
   // On OS X OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
   processFDEs((char*)Addr, Size, [](const char *Entry) {
-        if (!libc_register_frame) {
-          libc_register_frame = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
-        }
-        assert(libc_register_frame);
-        jl_profile_atomic([&]() {
-            libc_register_frame(const_cast<char *>(Entry));
-            __register_frame(const_cast<char *>(Entry));
-        });
+      jl_jit_object_registry.libc_frames.libc_register_frame(Entry);
     });
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
    processFDEs((char*)Addr, Size, [](const char *Entry) {
-        if (!libc_deregister_frame) {
-          libc_deregister_frame = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
-        }
-        assert(libc_deregister_frame);
-        jl_profile_atomic([&]() {
-            libc_deregister_frame(const_cast<char *>(Entry));
-            __deregister_frame(const_cast<char *>(Entry));
-        });
+      jl_jit_object_registry.libc_frames.libc_deregister_frame(Entry);
     });
 }
 
