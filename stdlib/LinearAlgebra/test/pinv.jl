@@ -86,7 +86,7 @@ function randn_float32(m::Integer, n::Integer)
 end
 
 
-function test_pinv(a,m,n,tol1,tol2,tol3)
+function test_pinv(a,m,n,tol1,tol2)
     apinv = @inferred pinv(a)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
     x0 = randn(n); b = a*x0; x = apinv*b
@@ -103,28 +103,26 @@ end
         default_tol = (real(one(eltya))) * max(m,n) * 10
         tol1 = 1e-2
         tol2 = 1e-5
-        tol3 = 1e-5
         if real(eltya) == Float32
             tol1 = 1e0
             tol2 = 1e-2
-            tol3 = 1e-2
         end
         @testset "dense/ill-conditioned matrix" begin
         ###    a = randn_float64(m,n) * hilb(eltya,n)
             a = hilb(eltya, m, n)
-            test_pinv(a, m, n, tol1, tol2, tol3)
+            test_pinv(a, m, n, tol1, tol2)
         end
         @testset "dense/diagonal matrix" begin
             a = onediag(eltya, m, n)
-            test_pinv(a, m, n, default_tol, default_tol, default_tol)
+            test_pinv(a, m, n, default_tol, default_tol)
         end
         @testset "dense/tri-diagonal matrix" begin
             a = tridiag(eltya, m, n)
-            test_pinv(a, m, n, default_tol, tol2, default_tol)
+            test_pinv(a, m, n, default_tol, tol2)
         end
         @testset "Diagonal matrix" begin
             a = onediag_sparse(eltya, m)
-            test_pinv(a, m, m, default_tol, default_tol, default_tol)
+            test_pinv(a, m, m, default_tol, default_tol)
         end
         @testset "Vector" begin
             a = rand(eltya, m)
