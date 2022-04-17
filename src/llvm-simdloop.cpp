@@ -20,16 +20,26 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Metadata.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 
 #include "julia_assert.h"
 
 using namespace llvm;
+
+STATISTIC(TotalMarkedLoops, "Total number of loops marked with simdloop");
+STATISTIC(IVDepLoops, "Number of loops with no loop-carried dependencies");
+STATISTIC(SimdLoops, "Number of loops with SIMD instructions");
+STATISTIC(IVDepInstructions, "Number of instructions marked ivdep");
+STATISTIC(ReductionChains, "Number of reduction chains folded");
+STATISTIC(ReductionChainLength, "Total sum of instructions folded from reduction chain");
+STATISTIC(AddChains, "Addition reduction chains");
+STATISTIC(MulChains, "Multiply reduction chains");
 
 namespace {
 
@@ -100,9 +110,19 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
         }
         chain.push_back(J);
     }
+    switch (opcode) {
+        case Instruction::FAdd:
+            ++AddChains;
+            break;
+        case Instruction::FMul:
+            ++MulChains;
+            break;
+    }
+    ++ReductionChains;
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
         (*K)->setFast(true);
+        ++ReductionChainLength;
     }
 }
 
@@ -111,6 +131,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
     bool Changed = false;
     std::vector<Instruction*> ToDelete;
     for (User *U : marker->users()) {
+        ++TotalMarkedLoops;
         Instruction *I = cast<Instruction>(U);
         ToDelete.push_back(I);
 
@@ -177,10 +198,12 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         // If ivdep is true we assume that there is no memory dependency between loop iterations
         // This is a fairly strong assumption and does often not hold true for generic code.
         if (ivdep) {
+            ++IVDepLoops;
             // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
             for (BasicBlock *BB : L->blocks()) {
                for (Instruction &I : *BB) {
                    if (I.mayReadOrWriteMemory()) {
+                       ++IVDepInstructions;
                        I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
                    }
                }
@@ -189,6 +212,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         }
 
         if (simd) {
+            ++SimdLoops;
             // Mark floating-point reductions as okay to reassociate/commute.
             for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
                 if (PHINode *Phi = dyn_cast<PHINode>(I))
@@ -205,6 +229,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         I->deleteValue();
     marker->eraseFromParent();
 
+    assert(!verifyModule(M));
     return Changed;
 }
 

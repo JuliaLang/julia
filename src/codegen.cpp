@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "julia_irgen_codegen"
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
@@ -86,6 +85,8 @@
 #include "llvm/Support/Path.h" // for llvm::sys::path
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
+
+#define DEBUG_TYPE "julia_irgen_codegen"
 
 using namespace llvm;
 
@@ -218,9 +219,6 @@ extern void _chkstk(void);
 //}
 #endif
 }
-
-// for image reloading
-bool imaging_mode = false;
 
 // shared llvm state
 #define jl_Module ctx.f->getParent()
@@ -1867,14 +1865,15 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 boxv = ctx.builder.CreateSelect(
                     ctx.builder.CreateAnd(wasboxed, isboxed), v.Vboxed, boxv);
             }
+            Value *slotv;
+            MDNode *tbaa;
             if (v.V == NULL) {
                 // v.V might be NULL if it was all ghost objects before
-                return jl_cgval_t(boxv, NULL, false, typ, new_tindex, ctx.tbaa());
+                slotv = NULL;
+                tbaa = ctx.tbaa().tbaa_const;
             }
             else {
                 Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
-                Value *slotv;
-                MDNode *tbaa;
                 if (v.ispointer()) {
                     slotv = v.V;
                     tbaa = v.tbaa;
@@ -1887,12 +1886,12 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 slotv = ctx.builder.CreateSelect(isboxv,
                             decay_derived(ctx, boxv),
                             decay_derived(ctx, emit_bitcast(ctx, slotv, boxv->getType())));
-                jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex, ctx.tbaa());
-                assert(boxv->getType() == ctx.types().T_prjlvalue);
-                newv.Vboxed = boxv;
-                newv.tbaa = tbaa;
-                return newv;
             }
+            jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex, ctx.tbaa());
+            assert(boxv->getType() == ctx.types().T_prjlvalue);
+            newv.Vboxed = boxv;
+            newv.tbaa = tbaa;
+            return newv;
         }
     }
     else {
@@ -1979,7 +1978,7 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, const DataLayout &DL, const Triple &triple)
+orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext context, bool imaging_mode, const DataLayout &DL, const Triple &triple)
 {
     ++ModulesCreated;
     auto lock = context.getLock();
@@ -2126,7 +2125,7 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    assert(!imaging_mode);
+    assert(!ctx.emission_context.imaging);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
@@ -2136,7 +2135,7 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
-    assert(!imaging_mode);
+    assert(!ctx.emission_context.imaging);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     Value *addend = sync
@@ -4031,6 +4030,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 
 static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
 {
+    ++EmittedUndefVarErrors;
     BasicBlock *err = BasicBlock::Create(ctx.builder.getContext(), "err", ctx.f);
     BasicBlock *ifok = BasicBlock::Create(ctx.builder.getContext(), "ok");
     ctx.builder.CreateCondBr(ok, ifok, err);
@@ -4762,6 +4762,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
     orc::ThreadSafeModule closure_m = jl_create_llvm_module(
             name_from_method_instance(mi), ctx.emission_context.tsctx,
+            ctx.emission_context.imaging,
             jl_Module->getDataLayout(), Triple(jl_Module->getTargetTriple()));
     jl_llvm_functions_t closure_decls = emit_function(closure_m, mi, ir, rettype, ctx.emission_context);
 
@@ -8071,7 +8072,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                      // don't delete inlineable code, unless it is constant
                      (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
                      // don't delete code when generating a precompile file
-                     !(imaging_mode || jl_options.incremental)) {
+                     !(params.imaging || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
                 codeinst->inferred = jl_nothing;
             }
@@ -8129,7 +8130,8 @@ void jl_compile_workqueue(
                     if (src) {
                         orc::ThreadSafeModule result_m =
                         jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, original.getDataLayout(), Triple(original.getTargetTriple()));
+                            params.tsctx, params.imaging,
+                            original.getDataLayout(), Triple(original.getTargetTriple()));
                         result.second = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
                         result.first = std::move(result_m);
                     }
@@ -8137,7 +8139,8 @@ void jl_compile_workqueue(
                 else {
                     orc::ThreadSafeModule result_m =
                         jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, original.getDataLayout(), Triple(original.getTargetTriple()));
+                            params.tsctx, params.imaging,
+                            original.getDataLayout(), Triple(original.getTargetTriple()));
                     result.second = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     result.first = std::move(result_m);
                 }
@@ -8331,7 +8334,6 @@ extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
-    imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.generic_context = jl_nothing;
     jl_init_debuginfo();
 
@@ -8372,7 +8374,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-    jl_ExecutionEngine = new JuliaOJIT(new LLVMContext());
+    jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
     // Register GDB event listener

@@ -1569,6 +1569,8 @@ let tuple_tfunc
     @test Core.Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
     # https://github.com/JuliaLang/julia/issues/44705
     @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
+    @test tuple_tfunc(DataType) === Tuple{DataType}
+    @test tuple_tfunc(UnionAll) === Tuple{UnionAll}
 end
 
 function f23024(::Type{T}, ::Int) where T
@@ -4089,6 +4091,11 @@ end
     Base.Experimental.@force_compile
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44965
+let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
+    @test Core.Compiler.issimplertype(t, t)
+end
 
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0

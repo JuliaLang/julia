@@ -20,13 +20,28 @@
 #include "passes.h"
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 
 using namespace llvm;
+
+STATISTIC(TotalChanged, "Total number of instructions changed");
+STATISTIC(TotalExt, "Total number of FPExt instructions inserted");
+STATISTIC(TotalTrunc, "Total number of FPTrunc instructions inserted");
+#define INST_STATISTIC(Opcode) STATISTIC(Opcode##Changed, "Number of " #Opcode " instructions changed")
+INST_STATISTIC(FNeg);
+INST_STATISTIC(FAdd);
+INST_STATISTIC(FSub);
+INST_STATISTIC(FMul);
+INST_STATISTIC(FDiv);
+INST_STATISTIC(FRem);
+INST_STATISTIC(FCmp);
+#undef INST_STATISTIC
 
 namespace {
 
@@ -65,6 +80,7 @@ static bool demoteFloat16(Function &F)
             for (size_t i = 0; i < I.getNumOperands(); i++) {
                 Value *Op = I.getOperand(i);
                 if (Op->getType() == T_float16) {
+                    ++TotalExt;
                     Op = builder.CreateFPExt(Op, T_float32);
                     OperandsChanged = true;
                 }
@@ -75,33 +91,41 @@ static bool demoteFloat16(Function &F)
             // truncating the result back to Float16
             if (OperandsChanged) {
                 Value *NewI;
+                ++TotalChanged;
                 switch (I.getOpcode()) {
                 case Instruction::FNeg:
                     assert(Operands.size() == 1);
+                    ++FNegChanged;
                     NewI = builder.CreateFNeg(Operands[0]);
                     break;
                 case Instruction::FAdd:
                     assert(Operands.size() == 2);
+                    ++FAddChanged;
                     NewI = builder.CreateFAdd(Operands[0], Operands[1]);
                     break;
                 case Instruction::FSub:
                     assert(Operands.size() == 2);
+                    ++FSubChanged;
                     NewI = builder.CreateFSub(Operands[0], Operands[1]);
                     break;
                 case Instruction::FMul:
                     assert(Operands.size() == 2);
+                    ++FMulChanged;
                     NewI = builder.CreateFMul(Operands[0], Operands[1]);
                     break;
                 case Instruction::FDiv:
                     assert(Operands.size() == 2);
+                    ++FDivChanged;
                     NewI = builder.CreateFDiv(Operands[0], Operands[1]);
                     break;
                 case Instruction::FRem:
                     assert(Operands.size() == 2);
+                    ++FRemChanged;
                     NewI = builder.CreateFRem(Operands[0], Operands[1]);
                     break;
                 case Instruction::FCmp:
                     assert(Operands.size() == 2);
+                    ++FCmpChanged;
                     NewI = builder.CreateFCmp(cast<FCmpInst>(&I)->getPredicate(),
                                               Operands[0], Operands[1]);
                     break;
@@ -110,8 +134,10 @@ static bool demoteFloat16(Function &F)
                 }
                 cast<Instruction>(NewI)->copyMetadata(I);
                 cast<Instruction>(NewI)->copyFastMathFlags(&I);
-                if (NewI->getType() != I.getType())
+                if (NewI->getType() != I.getType()) {
+                    ++TotalTrunc;
                     NewI = builder.CreateFPTrunc(NewI, I.getType());
+                }
                 I.replaceAllUsesWith(NewI);
                 erase.push_back(&I);
             }
@@ -121,6 +147,7 @@ static bool demoteFloat16(Function &F)
     if (erase.size() > 0) {
         for (auto V : erase)
             V->eraseFromParent();
+        assert(!verifyFunction(F));
         return true;
     }
     else
