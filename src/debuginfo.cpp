@@ -34,6 +34,7 @@ using namespace llvm;
 #include <map>
 #include <vector>
 #include <set>
+#include <mutex>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
@@ -73,8 +74,6 @@ extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
 template <typename T>
 static void jl_profile_atomic(T f);
 
-static std::string mangle(StringRef Name, const DataLayout &DL);
-
 
 // Central registry for resolving function addresses to `jl_method_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
@@ -85,18 +84,57 @@ static std::string mangle(StringRef Name, const DataLayout &DL);
 // functionality).
 class JITObjectRegistry
 {
+public:
+    template<typename ResourceT>
+    struct Locked {
+        struct Lock {
+            std::unique_lock<std::mutex> lock;
+            ResourceT &resource;
+
+            Lock(std::mutex &mutex, ResourceT &resource) : lock(mutex), resource(resource) {}
+
+            ResourceT &operator*() {
+                return resource;
+            }
+
+            operator const ResourceT &() const {
+                return resource;
+            }
+        };
+    private:
+
+        std::mutex mutex;
+        ResourceT resource;
+    public:
+        Locked(ResourceT resource = ResourceT()) : mutex(), resource(std::move(resource)) {}
+
+        Lock operator*() {
+            return Lock(mutex, resource);
+        }
+    };
+private:
     std::map<size_t, ObjectInfo, revcomp> objectmap;
     std::map<size_t, std::pair<size_t, jl_method_instance_t *>, revcomp> linfomap;
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
     // that it came from (providing name, type signature, file info, etc.)
-    StringMap<jl_code_instance_t*> codeinst_in_flight;
+    Locked<StringMap<jl_code_instance_t*>> codeinst_in_flight;
+
+    static std::string mangle(StringRef Name, const DataLayout &DL)
+    {
+        std::string MangledName;
+        {
+            raw_string_ostream MangledNameStream(MangledName);
+            Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+        }
+        return MangledName;
+    }
 
 public:
 
     void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
-        codeinst_in_flight[mangle(name, DL)] = codeinst;
+        (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
     }
 
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
@@ -251,11 +289,15 @@ public:
                    (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
             jl_code_instance_t *codeinst = NULL;
-            if (codeinst_it != codeinst_in_flight.end()) {
-                codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
+            {
+                auto lock = *this->codeinst_in_flight;
+                auto &codeinst_in_flight = *lock;
+                StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
+                if (codeinst_it != codeinst_in_flight.end()) {
+                    codeinst = codeinst_it->second;
+                    codeinst_in_flight.erase(codeinst_it);
+                }
             }
             jl_profile_atomic([&]() {
                 if (codeinst)
@@ -360,15 +402,6 @@ static void jl_profile_atomic(T f)
 
 
 // --- storing and accessing source location metadata ---
-static std::string mangle(StringRef Name, const DataLayout &DL)
-{
-    std::string MangledName;
-    {
-        raw_string_ostream MangledNameStream(MangledName);
-        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
-    }
-    return MangledName;
-}
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
     jl_jit_object_registry.add_code_in_flight(name, codeinst, DL);
