@@ -89,6 +89,7 @@ end
 function test_pinv(a,m,n,tol1,tol2)
     apinv = @inferred pinv(a)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
+    @test norm(apinv*a*apinv-apinv)/norm(apinv) ≈ 0 atol=tol1
     for _ in 1:100
         b = a*randn(n)
         x = apinv*b
@@ -97,6 +98,7 @@ function test_pinv(a,m,n,tol1,tol2)
 
     apinv = @inferred pinv(a,sqrt(eps(real(one(eltype(a))))))
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol2
+    @test norm(apinv*a*apinv-apinv)/norm(apinv) ≈ 0 atol=tol2
     for _ in 1:100
         b = a*randn(n)
         x = apinv*b
