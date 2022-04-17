@@ -63,29 +63,6 @@ function tridiag(T::Type, m::Integer, n::Integer)
 end
 tridiag(m::Integer, n::Integer) = tridiag(Float64, m::Integer, n::Integer)
 
-function randn_float64(m::Integer, n::Integer)
-    a=randn(m,n)
-    b = Matrix{Float64}(undef, m, n)
-    for i=1:n
-        for j=1:m
-            b[j,i]=convert(Float64,a[j,i])
-        end
-    end
-    return b
-end
-
-function randn_float32(m::Integer, n::Integer)
-    a=randn(m,n)
-    b = Matrix{Float32}(undef, m, n)
-    for i=1:n
-        for j=1:m
-            b[j,i]=convert(Float32,a[j,i])
-        end
-    end
-    return b
-end
-
-
 function test_pinv(a,tol1,tol2)
     m,n = size(a)
 
@@ -120,7 +97,6 @@ end
             tol2 = 1e-2
         end
         @testset "dense/ill-conditioned matrix" begin
-        ###    a = randn_float64(m,n) * hilb(eltya,n)
             a = hilb(eltya, m, n)
             test_pinv(a, tol1, tol2)
         end
