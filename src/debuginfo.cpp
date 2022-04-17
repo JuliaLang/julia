@@ -159,6 +159,7 @@ public:
         size_t sysimg_fvars_n;
     };
 private:
+
     template<typename KeyT, typename ValT>
     using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
 
@@ -185,6 +186,17 @@ private:
     }
 
 public:
+
+    // Any function that acquires this lock must be either a unmanaged thread
+    // or in the GC safe region and must NOT allocate anything through the GC
+    // while holding this lock.
+    // Certain functions in this file might be called from an unmanaged thread
+    // and cannot have any interaction with the julia runtime
+    // They also may be re-entrant, and operating while threads are paused, so we
+    // separately manage the re-entrant count behavior for safety across platforms
+    // Note that we cannot safely upgrade read->write
+    uv_rwlock_t debuginfo_asyncsafe;
+    jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
 
     void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
         (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
@@ -386,6 +398,11 @@ public:
     auto get_objfile_map() {
         return *this->objfilemap;
     }
+
+    void init() {
+        uv_rwlock_init(&debuginfo_asyncsafe);
+        debuginfo_asyncsafe_held.init();
+    }
 };
 
 
@@ -402,40 +419,28 @@ struct unw_table_entry
     int32_t fde_offset;
 };
 
-// Any function that acquires this lock must be either a unmanaged thread
-// or in the GC safe region and must NOT allocate anything through the GC
-// while holding this lock.
-// Certain functions in this file might be called from an unmanaged thread
-// and cannot have any interaction with the julia runtime
-// They also may be re-entrant, and operating while threads are paused, so we
-// separately manage the re-entrant count behavior for safety across platforms
-// Note that we cannot safely upgrade read->write
-static uv_rwlock_t debuginfo_asyncsafe;
-static jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
-
 static JITObjectRegistry jl_jit_object_registry;
 
-void jl_init_debuginfo(void)
+void jl_init_debuginfo()
 {
-    uv_rwlock_init(&debuginfo_asyncsafe);
-    debuginfo_asyncsafe_held.init();
+    jl_jit_object_registry.init();
 }
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
 {
-    uintptr_t held = debuginfo_asyncsafe_held;
+    uintptr_t held = jl_jit_object_registry.debuginfo_asyncsafe_held;
     if (held++ == 0)
-        uv_rwlock_rdlock(&debuginfo_asyncsafe);
-    debuginfo_asyncsafe_held = held;
+        uv_rwlock_rdlock(&jl_jit_object_registry.debuginfo_asyncsafe);
+    jl_jit_object_registry.debuginfo_asyncsafe_held = held;
 }
 
 extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 {
-    uintptr_t held = debuginfo_asyncsafe_held;
+    uintptr_t held = jl_jit_object_registry.debuginfo_asyncsafe_held;
     assert(held);
     if (--held == 0)
-        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
-    debuginfo_asyncsafe_held = held;
+        uv_rwlock_rdunlock(&jl_jit_object_registry.debuginfo_asyncsafe);
+    jl_jit_object_registry.debuginfo_asyncsafe_held = held;
 }
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
@@ -443,8 +448,8 @@ extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 template <typename T>
 static void jl_profile_atomic(T f)
 {
-    assert(0 == debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&debuginfo_asyncsafe);
+    assert(0 == jl_jit_object_registry.debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&jl_jit_object_registry.debuginfo_asyncsafe);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -455,7 +460,7 @@ static void jl_profile_atomic(T f)
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
+    uv_rwlock_wrunlock(&jl_jit_object_registry.debuginfo_asyncsafe);
 }
 
 
@@ -594,10 +599,10 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&debuginfo_asyncsafe);
+    assert(0 == jl_jit_object_registry.debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&jl_jit_object_registry.debuginfo_asyncsafe);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
+    uv_rwlock_wrunlock(&jl_jit_object_registry.debuginfo_asyncsafe);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -620,9 +625,9 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            uv_rwlock_wrlock(&debuginfo_asyncsafe);
+            uv_rwlock_wrlock(&jl_jit_object_registry.debuginfo_asyncsafe);
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            uv_rwlock_wrunlock(&debuginfo_asyncsafe);
+            uv_rwlock_wrunlock(&jl_jit_object_registry.debuginfo_asyncsafe);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1282,8 +1287,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&debuginfo_asyncsafe);
+    assert(0 == jl_jit_object_registry.debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&jl_jit_object_registry.debuginfo_asyncsafe);
     if (symsize)
         *symsize = 0;
 
@@ -1299,7 +1304,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         }
         found = 1;
     }
-    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
+    uv_rwlock_wrunlock(&jl_jit_object_registry.debuginfo_asyncsafe);
     return found;
 }
 
