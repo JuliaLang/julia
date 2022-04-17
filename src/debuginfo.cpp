@@ -61,7 +61,6 @@ typedef struct {
     DIContext *ctx;
     int64_t slide;
 } objfileentry_t;
-typedef std::map<uint64_t, objfileentry_t, std::greater<uint64_t>> obfiletype;
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
 extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
@@ -133,8 +132,11 @@ public:
         size_t sysimg_fvars_n;
     };
 private:
-    std::map<size_t, ObjectInfo, std::greater<size_t>> objectmap;
-    std::map<size_t, std::pair<size_t, jl_method_instance_t *>, std::greater<size_t>> linfomap;
+    template<typename KeyT, typename ValT>
+    using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
+
+    rev_map<size_t, ObjectInfo> objectmap;
+    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap;
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
@@ -142,6 +144,8 @@ private:
     Locked<StringMap<jl_code_instance_t*>> codeinst_in_flight;
 
     Locked<sysimg_info_t> sysimg_info;
+
+    Locked<rev_map<uint64_t, objfileentry_t>> objfilemap;
 
     static std::string mangle(StringRef Name, const DataLayout &DL)
     {
@@ -351,6 +355,10 @@ public:
     auto get_sysimg_info() const {
         return *this->sysimg_info;
     }
+
+    auto get_objfile_map() {
+        return *this->objfilemap;
+    }
 };
 
 
@@ -366,8 +374,6 @@ struct unw_table_entry
     int32_t start_ip_offset;
     int32_t fde_offset;
 };
-
-static obfiletype objfilemap;
 
 // Any function that acquires this lock must be either a unmanaged thread
 // or in the GC safe region and must NOT allocate anything through the GC
@@ -876,7 +882,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
 #endif
 }
 
-static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTSAFEPOINT
+static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSAFEPOINT
 {
     int isdarwin = 0, islinux = 0, iswindows = 0;
 #if defined(_OS_DARWIN_)
@@ -889,12 +895,13 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
     (void)iswindows;
 
 // GOAL: Read debuginfo from file
-    // TODO: need read/write lock here for objfilemap synchronization
-    obfiletype::iterator it = objfilemap.find(fbase);
-    if (it != objfilemap.end())
-        // Return cached value
-        return it->second;
-    auto &entry = objfilemap[fbase]; // default initialized
+    objfileentry_t entry{nullptr, nullptr, 0};
+    {
+        auto success = jl_jit_object_registry.get_objfile_map()->emplace(fbase, entry);
+        if (!success.second)
+            // Return cached value
+            return success.first->second;
+    }
 
 // GOAL: Assign errorobj
     StringRef objpath;
@@ -1064,8 +1071,11 @@ static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname) JL_NOTS
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
-        // update cache
         entry = {debugobj, context, slide};
+        // update cache
+        {
+            (*jl_jit_object_registry.get_objfile_map())[fbase] = entry;
+        }
     }
     else {
         // TODO: report the error instead of silently consuming it?
@@ -1178,7 +1188,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
         jl_copy_str(filename, dlinfo.dli_fname);
     fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
-    auto &entry = find_object_file(fbase, fname);
+    auto entry = find_object_file(fbase, fname);
     *slide = entry.slide;
     *context = entry.ctx;
     if (entry.obj)
