@@ -365,7 +365,8 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         uint64_t t_comp = jl_hrtime() - compiler_start_time;
         if (is_recompile)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
+        else
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
     }
     JL_UNLOCK(&jl_codegen_lock);
     JL_GC_POP();

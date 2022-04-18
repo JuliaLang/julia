@@ -55,16 +55,20 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
-# cumulative total time spent on compilation, in nanoseconds
-function cumulative_compile_time_ns_before()
-    comp = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
-    recomp = ccall(:jl_cumulative_recompile_time_ns_before, UInt64, ())
+# cumulative total time spent on compilation and recompilation, in nanoseconds
+function cumulative_compile_time_ns()
+    comp = ccall(:jl_cumulative_compile_time_ns, UInt64, ())
+    recomp = ccall(:jl_cumulative_recompile_time_ns, UInt64, ())
     return comp, recomp
 end
-function cumulative_compile_time_ns_after()
-    comp = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
-    recomp = ccall(:jl_cumulative_recompile_time_ns_before, UInt64, ())
-    return comp, recomp
+
+function cumulative_compile_timing(b::Bool)
+    if b
+        ccall(:jl_cumulative_compile_timing_enable, Cvoid, ())
+    else
+        ccall(:jl_cumulative_compile_timing_disable, Cvoid, ())
+    end
+    return
 end
 
 # total time spend in garbage collection, in nanoseconds
@@ -127,7 +131,7 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
     str = sprint() do io
         _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0 || recompile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -151,7 +155,10 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
         if recompile_time > 0
-            print(io, " of which ", Ryu.writefixed(Float64(100*recompile_time/compile_time), 0), "% was recompilation")
+            if bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
+                print(io, ", ")
+            end
+            print(io, Ryu.writefixed(Float64(100*recompile_time/elapsedtime), 2), "% recompilation time")
         end
         parens && print(io, ")")
     end
@@ -251,10 +258,12 @@ macro time(msg, ex)
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local compile_elapsedtimes = cumulative_compile_time_ns_before()
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
-            compile_elapsedtimes = cumulative_compile_time_ns_after() .- compile_elapsedtimes)
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
@@ -333,10 +342,10 @@ macro timev(msg, ex)
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local compile_elapsedtimes = cumulative_compile_time_ns_before()
+        local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
-            compile_elapsedtimes = cumulative_compile_time_ns_after() .- compile_elapsedtimes)
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
