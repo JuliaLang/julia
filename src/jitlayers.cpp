@@ -331,6 +331,10 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         else if (jl_is_method(mi->def.method))
             src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
     }
+    else {
+        // identify whether this is an invalidated method that is being recompiled
+        is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
+    }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
         if (mi->def.method->source != jl_nothing) {
@@ -350,8 +354,6 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             if (src->inferred && !codeinst->inferred)
                 codeinst->inferred = jl_nothing;
         }
-        // heuristic to identify whether an invalidated method is being recompiled
-        is_recompile = codeinst->min_world == world;
         _jl_compile_codeinst(codeinst, src, world, context);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
