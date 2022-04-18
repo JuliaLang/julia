@@ -1398,6 +1398,10 @@ void JuliaOJIT::shareStrings(Module &M)
         GV->eraseFromParent();
 }
 
+JITDebugInfoRegistry &JuliaOJIT::getDebugInfoRegistry() {
+    return DebugRegistry;
+}
+
 static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
@@ -1502,4 +1506,8 @@ extern "C" JL_DLLEXPORT
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+JITDebugInfoRegistry &getJITDebugRegistry() {
+    return jl_ExecutionEngine->getDebugInfoRegistry();
 }

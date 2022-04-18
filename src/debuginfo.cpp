@@ -334,28 +334,26 @@ struct unw_table_entry
     int32_t fde_offset;
 };
 
-static JITDebugInfoRegistry jl_jit_debug_info;
-
 void jl_init_debuginfo()
 {
-    jl_jit_debug_info.init();
+    getJITDebugRegistry().init();
 }
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
 {
-    uintptr_t held = jl_jit_debug_info.debuginfo_asyncsafe_held;
+    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
     if (held++ == 0)
-        uv_rwlock_rdlock(&jl_jit_debug_info.debuginfo_asyncsafe);
-    jl_jit_debug_info.debuginfo_asyncsafe_held = held;
+        uv_rwlock_rdlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
 }
 
 extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 {
-    uintptr_t held = jl_jit_debug_info.debuginfo_asyncsafe_held;
+    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
     assert(held);
     if (--held == 0)
-        uv_rwlock_rdunlock(&jl_jit_debug_info.debuginfo_asyncsafe);
-    jl_jit_debug_info.debuginfo_asyncsafe_held = held;
+        uv_rwlock_rdunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
 }
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
@@ -363,8 +361,8 @@ extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
 template <typename T>
 static void jl_profile_atomic(T f)
 {
-    assert(0 == jl_jit_debug_info.debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -375,14 +373,14 @@ static void jl_profile_atomic(T f)
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    uv_rwlock_wrunlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
 }
 
 
 // --- storing and accessing source location metadata ---
 void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
 {
-    jl_jit_debug_info.add_code_in_flight(name, codeinst, DL);
+    getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
 }
 
 
@@ -444,7 +442,7 @@ void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
                             std::function<void *(void *)> lookupWriteAddress)
 {
-    jl_jit_debug_info.registerJITObject(Object, getLoadAddress, lookupWriteAddress);
+    getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
@@ -514,10 +512,10 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == jl_jit_debug_info.debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-    uv_rwlock_wrunlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -540,9 +538,9 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            uv_rwlock_wrlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+            uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            uv_rwlock_wrunlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+            uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -712,7 +710,7 @@ extern "C" JL_DLLEXPORT
 void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
     jl_method_instance_t **linfos, size_t n)
 {
-    jl_jit_debug_info.set_sysimg_info({(uintptr_t) sysimage_base, *fptrs, linfos, n});
+    getJITDebugRegistry().set_sysimg_info({(uintptr_t) sysimage_base, *fptrs, linfos, n});
 }
 
 template<typename T>
@@ -727,7 +725,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
     // Assume we only need base address for sysimg for now
-    if (!insysimage || !jl_jit_debug_info.get_sysimg_info()->sysimg_fptrs.base)
+    if (!insysimage || !getJITDebugRegistry().get_sysimg_info()->sysimg_fptrs.base)
         saddr = nullptr;
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
     bool needs_name = name && (!*name || untrusted_dladdr);
@@ -843,7 +841,7 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
 // GOAL: Read debuginfo from file
     objfileentry_t entry{nullptr, nullptr, 0};
     {
-        auto success = jl_jit_debug_info.get_objfile_map()->emplace(fbase, entry);
+        auto success = getJITDebugRegistry().get_objfile_map()->emplace(fbase, entry);
         if (!success.second)
             // Return cached value
             return success.first->second;
@@ -1020,7 +1018,7 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
         entry = {debugobj, context, slide};
         // update cache
         {
-            (*jl_jit_debug_info.get_objfile_map())[fbase] = entry;
+            (*getJITDebugRegistry().get_objfile_map())[fbase] = entry;
         }
     }
     else {
@@ -1079,7 +1077,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (fname.empty()) // empirically, LoadedImageName might be missing
         fname = ModuleInfo.ImageName;
     DWORD64 fbase = ModuleInfo.BaseOfImage;
-    bool insysimage = (fbase == jl_jit_debug_info.get_sysimg_info()->jl_sysimage_base);
+    bool insysimage = (fbase == getJITDebugRegistry().get_sysimg_info()->jl_sysimage_base);
     if (isSysImg)
         *isSysImg = insysimage;
     if (onlySysImg && !insysimage)
@@ -1119,7 +1117,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     fbase = (uintptr_t)dlinfo.dli_fbase;
 #endif
     StringRef fname;
-    bool insysimage = (fbase == jl_jit_debug_info.get_sysimg_info()->jl_sysimage_base);
+    bool insysimage = (fbase == getJITDebugRegistry().get_sysimg_info()->jl_sysimage_base);
     if (saddr && !(insysimage && untrusted_dladdr))
         *saddr = dlinfo.dli_saddr;
     if (isSysImg)
@@ -1176,7 +1174,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     }
     frame0->fromC = !isSysImg;
     {
-        auto sysimg_locked = jl_jit_debug_info.get_sysimg_info();
+        auto sysimg_locked = getJITDebugRegistry().get_sysimg_info();
         if (isSysImg && sysimg_locked->sysimg_fptrs.base && saddr) {
             intptr_t diff = (uintptr_t)saddr - (uintptr_t)sysimg_locked->sysimg_fptrs.base;
             for (size_t i = 0; i < sysimg_locked->sysimg_fptrs.nclones; i++) {
@@ -1202,12 +1200,12 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == jl_jit_debug_info.debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
     if (symsize)
         *symsize = 0;
 
-    auto &objmap = jl_jit_debug_info.getObjectMap();
+    auto &objmap = getJITDebugRegistry().getObjectMap();
     auto fit = objmap.lower_bound(fptr);
     if (fit != objmap.end() && fptr < fit->first + fit->second.SectionSize) {
         *slide = fit->second.slide;
@@ -1219,7 +1217,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         }
         found = 1;
     }
-    uv_rwlock_wrunlock(&jl_jit_debug_info.debuginfo_asyncsafe);
+    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
     return found;
 }
 
@@ -1238,7 +1236,7 @@ extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, siz
     int64_t slide;
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
-        frames[0].linfo = jl_jit_debug_info.lookupLinfo(pointer);
+        frames[0].linfo = getJITDebugRegistry().lookupLinfo(pointer);
         int nf = lookup_pointer(Section, context, frames_out, pointer, slide, true, noInline);
         return nf;
     }
@@ -1247,7 +1245,7 @@ extern "C" JL_DLLEXPORT int jl_getFunctionInfo_impl(jl_frame_t **frames_out, siz
 
 extern "C" jl_method_instance_t *jl_gdblookuplinfo(void *p) JL_NOTSAFEPOINT
 {
-    return jl_jit_debug_info.lookupLinfo((size_t)p);
+    return getJITDebugRegistry().lookupLinfo((size_t)p);
 }
 
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -1266,14 +1264,14 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
   // On OS X OS X __register_frame takes a single FDE as an argument.
   // See http://lists.cs.uiuc.edu/pipermail/llvmdev/2013-April/061768.html
   processFDEs((char*)Addr, Size, [](const char *Entry) {
-      jl_jit_debug_info.libc_frames.libc_register_frame(Entry);
+      getJITDebugRegistry().libc_frames.libc_register_frame(Entry);
     });
 }
 
 void deregister_eh_frames(uint8_t *Addr, size_t Size)
 {
    processFDEs((char*)Addr, Size, [](const char *Entry) {
-      jl_jit_debug_info.libc_frames.libc_deregister_frame(Entry);
+      getJITDebugRegistry().libc_frames.libc_deregister_frame(Entry);
     });
 }
 
@@ -1619,7 +1617,7 @@ uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
     jl_lock_profile_impl();
-    auto &objmap = jl_jit_debug_info.getObjectMap();
+    auto &objmap = getJITDebugRegistry().getObjectMap();
     auto it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {

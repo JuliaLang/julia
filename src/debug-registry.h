@@ -173,3 +173,5 @@ public:
     Locked<objfilemap_t>::LockT get_objfile_map();
     void init();
 };
+
+JITDebugInfoRegistry &getJITDebugRegistry();
