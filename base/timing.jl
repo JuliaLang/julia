@@ -161,7 +161,9 @@ end
 
 function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_times, true, _lpad)
+    compile_time = first(compile_times)
+    recompile_time = last(compile_times)
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
