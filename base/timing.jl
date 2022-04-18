@@ -201,8 +201,8 @@ end
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression. Any time spent garbage collecting (gc) or
-compiling is shown as a percentage.
+returning the value of the expression. Any time spent garbage collecting (gc), compiling
+new code, or recompiling invalidated code is shown as a percentage.
 
 Optionally provide a description string to print before the time report.
 
@@ -220,6 +220,9 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 
 !!! compat "Julia 1.8"
     The option to add a description was introduced in Julia 1.8.
+
+!!! compat "Julia 1.9"
+    Recompilation time being shown separately from compilation time was introduced in Julia 1.9
 
 ```julia-repl
 julia> x = rand(10,10);
