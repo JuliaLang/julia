@@ -35,6 +35,8 @@ public:
             CResourceT &resource;
 
             Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT : lock(mutex), resource(resource) {}
+            Lock(Lock &&) JL_NOTSAFEPOINT = default;
+            Lock &operator=(Lock &&) JL_NOTSAFEPOINT = default;
 
             CResourceT &operator*() JL_NOTSAFEPOINT {
                 return resource;
@@ -56,7 +58,7 @@ public:
                 return resource;
             }
 
-            ~Lock() JL_NOTSAFEPOINT {}
+            ~Lock() JL_NOTSAFEPOINT = default;
         };
     private:
 
@@ -76,7 +78,7 @@ public:
             return ConstLockT(mutex, resource);
         }
 
-        ~Locked() JL_NOTSAFEPOINT {}
+        ~Locked() JL_NOTSAFEPOINT = default;
     };
 
     template<typename datatype>
@@ -155,7 +157,7 @@ private:
 public:
 
     JITDebugInfoRegistry() JL_NOTSAFEPOINT;
-    ~JITDebugInfoRegistry() JL_NOTSAFEPOINT {}
+    ~JITDebugInfoRegistry() JL_NOTSAFEPOINT = default;
 
     // Any function that acquires this lock must be either a unmanaged thread
     // or in the GC safe region and must NOT allocate anything through the GC
