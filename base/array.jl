@@ -844,8 +844,8 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
-        if el isa T || typeof(el) === T
-            @inbounds dest[i] = el::T
+        if el isa T
+            @inbounds dest[i] = el
             i += 1
         else
             new = setindex_widen_up_to(dest, el, i)
@@ -881,8 +881,8 @@ function grow_to!(dest, itr, st)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        if el isa T || typeof(el) === T
-            push!(dest, el::T)
+        if el isa T
+            push!(dest, el)
         else
             new = push_widen(dest, el)
             return grow_to!(new, itr, st)
