@@ -42,118 +42,11 @@ using namespace llvm;
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
-typedef object::SymbolRef SymRef;
-
-struct debug_link_info {
-    StringRef filename;
-    uint32_t crc32;
-};
-
-struct ObjectInfo {
-    const object::ObjectFile *object;
-    size_t SectionSize;
-    ptrdiff_t slide;
-    object::SectionRef Section;
-    DIContext *context;
-};
-
 typedef struct {
     const llvm::object::ObjectFile *obj;
     DIContext *ctx;
     int64_t slide;
 } objfileentry_t;
-
-template<typename datatype>
-struct jl_pthread_key_t {
-    static_assert(std::is_trivially_default_constructible<datatype>::value, "Invalid datatype for pthread key!");
-    static_assert(std::is_trivially_destructible<datatype>::value, "Expected datatype to be trivially destructible!");
-    static_assert(sizeof(datatype) == sizeof(void*), "Expected datatype to be like a void*!");
-    pthread_key_t key;
-
-    void init() {
-        if (pthread_key_create(&key, NULL))
-            jl_error("fatal: pthread_key_create failed");
-    }
-
-    operator datatype() {
-        return reinterpret_cast<datatype>(pthread_getspecific(key));
-    }
-
-    jl_pthread_key_t &operator=(datatype val) {
-        pthread_setspecific(key, reinterpret_cast<void*>(val));
-        return *this;
-    }
-
-    void destroy() {
-        pthread_key_delete(key);
-    }
-};
-
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
-
-template <typename T>
-static void jl_profile_atomic(T f);
-
-#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
-extern "C" void __register_frame(void*);
-extern "C" void __deregister_frame(void*);
-
-template <typename callback>
-static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
-{
-    const char *P = EHFrameAddr;
-    const char *End = P + EHFrameSize;
-    do {
-        const char *Entry = P;
-        P += 4;
-        assert(P <= End);
-        uint32_t Length = *(const uint32_t*)Entry;
-        // Length == 0: Terminator
-        if (Length == 0)
-            break;
-        assert(P + Length <= End);
-        uint32_t Offset = *(const uint32_t*)P;
-        // Offset == 0: CIE
-        if (Offset != 0)
-            f(Entry);
-        P += Length;
-    } while (P != End);
-}
-#endif
-
-struct libc_frames_t {
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
-    std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
-    std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
-
-    void libc_register_frame(const char *Entry) {
-        auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
-        if (!libc_register_frame_) {
-          libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
-          jl_atomic_store_relaxed(&this->libc_register_frame_, libc_register_frame_);
-        }
-        assert(libc_register_frame_);
-        jl_profile_atomic([&]() {
-            libc_register_frame_(const_cast<char *>(Entry));
-            __register_frame(const_cast<char *>(Entry));
-        });
-    }
-
-    void libc_deregister_frame(const char *Entry) {
-        auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
-        if (!libc_deregister_frame_) {
-          libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
-          jl_atomic_store_relaxed(&this->libc_deregister_frame_, libc_deregister_frame_);
-        }
-        assert(libc_deregister_frame_);
-        jl_profile_atomic([&]() {
-            libc_deregister_frame_(const_cast<char *>(Entry));
-            __deregister_frame(const_cast<char *>(Entry));
-        });
-    }
-#endif
-};
 
 
 // Central registry for resolving function addresses to `jl_method_instance_t`s and
@@ -212,13 +105,58 @@ public:
         }
     };
 
+    template<typename datatype>
+    struct jl_pthread_key_t {
+        static_assert(std::is_trivially_default_constructible<datatype>::value, "Invalid datatype for pthread key!");
+        static_assert(std::is_trivially_destructible<datatype>::value, "Expected datatype to be trivially destructible!");
+        static_assert(sizeof(datatype) == sizeof(void*), "Expected datatype to be like a void*!");
+        pthread_key_t key;
+
+        void init() {
+            if (pthread_key_create(&key, NULL))
+                jl_error("fatal: pthread_key_create failed");
+        }
+
+        operator datatype() {
+            return reinterpret_cast<datatype>(pthread_getspecific(key));
+        }
+
+        jl_pthread_key_t &operator=(datatype val) {
+            pthread_setspecific(key, reinterpret_cast<void*>(val));
+            return *this;
+        }
+
+        void destroy() {
+            pthread_key_delete(key);
+        }
+    };
+
     struct sysimg_info_t {
         uint64_t jl_sysimage_base;
         jl_sysimg_fptrs_t sysimg_fptrs;
         jl_method_instance_t **sysimg_fvars_linfo;
         size_t sysimg_fvars_n;
     };
+
+    struct libc_frames_t {
+#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+        std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
+        std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
+
+        void libc_register_frame(const char *Entry);
+
+        void libc_deregister_frame(const char *Entry);
+#endif
+    };
 private:
+
+    struct ObjectInfo {
+        const object::ObjectFile *object;
+        size_t SectionSize;
+        ptrdiff_t slide;
+        object::SectionRef Section;
+        DIContext *context;
+    };
 
     template<typename KeyT, typename ValT>
     using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
@@ -235,15 +173,7 @@ private:
 
     Locked<rev_map<uint64_t, objfileentry_t>> objfilemap;
 
-    static std::string mangle(StringRef Name, const DataLayout &DL)
-    {
-        std::string MangledName;
-        {
-            raw_string_ostream MangledNameStream(MangledName);
-            Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
-        }
-        return MangledName;
-    }
+    static std::string mangle(StringRef Name, const DataLayout &DL);
 
 public:
 
@@ -259,212 +189,299 @@ public:
     jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
     libc_frames_t libc_frames;
 
-    void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
-        (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
-    }
-
-    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
-    {
-        jl_lock_profile_impl();
-        auto region = linfomap.lower_bound(pointer);
-        jl_method_instance_t *linfo = NULL;
-        if (region != linfomap.end() && pointer < region->first + region->second.first)
-            linfo = region->second.second;
-        jl_unlock_profile_impl();
-        return linfo;
-    }
-
+    void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
+    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const object::ObjectFile &Object,
-                           std::function<uint64_t(const StringRef &)> getLoadAddress,
-                           std::function<void*(void*)> lookupWriteAddress)
+                        std::function<uint64_t(const StringRef &)> getLoadAddress,
+                        std::function<void*(void*)> lookupWriteAddress);
+    auto& getObjectMap() JL_NOTSAFEPOINT;
+    void set_sysimg_info(sysimg_info_t info);
+    auto get_sysimg_info() const;
+    auto get_objfile_map();
+    void init();
+};
+
+struct debug_link_info {
+    StringRef filename;
+    uint32_t crc32;
+};
+
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
+
+template <typename T>
+static void jl_profile_atomic(T f);
+
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
+extern "C" void __register_frame(void*);
+extern "C" void __deregister_frame(void*);
+
+template <typename callback>
+static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
+{
+    const char *P = EHFrameAddr;
+    const char *End = P + EHFrameSize;
+    do {
+        const char *Entry = P;
+        P += 4;
+        assert(P <= End);
+        uint32_t Length = *(const uint32_t*)Entry;
+        // Length == 0: Terminator
+        if (Length == 0)
+            break;
+        assert(P + Length <= End);
+        uint32_t Offset = *(const uint32_t*)P;
+        // Offset == 0: CIE
+        if (Offset != 0)
+            f(Entry);
+        P += Length;
+    } while (P != End);
+}
+#endif
+
+#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+
+void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
+    auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
+    if (!libc_register_frame_) {
+        libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
+        jl_atomic_store_relaxed(&this->libc_register_frame_, libc_register_frame_);
+    }
+    assert(libc_register_frame_);
+    jl_profile_atomic([&]() {
+        libc_register_frame_(const_cast<char *>(Entry));
+        __register_frame(const_cast<char *>(Entry));
+    });
+}
+
+void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entry) {
+    auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
+    if (!libc_deregister_frame_) {
+        libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
+        jl_atomic_store_relaxed(&this->libc_deregister_frame_, libc_deregister_frame_);
+    }
+    assert(libc_deregister_frame_);
+    jl_profile_atomic([&]() {
+        libc_deregister_frame_(const_cast<char *>(Entry));
+        __deregister_frame(const_cast<char *>(Entry));
+    });
+}
+#endif
+
+std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
+{
+    std::string MangledName;
     {
-        object::section_iterator EndSection = Object.section_end();
+        raw_string_ostream MangledNameStream(MangledName);
+        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
+    }
+    return MangledName;
+}
+
+void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
+    (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
+}
+
+jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
+{
+    jl_lock_profile_impl();
+    auto region = linfomap.lower_bound(pointer);
+    jl_method_instance_t *linfo = NULL;
+    if (region != linfomap.end() && pointer < region->first + region->second.first)
+        linfo = region->second.second;
+    jl_unlock_profile_impl();
+    return linfo;
+}
+
+void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
+                        std::function<uint64_t(const StringRef &)> getLoadAddress,
+                        std::function<void*(void*)> lookupWriteAddress)
+{
+    object::section_iterator EndSection = Object.section_end();
 
 #ifdef _CPU_ARM_
-        // ARM does not have/use .eh_frame
-        uint64_t arm_exidx_addr = 0;
-        size_t arm_exidx_len = 0;
-        uint64_t arm_text_addr = 0;
-        size_t arm_text_len = 0;
-        for (auto &section: Object.sections()) {
-            bool istext = false;
-            if (section.isText()) {
-                istext = true;
-            }
-            else {
-                auto sName = section.getName();
-                if (!sName)
-                    continue;
-                if (sName.get() != ".ARM.exidx") {
-                    continue;
-                }
-            }
-            uint64_t loadaddr = getLoadAddress(section.getName().get());
-            size_t seclen = section.getSize();
-            if (istext) {
-                arm_text_addr = loadaddr;
-                arm_text_len = seclen;
-                if (!arm_exidx_addr) {
-                    continue;
-                }
-            }
-            else {
-                arm_exidx_addr = loadaddr;
-                arm_exidx_len = seclen;
-                if (!arm_text_addr) {
-                    continue;
-                }
-            }
-            unw_dyn_info_t *di = new unw_dyn_info_t;
-            di->gp = 0;
-            di->format = UNW_INFO_FORMAT_ARM_EXIDX;
-            di->start_ip = (uintptr_t)arm_text_addr;
-            di->end_ip = (uintptr_t)(arm_text_addr + arm_text_len);
-            di->u.rti.name_ptr = 0;
-            di->u.rti.table_data = arm_exidx_addr;
-            di->u.rti.table_len = arm_exidx_len;
-            jl_profile_atomic([&]() {
-                _U_dyn_register(di);
-            });
-            break;
+    // ARM does not have/use .eh_frame
+    uint64_t arm_exidx_addr = 0;
+    size_t arm_exidx_len = 0;
+    uint64_t arm_text_addr = 0;
+    size_t arm_text_len = 0;
+    for (auto &section: Object.sections()) {
+        bool istext = false;
+        if (section.isText()) {
+            istext = true;
         }
+        else {
+            auto sName = section.getName();
+            if (!sName)
+                continue;
+            if (sName.get() != ".ARM.exidx") {
+                continue;
+            }
+        }
+        uint64_t loadaddr = getLoadAddress(section.getName().get());
+        size_t seclen = section.getSize();
+        if (istext) {
+            arm_text_addr = loadaddr;
+            arm_text_len = seclen;
+            if (!arm_exidx_addr) {
+                continue;
+            }
+        }
+        else {
+            arm_exidx_addr = loadaddr;
+            arm_exidx_len = seclen;
+            if (!arm_text_addr) {
+                continue;
+            }
+        }
+        unw_dyn_info_t *di = new unw_dyn_info_t;
+        di->gp = 0;
+        di->format = UNW_INFO_FORMAT_ARM_EXIDX;
+        di->start_ip = (uintptr_t)arm_text_addr;
+        di->end_ip = (uintptr_t)(arm_text_addr + arm_text_len);
+        di->u.rti.name_ptr = 0;
+        di->u.rti.table_data = arm_exidx_addr;
+        di->u.rti.table_len = arm_exidx_len;
+        jl_profile_atomic([&]() {
+            _U_dyn_register(di);
+        });
+        break;
+    }
 #endif
 
 #if defined(_OS_WINDOWS_)
-        uint64_t SectionAddrCheck = 0;
-        uint64_t SectionLoadCheck = 0; (void)SectionLoadCheck;
-        uint64_t SectionWriteCheck = 0; (void)SectionWriteCheck;
-        uint8_t *UnwindData = NULL;
+    uint64_t SectionAddrCheck = 0;
+    uint64_t SectionLoadCheck = 0; (void)SectionLoadCheck;
+    uint64_t SectionWriteCheck = 0; (void)SectionWriteCheck;
+    uint8_t *UnwindData = NULL;
 #if defined(_CPU_X86_64_)
-        uint8_t *catchjmp = NULL;
-        for (const object::SymbolRef &sym_iter : Object.symbols()) {
-            StringRef sName = cantFail(sym_iter.getName());
-            if (sName.equals("__UnwindData") || sName.equals("__catchjmp")) {
-                uint64_t Addr = cantFail(sym_iter.getAddress());
-                auto Section = cantFail(sym_iter.getSection());
-                assert(Section != EndSection && Section->isText());
-                uint64_t SectionAddr = Section->getAddress();
-                StringRef secName = cantFail(Section->getName());
-                uint64_t SectionLoadAddr = getLoadAddress(secName);
-                assert(SectionLoadAddr);
-                if (SectionAddrCheck) // assert that all of the Sections are at the same location
-                    assert(SectionAddrCheck == SectionAddr &&
-                           SectionLoadCheck == SectionLoadAddr);
-                SectionAddrCheck = SectionAddr;
-                SectionLoadCheck = SectionLoadAddr;
-                SectionWriteCheck = SectionLoadAddr;
-                if (lookupWriteAddress)
-                    SectionWriteCheck = (uintptr_t)lookupWriteAddress((void*)SectionLoadAddr);
-                Addr += SectionWriteCheck - SectionLoadCheck;
-                if (sName.equals("__UnwindData")) {
-                    UnwindData = (uint8_t*)Addr;
-                }
-                else if (sName.equals("__catchjmp")) {
-                    catchjmp = (uint8_t*)Addr;
-                }
-            }
-        }
-        assert(catchjmp);
-        assert(UnwindData);
-        assert(SectionAddrCheck);
-        assert(SectionLoadCheck);
-        assert(!memcmp(catchjmp, "\0\0\0\0\0\0\0\0\0\0\0\0", 12) &&
-               !memcmp(UnwindData, "\0\0\0\0\0\0\0\0\0\0\0\0", 12));
-        catchjmp[0] = 0x48;
-        catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
-        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
-        catchjmp[10] = 0xff;
-        catchjmp[11] = 0xe0; // jmp RAX
-        UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
-        UnwindData[1] = 4;    // size of prolog (bytes)
-        UnwindData[2] = 2;    // count of unwind codes (slots)
-        UnwindData[3] = 0x05; // frame register (rbp) = rsp
-        UnwindData[4] = 4;    // second instruction
-        UnwindData[5] = 0x03; // mov RBP, RSP
-        UnwindData[6] = 1;    // first instruction
-        UnwindData[7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
-        UnwindData -= SectionWriteCheck - SectionLoadCheck;
-#endif // defined(_OS_X86_64_)
-#endif // defined(_OS_WINDOWS_)
-
-        auto symbols = object::computeSymbolSizes(Object);
-        bool first = true;
-        for (const auto &sym_size : symbols) {
-            const object::SymbolRef &sym_iter = sym_size.first;
-            object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
-            if (SymbolType != object::SymbolRef::ST_Function) continue;
+    uint8_t *catchjmp = NULL;
+    for (const object::SymbolRef &sym_iter : Object.symbols()) {
+        StringRef sName = cantFail(sym_iter.getName());
+        if (sName.equals("__UnwindData") || sName.equals("__catchjmp")) {
             uint64_t Addr = cantFail(sym_iter.getAddress());
             auto Section = cantFail(sym_iter.getSection());
-            if (Section == EndSection) continue;
-            if (!Section->isText()) continue;
+            assert(Section != EndSection && Section->isText());
             uint64_t SectionAddr = Section->getAddress();
             StringRef secName = cantFail(Section->getName());
             uint64_t SectionLoadAddr = getLoadAddress(secName);
-            Addr -= SectionAddr - SectionLoadAddr;
-            StringRef sName = cantFail(sym_iter.getName());
-            uint64_t SectionSize = Section->getSize();
-            size_t Size = sym_size.second;
-#if defined(_OS_WINDOWS_)
-            if (SectionAddrCheck)
+            assert(SectionLoadAddr);
+            if (SectionAddrCheck) // assert that all of the Sections are at the same location
                 assert(SectionAddrCheck == SectionAddr &&
-                       SectionLoadCheck == SectionLoadAddr);
+                        SectionLoadCheck == SectionLoadAddr);
             SectionAddrCheck = SectionAddr;
             SectionLoadCheck = SectionLoadAddr;
-            create_PRUNTIME_FUNCTION(
-                   (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
-                   (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
-#endif
-            jl_code_instance_t *codeinst = NULL;
-            {
-                auto lock = *this->codeinst_in_flight;
-                auto &codeinst_in_flight = *lock;
-                StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
-                if (codeinst_it != codeinst_in_flight.end()) {
-                    codeinst = codeinst_it->second;
-                    codeinst_in_flight.erase(codeinst_it);
-                }
+            SectionWriteCheck = SectionLoadAddr;
+            if (lookupWriteAddress)
+                SectionWriteCheck = (uintptr_t)lookupWriteAddress((void*)SectionLoadAddr);
+            Addr += SectionWriteCheck - SectionLoadCheck;
+            if (sName.equals("__UnwindData")) {
+                UnwindData = (uint8_t*)Addr;
             }
-            jl_profile_atomic([&]() {
-                if (codeinst)
-                    linfomap[Addr] = std::make_pair(Size, codeinst->def);
-                if (first) {
-                    ObjectInfo tmp = {&Object,
-                        (size_t)SectionSize,
-                        (ptrdiff_t)(SectionAddr - SectionLoadAddr),
-                        *Section,
-                        nullptr,
-                        };
-                    objectmap[SectionLoadAddr] = tmp;
-                    first = false;
-                }
-            });
+            else if (sName.equals("__catchjmp")) {
+                catchjmp = (uint8_t*)Addr;
+            }
         }
     }
+    assert(catchjmp);
+    assert(UnwindData);
+    assert(SectionAddrCheck);
+    assert(SectionLoadCheck);
+    assert(!memcmp(catchjmp, "\0\0\0\0\0\0\0\0\0\0\0\0", 12) &&
+            !memcmp(UnwindData, "\0\0\0\0\0\0\0\0\0\0\0\0", 12));
+    catchjmp[0] = 0x48;
+    catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [&__julia_personality]
+    *(uint64_t*)(&catchjmp[2]) = (uint64_t)&__julia_personality;
+    catchjmp[10] = 0xff;
+    catchjmp[11] = 0xe0; // jmp RAX
+    UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
+    UnwindData[1] = 4;    // size of prolog (bytes)
+    UnwindData[2] = 2;    // count of unwind codes (slots)
+    UnwindData[3] = 0x05; // frame register (rbp) = rsp
+    UnwindData[4] = 4;    // second instruction
+    UnwindData[5] = 0x03; // mov RBP, RSP
+    UnwindData[6] = 1;    // first instruction
+    UnwindData[7] = 0x50; // push RBP
+    *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionWriteCheck); // relative location of catchjmp
+    UnwindData -= SectionWriteCheck - SectionLoadCheck;
+#endif // defined(_OS_X86_64_)
+#endif // defined(_OS_WINDOWS_)
 
-    //Protected by debuginfo_asyncsafe
-    auto& getObjectMap() JL_NOTSAFEPOINT
-    {
-        return objectmap;
+    auto symbols = object::computeSymbolSizes(Object);
+    bool first = true;
+    for (const auto &sym_size : symbols) {
+        const object::SymbolRef &sym_iter = sym_size.first;
+        object::SymbolRef::Type SymbolType = cantFail(sym_iter.getType());
+        if (SymbolType != object::SymbolRef::ST_Function) continue;
+        uint64_t Addr = cantFail(sym_iter.getAddress());
+        auto Section = cantFail(sym_iter.getSection());
+        if (Section == EndSection) continue;
+        if (!Section->isText()) continue;
+        uint64_t SectionAddr = Section->getAddress();
+        StringRef secName = cantFail(Section->getName());
+        uint64_t SectionLoadAddr = getLoadAddress(secName);
+        Addr -= SectionAddr - SectionLoadAddr;
+        StringRef sName = cantFail(sym_iter.getName());
+        uint64_t SectionSize = Section->getSize();
+        size_t Size = sym_size.second;
+#if defined(_OS_WINDOWS_)
+        if (SectionAddrCheck)
+            assert(SectionAddrCheck == SectionAddr &&
+                    SectionLoadCheck == SectionLoadAddr);
+        SectionAddrCheck = SectionAddr;
+        SectionLoadCheck = SectionLoadAddr;
+        create_PRUNTIME_FUNCTION(
+                (uint8_t*)(uintptr_t)Addr, (size_t)Size, sName,
+                (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
+#endif
+        jl_code_instance_t *codeinst = NULL;
+        {
+            auto lock = *this->codeinst_in_flight;
+            auto &codeinst_in_flight = *lock;
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
+            if (codeinst_it != codeinst_in_flight.end()) {
+                codeinst = codeinst_it->second;
+                codeinst_in_flight.erase(codeinst_it);
+            }
+        }
+        jl_profile_atomic([&]() {
+            if (codeinst)
+                linfomap[Addr] = std::make_pair(Size, codeinst->def);
+            if (first) {
+                objectmap[SectionLoadAddr] = {&Object,
+                    (size_t)SectionSize,
+                    (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                    *Section,
+                    nullptr,
+                    };
+                first = false;
+            }
+        });
     }
+}
 
-    void set_sysimg_info(sysimg_info_t info) {
-        (**this->sysimg_info) = info;
-    }
+//Protected by debuginfo_asyncsafe
+auto& JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
+{
+    return objectmap;
+}
 
-    auto get_sysimg_info() const {
-        return *this->sysimg_info;
-    }
+void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) {
+    (**this->sysimg_info) = info;
+}
 
-    auto get_objfile_map() {
-        return *this->objfilemap;
-    }
+auto JITDebugInfoRegistry::get_sysimg_info() const {
+    return *this->sysimg_info;
+}
 
-    void init() {
-        uv_rwlock_init(&debuginfo_asyncsafe);
-        debuginfo_asyncsafe_held.init();
-    }
-};
+auto JITDebugInfoRegistry::get_objfile_map() {
+    return *this->objfilemap;
+}
+
+void JITDebugInfoRegistry::init() {
+    uv_rwlock_init(&debuginfo_asyncsafe);
+    debuginfo_asyncsafe_held.init();
+}
 
 struct unw_table_entry
 {
@@ -891,7 +908,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
     }
     if (Section.getObject() && (needs_saddr || needs_name)) {
         size_t distance = (size_t)-1;
-        SymRef sym_found;
+        object::SymbolRef sym_found;
         for (auto sym : Section.getObject()->symbols()) {
             if (!Section.containsSymbol(sym))
                 continue;
