@@ -635,7 +635,12 @@ public:
                     continue;
                 }
                 auto SecName = Sec.getName().substr(SepPos + 1);
-                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart();
+                // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
+#if JL_LLVM_VERSION >= 140000
+               Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
+#else
+               Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart();
+#endif
             }
             return Error::success();
         });
@@ -644,21 +649,30 @@ public:
 }
 
 # ifdef LLVM_SHLIB
+
+#  if JL_LLVM_VERSION >= 140000
+#   define EHFRAME_RANGE(name) orc::ExecutorAddrRange name
+#   define UNPACK_EHFRAME_RANGE(name) \
+        name.Start.toPtr<uint8_t *>(), \
+        static_cast<size_t>(name.size())
+#  else
+#   define EHFRAME_RANGE(name) JITTargetAddress name##Addr, size_t name##Size
+#   define UNPACK_EHFRAME_RANGE(name) \
+        jitTargetAddressToPointer<uint8_t *>(name##Addr), \
+        name##Size
+#  endif
+
 class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
 public:
-    Error registerEHFrames(JITTargetAddress EHFrameSectionAddr,
-                         size_t EHFrameSectionSize) override {
+    Error registerEHFrames(EHFRAME_RANGE(EHFrameSection)) override {
         register_eh_frames(
-            jitTargetAddressToPointer<uint8_t *>(EHFrameSectionAddr),
-            EHFrameSectionSize);
+            UNPACK_EHFRAME_RANGE(EHFrameSection));
         return Error::success();
     }
 
-    Error deregisterEHFrames(JITTargetAddress EHFrameSectionAddr,
-                           size_t EHFrameSectionSize) override {
+    Error deregisterEHFrames(EHFRAME_RANGE(EHFrameSection)) override {
         deregister_eh_frames(
-            jitTargetAddressToPointer<uint8_t *>(EHFrameSectionAddr),
-            EHFrameSectionSize);
+            UNPACK_EHFRAME_RANGE(EHFrameSection));
         return Error::success();
     }
 };
