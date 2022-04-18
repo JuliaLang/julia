@@ -837,12 +837,10 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
 
 // GOAL: Read debuginfo from file
     objfileentry_t entry{nullptr, nullptr, 0};
-    {
-        auto success = getJITDebugRegistry().get_objfile_map()->emplace(fbase, entry);
-        if (!success.second)
-            // Return cached value
-            return success.first->second;
-    }
+    auto success = getJITDebugRegistry().get_objfile_map()->emplace(fbase, entry);
+    if (!success.second)
+        // Return cached value
+        return success.first->second;
 
 // GOAL: Assign errorobj
     StringRef objpath;
@@ -1014,9 +1012,7 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
         binary.second.release();
         entry = {debugobj, context, slide};
         // update cache
-        {
-            (*getJITDebugRegistry().get_objfile_map())[fbase] = entry;
-        }
+        (*getJITDebugRegistry().get_objfile_map())[fbase] = entry;
     }
     else {
         // TODO: report the error instead of silently consuming it?
