@@ -485,6 +485,16 @@ JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_after(void)
     return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
 
+JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns_before(void)
+{
+    return jl_atomic_load_relaxed(&jl_cumulative_recompile_time);
+}
+
+JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns_after(void)
+{
+    return jl_atomic_load_relaxed(&jl_cumulative_recompile_time);
+}
+
 JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
 {
     ret[0] = FE_INEXACT;

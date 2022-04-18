@@ -334,7 +334,7 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
-before = Base.cumulative_compile_time_ns_before();
+before_comp, before_recomp = Base.cumulative_compile_time_ns_before();
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.
 t1 = @async @time begin
@@ -347,8 +347,8 @@ t2 = @async begin
     @time 2 + 2
 end
 
-after = Base.cumulative_compile_time_ns_after();
-@test after >= before;
+after_comp, after_recomp = Base.cumulative_compile_time_ns_after();
+@test after_comp >= before_comp;
 
 # wait for completion of these tasks before restoring stdout, to suppress their @time prints.
 wait(t1); wait(t2)
