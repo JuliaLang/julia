@@ -1398,10 +1398,6 @@ void JuliaOJIT::shareStrings(Module &M)
         GV->eraseFromParent();
 }
 
-JITDebugInfoRegistry &JuliaOJIT::getDebugInfoRegistry() {
-    return DebugRegistry;
-}
-
 static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64

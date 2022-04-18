@@ -336,7 +336,9 @@ public:
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
 
-    JITDebugInfoRegistry &getDebugInfoRegistry();
+    JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
+        return DebugRegistry;
+    }
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
