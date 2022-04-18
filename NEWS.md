@@ -66,6 +66,7 @@ Library changes
 * `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* `time()` now has up to nanosecond resolution on Unix based platforms.
 
 Standard library changes
 ------------------------

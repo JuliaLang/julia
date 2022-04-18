@@ -66,7 +66,7 @@ locale.
 function now()
     tv = Libc.TimeVal()
     tm = Libc.TmStruct(tv.sec)
-    return DateTime(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec, div(tv.usec, 1000))
+    return DateTime(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec, div(tv.nsec, 1000000))
 end
 
 """

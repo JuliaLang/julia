@@ -137,7 +137,7 @@ systemsleep
 
 struct TimeVal
    sec::Int64
-   usec::Int64
+   nsec::Int64
 end
 
 function TimeVal()
@@ -244,7 +244,7 @@ time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 """
     time()
 
-Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+Get the system time in seconds since the epoch. Resolution is system dependent and limited to milliseconds on windows, with (up to) nanosecond resolution on other platforms.
 """
 time() = ccall(:jl_clock_now, Float64, ())
 
