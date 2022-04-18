@@ -121,11 +121,11 @@ public:
 private:
 
     struct ObjectInfo {
-        const llvm::object::ObjectFile *object;
-        size_t SectionSize;
-        ptrdiff_t slide;
-        llvm::object::SectionRef Section;
-        llvm::DIContext *context;
+        const llvm::object::ObjectFile *object = nullptr;
+        size_t SectionSize = 0;
+        ptrdiff_t slide = 0;
+        llvm::object::SectionRef Section{};
+        llvm::DIContext *context = nullptr;
     };
 
     template<typename KeyT, typename ValT>
@@ -134,21 +134,23 @@ private:
     typedef rev_map<size_t, ObjectInfo> objectmap_t;
     typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
 
-    objectmap_t objectmap;
-    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap;
+    objectmap_t objectmap{};
+    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap{};
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
     // that it came from (providing name, type signature, file info, etc.)
-    Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight;
+    Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight{};
 
-    Locked<sysimg_info_t> sysimg_info;
+    Locked<sysimg_info_t> sysimg_info{};
 
-    Locked<objfilemap_t> objfilemap;
+    Locked<objfilemap_t> objfilemap{};
 
     static std::string mangle(llvm::StringRef Name, const llvm::DataLayout &DL);
 
 public:
+
+    JITDebugInfoRegistry();
 
     // Any function that acquires this lock must be either a unmanaged thread
     // or in the GC safe region and must NOT allocate anything through the GC
@@ -158,9 +160,9 @@ public:
     // They also may be re-entrant, and operating while threads are paused, so we
     // separately manage the re-entrant count behavior for safety across platforms
     // Note that we cannot safely upgrade read->write
-    uv_rwlock_t debuginfo_asyncsafe;
-    jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
-    libc_frames_t libc_frames;
+    uv_rwlock_t debuginfo_asyncsafe{};
+    jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held{};
+    libc_frames_t libc_frames{};
 
     void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL);
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
@@ -171,7 +173,6 @@ public:
     void set_sysimg_info(sysimg_info_t info);
     Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const;
     Locked<objfilemap_t>::LockT get_objfile_map();
-    void init();
 };
 
 JITDebugInfoRegistry &getJITDebugRegistry();

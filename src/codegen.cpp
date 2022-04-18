@@ -8328,14 +8328,11 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-void jl_init_debuginfo(void);
-
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.generic_context = jl_nothing;
-    jl_init_debuginfo();
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();

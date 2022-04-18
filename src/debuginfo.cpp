@@ -81,35 +81,6 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 }
 #endif
 
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
-
-void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
-    auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
-    if (!libc_register_frame_) {
-        libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
-        jl_atomic_store_relaxed(&this->libc_register_frame_, libc_register_frame_);
-    }
-    assert(libc_register_frame_);
-    jl_profile_atomic([&]() {
-        libc_register_frame_(const_cast<char *>(Entry));
-        __register_frame(const_cast<char *>(Entry));
-    });
-}
-
-void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entry) {
-    auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
-    if (!libc_deregister_frame_) {
-        libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
-        jl_atomic_store_relaxed(&this->libc_deregister_frame_, libc_deregister_frame_);
-    }
-    assert(libc_deregister_frame_);
-    jl_profile_atomic([&]() {
-        libc_deregister_frame_(const_cast<char *>(Entry));
-        __deregister_frame(const_cast<char *>(Entry));
-    });
-}
-#endif
-
 std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
 {
     std::string MangledName;
@@ -323,7 +294,7 @@ JITDebugInfoRegistry::get_objfile_map() {
     return *this->objfilemap;
 }
 
-void JITDebugInfoRegistry::init() {
+JITDebugInfoRegistry::JITDebugInfoRegistry() {
     uv_rwlock_init(&debuginfo_asyncsafe);
     debuginfo_asyncsafe_held.init();
 }
@@ -333,11 +304,6 @@ struct unw_table_entry
     int32_t start_ip_offset;
     int32_t fde_offset;
 };
-
-void jl_init_debuginfo()
-{
-    getJITDebugRegistry().init();
-}
 
 extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
 {
@@ -583,6 +549,37 @@ static int lookup_pointer(
 #endif
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
+#endif
+
+
+
+#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+
+void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
+    auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
+    if (!libc_register_frame_) {
+        libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
+        jl_atomic_store_relaxed(&this->libc_register_frame_, libc_register_frame_);
+    }
+    assert(libc_register_frame_);
+    jl_profile_atomic([&]() {
+        libc_register_frame_(const_cast<char *>(Entry));
+        __register_frame(const_cast<char *>(Entry));
+    });
+}
+
+void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entry) {
+    auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
+    if (!libc_deregister_frame_) {
+        libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
+        jl_atomic_store_relaxed(&this->libc_deregister_frame_, libc_deregister_frame_);
+    }
+    assert(libc_deregister_frame_);
+    jl_profile_atomic([&]() {
+        libc_deregister_frame_(const_cast<char *>(Entry));
+        __deregister_frame(const_cast<char *>(Entry));
+    });
+}
 #endif
 
 static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
