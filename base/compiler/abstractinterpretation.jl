@@ -86,17 +86,19 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     any_const_result = false
     const_results = Union{InferenceResult,Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
+    fargs = arginfo.fargs
+    all_effects = EFFECTS_TOTAL
     if !matches.nonoverlayed
         # currently we don't have a good way to execute the overlayed method definition,
         # so we should give up pure/concrete eval when any of the matched methods is overlayed
         f = nothing
-        tristate_merge!(sv, Effects(EFFECTS_TOTAL; nonoverlayed=false))
+        all_effects = Effects(all_effects; nonoverlayed=false)
     end
 
+    # try pure-evaluation
     val = pure_eval_call(interp, f, applicable, arginfo, sv)
     val !== nothing && return CallMeta(val, MethodResultPure(info)) # TODO: add some sort of edge(s)
 
-    fargs = arginfo.fargs
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
         method = match.method
@@ -132,7 +134,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         (; effects, const_result) = const_call_result
                     end
                 end
-                tristate_merge!(sv, effects)
+                all_effects = tristate_merge(all_effects, effects)
                 push!(const_results, const_result)
                 any_const_result |= const_result !== nothing
                 this_rt = tmerge(this_rt, rt)
@@ -181,7 +183,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     (; effects, const_result) = const_call_result
                 end
             end
-            tristate_merge!(sv, effects)
+            all_effects = tristate_merge(all_effects, effects)
             push!(const_results, const_result)
             any_const_result |= const_result !== nothing
         end
@@ -212,11 +214,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if seen != napplicable
         # there may be unanalyzed effects within unseen dispatch candidate,
         # but we can still ignore nonoverlayed effect here since we already accounted for it
-        tristate_merge!(sv, EFFECTS_UNKNOWN)
+        all_effects = tristate_merge(all_effects, EFFECTS_UNKNOWN)
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!_all(b->b, matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        tristate_merge!(sv, Effects(EFFECTS_TOTAL; nothrow=TRISTATE_UNKNOWN))
+        all_effects = Effects(all_effects; nothrow=TRISTATE_UNKNOWN)
     end
 
     rettype = from_interprocedural!(rettype, sv, arginfo, conditionals)
@@ -231,13 +233,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    add_call_backedges!(interp, rettype, edges, matches, atype, sv)
+    add_call_backedges!(interp, rettype, all_effects, edges, matches, atype, sv)
     if !isempty(sv.pclimitations) # remove self, if present
         delete!(sv.pclimitations, sv)
         for caller in sv.callers_in_cycle
             delete!(sv.pclimitations, caller)
         end
     end
+    tristate_merge!(sv, all_effects)
     return CallMeta(rettype, info)
 end
 
@@ -452,11 +455,16 @@ function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Ve
     end
 end
 
-function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), edges::Vector{MethodInstance},
-                             matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
-                             sv::InferenceState)
-    # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine (widen) this type
-    rettype === Any && return
+function add_call_backedges!(interp::AbstractInterpreter,
+    @nospecialize(rettype), all_effects::Effects,
+    edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
+    sv::InferenceState)
+    if rettype === Any && all_effects === Effects()
+        # for `NativeInterpreter`, we don't need to add backedges when:
+        # - a new method couldn't refine (widen) this type and
+        # - the effects don't provide any useful information for interprocedural optimization
+        return
+    end
     for edge in edges
         add_backedge!(edge, sv)
     end
