@@ -131,7 +131,7 @@ JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
     return *this->objfilemap;
 }
 
-JITDebugInfoRegistry::JITDebugInfoRegistry() {
+JITDebugInfoRegistry::JITDebugInfoRegistry() JL_NOTSAFEPOINT {
     uv_rwlock_init(&debuginfo_asyncsafe);
     debuginfo_asyncsafe_held.init();
 }

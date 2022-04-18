@@ -34,7 +34,7 @@ public:
             std::unique_lock<std::mutex> lock;
             CResourceT &resource;
 
-            Lock(std::mutex &mutex, CResourceT &resource) : lock(mutex), resource(resource) {}
+            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT : lock(mutex), resource(resource) {}
 
             CResourceT &operator*() JL_NOTSAFEPOINT {
                 return resource;
@@ -44,7 +44,7 @@ public:
                 return resource;
             }
 
-            CResourceT *operator->() {
+            CResourceT *operator->() JL_NOTSAFEPOINT {
                 return &**this;
             }
 
@@ -64,7 +64,7 @@ public:
         typedef Lock<ResourceT> LockT;
         typedef Lock<const ResourceT> ConstLockT;
 
-        Locked(ResourceT resource = ResourceT()) : mutex(), resource(std::move(resource)) {}
+        Locked(ResourceT resource = ResourceT()) JL_NOTSAFEPOINT : mutex(), resource(std::move(resource)) {}
 
         LockT operator*() JL_NOTSAFEPOINT {
             return LockT(mutex, resource);
@@ -150,7 +150,7 @@ private:
 
 public:
 
-    JITDebugInfoRegistry();
+    JITDebugInfoRegistry() JL_NOTSAFEPOINT;
 
     // Any function that acquires this lock must be either a unmanaged thread
     // or in the GC safe region and must NOT allocate anything through the GC
