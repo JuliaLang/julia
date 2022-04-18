@@ -35,171 +35,13 @@ using namespace llvm;
 #include <vector>
 #include <set>
 #include <mutex>
-#include <type_traits>
 #include "julia_assert.h"
 
 #ifdef _OS_DARWIN_
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
-typedef struct {
-    const llvm::object::ObjectFile *obj;
-    DIContext *ctx;
-    int64_t slide;
-} objfileentry_t;
-
-
-// Central registry for resolving function addresses to `jl_method_instance_t`s and
-// originating `ObjectFile`s (for the DWARF debug info).
-//
-// A global singleton instance is notified by the JIT whenever a new object is emitted,
-// and later queried by the various function info APIs. We also use the chance to handle
-// some platform-specific unwind info registration (which is unrelated to the query
-// functionality).
-class JITDebugInfoRegistry
-{
-public:
-    template<typename ResourceT>
-    struct Locked {
-        
-        template<typename CResourceT>
-        struct Lock {
-            std::unique_lock<std::mutex> lock;
-            CResourceT &resource;
-
-            Lock(std::mutex &mutex, CResourceT &resource) : lock(mutex), resource(resource) {}
-
-            CResourceT &operator*() {
-                return resource;
-            }
-
-            const CResourceT &operator*() const {
-                return resource;
-            }
-
-            CResourceT *operator->() {
-                return &**this;
-            }
-
-            const CResourceT *operator->() const {
-                return &**this;
-            }
-
-            operator const CResourceT &() const {
-                return resource;
-            }
-        };
-    private:
-
-        mutable std::mutex mutex;
-        ResourceT resource;
-    public:
-        Locked(ResourceT resource = ResourceT()) : mutex(), resource(std::move(resource)) {}
-
-        Lock<ResourceT> operator*() {
-            return Lock<ResourceT>(mutex, resource);
-        }
-
-        Lock<const ResourceT> operator*() const {
-            return Lock<const ResourceT>(mutex, resource);
-        }
-    };
-
-    template<typename datatype>
-    struct jl_pthread_key_t {
-        static_assert(std::is_trivially_default_constructible<datatype>::value, "Invalid datatype for pthread key!");
-        static_assert(std::is_trivially_destructible<datatype>::value, "Expected datatype to be trivially destructible!");
-        static_assert(sizeof(datatype) == sizeof(void*), "Expected datatype to be like a void*!");
-        pthread_key_t key;
-
-        void init() {
-            if (pthread_key_create(&key, NULL))
-                jl_error("fatal: pthread_key_create failed");
-        }
-
-        operator datatype() {
-            return reinterpret_cast<datatype>(pthread_getspecific(key));
-        }
-
-        jl_pthread_key_t &operator=(datatype val) {
-            pthread_setspecific(key, reinterpret_cast<void*>(val));
-            return *this;
-        }
-
-        void destroy() {
-            pthread_key_delete(key);
-        }
-    };
-
-    struct sysimg_info_t {
-        uint64_t jl_sysimage_base;
-        jl_sysimg_fptrs_t sysimg_fptrs;
-        jl_method_instance_t **sysimg_fvars_linfo;
-        size_t sysimg_fvars_n;
-    };
-
-    struct libc_frames_t {
-#if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
-        std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
-        std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
-
-        void libc_register_frame(const char *Entry);
-
-        void libc_deregister_frame(const char *Entry);
-#endif
-    };
-private:
-
-    struct ObjectInfo {
-        const object::ObjectFile *object;
-        size_t SectionSize;
-        ptrdiff_t slide;
-        object::SectionRef Section;
-        DIContext *context;
-    };
-
-    template<typename KeyT, typename ValT>
-    using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
-
-    rev_map<size_t, ObjectInfo> objectmap;
-    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap;
-
-    // Maintain a mapping of unrealized function names -> linfo objects
-    // so that when we see it get emitted, we can add a link back to the linfo
-    // that it came from (providing name, type signature, file info, etc.)
-    Locked<StringMap<jl_code_instance_t*>> codeinst_in_flight;
-
-    Locked<sysimg_info_t> sysimg_info;
-
-    Locked<rev_map<uint64_t, objfileentry_t>> objfilemap;
-
-    static std::string mangle(StringRef Name, const DataLayout &DL);
-
-public:
-
-    // Any function that acquires this lock must be either a unmanaged thread
-    // or in the GC safe region and must NOT allocate anything through the GC
-    // while holding this lock.
-    // Certain functions in this file might be called from an unmanaged thread
-    // and cannot have any interaction with the julia runtime
-    // They also may be re-entrant, and operating while threads are paused, so we
-    // separately manage the re-entrant count behavior for safety across platforms
-    // Note that we cannot safely upgrade read->write
-    uv_rwlock_t debuginfo_asyncsafe;
-    jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held;
-    libc_frames_t libc_frames;
-
-    void add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
-    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
-    void registerJITObject(const object::ObjectFile &Object,
-                        std::function<uint64_t(const StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress);
-    auto& getObjectMap() JL_NOTSAFEPOINT;
-    void set_sysimg_info(sysimg_info_t info);
-    auto get_sysimg_info() const;
-    auto get_objfile_map();
-    void init();
-};
+#include "debug-registry.h"
 
 struct debug_link_info {
     StringRef filename;
@@ -461,7 +303,8 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 }
 
 //Protected by debuginfo_asyncsafe
-auto& JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
+JITDebugInfoRegistry::objectmap_t &
+JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
 {
     return objectmap;
 }
@@ -470,11 +313,13 @@ void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) {
     (**this->sysimg_info) = info;
 }
 
-auto JITDebugInfoRegistry::get_sysimg_info() const {
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
+JITDebugInfoRegistry::get_sysimg_info() const {
     return *this->sysimg_info;
 }
 
-auto JITDebugInfoRegistry::get_objfile_map() {
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+JITDebugInfoRegistry::get_objfile_map() {
     return *this->objfilemap;
 }
 
