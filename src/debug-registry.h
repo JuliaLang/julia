@@ -28,7 +28,7 @@ class JITDebugInfoRegistry
 public:
     template<typename ResourceT>
     struct Locked {
-        
+
         template<typename CResourceT>
         struct Lock {
             std::unique_lock<std::mutex> lock;
