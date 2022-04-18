@@ -55,6 +55,8 @@ public:
             operator const CResourceT &() const JL_NOTSAFEPOINT {
                 return resource;
             }
+
+            ~Lock() JL_NOTSAFEPOINT {}
         };
     private:
 
@@ -73,6 +75,8 @@ public:
         ConstLockT operator*() const JL_NOTSAFEPOINT {
             return ConstLockT(mutex, resource);
         }
+
+        ~Locked() JL_NOTSAFEPOINT {}
     };
 
     template<typename datatype>
@@ -151,6 +155,7 @@ private:
 public:
 
     JITDebugInfoRegistry() JL_NOTSAFEPOINT;
+    ~JITDebugInfoRegistry() JL_NOTSAFEPOINT {}
 
     // Any function that acquires this lock must be either a unmanaged thread
     // or in the GC safe region and must NOT allocate anything through the GC
