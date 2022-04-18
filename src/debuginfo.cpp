@@ -106,6 +106,137 @@ jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer) JL_NOTSA
     return linfo;
 }
 
+//Protected by debuginfo_asyncsafe
+JITDebugInfoRegistry::objectmap_t &
+JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
+{
+    return objectmap;
+}
+
+void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) {
+    (**this->sysimg_info) = info;
+}
+
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
+JITDebugInfoRegistry::get_sysimg_info() const {
+    return *this->sysimg_info;
+}
+
+JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+JITDebugInfoRegistry::get_objfile_map() {
+    return *this->objfilemap;
+}
+
+JITDebugInfoRegistry::JITDebugInfoRegistry() {
+    uv_rwlock_init(&debuginfo_asyncsafe);
+    debuginfo_asyncsafe_held.init();
+}
+
+struct unw_table_entry
+{
+    int32_t start_ip_offset;
+    int32_t fde_offset;
+};
+
+extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
+{
+    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
+    if (held++ == 0)
+        uv_rwlock_rdlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
+}
+
+extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
+{
+    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
+    assert(held);
+    if (--held == 0)
+        uv_rwlock_rdunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
+}
+
+// some actions aren't signal (especially profiler) safe so we acquire a lock
+// around them to establish a mutual exclusion with unwinding from a signal
+template <typename T>
+static void jl_profile_atomic(T f)
+{
+    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
+    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+#ifndef _OS_WINDOWS_
+    sigset_t sset;
+    sigset_t oset;
+    sigfillset(&sset);
+    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+#endif
+    f();
+#ifndef _OS_WINDOWS_
+    pthread_sigmask(SIG_SETMASK, &oset, NULL);
+#endif
+    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+}
+
+
+// --- storing and accessing source location metadata ---
+void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
+{
+    getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
+}
+
+
+#if defined(_OS_WINDOWS_)
+static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
+                                     uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
+{
+    // GC safe
+    DWORD mod_size = 0;
+#if defined(_CPU_X86_64_)
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
+    tbl->BeginAddress = (DWORD)(Code - Section);
+    tbl->EndAddress = (DWORD)(Code - Section + Size);
+    tbl->UnwindData = (DWORD)(UnwindData - Section);
+    assert(Code >= Section && Code + Size <= Section + Allocated);
+    assert(UnwindData >= Section && UnwindData <= Section + Allocated);
+#else // defined(_CPU_X86_64_)
+    Section += (uintptr_t)Code;
+    mod_size = Size;
+#endif
+    if (0) {
+        uv_mutex_lock(&jl_in_stackwalk);
+        if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+            static int warned = 0;
+            if (!warned) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert module info for backtrace: %lu\n", GetLastError());
+                warned = 1;
+            }
+        }
+        else {
+            size_t len = fnname.size()+1;
+            if (len > MAX_SYM_NAME)
+                len = MAX_SYM_NAME;
+            char *name = (char*)alloca(len);
+            memcpy(name, fnname.data(), len-1);
+            name[len-1] = 0;
+            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
+                        (DWORD64)Code, (DWORD)Size, 0)) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
+            }
+        }
+        uv_mutex_unlock(&jl_in_stackwalk);
+    }
+#if defined(_CPU_X86_64_)
+    jl_profile_atomic([&]() {
+        if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
+            static int warned = 0;
+            if (!warned) {
+                jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
+                warned = 1;
+            }
+        }
+    });
+#endif
+}
+#endif
+
 void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                         std::function<uint64_t(const StringRef &)> getLoadAddress,
                         std::function<void*(void*)> lookupWriteAddress)
@@ -272,137 +403,6 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         });
     }
 }
-
-//Protected by debuginfo_asyncsafe
-JITDebugInfoRegistry::objectmap_t &
-JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
-{
-    return objectmap;
-}
-
-void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) {
-    (**this->sysimg_info) = info;
-}
-
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
-JITDebugInfoRegistry::get_sysimg_info() const {
-    return *this->sysimg_info;
-}
-
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
-JITDebugInfoRegistry::get_objfile_map() {
-    return *this->objfilemap;
-}
-
-JITDebugInfoRegistry::JITDebugInfoRegistry() {
-    uv_rwlock_init(&debuginfo_asyncsafe);
-    debuginfo_asyncsafe_held.init();
-}
-
-struct unw_table_entry
-{
-    int32_t start_ip_offset;
-    int32_t fde_offset;
-};
-
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
-{
-    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
-    if (held++ == 0)
-        uv_rwlock_rdlock(&getJITDebugRegistry().debuginfo_asyncsafe);
-    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
-}
-
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
-{
-    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
-    assert(held);
-    if (--held == 0)
-        uv_rwlock_rdunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
-    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
-}
-
-// some actions aren't signal (especially profiler) safe so we acquire a lock
-// around them to establish a mutual exclusion with unwinding from a signal
-template <typename T>
-static void jl_profile_atomic(T f)
-{
-    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
-#ifndef _OS_WINDOWS_
-    sigset_t sset;
-    sigset_t oset;
-    sigfillset(&sset);
-    pthread_sigmask(SIG_BLOCK, &sset, &oset);
-#endif
-    f();
-#ifndef _OS_WINDOWS_
-    pthread_sigmask(SIG_SETMASK, &oset, NULL);
-#endif
-    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
-}
-
-
-// --- storing and accessing source location metadata ---
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
-{
-    getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
-}
-
-
-#if defined(_OS_WINDOWS_)
-static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
-                                     uint8_t *Section, size_t Allocated, uint8_t *UnwindData)
-{
-    // GC safe
-    DWORD mod_size = 0;
-#if defined(_CPU_X86_64_)
-    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc_s(sizeof(RUNTIME_FUNCTION));
-    tbl->BeginAddress = (DWORD)(Code - Section);
-    tbl->EndAddress = (DWORD)(Code - Section + Size);
-    tbl->UnwindData = (DWORD)(UnwindData - Section);
-    assert(Code >= Section && Code + Size <= Section + Allocated);
-    assert(UnwindData >= Section && UnwindData <= Section + Allocated);
-#else // defined(_CPU_X86_64_)
-    Section += (uintptr_t)Code;
-    mod_size = Size;
-#endif
-    if (0) {
-        uv_mutex_lock(&jl_in_stackwalk);
-        if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
-            static int warned = 0;
-            if (!warned) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert module info for backtrace: %lu\n", GetLastError());
-                warned = 1;
-            }
-        }
-        else {
-            size_t len = fnname.size()+1;
-            if (len > MAX_SYM_NAME)
-                len = MAX_SYM_NAME;
-            char *name = (char*)alloca(len);
-            memcpy(name, fnname.data(), len-1);
-            name[len-1] = 0;
-            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
-                        (DWORD64)Code, (DWORD)Size, 0)) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %lu\n", name, GetLastError());
-            }
-        }
-        uv_mutex_unlock(&jl_in_stackwalk);
-    }
-#if defined(_CPU_X86_64_)
-    jl_profile_atomic([&]() {
-        if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
-            static int warned = 0;
-            if (!warned) {
-                jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %lu\n", GetLastError());
-                warned = 1;
-            }
-        }
-    });
-#endif
-}
-#endif
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,

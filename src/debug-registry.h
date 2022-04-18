@@ -175,4 +175,4 @@ public:
     Locked<objfilemap_t>::LockT get_objfile_map();
 };
 
-JITDebugInfoRegistry &getJITDebugRegistry();
+JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT;
