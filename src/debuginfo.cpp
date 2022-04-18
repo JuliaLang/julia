@@ -41,7 +41,11 @@ using namespace llvm;
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 
-#include "debug-registry.h"
+#include "jitlayers.h"
+
+static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
+    return jl_ExecutionEngine->getDebugInfoRegistry();
+}
 
 struct debug_link_info {
     StringRef filename;

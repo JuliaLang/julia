@@ -1507,7 +1507,3 @@ size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
 }
-
-JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
-    return jl_ExecutionEngine->getDebugInfoRegistry();
-}

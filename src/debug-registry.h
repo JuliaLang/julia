@@ -174,5 +174,3 @@ public:
     Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const;
     Locked<objfilemap_t>::LockT get_objfile_map();
 };
-
-JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT;
