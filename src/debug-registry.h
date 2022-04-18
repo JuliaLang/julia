@@ -36,11 +36,11 @@ public:
 
             Lock(std::mutex &mutex, CResourceT &resource) : lock(mutex), resource(resource) {}
 
-            CResourceT &operator*() {
+            CResourceT &operator*() JL_NOTSAFEPOINT {
                 return resource;
             }
 
-            const CResourceT &operator*() const {
+            const CResourceT &operator*() const JL_NOTSAFEPOINT {
                 return resource;
             }
 
@@ -48,11 +48,11 @@ public:
                 return &**this;
             }
 
-            const CResourceT *operator->() const {
+            const CResourceT *operator->() const JL_NOTSAFEPOINT {
                 return &**this;
             }
 
-            operator const CResourceT &() const {
+            operator const CResourceT &() const JL_NOTSAFEPOINT {
                 return resource;
             }
         };
@@ -66,11 +66,11 @@ public:
 
         Locked(ResourceT resource = ResourceT()) : mutex(), resource(std::move(resource)) {}
 
-        LockT operator*() {
+        LockT operator*() JL_NOTSAFEPOINT {
             return LockT(mutex, resource);
         }
 
-        ConstLockT operator*() const {
+        ConstLockT operator*() const JL_NOTSAFEPOINT {
             return ConstLockT(mutex, resource);
         }
     };
@@ -82,21 +82,21 @@ public:
         static_assert(sizeof(datatype) == sizeof(void*), "Expected datatype to be like a void*!");
         pthread_key_t key;
 
-        void init() {
+        void init() JL_NOTSAFEPOINT {
             if (pthread_key_create(&key, NULL))
                 jl_error("fatal: pthread_key_create failed");
         }
 
-        operator datatype() {
+        operator datatype() JL_NOTSAFEPOINT {
             return reinterpret_cast<datatype>(pthread_getspecific(key));
         }
 
-        jl_pthread_key_t &operator=(datatype val) {
+        jl_pthread_key_t &operator=(datatype val) JL_NOTSAFEPOINT {
             pthread_setspecific(key, reinterpret_cast<void*>(val));
             return *this;
         }
 
-        void destroy() {
+        void destroy() JL_NOTSAFEPOINT {
             pthread_key_delete(key);
         }
     };
@@ -113,9 +113,9 @@ public:
         std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
         std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
 
-        void libc_register_frame(const char *Entry);
+        void libc_register_frame(const char *Entry) JL_NOTSAFEPOINT;
 
-        void libc_deregister_frame(const char *Entry);
+        void libc_deregister_frame(const char *Entry) JL_NOTSAFEPOINT;
 #endif
     };
 private:
@@ -146,7 +146,7 @@ private:
 
     Locked<objfilemap_t> objfilemap{};
 
-    static std::string mangle(llvm::StringRef Name, const llvm::DataLayout &DL);
+    static std::string mangle(llvm::StringRef Name, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
 
 public:
 
@@ -164,13 +164,13 @@ public:
     jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held{};
     libc_frames_t libc_frames{};
 
-    void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL);
+    void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
                         std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress);
+                        std::function<void*(void*)> lookupWriteAddress) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
-    void set_sysimg_info(sysimg_info_t info);
-    Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const;
-    Locked<objfilemap_t>::LockT get_objfile_map();
+    void set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT;
+    Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const JL_NOTSAFEPOINT;
+    Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
 };

@@ -85,7 +85,7 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 }
 #endif
 
-std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
+std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL) JL_NOTSAFEPOINT
 {
     std::string MangledName;
     {
@@ -95,7 +95,7 @@ std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
     return MangledName;
 }
 
-void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
+void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) JL_NOTSAFEPOINT {
     (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
 }
 
@@ -117,17 +117,17 @@ JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
     return objectmap;
 }
 
-void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) {
+void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT {
     (**this->sysimg_info) = info;
 }
 
 JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
-JITDebugInfoRegistry::get_sysimg_info() const {
+JITDebugInfoRegistry::get_sysimg_info() const JL_NOTSAFEPOINT {
     return *this->sysimg_info;
 }
 
 JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
-JITDebugInfoRegistry::get_objfile_map() {
+JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
     return *this->objfilemap;
 }
 
