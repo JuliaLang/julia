@@ -70,21 +70,17 @@ function test_pinv(a,tol1,tol2)
     @test size(apinv) == (n,m)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol1
     @test norm(apinv*a*apinv-apinv)/norm(apinv) ≈ 0 atol=tol1
-    for _ in 1:100
-        b = a*randn(n)
-        x = apinv*b
-        @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
-    end
+    b = a*randn(n)
+    x = apinv*b
+    @test norm(a*x-b)/norm(b) ≈ 0 atol=tol1
 
     apinv = @inferred pinv(a,sqrt(eps(real(one(eltype(a))))))
     @test size(apinv) == (n,m)
     @test norm(a*apinv*a-a)/norm(a) ≈ 0 atol=tol2
     @test norm(apinv*a*apinv-apinv)/norm(apinv) ≈ 0 atol=tol2
-    for _ in 1:100
-        b = a*randn(n)
-        x = apinv*b
-        @test norm(a*x-b)/norm(b) ≈ 0 atol=tol2
-    end
+    b = a*randn(n)
+    x = apinv*b
+    @test norm(a*x-b)/norm(b) ≈ 0 atol=tol2
 end
 
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64)
