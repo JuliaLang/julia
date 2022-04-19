@@ -1338,6 +1338,8 @@ test_repr("(:).a")
 @test repr(NTuple{7,Int64}) == "NTuple{7, Int64}"
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
+@test repr(Tuple{String, Int64, Int64, Int64}) == "Tuple{String, Int64, Int64, Int64}"
+@test repr(Tuple{String, Int64, Int64, Int64, Int64}) == "Tuple{String, Vararg{Int64, 4}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -1452,6 +1454,9 @@ struct var"%X%" end  # Invalid name without '#'
         @test v == eval(Meta.parse(static_shown(v)))
     end
 end
+
+# Test that static show prints something reasonable for `<:Function` types
+@test static_shown(:) == "Base.Colon()"
 
 # Test @show
 let fname = tempname()

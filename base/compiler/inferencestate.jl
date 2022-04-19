@@ -198,7 +198,7 @@ mutable struct InferenceState
             #=parent=#nothing,
             #=cached=#cache === :global,
             #=inferred=#false, #=dont_work_on_me=#false, #=restrict_abstract_call_sites=# isa(linfo.def, Module),
-            #=ipo_effects=#Effects(consistent, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false, inbounds_taints_consistency),
+            #=ipo_effects=#Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency),
             interp)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)

@@ -283,8 +283,8 @@ end
 @deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
 
 _lucopy(A::AbstractMatrix, T) = copy_similar(A, T)
-_lucopy(A::HermOrSym, T)      = copy_oftype(A, T)
-_lucopy(A::Tridiagonal, T)    = copy_oftype(A, T)
+_lucopy(A::HermOrSym, T)      = copymutable_oftype(A, T)
+_lucopy(A::Tridiagonal, T)    = copymutable_oftype(A, T)
 
 lu(S::LU) = S
 function lu(x::Number; check::Bool=true)
@@ -438,18 +438,18 @@ end
 
 function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(A), eltype(F))
-    return adjoint(ldiv!(F.parent, copy_oftype(adjoint(A), T)))
+    return adjoint(ldiv!(F.parent, copymutable_oftype(adjoint(A), T)))
 end
 # To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
 (/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 (/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copy_oftype(trA.parent, T))))
+    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
 end
 function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copy_oftype(trA.parent, T))))
+    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
 end
 
 function det(F::LU{T}) where T

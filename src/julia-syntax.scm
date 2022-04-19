@@ -1506,6 +1506,8 @@
                        after
                        (cons R elts)))
                 ((vararg? L)
+                 (if (any vararg? (cdr lhss))
+                     (error "multiple \"...\" on lhs of assignment"))
                  (if (null? (cdr lhss))
                      (let ((temp (if (eventually-call? (cadr L)) (gensy) (make-ssavalue))))
                        `(block ,@(reverse stmts)
@@ -1513,8 +1515,50 @@
                                ,@(reverse after)
                                (= ,(cadr L) ,temp)
                                (unnecessary (tuple ,@(reverse elts) (... ,temp)))))
-                     (error (string "invalid \"...\" on non-final assignment location \""
-                                    (cadr L) "\""))))
+                     (let ((lhss- (reverse lhss))
+                           (rhss- (reverse rhss))
+                           (lhs-tail '())
+                           (rhs-tail '()))
+                       (define (extract-tail)
+                         (if (not (or (null? lhss-) (null? rhss-)
+                                      (vararg? (car lhss-)) (vararg? (car rhss-))))
+                             (begin
+                               (set! lhs-tail (cons (car lhss-) lhs-tail))
+                               (set! rhs-tail (cons (car rhss-) rhs-tail))
+                               (set! lhss- (cdr lhss-))
+                               (set! rhss- (cdr rhss-))
+                               (extract-tail))))
+                       (extract-tail)
+                       (let* ((temp (if (any (lambda (x)
+                                               (or (eventually-call? x)
+                                                   (and (vararg? x) (eventually-call? (cadr x)))))
+                                             lhss-)
+                                        (gensy)
+                                        (make-ssavalue)))
+                              (assigns (make-assignment temp `(tuple ,@(reverse rhss-))))
+                              (assigns (if (symbol? temp)
+                                          `((local-def ,temp) ,assigns)
+                                          (list assigns)))
+                              (n (length lhss-))
+                              (st (gensy))
+                              (end (list after))
+                              (assigns (if (and (length= lhss- 1) (vararg? (car lhss-)))
+                                           (begin
+                                             (set-car! end
+                                                       (cons `(= ,(cadar lhss-) ,temp) (car end)))
+                                             assigns)
+                                           (append (if (> n 0)
+                                                       `(,@assigns (local ,st))
+                                                       assigns)
+                                                   (destructure- 1 (reverse lhss-) temp
+                                                                 n st end)))))
+                         (loop lhs-tail
+                               (append (map (lambda (x) (if (vararg? x) (cadr x) x)) lhss-) assigned)
+                               rhs-tail
+                               (append (reverse assigns) stmts)
+                               (car end)
+                               (cons `(... ,temp) elts))))))
+
                 ((vararg? R)
                  (let ((temp (make-ssavalue)))
                    `(block ,@(reverse stmts)
@@ -2187,6 +2231,59 @@
            lhss)
        (unnecessary ,xx))))
 
+;; implement tuple destructuring, possibly with slurping
+;;
+;; `i`:    index of the current lhs arg
+;; `lhss`: remaining lhs args
+;; `xx`:   the rhs, already either an ssavalue or something simple
+;; `st`:   empty list if i=1, otherwise contains the iteration state
+;; `n`:    total nr of lhs args
+;; `end`:  car collects statements to be executed afterwards.
+;;         In general, actual assignments should only happen after
+;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+(define (destructure- i lhss xx n st end)
+  (if (null? lhss)
+      '()
+      (let* ((lhs  (car lhss))
+             (lhs- (cond ((or (symbol? lhs) (ssavalue? lhs))
+                          lhs)
+                         ((vararg? lhs)
+                          (let ((lhs- (cadr lhs)))
+                            (if (or (symbol? lhs-) (ssavalue? lhs-))
+                                lhs
+                                `(|...| ,(if (eventually-call? lhs-)
+                                             (gensy)
+                                             (make-ssavalue))))))
+                         ;; can't use ssavalues if it's a function definition
+                         ((eventually-call? lhs) (gensy))
+                         (else (make-ssavalue)))))
+        (if (and (vararg? lhs) (any vararg? (cdr lhss)))
+            (error "multiple \"...\" on lhs of assignment"))
+        (if (not (eq? lhs lhs-))
+            (if (vararg? lhs)
+                (set-car! end (cons (expand-forms `(= ,(cadr lhs) ,(cadr lhs-))) (car end)))
+                (set-car! end (cons (expand-forms `(= ,lhs ,lhs-)) (car end)))))
+        (if (vararg? lhs-)
+            (if (= i n)
+                (if (underscore-symbol? (cadr lhs-))
+                    '()
+                    (list (expand-forms
+                            `(= ,(cadr lhs-) (call (top rest) ,xx ,@(if (eq? i 1) '() `(,st)))))))
+                (let ((tail (if (eventually-call? lhs) (gensy) (make-ssavalue))))
+                  (cons (expand-forms
+                          (lower-tuple-assignment
+                            (list (cadr lhs-) tail)
+                            `(call (top split_rest) ,xx ,(- n i) ,@(if (eq? i 1) '() `(,st)))))
+                        (destructure- 1 (cdr lhss) tail (- n i) st end))))
+            (cons (expand-forms
+                    (lower-tuple-assignment
+                      (if (= i n)
+                          (list lhs-)
+                          (list lhs- st))
+                      `(call (top indexed_iterate)
+                             ,xx ,i ,@(if (eq? i 1) '() `(,st)))))
+                  (destructure- (+ i 1) (cdr lhss) xx n st end))))))
+
 (define (expand-tuple-destruct lhss x)
   (define (sides-match? l r)
     ;; l and r either have equal lengths, or r has a trailing ...
@@ -2203,64 +2300,26 @@
        (tuple-to-assignments lhss x))
       ;; (a, b, ...) = other
       (begin
-        ;; like memq, but if last element of lhss is (... sym),
-        ;; check against sym instead
+        ;; like memq, but if lhs is (... sym), check against sym instead
         (define (in-lhs? x lhss)
           (if (null? lhss)
               #f
               (let ((l (car lhss)))
                 (cond ((and (pair? l) (eq? (car l) '|...|))
-                       (if (null? (cdr lhss))
-                           (eq? (cadr l) x)
-                           (error (string "invalid \"...\" on non-final assignment location \""
-                                          (cadr l) "\""))))
+                       (eq? (cadr l) x))
                       ((eq? l x) #t)
                       (else (in-lhs? x (cdr lhss)))))))
         ;; in-lhs? also checks for invalid syntax, so always call it first
         (let* ((xx  (maybe-ssavalue lhss x in-lhs?))
                (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                (n   (length lhss))
-               ;; skip last assignment if it is an all-underscore vararg
-               (n   (if (> n 0)
-                        (let ((l (last lhss)))
-                          (if (and (vararg? l) (underscore-symbol? (cadr l)))
-                              (- n 1)
-                              n))
-                        n))
                (st  (gensy))
-               (end '()))
+               (end (list (list))))
           `(block
             ,@(if (> n 0) `((local ,st)) '())
             ,@ini
-            ,@(map (lambda (i lhs)
-                     (let ((lhs- (cond ((or (symbol? lhs) (ssavalue? lhs))
-                                        lhs)
-                                       ((vararg? lhs)
-                                        (let ((lhs- (cadr lhs)))
-                                          (if (or (symbol? lhs-) (ssavalue? lhs-))
-                                              lhs
-                                              `(|...| ,(if (eventually-call? lhs-)
-                                                           (gensy)
-                                                           (make-ssavalue))))))
-                                       ;; can't use ssavalues if it's a function definition
-                                       ((eventually-call? lhs) (gensy))
-                                       (else (make-ssavalue)))))
-                       (if (not (eq? lhs lhs-))
-                           (if (vararg? lhs)
-                               (set! end (cons (expand-forms `(= ,(cadr lhs) ,(cadr lhs-))) end))
-                               (set! end (cons (expand-forms `(= ,lhs ,lhs-)) end))))
-                       (expand-forms
-                         (if (vararg? lhs-)
-                             `(= ,(cadr lhs-) (call (top rest) ,xx ,@(if (eq? i 0) '() `(,st))))
-                             (lower-tuple-assignment
-                               (if (= i (- n 1))
-                                   (list lhs-)
-                                   (list lhs- st))
-                               `(call (top indexed_iterate)
-                                      ,xx ,(+ i 1) ,@(if (eq? i 0) '() `(,st))))))))
-                   (iota n)
-                   lhss)
-            ,@(reverse end)
+            ,@(destructure- 1 lhss xx n st end)
+            ,@(reverse (car end))
             (unnecessary ,xx))))))
 
 ;; move an assignment into the last statement of a block to keep more statements at top level
@@ -3332,9 +3391,9 @@ f(x) = yt(x)
                             (call (core svec) ,@(map quotify fields))
                             (call (core svec))
                             (false) ,(length fields)))
+                (call (core _setsuper!) ,s ,super)
                 (= (outerref ,name) ,s)
-                (call (core _setsuper!) ,name ,super)
-                (call (core _typebody!) ,name (call (core svec) ,@types))
+                (call (core _typebody!) ,s (call (core svec) ,@types))
                 (return (null))))))))
 
 (define (type-for-closure name fields super)
@@ -3346,9 +3405,9 @@ f(x) = yt(x)
                                   (call (core svec) ,@(map quotify fields))
                                   (call (core svec))
                                   (false) ,(length fields)))
+                      (call (core _setsuper!) ,s ,super)
                       (= (outerref ,name) ,s)
-                      (call (core _setsuper!) ,name ,super)
-                      (call (core _typebody!) ,name
+                      (call (core _typebody!) ,s
                             (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
                       (return (null))))))))
 
@@ -4119,7 +4178,7 @@ f(x) = yt(x)
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals))))))))
 
-(define (closure-convert e) (cl-convert e #f #f #f #f #f #f #f))
+(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
 ;; pass 5: convert to linear IR
 
@@ -4219,17 +4278,21 @@ f(x) = yt(x)
                                      (loop (cdr s))))))
             `(pop_exception ,restore-token))))
     (define (emit-return x)
-      (define (actually-return x)
-        (let* ((x   (if rett
-                        (compile (convert-for-type-decl x rett) '() #t #f)
-                        x))
-               (tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
+      (define (emit- x)
+        (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
                         #f
                         (make-ssavalue))))
-          (if tmp (emit `(= ,tmp ,x)))
+          (if tmp
+              (begin (emit `(= ,tmp ,x)) tmp)
+              x)))
+      (define (actually-return x)
+        (let* ((x (if rett
+                      (compile (convert-for-type-decl (emit- x) rett) '() #t #f)
+                      x))
+               (x (emit- x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
             (if pexc (emit pexc)))
-          (emit `(return ,(or tmp x)))))
+          (emit `(return ,x))))
       (if x
           (if (> handler-level 0)
               (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)
@@ -4436,32 +4499,36 @@ f(x) = yt(x)
                                      (not (eq? e (lam:body lam))))))
                (if file-diff (set! filename fname))
                (if need-meta (emit `(meta push_loc ,fname)))
-               (begin0
-                (let loop ((xs (cdr e)))
+               (let ((v (let loop ((xs (cdr e)))
                   (if (null? (cdr xs))
                       (compile (car xs) break-labels value tail)
                       (begin (compile (car xs) break-labels #f #f)
-                             (loop (cdr xs)))))
-                (if need-meta
-                    (if (or (not tail)
-                            (and (pair? (car code))
-                                 (or (eq? (cdar code) 'meta)
-                                     (eq? (cdar code) 'line))))
-                        (emit '(meta pop_loc))
-                        ;; If we need to return the last non-meta expression
-                        ;; splice the pop before the result
-                        (let ((retv (car code))
-                              (body (cdr code)))
-                          (set! code body)
-                          (if (complex-return? retv)
-                              (let ((tmp (make-ssavalue)))
-                                (emit `(= ,tmp ,(cadr retv)))
-                                (emit '(meta pop_loc))
-                                (emit `(return ,tmp)))
-                              (begin
-                                (emit '(meta pop_loc))
-                                (emit retv))))))
-                (if file-diff (set! filename last-fname)))))
+                             (loop (cdr xs)))))))
+                  (if need-meta
+                    (cond (tail
+                           ;; If we need to return the last non-meta expression
+                           ;; attempt to splice the pop_loc before the return
+                           ;; so that the return location always gets
+                           ;; attributed to the right level of macro
+                           (if (and (pair? code) (return? (car code)))
+                               (let ((retv (cadr (car code))))
+                                 (set! code (cdr code))
+                                 (if (not (simple-atom? retv))
+                                   (let ((tmp (make-ssavalue)))
+                                     (emit `(= ,tmp ,retv))
+                                     (set! retv tmp)))
+                                 (emit '(meta pop_loc))
+                                 (emit `(return ,retv)))
+                               (emit '(meta pop_loc))))
+                          ((and value (not (simple-atom? v)))
+                           (let ((tmp (make-ssavalue)))
+                             (emit `(= ,tmp ,v))
+                             (set! v tmp)
+                             (emit `(meta pop_loc))))
+                          (else
+                           (emit `(meta pop_loc)))))
+                  (if file-diff (set! filename last-fname))
+                  v)))
             ((return)
              (compile (cadr e) break-labels #t #t)
              #f)

@@ -1017,10 +1017,11 @@ end
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
-       for v in names(mod)
-           @test isdefined(mod, v)
-       end
-   end
+        mod === Main && continue # Main exports everything
+        for v in names(mod)
+            @test isdefined(mod, v)
+        end
+    end
 end
 
 @testset "ordering UUIDs" begin
@@ -1069,7 +1070,7 @@ end
                 GC.enable_logging(false)
             end
         end
-        @test occursin("GC: pause", read(open(tmppath), String))
+        @test occursin("GC: pause", read(tmppath, String))
     end
 end
 
