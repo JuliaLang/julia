@@ -137,15 +137,22 @@ systemsleep
 
 struct TimeVal
    sec::Int64
+   usec::Int64
+end
+
+struct TimeSpec
+   sec::Int64
    nsec::Int64
 end
 
-function TimeVal()
-    tv = Ref{TimeVal}()
-    status = ccall(:jl_gettimeofday, Cint, (Ref{TimeVal},), tv)
+function TimeSpec()
+    ts = Ref{TimeSpec}()
+    status = ccall(:jl_gettimeofday, Cint, (Ref{TimeSpec},), ts)
     status != 0 && error("unable to determine current time: ", status)
-    return tv[]
+    return ts[]
 end
+
+Base.convert(::Type{TimeVal}, ts::TimeSpec) = TimeVal(ts.sec, div(ts.nsec, 1000))
 
 """
     TmStruct([seconds])

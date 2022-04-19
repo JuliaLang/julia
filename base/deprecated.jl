@@ -298,5 +298,10 @@ const var"@_noinline_meta" = var"@noinline"
 # BEGIN 1.9 deprecations
 
 @deprecate splat(x) Splat(x) false
+# When removing this, also remove the struct & its constructor in Libc
+function Libc.TimeVal()
+    Base.depwarn("`TimeVal()` is deprecated, use `TimeSpec()` and convert to microseconds manually or move to the higher precision directly instead.", :TimeVal)
+    convert(Libc.TimeVal, Libc.TimeSpec())
+end
 
 # END 1.9 deprecations

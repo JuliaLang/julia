@@ -64,9 +64,9 @@ Return a `DateTime` corresponding to the user's system time including the system
 locale.
 """
 function now()
-    tv = Libc.TimeVal()
-    tm = Libc.TmStruct(tv.sec)
-    return DateTime(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec, div(tv.nsec, 1000000))
+    ts = Libc.TimeSpec()
+    tm = Libc.TmStruct(ts.sec)
+    return DateTime(tm.year + 1900, tm.month + 1, tm.mday, tm.hour, tm.min, tm.sec, div(ts.nsec, 1_000_000))
 end
 
 """
