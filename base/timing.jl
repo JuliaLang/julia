@@ -155,8 +155,7 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
         if recompile_time > 0
-            amount = recompile_time == compile_time ? "all" : Ryu.writefixed(Float64(100*recompile_time/compile_time), 0) * "%"
-            print(io, ": $amount of which was recompilation")
+            print(io, ": ", Ryu.writefixed(Float64(100*recompile_time/compile_time), 0), "% of which was recompilation")
         end
         parens && print(io, ")")
     end
