@@ -24,7 +24,7 @@ version = "0.8.6"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "Base64", "Dates", "DocStringExtensions", "IOCapture", "InteractiveUtils", "JSON", "LibGit2", "Logging", "Markdown", "REPL", "Test", "Unicode"]
-git-tree-sha1 = "7d9a46421aef53cbd6b8ecc40c3dcbacbceaf40e"
+git-tree-sha1 = "6edbf28671b4df4f692e54ae72f1e35851cfbf38"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "0.27.16"
 
