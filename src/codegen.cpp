@@ -7959,8 +7959,6 @@ static jl_llvm_functions_t
 
 // --- entry point ---
 
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
-
 JL_GCC_IGNORE_START("-Wclobbered")
 jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &m,
@@ -8040,9 +8038,9 @@ jl_llvm_functions_t jl_emit_codeinst(
             // they may not be rooted in the gc for the life of the program,
             // and the runtime doesn't notify us when the code becomes unreachable :(
             if (!specf.empty())
-                jl_add_code_in_flight(specf, codeinst, DL);
+                jl_ExecutionEngine->getDebugInfoRegistry().add_code_in_flight(specf, codeinst, DL);
             if (!f.empty() && f != "jl_fptr_args" && f != "jl_fptr_sparam")
-                jl_add_code_in_flight(f, codeinst, DL);
+                jl_ExecutionEngine->getDebugInfoRegistry().add_code_in_flight(f, codeinst, DL);
         }
 
         if (// don't alter `inferred` when the code is not directly being used

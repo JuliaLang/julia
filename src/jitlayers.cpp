@@ -521,10 +521,6 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
     this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
 }
 
-void jl_register_jit_object(const object::ObjectFile &debugObj,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress);
-
 #ifdef JL_USE_JITLINK
 
 namespace {
@@ -582,7 +578,7 @@ public:
             return result->second;
         };
 
-        jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+        jl_ExecutionEngine->getDebugInfoRegistry().registerJITObject(*NewInfo->Object, getLoadAddress, nullptr);
 
         cantFail(MR.withResourceKeyDo([&](ResourceKey K) {
             RegisteredObjs[K].push_back(std::move(PendingObjs[&MR]));
@@ -772,7 +768,7 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
         return L.getSectionLoadAddress(search->second);
     };
 
-    jl_register_jit_object(*DebugObj, getLoadAddress,
+    jl_ExecutionEngine->getDebugInfoRegistry().registerJITObject(*DebugObj, getLoadAddress,
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         [MemMgr](void *p) { return lookupWriteAddressFor(MemMgr.get(), p); }
 #else
@@ -967,7 +963,7 @@ namespace {
         }
     private:
         int optlevel;
-        JuliaOJIT::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
+        jl_cc::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
@@ -979,7 +975,7 @@ namespace {
             return orc::SimpleCompiler(***TMs)(M);
         }
 
-        JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
+        jl_cc::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
     };
 }
 
@@ -1182,8 +1178,8 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
-    std::lock_guard<std::mutex> lock(RLST_mutex);
-    std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
+    auto RLST = *ReverseLocalSymbols;
+    std::string *fname = &RLST->Table[(void*)(uintptr_t)Addr];
     if (fname->empty()) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
@@ -1202,7 +1198,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << RLST_inc++;
+        stream_fname << unadorned_name << "_" << RLST->Unique++;
         *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
     }

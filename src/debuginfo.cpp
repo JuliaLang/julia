@@ -121,12 +121,12 @@ void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT {
     (**this->sysimg_info) = info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
+jl_cc::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
 JITDebugInfoRegistry::get_sysimg_info() const JL_NOTSAFEPOINT {
     return *this->sysimg_info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+jl_cc::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
 JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
     return *this->objfilemap;
 }
@@ -178,14 +178,6 @@ static void jl_profile_atomic(T f)
 #endif
     uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
 }
-
-
-// --- storing and accessing source location metadata ---
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL)
-{
-    getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
-}
-
 
 #if defined(_OS_WINDOWS_)
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
@@ -406,13 +398,6 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
             }
         });
     }
-}
-
-void jl_register_jit_object(const object::ObjectFile &Object,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            std::function<void *(void *)> lookupWriteAddress)
-{
-    getJITDebugRegistry().registerJITObject(Object, getLoadAddress, lookupWriteAddress);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols

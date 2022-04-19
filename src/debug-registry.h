@@ -4,6 +4,7 @@
 
 #include "julia_internal.h"
 #include "processor.h"
+#include "concurrency-utils.h"
 
 #include <map>
 #include <mutex>
@@ -26,60 +27,6 @@ typedef struct {
 class JITDebugInfoRegistry
 {
 public:
-    template<typename ResourceT>
-    struct Locked {
-
-        template<typename CResourceT>
-        struct Lock {
-            std::unique_lock<std::mutex> lock;
-            CResourceT &resource;
-
-            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT : lock(mutex), resource(resource) {}
-            Lock(Lock &&) JL_NOTSAFEPOINT = default;
-            Lock &operator=(Lock &&) JL_NOTSAFEPOINT = default;
-
-            CResourceT &operator*() JL_NOTSAFEPOINT {
-                return resource;
-            }
-
-            const CResourceT &operator*() const JL_NOTSAFEPOINT {
-                return resource;
-            }
-
-            CResourceT *operator->() JL_NOTSAFEPOINT {
-                return &**this;
-            }
-
-            const CResourceT *operator->() const JL_NOTSAFEPOINT {
-                return &**this;
-            }
-
-            operator const CResourceT &() const JL_NOTSAFEPOINT {
-                return resource;
-            }
-
-            ~Lock() JL_NOTSAFEPOINT = default;
-        };
-    private:
-
-        mutable std::mutex mutex;
-        ResourceT resource;
-    public:
-        typedef Lock<ResourceT> LockT;
-        typedef Lock<const ResourceT> ConstLockT;
-
-        Locked(ResourceT resource = ResourceT()) JL_NOTSAFEPOINT : mutex(), resource(std::move(resource)) {}
-
-        LockT operator*() JL_NOTSAFEPOINT {
-            return LockT(mutex, resource);
-        }
-
-        ConstLockT operator*() const JL_NOTSAFEPOINT {
-            return ConstLockT(mutex, resource);
-        }
-
-        ~Locked() JL_NOTSAFEPOINT = default;
-    };
 
     template<typename datatype>
     struct jl_pthread_key_t {
@@ -146,11 +93,11 @@ private:
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
     // that it came from (providing name, type signature, file info, etc.)
-    Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight{};
+    jl_cc::Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight{};
 
-    Locked<sysimg_info_t> sysimg_info{};
+    jl_cc::Locked<sysimg_info_t> sysimg_info{};
 
-    Locked<objfilemap_t> objfilemap{};
+    jl_cc::Locked<objfilemap_t> objfilemap{};
 
     static std::string mangle(llvm::StringRef Name, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
 
@@ -178,6 +125,6 @@ public:
                         std::function<void*(void*)> lookupWriteAddress) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT;
-    Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const JL_NOTSAFEPOINT;
-    Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
+    jl_cc::Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const JL_NOTSAFEPOINT;
+    jl_cc::Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
 };
