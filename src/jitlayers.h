@@ -379,6 +379,16 @@ public:
     JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
         return DebugRegistry;
     }
+
+    jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
+        return dump_emitted_mi_name_stream;
+    }
+    jl_locked_stream &get_dump_compiles_stream() JL_NOTSAFEPOINT {
+        return dump_compiles_stream;
+    }
+    jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
+        return dump_llvm_opt_stream;
+    }
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
@@ -397,6 +407,11 @@ private:
     std::mutex RLST_mutex{};
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+
+    //Compilation streams
+    jl_locked_stream dump_emitted_mi_name_stream;
+    jl_locked_stream dump_compiles_stream;
+    jl_locked_stream dump_llvm_opt_stream;
 
     ResourcePool<orc::ThreadSafeContext> ContextPool;
 

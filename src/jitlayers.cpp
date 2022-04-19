@@ -54,17 +54,15 @@ using namespace llvm;
 #define DEBUG_TYPE "jitlayers"
 
 // Snooping on which functions are being compiled, and how long it takes
-jl_locked_stream dump_compiles_stream;
 extern "C" JL_DLLEXPORT
 void jl_dump_compiles_impl(void *s)
 {
-    **dump_compiles_stream = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_compiles_stream() = (JL_STREAM*)s;
 }
-jl_locked_stream dump_llvm_opt_stream;
 extern "C" JL_DLLEXPORT
 void jl_dump_llvm_opt_impl(void *s)
 {
-    **dump_llvm_opt_stream = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (JL_STREAM*)s;
 }
 
 static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports);
@@ -108,7 +106,7 @@ static jl_callptr_t _jl_compile_codeinst(
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
-    bool timed = !!*dump_compiles_stream;
+    bool timed = !!*jl_ExecutionEngine->get_dump_compiles_stream();
     if (timed)
         start_time = jl_hrtime();
 
@@ -206,7 +204,7 @@ static jl_callptr_t _jl_compile_codeinst(
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
-        auto stream = *dump_compiles_stream;
+        auto stream = *jl_ExecutionEngine->get_dump_compiles_stream();
         if (stream) {
             jl_printf(stream, "%" PRIu64 "\t\"", end_time - start_time);
             jl_static_show(stream, mi->specTypes);
@@ -908,7 +906,7 @@ namespace {
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
                 {
-                    auto stream = *dump_llvm_opt_stream;
+                    auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream) {
                         // Print LLVM function statistics _before_ optimization
                         // Print all the information about this invocation as a YAML object
@@ -937,7 +935,7 @@ namespace {
 
                 uint64_t end_time = 0;
                 {
-                    auto stream = *dump_llvm_opt_stream;
+                    auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream) {
                         end_time = jl_hrtime();
                         jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);

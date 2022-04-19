@@ -186,11 +186,10 @@ typedef Instruction TerminatorInst;
 #include "processor.h"
 #include "julia_assert.h"
 
-jl_locked_stream dump_emitted_mi_name_stream;
 extern "C" JL_DLLEXPORT
 void jl_dump_emitted_mi_name_impl(void *s)
 {
-    **dump_emitted_mi_name_stream = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (JL_STREAM*)s;
 }
 
 extern "C" {
@@ -7978,7 +7977,7 @@ jl_llvm_functions_t jl_emit_code(
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         decls = emit_function(m, li, src, jlrettype, params);
-        auto stream = *dump_emitted_mi_name_stream;
+        auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
         if (stream) {
             jl_printf(stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
