@@ -54,17 +54,15 @@ using namespace llvm;
 #define DEBUG_TYPE "jitlayers"
 
 // Snooping on which functions are being compiled, and how long it takes
-JL_STREAM *dump_compiles_stream = NULL;
 extern "C" JL_DLLEXPORT
 void jl_dump_compiles_impl(void *s)
 {
-    dump_compiles_stream = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_compiles_stream() = (JL_STREAM*)s;
 }
-JL_STREAM *dump_llvm_opt_stream = NULL;
 extern "C" JL_DLLEXPORT
 void jl_dump_llvm_opt_impl(void *s)
 {
-    dump_llvm_opt_stream = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (JL_STREAM*)s;
 }
 
 static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports);
@@ -108,7 +106,8 @@ static jl_callptr_t _jl_compile_codeinst(
     // caller must hold codegen_lock
     // and have disabled finalizers
     uint64_t start_time = 0;
-    if (dump_compiles_stream != NULL)
+    bool timed = !!*jl_ExecutionEngine->get_dump_compiles_stream();
+    if (timed)
         start_time = jl_hrtime();
 
     assert(jl_is_code_instance(codeinst));
@@ -198,17 +197,18 @@ static jl_callptr_t _jl_compile_codeinst(
     }
 
     uint64_t end_time = 0;
-    if (dump_compiles_stream != NULL)
+    if (timed)
         end_time = jl_hrtime();
 
     // If logging of the compilation stream is enabled,
     // then dump the method-instance specialization type to the stream
     jl_method_instance_t *mi = codeinst->def;
     if (jl_is_method(mi->def.method)) {
-        if (dump_compiles_stream != NULL) {
-            jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", end_time - start_time);
-            jl_static_show(dump_compiles_stream, mi->specTypes);
-            jl_printf(dump_compiles_stream, "\"\n");
+        auto stream = *jl_ExecutionEngine->get_dump_compiles_stream();
+        if (stream) {
+            jl_printf(stream, "%" PRIu64 "\t\"", end_time - start_time);
+            jl_static_show(stream, mi->specTypes);
+            jl_printf(stream, "\"\n");
         }
     }
     return fptr;
@@ -478,13 +478,6 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
         optlevel == 2 ? CodeGenOpt::Default :
         CodeGenOpt::Aggressive;
 #endif
-}
-
-static void addPassesForOptLevel(legacy::PassManager &PM, TargetMachine &TM, int optlevel)
-{
-    addTargetPasses(&PM, &TM);
-    addOptimizationPasses(&PM, optlevel);
-    addMachinePasses(&PM, &TM, optlevel);
 }
 
 static auto countBasicBlocks(const Function &F)
@@ -899,7 +892,9 @@ namespace {
         }
         std::unique_ptr<legacy::PassManager> operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
-            addPassesForOptLevel(*PM, *TM, optlevel);
+            addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
+            addOptimizationPasses(PM.get(), optlevel);
+            addMachinePasses(PM.get(), optlevel);
             return PM;
         }
     };
@@ -910,24 +905,27 @@ namespace {
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
-                if (dump_llvm_opt_stream != NULL) {
-                    // Print LLVM function statistics _before_ optimization
-                    // Print all the information about this invocation as a YAML object
-                    jl_printf(dump_llvm_opt_stream, "- \n");
-                    // We print the name and some statistics for each function in the module, both
-                    // before optimization and again afterwards.
-                    jl_printf(dump_llvm_opt_stream, "  before: \n");
-                    for (auto &F : M.functions()) {
-                        if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                            continue;
+                {
+                    auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
+                    if (stream) {
+                        // Print LLVM function statistics _before_ optimization
+                        // Print all the information about this invocation as a YAML object
+                        jl_printf(stream, "- \n");
+                        // We print the name and some statistics for each function in the module, both
+                        // before optimization and again afterwards.
+                        jl_printf(stream, "  before: \n");
+                        for (auto &F : M.functions()) {
+                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                                continue;
+                            }
+                            // Each function is printed as a YAML object with several attributes
+                            jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
+                            jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
+                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
                         }
-                        // Each function is printed as a YAML object with several attributes
-                        jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-                        jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-                        jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
-                    }
 
-                    start_time = jl_hrtime();
+                        start_time = jl_hrtime();
+                    }
                 }
 
                 JL_TIMING(LLVM_OPT);
@@ -936,20 +934,23 @@ namespace {
                 (***PMs).run(M);
 
                 uint64_t end_time = 0;
-                if (dump_llvm_opt_stream != NULL) {
-                    end_time = jl_hrtime();
-                    jl_printf(dump_llvm_opt_stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
-                    jl_printf(dump_llvm_opt_stream, "  optlevel: %d\n", optlevel);
+                {
+                    auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
+                    if (stream) {
+                        end_time = jl_hrtime();
+                        jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+                        jl_printf(stream, "  optlevel: %d\n", optlevel);
 
-                    // Print LLVM function statistics _after_ optimization
-                    jl_printf(dump_llvm_opt_stream, "  after: \n");
-                    for (auto &F : M.functions()) {
-                        if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                            continue;
+                        // Print LLVM function statistics _after_ optimization
+                        jl_printf(stream, "  after: \n");
+                        for (auto &F : M.functions()) {
+                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                                continue;
+                            }
+                            jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
+                            jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
+                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
                         }
-                        jl_printf(dump_llvm_opt_stream, "    \"%s\":\n", F.getName().str().c_str());
-                        jl_printf(dump_llvm_opt_stream, "        instructions: %u\n", F.getInstructionCount());
-                        jl_printf(dump_llvm_opt_stream, "        basicblocks: %lu\n", countBasicBlocks(F));
                     }
                 }
             });
@@ -1166,7 +1167,7 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
-    static int globalUnique = 0;
+    std::lock_guard<std::mutex> lock(RLST_mutex);
     std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     if (fname->empty()) {
         std::string string_fname;
@@ -1186,7 +1187,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
             stream_fname << "jlsys_";
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
-        stream_fname << unadorned_name << "_" << globalUnique++;
+        stream_fname << unadorned_name << "_" << RLST_inc++;
         *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
     }
@@ -1230,16 +1231,6 @@ void JuliaOJIT::RegisterJITEventListener(JITEventListener *L)
 const DataLayout& JuliaOJIT::getDataLayout() const
 {
     return DL;
-}
-
-TargetMachine &JuliaOJIT::getTargetMachine()
-{
-    return *TM;
-}
-
-const Triple& JuliaOJIT::getTargetTriple() const
-{
-    return TM->getTargetTriple();
 }
 
 std::string JuliaOJIT::getMangledName(StringRef Name)
@@ -1410,6 +1401,40 @@ void JuliaOJIT::shareStrings(Module &M)
     }
     for (auto GV : erase)
         GV->eraseFromParent();
+}
+
+//TargetMachine pass-through methods
+
+std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
+{
+    return std::unique_ptr<TargetMachine>(getTarget()
+        .createTargetMachine(
+            getTargetTriple().str(),
+            getTargetCPU(),
+            getTargetFeatureString(),
+            getTargetOptions(),
+            TM->getRelocationModel(),
+            TM->getCodeModel(),
+            TM->getOptLevel()));
+}
+
+const Triple& JuliaOJIT::getTargetTriple() const {
+    return TM->getTargetTriple();
+}
+StringRef JuliaOJIT::getTargetFeatureString() const {
+    return TM->getTargetFeatureString();
+}
+StringRef JuliaOJIT::getTargetCPU() const {
+    return TM->getTargetCPU();
+}
+const TargetOptions &JuliaOJIT::getTargetOptions() const {
+    return TM->Options;
+}
+const Target &JuliaOJIT::getTarget() const {
+    return TM->getTarget();
+}
+TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
+    return TM->getTargetIRAnalysis();
 }
 
 static void jl_decorate_module(Module &M) {

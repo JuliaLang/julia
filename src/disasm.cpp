@@ -1208,9 +1208,10 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
                     f2.deleteBody();
             }
         });
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(&jl_ExecutionEngine->getTargetMachine());
+        auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
+        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
         legacy::PassManager PM;
-        addTargetPasses(&PM, TM);
+        addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (raw_mc) {
             raw_svector_ostream obj_OS(ObjBufferSV);
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
