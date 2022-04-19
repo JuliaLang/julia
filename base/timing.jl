@@ -131,7 +131,7 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
     str = sprint() do io
         _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
         print(io, timestr, " seconds")
-        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0 || recompile_time > 0
+        parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
         parens && print(io, " (")
         if bytes != 0 || allocs != 0
             allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
@@ -155,10 +155,8 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
         if recompile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
-                print(io, ", ")
-            end
-            print(io, Ryu.writefixed(Float64(100*recompile_time/elapsedtime), 2), "% recompilation time")
+            amount = recompile_time == compile_time ? "all" : Ryu.writefixed(Float64(100*recompile_time/compile_time), 0) * "%"
+            print(io, ": $amount of which was recompilation")
         end
         parens && print(io, ")")
     end
