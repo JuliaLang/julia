@@ -286,14 +286,10 @@ private:
     const std::unique_ptr<TargetMachine> TM;
     const DataLayout DL;
 
-    orc::ExecutionSession ES;
-    orc::JITDylib &GlobalJD;
-    orc::JITDylib &JD;
-
     JITDebugInfoRegistry DebugRegistry;
 
     struct ReverseLocalSymbolsT {
-        int Unique;
+        int Unique = 0;
         DenseMap<void*, std::string> Table;
     };
     jl_cc::Locked<ReverseLocalSymbolsT> ReverseLocalSymbols;
@@ -302,6 +298,10 @@ private:
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
+
+    orc::ExecutionSession ES;
+    orc::JITDylib &GlobalJD;
+    orc::JITDylib &JD;
 
     jl_cc::ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
