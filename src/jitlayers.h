@@ -54,6 +54,11 @@
 #define JL_COMPILE_ON_DEMAND
 #endif
 
+//Pool memory managers because non-JITLink can't handle recursive codegen
+#if defined(JL_COMPILE_ON_DEMAND) && !defined(JL_USE_JITLINK)
+#define JL_USE_POOLED_MEMMGRS
+#endif
+
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
@@ -345,7 +350,7 @@ public:
     template<typename ResourceT, size_t max = 0>
     using QueuedResourcePool = ResourcePool<ResourceT, max, std::queue<ResourceT>>;
 
-#ifdef JL_COMPILE_ON_DEMAND
+#ifdef JL_USE_POOLED_MEMMGRS
     typedef QueuedResourcePool<std::unique_ptr<RTDyldMemoryManager>> MemMgrPoolT;
 #endif
     struct PipelineT {
@@ -456,14 +461,16 @@ private:
 
     QueuedResourcePool<orc::ThreadSafeContext> ContextPool;
 
-#ifndef JL_USE_JITLINK
-#ifndef JL_COMPILE_ON_DEMAND
-    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
-#else
+#ifdef JL_COMPILE_ON_DEMAND
     std::unique_ptr<orc::LazyCallThroughManager> LCTM;
+#endif
+
+#ifdef JL_USE_POOLED_MEMMGRS
     MemMgrPoolT MemMgrs;
+#elif !defined(JL_USE_JITLINK)
+    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
-#endif
+
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;

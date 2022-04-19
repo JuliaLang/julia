@@ -413,6 +413,7 @@ extern "C" JL_DLLEXPORT
 jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
+#ifndef JL_COMPILE_ON_DEMAND
     // printing via disassembly
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
@@ -461,6 +462,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
     }
+#endif
 
     // whatever, that didn't work - use the assembler output instead
     void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
@@ -678,21 +680,18 @@ RTDyldMemoryManager* createRTDyldMemoryManager(void);
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
 private:
-#ifndef JL_COMPILE_ON_DEMAND
-    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr_;
+#ifdef JL_USE_POOLED_MEMMGRS
+    typedef JuliaOJIT::MemMgrPoolT::OwningResource MemMgrT_;
 #else
-    JuliaOJIT::MemMgrPoolT::OwningResource MemMgr_;
+    typedef std::shared_ptr<RuntimeDyld::MemoryManager> MemMgrT_;
 #endif
 
+    MemMgrT_ MemMgr_;
+
 public:
-    ForwardingMemoryManager(
-#ifndef JL_COMPILE_ON_DEMAND
-        std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr
-#else
-        decltype(MemMgr_) MemMgr
-#endif
-    ) : MemMgr_(std::move(MemMgr)) {}
-#ifdef JL_COMPILE_ON_DEMAND
+    ForwardingMemoryManager(MemMgrT_ MemMgr) : MemMgr_(std::move(MemMgr)) {}
+
+#ifdef JL_USE_POOLED_MEMMGRS
 #define MemMgr (*MemMgr_)
 #else
 #define MemMgr MemMgr_
@@ -728,7 +727,7 @@ public:
     }
     virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
         auto error = MemMgr->finalizeMemory(ErrMsg);
-#ifdef JL_COMPILE_ON_DEMAND
+#ifdef JL_USE_POOLED_MEMMGRS
         MemMgr_.reset();
 #endif
         return error;
@@ -1019,6 +1018,11 @@ JuliaOJIT::JuliaOJIT()
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ContextPool([](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }),
+#ifdef JL_COMPILE_ON_DEMAND
+    //TODO set an actual COD error handler address
+    LCTM(cantFail(orc::createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0))),
+#endif
+
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
@@ -1027,8 +1031,7 @@ JuliaOJIT::JuliaOJIT()
 # else
     ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
 # endif
-#else
-#ifndef JL_COMPILE_ON_DEMAND
+#elif !defined(JL_USE_POOLED_MEMMGRS)
     MemMgr(createRTDyldMemoryManager()),
     ObjectLayer(
             ES,
@@ -1038,8 +1041,6 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #else
-    //TODO set an actual COD error handler address
-    LCTM(cantFail(orc::createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0))),
     MemMgrs([](){ return std::unique_ptr<RTDyldMemoryManager>(createRTDyldMemoryManager()); }),
     ObjectLayer(
             ES,
@@ -1048,7 +1049,6 @@ JuliaOJIT::JuliaOJIT()
                 return result;
             }
         ),
-#endif
 #endif
     Pipelines{
         std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
@@ -1078,7 +1078,7 @@ JuliaOJIT::JuliaOJIT()
         [this](orc::MaterializationResponsibility &MR,
                const object::ObjectFile &Object,
                const RuntimeDyld::LoadedObjectInfo &LO) {
-#ifdef JL_COMPILE_ON_DEMAND
+#ifdef JL_USE_POOLED_MEMMGRS
             auto MemMgr = nullptr;
 #endif
             registerRTDyldJITObject(Object, LO, MemMgr);
@@ -1304,7 +1304,7 @@ size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
 
 size_t JuliaOJIT::getTotalBytes() const
 {
-#ifndef JL_COMPILE_ON_DEMAND
+#ifndef JL_USE_POOLED_MEMMGRS
     return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
 #else
     return 0;
