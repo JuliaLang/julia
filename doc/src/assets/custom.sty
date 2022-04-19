@@ -1,26 +1,40 @@
+%% Load the macro package required for the cover.
 
-%% pkg for make title page BEGIN
+
+%% pkg for make cover page BEGIN ----------------------------------------------
+% Load `geometry' to modify margins later
 \usepackage{geometry}
-\usepackage[some]{background}
+% "some": use \BgThispage to change background
+% ref: background@v2.1,# 2.1 Options, "pages="
+%   http://mirrors.ctan.org/macros/latex/contrib/background/background.pdf
+\usepackage[pages=some]{background}
 
 % ---- define heading background
+% ref: background.pdf, #2.1 Options
 \backgroundsetup{
-scale=1,
-angle=0,
-opacity=1,
+scale=1,    % scaling factor
+angle=0,    % counterclockwise angle
+opacity=1,  % no transparency at all
 contents={
+%% Place the background image `title-bg' in the right place via `tikz'.
+% tikz option "remember picture", "overlay"
+% ref: pgfmanual@3.1.9a, #17.13.1 Referencing a Node in a Different Picture\
+%   http://mirrors.ctan.org/graphics/pgf/base/doc/pgfmanual.pdf
 \begin{tikzpicture}[remember picture,overlay]
   \draw [path picture={
+    % ref: pgfmanual, 15.6, "Predefined node path picture bounding box"
     \node at (path picture bounding box.center){
       % remember to adjust bg img height
       %   when you changed the box size
       % now: 11cm - 4cm = 7cm
       \includegraphics[height=7cm]{./assets/title-bg}
   };}] (-0.5\paperwidth,4cm) rectangle (0.5\paperwidth,11cm);
+  % Put picture to right place
+  %   ref: pgfmanual, #2.6 Rectangle Path Construction
 \end{tikzpicture}
 }}%
 
 % ---- Heading font style
 \DeclareFixedFont{\MainHeading}{T1}{phv}{b}{n}{1.5cm}
 \DeclareFixedFont{\SecondaryHeading}{T1}{phv}{b}{n}{0.8cm}
-%% title page END
+%% cover page END -------------------------------------------------------------

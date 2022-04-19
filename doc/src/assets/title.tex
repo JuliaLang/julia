@@ -1,7 +1,21 @@
+%% ============================================================================
+%% Custom tex styles, including this file, add a custom cover to the document.
+%%
+%% These custom styles include:
+%%  - `title.tex`: This file, The main definition of the cover, 
+%%      used to replace the default `\maketitle` command.
+%%  - `custom.sty`: Load the macro package required for the cover, 
+%%      define the background image style, etc.
+%%  - `preamble.tex`: Replace the default preamble for inserting a custom cover.
+%%  - `logo.png`: logo of julia. (LaTeX does not yet support SVG)
+%%  - `title-bg.png`: Background image of the cover title, 
+%%      from julia's homepage.
+%% ============================================================================
 
 %% ---- reset page geometry for cover page
 \newgeometry{left=2cm,right=2cm,bottom=3cm}
-% ref: P65 - http://mirrors.ctan.org/macros/latex/contrib/memoir/memman.pdf
+% ref: memman@v3.7q, P65, "4.1. Styling the titling"
+%   http://mirrors.ctan.org/macros/latex/contrib/memoir/memman.pdf
 \begin{titlingpage}
     % set background image
     \BgThispage
