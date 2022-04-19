@@ -1053,7 +1053,7 @@ function copyto_nonleaf!(dest, bc::Broadcasted, iter, state, count)
         y === nothing && break
         I, state = y
         @inbounds val = bc[I]
-        if val isa T || typeof(val) === T
+        if val isa T
             @inbounds dest[I] = val
         else
             # This element type doesn't fit in dest. Allocate a new dest with wider eltype,
