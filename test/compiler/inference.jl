@@ -7,6 +7,8 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+include("irutils.jl")
+
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
@@ -4069,3 +4071,29 @@ invoke44763(x) = Base.@invoke increase_x44763!(x)
     invoke44763(42)
 end |> only === Int
 @test x44763 == 0
+
+# backedge insertion for Any-typed, effect-free frame
+const CONST_DICT = let d = Dict()
+    for c in 'A':'z'
+        push!(d, c => Int(c))
+    end
+    d
+end
+Base.@assume_effects :total_may_throw getcharid(c) = CONST_DICT[c]
+@noinline callf(f, args...) = f(args...)
+function entry_to_be_invalidated(c)
+    return callf(getcharid, c)
+end
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> Core.Compiler.is_concrete_eval_eligible
+@test fully_eliminated(; retval=97) do
+    entry_to_be_invalidated('a')
+end
+getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> !Core.Compiler.is_concrete_eval_eligible
+@test !fully_eliminated() do
+    entry_to_be_invalidated('a')
+end
