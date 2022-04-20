@@ -6,8 +6,12 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <type_traits>
 #include <stack>
 #include <queue>
+
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/APInt.h>
 
 namespace jl_cc {
 
@@ -15,8 +19,8 @@ namespace jl_cc {
     <typename ResourceT, size_t max = 0,
         typename BackingT = std::stack<ResourceT,
             std::conditional_t<max == 0,
-                SmallVector<ResourceT>,
-                SmallVector<ResourceT, max>
+                llvm::SmallVector<ResourceT>,
+                llvm::SmallVector<ResourceT, max>
             >
         >
     >
