@@ -152,7 +152,7 @@ function _getenv_include_thread_unsafe()
     return b
 end
 const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
-function include_thread_unsafe()
+function include_thread_unsafe_tests()
     if Threads.nthreads() > 1
         if _env_include_thread_unsafe
             return true
@@ -260,8 +260,7 @@ remotecall_fetch(f25847, id_other, f)
 
 finalize(f)
 yield() # flush gc msgs
-@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
-
+@test poll_while(() -> remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid))
 
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
@@ -288,12 +287,12 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    if include_thread_unsafe()
+    if include_thread_unsafe_tests()
         @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
     end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    if include_thread_unsafe()
+    if include_thread_unsafe_tests()
         @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
     end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
