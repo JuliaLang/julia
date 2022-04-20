@@ -1252,11 +1252,15 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 #endif
     });
     // TODO: what is the performance characteristics of this?
+#ifdef JL_USE_COMPILE_ON_DEMAND
     cantFail(CODLayer.add(JD, std::move(TSM)));
+#else
+    cantFail(OptSelLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
-    // for (auto Name : NewExports)
-    //     cantFail(ES.lookup({&JD}, Name));
+    for (auto Name : NewExports)
+        cantFail(ES.lookup({&JD}, Name));
+#endif
 
 }
 
