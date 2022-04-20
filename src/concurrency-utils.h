@@ -10,7 +10,7 @@
 #include <queue>
 
 namespace jl_cc {
-    
+
     template
     <typename ResourceT, size_t max = 0,
         typename BackingT = std::stack<ResourceT,
