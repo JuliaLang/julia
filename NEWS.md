@@ -110,6 +110,8 @@ New library features
 * TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
 * `extrema` now accepts an `init` keyword argument ([#36265], [#43604]).
 * `Iterators.countfrom` now accepts any type that defines `+` ([#37747]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 
 Standard library changes
 ------------------------

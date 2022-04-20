@@ -291,6 +291,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    bool is_recompile = false;
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
@@ -304,6 +305,10 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             src = NULL;
         else if (jl_is_method(mi->def.method))
             src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+    }
+    else {
+        // identify whether this is an invalidated method that is being recompiled
+        is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
     }
     if (src == NULL && jl_is_method(mi->def.method) &&
              jl_symbol_name(mi->def.method->name)[0] != '@') {
@@ -331,8 +336,12 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else {
         codeinst = NULL;
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled) {
+        uint64_t t_comp = jl_hrtime() - compiler_start_time;
+        if (is_recompile)
+            jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
+    }
     JL_UNLOCK(&jl_codegen_lock);
     JL_GC_POP();
     return codeinst;
