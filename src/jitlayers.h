@@ -307,7 +307,7 @@ private:
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
 
-    jl_cc::ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
+    jl_cc::QueuedResourcePool<orc::ThreadSafeContext> ContextPool;
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<PooledMemoryManager> MemMgr;
