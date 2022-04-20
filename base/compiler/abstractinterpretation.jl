@@ -451,11 +451,18 @@ function add_call_backedges!(interp::AbstractInterpreter,
     @nospecialize(rettype), all_effects::Effects,
     edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
     sv::InferenceState)
-    if rettype === Any && all_effects === Effects()
-        # for `NativeInterpreter`, we don't need to add backedges when:
-        # - a new method couldn't refine (widen) this type and
-        # - the effects don't provide any useful information for interprocedural optimization
-        return
+    # we don't need to add backedges when:
+    # - a new method couldn't refine (widen) this type and
+    # - the effects are known to not provide any useful IPO information
+    if rettype === Any
+        if !isoverlayed(method_table(interp))
+            # we can ignore the `nonoverlayed` property if `interp` doesn't use
+            # overlayed method table at all since it will never be tainted anyway
+            all_effects = Effects(all_effects; nonoverlayed=false)
+        end
+        if all_effects === Effects()
+            return
+        end
     end
     for edge in edges
         add_backedge!(edge, sv)
