@@ -670,8 +670,15 @@ public:
 #else // !JL_USE_JITLINK
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
+
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#define REMAP_WR_ADDR
+#endif
+
+#ifdef REMAP_WR_ADDR
 void addAllocationMappings(RTDyldMemoryManager *memmgr, DenseMap<void *, void *> &mappings);
 void removeAllocationMappings(RTDyldMemoryManager *memmgr, DenseMap<void *, void *> &mappings);
+#endif
 
 class JuliaOJIT::PooledMemoryManager {
 private:
@@ -742,7 +749,7 @@ public:
         auto it = lock->allocated.find(identifier);
         assert(it != lock->allocated.end()
             && "Expected identifier to be assigned a memory manager!");
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#ifdef REMAP_WR_ADDR
         removeAllocationMappings(it->second.get(), lock->WindowsDebugWriteAddrRemap);
 #endif
         bool fail = it->second->finalizeMemory(ErrMsg);
@@ -755,12 +762,12 @@ public:
         auto lock = *state;
         auto &MemMgr = lock->allocated[identifier];
         assert(MemMgr && "Expected memory manager to exist for identifier!");
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#ifdef REMAP_WR_ADDR
         addAllocationMappings(MemMgr.get(), lock->WindowsDebugWriteAddrRemap);
 #endif
         return MemMgr->notifyObjectLoaded(RTDyld, Obj);
     }
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#ifdef REMAP_WR_ADDR
     void *lookupWriteAddressFor(void *rt_addr) {
         auto lock = *state;
         auto wr_addr = lock->WindowsDebugWriteAddrRemap.find(rt_addr);
@@ -862,7 +869,7 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
     };
 
     jl_ExecutionEngine->getDebugInfoRegistry().registerJITObject(*DebugObj, getLoadAddress,
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#ifdef REMAP_WR_ADDR
         [MemMgr](void *p) { return MemMgr->lookupWriteAddressFor(p); }
 #else
         nullptr
