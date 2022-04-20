@@ -122,6 +122,9 @@ namespace jl_cc {
         std::unique_ptr<WNMutex> mutex;
     };
 
+    template<typename ResourceT, size_t max = 0>
+    using QueuedResourcePool = ResourcePool<ResourceT, max, std::queue<ResourceT>>;
+
     template<typename ResourceT>
     struct Locked {
 

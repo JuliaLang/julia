@@ -220,6 +220,10 @@ public:
         size_t count;
     };
 
+#ifndef JL_USE_JITLINK
+    struct PooledMemoryManager;
+#endif
+
 private:
     // Custom object emission notification handler for the JuliaOJIT
     template <typename ObjT, typename LoadResult>
@@ -306,7 +310,7 @@ private:
     jl_cc::ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
 #ifndef JL_USE_JITLINK
-    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
+    const std::shared_ptr<PooledMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
