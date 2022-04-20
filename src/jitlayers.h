@@ -221,7 +221,7 @@ public:
     };
 
 #ifndef JL_USE_JITLINK
-    struct PooledMemoryManager;
+    class PooledMemoryManager;
 #endif
 
 private:
@@ -232,6 +232,7 @@ private:
 public:
 
     JuliaOJIT();
+    ~JuliaOJIT();
 
     void enableJITDebuggingSupport();
 #ifndef JL_USE_JITLINK
@@ -295,6 +296,11 @@ private:
     struct ReverseLocalSymbolsT {
         int Unique = 0;
         DenseMap<void*, std::string> Table;
+
+        ReverseLocalSymbolsT() JL_NOTSAFEPOINT = default;
+        ReverseLocalSymbolsT(ReverseLocalSymbolsT &&) JL_NOTSAFEPOINT = default;
+        ReverseLocalSymbolsT &operator=(ReverseLocalSymbolsT &&) JL_NOTSAFEPOINT = default;
+        ~ReverseLocalSymbolsT() JL_NOTSAFEPOINT = default;
     };
     jl_cc::Locked<ReverseLocalSymbolsT> ReverseLocalSymbols;
 

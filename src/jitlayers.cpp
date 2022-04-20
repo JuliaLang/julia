@@ -698,6 +698,11 @@ private:
         DenseMap<void *, void *> WindowsDebugWriteAddrRemap;
 #endif
         size_t total_allocated;
+
+        State() JL_NOTSAFEPOINT = default;
+        State(State &&) JL_NOTSAFEPOINT = default;
+        State &operator=(State &&) JL_NOTSAFEPOINT = default;
+        ~State() JL_NOTSAFEPOINT = default;
     };
     jl_cc::Locked<State> state;
 
@@ -717,7 +722,7 @@ public:
 
     PooledMemoryManager() : pool([](){ return std::unique_ptr<RTDyldMemoryManager>(createRTDyldMemoryManager()); }) {}
 
-    virtual uint8_t *allocateCodeSection(void *identifier, uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateCodeSection(void *identifier, uintptr_t Size, unsigned Alignment,
                                      unsigned SectionID,
                                      StringRef SectionName) {
         auto locked = *state;
@@ -726,7 +731,7 @@ public:
         locked->total_allocated += Size;
         return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
     }
-    virtual uint8_t *allocateDataSection(void *identifier, uintptr_t Size, unsigned Alignment,
+    uint8_t *allocateDataSection(void *identifier, uintptr_t Size, unsigned Alignment,
                                      unsigned SectionID,
                                      StringRef SectionName,
                                      bool IsReadOnly) {
@@ -736,24 +741,24 @@ public:
         locked->total_allocated += Size;
         return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
     }
-    virtual void reserveAllocationSpace(void *identifier, uintptr_t CodeSize, uint32_t CodeAlign,
+    void reserveAllocationSpace(void *identifier, uintptr_t CodeSize, uint32_t CodeAlign,
                                         uintptr_t RODataSize,
                                         uint32_t RODataAlign,
                                         uintptr_t RWDataSize,
                                         uint32_t RWDataAlign) {
         return MemMgr(identifier).reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
     }
-    virtual bool needsToReserveAllocationSpace(void *identifier) {
+    bool needsToReserveAllocationSpace(void *identifier) {
         return acquire(identifier).needsToReserveAllocationSpace();
     }
-    virtual void registerEHFrames(void *identifier, uint8_t *Addr, uint64_t LoadAddr,
+    void registerEHFrames(void *identifier, uint8_t *Addr, uint64_t LoadAddr,
                                   size_t Size) {
         return MemMgr(identifier).registerEHFrames(Addr, LoadAddr, Size);
     }
-    virtual void deregisterEHFrames(void *identifier) {
+    void deregisterEHFrames(void *identifier) {
         return MemMgr(identifier).deregisterEHFrames();
     }
-    virtual bool finalizeMemory(void *identifier, std::string *ErrMsg = nullptr) {
+    bool finalizeMemory(void *identifier, std::string *ErrMsg = nullptr) {
         auto lock = *state;
         auto it = lock->allocated.find(identifier);
         assert(it != lock->allocated.end()
@@ -766,7 +771,7 @@ public:
         lock->allocated.erase(std::move(it));
         return fail;
     }
-    virtual void notifyObjectLoaded(void *identifier, RuntimeDyld &RTDyld,
+    void notifyObjectLoaded(void *identifier, RuntimeDyld &RTDyld,
                                     const object::ObjectFile &Obj) {
         auto lock = *state;
         auto &MemMgr = lock->allocated[identifier];
@@ -1200,6 +1205,12 @@ JuliaOJIT::JuliaOJIT()
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+}
+
+JuliaOJIT::~JuliaOJIT() {
+    if (auto Err = ES.endSession()) {
+        ES.reportError(std::move(Err));
+    }
 }
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
