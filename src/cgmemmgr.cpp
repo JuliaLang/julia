@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -764,7 +765,6 @@ class RTDyldMemoryManagerJL : public SectionMemoryManager {
     std::unique_ptr<ROAllocator<false>> ro_alloc;
     std::unique_ptr<ROAllocator<true>> exe_alloc;
     bool code_allocated;
-    size_t total_allocated;
 
 public:
     RTDyldMemoryManagerJL()
@@ -773,8 +773,7 @@ public:
           rw_alloc(),
           ro_alloc(),
           exe_alloc(),
-          code_allocated(false),
-          total_allocated(0)
+          code_allocated(false)
     {
 #ifdef _OS_LINUX_
         if (!ro_alloc && get_self_mem_fd() != -1) {
@@ -790,7 +789,6 @@ public:
     ~RTDyldMemoryManagerJL() override
     {
     }
-    size_t getTotalBytes() { return total_allocated; }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
 #if 0
@@ -827,25 +825,35 @@ public:
         mapAddresses(Dyld, exe_alloc);
     }
 #ifdef _OS_WINDOWS_
-    template <typename Alloc>
-    void *lookupWriteAddressFor(void *rt_addr, Alloc &&allocator)
-    {
-        for (auto &alloc: allocator->allocations) {
-            if (alloc.rt_addr == rt_addr) {
-                return alloc.wr_addr;
-            }
+
+    template<typename Alloc>
+    void addAllocationMappings(DenseMap<void *, void *> &mappings, Alloc &&allocator) {
+        for (auto &alloc : allocator->allocations) {
+            mappings[alloc.rt_addr] = alloc.wr_addr;
         }
-        return nullptr;
     }
-    void *lookupWriteAddressFor(void *rt_addr)
-    {
-        if (!ro_alloc)
-            return rt_addr;
-        if (void *ptr = lookupWriteAddressFor(rt_addr, ro_alloc))
-            return ptr;
-        if (void *ptr = lookupWriteAddressFor(rt_addr, exe_alloc))
-            return ptr;
-        return rt_addr;
+
+    void addAllocationMappings(DenseMap<void *, void *> &mappings) {
+        if (ro_alloc) {
+            assert(exe_alloc);
+            addAllocationMappings(mappings, exe_alloc);
+            addAllocationMappings(mappings, ro_alloc);
+        }
+    }
+
+    template<typename Alloc>
+    void removeAllocationMappings(DenseMap<void *, void *> &mappings, Alloc &&allocator) {
+        for (auto &alloc : allocator->allocations) {
+            mappings.erase(alloc.rt_addr);
+        }
+    }
+
+    void removeAllocationMappings(DenseMap<void *, void *> &mappings) {
+        if (ro_alloc) {
+            assert(exe_alloc);
+            removeAllocationMappings(mappings, ro_alloc);
+            removeAllocationMappings(mappings, exe_alloc);
+        }
     }
 #endif // _OS_WINDOWS_
 };
@@ -858,7 +866,6 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
     // allocating more than one code section can confuse libunwind.
     assert(!code_allocated);
     code_allocated = true;
-    total_allocated += Size;
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);
     return SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID,
@@ -871,7 +878,6 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                     StringRef SectionName,
                                                     bool isReadOnly)
 {
-    total_allocated += Size;
     if (!isReadOnly)
         return (uint8_t*)rw_alloc.alloc(Size, Alignment);
     if (ro_alloc)
@@ -934,18 +940,16 @@ void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
 }
 
 #ifdef _OS_WINDOWS_
-void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
-{
-    return ((RTDyldMemoryManagerJL*)memmgr)->lookupWriteAddressFor(rt_addr);
+void addAllocationMappings(RTDyldMemoryManager *memmgr, DenseMap<void *, void *> &mappings) {
+    ((RTDyldMemoryManagerJL*)memmgr)->addAllocationMappings(mappings);
+}
+
+void removeAllocationMappings(RTDyldMemoryManager *memmgr, DenseMap<void *, void *> &mappings) {
+    ((RTDyldMemoryManagerJL*)memmgr)->removeAllocationMappings(mappings);
 }
 #endif
 
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {
     return new RTDyldMemoryManagerJL();
-}
-
-size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm)
-{
-    return ((RTDyldMemoryManagerJL*)mm)->getTotalBytes();
 }

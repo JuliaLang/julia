@@ -670,60 +670,162 @@ public:
 #else // !JL_USE_JITLINK
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);
+void addAllocationMappings(RTDyldMemoryManager *memmgr, DenseMap<void *, void *> &mappings);
+void removeAllocationMappings(RTDyldMemoryManager *memmgr, DenseMap<void *, void *> &mappings);
+
+class JuliaOJIT::PooledMemoryManager {
+private:
+    jl_cc::QueuedResourcePool<std::unique_ptr<RTDyldMemoryManager>> pool;
+    struct State {
+        DenseMap<void *, std::unique_ptr<RTDyldMemoryManager>> allocated;
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        DenseMap<void *, void *> WindowsDebugWriteAddrRemap;
+#endif
+        size_t total_allocated;
+    };
+    jl_cc::Locked<State> state;
+
+    auto &MemMgr(void *identifier) {
+        auto lock = *state;
+        auto &alloc = lock->allocated[identifier];
+        assert(alloc && "Expected identifier to be assigned a memory manager!");
+        return *alloc;
+    }
+    auto &acquire(void *identifier) {
+        auto lock = *state;
+        assert(lock->allocated.find(identifier) == lock->allocated.end()
+            && "Expected identifier to not already be assigned a memory manager!");
+        return *(lock->allocated[identifier] = pool.acquire());
+    }
+public:
+
+    PooledMemoryManager() : pool([](){ return std::unique_ptr<RTDyldMemoryManager>(createRTDyldMemoryManager()); }) {}
+
+    virtual uint8_t *allocateCodeSection(void *identifier, uintptr_t Size, unsigned Alignment,
+                                     unsigned SectionID,
+                                     StringRef SectionName) {
+        auto locked = *state;
+        auto &MemMgr = locked->allocated[identifier];
+        assert(MemMgr && "Expected memory manager to exist for identifier!");
+        locked->total_allocated += Size;
+        return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
+    }
+    virtual uint8_t *allocateDataSection(void *identifier, uintptr_t Size, unsigned Alignment,
+                                     unsigned SectionID,
+                                     StringRef SectionName,
+                                     bool IsReadOnly) {
+        auto locked = *state;
+        auto &MemMgr = locked->allocated[identifier];
+        assert(MemMgr && "Expected memory manager to exist for identifier!");
+        locked->total_allocated += Size;
+        return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
+    }
+    virtual void reserveAllocationSpace(void *identifier, uintptr_t CodeSize, uint32_t CodeAlign,
+                                        uintptr_t RODataSize,
+                                        uint32_t RODataAlign,
+                                        uintptr_t RWDataSize,
+                                        uint32_t RWDataAlign) {
+        return MemMgr(identifier).reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
+    }
+    virtual bool needsToReserveAllocationSpace(void *identifier) {
+        return acquire(identifier).needsToReserveAllocationSpace();
+    }
+    virtual void registerEHFrames(void *identifier, uint8_t *Addr, uint64_t LoadAddr,
+                                  size_t Size) {
+        return MemMgr(identifier).registerEHFrames(Addr, LoadAddr, Size);
+    }
+    virtual void deregisterEHFrames(void *identifier) {
+        return MemMgr(identifier).deregisterEHFrames();
+    }
+    virtual bool finalizeMemory(void *identifier, std::string *ErrMsg = nullptr) {
+        auto lock = *state;
+        auto it = lock->allocated.find(identifier);
+        assert(it != lock->allocated.end()
+            && "Expected identifier to be assigned a memory manager!");
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        removeAllocationMappings(it->second.get(), lock->WindowsDebugWriteAddrRemap);
+#endif
+        bool fail = it->second->finalizeMemory(ErrMsg);
+        pool.release(std::move(it->second));
+        lock->allocated.erase(std::move(it));
+        return fail;
+    }
+    virtual void notifyObjectLoaded(void *identifier, RuntimeDyld &RTDyld,
+                                    const object::ObjectFile &Obj) {
+        auto lock = *state;
+        auto &MemMgr = lock->allocated[identifier];
+        assert(MemMgr && "Expected memory manager to exist for identifier!");
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        addAllocationMappings(MemMgr.get(), lock->WindowsDebugWriteAddrRemap);
+#endif
+        return MemMgr->notifyObjectLoaded(RTDyld, Obj);
+    }
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    void *lookupWriteAddressFor(void *rt_addr) {
+        auto lock = *state;
+        auto wr_addr = lock->WindowsDebugWriteAddrRemap.find(rt_addr);
+        if (wr_addr != lock->WindowsDebugWriteAddrRemap.end()) {
+            if (wr_addr->second) {
+                return wr_addr->second;
+            }
+        }
+        return rt_addr;
+    }
+#endif
+
+    size_t total_bytes() {
+        return (**state).total_allocated;
+    }
+};
 
 // A simple forwarding class, since OrcJIT v2 needs a unique_ptr, while we have a shared_ptr
 class ForwardingMemoryManager : public RuntimeDyld::MemoryManager {
 private:
-    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr;
+    std::shared_ptr<JuliaOJIT::PooledMemoryManager> MemMgr;
 
 public:
-    ForwardingMemoryManager(std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr) : MemMgr(MemMgr) {}
+    ForwardingMemoryManager(std::shared_ptr<JuliaOJIT::PooledMemoryManager> MemMgr) : MemMgr(std::move(MemMgr)) {}
     virtual ~ForwardingMemoryManager() = default;
     virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                      unsigned SectionID,
                                      StringRef SectionName) override {
-        return MemMgr->allocateCodeSection(Size, Alignment, SectionID, SectionName);
+        return MemMgr->allocateCodeSection(this, Size, Alignment, SectionID, SectionName);
     }
     virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                      unsigned SectionID,
                                      StringRef SectionName,
                                      bool IsReadOnly) override {
-        return MemMgr->allocateDataSection(Size, Alignment, SectionID, SectionName, IsReadOnly);
+        return MemMgr->allocateDataSection(this, Size, Alignment, SectionID, SectionName, IsReadOnly);
     }
     virtual void reserveAllocationSpace(uintptr_t CodeSize, uint32_t CodeAlign,
                                         uintptr_t RODataSize,
                                         uint32_t RODataAlign,
                                         uintptr_t RWDataSize,
                                         uint32_t RWDataAlign) override {
-        return MemMgr->reserveAllocationSpace(CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
+        return MemMgr->reserveAllocationSpace(this, CodeSize, CodeAlign, RODataSize, RODataAlign, RWDataSize, RWDataAlign);
     }
     virtual bool needsToReserveAllocationSpace() override {
-        return MemMgr->needsToReserveAllocationSpace();
+        return MemMgr->needsToReserveAllocationSpace(this);
     }
     virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                                   size_t Size) override {
-        return MemMgr->registerEHFrames(Addr, LoadAddr, Size);
+        return MemMgr->registerEHFrames(this, Addr, LoadAddr, Size);
     }
     virtual void deregisterEHFrames() override {
-        return MemMgr->deregisterEHFrames();
+        return MemMgr->deregisterEHFrames(this);
     }
     virtual bool finalizeMemory(std::string *ErrMsg = nullptr) override {
-        return MemMgr->finalizeMemory(ErrMsg);
+        return MemMgr->finalizeMemory(this, ErrMsg);
     }
     virtual void notifyObjectLoaded(RuntimeDyld &RTDyld,
                                     const object::ObjectFile &Obj) override {
-        return MemMgr->notifyObjectLoaded(RTDyld, Obj);
+        return MemMgr->notifyObjectLoaded(this, RTDyld, Obj);
     }
 };
 
-
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-void *lookupWriteAddressFor(RTDyldMemoryManager *MemMgr, void *rt_addr);
-#endif
-
 void registerRTDyldJITObject(const object::ObjectFile &Object,
                              const RuntimeDyld::LoadedObjectInfo &L,
-                             const std::shared_ptr<RTDyldMemoryManager> &MemMgr)
+                             const std::shared_ptr<JuliaOJIT::PooledMemoryManager> &MemMgr)
 {
     auto SavedObject = L.getObjectForDebug(Object).takeBinary();
     // If the debug object is unavailable, save (a copy of) the original object
@@ -761,7 +863,7 @@ void registerRTDyldJITObject(const object::ObjectFile &Object,
 
     jl_ExecutionEngine->getDebugInfoRegistry().registerJITObject(*DebugObj, getLoadAddress,
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-        [MemMgr](void *p) { return lookupWriteAddressFor(MemMgr.get(), p); }
+        [MemMgr](void *p) { return MemMgr->lookupWriteAddressFor(p); }
 #else
         nullptr
 #endif
@@ -1002,7 +1104,7 @@ JuliaOJIT::JuliaOJIT()
     ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
 # endif
 #else
-    MemMgr(createRTDyldMemoryManager()),
+    MemMgr(std::make_shared<PooledMemoryManager>()),
     ObjectLayer(
             ES,
             [this]() {
@@ -1248,11 +1350,10 @@ size_t JuliaOJIT::getTotalBytes() const
     return 0;
 }
 #else
-size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);
 
 size_t JuliaOJIT::getTotalBytes() const
 {
-    return getRTDyldMemoryManagerTotalBytes(MemMgr.get());
+    return MemMgr->total_bytes();
 }
 #endif
 
