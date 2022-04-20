@@ -414,6 +414,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
+#ifndef JL_USE_COMPILE_ON_DEMAND
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
@@ -461,6 +462,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
     }
+#endif
 
     // whatever, that didn't work - use the assembler output instead
     void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
@@ -1107,6 +1109,11 @@ JuliaOJIT::JuliaOJIT()
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
     ContextPool([](){ return orc::ThreadSafeContext(std::make_unique<LLVMContext>()); }),
+#ifdef JL_USE_COMPILE_ON_DEMAND
+    //TODO set an actual error handler address here
+    LCTM(cantFail(orc::createLocalLazyCallThroughManager(TM->getTargetTriple(), ES, 0))),
+#endif
+
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
@@ -1132,6 +1139,9 @@ JuliaOJIT::JuliaOJIT()
         std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
     },
     OptSelLayer(Pipelines)
+#ifdef JL_USE_COMPILE_ON_DEMAND
+    ,CODLayer(ES, OptSelLayer, *LCTM, orc::createLocalIndirectStubsManagerBuilder(TM->getTargetTriple()))
+#endif
 {
 #ifdef JL_USE_JITLINK
 # if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
@@ -1152,6 +1162,10 @@ JuliaOJIT::JuliaOJIT()
                const RuntimeDyld::LoadedObjectInfo &LO) {
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
+#endif
+
+#ifdef JL_USE_COMPILE_ON_DEMAND
+    CODLayer.setPartitionFunction(CODLayerT::compileWholeModule);
 #endif
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
@@ -1238,11 +1252,11 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 #endif
     });
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, std::move(TSM)));
+    cantFail(CODLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
-    for (auto Name : NewExports)
-        cantFail(ES.lookup({&JD}, Name));
+    // for (auto Name : NewExports)
+    //     cantFail(ES.lookup({&JD}, Name));
 
 }
 

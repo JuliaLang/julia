@@ -9,6 +9,7 @@
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
+#include <llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
 #include <llvm/Target/TargetMachine.h>
@@ -44,6 +45,8 @@
 # include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 #endif
+
+#define JL_USE_COMPILE_ON_DEMAND
 
 using namespace llvm;
 
@@ -195,6 +198,7 @@ public:
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::CompileOnDemandLayer CODLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     struct PipelineT {
         PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
@@ -314,6 +318,9 @@ private:
     orc::JITDylib &JD;
 
     jl_cc::QueuedResourcePool<orc::ThreadSafeContext> ContextPool;
+#ifdef JL_USE_COMPILE_ON_DEMAND
+    std::unique_ptr<orc::LazyCallThroughManager> LCTM;
+#endif
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<PooledMemoryManager> MemMgr;
@@ -321,6 +328,9 @@ private:
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
+#ifdef JL_USE_COMPILE_ON_DEMAND
+    CODLayerT CODLayer;
+#endif
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
