@@ -562,6 +562,7 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
+            ,@(filter inline-meta? prologue)
             ,@(let ((lnns (filter linenum? prologue)))
                 (if (pair? lnns)
                     (list (car lnns))

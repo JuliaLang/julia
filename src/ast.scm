@@ -523,6 +523,10 @@
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
+(define (inline-meta? e)
+  (and (length= e 2)
+       (eq? (car e) 'meta) (memq (cadr e) '(inline noinline))))
+
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))
 
