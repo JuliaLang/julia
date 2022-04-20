@@ -489,6 +489,12 @@ static auto countBasicBlocks(const Function &F)
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
     size_t optlevel = ~0ull;
+    //We may enter compilation here, which may clobber errno/LastError
+    //Pretend like nothing happened
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     TSM.withModuleDo([&](Module &M) {
         if (jl_generating_output()) {
             optlevel = 0;
@@ -512,6 +518,10 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
     });
     assert(optlevel != ~0ull && "Failed to select a valid optimization level!");
     this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 #ifdef JL_USE_JITLINK
