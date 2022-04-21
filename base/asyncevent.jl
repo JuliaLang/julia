@@ -14,9 +14,9 @@ Use [`isopen`](@ref) to check whether it is still active.
 This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
 mutable struct AsyncCondition
-    @atomic handle::Ptr{Cvoid}
+    handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    @atomic isopen::Bool
+    isopen::Bool
     @atomic set::Bool
 
     function AsyncCondition()
@@ -86,9 +86,9 @@ once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with
 
 """
 mutable struct Timer
-    @atomic handle::Ptr{Cvoid}
+    handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    @atomic isopen::Bool
+    isopen::Bool
     @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
@@ -157,12 +157,12 @@ function wait(t::Union{Timer, AsyncCondition})
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
+isopen(t::Union{Timer, AsyncCondition}) = t.isopen
 
 function close(t::Union{Timer, AsyncCondition})
     iolock_begin()
-    if isopen(t)
-        @atomic :monotonic t.isopen = false
+    if t.handle != C_NULL && isopen(t)
+        t.isopen = false
         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     iolock_end()
@@ -174,12 +174,12 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
         if t.handle != C_NULL
-            disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
+            disassociate_julia_struct(t.handle) # not going to call the usual close hooks
             if t.isopen
-                @atomic :monotonic t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+                t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
             end
-            @atomic :monotonic t.handle = C_NULL
+            t.handle = C_NULL
             notify(t.cond, false)
         end
     finally
@@ -192,9 +192,9 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        @atomic :monotonic t.isopen = false
-        Libc.free(@atomicswap :monotonic t.handle = C_NULL)
-        notify(t.cond, false)
+        t.isopen = false
+        t.handle = C_NULL
+        notify(t.cond, t.set)
     finally
         unlock(t.cond)
     end

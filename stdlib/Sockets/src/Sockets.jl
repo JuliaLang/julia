@@ -200,6 +200,7 @@ end
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
 function _uv_hook_close(sock::UDPSocket)
+    sock.handle = C_NULL
     lock(sock.cond)
     try
         sock.status = StatusClosed

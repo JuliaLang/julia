@@ -165,7 +165,8 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     switch(handle->type) {
     case UV_PROCESS:
         // cause Julia to forget about the Process object
-        handle->data = NULL;
+        if (handle->data)
+            jl_uv_call_close_callback((jl_value_t*)handle->data);
         // and make libuv think it is already dead
         ((uv_process_t*)handle)->pid = 0;
         // fall-through
