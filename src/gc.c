@@ -1743,14 +1743,8 @@ STATIC_INLINE void *gc_pop_pc(jl_gc_public_mark_sp_t *public_sp, jl_gc_mark_sp_t
     jl_gc_ws_top_t top = jl_atomic_load_relaxed(&public_sp->top);
     void *pc;
     if (b >= top.offset) {
-        pc = jl_atomic_load_relaxed(
-             (_Atomic(void *) *)&public_sp->pc_start[b % GC_PUBLIC_MARK_SP_SZ]);
+        pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp->pc_start[b]);
         if (__unlikely(b == top.offset)) {
-            // The original implementation of Chase and Lev's deque would compare-and-swap
-            // top with top + 1 to determine whether it's safe to claim the corresponding work item. 
-            // This won't work here because `gc_repush_markdata` assumes that data is already on the
-            // mark queue and simply increments the bottom when pushing, so we keep a version number
-            // instead
             jl_gc_ws_top_t top2 = {top.offset, top.version + 1};
             if (!jl_atomic_cmpswap(&public_sp->top, &top, top2)) {
                 pc = (void*)_GC_MARK_L_MAX;
@@ -1780,7 +1774,7 @@ STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
     // Pop from public queue if there are no items in private queue
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
     bottom.data_offset--;
-    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset];
     jl_atomic_store_relaxed(&public_sp->bottom, bottom);
     return data;
 }
@@ -1791,15 +1785,12 @@ STATIC_INLINE int gc_public_mark_stack_try_push(jl_gc_public_mark_sp_t *public_s
                                                void *data, size_t data_size, jl_gc_push_mode pm) JL_NOTSAFEPOINT
 {
     jl_gc_ws_bottom_t bottom = jl_atomic_load_acquire(&public_sp->bottom);
-    jl_gc_ws_top_t top = jl_atomic_load_acquire(&public_sp->top);
-    int64_t size = bottom.pc_offset - top.offset;
     // Public queue overflow
-    if (__unlikely(size >= GC_PUBLIC_MARK_SP_SZ))
+    if (__unlikely(bottom.pc_offset >= GC_PUBLIC_MARK_SP_SZ))
         return 0;
     // Copy pc/data items to public queue
-    jl_atomic_store_relaxed(
-        (_Atomic(void *) *)&public_sp->pc_start[bottom.pc_offset % GC_PUBLIC_MARK_SP_SZ], pc);
-    memcpy(&public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ], data, data_size);
+    jl_atomic_store_relaxed((_Atomic(void *) *)&public_sp->pc_start[bottom.pc_offset], pc);
+    memcpy(&public_sp->data_start[bottom.data_offset], data, data_size);
     jl_fence_release();
     if (pm == inc) {
         bottom.pc_offset++;
@@ -1855,9 +1846,8 @@ STATIC_INLINE int gc_mark_stack_steal(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_c
     if (!jl_atomic_cmpswap(&public_sp2->top, &top, top2))
         return 0;
     // Push stolen items to thief's public queue
-    void *pc = jl_atomic_load_relaxed(
-        (_Atomic(void *) *)&public_sp2->pc_start[top.offset % GC_PUBLIC_MARK_SP_SZ]);
-    jl_gc_mark_data_t *data = &public_sp2->data_start[top.offset % GC_PUBLIC_MARK_SP_SZ];
+    void *pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp2->pc_start[top.offset]);
+    jl_gc_mark_data_t *data = &public_sp2->data_start[top.offset];
     size_t data_size = gc_mark_label_sizes[(int)(uintptr_t)pc];
     return gc_public_mark_stack_try_push(&gc_cache->public_sp, pc, data, data_size, inc);
 }

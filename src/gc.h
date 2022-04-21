@@ -220,7 +220,7 @@ STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_mark_cache_t *gc_cache, jl_gc_m
     if (public_sp->overflow)
         return sp->data; 
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
-    return &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    return &public_sp->data_start[bottom.data_offset];
 }
 
 // Re-push a frame to the mark queue (both data and pc)
@@ -236,7 +236,7 @@ STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark
         return data;
     }
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
-    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset];
     bottom.pc_offset++;
     bottom.data_offset++;
     jl_atomic_store_relaxed(&public_sp->bottom, bottom);
