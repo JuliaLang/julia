@@ -176,7 +176,6 @@ const PAGES = [
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
     "Developer Documentation" => DevDocs,
-    hide("NEWS.md"),
 ]
 else
 const PAGES = [
