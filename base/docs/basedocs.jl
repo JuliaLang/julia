@@ -1094,7 +1094,7 @@ first argument:
   with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
 - as a 2-element tuple, containing a string of module IR and a string representing the name
   of the entry-point function to call;
-- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
+- as a 2-element tuple, but with the module provided as an `Vector{UInt8}` with bitcode.
 
 Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
