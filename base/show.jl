@@ -1987,7 +1987,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
     # comparison (i.e. "x < y < z")
     elseif head === :comparison && nargs >= 3 && (nargs&1==1)
-        comp_prec = minimum(operator_precedence, args[2:2:end])
+        comp_prec = minimum(operator_precedence, args[2:2:end]; init=typemax(Int))
         if comp_prec <= prec
             show_enclosed_list(io, '(', args, " ", ')', indent, comp_prec, quote_level)
         else

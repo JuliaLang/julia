@@ -416,7 +416,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
     n = length(inds)
     if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+        return reduce_empty_iter(MappingRF(f, op), A, IteratorEltype(A))
     elseif n == 1
         @inbounds a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
