@@ -2068,10 +2068,6 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     # and is valid and good inter-procedurally
     isa(rt, Conditional) && return InterConditional(slot_id(rt.var), rt.vtype, rt.elsetype)
     isa(rt, InterConditional) && return rt
-    return widenreturn_noconditional(rt)
-end
-
-function widenreturn_noconditional(@nospecialize(rt))
     isa(rt, Const) && return rt
     isa(rt, Type) && return rt
     if isa(rt, PartialStruct)
@@ -2079,7 +2075,7 @@ function widenreturn_noconditional(@nospecialize(rt))
         local anyrefine = false
         for i in 1:length(fields)
             a = fields[i]
-            a = isvarargtype(a) ? a : widenreturn_noconditional(widenconditional(a))
+            a = isvarargtype(a) ? a : widenreturn(a, bestguess, nslots, slottypes, changes)
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
                 anyrefine = has_const_info(a) ||
@@ -2094,7 +2090,6 @@ function widenreturn_noconditional(@nospecialize(rt))
     end
     return widenconst(rt)
 end
-
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
