@@ -222,10 +222,10 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                @sync_add remotecall(Core.eval, pid, m, ex)
+                @async_unwrap remotecall_wait(Core.eval, pid, m, ex)
             end
         end
-        yield() # ensure that the remotecall_fetch have had a chance to start
+        yield() # ensure that the remotecalls have had a chance to start
 
         # execute locally last as we do not want local execution to block serialization
         # of the request to remote nodes.

@@ -48,7 +48,7 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
-	@echo '@"%~dp0\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')"\" '%*' > $(BUILDROOT)/julia.bat
+	echo '@"%~dp0/'"$$(echo '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')"'" %*' | tr / '\\' > $(BUILDROOT)/julia.bat
 	chmod a+x $(BUILDROOT)/julia.bat
 else
 ifndef JULIA_VAGRANT_BUILD
@@ -434,7 +434,19 @@ endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 endif
+	# If we're on macOS, and we have a codesigning identity, then codesign the binary-dist tarball!
+ifeq ($(OS),Darwin)
+ifneq ($(MACOS_CODESIGN_IDENTITY),)
+	echo "Codesigning with identity $(MACOS_CODESIGN_IDENTITY)"; \
+	MACHO_FILES=$$(find "$(BUILDROOT)/julia-$(JULIA_COMMIT)" -type f -perm -0111 | cut -d: -f1); \
+	for f in $${MACHO_FILES}; do \
+		echo "Codesigning $${f}..."; \
+		codesign -s "$(MACOS_CODESIGN_IDENTITY)" --option=runtime --entitlements $(JULIAHOME)/contrib/mac/app/Entitlements.plist -vvv --timestamp --deep --force "$${f}"; \
+	done
+endif
+endif
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
+
 
 exe:
 	# run Inno Setup to compile installer

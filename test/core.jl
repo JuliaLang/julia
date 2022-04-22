@@ -239,6 +239,15 @@ end
 #struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
 @test_broken @isdefined S22624
 
+# issue #42297
+mutable struct Node42297{T, V}
+    value::V
+    next::Union{Node42297{T, T}, Node42297{T, Val{T}}, Nothing}
+    Node42297{T}(value) where {T} = new{T, typeof(value)}(value, nothing)
+end
+@test fieldtype(Node42297{Int,Val{Int}}, 1) === Val{Int}
+@test fieldtype(Node42297{Int,Int}, 1) === Int
+
 # issue #3890
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
@@ -1440,6 +1449,12 @@ let
     i2169(a::Array{T}) where {T} = typemin(T)
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
+
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
 
 # issue #2365
 mutable struct B2365{T}
@@ -7240,6 +7255,12 @@ struct X41654 <: Ref{X41654}
 end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
+
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
 
 # Issue #34206/34207
 function mre34206(a, n)

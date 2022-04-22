@@ -120,6 +120,10 @@
          ;; inside ref only replace within the first argument
          (list* 'ref (replace-beginend (cadr ex) a n tuples last)
                 (cddr ex)))
+        ;; TODO: this probably should not be allowed since keyword args aren't
+        ;; positional, but in this context we have just used their positions anyway
+        ((eq? (car ex) 'kw)
+         (list 'kw (cadr ex) (replace-beginend (caddr ex) a n tuples last)))
         (else
          (cons (car ex)
                (map (lambda (x) (replace-beginend x a n tuples last))
@@ -130,31 +134,33 @@
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
 (define (process-indices a i)
-  (let loop ((lst i)
-             (n   1)
-             (stmts '())
-             (tuples '())
-             (ret '()))
-    (if (null? lst)
-        (values (reverse ret) (reverse stmts))
-        (let ((idx  (car lst))
-              (last (null? (cdr lst))))
-          (if (and (pair? idx) (eq? (car idx) '...))
-              (if (symbol-like? (cadr idx))
-                  (loop (cdr lst) (+ n 1)
-                        stmts
-                        (cons (cadr idx) tuples)
-                        (cons `(... ,(replace-beginend (cadr idx) a n tuples last))
-                              ret))
-                  (let ((g (make-ssavalue)))
-                    (loop (cdr lst) (+ n 1)
-                          (cons `(= ,g ,(replace-beginend (cadr idx) a n tuples last))
-                                stmts)
-                          (cons g tuples)
-                          (cons `(... ,g) ret))))
-              (loop (cdr lst) (+ n 1)
-                    stmts tuples
-                    (cons (replace-beginend idx a n tuples last) ret)))))))
+  (let ((has-va? (any vararg? i)))
+    (let loop ((lst i)
+               (n   1)
+               (stmts '())
+               (tuples '())
+               (ret '()))
+      (if (null? lst)
+          (values (reverse ret) (reverse stmts))
+          (let* ((idx0 (car lst))
+                 (idx  (if (vararg? idx0) (cadr idx0) idx0))
+                 (last (null? (cdr lst)))
+                 (replaced (replace-beginend idx a n tuples last))
+                 (val      (if (kwarg? replaced) (caddr replaced) replaced))
+                 (idx      (if (or (not has-va?) (simple-atom? val))
+                               val (make-ssavalue))))
+            (loop (cdr lst) (+ n 1)
+                  (if (eq? idx val)
+                      stmts
+                      (cons `(= ,idx ,val)
+                            stmts))
+                  (if (vararg? idx0) (cons idx tuples) tuples)
+                  (cons (if (vararg? idx0)
+                            `(... ,idx)
+                            (if (eq? val replaced)
+                                idx
+                                (list 'kw (cadr replaced) idx)))
+                        ret)))))))
 
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
@@ -2107,11 +2113,21 @@
                      `(call ,@hvncat ,dims ,(tf is-row-first) ,@aflat))
                     `(call ,@hvncat ,(tuplize shape) ,(tf is-row-first) ,@aflat))))))))
 
-(define (expand-property-destruct lhss x)
-  (if (not (length= lhss 1))
-      (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-  (let* ((xx (if (symbol-like? x) x (make-ssavalue)))
-         (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
+(define (maybe-ssavalue lhss x in-lhs?)
+  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
+             (ssavalue? x))
+          x)
+        ((and (pair? lhss) (vararg? (last lhss))
+              (eventually-call? (cadr (last lhss))))
+         (gensy))
+        (else (make-ssavalue))))
+
+(define (expand-property-destruct lhs x)
+  (if (not (length= lhs 1))
+      (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))
+  (let* ((lhss (cdar lhs))
+         (xx   (maybe-ssavalue lhss x memq))
+         (ini  (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
     `(block
        ,@ini
        ,@(map
@@ -2120,9 +2136,9 @@
                                ((and (pair? field) (eq? (car field) '|::|) (symbol? (cadr field)))
                                 (cadr field))
                                (else
-                                (error (string "invalid assignment location \"" (deparse lhs) "\""))))))
+                                (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\""))))))
                (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,prop))))))
-           (cdar lhss))
+           lhss)
        (unnecessary ,xx))))
 
 (define (expand-tuple-destruct lhss x)
@@ -2155,13 +2171,7 @@
                       ((eq? l x) #t)
                       (else (in-lhs? x (cdr lhss)))))))
         ;; in-lhs? also checks for invalid syntax, so always call it first
-        (let* ((xx  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
-                               (ssavalue? x))
-                            x)
-                          ((and (pair? lhss) (vararg? (last lhss))
-                                (eventually-call? (cadr (last lhss))))
-                           (gensy))
-                          (else (make-ssavalue))))
+        (let* ((xx  (maybe-ssavalue lhss x in-lhs?))
                (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
                (n   (length lhss))
                ;; skip last assignment if it is an all-underscore vararg
@@ -4016,7 +4026,7 @@ f(x) = yt(x)
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq))))))))
 
-(define (closure-convert e) (cl-convert e #f #f #f #f #f #f #f))
+(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
 ;; pass 5: convert to linear IR
 
@@ -4116,17 +4126,21 @@ f(x) = yt(x)
                                      (loop (cdr s))))))
             `(pop_exception ,restore-token))))
     (define (emit-return x)
-      (define (actually-return x)
-        (let* ((x   (if rett
-                        (compile (convert-for-type-decl x rett) '() #t #f)
-                        x))
-               (tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
+      (define (emit- x)
+        (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
                         #f
                         (make-ssavalue))))
-          (if tmp (emit `(= ,tmp ,x)))
+          (if tmp
+              (begin (emit `(= ,tmp ,x)) tmp)
+              x)))
+      (define (actually-return x)
+        (let* ((x (if rett
+                      (compile (convert-for-type-decl (emit- x) rett) '() #t #f)
+                      x))
+               (x (emit- x)))
           (let ((pexc (pop-exc-expr catch-token-stack '())))
             (if pexc (emit pexc)))
-          (emit `(return ,(or tmp x)))))
+          (emit `(return ,x))))
       (if x
           (if (> handler-level 0)
               (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)

@@ -155,7 +155,10 @@ empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
 copy(a::AbstractDict) = merge!(empty(a), a)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
+function copy!(dst::AbstractDict, src::AbstractDict)
+    dst === src && return dst
+    merge!(empty!(dst), src)
+end
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)

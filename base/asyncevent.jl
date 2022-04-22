@@ -43,13 +43,22 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    t = @task while _trywait(async)
-        cb(async)
-        isopen(async) || return
+    t = @task begin
+        unpreserve_handle(async)
+        while _trywait(async)
+            cb(async)
+            isopen(async) || return
+        end
     end
-    lock(async.cond)
-    _wait2(async.cond, t)
-    unlock(async.cond)
+    # here we are mimicking parts of _trywait, in coordination with task `t`
+    preserve_handle(async)
+    @lock async.cond begin
+        if async.set
+            schedule(t)
+        else
+            _wait2(async.cond, t)
+        end
+    end
     return async
 end
 
@@ -103,7 +112,11 @@ unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
-    if !set
+    if set
+        # full barrier now for AsyncCondition
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+    else
+        t.isopen || return false
         t.handle == C_NULL && return false
         iolock_begin()
         set = t.set
@@ -112,14 +125,12 @@ function _trywait(t::Union{Timer, AsyncCondition})
             lock(t.cond)
             try
                 set = t.set
-                if !set
-                    if t.handle != C_NULL
-                        iolock_end()
-                        set = wait(t.cond)
-                        unlock(t.cond)
-                        iolock_begin()
-                        lock(t.cond)
-                    end
+                if !set && t.isopen && t.handle != C_NULL
+                    iolock_end()
+                    set = wait(t.cond)
+                    unlock(t.cond)
+                    iolock_begin()
+                    lock(t.cond)
                 end
             finally
                 unlock(t.cond)
@@ -255,19 +266,28 @@ julia> begin
 """
 function Timer(cb::Function, timeout::Real; interval::Real=0.0)
     timer = Timer(timeout, interval=interval)
-    t = @task while _trywait(timer)
-        try
-            cb(timer)
-        catch err
-            write(stderr, "Error in Timer:\n")
-            showerror(stderr, err, catch_backtrace())
-            return
+    t = @task begin
+        unpreserve_handle(timer)
+        while _trywait(timer)
+            try
+                cb(timer)
+            catch err
+                write(stderr, "Error in Timer:\n")
+                showerror(stderr, err, catch_backtrace())
+                return
+            end
+            isopen(timer) || return
         end
-        isopen(timer) || return
     end
-    lock(timer.cond)
-    _wait2(timer.cond, t)
-    unlock(timer.cond)
+    # here we are mimicking parts of _trywait, in coordination with task `t`
+    preserve_handle(timer)
+    @lock timer.cond begin
+        if timer.set
+            schedule(t)
+        else
+            _wait2(timer.cond, t)
+        end
+    end
     return timer
 end
 
