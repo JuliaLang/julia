@@ -2072,7 +2072,7 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
-function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, slottypes::Vector{Any}, changes::VarTable)
+function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nargs::Int, slottypes::Vector{Any}, changes::VarTable)
     if !(bestguess ⊑ Bool) || bestguess === Bool
         # give up inter-procedural constraint back-propagation
         # when tmerge would widen the result anyways (as an optimization)
@@ -2080,7 +2080,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     else
         if isa(rt, Conditional)
             id = slot_id(rt.var)
-            if 1 ≤ id ≤ nslots
+            if 1 ≤ id ≤ nargs
                 old_id_type = widenconditional(slottypes[id]) # same as `(states[1]::VarTable)[id].typ`
                 if (!(rt.vtype ⊑ old_id_type) || old_id_type ⊑ rt.vtype) &&
                    (!(rt.elsetype ⊑ old_id_type) || old_id_type ⊑ rt.elsetype)
@@ -2108,7 +2108,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
                 # pick up the first "interesting" slot, convert `rt` to its `Conditional`
                 # TODO: ideally we want `Conditional` and `InterConditional` to convey
                 # constraints on multiple slots
-                for slot_id in 1:nslots
+                for slot_id in 1:nargs
                     rt = bool_rt_to_conditional(rt, slottypes, changes, slot_id)
                     rt isa InterConditional && break
                 end
@@ -2167,10 +2167,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     states = frame.stmt_types
-    nargs = frame.nargs
     def = frame.linfo.def
     isva = isa(def, Method) && def.isva
-    nslots = nargs - isva
+    nargs = length(frame.result.argtypes) - isva
     slottypes = frame.slottypes
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
     while !isempty(W)
@@ -2238,7 +2237,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
         elseif isa(stmt, ReturnNode)
             bestguess = frame.bestguess
             rt = abstract_eval_value(interp, stmt.val, changes, frame)
-            rt = widenreturn(rt, bestguess, nslots, slottypes, changes)
+            rt = widenreturn(rt, bestguess, nargs, slottypes, changes)
             # narrow representation of bestguess slightly to prepare for tmerge with rt
             if rt isa InterConditional && bestguess isa Const
                 let slot_id = rt.slot
