@@ -1128,7 +1128,7 @@ julia> findmin(abs2, A, dims=2)
 ([1.0; 0.25;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
-findmin(f::Function, A::AbstractArray; dims=:) = _findmin(f, A, dims)
+findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
 
 function _findmin(f, A, region)
     ri = reduced_indices0(A, region)
@@ -1139,7 +1139,7 @@ function _findmin(f, A, region)
         (similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri))
     else
         fA = f(first(A))
-        findminmax!(f, isgreater, fill!(similar(A, typeof(fA), ri), fA),
+        findminmax!(f, isgreater, fill!(similar(A, promote_type(eltype(A), typeof(fA)), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
@@ -1195,7 +1195,7 @@ julia> findmax(abs2, A, dims=2)
 ([1.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 2);;])
 ```
 """
-findmax(f::Function, A::AbstractArray; dims=:) = _findmax(f, A, dims)
+findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
 
 function _findmax(f, A, region)
     ri = reduced_indices0(A, region)
@@ -1206,7 +1206,7 @@ function _findmax(f, A, region)
         similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
         fA = f(first(A))
-        findminmax!(f, isless, fill!(similar(A, typeof(fA), ri), fA),
+        findminmax!(f, isless, fill!(similar(A, promote_type(eltype(A), typeof(fA)), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
