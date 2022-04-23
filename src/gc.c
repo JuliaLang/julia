@@ -1743,7 +1743,7 @@ STATIC_INLINE void *gc_pop_pc(jl_gc_public_mark_sp_t *public_sp, jl_gc_mark_sp_t
     jl_gc_ws_top_t top = jl_atomic_load_relaxed(&public_sp->top);
     void *pc;
     if (b >= top.offset) {
-        pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp->pc_start[b]);
+        pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp->pc_start[b % GC_PUBLIC_MARK_SP_SZ]);
         if (__unlikely(b == top.offset)) {
             jl_gc_ws_top_t top2 = {top.offset, top.version + 1};
             if (!jl_atomic_cmpswap(&public_sp->top, &top, top2)) {
@@ -1774,7 +1774,7 @@ STATIC_INLINE void *gc_pop_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
     // Pop from public queue if there are no items in private queue
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
     bottom.data_offset--;
-    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset];
+    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
     jl_atomic_store_relaxed(&public_sp->bottom, bottom);
     return data;
 }
@@ -1789,8 +1789,8 @@ STATIC_INLINE int gc_public_mark_stack_try_push(jl_gc_public_mark_sp_t *public_s
     if (__unlikely(bottom.pc_offset >= GC_PUBLIC_MARK_SP_SZ))
         return 0;
     // Copy pc/data items to public queue
-    jl_atomic_store_relaxed((_Atomic(void *) *)&public_sp->pc_start[bottom.pc_offset], pc);
-    memcpy(&public_sp->data_start[bottom.data_offset], data, data_size);
+    jl_atomic_store_relaxed((_Atomic(void *) *)&public_sp->pc_start[bottom.pc_offset % GC_PUBLIC_MARK_SP_SZ], pc);
+    memcpy(&public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ], data, data_size);
     jl_fence_release();
     if (pm == inc) {
         bottom.pc_offset++;
@@ -1818,17 +1818,19 @@ STATIC_INLINE void gc_mark_stack_push(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_s
         gc_public_mark_stack_try_push(public_sp, pc, data, data_size, pm)) {
         return;
     }
-    public_sp->overflow = 1;
-    if (__unlikely(sp->pc == sp->pc_end))
-        gc_mark_stack_resize(gc_cache, sp);
-    *sp->pc = pc;
-    memcpy(sp->data, data, data_size);
-    if (pm == inc) {
-        sp->pc++;
-    }
-    if (pm == inc || pm == inc_data_only) {
-        sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + data_size);
-    }
+    fprintf(stderr, "panic: public queue overflow is unimplemented");
+    abort();
+    // public_sp->overflow = 1;
+    // if (__unlikely(sp->pc == sp->pc_end))
+    //     gc_mark_stack_resize(gc_cache, sp);
+    // *sp->pc = pc;
+    // memcpy(sp->data, data, data_size);
+    // if (pm == inc) {
+    //     sp->pc++;
+    // }
+    // if (pm == inc || pm == inc_data_only) {
+    //     sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + data_size);
+    // }
 }
 
 // Steal a work item from the public queue in the cache referenced by `gc_cache2`
@@ -1846,8 +1848,8 @@ STATIC_INLINE int gc_mark_stack_steal(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_c
     if (!jl_atomic_cmpswap(&public_sp2->top, &top, top2))
         return 0;
     // Push stolen items to thief's public queue
-    void *pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp2->pc_start[top.offset]);
-    jl_gc_mark_data_t *data = &public_sp2->data_start[top.offset];
+    void *pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp2->pc_start[top.offset % GC_PUBLIC_MARK_SP_SZ]);
+    jl_gc_mark_data_t *data = &public_sp2->data_start[top.offset % GC_PUBLIC_MARK_SP_SZ];
     size_t data_size = gc_mark_label_sizes[(int)(uintptr_t)pc];
     return gc_public_mark_stack_try_push(&gc_cache->public_sp, pc, data, data_size, inc);
 }
@@ -2201,9 +2203,8 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 // running gc)
 void jl_gc_set_recruit(jl_ptls_t ptls, void *addr)
 {
-    // fprintf(stderr, "[%d] set the recruitment location\n", ptls->tid);
     jl_fence();
-    jl_atomic_exchange_relaxed(&jl_gc_recruiting_location, addr);
+    jl_atomic_store_relaxed(&jl_gc_recruiting_location, addr);
     if (jl_n_threads > 1)
         jl_wake_libuv();
     for (int i = 0; i < jl_n_threads; i++) {
@@ -2216,15 +2217,14 @@ void jl_gc_set_recruit(jl_ptls_t ptls, void *addr)
 // Clear the mark loop recruitment location, ensuring that all threads finished marking
 void jl_gc_clear_recruit(jl_ptls_t ptls)
 {
-    if (jl_atomic_exchange_relaxed(&jl_gc_recruiting_location, NULL)) {
-        for (int i = 0; i < jl_n_threads; i++) {
-            if (i == ptls->tid)
-                continue;
-            jl_ptls_t ptls2 = jl_all_tls_states[i];
-            while (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL &&
-                   jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL)
-                jl_cpu_pause();
-        }
+    jl_atomic_store_relaxed(&jl_gc_recruiting_location, NULL);
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        while (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL &&
+               jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL)
+            jl_cpu_pause();
     }
 }
 
