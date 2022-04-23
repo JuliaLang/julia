@@ -187,7 +187,19 @@ function evalpoly(x, p::Tuple)
     end
 end
 
-evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
+function evalpoly(x, p::AbstractVector)
+    i = lastindex(p)
+
+    @inbounds v = p[i]
+    i -= 1
+
+    while i >= firstindex(p)
+        @inbounds v = muladd(v, x, p[i])
+        i -= 1
+    end
+
+    return v
+end
 
 function _evalpoly(x, p)
     N = length(p)
