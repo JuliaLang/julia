@@ -333,7 +333,7 @@ end
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
-function showerror_ambiguous(io::IO, meth, f, args)
+function showerror_ambiguous(io::IO, meths, f, args)
     print(io, "MethodError: ")
     show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
     print(io, "(")
@@ -342,23 +342,25 @@ function showerror_ambiguous(io::IO, meth, f, args)
         print(io, "::", a)
         i < length(p) && print(io, ", ")
     end
-    print(io, ") is ambiguous. Candidates:")
+    println(io, ") is ambiguous.\n\nCandidates:")
     sigfix = Any
-    for m in meth
-        print(io, "\n  ", m)
+    for m in meths
+        print(io, "  ")
+        show(io, m; digit_align_width=-2)
+        println(io)
         sigfix = typeintersect(m.sig, sigfix)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
         let sigfix=sigfix
-            if all(m->morespecific(sigfix, m.sig), meth)
+            if all(m->morespecific(sigfix, m.sig), meths)
                 print(io, "\nPossible fix, define\n  ")
                 Base.show_tuple_as_call(io, :function,  sigfix)
             else
-                println(io)
                 print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
                 print(io, "adding a new method more specific than any of the existing applicable methods.")
             end
         end
+        println(io)
     end
     nothing
 end
@@ -402,6 +404,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
+
+    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     for (func, arg_types_param) in funcs
         for method in methods(func)
@@ -516,7 +521,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     file = string(method.file)
                 end
                 stacktrace_contract_userdir() && (file = contractuser(file))
-                print(iob, " at ", file, ":", line)
+
                 if !isempty(kwargs)::Bool
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
@@ -538,6 +543,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
+                println(iob)
+
+                m = parentmodule_before_main(method.module)
+                color = get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+                print_module_path_file(iob, m, string(file), line, color, 1)
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
             end
@@ -546,7 +556,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            print(io, "\nClosest candidates are:")
+            print(io, "\n\nClosest candidates are:")
             sort!(lines, by = x -> -x[2])
             i = 0
             for line in lines
@@ -558,6 +568,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 i += 1
                 print(io, String(take!(line[1])))
             end
+            println(io) # extra newline for spacing to stacktrace
         end
     end
 end
@@ -684,22 +695,24 @@ end
 # from `modulecolorcycler`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
-    if m !== nothing
-        while parentmodule(m) !== m
-            pm = parentmodule(m)
-            pm == Main && break
-            m = pm
-        end
-        if !haskey(modulecolordict, m)
-            modulecolordict[m] = popfirst!(modulecolorcycler)
-        end
-        modulecolor = modulecolordict[m]
+    modulecolor = if m !== nothing
+        m = parentmodule_before_main(m)
+        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
     else
-        modulecolor = :default
+        :default
     end
     print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
 end
 
+# Gets the topmost parent module that isn't Main
+function parentmodule_before_main(m)
+    while parentmodule(m) !== m
+        pm = parentmodule(m)
+        pm == Main && break
+        m = pm
+    end
+    m
+end
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
@@ -727,31 +740,35 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     end
     println(io)
 
-    # @
-    printstyled(io, " " ^ (digit_align_width + 2) * "@ ", color = :light_black)
-
-    # module
-    if modul !== nothing
-        printstyled(io, modul, color = modulecolor)
-        print(io, " ")
-    end
-
-    # filepath
-    pathparts = splitpath(file)
-    folderparts = pathparts[1:end-1]
-    if !isempty(folderparts)
-        printstyled(io, joinpath(folderparts...) * (Sys.iswindows() ? "\\" : "/"), color = :light_black)
-    end
-
-    # filename, separator, line
-    # use escape codes for formatting, printstyled can't do underlined and color
-    # codes are bright black (90) and underlined (4)
-    printstyled(io, pathparts[end], ":", line; color = :light_black, underline = true)
+    # @ Module path / file : line
+    print_module_path_file(io, modul, file, line, modulecolor, digit_align_width)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
+function print_module_path_file(io, modul, file, line, modulecolor = :light_black, digit_align_width = 0)
+    printstyled(io, " " ^ (digit_align_width + 2) * "@", color = :light_black)
+
+    # module
+    if modul !== nothing && modulecolor !== nothing
+        print(io, " ")
+        printstyled(io, modul, color = modulecolor)
+    end
+
+    # no file/line location info to print
+    iszero(line) && return
+
+    # filepath
+    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
+    print(io, " ")
+    dir = dirname(file)
+    !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
+
+    # filename, separator, line
+    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+end
 
 function show_backtrace(io::IO, t::Vector)
     if haskey(io, :last_shown_line_infos)

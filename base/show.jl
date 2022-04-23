@@ -2448,7 +2448,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
             print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_type_stacktrace(env_io, sig[i])
+        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false))
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2458,7 +2458,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
             first = false
             print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_type_stacktrace(io, t)
+            print_type_bicolor(io, t; use_color = get(io, :backtrace, false))
         end
     end
     print_within_stacktrace(io, ")", bold=true)
@@ -2466,16 +2466,25 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
     nothing
 end
 
-function print_type_stacktrace(io, type; color=:normal)
+function print_type_bicolor(io, type; kwargs...)
     str = sprint(show, type, context=io)
+    print_type_bicolor(io, str; kwargs...)
+end
+
+function print_type_bicolor(io, str::String; color=:normal, inner_color=:light_black, use_color::Bool=true)
     i = findfirst('{', str)
-    if !get(io, :backtrace, false)::Bool
+    if !use_color # fix #41928
         print(io, str)
     elseif i === nothing
         printstyled(io, str; color=color)
     else
         printstyled(io, str[1:prevind(str,i)]; color=color)
-        printstyled(io, str[i:end]; color=:light_black)
+        if endswith(str, "...")
+            printstyled(io, str[i:prevind(str,end,3)]; color=inner_color)
+            printstyled(io, "..."; color=color)
+        else
+            printstyled(io, str[i:end]; color=inner_color)
+        end
     end
 end
 
