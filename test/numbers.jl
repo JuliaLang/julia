@@ -2019,6 +2019,14 @@ end
         @test nextpow(2, T(42)) === T(64)
         @test prevpow(2, T(42)) === T(32)
     end
+    for T in (Float16, Float32, Float64)
+        @test prevpow(2, prevfloat(T(1024.0))) == T(512.0)
+        @test nextpow(2, nextfloat(T(1024.0))) == T(2048.0)
+        @test prevpow(T(2.0), prevfloat(T(1024.0))) == T(512.0)
+        @test nextpow(T(2.0), nextfloat(T(1024.0))) == T(2048.0)
+        @test prevpow(T(2.0), prevfloat(T(Inf))) < T(Inf)
+        @test nextpow(T(2.0), prevfloat(T(Inf))) == T(Inf)
+    end
 end
 @testset "ispow2" begin
     @test  ispow2(64)
