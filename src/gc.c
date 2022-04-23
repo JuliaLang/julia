@@ -1785,8 +1785,10 @@ STATIC_INLINE int gc_public_mark_stack_try_push(jl_gc_public_mark_sp_t *public_s
                                                void *data, size_t data_size, jl_gc_push_mode pm) JL_NOTSAFEPOINT
 {
     jl_gc_ws_bottom_t bottom = jl_atomic_load_acquire(&public_sp->bottom);
+    jl_gc_ws_top_t top = jl_atomic_load_acquire(&public_sp->top);
+    int64_t size = bottom.pc_offset - top.offset;
     // Public queue overflow
-    if (__unlikely(bottom.pc_offset >= GC_PUBLIC_MARK_SP_SZ))
+    if (__unlikely(size >= GC_PUBLIC_MARK_SP_SZ))
         return 0;
     // Copy pc/data items to public queue
     jl_atomic_store_relaxed((_Atomic(void *) *)&public_sp->pc_start[bottom.pc_offset % GC_PUBLIC_MARK_SP_SZ], pc);
@@ -1843,13 +1845,14 @@ STATIC_INLINE int gc_mark_stack_steal(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_c
     // No items to steal
     if (bottom.pc_offset - top.offset <= 0) 
         return 0;
+    // Try stealing
+    void *pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp2->pc_start[top.offset % GC_PUBLIC_MARK_SP_SZ]);
+    jl_gc_mark_data_t *data = &public_sp2->data_start[top.offset % GC_PUBLIC_MARK_SP_SZ];
     jl_gc_ws_top_t top2 = {top.offset + 1, top.version + 1};
     // Top already claimed by another thief: abort stealing
     if (!jl_atomic_cmpswap(&public_sp2->top, &top, top2))
         return 0;
     // Push stolen items to thief's public queue
-    void *pc = jl_atomic_load_relaxed((_Atomic(void *) *)&public_sp2->pc_start[top.offset % GC_PUBLIC_MARK_SP_SZ]);
-    jl_gc_mark_data_t *data = &public_sp2->data_start[top.offset % GC_PUBLIC_MARK_SP_SZ];
     size_t data_size = gc_mark_label_sizes[(int)(uintptr_t)pc];
     return gc_public_mark_stack_try_push(&gc_cache->public_sp, pc, data, data_size, inc);
 }

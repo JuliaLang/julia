@@ -35,7 +35,7 @@ extern "C" {
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
 // TODO: tune these parameters
-#define GC_PUBLIC_MARK_SP_SZ (1 << 17)
+#define GC_PUBLIC_MARK_SP_SZ (1 << 18)
 
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
