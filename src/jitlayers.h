@@ -15,6 +15,9 @@
 #include "julia_assert.h"
 #include "debug-registry.h"
 
+#include <stack>
+#include <queue>
+
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
 // (used via orc::ObjectLinkingLayer).
@@ -49,9 +52,9 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel);
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel);
 void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
@@ -60,6 +63,34 @@ DataLayout jl_create_datalayout(TargetMachine &TM);
 static inline bool imaging_default() {
     return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
 }
+
+struct jl_locked_stream {
+    JL_STREAM *stream = nullptr;
+    std::mutex mutex;
+
+    struct lock {
+        std::unique_lock<std::mutex> lck;
+        JL_STREAM *&stream;
+
+        lock(std::mutex &mutex, JL_STREAM *&stream) : lck(mutex), stream(stream) {}
+
+        JL_STREAM *&operator*() {
+            return stream;
+        }
+
+        explicit operator bool() {
+            return !!stream;
+        }
+
+        operator JL_STREAM *() {
+            return stream;
+        }
+    };
+
+    lock operator*() {
+        return lock(mutex, stream);
+    }
+};
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
@@ -194,7 +225,15 @@ public:
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-    template<typename ResourceT, size_t max = 0>
+    template
+    <typename ResourceT, size_t max = 0,
+        typename BackingT = std::stack<ResourceT,
+            std::conditional_t<max == 0,
+                SmallVector<ResourceT>,
+                SmallVector<ResourceT, max>
+            >
+        >
+    >
     struct ResourcePool {
         public:
         ResourcePool(std::function<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
@@ -253,7 +292,7 @@ public:
         ResourceT acquire() {
             std::unique_lock<std::mutex> lock(mutex->mutex);
             if (!pool.empty()) {
-                return pool.pop_back_val();
+                return pop(pool);
             }
             if (!max || created < max) {
                 created++;
@@ -261,17 +300,29 @@ public:
             }
             mutex->empty.wait(lock, [&](){ return !pool.empty(); });
             assert(!pool.empty() && "Expected resource pool to have a value!");
-            return pool.pop_back_val();
+            return pop(pool);
         }
         void release(ResourceT &&resource) {
             std::lock_guard<std::mutex> lock(mutex->mutex);
-            pool.push_back(std::move(resource));
+            pool.push(std::move(resource));
             mutex->empty.notify_one();
         }
         private:
+        template<typename T, typename Container>
+        static ResourceT pop(std::queue<T, Container> &pool) {
+            ResourceT top = std::move(pool.front());
+            pool.pop();
+            return top;
+        }
+        template<typename PoolT>
+        static ResourceT pop(PoolT &pool) {
+            ResourceT top = std::move(pool.top());
+            pool.pop();
+            return top;
+        }
         std::function<ResourceT()> creator;
         size_t created = 0;
-        llvm::SmallVector<ResourceT, max == 0 ? 8 : max> pool;
+        BackingT pool;
         struct WNMutex {
             std::mutex mutex;
             std::condition_variable empty;
@@ -288,14 +339,18 @@ public:
     struct OptSelLayerT : orc::IRLayer {
 
         template<size_t N>
-        OptSelLayerT(std::unique_ptr<PipelineT> (&optimizers)[N]) : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(), optimizers[0]->OptimizeLayer.getManglingOptions()), optimizers(optimizers), count(N) {
+        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers)
+            : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
+                optimizers[0]->OptimizeLayer.getManglingOptions()),
+            optimizers(optimizers.data()),
+            count(N) {
             static_assert(N > 0, "Expected array with at least one optimizer!");
         }
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
 
         private:
-        std::unique_ptr<PipelineT> *optimizers;
+        const std::unique_ptr<PipelineT> * const optimizers;
         size_t count;
     };
 
@@ -332,20 +387,38 @@ public:
         ContextPool.release(std::move(ctx));
     }
     const DataLayout& getDataLayout() const;
-    TargetMachine &getTargetMachine();
+
+    // TargetMachine pass-through methods
+    std::unique_ptr<TargetMachine> cloneTargetMachine() const;
     const Triple& getTargetTriple() const;
+    StringRef getTargetFeatureString() const;
+    StringRef getTargetCPU() const;
+    const TargetOptions &getTargetOptions() const;
+    const Target &getTarget() const;
+    TargetIRAnalysis getTargetIRAnalysis() const;
+
     size_t getTotalBytes() const;
 
     JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
         return DebugRegistry;
+    }
+
+    jl_locked_stream &get_dump_emitted_mi_name_stream() JL_NOTSAFEPOINT {
+        return dump_emitted_mi_name_stream;
+    }
+    jl_locked_stream &get_dump_compiles_stream() JL_NOTSAFEPOINT {
+        return dump_compiles_stream;
+    }
+    jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
+        return dump_llvm_opt_stream;
     }
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
     void shareStrings(Module &M);
 
-    std::unique_ptr<TargetMachine> TM;
-    DataLayout DL;
+    const std::unique_ptr<TargetMachine> TM;
+    const DataLayout DL;
 
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
@@ -353,16 +426,24 @@ private:
 
     JITDebugInfoRegistry DebugRegistry;
 
-    ResourcePool<orc::ThreadSafeContext> ContextPool;
+    //Map and inc are guarded by RLST_mutex
+    std::mutex RLST_mutex{};
+    int RLST_inc = 0;
+    DenseMap<void*, std::string> ReverseLocalSymbolTable;
+
+    //Compilation streams
+    jl_locked_stream dump_emitted_mi_name_stream;
+    jl_locked_stream dump_compiles_stream;
+    jl_locked_stream dump_llvm_opt_stream;
+
+    ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
 #ifndef JL_USE_JITLINK
-    std::shared_ptr<RTDyldMemoryManager> MemMgr;
+    const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    std::unique_ptr<PipelineT> Pipelines[4];
+    const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
-
-    DenseMap<void*, std::string> ReverseLocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());
