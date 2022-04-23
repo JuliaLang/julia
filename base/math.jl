@@ -190,7 +190,10 @@ end
 function evalpoly(x, p::AbstractVector)
     i = lastindex(p)
 
-    @inbounds v = p[i]
+    # without the annotation v is not type stable in some cases,
+    # e.g. if p contains Float32 but x is Float64
+    T = promote_type(typeof(x), eltype(p))
+    @inbounds v::T = p[i]
     i -= 1
 
     while i >= firstindex(p)
