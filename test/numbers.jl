@@ -2013,6 +2013,7 @@ end
     @test prevpow(2, 56789) == 32768
     @test_throws DomainError prevpow(2, -56789)
     @test_throws DomainError prevpow(Int8(4), 128)
+    @test_throws OverflowError nextpow(Int8(4), 65)
     for i = 1:100
         @test nextpow(2, i) == nextpow(2, big(i))
         @test prevpow(2, i) == prevpow(2, big(i))

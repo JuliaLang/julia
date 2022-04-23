@@ -464,9 +464,12 @@ function nextpow(a::Real, x::Real)
     p = a^(n-1)
     x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
-    p = a^n
-    p >= x && return p
-    return a^(n+1)
+    wp = a^n
+    wp > p || throw(OverflowError("result is beyond the range of type of the base"))
+    wp >= x && return wp
+    wwp = a^(n+1)
+    wwp > wp || throw(OverflowError("result is beyond the range of type of the base"))
+    return wp
 end
 
 """
