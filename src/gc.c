@@ -1713,19 +1713,19 @@ void *gc_mark_label_addrs[_GC_MARK_L_MAX];
 size_t gc_mark_label_sizes[_GC_MARK_L_MAX];
 
 // Double the private mark stack (both pc and data)
-static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp) JL_NOTSAFEPOINT
-{
-    jl_gc_mark_data_t *old_data = gc_cache->data_stack;
-    void **pc_stack = sp->pc_start;
-    size_t stack_size = sp->pc_end - pc_stack;
+// static void NOINLINE gc_mark_stack_resize(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp) JL_NOTSAFEPOINT
+// {
+//     jl_gc_mark_data_t *old_data = gc_cache->data_stack;
+//     void **pc_stack = sp->pc_start;
+//     size_t stack_size = sp->pc_end - pc_stack;
 
-    gc_cache->data_stack = (jl_gc_mark_data_t *)realloc_s(old_data, stack_size * 2 * sizeof(jl_gc_mark_data_t));
-    sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + (((char*)gc_cache->data_stack) - ((char*)old_data)));
+//     gc_cache->data_stack = (jl_gc_mark_data_t *)realloc_s(old_data, stack_size * 2 * sizeof(jl_gc_mark_data_t));
+//     sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + (((char*)gc_cache->data_stack) - ((char*)old_data)));
     
-    sp->pc_start = gc_cache->pc_stack = (void**)realloc_s(pc_stack, stack_size * 2 * sizeof(void*));
-    gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
-    sp->pc = sp->pc_start + (sp->pc - pc_stack);
-}
+//     sp->pc_start = gc_cache->pc_stack = (void**)realloc_s(pc_stack, stack_size * 2 * sizeof(void*));
+//     gc_cache->pc_stack_end = sp->pc_end = sp->pc_start + stack_size * 2;
+//     sp->pc = sp->pc_start + (sp->pc - pc_stack);
+// }
 
 // Pop a return address from the mark pc queue (i.e. decrease the pc queue bottom pointer)
 STATIC_INLINE void *gc_pop_pc(jl_gc_public_mark_sp_t *public_sp, jl_gc_mark_sp_t *sp)
