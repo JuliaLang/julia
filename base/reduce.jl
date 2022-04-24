@@ -908,7 +908,8 @@ julia> findmax([1, 7, 7, NaN])
 (NaN, 4)
 ```
 """
-findmax(itr) = findmax(identity, itr)
+findmax(itr) = _findmax(itr, :)
+_findmax(a, ::Colon) = findmax(identity, a)
 
 """
     findmin(f, domain) -> (f(x), index)
@@ -967,7 +968,8 @@ julia> findmin([1, 7, 7, NaN])
 (NaN, 4)
 ```
 """
-findmin(itr) = findmin(identity, itr)
+findmin(itr) = _findmin(itr, :)
+_findmin(a, ::Colon) = findmin(identity, a)
 
 """
     argmax(f, domain)
