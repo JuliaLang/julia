@@ -469,7 +469,7 @@ function nextpow(a::Real, x::Real)
     wp >= x && return wp
     wwp = a^(n+1)
     wwp > wp || throw(OverflowError("result is beyond the range of type of the base"))
-    return wp
+    return wwp
 end
 
 """
