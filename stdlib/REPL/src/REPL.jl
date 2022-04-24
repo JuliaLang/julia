@@ -29,7 +29,9 @@ import Base:
     display,
     show,
     AnyDict,
-    ==
+    ==,
+    UUID,
+    rand
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
@@ -534,10 +536,11 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     last_mode::Union{Nothing,Prompt}
     mode_mapping::Dict{Symbol,Prompt}
     modes::Vector{Symbol}
+    session::UUID
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
     REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
-                        nothing, mode_mapping, UInt8[])
+                        nothing, mode_mapping, UInt8[], UUID(rand(UInt128)))
 
 invalid_history_message(path::String) = """
 Invalid history file ($path) format:
@@ -614,6 +617,7 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     entry = """
     # time: $(Libc.strftime("%Y-%m-%d %H:%M:%S %Z", time()))
     # mode: $mode
+    # session: $(hist.session)
     $(replace(str, r"^"ms => "\t"))
     """
     # TODO: write-lock history file
