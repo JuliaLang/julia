@@ -317,19 +317,16 @@ let p = 15
     @test 2p+1 == 31  # not a hex float literal
 end
 
-function test_parseerror(str, msg)
-    try
-        Meta.parse(str)
-        @test false
-    catch e
-        @test isa(e,ParseError) && e.msg == msg
-    end
+macro test_parseerror(str, msg)
+    ex = :(@test_throws ParseError($(esc(msg))) Meta.parse($(esc(str))))
+    ex.args[2] = __source__
+    return ex
 end
-test_parseerror("0x", "invalid numeric constant \"0x\"")
-test_parseerror("0b", "invalid numeric constant \"0b\"")
-test_parseerror("0o", "invalid numeric constant \"0o\"")
-test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
-test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
+@test_parseerror("0x", "invalid numeric constant \"0x\"")
+@test_parseerror("0b", "invalid numeric constant \"0b\"")
+@test_parseerror("0o", "invalid numeric constant \"0o\"")
+@test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
+@test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 
 # issue #15798
 @test Meta.lower(Main, Base.parse_input_line("""
@@ -345,8 +342,8 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
            """)::Expr) == 23341
 
 # issue #15763
-test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
-test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
+@test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+@test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
@@ -2059,8 +2056,8 @@ end == 1
 # issue #29982
 @test Meta.parse("'a'") == 'a'
 @test Meta.parse("'\U0061'") == 'a'
-test_parseerror("''", "invalid empty character literal")
-test_parseerror("'abc'", "character literal contains multiple characters")
+@test_parseerror("''", "invalid empty character literal")
+@test_parseerror("'abc'", "character literal contains multiple characters")
 
 # optional soft scope: #28789, #33864
 
