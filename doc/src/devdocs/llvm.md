@@ -127,15 +127,11 @@ array. However, this would betray the SSA nature of the uses at the call site,
 making optimizations (including GC root placement), significantly harder.
 Instead, we emit it as follows:
 ```llvm
-%bitcast = bitcast @any_unoptimized_call to %jl_value_t *(*)(%jl_value_t *, %jl_value_t *)
-call cc 37 %jl_value_t *%bitcast(%jl_value_t *%arg1, %jl_value_t *%arg2)
+call %jl_value_t *@julia.call(jl_value_t *(*)(...) @any_unoptimized_call, %jl_value_t *%arg1, %jl_value_t *%arg2)
 ```
-The special `cc 37` annotation marks the fact that this call site is really using
-the jlcall calling convention. This allows us to retain the SSA-ness of the
+This allows us to retain the SSA-ness of the
 uses throughout the optimizer. GC root placement will later lower this call to
-the original C ABI. In the code the calling convention number is represented by
-the `JLCALL_F_CC` constant. In addition, there is the `JLCALL_CC` calling
-convention which functions similarly, but omits the first argument.
+the original C ABI.
 
 ## GC root placement
 

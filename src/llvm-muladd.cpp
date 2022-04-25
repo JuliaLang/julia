@@ -83,7 +83,7 @@ static bool combineMulAdd(Function &F)
             }
         }
     }
-    assert(!verifyFunction(F));
+    assert(!verifyFunction(F, &errs()));
     return modified;
 }
 

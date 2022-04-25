@@ -27,7 +27,8 @@ JuliaPassContext::JuliaPassContext()
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        write_barrier_binding_func(nullptr), module(nullptr)
+        write_barrier_binding_func(nullptr), call_func(nullptr),
+        call2_func(nullptr), module(nullptr)
 {
 }
 
@@ -51,6 +52,8 @@ void JuliaPassContext::initFunctions(Module &M)
     write_barrier_func = M.getFunction("julia.write_barrier");
     write_barrier_binding_func = M.getFunction("julia.write_barrier_binding");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    call_func = M.getFunction("julia.call");
+    call2_func = M.getFunction("julia.call2");
 }
 
 void JuliaPassContext::initAll(Module &M)
