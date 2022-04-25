@@ -310,26 +310,30 @@
        (symbol? (cadr e))))
 
 (define (lam:args x) (cadr x))
-(define (lam:argnames x) (llist-vars (lam:args x)))
+(define (lam:argnames x) (llist-vars (lam:args x) #f))
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 (define (lam:sp x) (cadddr (lam:vinfo x)))
 
-(define (bad-formal-argument v)
-  (error (string #\" (deparse v) #\" " is not a valid function argument name")))
+(define (bad-formal-argument v fname)
+  (error (string #\" (deparse v) #\" " is not a valid function argument name"
+                 (if fname
+                     (string " inside the function definition for \"" fname "\"")
+                     "")
+                 ". Perhaps you meant to write \"==\" instead of \"=\"")))
 
 (define (valid-name? s)
   (not (memq s '(ccall cglobal))))
 
-(define (arg-name v)
+(define (arg-name v (fname #f))
   (cond ((and (symbol? v) (valid-name? v))
          v)
         ((not (pair? v))
-         (bad-formal-argument v))
+         (bad-formal-argument v fname))
         (else
          (case (car v)
            ((...)
-	    (arg-name (cadr v)) ;; to check for errors
+	    (arg-name (cadr v) fname) ;; to check for errors
 	    (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
@@ -338,15 +342,18 @@
            ((meta)  ;; allow certain per-argument annotations
             (if (nospecialize-meta? v #t)
                 (arg-name (caddr v))
-                (bad-formal-argument v)))
+                (bad-formal-argument v fname)))
            ((kw)
-            (arg-name (cadr v)))
-           (else (bad-formal-argument v))))))
+            (arg-name (cadr v) fname))
+           (else (bad-formal-argument v fname))))))
 
-(define (arg-type v)
+(define (arg-name-🍛 fname)
+  (lambda (a) (arg-name a fname)))
+
+(define (arg-type v (fname #f))
   (cond ((symbol? v)  '(core Any))
         ((not (pair? v))
-         (bad-formal-argument v))
+         (bad-formal-argument v fname))
         (else
          (case (car v)
            ((...) (if (eq? (length v) 3)
@@ -354,24 +361,28 @@
                       `(... ,(decl-type (cadr v)))))
            ((|::|)
             (if (not (symbol? (cadr v)))
-                (bad-formal-argument (cadr v)))
+                (bad-formal-argument (cadr v) fname))
             (decl-type v))
            ((meta)  ;; allow certain per-argument annotations
             (if (nospecialize-meta? v #t)
-                (arg-type (caddr v))
-                (bad-formal-argument v)))
+                (arg-type (caddr v) fname)
+                (bad-formal-argument v fname)))
            ((kw)
-            (arg-type (cadr v)))
-           (else (bad-formal-argument v))))))
+            (arg-type (cadr v) fname))
+           (else (bad-formal-argument v fname))))))
+
+(define (arg-type-🍛 fname)
+  (lambda (a) (arg-type a fname)))
 
 ;; convert a lambda list into a list of just symbols
-(define (llist-vars lst)
-  (map arg-name (filter (lambda (a) (not (and (pair? a)
-                                              (eq? (car a) 'parameters))))
-                        lst)))
+(define (llist-vars lst fname)
+  (map (arg-name-🍛 fname)
+       (filter (lambda (a) (not (and (pair? a)
+                                 (eq? (car a) 'parameters))))
+               lst)))
 
 ;; get just argument types
-(define (llist-types lst) (map arg-type lst))
+(define (llist-types lst fname) (map (arg-type-🍛 fname) lst))
 
 (define (decl? e)
   (and (pair? e) (eq? (car e) '|::|)))
