@@ -1,28 +1,41 @@
 # NOTE: ryu/Ryu.jl: neededdigits(::Type{Float64}) = 309 + 17
-const SCRATCH_BUFFER_INLINE_LENGTH = 309 + 17
-struct ScratchBufferInline
-    data::NTuple{SCRATCH_BUFFER_INLINE_LENGTH,UInt8}
-
-    ScratchBufferInline() = new()
-end
+const SCRATCH_BUFFER_MIN_LENGTH = 309 + 17
 
 struct ScratchBuffer
     p::Ptr{UInt8}
     length::UInt64
 end
 
-function with_scratch_buffer(f, n)
-    if n <= SCRATCH_BUFFER_INLINE_LENGTH
-        buf = Ref(ScratchBufferInline())
-        GC.@preserve buf f(ScratchBuffer(pointer_from_objref(buf), unsafe_trunc(UInt64, n)))
+# NOTE: similar to pcre.jl, Threads module isn't available at the time of loading
+_tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
+_nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+
+const SCRATCH_BUFFERS = map(1:_nth()) do _
+    Vector{UInt8}(undef, SCRATCH_BUFFER_MIN_LENGTH), false
+end
+
+function with_scratch_buffer(f, n::Int)
+    buf, buf_inuse = @inbounds SCRATCH_BUFFERS[_tid()]
+    if buf_inuse
+        buf = Vector{UInt8}(undef, max(SCRATCH_BUFFER_MIN_LENGTH, n))
     else
-        tls = task_local_storage()
-        buf = get!(tls, :SCRATCH_BUFFER) do
-            Vector{UInt8}(undef, n)
-        end::Vector{UInt8}
-        resize!(buf, n)
-        GC.@preserve buf f(ScratchBuffer(pointer(buf), length(buf)))
+        @inbounds SCRATCH_BUFFERS[_tid()] = (buf, true)
     end
+
+    resize!(buf, n)
+    # NOTE: we could just `f(buf)`, but String(buf) doesn't play well and causes allocation on the next `resize!(buf)`
+    res = GC.@preserve buf f(ScratchBuffer(pointer(buf), length(buf)))
+
+    # The intent is to reuse buffers when it's cheap and reallocate when synchronization/exception handling is required.
+    # We'll "waste" a buffer when:
+    # * task is migrated while `f()` is running
+    # * exception is thrown from `f()`
+    # * multiple tasks are using `with_scratch_buffer()` from the same thread (e.g. f() is blocking)
+    # Those shouldn't happen often.
+    # NOTE: _tid() could be different here if task migrated.
+    @inbounds SCRATCH_BUFFERS[_tid()] = (buf, false)
+
+    res
 end
 
 @propagate_inbounds function setindex!(a::ScratchBuffer, v, i)
