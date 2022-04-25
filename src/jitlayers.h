@@ -250,7 +250,6 @@ public:
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly);
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
     uint64_t getGlobalValueAddress(StringRef Name);
-    uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
     auto getContext() {
         return *ContextPool;
@@ -273,6 +272,10 @@ public:
     TargetIRAnalysis getTargetIRAnalysis() const;
 
     size_t getTotalBytes() const;
+
+    JITTargetAddress getCompiledFunctionPointer(JITTargetAddress trampoline);
+    JITTargetAddress registerFunctionName(std::string name);
+    StringRef getFunctionName(JITTargetAddress func) const;
 
     JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
         return DebugRegistry;

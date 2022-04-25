@@ -67,7 +67,6 @@ void jl_dump_llvm_opt_impl(void *s)
 
 static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports);
 static void jl_decorate_module(Module &M);
-static uint64_t getAddressForFunction(StringRef fname);
 
 void jl_link_global(GlobalVariable *GV, void *addr)
 {
@@ -176,21 +175,21 @@ static jl_callptr_t _jl_compile_codeinst(
             addr = jl_fptr_sparam_addr;
         }
         else {
-            addr = (jl_callptr_t)getAddressForFunction(decls.functionObject);
+            addr = jitTargetAddressToFunction<jl_callptr_t>(jl_ExecutionEngine->registerFunctionName(decls.functionObject));
             isspecsig = true;
         }
         if (jl_atomic_load_relaxed(&this_code->invoke) == NULL) {
             // once set, don't change invoke-ptr, as that leads to race conditions
             // with the (not) simultaneous updates to invoke and specptr
             if (!decls.specFunctionObject.empty()) {
-                jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
+                jl_atomic_store_release(&this_code->specptr.fptr, jitTargetAddressToPointer<void*>(jl_ExecutionEngine->registerFunctionName(decls.specFunctionObject)));
                 this_code->isspecsig = isspecsig;
             }
             jl_atomic_store_release(&this_code->invoke, addr);
         }
         else if (jl_atomic_load_relaxed(&this_code->invoke) == jl_fptr_const_return_addr && !decls.specFunctionObject.empty()) {
             // hack to export this pointer value to jl_dump_method_disasm
-            jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
+            jl_atomic_store_release(&this_code->specptr.fptr, jitTargetAddressToPointer<void*>(jl_ExecutionEngine->registerFunctionName(decls.specFunctionObject)));
         }
         if (this_code== codeinst)
             fptr = addr;
@@ -414,12 +413,11 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
-#ifndef JL_USE_COMPILE_ON_DEMAND
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
         if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(jl_ExecutionEngine->getCompiledFunctionPointer(fptr), raw_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -460,9 +458,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             JL_UNLOCK(&jl_codegen_lock);
         }
         if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(jl_ExecutionEngine->getCompiledFunctionPointer(specfptr), raw_mc, asm_variant, debuginfo, binary);
     }
-#endif
 
     // whatever, that didn't work - use the assembler output instead
     void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
@@ -1299,16 +1296,6 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
     return cantFail(addr.getAddress());
 }
 
-uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
-{
-    auto addr = findSymbol(getMangledName(Name), false);
-    if (!addr) {
-        consumeError(addr.takeError());
-        return 0;
-    }
-    return cantFail(addr.getAddress());
-}
-
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
     auto RLST = *ReverseLocalSymbols;
@@ -1402,6 +1389,37 @@ size_t JuliaOJIT::getTotalBytes() const
     return MemMgr->total_bytes();
 }
 #endif
+
+JITTargetAddress JuliaOJIT::getCompiledFunctionPointer(JITTargetAddress trampoline) {
+#ifdef JL_USE_COMPILE_ON_DEMAND
+    auto implDylib = ES.getJITDylibByName(JD.getName() + ".impl");
+    assert(implDylib && "Didn't create the implementation dylib used by compile-on-demand!");
+    orc::JITDylib *search[] = {implDylib, &JD};
+    auto ptr = ES.lookup(search, getFunctionName(trampoline));
+    if (!ptr) {
+        ES.reportError(ptr.takeError());
+        return 0;
+    }
+    return ptr->getAddress();
+#else
+    return trampoline; // Trampoline is the actual function
+#endif
+}
+
+JITTargetAddress JuliaOJIT::registerFunctionName(std::string name) {
+    auto lock = *ReverseLocalSymbols;
+    auto addr = getGlobalValueAddress(name);
+    auto ptr = jitTargetAddressToPointer<void*>(addr);
+    assert(lock->Table.find(ptr) == lock->Table.end() && "Duplicated reverse lookup mapping!");
+    lock->Table[ptr] = std::move(name);
+    return addr;
+}
+StringRef JuliaOJIT::getFunctionName(JITTargetAddress func) const {
+    auto lock = *ReverseLocalSymbols;
+    auto it = lock->Table.find(jitTargetAddressToPointer<void*>(func));
+    assert(it != lock->Table.end() && "Unable to find function pointer in reverse mapping!");
+    return it->second;
+}
 
 JuliaOJIT *jl_ExecutionEngine;
 
@@ -1664,14 +1682,6 @@ static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModu
     std::vector<std::vector<orc::ThreadSafeModule*>> ToMerge;
     jl_add_to_ee(M, NewExports, Queued, ToMerge, 1);
     assert(!M);
-}
-
-
-static uint64_t getAddressForFunction(StringRef fname)
-{
-    auto addr = jl_ExecutionEngine->getFunctionAddress(fname);
-    assert(addr);
-    return addr;
 }
 
 // helper function for adding a DLLImport (dlsym) address to the execution engine
