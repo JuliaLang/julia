@@ -13,6 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
@@ -142,8 +143,10 @@ Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
 
 typeof_rng(rng::AbstractRNG) = typeof(rng)
 
-Sampler(::Type{<:AbstractRNG}, sp::Sampler, ::Repetition) =
-    throw(ArgumentError("Sampler for this object is not defined"))
+# this method is necessary to prevent rand(rng::AbstractRNG, X) from
+# recursively constructing nested Sampler types.
+Sampler(T::Type{<:AbstractRNG}, sp::Sampler, r::Repetition) =
+    throw(MethodError(Sampler, (T, sp, r)))
 
 # default shortcut for the general case
 Sampler(::Type{RNG}, X) where {RNG<:AbstractRNG} = Sampler(RNG, X, Val(Inf))
@@ -306,7 +309,7 @@ include("XoshiroSimd.jl")
 ## rand & rand! & seed! docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=default_rng()], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
@@ -351,14 +354,14 @@ julia> rand(Float64, (2, 3))
     The complexity of `rand(rng, s::Union{AbstractDict,AbstractSet})`
     is linear in the length of `s`, unless an optimized method with
     constant complexity is available, which is the case for `Dict`,
-    `Set` and `BitSet`. For more than a few calls, use `rand(rng,
+    `Set` and dense `BitSet`s. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
 """
 rand
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=default_rng()], A, [S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -382,8 +385,8 @@ julia> rand!(rng, zeros(5))
 rand!
 
 """
-    seed!([rng=GLOBAL_RNG], seed) -> rng
-    seed!([rng=GLOBAL_RNG]) -> rng
+    seed!([rng=default_rng()], seed) -> rng
+    seed!([rng=default_rng()]) -> rng
 
 Reseed the random number generator: `rng` will give a reproducible
 sequence of numbers if and only if a `seed` is provided. Some RNGs

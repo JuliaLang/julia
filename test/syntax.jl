@@ -1204,6 +1204,25 @@ end
 @test [(0,0)... 1] == [0 0 1]
 @test Float32[(0,0)... 1] == Float32[0 0 1]
 
+# issue #43960, evaluation order of splatting in `ref`
+let a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test b[f(), g()...] == 3
+    @test a == [1,2]
+end
+
+# issue #44239
+struct KWGetindex end
+Base.getindex(::KWGetindex, args...; kws...) = (args, NamedTuple(kws))
+let A = KWGetindex(), a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test A[f(), g()..., k = f()] === ((2,), (k = 2,))
+    @test a == [1, 2, 1]
+    @test A[var"end"=1] === ((), (var"end" = 1,))
+end
+
 @testset "raw_str macro" begin
     @test raw"$" == "\$"
     @test raw"\n" == "\\n"
@@ -1433,6 +1452,14 @@ invalid assignment location "function (s, o...)
 end\""""
 end
 
+let ex = Meta.lower(@__MODULE__, :(function g end = 1))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function g
+end\""""
+end
+
+
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
     Expr(:error, "local variable name \"x\" conflicts with an argument")
@@ -1509,8 +1536,18 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
     @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
 end
 
+# issue #43018
+module M43018
+    macro test43018(fn)
+        quote $(fn)() end
+    end
+end
+@test :(@M43018.test43018() do; end) == :(M43018.@test43018() do; end)
+@test @macroexpand(@M43018.test43018() do; end) == @macroexpand(M43018.@test43018() do; end)
+@test @M43018.test43018() do; 43018 end == 43018
+
 # issue #27129
-f27129(x = 1) = (@Base._inline_meta; x)
+f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
     @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
 end
@@ -1880,7 +1917,12 @@ f31404(a, b; kws...) = (a, b, values(kws))
 # issue #28992
 macro id28992(x) x end
 @test @id28992(1 .+ 2) == 3
-@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
+@test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
+let m = @__MODULE__
+    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\"")
+    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\"")
+end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
@@ -2268,6 +2310,9 @@ h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
+# issue #44343
+f44343(;kw...) = NamedTuple(kw)
+@test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
     # Test these evals shouldnt segfault
@@ -2485,13 +2530,21 @@ end
 end
 
 module Mod2
+import ..Mod.x as x_from_mod
+import ..Mod.x as x_from_mod2
 const y = 2
+
+export x_from_mod2
 end
 
 import .Mod: x as x2
 
 @test x2 == 1
 @test !@isdefined(x)
+
+module_names = names(@__MODULE__; all=true, imported=true)
+@test :x2 ∈ module_names
+@test :x ∉ module_names
 
 import .Mod2.y as y2
 
@@ -2521,6 +2574,17 @@ import .Mod.@mac as @m
 @test_throws ErrorException eval(:(import .Mod.func as @notmacro))
 @test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
 @test_throws ErrorException eval(:(using .Mod: func as @notmacro))
+
+import .Mod2.x_from_mod
+
+@test @isdefined(x_from_mod)
+@test x_from_mod == Mod.x
+
+using .Mod2
+
+@test_nowarn @eval x_from_mod2
+@test @isdefined(x_from_mod2)
+@test x_from_mod2 == x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
@@ -2604,8 +2668,6 @@ end
     @test x == 1 && y == 2
     @test z == (3:5,)
 
-    @test Meta.isexpr(Meta.@lower(begin a, b..., c = 1:3 end), :error)
-    @test Meta.isexpr(Meta.@lower(begin a, b..., c = 1, 2, 3 end), :error)
     @test Meta.isexpr(Meta.@lower(begin a, b..., c... = 1, 2, 3 end), :error)
 
     @test_throws BoundsError begin x, y, z... = 1:1 end
@@ -2939,15 +3001,15 @@ end
 end
 
 @testset "slurping into function def" begin
-    x, f()... = [1, 2, 3]
+    x, f1()... = [1, 2, 3]
     @test x == 1
-    @test f() == [2, 3]
+    @test f1() == [2, 3]
     # test that call to `Base.rest` is outside the definition of `f`
-    @test f() === f()
+    @test f1() === f1()
 
-    x, f()... = 1, 2, 3
+    x, f2()... = 1, 2, 3
     @test x == 1
-    @test f() == (2, 3)
+    @test f2() == (2, 3)
 end
 
 @testset "long function bodies" begin
@@ -2958,4 +3020,340 @@ end
     ex = Expr(:vcat)
     ex.args = fill!(Vector{Any}(undef, 600000), 1)
     @test_throws ErrorException("syntax: expression too large") eval(ex)
+end
+
+# issue 25678
+@generated f25678(x::T) where {T} = code_lowered(sin, Tuple{x})[]
+@test f25678(pi/6) === sin(pi/6)
+
+@generated g25678(x) = return :x
+@test g25678(7) === 7
+
+# issue 25678: module of name `Core`
+# https://github.com/JuliaLang/julia/pull/40778/files#r784416018
+@test @eval Module() begin
+    Core = 1
+    @generated f() = 1
+    f() == 1
+end
+
+# issue 25678: argument of name `tmp`
+# https://github.com/JuliaLang/julia/pull/43823#discussion_r785365312
+@test @eval Module() begin
+    @generated f(tmp) = tmp
+    f(1) === Int
+end
+
+# issue #19012
+@test Meta.parse("\U2200", raise=false) == Symbol("∀")
+@test Meta.parse("\U2203", raise=false) == Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) == Symbol("∄")
+
+# issue 42220
+macro m42220()
+    return quote
+        function foo(::Type{T}=Float64) where {T}
+            return Vector{T}(undef, 10)
+        end
+    end
+end
+@test @m42220()() isa Vector{Float64}
+@test @m42220()(Bool) isa Vector{Bool}
+
+@testset "try else" begin
+    fails(f) = try f() catch; true else false end
+    @test fails(error)
+    @test !fails(() -> 1 + 2)
+
+    @test_throws ParseError Meta.parse("try foo() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() else bar() catch; baz() end")
+    @test_throws ParseError Meta.parse("try foo() catch; baz() finally foobar() else bar() end")
+    @test_throws ParseError Meta.parse("try foo() finally foobar() else bar() catch; baz() end")
+
+    err = try
+        try
+            1 + 2
+        catch
+        else
+            error("foo")
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+        else
+            error("foo")
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == ErrorException("foo")
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            1 + 2
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 3 + 4
+    @test x == 1
+
+    x = 0
+    err = try
+        try
+            error()
+        catch
+            5 + 6
+        else
+            3 + 4
+        finally
+            x += 1
+        end
+    catch e
+        e
+    end
+    @test err == 5 + 6
+    @test x == 1
+end
+
+@test_throws ParseError Meta.parse("""
+function checkUserAccess(u::User)
+	if u.accessLevel != "user\u202e \u2066# users are not allowed\u2069\u2066"
+		return true
+	end
+	return false
+end
+""")
+
+@test_throws ParseError Meta.parse("""
+function checkUserAccess(u::User)
+	#=\u202e \u2066if (u.isAdmin)\u2069 \u2066 begin admins only =#
+		return true
+	#= end admin only \u202e \u2066end\u2069 \u2066=#
+	return false
+end
+""")
+
+@testset "empty nd arrays" begin
+    @test :([])    == Expr(:vect)
+    @test :([;])   == Expr(:ncat, 1)
+    @test :([;;])  == Expr(:ncat, 2)
+    @test :([;;;]) == Expr(:ncat, 3)
+
+    @test []    == Array{Any}(undef, 0)
+    @test [;]   == Array{Any}(undef, 0)
+    @test [;;]  == Array{Any}(undef, 0, 0)
+    @test [;;;] == Array{Any}(undef, 0, 0, 0)
+
+    @test :(T[])    == Expr(:ref, :T)
+    @test :(T[;])   == Expr(:typed_ncat, :T, 1)
+    @test :(T[;;])  == Expr(:typed_ncat, :T, 2)
+    @test :(T[;;;]) == Expr(:typed_ncat, :T, 3)
+
+    @test Int[]    == Array{Int}(undef, 0)
+    @test Int[;]   == Array{Int}(undef, 0)
+    @test Int[;;]  == Array{Int}(undef, 0, 0)
+    @test Int[;;;] == Array{Int}(undef, 0, 0, 0)
+
+    @test :([  ]) == Expr(:vect)
+    @test :([
+            ]) == Expr(:vect)
+    @test :([ ;; ]) == Expr(:ncat, 2)
+    @test :([
+             ;;
+            ]) == Expr(:ncat, 2)
+
+    @test_throws ParseError Meta.parse("[; ;]")
+    @test_throws ParseError Meta.parse("[;; ;]")
+    @test_throws ParseError Meta.parse("[;\n;]")
+end
+
+@test Meta.parseatom("@foo", 1; filename="foo", lineno=7) == (Expr(:macrocall, :var"@foo", LineNumberNode(7, :foo)), 5)
+@test Meta.parseall("@foo"; filename="foo", lineno=3) == Expr(:toplevel, LineNumberNode(3, :foo), Expr(:macrocall, :var"@foo", LineNumberNode(3, :foo)))
+
+let ex = :(const $(esc(:x)) = 1; (::typeof(2))() = $(esc(:x)))
+    @test macroexpand(Main, Expr(:var"hygienic-scope", ex, Main)).args[3].args[1] == :((::$(GlobalRef(Main, :typeof))(2))())
+end
+
+struct Foo44013
+    x
+    f
+end
+
+@testset "issue #44013" begin
+    f = Foo44013(1, 2)
+    res = begin (; x, f) = f end
+    @test res == Foo44013(1, 2)
+    @test x == 1
+    @test f == 2
+
+    f = Foo44013(1, 2)
+    res = begin (; f, x) = f end
+    @test res == Foo44013(1, 2)
+    @test x == 1
+    @test f == 2
+end
+
+@testset "typed globals" begin
+    m = Module()
+    @eval m begin
+        x::Int = 1
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @eval m begin
+        global x::Int
+        f(y) = x + y
+    end
+    @test Base.return_types(m.f, (Int,)) == [Int]
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        function f()
+            global x
+            x::Int = 1
+            x = 2.
+        end
+        g() = x
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m function f()
+        global x
+        x::Int = 1
+        x::Float64 = 2.
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        x::Float64 = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x::Int = 1
+        const x = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        const x = 1
+        x::Int = 2
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Float64
+    end
+
+    m = Module()
+    @test_throws ErrorException @eval m begin
+        x = 1
+        global x::Int
+    end
+
+    m = Module()
+    @eval m module Foo
+        export bar
+        bar = 1
+    end
+    @eval m begin
+        using .Foo
+        bar::Float64 = 2
+    end
+    @test m.bar === 2.0
+    @test Core.get_binding_type(m, :bar) == Float64
+    @test m.Foo.bar === 1
+    @test Core.get_binding_type(m.Foo, :bar) == Any
+end
+
+# issue 44723
+demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
+@test demo44723()() == 1
+
+@testset "slurping in non-final position" begin
+    res = begin x, y..., z = 1:7 end
+    @test res == 1:7
+    @test x == 1
+    @test y == Vector(2:6)
+    @test z == 7
+
+    res = begin x, y..., z = [1, 2] end
+    @test res == [1, 2]
+    @test x == 1
+    @test y == Int[]
+    @test z == 2
+
+    x, y, z... = 1:7
+    res = begin y, z..., x = z..., x, y end
+    @test res == ((3:7)..., 1, 2)
+    @test y == 3
+    @test z == ((4:7)..., 1)
+    @test x == 2
+
+    res = begin x, _..., y = 1, 2 end
+    @test res == (1, 2)
+    @test x == 1
+    @test y == 2
+
+    res = begin x, y..., z = 1, 2:4, 5 end
+    @test res == (1, 2:4, 5)
+    @test x == 1
+    @test y == (2:4,)
+    @test z == 5
+
+    @test_throws ArgumentError begin x, y..., z = 1:1 end
+    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+
+    last((a..., b)) = b
+    front((a..., b)) = a
+    @test last(1:3) == 3
+    @test front(1:3) == [1, 2]
+
+    res = begin x, y..., z = "abcde" end
+    @test res == "abcde"
+    @test x == 'a'
+    @test y == "bcd"
+    @test z == 'e'
+
+    res = begin x, y..., z = (a=1, b=2, c=3, d=4) end
+    @test res == (a=1, b=2, c=3, d=4)
+    @test x == 1
+    @test y == (b=2, c=3)
+    @test z == 4
+
+    v = rand(Bool, 7)
+    res = begin x, y..., z = v end
+    @test res === v
+    @test x == v[1]
+    @test y == v[2:6]
+    @test z == v[end]
+
+    res = begin x, y..., z = Core.svec(1, 2, 3, 4) end
+    @test res == Core.svec(1, 2, 3, 4)
+    @test x == 1
+    @test y == Core.svec(2, 3)
+    @test z == 4
 end

@@ -641,4 +641,4 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
-in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+in(::AbstractString, ::AbstractString) = error("use occursin(needle, haystack) for string containment")

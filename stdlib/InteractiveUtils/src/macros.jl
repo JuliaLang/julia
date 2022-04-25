@@ -174,7 +174,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
 end
 
 """
-Same behaviour as gen_call_with_extracted_types except that keyword arguments
+Same behaviour as `gen_call_with_extracted_types` except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
@@ -229,6 +229,17 @@ macro code_lowered(ex0...)
     quote
         local results = $thecall
         length(results) == 1 ? results[1] : results
+    end
+end
+
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
     end
 end
 
@@ -325,10 +336,49 @@ by putting them and their value before the function call, like this:
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_native`](@ref) on the resulting expression.
 
-Set the optional keyword argument `debuginfo` by putting it before the function call, like this:
+Set any of the optional keyword arguments `syntax`, `debuginfo`, `binary` or `dump_module`
+by putting it before the function call, like this:
 
-    @code_native debuginfo=:default f(x)
+    @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
-`debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
+* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+
+See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and [`@code_lowered`](@ref)
 """
 :@code_native
+
+"""
+    @time_imports
+
+A macro to execute an expression and produce a report of any time spent importing packages and their
+dependencies.
+
+If a package's dependencies have already been imported either globally or by another dependency they will
+not appear under that package and the package will accurately report a faster load time than if it were to
+be loaded in isolation.
+
+```julia-repl
+julia> @time_imports using CSV
+      3.5 ms    ┌ IteratorInterfaceExtensions
+     27.4 ms  ┌ TableTraits
+    614.0 ms  ┌ SentinelArrays
+    138.6 ms  ┌ Parsers
+      2.7 ms  ┌ DataValueInterfaces
+      3.4 ms    ┌ DataAPI
+     59.0 ms  ┌ WeakRefStrings
+     35.4 ms  ┌ Tables
+     49.5 ms  ┌ PooledArrays
+    972.1 ms  CSV
+```
+
+!!! note
+    During the load process a package sequentially imports where necessary all of its dependencies, not just
+    its direct dependencies. That is also true for the dependencies themselves so nested importing will likely
+    occur, but not always. Therefore the nesting shown in this output report is not equivalent to the dependency
+    tree, but does indicate where import time has accumulated.
+
+"""
+:@time_imports

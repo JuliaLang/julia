@@ -44,7 +44,7 @@ function reduced_indices0(inds::Indices{N}, d::Int) where N
 end
 
 function reduced_indices(inds::Indices{N}, region) where N
-    rinds = [inds...]
+    rinds = collect(inds)
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = Int(i)
@@ -58,7 +58,7 @@ function reduced_indices(inds::Indices{N}, region) where N
 end
 
 function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = [inds...]
+    rinds = collect(inds)
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = Int(i)
@@ -77,15 +77,14 @@ end
 ## initialization
 # initarray! is only called by sum!, prod!, etc.
 for (Op, initfun) in ((:(typeof(add_sum)), :zero), (:(typeof(mul_prod)), :one))
-    @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
+    @eval initarray!(a::AbstractArray{T}, ::Any, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
 end
 
-for Op in (:(typeof(max)), :(typeof(min)))
-    @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && copyfirst!(a, src); a)
-end
+initarray!(a::AbstractArray{T}, f, ::Union{typeof(min),typeof(max),typeof(_extrema_rf)},
+    init::Bool, src::AbstractArray) where {T} = (init && mapfirst!(f, a, src); a)
 
 for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
-    @eval initarray!(a::AbstractArray, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
+    @eval initarray!(a::AbstractArray, ::Any, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
 end
 
 # reducedim_initarray is called by
@@ -139,7 +138,7 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
 
         if isempty(A1)
             # If the slice is empty just return non-view version as the initial array
-            return copy(A1)
+            return map(f, A1)
         else
             # otherwise use the min/max of the first slice as initial value
             v0 = mapreduce(f, $f2, A1)
@@ -148,9 +147,9 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             Tr = v0 isa T ? T : typeof(v0)
 
             # but NaNs and missing need to be avoided as initial values
-            if (v0 == v0) === false
+            if v0 isa Number && isnan(v0)
                 # v0 is NaN
-                v0 = $initval
+                v0 = oftype(v0, $initval)
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
@@ -165,6 +164,42 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
         end
     end
 end
+
+function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray, region)
+    # First compute the reduce indices. This will throw an ArgumentError
+    # if any region is invalid
+    ri = reduced_indices(A, region)
+
+    # Next, throw if reduction is over a region with length zero
+    any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
+
+    # Make a view of the first slice of the region
+    A1 = view(A, ri...)
+
+    isempty(A1) && return map(f, A1)
+    # use the max/min of the first slice as initial value for non-empty cases
+    v0 = reverse(mapreduce(f, op, A1)) # turn minmax to maxmin
+
+    T = _realtype(f.f, promote_union(eltype(A)))
+    Tmin = v0[1] isa T ? T : typeof(v0[1])
+    Tmax = v0[2] isa T ? T : typeof(v0[2])
+
+    # but NaNs and missing need to be avoided as initial values
+    if v0[1] isa Number && isnan(v0[1])
+        v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
+    elseif isunordered(v0[1])
+        # v0 is missing or a third-party unordered value
+        # TODO: Some types, like BigInt, don't support typemin/typemax.
+        # So a Matrix{Union{BigInt, Missing}} can still error here.
+        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
+    end
+    # v0 may have changed type.
+    Tmin = v0[1] isa T ? T : typeof(v0[1])
+    Tmax = v0[2] isa T ? T : typeof(v0[2])
+
+    return reducedim_initarray(A, region, v0, Tuple{Tmin,Tmax})
+end
+
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
@@ -435,7 +470,7 @@ julia> count!(<=(2), [1; 1], A)
 """
 count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) = count!(identity, r, A; init=init)
 count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) =
-    mapreducedim!(_bool(f), add_sum, initarray!(r, add_sum, init, A), A)
+    mapreducedim!(_bool(f), add_sum, initarray!(r, f, add_sum, init, A), A)
 
 """
     sum(A::AbstractArray; dims)
@@ -738,6 +773,74 @@ julia> minimum!([1 1], A)
 minimum!(r, A)
 
 """
+    extrema(A::AbstractArray; dims) -> Array{Tuple}
+
+Compute the minimum and maximum elements of an array over the given dimensions.
+
+See also: [`minimum`](@ref), [`maximum`](@ref), [`extrema!`](@ref).
+
+# Examples
+```jldoctest
+julia> A = reshape(Vector(1:2:16), (2,2,2))
+2×2×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  5
+ 3  7
+
+[:, :, 2] =
+  9  13
+ 11  15
+
+julia> extrema(A, dims = (1,2))
+1×1×2 Array{Tuple{Int64, Int64}, 3}:
+[:, :, 1] =
+ (1, 7)
+
+[:, :, 2] =
+ (9, 15)
+```
+"""
+extrema(A::AbstractArray; dims)
+
+"""
+    extrema(f, A::AbstractArray; dims) -> Array{Tuple}
+
+Compute the minimum and maximum of `f` applied to each element in the given dimensions
+of `A`.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+"""
+extrema(f, A::AbstractArray; dims)
+
+"""
+    extrema!(r, A)
+
+Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+!!! compat "Julia 1.8"
+    This method requires Julia 1.8 or later.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> extrema!([(1, 1); (1, 1)], A)
+2-element Vector{Tuple{Int64, Int64}}:
+ (1, 2)
+ (3, 4)
+
+julia> extrema!([(1, 1);; (1, 1)], A)
+1×2 Matrix{Tuple{Int64, Int64}}:
+ (1, 3)  (2, 4)
+```
+"""
+extrema!(r, A)
+
+"""
     all(A; dims)
 
 Test whether all values along the given dimensions of an array are `true`.
@@ -883,7 +986,9 @@ julia> any!([1 1], A)
 any!(r, A)
 
 for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod,    :mul_prod),
-                            (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min)]
+                            (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min),
+                            (:extrema, :_extrema, :_extrema_rf)]
+    mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
         # User-facing methods with keyword arguments
         @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
@@ -891,7 +996,7 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
 
         # Underlying implementations using dispatch
         ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
-        ($_fname)(f, a, ::Colon; kw...) = mapreduce(f, $op, a; kw...)
+        ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
     end
 end
 
@@ -904,16 +1009,18 @@ _all(a, ::Colon)                           = _all(identity, a, :)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
-                    (:all, :&),       (:any, :|)]
+                    (:all, :&),       (:any, :|),
+                    (:extrema, :_extrema_rf)]
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)
+    mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            mapreducedim!(f, $(op), initarray!(r, $(op), init, A), A)
+            mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
-        $(_fname)(f, A, dims; kw...) = mapreduce(f, $(op), A; dims=dims, kw...)
+        $(_fname)(f, A, dims; kw...) = mapreduce($mapf, $(op), A; dims=dims, kw...)
     end
 end
 

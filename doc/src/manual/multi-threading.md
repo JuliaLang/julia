@@ -18,10 +18,17 @@ The number of execution threads is controlled either by using the
 [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
 specified, then `-t`/`--threads` takes precedence.
 
+The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
+(`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
+(see [Command-line Options](@ref command-line-options) for more details).
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
 
+!!! compat "Julia 1.7"
+    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
 ```bash
@@ -244,10 +251,13 @@ which will later be published formally.
 
 Any field in a struct declaration can be decorated with `@atomic`, and then any
 write must be marked with `@atomic` also, and must use one of the defined atomic
-orderings (:monotonic, :acquire, :release, :acquire\_release, or
-:sequentially\_consistent). Any read of an atomic field can also be annotated
+orderings (`:monotonic`, `:acquire`, `:release`, `:acquire_release`, or
+`:sequentially_consistent`). Any read of an atomic field can also be annotated
 with an atomic ordering constraint, or will be done with monotonic (relaxed)
 ordering if unspecified.
+
+!!! compat "Julia 1.7"
+    Per-field atomics requires at least Julia 1.7.
 
 
 ## Side effects and mutable function arguments
@@ -297,9 +307,6 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * After a task starts running on a certain thread (e.g. via `@spawn`), it
-    will always be restarted on the same thread after blocking. In the future
-    this limitation will be removed, and tasks will migrate between threads.
   * `@threads` currently uses a static schedule, using all threads and assigning
     equal iteration counts to each. In the future the default schedule is likely
     to change to be dynamic.
@@ -357,7 +364,7 @@ There are a few approaches to dealing with this problem:
 
 3. A related third strategy is to use a yield-free queue. We don't currently
    have a lock-free queue implemented in Base, but
-   `Base.InvasiveLinkedListSynchronized{T}` is suitable. This can frequently be a
+   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This can frequently be a
    good strategy to use for code with event loops. For example, this strategy is
    employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
    don't do any explicit work inside the `finalizer`, and instead add it to a queue

@@ -94,12 +94,12 @@ keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
-    @_inline_meta
+    @inline
     @boundscheck i == 1 || throw(BoundsError())
     x
 end
 function getindex(x::Number, I::Integer...)
-    @_inline_meta
+    @inline
     @boundscheck all(isone, I) || throw(BoundsError())
     x
 end
@@ -174,6 +174,7 @@ julia> abs2(-3)
 9
 ```
 """
+abs2(x::Number) = abs(x)^2
 abs2(x::Real) = x*x
 
 """

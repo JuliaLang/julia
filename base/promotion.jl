@@ -10,9 +10,9 @@ they both inherit.
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), ts...) = (@_total_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_total_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -29,11 +29,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif a <: Tuple
+    end
+    # a and b are DataTypes
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
+    if a <: Tuple
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        ap, bp = a.parameters, b.parameters
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -77,7 +81,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
@@ -125,7 +128,7 @@ end
 # WARNING: this is wrong for some objects for which subtyping is broken
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_total_may_throw_meta
     if a <: b
         return Bottom
     end
@@ -161,18 +164,63 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
 end
 _promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
 
+function promote_typejoin_union(::Type{T}) where T
+    if T === Union{}
+        return Union{}
+    elseif T isa UnionAll
+        return Any # TODO: compute more precise bounds
+    elseif T isa Union
+        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
+    elseif T isa DataType
+        T <: Tuple && return typejoin_union_tuple(T)
+        return T
+    else
+        error("unreachable") # not a type??
+    end
+end
+
+function typejoin_union_tuple(T::DataType)
+    @_total_may_throw_meta
+    u = Base.unwrap_unionall(T)
+    p = (u::DataType).parameters
+    lr = length(p)::Int
+    if lr == 0
+        return Tuple{}
+    end
+    c = Vector{Any}(undef, lr)
+    for i = 1:lr
+        pi = p[i]
+        U = Core.Compiler.unwrapva(pi)
+        if U === Union{}
+            ci = Union{}
+        elseif U isa Union
+            ci = typejoin(U.a, U.b)
+        elseif U isa UnionAll
+            return Any # TODO: compute more precise bounds
+        else
+            ci = promote_typejoin_union(U)
+        end
+        if i == lr && Core.Compiler.isvarargtype(pi)
+            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
+        else
+            c[i] = ci
+        end
+    end
+    return Base.rewrap_unionall(Tuple{c...}, T)
+end
 
 # Returns length, isfixed
-function full_va_len(p)
+function full_va_len(p::Core.SimpleVector)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        if isdefined(last, :N) && isa(last.N, Int)
-            return length(p)::Int + last.N - 1, true
+        if isdefined(last, :N)
+            N = last.N
+            isa(N, Int) && return length(p) + N - 1, true
         end
-        return length(p)::Int, false
+        return length(p), false
     end
-    return length(p)::Int, true
+    return length(p), true
 end
 
 # reduce typejoin over A[i:end]
@@ -233,7 +281,7 @@ function promote_type end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
+promote_type(T, S, U, V...) = (@inline; promote_type(T, promote_type(S, U, V...)))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
@@ -241,7 +289,7 @@ promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
 promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @_inline_meta
+    @inline
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
     #   promote_type(T, S) =>
@@ -259,12 +307,12 @@ it for new types as appropriate.
 """
 function promote_rule end
 
-promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::Type, ::Type) = Bottom
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
+promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_inline_meta; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)
@@ -283,19 +331,19 @@ julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 function promote end
 
 function _promote(x::T, y::S) where {T,S}
-    @_inline_meta
+    @inline
     R = promote_type(T, S)
     return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x, xs...) = (@inline; promote_type(typeof(x), promote_typeof(xs...)))
 function _promote(x, y, z)
-    @_inline_meta
+    @inline
     R = promote_typeof(x, y, z)
     return (convert(R, x), convert(R, y), convert(R, z))
 end
 function _promote(x, y, zs...)
-    @_inline_meta
+    @inline
     R = promote_typeof(x, y, zs...)
     return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
@@ -307,13 +355,13 @@ promote() = ()
 promote(x) = (x,)
 
 function promote(x, y)
-    @_inline_meta
+    @inline
     px, py = _promote(x, y)
     not_sametype((x,y), (px,py))
     px, py
 end
 function promote(x, y, z)
-    @_inline_meta
+    @inline
     px, py, pz = _promote(x, y, z)
     not_sametype((x,y,z), (px,py,pz))
     px, py, pz
@@ -331,7 +379,7 @@ not_sametype(x::T, y::T) where {T} = sametype_error(x)
 not_sametype(x, y) = nothing
 
 function sametype_error(input)
-    @_noinline_meta
+    @noinline
     error("promotion of types ",
           join(map(x->string(typeof(x)), input), ", ", " and "),
           " failed to change any arguments")

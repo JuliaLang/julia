@@ -270,11 +270,19 @@ end
     b  = randn(3)
     b0 = copy(b)
     c  = randn(2)
+    B  = randn(3,3)
+    B0 = copy(B)
+    C  = randn(2,3)
     @test A \b ≈ ldiv!(c, qr(A ), b)
     @test b == b0
+    @test A \B ≈ ldiv!(C, qr(A ), B)
+    @test B == B0
     c0 = copy(c)
+    C0 = copy(C)
     @test Ac\c ≈ ldiv!(b, qr(Ac, ColumnNorm()), c)
     @test c0 == c
+    @test Ac\C ≈ ldiv!(B, qr(Ac, ColumnNorm()), C)
+    @test C0 == C
 end
 
 @testset "Issue reflector of zero-length vector" begin
@@ -413,6 +421,49 @@ end
     C = B*A.Q'
     @test C ≈ A.Q
     @test A.Q' * B ≈ A.Q
+end
+
+@testset "convert between eltypes" begin
+    a = rand(Float64, 10, 5)
+    qra = qr(a)
+    qrwy = LinearAlgebra.QRCompactWY{Float32}(qra.factors, qra.T)
+    @test Array(qrwy) ≈ Array(qr(Float32.(a)))
+    @test eltype(qrwy.factors) == eltype(qrwy.T) == Float32
+    qra = qr(a, ColumnNorm())
+    qrp = QRPivoted{Float32}(qra.factors, qra.τ, qra.jpvt)
+    @test Array(qrp) ≈ Array(qr(Float32.(a), ColumnNorm()))
+    @test eltype(qrp.factors) == eltype(qrp.τ) == Float32
+    a = rand(Float16, 10, 5)
+    qra = qr(a)
+    qrnonblas = QR{ComplexF16}(qra.factors, qra.τ)
+    @test Array(qrnonblas) ≈ Array(qr(ComplexF16.(a)))
+    @test eltype(qrnonblas.factors) == eltype(qrnonblas.τ) == ComplexF16
+end
+
+# We use approximate equals to get MKL.jl tests to pass.
+@testset "optimized getindex for an AbstractQ" begin
+    for T in [Float64, ComplexF64]
+        Q = qr(rand(T, 4, 4))
+        Q2 = Q.Q
+        M = Matrix(Q2)
+        for j in axes(M, 2)
+            @test Q2[:, j] ≈ M[:, j]
+            for i in axes(M, 1)
+                @test Q2[i, :] ≈ M[i, :]
+                @test Q2[i, j] ≈ M[i, j]
+            end
+        end
+        @test Q2[:] ≈ M[:]
+        @test Q2[:, :] ≈ M[:, :]
+        @test Q2[:, :, :] ≈ M[:, :, :]
+    end
+    # Check that getindex works if copy returns itself (#44729)
+    struct MyIdentity{T} <: LinearAlgebra.AbstractQ{T} end
+    Base.size(::MyIdentity, dim::Integer) = dim in (1,2) ? 2 : 1
+    Base.size(::MyIdentity) = (2, 2)
+    Base.copy(J::MyIdentity) = J
+    LinearAlgebra.lmul!(::MyIdentity{T}, M::Array{T}) where {T} = M
+    @test MyIdentity{Float64}()[1,:] == [1.0, 0.0]
 end
 
 end # module TestQR

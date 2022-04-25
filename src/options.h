@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "platform.h"
+
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
@@ -158,23 +160,19 @@
 
 // sanitizer defaults ---------------------------------------------------------
 
-#ifndef JULIA_H
-#error "Must be included after julia.h"
-#endif
-
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
-#if defined(JL_ASAN_ENABLED) || defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define MEMDEBUG
 #define KEEP_BODIES
 #endif
 
 // TSAN doesn't like COPY_STACKS
-#if defined(JL_TSAN_ENABLED) && defined(COPY_STACKS)
+#if defined(_COMPILER_TSAN_ENABLED_) && defined(COPY_STACKS)
 #undef COPY_STACKS
 #endif
 
 // Memory sanitizer needs TLS, which llvm only supports for the small memory model
-#if defined(JL_MSAN_ENABLED)
+#if defined(_COMPILER_MSAN_ENABLED_)
 // todo: fix the llvm MemoryManager to work with small memory model
 #endif
 

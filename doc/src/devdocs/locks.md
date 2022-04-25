@@ -1,4 +1,4 @@
-# Proper maintenance and care of multi-threading locks
+# [Proper maintenance and care of multi-threading locks](@id Proper-maintenance-and-care-of-multi-threading-locks)
 
 The following strategies are used to ensure that the code is dead-lock free (generally by addressing
 the 4th Coffman condition: circular wait).
@@ -28,8 +28,12 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * gc_perm_lock
 >   * flisp
 >   * jl_in_stackwalk (Win32)
+>   * ResourcePool<?>::mutex
+>   * RLST_mutex
+>   * jl_locked_stream::mutex
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
+>     > likewise, the ResourcePool<?>::mutexes just protect the associated resource pool
 
 The following is a leaf lock (level 2), and only acquires level 1 locks (safepoint) internally:
 
@@ -45,6 +49,11 @@ The following is a level 4 lock, which can only recurse to acquire level 1, 2, o
 >   * MethodTable->writelock
 
 No Julia code may be called while holding a lock above this point.
+
+orc::ThreadSafeContext locks occupy a special spot in the locking diagram. They are used to protect
+LLVM's global non-threadsafe state, but there may be an arbitrary number of them. For now, there is
+only one global context, and thus acquiring it is a level 5 lock. However, acquiring such a lock
+should only be done at the same time that the codegen lock is acquired.
 
 The following are a level 6 lock, which can only recurse to acquire locks at lower levels:
 

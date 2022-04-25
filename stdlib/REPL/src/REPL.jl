@@ -55,6 +55,7 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
+    setmodifiers!,
     terminal,
     MIState,
     PromptState,
@@ -149,8 +150,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
-                # note: use jl_set_global to make sure value isn't passed through `expand`
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -167,6 +167,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
 end
 
 function check_for_missing_packages_and_run_hooks(ast)
+    isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
@@ -176,25 +177,29 @@ function check_for_missing_packages_and_run_hooks(ast)
     end
 end
 
-function modules_to_be_loaded(ast, mods = Symbol[])
+function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+    ast.head == :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head in [:using, :import]
         for arg in ast.args
-            if first(arg.args) isa Symbol # i.e. `Foo`
-                if first(arg.args) != :. # don't include local imports
-                    push!(mods, first(arg.args))
+            arg = arg::Expr
+            arg1 = first(arg.args)
+            if arg1 isa Symbol # i.e. `Foo`
+                if arg1 != :. # don't include local imports
+                    push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first(first(arg.args).args))
+                push!(mods, first((arg1::Expr).args))
             end
         end
     end
     for arg in ast.args
-        arg isa Expr && modules_to_be_loaded(arg, mods)
+        if isexpr(arg, (:block, :if, :using, :import))
+            modules_to_be_loaded(arg, mods)
+        end
     end
     filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
-    return mods
+    return unique(mods)
 end
-modules_to_be_loaded(::Nothing) = Symbol[] # comments are parsed as nothing
 
 """
     start_repl_backend(repl_channel::Channel, response_channel::Channel)
@@ -280,6 +285,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
+                val = Base.scrub_repl_backtrace(val)
+                Base.istrivialerror(val) || setglobal!(Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -296,12 +303,14 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
             end
             break
-        catch
+        catch ex
             if iserr
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, current_exceptions())
+                    excs = Base.scrub_repl_backtrace(current_exceptions())
+                    setglobal!(Main, :err, excs)
+                    Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -470,16 +479,22 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         false, false, false, envcolors
     )
 
-mutable struct REPLCompletionProvider <: CompletionProvider end
+mutable struct REPLCompletionProvider <: CompletionProvider
+    modifiers::LineEdit.Modifiers
+end
+REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
+
+setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
 function complete_line(c::REPLCompletionProvider, s::PromptState)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, lastindex(partial))
+    ret, range, should_complete = completions(full, lastindex(partial), Main, c.modifiers.shift)
+    c.modifiers = LineEdit.Modifiers()
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
@@ -1186,7 +1201,12 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
                 @goto writeback
             end
-            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            try
+                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            catch ex
+                ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
+                @info "edit failed" _exception=ex
+            end
             LineEdit.refresh_line(s)
             return
             @label writeback
@@ -1252,56 +1272,49 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
+let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
+    "`" => r"`", "```" => r"```", "#" => r"$"m, "#=" => r"=#|#=")
+    global _rm_strings_and_comments
+    function _rm_strings_and_comments(code::Union{String,SubString{String}})
+        buf = IOBuffer(sizehint = sizeof(code))
+        pos = 1
+        while true
+            i = findnext(r"\"(?!\"\")|\"\"\"|'|`(?!``)|```|#(?!=)|#=", code, pos)
+            isnothing(i) && break
+            match = SubString(code, i)
+            j = findnext(matchend[match]::Regex, code, nextind(code, last(i)))
+            if match == "#=" # possibly nested
+                nested = 1
+                while j !== nothing
+                    nested += SubString(code, j) == "#=" ? +1 : -1
+                    iszero(nested) && break
+                    j = findnext(r"=#|#=", code, nextind(code, last(j)))
+                end
+            elseif match[1] != '#' # quote match: check non-escaped
+                while j !== nothing
+                    notbackslash = findprev(!=('\\'), code, prevind(code, first(j)))::Int
+                    isodd(first(j) - notbackslash) && break # not escaped
+                    j = findnext(matchend[match]::Regex, code, nextind(code, first(j)))
+                end
+            end
+            isnothing(j) && break
+            if match[1] == '#'
+                print(buf, SubString(code, pos, prevind(code, first(i))))
+            else
+                print(buf, SubString(code, pos, last(i)), ' ', SubString(code, j))
+            end
+            pos = nextind(code, last(j))
+        end
+        print(buf, SubString(code, pos, lastindex(code)))
+        return String(take!(buf))
+    end
+end
+
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
-function ends_with_semicolon(line::AbstractString)
-    match = findlast(isequal(';'), line)::Union{Nothing,Int}
-    if match !== nothing
-        # state for comment parser, assuming that the `;` isn't in a string or comment
-        # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
-        comment = false
-        comment_start = false
-        comment_close = false
-        comment_multi = 0
-        for c in line[(match + 1):end]
-            if comment_multi > 0
-                # handle nested multi-line comments
-                if comment_close && c == '#'
-                    comment_close = false
-                    comment_multi -= 1
-                elseif comment_start && c == '='
-                    comment_start = false
-                    comment_multi += 1
-                else
-                    comment_start = (c == '#')
-                    comment_close = (c == '=')
-                end
-            elseif comment
-                # handle line comments
-                if c == '\r' || c == '\n'
-                    comment = false
-                end
-            elseif comment_start
-                # see what kind of comment this is
-                comment_start = false
-                if c == '='
-                    comment_multi = 1
-                else
-                    comment = true
-                end
-            elseif c == '#'
-                # start handling for a comment
-                comment_start = true
-            else
-                # outside of a comment, encountering anything but whitespace
-                # means the semi-colon was internal to the expression
-                isspace(c) || return false
-            end
-        end
-        return true
-    end
-    return false
-end
+ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
+ends_with_semicolon(code::Union{String,SubString{String}}) =
+    contains(_rm_strings_and_comments(code), r";\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = hascolor(repl)

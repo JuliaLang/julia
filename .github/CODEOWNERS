@@ -1,3 +1,6 @@
-CODEOWNERS @JuliaLang/github-actions 
-/.github/ @JuliaLang/github-actions 
+CODEOWNERS @JuliaLang/github-actions
+/.github/ @JuliaLang/github-actions
 /.buildkite/ @JuliaLang/github-actions
+
+/.github/workflows/retry.yml @DilumAluthge
+/.github/workflows/statuses.yml @DilumAluthge

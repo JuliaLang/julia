@@ -6,7 +6,8 @@ using Core.Intrinsics, Core.IR
 
 import Core: print, println, show, write, unsafe_write, stdout, stderr,
              _apply_iterate, svec, apply_type, Builtin, IntrinsicFunction,
-             MethodInstance, CodeInstance, MethodMatch, PartialOpaque
+             MethodInstance, CodeInstance, MethodMatch, PartialOpaque,
+             TypeofVararg
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -22,14 +23,13 @@ eval(m, x) = Core.eval(m, x)
 include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
-# The real @inline macro is not available until after array.jl, so this
-# internal macro splices the meta Expr directly into the function body.
-macro _inline_meta()
-    Expr(:meta, :inline)
-end
-macro _noinline_meta()
-    Expr(:meta, :noinline)
-end
+# The @inline/@noinline macros that can be applied to a function declaration are not available
+# until after array.jl, and so we will mark them within a function body instead.
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
+
+convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 
 # essential files and libraries
 include("essentials.jl")
@@ -58,6 +58,9 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 
+# the same constructor as defined in float.jl, but with a different name to avoid redefinition
+_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+
 # checked arithmetic
 const checked_add = +
 const checked_sub = -
@@ -69,6 +72,8 @@ sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
 add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x+y, false)
+
+include("strings/lazy.jl")
 
 # core array operations
 include("indices.jl")
@@ -88,14 +93,16 @@ using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
 
 ntuple(f, ::Val{0}) = ()
-ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
-ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
-ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple(f, ::Val{1}) = (@inline; (f(1),))
+ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@inline; (f(1), f(2), f(3)))
 ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
 ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core docsystem
 include("docs/core.jl")
+import Core.Compiler.CoreDocs
+Core.atdoc!(CoreDocs.docm)
 
 # sorting
 function sort end
@@ -133,6 +140,19 @@ include("compiler/stmtinfo.jl")
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+
+# required for bootstrap
+# TODO: find why this is needed and remove it.
+function extrema(x::Array)
+    isempty(x) && throw(ArgumentError("collection must be non-empty"))
+    vmin = vmax = x[1]
+    for i in 2:length(x)
+        xi = x[i]
+        vmax = max(vmax, xi)
+        vmin = min(vmin, xi)
+    end
+    return vmin, vmax
+end
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

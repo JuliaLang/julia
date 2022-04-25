@@ -15,12 +15,25 @@ end
 Furlong(x::T) where {T<:Number} = Furlong{1,T}(x)
 Furlong(x::Furlong) = x
 (::Type{T})(x::Furlong{0}) where {T<:Number} = T(x.val)::T
+(::Type{T})(x::Furlong{0}) where {T<:Furlong{0}} = T(x.val)::T
+(::Type{T})(x::Furlong{0}) where {T<:Furlong} = typeassert(x, T)
 Furlong{p}(v::Number) where {p} = Furlong{p,typeof(v)}(v)
-Furlong{p}(x::Furlong{q}) where {p,q} = (@assert(p==q); Furlong{p,typeof(x.val)}(x.val))
-Furlong{p,T}(x::Furlong{q}) where {T,p,q} = (@assert(p==q); Furlong{p,T}(T(x.val)))
+Furlong{p}(x::Furlong{q}) where {p,q} = (typeassert(x, Furlong{p}); Furlong{p,typeof(x.val)}(x.val))
+Furlong{p,T}(x::Furlong{q}) where {T,p,q} = (typeassert(x, Furlong{p}); Furlong{p,T}(T(x.val)))
 
 Base.promote_type(::Type{Furlong{p,T}}, ::Type{Furlong{p,S}}) where {p,T,S} =
     Furlong{p,promote_type(T,S)}
+
+# only Furlong{0} forms a ring and isa Number
+Base.convert(::Type{T}, y::Number) where {T<:Furlong{0}} = T(y)
+Base.convert(::Type{Furlong}, y::Number) = Furlong{0}(y)
+Base.convert(::Type{Furlong{<:Any,T}}, y::Number) where {T<:Number} = Furlong{0,T}(y)
+Base.convert(::Type{T}, y::Number) where {T<:Furlong} = typeassert(y, T) # throws, since cannot convert a Furlong{0} to a Furlong{p}
+# other Furlong{p} form a group
+Base.convert(::Type{T}, y::Furlong) where {T<:Furlong{0}} = T(y)
+Base.convert(::Type{Furlong}, y::Furlong) = y
+Base.convert(::Type{Furlong{<:Any,T}}, y::Furlong{p}) where {p,T<:Number} = Furlong{p,T}(y)
+Base.convert(::Type{T}, y::Furlong) where {T<:Furlong} = T(y)
 
 Base.one(x::Furlong{p,T}) where {p,T} = one(T)
 Base.one(::Type{Furlong{p,T}}) where {p,T} = one(T)

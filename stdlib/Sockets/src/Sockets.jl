@@ -97,7 +97,7 @@ end
 function TCPSocket(fd::OS_HANDLE)
     tcp = TCPSocket()
     iolock_begin()
-    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
+    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), tcp.handle, fd)
     uv_error("tcp_open", err)
     tcp.status = StatusOpen
     iolock_end()
@@ -138,9 +138,6 @@ function TCPServer(; delay=true)
     iolock_end()
     return tcp
 end
-
-isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
-iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
 """
     accept(server[, client])
@@ -203,7 +200,6 @@ end
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = C_NULL
     lock(sock.cond)
     try
         sock.status = StatusClosed
@@ -578,11 +574,11 @@ Enables or disables Nagle's algorithm on a given TCP server or socket.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     err = ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
     # TODO: check err
-    Sockets.iolock_end()
+    iolock_end()
     return err
 end
 
@@ -592,15 +588,15 @@ end
 On Linux systems, the TCP_QUICKACK is disabled or enabled on `socket`.
 """
 function quickack(sock::Union{TCPServer, TCPSocket}, enable::Bool)
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(enable)) < 0
             @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
-    Sockets.iolock_end()
+    iolock_end()
     nothing
 end
 

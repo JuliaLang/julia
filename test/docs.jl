@@ -1271,6 +1271,8 @@ end
 
 # issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
 @test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
+# issue 39814
+@test sprint(repl_latex, "\u2209") == "\"\u2209\" can be typed by \\notin<tab>\n\n"
 
 # issue #15684
 begin
@@ -1502,3 +1504,12 @@ end
 # Issue #13109
 eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
 @test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
+
+# issue #41727
+"struct docstring"
+struct S41727
+    "x is $(2*2)"
+    x
+end
+@test S41727(1) isa S41727
+@test string(@repl S41727.x) == "x is 4\n"

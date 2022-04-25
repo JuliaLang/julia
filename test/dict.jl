@@ -1179,6 +1179,8 @@ end
             @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
         end
     end
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "map!(f, values(dict))" begin
@@ -1197,6 +1199,7 @@ end
         map!(v->v-1, values(testdict))
         @test testdict[:a] == 0
         @test testdict[:b] == 1
+        @test sizehint!(testdict, 1) === testdict
     end
     @testset "Dict" begin
         testdict = Dict(:a=>1, :b=>2)
