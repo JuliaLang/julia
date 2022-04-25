@@ -230,6 +230,7 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
+// the following mirrors `struct EffectsOverride` in `base/compiler/types.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint8_t ipo_consistent  : 1;
@@ -390,6 +391,8 @@ typedef struct _jl_code_instance_t {
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
+#ifdef JL_USE_ANON_UNIONS_FOR_PURITY_FLAGS
+    // see also encode_effects() and decode_effects() in `base/compiler/types.jl`,
     union {
         uint32_t ipo_purity_bits;
         struct {
@@ -410,6 +413,10 @@ typedef struct _jl_code_instance_t {
             uint8_t nonoverlayed:1;
         } purity_flags;
     };
+#else
+    uint32_t ipo_purity_bits;
+    uint32_t purity_bits;
+#endif
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
@@ -457,6 +464,7 @@ typedef struct {
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
+    _Atomic(jl_value_t*) Typeofwrapper;  // cache for Type{wrapper}
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
     struct _jl_methtable_t *mt;

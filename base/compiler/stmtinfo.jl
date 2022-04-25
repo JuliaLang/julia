@@ -47,24 +47,30 @@ function nmatches(info::UnionSplitInfo)
     return n
 end
 
-struct ConstResult
+struct ConstPropResult
+    result::InferenceResult
+end
+
+struct ConcreteResult
     mi::MethodInstance
     effects::Effects
     result
-    ConstResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
-    ConstResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
+    ConcreteResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
+    ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
+
+const ConstResult = Union{ConstPropResult,ConcreteResult}
 
 """
     info::ConstCallInfo
 
 The precision of this call was improved using constant information.
-In addition to the original call information `info.call`, this info also keeps
-the inference results with constant information `info.results::Vector{Union{Nothing,InferenceResult}}`.
+In addition to the original call information `info.call`, this info also keeps the results
+of constant inference `info.results::Vector{Union{Nothing,ConstResult}}`.
 """
 struct ConstCallInfo
     call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,InferenceResult,ConstResult}}
+    results::Vector{Union{Nothing,ConstResult}}
 end
 
 """
@@ -130,7 +136,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct InvokeCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult}
+    result::Union{Nothing,ConstResult}
 end
 
 """
@@ -142,7 +148,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct OpaqueClosureCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult,ConstResult}
+    result::Union{Nothing,ConstResult}
 end
 
 """

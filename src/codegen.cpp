@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "julia_irgen_codegen"
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
@@ -86,6 +85,8 @@
 #include "llvm/Support/Path.h" // for llvm::sys::path
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
+
+#define DEBUG_TYPE "julia_irgen_codegen"
 
 using namespace llvm;
 
@@ -185,11 +186,10 @@ typedef Instruction TerminatorInst;
 #include "processor.h"
 #include "julia_assert.h"
 
-JL_STREAM *dump_emitted_mi_name_stream = NULL;
 extern "C" JL_DLLEXPORT
 void jl_dump_emitted_mi_name_impl(void *s)
 {
-    dump_emitted_mi_name_stream = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (JL_STREAM*)s;
 }
 
 extern "C" {
@@ -499,7 +499,7 @@ static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
     FnAttrs = FnAttrs.addAttribute(C, Attribute::NoUnwind);
     return AttributeList::get(C,
             FnAttrs,
-            Attributes(C, {Attribute::NonNull}),
+            Attributes(C, {}),
             None);
 }
 
@@ -1864,14 +1864,15 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 boxv = ctx.builder.CreateSelect(
                     ctx.builder.CreateAnd(wasboxed, isboxed), v.Vboxed, boxv);
             }
+            Value *slotv;
+            MDNode *tbaa;
             if (v.V == NULL) {
                 // v.V might be NULL if it was all ghost objects before
-                return jl_cgval_t(boxv, NULL, false, typ, new_tindex, ctx.tbaa());
+                slotv = NULL;
+                tbaa = ctx.tbaa().tbaa_const;
             }
             else {
                 Value *isboxv = ctx.builder.CreateIsNotNull(boxv);
-                Value *slotv;
-                MDNode *tbaa;
                 if (v.ispointer()) {
                     slotv = v.V;
                     tbaa = v.tbaa;
@@ -1884,12 +1885,12 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 slotv = ctx.builder.CreateSelect(isboxv,
                             decay_derived(ctx, boxv),
                             decay_derived(ctx, emit_bitcast(ctx, slotv, boxv->getType())));
-                jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex, ctx.tbaa());
-                assert(boxv->getType() == ctx.types().T_prjlvalue);
-                newv.Vboxed = boxv;
-                newv.tbaa = tbaa;
-                return newv;
             }
+            jl_cgval_t newv = jl_cgval_t(slotv, NULL, false, typ, new_tindex, ctx.tbaa());
+            assert(boxv->getType() == ctx.types().T_prjlvalue);
+            newv.Vboxed = boxv;
+            newv.tbaa = tbaa;
+            return newv;
         }
     }
     else {
@@ -7976,15 +7977,16 @@ jl_llvm_functions_t jl_emit_code(
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         decls = emit_function(m, li, src, jlrettype, params);
-        if (dump_emitted_mi_name_stream != NULL) {
-            jl_printf(dump_emitted_mi_name_stream, "%s\t", decls.specFunctionObject.c_str());
+        auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
+        if (stream) {
+            jl_printf(stream, "%s\t", decls.specFunctionObject.c_str());
             // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
             // break CSV parsing if there are any internal quotes in the Type name (e.g. in
             // Symbol("...")). The \t delineator should be enough to ensure whitespace is
             // handled correctly. (And we don't need to worry about any tabs in the printed
             // string, because tabs are printed as "\t" by `show`.)
-            jl_static_show(dump_emitted_mi_name_stream, li->specTypes);
-            jl_printf(dump_emitted_mi_name_stream, "\n");
+            jl_static_show(stream, li->specTypes);
+            jl_printf(stream, "\n");
         }
     }
     JL_CATCH {
@@ -8326,14 +8328,11 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-void jl_init_debuginfo(void);
-
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.generic_context = jl_nothing;
-    jl_init_debuginfo();
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
@@ -8372,7 +8371,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-    jl_ExecutionEngine = new JuliaOJIT(new LLVMContext());
+    jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
     // Register GDB event listener

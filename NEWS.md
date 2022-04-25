@@ -36,6 +36,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `Iterators.flatmap` was added ([#44792]).
+
 Library changes
 ---------------
 
@@ -43,6 +45,9 @@ Library changes
   as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
   now be called on a dictionary or set shared by arbitrary tasks provided that there are no
   tasks mutating the dictionary or set ([#44534]).
+* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 
 
 Standard library changes

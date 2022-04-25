@@ -3391,9 +3391,9 @@ f(x) = yt(x)
                             (call (core svec) ,@(map quotify fields))
                             (call (core svec))
                             (false) ,(length fields)))
+                (call (core _setsuper!) ,s ,super)
                 (= (outerref ,name) ,s)
-                (call (core _setsuper!) ,name ,super)
-                (call (core _typebody!) ,name (call (core svec) ,@types))
+                (call (core _typebody!) ,s (call (core svec) ,@types))
                 (return (null))))))))
 
 (define (type-for-closure name fields super)
@@ -3405,9 +3405,9 @@ f(x) = yt(x)
                                   (call (core svec) ,@(map quotify fields))
                                   (call (core svec))
                                   (false) ,(length fields)))
+                      (call (core _setsuper!) ,s ,super)
                       (= (outerref ,name) ,s)
-                      (call (core _setsuper!) ,name ,super)
-                      (call (core _typebody!) ,name
+                      (call (core _typebody!) ,s
                             (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
                       (return (null))))))))
 
@@ -4499,32 +4499,36 @@ f(x) = yt(x)
                                      (not (eq? e (lam:body lam))))))
                (if file-diff (set! filename fname))
                (if need-meta (emit `(meta push_loc ,fname)))
-               (begin0
-                (let loop ((xs (cdr e)))
+               (let ((v (let loop ((xs (cdr e)))
                   (if (null? (cdr xs))
                       (compile (car xs) break-labels value tail)
                       (begin (compile (car xs) break-labels #f #f)
-                             (loop (cdr xs)))))
-                (if need-meta
-                    (if (or (not tail)
-                            (and (pair? (car code))
-                                 (or (eq? (cdar code) 'meta)
-                                     (eq? (cdar code) 'line))))
-                        (emit '(meta pop_loc))
-                        ;; If we need to return the last non-meta expression
-                        ;; splice the pop before the result
-                        (let ((retv (car code))
-                              (body (cdr code)))
-                          (set! code body)
-                          (if (complex-return? retv)
-                              (let ((tmp (make-ssavalue)))
-                                (emit `(= ,tmp ,(cadr retv)))
-                                (emit '(meta pop_loc))
-                                (emit `(return ,tmp)))
-                              (begin
-                                (emit '(meta pop_loc))
-                                (emit retv))))))
-                (if file-diff (set! filename last-fname)))))
+                             (loop (cdr xs)))))))
+                  (if need-meta
+                    (cond (tail
+                           ;; If we need to return the last non-meta expression
+                           ;; attempt to splice the pop_loc before the return
+                           ;; so that the return location always gets
+                           ;; attributed to the right level of macro
+                           (if (and (pair? code) (return? (car code)))
+                               (let ((retv (cadr (car code))))
+                                 (set! code (cdr code))
+                                 (if (not (simple-atom? retv))
+                                   (let ((tmp (make-ssavalue)))
+                                     (emit `(= ,tmp ,retv))
+                                     (set! retv tmp)))
+                                 (emit '(meta pop_loc))
+                                 (emit `(return ,retv)))
+                               (emit '(meta pop_loc))))
+                          ((and value (not (simple-atom? v)))
+                           (let ((tmp (make-ssavalue)))
+                             (emit `(= ,tmp ,v))
+                             (set! v tmp)
+                             (emit `(meta pop_loc))))
+                          (else
+                           (emit `(meta pop_loc)))))
+                  (if file-diff (set! filename last-fname))
+                  v)))
             ((return)
              (compile (cadr e) break-labels #t #t)
              #f)

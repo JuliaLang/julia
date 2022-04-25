@@ -171,6 +171,7 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 // Global *atomic* integers controlling *process-wide* measurement of compilation time.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
@@ -568,7 +569,6 @@ JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
 void jl_uv_flush(uv_stream_t *stream);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;
