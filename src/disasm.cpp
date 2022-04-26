@@ -60,6 +60,7 @@
 // for outputting disassembly
 #include <llvm/ADT/Triple.h>
 #include <llvm/AsmParser/Parser.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/BinaryFormat/COFF.h>
 #include <llvm/BinaryFormat/MachO.h>
 #include <llvm/DebugInfo/DIContext.h>
