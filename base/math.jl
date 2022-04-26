@@ -187,30 +187,18 @@ function evalpoly(x, p::Tuple)
     end
 end
 
-function evalpoly(x, p::AbstractVector)
+evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
+
+function _evalpoly(x, p)
+    isempty(p) && return zero(eltype(p)) * one(x)
     i = lastindex(p)
-
-    # without the annotation v is not type stable in some cases,
-    # e.g. if p contains Float32 but x is Float64
-    T = promote_type(typeof(x), eltype(p))
-    @inbounds v::T = p[i]
+    @inbounds v = p[i] * one(x)
     i -= 1
-
     while i >= firstindex(p)
         @inbounds v = muladd(v, x, p[i])
         i -= 1
     end
-
     return v
-end
-
-function _evalpoly(x, p)
-    N = length(p)
-    ex = p[end]
-    for i in N-1:-1:1
-        ex = muladd(x, ex, p[i])
-    end
-    ex
 end
 
 function evalpoly(z::Complex, p::Tuple)
@@ -239,7 +227,6 @@ function evalpoly(z::Complex, p::Tuple)
     end
 end
 evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
-
 
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
