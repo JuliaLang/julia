@@ -14,6 +14,13 @@ const SCRATCH_BUFFERS = map(1:_nth()) do _
     Vector{UInt8}(undef, SCRATCH_BUFFER_MIN_LENGTH), false
 end
 
+function init_scratch_buffers()
+    while length(SCRATCH_BUFFERS) < _nth()
+        push!(SCRATCH_BUFFERS, (Vector{UInt8}(undef, SCRATCH_BUFFER_MIN_LENGTH), false))
+    end
+    nothing
+end
+
 function with_scratch_buffer(f, n::Int)
     buf, buf_inuse = @inbounds SCRATCH_BUFFERS[_tid()]
     if buf_inuse

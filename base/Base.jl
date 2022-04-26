@@ -493,6 +493,7 @@ function __init__()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
+    init_scratch_buffers()
     # initialize loading
     init_depot_path()
     init_load_path()
