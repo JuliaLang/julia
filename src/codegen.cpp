@@ -1321,7 +1321,7 @@ class jl_codectx_t {
 public:
     IRBuilder<> builder;
     jl_codegen_params_t &emission_context;
-    jl_codegen_call_targets_t &call_targets;
+    llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     std::map<void*, GlobalVariable*> &global_targets;
     Function *f = NULL;
     // local var info. globals are not in here.
@@ -1366,7 +1366,7 @@ public:
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
       : builder(llvmctx),
         emission_context(params),
-        call_targets(params.workqueue),
+        call_targets(),
         global_targets(params.globals),
         world(params.world),
         use_cache(params.cache),
@@ -1384,6 +1384,9 @@ public:
 
     ~jl_codectx_t() {
         assert(this->roots == NULL);
+        // Transfer local delayed calls to the global queue
+        for (auto call_target : call_targets)
+            emission_context.workqueue.push_back(call_target);
     }
 };
 
@@ -3911,6 +3914,11 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                             }
                         }
                     }
+                    auto it = ctx.call_targets.find(codeinst);
+                    if (need_to_emit && it != ctx.call_targets.end()) {
+                        protoname = std::get<2>(it->second)->getName();
+                        need_to_emit = false;
+                    }
                     if (need_to_emit) {
                         raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUniqueGeneratedNames++;
                         protoname = StringRef(name);
@@ -3924,7 +3932,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
-                        ctx.call_targets.push_back(std::make_tuple(codeinst, cc, return_roots, trampoline_decl, specsig));
+                        ctx.call_targets[codeinst] = std::make_tuple(cc, return_roots, trampoline_decl, specsig);
                     }
                 }
             }
@@ -8097,7 +8105,9 @@ void jl_compile_workqueue(
         jl_returninfo_t::CallingConv proto_cc;
         bool proto_specsig;
         unsigned proto_return_roots;
-        std::tie(codeinst, proto_cc, proto_return_roots, protodecl, proto_specsig) = params.workqueue.back();
+        auto it = params.workqueue.back();
+        codeinst = it.first;
+        std::tie(proto_cc, proto_return_roots, protodecl, proto_specsig) = it.second;
         params.workqueue.pop_back();
         // try to emit code for this item from the workqueue
         assert(codeinst->min_world <= params.world && codeinst->max_world >= params.world &&
