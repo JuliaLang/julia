@@ -81,7 +81,7 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklis
         }
     }
 }
-                                                }
+
 Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
     std::vector<Value *> Worklist;
