@@ -49,6 +49,7 @@ Library changes
   tasks mutating the dictionary or set ([#44534]).
 * Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 
 Standard library changes
 ------------------------
@@ -65,6 +66,7 @@ Standard library changes
   system image with other BLAS/LAPACK libraries is not
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
 
 #### Markdown
 

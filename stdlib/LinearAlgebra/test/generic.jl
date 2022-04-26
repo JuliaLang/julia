@@ -375,6 +375,13 @@ end
     @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
 end
 
+@testset "normalize for scalars" begin
+    @test normalize(8.0) == 1.0
+    @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
+    @test isnan(normalize(0.0))
+end
+
 @testset "Issue #30466" begin
     @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
     @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))

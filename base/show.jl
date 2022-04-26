@@ -445,12 +445,12 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
-function show_function(io::IO, f::Function, compact::Bool)
+function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
     ft = typeof(f)
     mt = ft.name.mt
     if mt === Symbol.name.mt
         # uses shared method table
-        show_default(io, f)
+        fallback(io, f)
     elseif compact
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
@@ -462,15 +462,12 @@ function show_function(io::IO, f::Function, compact::Bool)
             show_sym(io, mt.name)
         end
     else
-        show_default(io, f)
+        fallback(io, f)
     end
 end
 
-show_function(io::IO, x, ::Bool) = show(io, x)
-
-show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
-print(io::IO, f::Function) = show_function(io, f, true)
-
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool, show_default)
+print(io::IO, f::Function) = show_function(io, f, true, show)
 
 function show(io::IO, f::Core.IntrinsicFunction)
     if !(get(io, :compact, false)::Bool)

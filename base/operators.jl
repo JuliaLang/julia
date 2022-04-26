@@ -928,12 +928,7 @@ struct Returns{V} <: Function
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
-function show(io::IO, obj::Returns)
-    show(io, typeof(obj))
-    print(io, "(")
-    show(io, obj.value)
-    print(io, ")")
-end
+
 # function composition
 
 """
@@ -1040,18 +1035,6 @@ _showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); sh
 _showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
 #no nesting when ! is the outer function in a composition chain
 _showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
-
-function show_function(io::IO, c::ComposedFunction, compact::Bool)
-    if compact
-        show(io, c)
-    else
-        print(io, "ComposedFunction(")
-        show_function(io, c.outer, false)
-        print(io, ", ")
-        show_function(io, c.inner, false)
-        print(io, ')')
-    end
-end
 
 """
     !f::Function
