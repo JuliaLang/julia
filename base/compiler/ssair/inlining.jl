@@ -951,9 +951,9 @@ end
 rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
 
 function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
-    if isa(typ, Const) && isa(typ.val, SimpleVector)
-        length(typ.val) > params.MAX_TUPLE_SPLAT && return false
-        for p in typ.val
+    if isa(typ, Const) && (v = typ.val; isa(v, SimpleVector))
+        length(v) > params.MAX_TUPLE_SPLAT && return false
+        for p in v
             is_inlineable_constant(p) || return false
         end
         return true

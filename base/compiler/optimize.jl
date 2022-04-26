@@ -568,6 +568,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     ssaflags = ci.ssaflags
     if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
         for line in ci.linetable
+            line = line::LineInfoNode
             if is_file_tracked(line.file)
                 # if any line falls in a tracked file enable coverage for all
                 coverage = true
