@@ -81,11 +81,12 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklis
         }
     }
 }
-
+                                                }
 Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
     std::vector<Value *> Worklist;
     std::set<Value *> LocalVisited;
+    unsigned currentAddressSpace = InsertPt->getModule()->getDataLayout().getAllocaAddrSpace();
     Worklist.push_back(V);
     // Follow pointer casts back, see if we're based on a pointer in
     // an untracked address space, in which case we're allowed to drop
@@ -165,15 +166,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *Inser
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), AddressSpace::Generic);
+            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), currentAddressSpace);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
-
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), AddressSpace::Generic);
+        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), currentAddressSpace);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
