@@ -1002,7 +1002,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH2(&src, &jlrettype);
-    if (jl_is_method(mi->def.method) && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
         src = (jl_code_info_t*)mi->def.method->source;
         if (src && !jl_is_code_info(src))
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);

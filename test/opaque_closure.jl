@@ -1,5 +1,6 @@
 using Test
 using InteractiveUtils
+using Core: OpaqueClosure
 
 const_int() = 1
 
@@ -241,47 +242,25 @@ let oc = @opaque a->sin(a)
 end
 
 # constructing an opaque closure from IRCode
-using Core.Compiler: IRCode
-using Core: CodeInfo
-
-function OC(ir::IRCode, nargs::Int, isva::Bool, env...)
-    if (isva && nargs > length(ir.argtypes)) || (!isva && nargs != length(ir.argtypes)-1)
-        throw(ArgumentError("invalid argument count"))
-    end
-    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-    src.slotflags = UInt8[]
-    src.slotnames = fill(:none, nargs+1)
-    Core.Compiler.replace_code_newstyle!(src, ir, nargs+1)
-    Core.Compiler.widen_all_consts!(src)
-    src.inferred = true
-    # NOTE: we need ir.argtypes[1] == typeof(env)
-
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
-          Tuple{ir.argtypes[2:end]...}, Union{}, Any, @__MODULE__, src, 0, nothing, nargs, isva, env)
-end
-
-function OC(src::CodeInfo, env...)
-    M = src.parent.def
-    sig = Base.tuple_type_tail(src.parent.specTypes)
-
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
-          sig, Union{}, Any, @__MODULE__, src, 0, nothing, M.nargs - 1, M.isva, env)
-end
-
 let ci = code_typed(+, (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
-    @test OC(ir, 2, false)(40, 2) == 42
-    @test OC(ci)(40, 2) == 42
+    @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
+    @test OpaqueClosure(ci)(40, 2) == 42
+
+    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+    @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
+    @test isa(OpaqueClosure(ir; nargs=2, isva=false), Core.OpaqueClosure{Tuple{Int, Int}, Int})
+    @test_throws TypeError OpaqueClosure(ir; nargs=2, isva=false)(40.0, 2)
 end
 
 let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
-    @test OC(ir, 2, true)(40, 2) === (40, (2,))
-    @test OC(ci)(40, 2) === (40, (2,))
+    @test OpaqueClosure(ir; nargs=2, isva=true)(40, 2) === (40, (2,))
+    @test OpaqueClosure(ci)(40, 2) === (40, (2,))
 end
 
 let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
-    @test_throws MethodError OC(ir, 2, true)(1, 2, 3)
-    @test_throws MethodError OC(ci)(1, 2, 3)
+    @test_throws MethodError OpaqueClosure(ir; nargs=2, isva=true)(1, 2, 3)
+    @test_throws MethodError OpaqueClosure(ci)(1, 2, 3)
 end

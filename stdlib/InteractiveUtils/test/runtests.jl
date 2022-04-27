@@ -670,3 +670,15 @@ let # `default_tt` should work with any function with one method
         sin(a)
     end); true)
 end
+
+@testset "code_llvm on opaque_closure" begin
+    let ci = code_typed(+, (Int, Int))[1][1]
+        ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+        oc = Core.OpaqueClosure(ir)
+        @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
+        let io = IOBuffer()
+            code_llvm(io, oc, Tuple{})
+            @test occursin(InteractiveUtils.OC_MISMATCH_WARNING, String(take!(io)))
+        end
+    end
+end
