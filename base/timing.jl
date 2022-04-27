@@ -155,7 +155,9 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
         if recompile_time > 0
-            print(io, ": ", Ryu.writefixed(Float64(100*recompile_time/compile_time), 0), "% of which was recompilation")
+            perc = Float64(100 * recompile_time / compile_time)
+            # use "<1" to avoid the confusing UX of reporting 0% when it's >0%
+            print(io, ": ", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% of which was recompilation")
         end
         parens && print(io, ")")
     end
