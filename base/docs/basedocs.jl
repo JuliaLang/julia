@@ -2871,8 +2871,8 @@ true
 julia> "Hello!" isa IntOrString
 true
 
-julia> 1.0 :: IntOrString # Float is neither Int, nor AbstractString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
+julia> 1.0 isa IntOrString # Float is neither Int, nor AbstractString
+false
 
 julia> IntOrString(1) # error, cannot instantiate an Union type
 ERROR: MethodError: no method matching Union{Int64, AbstractString}(::Int64)
