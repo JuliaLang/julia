@@ -1143,10 +1143,10 @@ function _findmin(f, A, region)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri))
+        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
         fA = f(first(A))
-        findminmax!(f, isgreater, fill!(similar(A, promote_type(eltype(A), typeof(fA)), ri), fA),
+        findminmax!(f, isgreater, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
@@ -1217,9 +1217,19 @@ function _findmax(f, A, region)
         similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
         fA = f(first(A))
-        findminmax!(f, isless, fill!(similar(A, promote_type(eltype(A), typeof(fA)), ri), fA),
+        findminmax!(f, isless, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
+end
+
+function _findminmax_inittype(f, A::AbstractArray)
+    T = _realtype(f, promote_union(eltype(A)))
+    v0 = f(first(A))
+    # First conditional: T is >: typeof(v0), so return it
+    # Second conditional: handle missing specifically, as most often, f(missing) = missing;
+    # certainly, some predicate functions return Bool, but not all.
+    # Else, return the type of the transformation.
+    Tr = v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
 end
 
 reducedim1(R, A) = length(axes1(R)) == 1
