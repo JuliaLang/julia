@@ -50,6 +50,7 @@ function Core.OpaqueClosure(ir::IRCode, env...;
     src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     src.slotflags = UInt8[]
     src.slotnames = fill(:none, nargs+1)
+    src.slottypes = copy(ir.argtypes)
     Core.Compiler.replace_code_newstyle!(src, ir, nargs+1)
     Core.Compiler.widen_all_consts!(src)
     src.inferred = true
