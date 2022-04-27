@@ -2857,8 +2857,8 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types. The empty
-union [`Union{}`](@ref) is the bottom type of Julia.
+An `Union` type is an `abstract type` that can reference any value of one of its arguments. It cannot be
+instantiated.
 
 # Examples
 ```jldoctest
@@ -2871,9 +2871,14 @@ true
 julia> "Hello!" isa IntOrString
 true
 
-julia> 1.0 isa IntOrString
-false
+julia> 1.0 :: IntOrString # Float is neither Int, nor AbstractString
+ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
+
+julia> IntOrString(1) # error, cannot instantiate an Union type
+ERROR: MethodError: no method matching Union{Int64, AbstractString}(::Int64)
 ```
+
+**Note:** The empty union [`Union{}`](@ref) is the bottom type of Julia.
 """
 Union
 
