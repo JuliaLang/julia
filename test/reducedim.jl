@@ -298,7 +298,7 @@ end
         @test all(rval′ .=== rval)
         @test all(rind′ .== rind)
         @test all(maximum(B, dims=tup) .=== rval)
-        @test (rval′, rind′) == findmax(abs, B′, dims=tup)
+        @test isequal(findmax(abs, B′, dims=tup), (rval′, rind′))
     end
 
     for (tup, rval, rind) in [(1, [1.0 missing missing], [CartesianIndex(1, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
@@ -307,7 +307,7 @@ end
         @test all(rval′ .=== rval)
         @test all(rind′ .== rind)
         @test all(minimum(B, dims=tup) .=== rval)
-        @test (rval′, rind′) == findmin(abs, B′, dims=tup)
+        @test isequal(findmin(abs, B′, dims=tup), (rval′, rind′))
     end
 end
 
