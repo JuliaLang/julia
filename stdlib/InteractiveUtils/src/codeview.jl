@@ -154,9 +154,24 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    world = Base.get_world_counter()
-    match = Base._which(signature_type(f, t), world)
-    linfo = Core.Compiler.specialize_method(match)
+    if !isa(f, Core.OpaqueClosure)
+        world = Base.get_world_counter()
+        match = Base._which(signature_type(f, t), world)
+        linfo = Core.Compiler.specialize_method(match)
+        actual = isdispatchtuple(linfo.specTypes)
+    else
+        world = UInt64(f.world)
+        if Core.Compiler.is_source_inferred(f.source.source)
+            # OC was constructed from inferred source. There's only one
+            # specialization and we can't infer anything more precise either.
+            world = f.source.primary_world
+            linfo = f.source.specializations[1]
+            actual = true
+        else
+            linfo = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
+            actual = isdispatchtuple(linfo.specTypes)
+        end
+    end
     # get the code for it
     if debuginfo === :default
         debuginfo = :source
@@ -176,7 +191,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         str = _dump_function_linfo_llvm(linfo, world, wrapper, strip_ir_metadata, dump_module, optimize, debuginfo, params)
     end
     # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
-    isdispatchtuple(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    actual || (str = "; WARNING: This code may not match what actually runs.\n" * str)
     return str
 end
 
