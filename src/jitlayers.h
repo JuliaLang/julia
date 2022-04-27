@@ -274,7 +274,7 @@ public:
     size_t getTotalBytes() const;
 
     JITTargetAddress getCompiledFunctionPointer(JITTargetAddress trampoline);
-    JITTargetAddress registerFunctionName(std::string name);
+    JITTargetAddress registerFunctionName(StringRef name);
     StringRef getFunctionName(JITTargetAddress func) const;
 
     JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
@@ -302,7 +302,7 @@ private:
 
     struct ReverseLocalSymbolsT {
         int Unique = 0;
-        DenseMap<void*, std::string> Table;
+        DenseMap<void*, orc::SymbolStringPtr> Table;
 
         ReverseLocalSymbolsT() JL_NOTSAFEPOINT = default;
         ReverseLocalSymbolsT(ReverseLocalSymbolsT &&) JL_NOTSAFEPOINT = default;

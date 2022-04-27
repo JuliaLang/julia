@@ -1299,8 +1299,8 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
 {
     auto RLST = *ReverseLocalSymbols;
-    std::string *fname = &RLST->Table[(void*)(uintptr_t)Addr];
-    if (fname->empty()) {
+    auto &fname = RLST->Table[(void*)(uintptr_t)Addr];
+    if (!fname) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
@@ -1319,7 +1319,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << RLST->Unique++;
-        *fname = std::move(stream_fname.str()); // store to ReverseLocalSymbolTable
+        fname = ES.intern(stream_fname.str()); // store to ReverseLocalSymbolTable
         addGlobalMapping(*fname, Addr);
     }
     return *fname;
@@ -1406,19 +1406,19 @@ JITTargetAddress JuliaOJIT::getCompiledFunctionPointer(JITTargetAddress trampoli
 #endif
 }
 
-JITTargetAddress JuliaOJIT::registerFunctionName(std::string name) {
+JITTargetAddress JuliaOJIT::registerFunctionName(StringRef name) {
     auto lock = *ReverseLocalSymbols;
     auto addr = getGlobalValueAddress(name);
     auto ptr = jitTargetAddressToPointer<void*>(addr);
     assert(lock->Table.find(ptr) == lock->Table.end() && "Duplicated reverse lookup mapping!");
-    lock->Table[ptr] = std::move(name);
+    lock->Table[ptr] = ES.intern(name);
     return addr;
 }
 StringRef JuliaOJIT::getFunctionName(JITTargetAddress func) const {
     auto lock = *ReverseLocalSymbols;
     auto it = lock->Table.find(jitTargetAddressToPointer<void*>(func));
     assert(it != lock->Table.end() && "Unable to find function pointer in reverse mapping!");
-    return it->second;
+    return *it->second;
 }
 
 JuliaOJIT *jl_ExecutionEngine;
