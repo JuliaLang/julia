@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <llvm/ADT/MapVector.h>
+
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
@@ -117,14 +119,14 @@ struct jl_llvmf_dump_t {
     Function *F;
 };
 
-typedef std::vector<std::tuple<jl_code_instance_t*, jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool>> jl_codegen_call_targets_t;
+typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
 
 typedef struct _jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
-    jl_codegen_call_targets_t workqueue;
+    std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
     std::map<void*, GlobalVariable*> globals;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;

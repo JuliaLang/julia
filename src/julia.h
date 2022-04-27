@@ -1647,7 +1647,9 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
+extern JL_DLLIMPORT int jl_n_threadpools;
 extern JL_DLLIMPORT int jl_n_threads;
+extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1890,6 +1892,8 @@ typedef struct _jl_task_t {
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
+    // threadpool id
+    int8_t threadpoolid;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
@@ -1913,7 +1917,8 @@ typedef struct _jl_task_t {
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
-JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void);
