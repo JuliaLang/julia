@@ -200,9 +200,6 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
     return reducedim_initarray(A, region, v0, Tuple{Tmin,Tmax})
 end
 
-# Why is this defined for `max` but not also `min`?
-# It leads to improper behavior, e.g. maximum(abs2, Matrix{Int}(undef, 0, 1), dims=1)
-# Moreover, reducedim_init (above) handles the cases acceptably.
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
 
