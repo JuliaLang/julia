@@ -1094,6 +1094,9 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     return mark_julia_type(ctx, ifelse_result, isboxed, jt);
 }
 
+static jl_cgval_t emit_intrinsic_internal(jl_codectx_t &ctx, intrinsic f, jl_cgval_t *argv,
+                                          size_t nargs);
+
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **args, size_t nargs)
 {
     assert(f < num_intrinsics);
@@ -1114,6 +1117,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         argv[i] = emit_expr(ctx, args[i + 1]);
     }
 
+    return emit_intrinsic_internal(ctx, f, argv, nargs);
+}
+
+static jl_cgval_t emit_intrinsic_internal(jl_codectx_t &ctx, intrinsic f, jl_cgval_t *argv,
+                                          size_t nargs)
+{
     // this forces everything to use runtime-intrinsics (e.g. for testing)
     // return emit_runtime_call(ctx, f, argv, nargs);
 
@@ -1559,6 +1568,65 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         abort();
     }
     assert(0 && "unreachable");
+}
+
+// This method is incomplete at the moment compared to the "main" method taking the argument
+// `jl_value_t **args`. It is just enough for handling modifyfield!.
+static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, jl_value_t *fvalue, jl_cgval_t *argv,
+                                 size_t nargs)
+{
+    assert(jl_typeis(fvalue, jl_intrinsic_type));
+    intrinsic f = (intrinsic)*(uint32_t*)jl_data_ptr(fvalue);
+
+    assert(f < num_intrinsics);
+    if (f == cglobal && nargs == 1)
+        f = cglobal_auto;
+    unsigned expected_nargs = jl_intrinsic_nargs((int)f);
+    if (expected_nargs && expected_nargs != nargs) {
+        jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
+    }
+
+    return emit_intrinsic_internal(ctx, f, argv, nargs);
+}
+
+static Value *emit_atomicrmw(jl_codectx_t &ctx, Value *ptr, Value *rhs,
+                             AtomicOrdering Order, unsigned alignment,
+                             const jl_cgval_t *modifyop)
+{
+    intrinsic fi = (intrinsic) * (uint32_t *)jl_data_ptr(modifyop->constant);
+    AtomicRMWInst::BinOp binop = AtomicRMWInst::BAD_BINOP;
+    switch (fi) {
+    case add_int: {
+        binop = AtomicRMWInst::Add;
+        break;
+    }
+    case sub_int: {
+        binop = AtomicRMWInst::Sub;
+        break;
+    }
+    case and_int: {
+        binop = AtomicRMWInst::And;
+        break;
+    }
+    case or_int: {
+        binop = AtomicRMWInst::Or;
+        break;
+    }
+    case xor_int: {
+        binop = AtomicRMWInst::Xor;
+        break;
+    }
+    case add_float: {
+        binop = AtomicRMWInst::FAdd;
+        break;
+    }
+    case sub_float: {
+        binop = AtomicRMWInst::FSub;
+        break;
+    }
+    default: return nullptr;
+    }
+    return ctx.builder.CreateAtomicRMW(binop, ptr, rhs, Align(alignment), Order);
 }
 
 //Redefine us as being part of codegen

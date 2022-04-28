@@ -1194,6 +1194,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
             stmt.head = :invoke_modify
             pushfirst!(stmt.args, case.invoke)
             ir.stmts[idx][:inst] = stmt
+            optimize_modifyop!(ir.stmts[idx], sig, match, state)
         end
         return nothing
     end
@@ -1223,6 +1224,70 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
     end
 
     return stmt, sig
+end
+
+"""
+    optimize_modifyop!(
+        inst::Instruction, modifysig::Signature, opmatch::MethodMatch, state::InliningState)
+
+Optimize `:invoke_modify` in `inst` in-place.
+
+If `inst` is of form `modifyfield!(struct, field, op, arg2, order)` where `op` is (a method
+wrapping) a simple call of intrinsic, transform `inst[:inst]` to a `:call` to the builtin
+function `modifyfield!`.  This is detected in codegen and lowered to `atomicrmw` instruction
+(see `emit_atomicrmw`).
+"""
+function optimize_modifyop!(
+    inst::Instruction, modifysig::Signature, opmatch::MethodMatch, state::InliningState)
+    @assert inst[:inst].head === :invoke_modify
+
+    # Extract argument types for `op(arg1, arg2)` from the signature of
+    # `modifyfield!(struct, field, op, arg2, order)`.
+    fieldarg = modifysig.argtypes[3]
+    fieldarg isa Const || return
+    field = fieldarg.val
+    field isa Union{Int,Symbol} || return
+    structtype = widenconst(modifysig.argtypes[2])
+    arg1type = fieldtype(structtype, field)
+    arg2type = widenconst(modifysig.argtypes[5])
+    (isconcretetype(arg1type) && isconcretetype(arg2type) && arg1type == arg2type) || return
+    ftype = modifysig.argtypes[4]
+    argtypes = Any[ftype, arg1type, arg2type]
+
+    mi = inst[:inst].args[1]::MethodInstance
+    item = resolve_todo(InliningTodo(mi, opmatch, argtypes), state, inst[:flag])
+    item isa InliningTodo || return
+    spec = item.spec::ResolvedInliningSpec
+    spec.linear_inline_eligible || return
+
+    # Replace `op` with its definition if possible so that codegen can optimize the case
+    # where `op` is a supported intrinsic function.
+    length(spec.ir.stmts) == 2 || return
+    spec.ir.stmts[2][:inst] === ReturnNode(SSAValue(1)) || return
+    call = spec.ir.stmts[1][:inst]
+    isexpr(call, :call, 3) || return
+    (call.args[2] == Argument(2) && call.args[3] == Argument(3)) || return
+    widenconst(spec.ir.stmts[1][:type]) === arg1type || return  # no `convert`
+
+    sig = call_sig(spec.ir, call)
+    sig === nothing && return
+
+    # The following cases have to be matched with what `emit_atomicrmw` (codegen) can
+    # handle:
+    sig.f === Intrinsics.add_int ||
+        sig.f === Intrinsics.sub_int ||
+        sig.f === Intrinsics.and_int ||
+        sig.f === Intrinsics.or_int ||
+        sig.f === Intrinsics.xor_int ||
+        sig.f === Intrinsics.add_float ||
+        sig.f === Intrinsics.sub_float ||
+        return
+
+    inst[:inst].head = :call
+    deleteat!(inst[:inst].args, 1)
+    inst[:inst].args[4] = sig.f
+
+    return
 end
 
 # TODO inline non-`isdispatchtuple`, union-split callsites?

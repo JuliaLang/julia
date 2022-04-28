@@ -1642,6 +1642,10 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     return mark_julia_type(ctx, instr, isboxed, jltype);
 }
 
+static Value *emit_atomicrmw(jl_codectx_t &ctx, Value *ptr, Value *rhs,
+                             AtomicOrdering Order, unsigned alignment,
+                             const jl_cgval_t *modifyop);
+
 static jl_cgval_t typed_store(jl_codectx_t &ctx,
         Value *ptr, Value *idx_0based, jl_cgval_t rhs, jl_cgval_t cmp,
         jl_value_t *jltype, MDNode *tbaa, MDNode *aliasscope,
@@ -1651,11 +1655,15 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         bool maybe_null_if_boxed, const jl_cgval_t *modifyop, const std::string &fname)
 {
     auto newval = [&](const jl_cgval_t &lhs) {
-        const jl_cgval_t argv[3] = { cmp, lhs, rhs };
+        jl_cgval_t argv[3] = { cmp, lhs, rhs };
         jl_cgval_t ret(ctx.builder.getContext());
-        if (modifyop) {
-            ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
-        }
+        if (modifyop)
+            if (jl_typeis(modifyop->constant, jl_method_instance_type))
+                ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
+            else {
+                assert(jl_typeis(modifyop->constant, jl_intrinsic_type));
+                ret = emit_intrinsic(ctx, modifyop->constant, &argv[1], 2);
+            }
         else {
             Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, JLCALL_F_CC);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
@@ -1706,8 +1714,10 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (nb != nb2)
             elty = Type::getIntNTy(ctx.builder.getContext(), nb2);
     }
+    bool intrinsic_rmw =
+        modifyop && modifyop->constant && jl_typeis(modifyop->constant, jl_intrinsic_type);
     Value *r = nullptr;
-    if (issetfield || isswapfield || isreplacefield)  {
+    if (issetfield || isswapfield || isreplacefield || intrinsic_rmw)  {
         if (!isboxed)
             r = emit_unbox(ctx, realelty, rhs, jltype);
         else
@@ -1724,6 +1734,16 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         alignment = sizeof(void*);
     else if (!alignment)
         alignment = julia_alignment(jltype);
+    if (intrinsic_rmw) {
+        assert(!isboxed && !needlock && ismodifyfield);
+        Value *result = emit_atomicrmw(ctx, ptr, r, Order, alignment, modifyop);
+        if (result) {
+            jl_cgval_t oldval = mark_julia_type(ctx, result, false, jltype);
+            const jl_cgval_t argv[2] = {oldval, newval(oldval)};
+            jl_datatype_t *rettyp = jl_apply_modify_type(jltype);
+            return emit_new_struct(ctx, (jl_value_t *)rettyp, 2, argv);
+        }
+    }
     Value *instr = nullptr;
     Value *Compare = nullptr;
     Value *Success = nullptr;
@@ -3441,9 +3461,12 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
             if (ismodifyfield) {
                 if (needlock)
                     emit_lockstate_value(ctx, strct, false);
-                const jl_cgval_t argv[3] = { cmp, oldval, rhs };
+                jl_cgval_t argv[3] = { cmp, oldval, rhs };
                 if (modifyop) {
-                    rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
+                    if jl_typeis(modifyop->constant, jl_method_instance_type)
+                        rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
+                    else
+                        rhs = emit_intrinsic(ctx, modifyop->constant, &argv[1], 2);
                 }
                 else {
                     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, JLCALL_F_CC);

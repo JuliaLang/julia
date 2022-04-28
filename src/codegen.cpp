@@ -1415,6 +1415,8 @@ static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgva
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
 static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv);
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt);
+static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, jl_value_t *fvalue, jl_cgval_t *argv,
+                                 size_t nargs);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G);
@@ -3982,6 +3984,26 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
     return mark_julia_type(ctx, callval, true, rt);
 }
 
+static bool emit_call_modify(jl_codectx_t &ctx, jl_cgval_t *ret, jl_cgval_t modifyfield,
+                             jl_expr_t *ex, jl_value_t *rt)
+{
+    jl_value_t **args = (jl_value_t **)jl_array_data(ex->args);
+    size_t nargs = jl_array_dim0(ex->args);
+    if (!(nargs == 5 || nargs == 6))
+        return false;
+    jl_cgval_t *argv = (jl_cgval_t *)alloca(sizeof(jl_cgval_t) * nargs);
+    argv[0] = modifyfield;
+    for (size_t i = 1; i < nargs; ++i) {
+        argv[i] = emit_expr(ctx, args[i]);
+        if (argv[i].typ == jl_bottom_type)
+            return true;
+    }
+    const jl_cgval_t *modifyop = &argv[3];
+    if (!(modifyop->constant && jl_typeis(modifyop->constant, jl_intrinsic_type)))
+        return false;
+    return emit_f_opfield(ctx, ret, jl_builtin_modifyfield, argv, nargs - 1, modifyop);
+}
+
 static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
 {
     ++EmittedCalls;
@@ -3993,6 +4015,11 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
     if (f.constant && jl_typeis(f.constant, jl_intrinsic_type)) {
         JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
         return emit_intrinsic(ctx, fi, args, nargs - 1);
+    }
+    else if (f.constant && f.constant == jl_builtin_modifyfield) {
+        jl_cgval_t ret(ctx.builder.getContext());
+        if (emit_call_modify(ctx, &ret, f, ex, rt))
+            return ret;
     }
 
     jl_value_t *context = ctx.params->generic_context == jl_nothing ? nullptr : ctx.params->generic_context;
