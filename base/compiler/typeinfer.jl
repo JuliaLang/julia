@@ -277,8 +277,34 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
             cache_result!(interp, caller)
         end
         finish!(interp, caller)
+        if isplugin(interp)
+            fixup_plugin_entry!(interp, caller)
+        end
     end
     return true
+end
+
+function fixup_plugin_entry!(interp::AbstractInterpreter, caller::InferenceResult)
+    src = caller.src
+    if src isa CodeInfo
+        fixup_plugin_entry!(src, collect(Any, caller.linfo.sparam_vals))
+    elseif src isa OptimizationState
+        fixup_plugin_entry!(src.src, src.sptypes)
+    end
+end
+
+function fixup_plugin_entry!(src::CodeInfo, sptypes::Vector{Any})
+    @assert src.inferred
+    for i = 1:length(src.code)
+        stmt = src.code[i]
+        if isexpr(stmt, :call)
+            ft = argextype(stmt.args[1], src, sptypes)
+            f = singleton_type(ft)
+            if f === nothing || !(f isa Builtin)
+                pushfirst!(stmt.args, GlobalRef(Core.Compiler, :execute_with_plugin))
+            end
+        end
+    end
 end
 
 function CodeInstance(

@@ -154,6 +154,8 @@ function extrema(x::Array)
     return vmin, vmax
 end
 
+include("compiler/plugin.jl")
+
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
 
