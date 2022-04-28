@@ -2874,7 +2874,7 @@ true
 julia> 1.0 isa IntOrString # Float is neither Int, nor AbstractString
 false
 
-julia> IntOrString(1) # error, cannot instantiate an Union type
+julia> IntOrString(1) # error, cannot instantiate a Union type
 ERROR: MethodError: no method matching Union{Int64, AbstractString}(::Int64)
 ```
 
