@@ -175,8 +175,8 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
-    "Developer Documentation" => DevDocs,
-    hide("NEWS.md"),
+    # Add "Release Notes" to devdocs
+    "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
 else
 const PAGES = [
