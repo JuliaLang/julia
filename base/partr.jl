@@ -13,12 +13,17 @@ mutable struct taskheap
     taskheap() = new(SpinLock(), Vector{Task}(undef, 256), zero(Int32), typemax(UInt16))
 end
 
+mutable struct MultiQueue
+    @atomic heaps::Vector{taskheap}
+    @atomic cong_unbias::UInt32
+    const lock::SpinLock
+end
+
+MultiQueue() = MultiQueue(taskheap[], typemax(UInt32), SpinLock())
 
 # multiqueue minheap state
 const heap_d = UInt32(8)
-const heaps = [Vector{taskheap}(undef, 0), Vector{taskheap}(undef, 0)]
-const heaps_lock = [SpinLock(), SpinLock()]
-const cong_unbias = [typemax(UInt32), typemax(UInt32)]
+const multiqs = (MultiQueue(), MultiQueue())
 
 
 cong(max::UInt32, unbias::UInt32) =
@@ -61,22 +66,24 @@ function multiq_sift_down(heap::taskheap, idx::Int32)
 end
 
 
-function multiq_size(tpid::Int8)
+function threadpool_heaps(tpid::Int8)
     nt = UInt32(Threads._nthreads_in_pool(tpid))
     tp = tpid + 1
-    tpheaps = heaps[tp]
+    mq = multiqs[tp]
+    tpheaps = @atomic :acquire mq.heaps
     heap_c = UInt32(2)
     heap_p = UInt32(length(tpheaps))
 
     if heap_c * nt <= heap_p
-        return heap_p
+        return tpheaps
     end
 
-    @lock heaps_lock[tp] begin
+    @lock mq.lock begin
+        tpheaps = @atomic :monotonic mq.heaps
         heap_p = UInt32(length(tpheaps))
         nt = UInt32(Threads._nthreads_in_pool(tpid))
         if heap_c * nt <= heap_p
-            return heap_p
+            return tpheaps
         end
 
         heap_p += heap_c * nt
@@ -85,25 +92,25 @@ function multiq_size(tpid::Int8)
         for i = (1 + length(tpheaps)):heap_p
             newheaps[i] = taskheap()
         end
-        heaps[tp] = newheaps
-        cong_unbias[tp] = unbias_cong(heap_p)
+        @atomic :release mq.heaps = newheaps
+        @atomic :monotonic mq.cong_unbias = unbias_cong(heap_p)
+        return newheaps
     end
-
-    return heap_p
 end
 
 
 function multiq_insert(task::Task, priority::UInt16)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
-    heap_p = multiq_size(tpid)
+    tpheaps = threadpool_heaps(tpid)
+    heap_p = UInt32(length(tpheaps))
     tp = tpid + 1
 
     task.priority = priority
 
-    rn = cong(heap_p, cong_unbias[tp])
-    tpheaps = heaps[tp]
+    ub = @atomic :monotonic multiqs[tp].cong_unbias
+    rn = cong(heap_p, ub)
     while !trylock(tpheaps[rn].lock)
-        rn = cong(heap_p, cong_unbias[tp])
+        rn = cong(heap_p, ub)
     end
 
     heap = tpheaps[rn]
@@ -131,7 +138,9 @@ function multiq_deletemin()
 
     tid = Threads.threadid()
     tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
-    tpheaps = heaps[tp]
+    mq = multiqs[tp]
+    tpheaps = @atomic :acquire mq.heaps
+    ub = @atomic :monotonic mq.cong_unbias
 
     @label retry
     GC.safepoint()
@@ -140,8 +149,8 @@ function multiq_deletemin()
         if i == heap_p
             return nothing
         end
-        rn1 = cong(heap_p, cong_unbias[tp])
-        rn2 = cong(heap_p, cong_unbias[tp])
+        rn1 = cong(heap_p, ub)
+        rn2 = cong(heap_p, ub)
         prio1 = tpheaps[rn1].priority
         prio2 = tpheaps[rn2].priority
         if prio1 > prio2
@@ -181,9 +190,9 @@ end
 
 
 function multiq_check_empty()
-    for j = UInt32(1):length(heaps)
-        for i = UInt32(1):length(heaps[j])
-            if heaps[j][i].ntasks != 0
+    for mq in multiqs
+        for heap in (@atomic :acquire mq.heaps)
+            if (@atomic :monotonic heap.ntasks) != 0
                 return false
             end
         end
