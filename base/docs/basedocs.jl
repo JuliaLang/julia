@@ -2857,7 +2857,7 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-An `Union` type is an `abstract type` that can reference any value of one of its arguments. It cannot be
+A `Union` type is an `abstract type` that can reference any value of one of its arguments. It cannot be
 instantiated.
 
 # Examples
