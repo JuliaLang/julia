@@ -102,7 +102,7 @@ julia> Meta.show_sexpr(ex3)
 
 The `:` character has two syntactic purposes in Julia. The first form creates a [`Symbol`](@ref),
 an [interned string](https://en.wikipedia.org/wiki/String_interning) used as one building-block
-of expressions:
+of expressions, from valid identifiers:
 
 ```jldoctest
 julia> s = :foo
@@ -126,8 +126,18 @@ julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
 
-Note that to use `:` syntax, the symbol's name must be a valid identifier.
-Otherwise the `Symbol(str)` constructor must be used.
+To create a symbol that isn't a valid identifier, the `Symbol(str)` constructor must be used:
+
+```jldoctest
+julia> Symbol(1)
+Symbol("1")
+
+julia> Symbol(true)
+Symbol("true")
+
+julia> Symbol("1foo")
+Symbol("1foo")
+```
 
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
