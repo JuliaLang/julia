@@ -98,7 +98,7 @@ let md_basename = "HISTORY"
     out_md =
         """
         ```@meta
-        EditURL = "https://github.com/JuliaLang/julia/blob/master/$basename.md"
+        EditURL = "https://github.com/JuliaLang/julia/blob/master/$md_basename.md"
         ```
         """ *
         "\n" *
