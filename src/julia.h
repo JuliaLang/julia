@@ -2241,6 +2241,16 @@ typedef struct {
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
+// probes interface
+typedef struct {
+    const char *name;
+    void *probe_addr;
+    void *semaphore_addr;
+} jl_probe_spec_t;
+JL_DLLEXPORT void jl_init_probes(void);
+JL_DLLEXPORT jl_probe_spec_t *jl_probe_register(const char *);
+JL_DLLEXPORT jl_probe_spec_t *jl_probe_lookup(const char *);
+
 #ifdef __cplusplus
 }
 #endif

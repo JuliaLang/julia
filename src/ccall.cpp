@@ -11,6 +11,7 @@ STATISTIC(PLTThunks, "Number of PLT Thunks emitted");
 STATISTIC(PLT, "Number of direct PLT entries emitted");
 STATISTIC(EmittedCGlobals, "Number of C globals emitted");
 STATISTIC(EmittedLLVMCalls, "Number of llvmcall intrinsics emitted");
+STATISTIC(EmittedProbeCalls, "Number of probecall intrinsics emitted");
 
 #define _CCALL_STAT(name) jl_transformed_ccall__##name
 #define CCALL_STAT(name) _CCALL_STAT(name)
@@ -568,7 +569,7 @@ typedef struct {
 } native_sym_arg_t;
 
 // --- parse :sym or (:sym, :lib) argument into address info ---
-static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg, const char *fname, bool llvmcall)
+static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_value_t *arg, const char *fname, bool llvmcall, bool probecall)
 {
     Value *&jl_ptr = out.jl_ptr;
     void (*&fptr)(void) = out.fptr;
@@ -620,7 +621,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
             // will look in process symbol table
-            if (!llvmcall) {
+            if (!llvmcall && !probecall) {
                 void *symaddr;
                 std::string iname("i");
                 iname += f_name;
@@ -695,7 +696,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     Type *lrt = getSizeTy(ctx.builder.getContext());
     assert(lrt == julia_type_to_llvm(ctx, rt));
 
-    interpret_symbol_arg(ctx, sym, args[1], "cglobal", false);
+    interpret_symbol_arg(ctx, sym, args[1], "cglobal", false, false);
 
     if (sym.jl_ptr != NULL) {
         res = ctx.builder.CreateBitCast(sym.jl_ptr, lrt);
@@ -1041,6 +1042,7 @@ public:
     std::string err_msg;
     CallingConv::ID cc; // calling convention ABI
     bool llvmcall;
+    bool probecall;
     jl_svec_t *at; // svec of julia argument types
     jl_value_t *rt; // julia return type
     jl_unionall_t *unionall_env; // UnionAll environment for `at` and `rt`
@@ -1048,9 +1050,9 @@ public:
     size_t nreqargs; // number of required arguments in ccall function definition
     jl_codegen_params_t *ctx;
 
-    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_params_t *ctx)
+    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, bool probecall, jl_codegen_params_t *ctx)
       : lrt(lrt), retboxed(retboxed),
-        prt(NULL), sret(0), cc(cc), llvmcall(llvmcall),
+        prt(NULL), sret(0), cc(cc), llvmcall(llvmcall), probecall(probecall),
         at(at), rt(rt), unionall_env(unionall_env),
         nccallargs(jl_svec_len(at)), nreqargs(nreqargs),
         ctx(ctx)
@@ -1210,26 +1212,29 @@ std::string generate_func_sig(const char *fname)
 }
 };
 
-static std::pair<CallingConv::ID, bool> convert_cconv(jl_sym_t *lhd)
+static std::tuple<CallingConv::ID, bool, bool> convert_cconv(jl_sym_t *lhd)
 {
     // check for calling convention specifier
     if (lhd == jl_symbol("stdcall")) {
-        return std::make_pair(CallingConv::X86_StdCall, false);
+        return std::make_tuple(CallingConv::X86_StdCall, false, false);
     }
     else if (lhd == jl_symbol("cdecl") || lhd == jl_symbol("ccall")) {
         // `ccall` calling convention is a placeholder for when there isn't one provided
         // it is not by itself a valid calling convention name to be specified in the surface
         // syntax.
-        return std::make_pair(CallingConv::C, false);
+        return std::make_tuple(CallingConv::C, false, false);
     }
     else if (lhd == jl_symbol("fastcall")) {
-        return std::make_pair(CallingConv::X86_FastCall, false);
+        return std::make_tuple(CallingConv::X86_FastCall, false, false);
     }
     else if (lhd == jl_symbol("thiscall")) {
-        return std::make_pair(CallingConv::X86_ThisCall, false);
+        return std::make_tuple(CallingConv::X86_ThisCall, false, false);
     }
     else if (lhd == jl_symbol("llvmcall")) {
-        return std::make_pair(CallingConv::C, true);
+        return std::make_tuple(CallingConv::C, true, false);
+    }
+    else if (lhd == jl_symbol("probecall")) {
+        return std::make_tuple(CallingConv::C, false, true);
     }
     jl_errorf("ccall: invalid calling convention %s", jl_symbol_name(lhd));
 }
@@ -1344,9 +1349,10 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;
-    std::tie(cc, llvmcall) = convert_cconv(cc_sym);
+    bool probecall = false;
+    std::tie(cc, llvmcall, probecall) = convert_cconv(cc_sym);
 
-    interpret_symbol_arg(ctx, symarg, args[1], "ccall", llvmcall);
+    interpret_symbol_arg(ctx, symarg, args[1], "ccall", llvmcall, probecall);
     Value *&jl_ptr = symarg.jl_ptr;
     void (*&fptr)(void) = symarg.fptr;
     const char *&f_name = symarg.f_name;
@@ -1452,7 +1458,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         rt = jl_ensure_rooted(ctx, rt);
     function_sig_t sig("ccall", lrt, rt, retboxed,
                        (jl_svec_t*)at, unionall, nreqargs,
-                       cc, llvmcall, &ctx.emission_context);
+                       cc, llvmcall, probecall, &ctx.emission_context);
     for (size_t i = 0; i < nccallargs; i++) {
         jl_value_t *tti = jl_svecref(at, i);
         if (jl_is_abstract_ref_type(tti)) {
@@ -1885,6 +1891,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         return jl_cgval_t();
     }
 
+    assert(!(llvmcall && probecall));
+
     FunctionType *functype = this->functype(ctx.builder.getContext());
 
     Value **argvals = (Value**) alloca((nccallargs + sret) * sizeof(Value*));
@@ -2016,6 +2024,115 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 emit_error(ctx, "llvmcall only supports intrinsic calls");
                 return jl_cgval_t();
             }
+        }
+    }
+    else if (probecall) {
+        ++EmittedProbeCalls;
+        if (symarg.jl_ptr != NULL) {
+            emit_error(ctx, "probecall doesn't support dynamic pointers");
+            return jl_cgval_t(ctx.builder.getContext());
+        }
+        else if (symarg.fptr != NULL) {
+            emit_error(ctx, "probecall doesn't support static pointers");
+            return jl_cgval_t(ctx.builder.getContext());
+        }
+        else if (symarg.f_lib != NULL) {
+            emit_error(ctx, "probecall doesn't support dynamic libraries");
+            return jl_cgval_t(ctx.builder.getContext());
+        }
+        else {
+            assert(symarg.f_name != NULL);
+            std::string fn_name = "jlprobe_";
+            fn_name += symarg.f_name;
+            std::string fn_name_unique = fn_name + std::to_string(globalUniqueGeneratedNames++);
+            std::string probe_name = fn_name + "_probe";
+            std::string sema_name = fn_name + "_semaphore";
+
+            Type *T_void = getVoidTy(ctx.builder.getContext());
+            ArrayRef<Type *> T_probe_args = makeArrayRef(fargt);
+            FunctionType *FT_call_probe = FunctionType::get(T_void, T_probe_args, false);
+            PointerType *T_pcall_probe = FT_call_probe->getPointerTo();
+            /*
+            // TODO: jl_create_llvm_module
+            //orc::ThreadSafeModule TSM = orc::ThreadSafeModule(std::make_unique<Module>("probefunc", ctx.builder.getContext()),
+            //                                                  ctx.emission_context.tsctx);
+
+            // Generate probe or locate existing
+            jl_probe_spec_t *spec = jl_probe_register(symarg.f_name);
+
+            Module *probemod = jl_Module;
+            //TSM.withModuleDo([&](Module &probemod) {
+            //    probemod.setTargetTriple(jl_Module->getTargetTriple());
+            //    probemod.setDataLayout(jl_Module->getDataLayout());
+#if JL_LLVM_VERSION >= 130000
+            //    probemod.setStackProtectorGuard(jl_Module->getStackProtectorGuard());
+            //    probemod.setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
+#endif
+            */
+
+            // TODO: always_inline
+            llvmf = Function::Create(FT_call_probe, GlobalValue::InternalLinkage,
+                                     fn_name_unique, probemod);
+            Function *F_llvmf = dyn_cast<Function>(llvmf);
+            assert(F_llvmf);
+            BasicBlock *probe_entry_bb = BasicBlock::Create(ctx.builder.getContext(), "probe_entry", F_llvmf);
+            BasicBlock *sema_loaded_bb = BasicBlock::Create(ctx.builder.getContext(), "semaphore_loaded", F_llvmf);
+            BasicBlock *probe_loaded_bb = BasicBlock::Create(ctx.builder.getContext(), "probe_loaded", F_llvmf);
+            BasicBlock *probe_done_bb = BasicBlock::Create(ctx.builder.getContext(), "probe_done", F_llvmf);
+            IRBuilder<> irbuilder(probe_entry_bb);
+
+            // Generate the probe slot
+            jl_value_t *probe_init = jl_eval_string("Base.RefValue{Ptr{Cvoid}}(0)");
+            Value *probegv = literal_pointer_val(ctx, probe_init);
+            Value *probegv_ptr = irbuilder.CreateBitCast(probegv, T_pcall_probe->getPointerTo());
+            LoadInst *probe_val = irbuilder.CreateAlignedLoad(T_pcall_probe, probegv_ptr, Align(sizeof(void*)));
+            probe_val->setOrdering(AtomicOrdering::Unordered);
+            probe_val->setVolatile(true);
+
+            // Generate the semaphore slot
+            Type *T_i64 = getInt64Ty(irbuilder.getContext());
+            jl_value_t *sema_init = jl_eval_string("Base.RefValue{Ptr{Cvoid}}(0)");
+            Value *semagv = literal_pointer_val(ctx, sema_init);
+            Value *semagv_ptr = irbuilder.CreateBitCast(semagv, T_i64->getPointerTo());
+            LoadInst *sema_val = irbuilder.CreateAlignedLoad(T_i64, semagv_ptr, Align(sizeof(void*)));
+            sema_val->setOrdering(AtomicOrdering::Unordered);
+            sema_val->setVolatile(true);
+
+            // Check semaphore value is non-zero
+            irbuilder.CreateCondBr(irbuilder.CreateICmpSGT(sema_val, ConstantInt::get(T_i64, 0)), sema_loaded_bb, probe_done_bb);
+
+            // Increment semaphore
+            irbuilder.SetInsertPoint(sema_loaded_bb);
+            irbuilder.CreateAtomicRMW(AtomicRMWInst::Add, semagv_ptr, ConstantInt::get(T_i64, 1), Align(sizeof(void*)), AtomicOrdering::AcquireRelease);
+
+            // Check that probe is non-NULL
+            Value *probe_val_int = irbuilder.CreatePtrToInt(probe_val, T_i64);
+            irbuilder.CreateCondBr(irbuilder.CreateICmpEQ(probe_val_int, ConstantInt::get(T_i64, 0)), probe_done_bb, probe_loaded_bb);
+
+            // Call probe
+            irbuilder.SetInsertPoint(probe_loaded_bb);
+            assert(!sret);
+            ArrayRef<Value *> probe_args = makeArrayRef(argvals, nccallargs);
+            irbuilder.CreateCall(FT_call_probe, probe_val, probe_args);
+            irbuilder.CreateBr(probe_done_bb);
+
+            // Decrement semaphore and return
+            irbuilder.SetInsertPoint(probe_done_bb);
+            irbuilder.CreateAtomicRMW(AtomicRMWInst::Sub, semagv_ptr, ConstantInt::get(T_i64, 1), Align(sizeof(void*)), AtomicOrdering::AcquireRelease);
+            irbuilder.CreateRetVoid();
+
+            // FIXME: Emit STAPSDT note
+
+            // TODO: Remove me
+            F_llvmf->dump();
+
+            // Load probe and semaphore addresses into object
+            if (!jl_ExecutionEngine->findUnmangledSymbol(probe_name)) {
+                jl_ExecutionEngine->addGlobalMapping(probe_name, (JITTargetAddress)spec->probe_addr);
+                jl_ExecutionEngine->addGlobalMapping(sema_name, (JITTargetAddress)spec->semaphore_addr);
+            }
+            //ctx.llvmcall_modules.push_back(std::move(TSM));
+            //jl_ExecutionEngine->addModule(std::move(TSM));
         }
     }
     else if (symarg.jl_ptr != NULL) {

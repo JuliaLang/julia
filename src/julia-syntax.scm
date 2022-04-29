@@ -2613,7 +2613,7 @@
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
-                         (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
+                         (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall probecall)))
                          (after-cconv (if have-cconv (cddddr e) (cdddr e)))
                          (name (caddr e))
                          (RT   (car after-cconv))
@@ -4444,7 +4444,7 @@ f(x) = yt(x)
     ;; from the current function.
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null true false ssavalue quote inert top core copyast the_exception $
-                                                   globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall)))
+                                                   globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall probecall)))
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
                         e)))
