@@ -61,6 +61,52 @@ function generate_markdown(basename)
 end
 generate_markdown("NEWS")
 
+# Replace links and copy `HISTORY.md`
+let md_basename = "HISTORY"
+    src_path = joinpath(@__DIR__, "..", "$md_basename.md")
+    md_lines = readlines(src_path)
+
+    # all links like: `[some text]: https://example.com/`
+    ref_links = filter(m -> match(r"^\[([^#\]]+)\]:", m) !== nothing, md_lines)
+
+    # convert md reflink to a replace pair
+    link_repalce_pairs = map(ref_links) do md
+        m = match(r"^\[([^\]]+)\]:\s+(.+)$", md)
+        text, link = m.captures
+        "[$text]" => "[$text]($link)"
+    end |> Dict
+
+    # Remove all links and HTML comments
+    filter!(md_lines) do line
+        # remove reference links
+        match(r"^\[([^\]]+)\]:", line) === nothing &&
+        # remove comments
+        match(r"^<!---", line) === nothing
+    end
+
+    # Replace reference links
+    replace!(md_lines) do line
+        # issues
+        replace(line, r"\[\#([0-9]*?)\]" => s"[#\g<1>](https://github.com/JuliaLang/julia/issues/\g<1>)")
+    end
+    replace!(md_lines) do line
+        # other links
+        replace(line, link_repalce_pairs...)
+    end
+
+    # Output processed "HISTORY.md"
+    out_path = joinpath(@__DIR__, "src", "$md_basename.md")
+    out_md =
+        """
+        ```@meta
+        EditURL = "https://github.com/JuliaLang/julia/blob/master/$basename.md"
+        ```
+        """ *
+        "\n" *
+        join(md_lines, '\n')
+    write(out_path, out_md)
+end
+
 Manual = [
     "manual/getting-started.md",
     "manual/variables.md",
