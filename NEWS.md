@@ -24,10 +24,16 @@ Command-line option changes
 
 * In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
   process affinity which is set typically in HPC and cloud environments ([#42340]).
+* The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
+  number of interactive threads to create (`auto` currently means 1) ([#42302]).
 
 Multi-threading changes
 -----------------------
 
+* `Threads.@spawn` now accepts an optional first argument: `:default` or `:interactive`.
+  An interactive task desires low latency and implicitly agrees to be short duration or to
+  yield frequently. Interactive tasks will run on interactive threads, if any are specified
+  when Julia is started ([#42302]).
 
 Build system changes
 --------------------
@@ -48,6 +54,8 @@ Library changes
 * Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 
 Standard library changes
 ------------------------
@@ -64,6 +72,7 @@ Standard library changes
   system image with other BLAS/LAPACK libraries is not
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
 
 #### Markdown
 

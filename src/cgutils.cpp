@@ -2035,6 +2035,8 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
+#ifndef JL_LLVM_OPAQUE_POINTERS
+    // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
     if (sz <= 64) {
         // The size limit is arbitrary but since we mainly care about floating points and
         // machine size vectors this should be enough.
@@ -2073,6 +2075,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
             return;
         }
     }
+#endif
     // the memcpy intrinsic does not allow to specify different alias tags
     // for the load part (x.tbaa) and the store part (ctx.tbaa().tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately

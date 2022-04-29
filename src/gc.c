@@ -556,20 +556,21 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     arraylist_free(&copied_list);
 }
 
+// explicitly scheduled objects for the sweepfunc callback
 static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 {
     size_t p = 0;
     for (size_t i = 0; i < objs->len; i++) {
-        jl_value_t *v = (jl_value_t *)(objs->items[i]);
-        jl_datatype_t *t = (jl_datatype_t *)(jl_typeof(v));
+        jl_value_t *v = (jl_value_t*)(objs->items[i]);
+        jl_datatype_t *t = (jl_datatype_t*)(jl_typeof(v));
         const jl_datatype_layout_t *layout = t->layout;
         jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
-        if (!gc_ptr_tag(v, 1)) {
+
+        int bits = jl_astaggedvalue(v)->bits.gc;
+        if (!gc_marked(bits))
             desc->sweepfunc(v);
-        }
-        else {
+        else
             objs->items[p++] = v;
-        }
     }
     objs->len = p;
 }
@@ -3240,6 +3241,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
+    uint64_t max_memory = last_live_bytes + gc_num.allocd;
+    if (max_memory > gc_num.max_memory) {
+        gc_num.max_memory = max_memory;
+    }
+
     gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
@@ -3270,6 +3276,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.total_time += pause;
     gc_num.since_sweep = 0;
     gc_num.freed = 0;
+    if (pause > gc_num.max_pause) {
+        gc_num.max_pause = pause;
+    }
     reset_thread_gc_counts();
 
     return recollect;
@@ -3419,6 +3428,8 @@ void jl_gc_init(void)
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
+    gc_num.max_pause = 0;
+    gc_num.max_memory = 0;
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2

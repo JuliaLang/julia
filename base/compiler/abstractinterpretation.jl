@@ -84,19 +84,21 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     conditionals = nothing # keeps refinement information of call argument types when the return type is boolean
     seen = 0               # number of signatures actually inferred
     any_const_result = false
-    const_results = Union{InferenceResult,Nothing,ConstResult}[]
+    const_results = Union{Nothing,ConstResult}[]
     multiple_matches = napplicable > 1
+    fargs = arginfo.fargs
+    all_effects = EFFECTS_TOTAL
     if !matches.nonoverlayed
         # currently we don't have a good way to execute the overlayed method definition,
         # so we should give up pure/concrete eval when any of the matched methods is overlayed
         f = nothing
-        tristate_merge!(sv, Effects(EFFECTS_TOTAL; nonoverlayed=false))
+        all_effects = Effects(all_effects; nonoverlayed=false)
     end
 
+    # try pure-evaluation
     val = pure_eval_call(interp, f, applicable, arginfo, sv)
     val !== nothing && return CallMeta(val, MethodResultPure(info)) # TODO: add some sort of edge(s)
 
-    fargs = arginfo.fargs
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
         method = match.method
@@ -132,7 +134,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                         (; effects, const_result) = const_call_result
                     end
                 end
-                tristate_merge!(sv, effects)
+                all_effects = tristate_merge(all_effects, effects)
                 push!(const_results, const_result)
                 any_const_result |= const_result !== nothing
                 this_rt = tmerge(this_rt, rt)
@@ -181,7 +183,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     (; effects, const_result) = const_call_result
                 end
             end
-            tristate_merge!(sv, effects)
+            all_effects = tristate_merge(all_effects, effects)
             push!(const_results, const_result)
             any_const_result |= const_result !== nothing
         end
@@ -212,11 +214,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     if seen != napplicable
         # there may be unanalyzed effects within unseen dispatch candidate,
         # but we can still ignore nonoverlayed effect here since we already accounted for it
-        tristate_merge!(sv, EFFECTS_UNKNOWN)
+        all_effects = tristate_merge(all_effects, EFFECTS_UNKNOWN)
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!_all(b->b, matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        tristate_merge!(sv, Effects(EFFECTS_TOTAL; nothrow=TRISTATE_UNKNOWN))
+        all_effects = Effects(all_effects; nothrow=TRISTATE_UNKNOWN)
     end
 
     rettype = from_interprocedural!(rettype, sv, arginfo, conditionals)
@@ -231,13 +233,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # and avoid keeping track of a more complex result type.
         rettype = Any
     end
-    add_call_backedges!(interp, rettype, edges, matches, atype, sv)
+    add_call_backedges!(interp, rettype, all_effects, edges, matches, atype, sv)
     if !isempty(sv.pclimitations) # remove self, if present
         delete!(sv.pclimitations, sv)
         for caller in sv.callers_in_cycle
             delete!(sv.pclimitations, caller)
         end
     end
+    tristate_merge!(sv, all_effects)
     return CallMeta(rettype, info)
 end
 
@@ -452,11 +455,23 @@ function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Ve
     end
 end
 
-function add_call_backedges!(interp::AbstractInterpreter, @nospecialize(rettype), edges::Vector{MethodInstance},
-                             matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
-                             sv::InferenceState)
-    # for `NativeInterpreter`, we don't add backedges when a new method couldn't refine (widen) this type
-    rettype === Any && return
+function add_call_backedges!(interp::AbstractInterpreter,
+    @nospecialize(rettype), all_effects::Effects,
+    edges::Vector{MethodInstance}, matches::Union{MethodMatches,UnionSplitMethodMatches}, @nospecialize(atype),
+    sv::InferenceState)
+    # we don't need to add backedges when:
+    # - a new method couldn't refine (widen) this type and
+    # - the effects are known to not provide any useful IPO information
+    if rettype === Any
+        if !isoverlayed(method_table(interp))
+            # we can ignore the `nonoverlayed` property if `interp` doesn't use
+            # overlayed method table at all since it will never be tainted anyway
+            all_effects = Effects(all_effects; nonoverlayed=false)
+        end
+        if all_effects === Effects()
+            return
+        end
+    end
     for edge in edges
         add_backedge!(edge, sv)
     end
@@ -744,13 +759,13 @@ function concrete_eval_call(interp::AbstractInterpreter,
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConstResult(result.edge, result.edge_effects), result.edge_effects)
+        return ConstCallResults(Union{}, ConcreteResult(result.edge, result.edge_effects), result.edge_effects)
     end
     if is_inlineable_constant(value) || call_result_unused(sv)
         # If the constant is not inlineable, still do the const-prop, since the
         # code that led to the creation of the Const may be inlineable in the same
         # circumstance and may be optimizable.
-        return ConstCallResults(Const(value), ConstResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
+        return ConstCallResults(Const(value), ConcreteResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
     end
     return nothing
 end
@@ -770,10 +785,10 @@ end
 
 struct ConstCallResults
     rt::Any
-    const_result::Union{InferenceResult, ConstResult}
+    const_result::ConstResult
     effects::Effects
     ConstCallResults(@nospecialize(rt),
-                     const_result::Union{InferenceResult, ConstResult},
+                     const_result::ConstResult,
                      effects::Effects) =
         new(rt, const_result, effects)
 end
@@ -823,7 +838,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return nothing
     add_backedge!(mi, sv)
-    return ConstCallResults(result, inf_result, inf_result.ipo_effects)
+    return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects)
 end
 
 # if there's a possibility we could get a better result (hopefully without doing too much work)
@@ -2057,7 +2072,7 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     return typ
 end
 
-function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, slottypes::Vector{Any}, changes::VarTable)
+function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nargs::Int, slottypes::Vector{Any}, changes::VarTable)
     if !(bestguess ⊑ Bool) || bestguess === Bool
         # give up inter-procedural constraint back-propagation
         # when tmerge would widen the result anyways (as an optimization)
@@ -2065,7 +2080,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
     else
         if isa(rt, Conditional)
             id = slot_id(rt.var)
-            if 1 ≤ id ≤ nslots
+            if 1 ≤ id ≤ nargs
                 old_id_type = widenconditional(slottypes[id]) # same as `(states[1]::VarTable)[id].typ`
                 if (!(rt.vtype ⊑ old_id_type) || old_id_type ⊑ rt.vtype) &&
                    (!(rt.elsetype ⊑ old_id_type) || old_id_type ⊑ rt.elsetype)
@@ -2093,7 +2108,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nslots::Int, s
                 # pick up the first "interesting" slot, convert `rt` to its `Conditional`
                 # TODO: ideally we want `Conditional` and `InterConditional` to convey
                 # constraints on multiple slots
-                for slot_id in 1:nslots
+                for slot_id in 1:nargs
                     rt = bool_rt_to_conditional(rt, slottypes, changes, slot_id)
                     rt isa InterConditional && break
                 end
@@ -2152,10 +2167,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     states = frame.stmt_types
-    nargs = frame.nargs
     def = frame.linfo.def
     isva = isa(def, Method) && def.isva
-    nslots = nargs - isva
+    nargs = length(frame.result.argtypes) - isva
     slottypes = frame.slottypes
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
     while !isempty(W)
@@ -2223,7 +2237,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
         elseif isa(stmt, ReturnNode)
             bestguess = frame.bestguess
             rt = abstract_eval_value(interp, stmt.val, changes, frame)
-            rt = widenreturn(rt, bestguess, nslots, slottypes, changes)
+            rt = widenreturn(rt, bestguess, nargs, slottypes, changes)
             # narrow representation of bestguess slightly to prepare for tmerge with rt
             if rt isa InterConditional && bestguess isa Const
                 let slot_id = rt.slot

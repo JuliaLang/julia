@@ -633,7 +633,7 @@ Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 This code is an implementation of the algorithm described in:
 An Improved Algorithm for `hypot(a,b)`
 by Carlos F. Borges
-The article is available online at ArXiv at the link
+The article is available online at arXiv at the link
   https://arxiv.org/abs/1904.09481
 
     hypot(x...)
