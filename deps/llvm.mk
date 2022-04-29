@@ -233,10 +233,14 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
 # declare that all patches must be applied before running ./configure
-$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV) $(build_prefix)/manifest/zlib
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround)
 	mkdir -p $(dir $@)
