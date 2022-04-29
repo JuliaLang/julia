@@ -24,6 +24,7 @@ Command-line option changes
 
 * In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
   process affinity which is set typically in HPC and cloud environments ([#42340]).
+* `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
 * The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
   number of interactive threads to create (`auto` currently means 1) ([#42302]).
 
