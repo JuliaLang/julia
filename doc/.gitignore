@@ -3,4 +3,4 @@ _build/
 UnicodeData.txt
 src/stdlib/
 src/NEWS.md
-
+src/HISTORY.md

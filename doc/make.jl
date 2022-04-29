@@ -179,6 +179,7 @@ const PAGES = [
     "Standard Library" => StdlibDocs,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
+    "Release History" => "HISTORY.md",
 ]
 else
 const PAGES = [
@@ -188,6 +189,7 @@ const PAGES = [
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
     "Developer Documentation" => DevDocs,
+    "Release History" => "HISTORY.md",
 ]
 end
 
