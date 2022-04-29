@@ -23,7 +23,7 @@ MultiQueue() = MultiQueue(taskheap[], typemax(UInt32), SpinLock())
 
 # multiqueue minheap state
 const heap_d = UInt32(8)
-const multiqs = (MultiQueue(), MultiQueue())
+const multiqs = [MultiQueue(), MultiQueue()]
 
 
 cong(max::UInt32, unbias::UInt32) =
