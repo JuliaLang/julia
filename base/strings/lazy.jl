@@ -16,7 +16,7 @@ julia> n = 5; str = LazyString("n is ", n)
 "n is 5"
 ```
 
-See also [`lazy"str"`](@ref).
+See also [`@lazy_str`](@ref).
 
 !!! compat "Julia 1.8"
     `LazyString` requires Julia 1.8 or later.

@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "alloc_opt"
 #undef DEBUG
 #include "llvm-version.h"
 
@@ -38,6 +37,7 @@
 #include <map>
 #include <set>
 
+#define DEBUG_TYPE "alloc_opt"
 #include "julia_assert.h"
 
 using namespace llvm;

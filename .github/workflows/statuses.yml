@@ -48,7 +48,6 @@ jobs:
       - run: |
           declare -a CONTEXT_LIST=(
                 "buildbot/tester_freebsd64"
-                "buildbot/tester_linux32"
                 "buildbot/tester_win32"
                 "buildbot/tester_win64"
                 )

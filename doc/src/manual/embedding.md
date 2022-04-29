@@ -507,7 +507,7 @@ that creates a 2D array and accesses its properties:
 
 ```c
 // Create 2D array of float64 type
-jl_value_t *array_type = jl_apply_array_type(jl_float64_type, 2);
+jl_value_t *array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 2);
 jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
 
 // Get array pointer

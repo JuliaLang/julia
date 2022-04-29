@@ -40,7 +40,7 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.world,
         copy(frame.sptypes),
         copy(frame.slottypes),
-        frame.nargs,
+        length(frame.result.argtypes),
     )
     return mi_info
 end
@@ -665,7 +665,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # remove dead code optimization
     # and compute which variables may be used undef
     states = sv.stmt_types
-    nargs = sv.nargs
     nslots = length(states[1]::VarTable)
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
