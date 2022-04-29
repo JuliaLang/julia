@@ -62,7 +62,10 @@ unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, 
 cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
 cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
-unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+@eval function unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T}
+    #@assume_effects :effect_free @ccall jl_array_ptr(a::Any)::Ptr{T}
+    $(Expr(:foreigncall, QuoteNode(:jl_array_ptr), :(Ptr{T}), :(Core.svec(Any)), 0, QuoteNode((:ccall, 0x02)), :a))
+end
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
 unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
 

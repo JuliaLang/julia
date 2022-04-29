@@ -518,3 +518,8 @@ end
     @test Av isa StridedArray && pointer(Av) === pointer(a, 2)
     @test Av * Av' isa Array
 end
+
+@testset "effect of StridedReinterpretArray's getindex" begin
+    eff = Base.infer_effects(getindex, Base.typesof(reinterpret(Int8, Int[1]), 1))
+    @test Core.Compiler.is_effect_free(eff)
+end
