@@ -1,0 +1,4 @@
+DELIMITEDFILES_BRANCH = main
+DELIMITEDFILES_SHA1 = 79f7865b7f009f2ca5917096276a01b11eeac90d
+DELIMITEDFILES_GIT_URL := https://github.com/JuliaData/DelimitedFiles.jl.git
+DELIMITEDFILES_TAR_URL = https://api.github.com/repos/JuliaData/DelimitedFiles.jl/tarball/$1
