@@ -1071,8 +1071,9 @@ void RecursivelyVisit(callback f, Value *V) {
         if (isa<VisitInst>(TheUser))
             f(VU);
         if (isa<CallInst>(TheUser) || isa<LoadInst>(TheUser) ||
-            isa<SelectInst>(TheUser) || isa<PHINode>(TheUser) ||
+            isa<SelectInst>(TheUser) || isa<PHINode>(TheUser) || // TODO: should these be removed from this list?
             isa<StoreInst>(TheUser) || isa<PtrToIntInst>(TheUser) ||
+            isa<ICmpInst>(TheUser) || // ICmpEQ/ICmpNE can be used with ptr types
             isa<AtomicCmpXchgInst>(TheUser) || isa<AtomicRMWInst>(TheUser))
             continue;
         if (isa<GetElementPtrInst>(TheUser) || isa<BitCastInst>(TheUser) || isa<AddrSpaceCastInst>(TheUser)) {

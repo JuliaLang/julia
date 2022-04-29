@@ -847,7 +847,7 @@ static bool is_uniontype_allunboxed(jl_value_t *typ)
     return for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
 }
 
-static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p);
+static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull=false);
 
 static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 {
@@ -902,16 +902,9 @@ static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNo
  }
 
 static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v);
+static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull);
 
-// Returns ctx.types().T_prjlvalue
-static Value *emit_typeof(jl_codectx_t &ctx, Value *tt)
-{
-    ++EmittedTypeof;
-    assert(tt != NULL && !isa<AllocaInst>(tt) && "expected a conditionally boxed value");
-    return ctx.builder.CreateCall(prepare_call(jl_typeof_func), {tt});
-}
-
-static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
+static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull)
 {
     // given p, compute its type
     if (p.constant)
@@ -924,7 +917,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
                 return mark_julia_const(ctx, jl_typeof(tp));
             }
         }
-        return mark_julia_type(ctx, emit_typeof(ctx, p.V), true, jl_datatype_type);
+        return mark_julia_type(ctx, emit_typeof(ctx, p.V, maybenull), true, jl_datatype_type);
     }
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
@@ -959,7 +952,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "merge", ctx.f);
             ctx.builder.CreateCondBr(isnull, boxBB, unboxBB);
             ctx.builder.SetInsertPoint(boxBB);
-            auto boxTy = emit_typeof(ctx, p.Vboxed);
+            auto boxTy = emit_typeof(ctx, p.Vboxed, maybenull);
             ctx.builder.CreateBr(mergeBB);
             boxBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(unboxBB);
@@ -981,9 +974,9 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 }
 
 // Returns ctx.types().T_prjlvalue
-static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p)
+static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull)
 {
-    return boxed(ctx, emit_typeof(ctx, p));
+    return boxed(ctx, emit_typeof(ctx, p, maybenull));
 }
 
 static Value *emit_datatype_types(jl_codectx_t &ctx, Value *dt)
@@ -1224,6 +1217,24 @@ static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
     });
 }
 
+// Returns typeof(v), or null if v is a null pointer at run time and maybenull is true.
+// This is used when the value might have come from an undefined value (a PhiNode),
+// yet we try to read its type to compute a union index when moving the value (a PiNode).
+// Returns a ctx.types().T_prjlvalue typed Value
+static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull)
+{
+    ++EmittedTypeof;
+    assert(v != NULL && !isa<AllocaInst>(v) && "expected a conditionally boxed value");
+    Function *typeof = prepare_call(jl_typeof_func);
+    if (maybenull)
+        return emit_guarded_test(ctx, null_pointer_cmp(ctx, v), Constant::getNullValue(typeof->getReturnType()), [&] {
+            // e.g. emit_typeof(ctx, v)
+            return ctx.builder.CreateCall(typeof, {v});
+        });
+    return ctx.builder.CreateCall(typeof, {v});
+}
+
+
 static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
     Value *msg_val = stringConstPtr(ctx.emission_context, ctx.builder, msg);
@@ -1353,7 +1364,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_isa", ctx.f);
                 ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
                 ctx.builder.SetInsertPoint(isaBB);
-                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed),
+                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed, false),
                     track_pjlvalue(ctx, literal_pointer_val(ctx, intersected_type)));
                 ctx.builder.CreateBr(postBB);
                 isaBB = ctx.builder.GetInsertBlock(); // could have changed
@@ -1408,6 +1419,20 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 track_pjlvalue(ctx, literal_pointer_val(ctx, type)) }),
             ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)), false);
 }
+
+// If this might have been sourced from a PhiNode object, it is possible our
+// Vboxed pointer itself is null (undef) at runtime even if we thought we should
+// know exactly the type of the bytes that should have been inside.
+//
+// n.b. It is also possible the value is a ghost of some sort, and we will
+// declare that the pointer is legal (for zero bytes) even though it might be undef.
+static Value *emit_isa_and_defined(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
+{
+    return emit_nullcheck_guard(ctx, val.ispointer() ? val.V : nullptr, [&] {
+        return emit_isa(ctx, val, typ, nullptr).first;
+    });
+}
+
 
 static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string &msg)
 {
@@ -3005,42 +3030,16 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
     return tindex;
 }
 
-// Returns typeof(v), or null if v is a null pointer at run time.
-// This is used when the value might have come from an undefined variable,
-// yet we try to read its type to compute a union index when moving the value.
-static Value *emit_typeof_or_null(jl_codectx_t &ctx, Value *v)
-{
-    BasicBlock *nonnull = BasicBlock::Create(ctx.builder.getContext(), "nonnull", ctx.f);
-    BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "postnull", ctx.f);
-    Value *isnull = ctx.builder.CreateICmpEQ(v, Constant::getNullValue(v->getType()));
-    ctx.builder.CreateCondBr(isnull, postBB, nonnull);
-    BasicBlock *entry = ctx.builder.GetInsertBlock();
-    ctx.builder.SetInsertPoint(nonnull);
-    Value *typof = emit_typeof(ctx, v);
-    ctx.builder.CreateBr(postBB);
-    nonnull = ctx.builder.GetInsertBlock(); // could have changed
-    ctx.builder.SetInsertPoint(postBB);
-    PHINode *ti = ctx.builder.CreatePHI(typof->getType(), 2);
-    ti->addIncoming(Constant::getNullValue(typof->getType()), entry);
-    ti->addIncoming(typof, nonnull);
-    return ti;
-}
-
 // get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
-static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
+static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ, bool maybenull=false)
 {
     if (val.typ == jl_bottom_type)
         return UndefValue::get(getInt8Ty(ctx.builder.getContext()));
     if (val.constant)
         return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
-
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-    Value *typof;
-    if (val.isboxed && !jl_is_concrete_type(val.typ) && !jl_is_type_type(val.typ))
-        typof = emit_typeof_or_null(ctx, val.V);
-    else
-        typof = emit_typeof_boxed(ctx, val);
+    Value *typof = emit_typeof_boxed(ctx, val, maybenull);
     return compute_box_tindex(ctx, typof, val.typ, typ);
 }
 
@@ -3222,14 +3221,17 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                 Value *src_ptr = data_pointer(ctx, src);
                 unsigned nb = jl_datatype_size(typ);
                 unsigned alignment = julia_alignment(typ);
-                Value *nbytes = ConstantInt::get(getSizeTy(ctx.builder.getContext()), nb);
-                if (skip) {
-                    // TODO: this Select is very bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
-                    //   select copy dest -> dest to simulate an undef value / conditional copy
-                    // src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
-                    nbytes = ctx.builder.CreateSelect(skip, Constant::getNullValue(getSizeTy(ctx.builder.getContext())), nbytes);
-                }
-                emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nbytes, alignment, isVolatile);
+                // TODO: this branch may be bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
+                //   select copy dest -> dest to simulate an undef value / conditional copy
+                // if (skip) src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
+                auto f = [&] {
+                    (void)emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nb, alignment, isVolatile);
+                    return nullptr;
+                };
+                if (skip)
+                    emit_guarded_test(ctx, skip, nullptr, f);
+                else
+                    f();
             }
         }
     }
@@ -3282,12 +3284,16 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
     }
     else {
         assert(src.isboxed && "expected boxed value for sizeof/alignment computation");
-        Value *datatype = emit_typeof_boxed(ctx, src);
-        Value *copy_bytes = emit_datatype_size(ctx, datatype);
-        if (skip) {
-            copy_bytes = ctx.builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
-        }
-        emit_memcpy(ctx, dest, tbaa_dst, src, copy_bytes, /*TODO: min-align*/1, isVolatile);
+        auto f = [&] {
+            Value *datatype = emit_typeof_boxed(ctx, src);
+            Value *copy_bytes = emit_datatype_size(ctx, datatype);
+            emit_memcpy(ctx, dest, tbaa_dst, src, copy_bytes, /*TODO: min-align*/1, isVolatile);
+            return nullptr;
+        };
+        if (skip)
+            emit_guarded_test(ctx, skip, nullptr, f);
+        else
+            f();
     }
 }
 
