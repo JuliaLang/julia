@@ -1570,8 +1570,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     assert(0 && "unreachable");
 }
 
-// This method is incomplete at the moment compared to the "main" method taking the argument
-// `jl_value_t **args`. It is just enough for handling modifyfield!.
 static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, jl_value_t *fvalue, jl_cgval_t *argv,
                                  size_t nargs)
 {
@@ -1585,6 +1583,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, jl_value_t *fvalue, jl_cgval
     if (expected_nargs && expected_nargs != nargs) {
         jl_errorf("intrinsic #%d %s: wrong number of arguments", f, jl_intrinsic_name((int)f));
     }
+
+    if (f == llvmcall) {
+        emit_error(ctx, "`llvmcall` must be compiled to be called");
+        return jl_cgval_t(ctx.builder.getContext());
+    }
+    if (f == cglobal_auto || f == cglobal)
+        return emit_runtime_call(ctx, f, argv, nargs);
 
     return emit_intrinsic_internal(ctx, f, argv, nargs);
 }

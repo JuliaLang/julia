@@ -411,5 +411,10 @@ Base.getindex(::StaticRef{value}) where {value} = value
               Pair{Bool,Bool}(false, true)
         @test _modifyfield!(ARefxy(false, false), :x, Base.or_int, true, :monotonic) ===
               Pair{Bool,Bool}(false, true)
+        @test_throws TypeError _modifyfield!(ARefxy(123, 0), :x, cglobal, 456, :monotonic)
+        @test_throws(
+            "`llvmcall` must be compiled to be called",
+            _modifyfield!(ARefxy(123, 0), :x, Core.Intrinsics.llvmcall, 456, :monotonic),
+        )
     end
 end
