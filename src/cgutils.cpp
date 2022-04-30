@@ -1714,8 +1714,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (nb != nb2)
             elty = Type::getIntNTy(ctx.builder.getContext(), nb2);
     }
-    bool intrinsic_rmw =
-        modifyop && modifyop->constant && jl_typeis(modifyop->constant, jl_intrinsic_type);
+    bool intrinsic_rmw = !isboxed && !needlock && ismodifyfield && modifyop &&
+                         modifyop->constant &&
+                         jl_typeis(modifyop->constant, jl_intrinsic_type);
     Value *r = nullptr;
     if (issetfield || isswapfield || isreplacefield || intrinsic_rmw)  {
         if (!isboxed)
@@ -1735,7 +1736,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     else if (!alignment)
         alignment = julia_alignment(jltype);
     if (intrinsic_rmw) {
-        assert(!isboxed && !needlock && ismodifyfield);
         Value *result = emit_atomicrmw(ctx, ptr, r, Order, alignment, modifyop);
         if (result) {
             jl_cgval_t oldval = mark_julia_type(ctx, result, false, jltype);
