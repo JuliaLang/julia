@@ -8534,8 +8534,9 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFEPOINT
     DWORD n16 = GetModuleFileNameW(mod, path16, MAX_PATH);
     if (n16 <= 0)
         return jl_nothing;
-    char path8[MAX_PATH * 2];
-    if (!WideCharToMultiByte(CP_UTF8, 0, path16, n16, path8, MAX_PATH * 2, NULL, NULL))
+    path16[n16++] = 0;
+    char path8[MAX_PATH * 3];
+    if (!WideCharToMultiByte(CP_UTF8, 0, path16, n16, path8, MAX_PATH * 3, NULL, NULL))
         return jl_nothing;
     return (jl_value_t*) jl_symbol(path8);
 #else
