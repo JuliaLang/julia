@@ -119,24 +119,14 @@ their string representations together:
 julia> :foo == Symbol("foo")
 true
 
+julia> Symbol("1foo") # `:1foo` would not work, as `1foo` is not a valid identifier
+Symbol("1foo")
+
 julia> Symbol("func",10)
 :func10
 
 julia> Symbol(:var,'_',"sym")
 :var_sym
-```
-
-To create a symbol that isn't a valid identifier, the `Symbol(str)` constructor must be used:
-
-```jldoctest
-julia> Symbol(1)
-Symbol("1")
-
-julia> Symbol(true)
-Symbol("true")
-
-julia> Symbol("1foo")
-Symbol("1foo")
 ```
 
 In the context of an expression, symbols are used to indicate access to variables; when an expression
