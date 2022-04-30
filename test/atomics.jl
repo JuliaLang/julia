@@ -381,3 +381,35 @@ ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, true)
 @test ans == 42
 ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, false)
 @test ans == 42
+
+struct StaticRef{value} end
+StaticRef(value) = StaticRef{value}()
+Base.getindex(::StaticRef{value}) where {value} = value
+
+@noinline do_modifyfield!(obj, field, op, x, order) =
+    modifyfield!(obj[], field[], op[], x[], order[])
+
+@testset "modifyfield!: partially inferrable arguments" begin
+    @testset for objw in [Ref, Ref{Any}],
+        fieldw in [StaticRef, Ref],
+        opw in [StaticRef, Ref],
+        xw in [Ref, Ref{Any}],
+        orderw in [StaticRef, Ref]
+
+        _modifyfield!(obj, field, op, x, order) =
+            do_modifyfield!(objw(obj), fieldw(field), opw(op), xw(x), orderw(order))
+
+        @test _modifyfield!(ARefxy(123, 0), :x, +, 456, :monotonic) ===
+              Pair{Int,Int}(123, 579)
+        @test _modifyfield!(ARefxy(123, 0), :x, Base.add_int, 456, :monotonic) ===
+              Pair{Int,Int}(123, 579)
+        @test _modifyfield!(ARefxy{Any}(123, 0), :x, +, 456, :monotonic) ===
+              Pair{Any,Any}(123, 579)
+        @test _modifyfield!(ARefxy{Any}(123, 0), :x, Base.add_int, 456, :monotonic) ===
+              Pair{Any,Any}(123, 579)
+        @test _modifyfield!(ARefxy(false, false), :x, |, true, :monotonic) ===
+              Pair{Bool,Bool}(false, true)
+        @test _modifyfield!(ARefxy(false, false), :x, Base.or_int, true, :monotonic) ===
+              Pair{Bool,Bool}(false, true)
+    end
+end
