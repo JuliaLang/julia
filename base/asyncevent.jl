@@ -233,7 +233,13 @@ end
     sleep(seconds)
 
 Block the current task for a specified number of seconds. The minimum sleep time is 1
-millisecond or input of `0.001`.
+millisecond or an input of `0.001`. On some Linux systems, it is possible to sleep at
+sub-millisecond resolution using `Libc.systemsleep`, but this alternative puts to
+sleep all Julia tasks in the caller's thread rather than only the caller's task. If you
+are not sure you want to sacrifice task-level specificity or portability, it is
+recommended that you use `sleep` rather than `Libc.systemsleep`.
+    
+See also [`Libc.systemsleep`](@ref).
 """
 function sleep(sec::Real)
     sec ≥ 0 || throw(ArgumentError("cannot sleep for $sec seconds"))
