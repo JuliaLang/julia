@@ -174,8 +174,15 @@ julia> abs(-3)
 julia> abs(1 + im)
 1.4142135623730951
 
-julia> abs(typemin(Int64))
--9223372036854775808
+julia> abs.(typemin(Int8):Int8(-125))  # overflow at typemin
+4-element Vector{Int8}:
+ -128
+  127
+  126
+  125
+
+julia> maximum(abs, [1, -2, 3, -4])
+4
 ```
 """
 function abs end
@@ -198,8 +205,11 @@ See also: [`signed`](@ref), [`sign`](@ref), [`signbit`](@ref).
 julia> unsigned(-2)
 0xfffffffffffffffe
 
-julia> unsigned(2)
-0x0000000000000002
+julia> unsigned(Int8(2))
+0x02
+
+julia> typeof(ans)
+UInt8
 
 julia> signed(unsigned(-2))
 -2
