@@ -417,6 +417,7 @@ function _show_default(io::IO, @nospecialize(x))
                     end
                     print(io, undef_ref_str)
                 else
+                    println(io)
                     fx = getfield(x, i)
                     show(recur_io, fx)
                     seek(buff, 0)
@@ -425,14 +426,14 @@ function _show_default(io::IO, @nospecialize(x))
                     is_complex_struct = any(isstructtype(inferencebarrier(typeof(getfield(fx, j)))) for j ∈ 1:nfields(fx))
                     if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
                         if newline
-                            println(io)
+                            #println(io)
                             write(io, " " ^ 4)
                             newline = false
                         end
                         write(io, buff)
                     else
                         seek(buff, 0)
-                        println(io)
+                        #println(io)
                         for l ∈ readlines(buff; keep = true)
                             write(io, " " ^ 4)
                             write(io, l)
