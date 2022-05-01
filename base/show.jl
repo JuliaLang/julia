@@ -394,23 +394,6 @@ show(x) = show(stdout, x)
 
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
-
-ComplexStruct2(
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
-    ComplexStruct2(
-        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
-        ComplexStruct2(
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
-            nothing, 3.0 + 6.0im, true,
-            read(::Union{Base.DevNull, Core.CoreSTDERR, Core.CoreSTDOUT}, ::Type{UInt8}) in Base at coreio.jl:23,
-            5, "test", false),
-        3.0 + 6.0im, true,
-        read(::Union{Base.DevNull, Core.CoreSTDERR, Core.CoreSTDOUT}, ::Type{UInt8}) in Base at coreio.jl:23,
-        5,"test", false),
-    3.0 + 6.0im, true,
-    read(::Union{Base.DevNull, Core.CoreSTDERR, Core.CoreSTDOUT}, ::Type{UInt8}) in Base at coreio.jl:23,
-    5, "test", false)
-
 function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)
     show(io, inferencebarrier(t)::DataType)
@@ -445,14 +428,12 @@ function _show_default(io::IO, @nospecialize(x))
                     if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
                         if newline
                             println(valsio)
-                            #write(valsio, " " ^ 4)
                             newline = false
                         end
                         write(valsio, buff)
                     else
                         i > 1 && println(valsio)
                         for l ∈ readlines(buff; keep = true)
-                            #write(valsio, " " ^ 4)
                             write(valsio, l)
                         end
                         newline = true
@@ -462,6 +443,7 @@ function _show_default(io::IO, @nospecialize(x))
                     print(valsio, ", ")
                 end
             end
+            # add indent and possibly initial line break
             seek(valsbuff, 0)
             lines = readlines(valsbuff; keep = true)
             if length(lines) > 1
