@@ -408,6 +408,26 @@ cosh(x::Number)
 Compute hyperbolic tangent of `x`.
 
 See also [`tan`](@ref), [`atanh`](@ref).
+
+# Examples
+
+```jldoctest
+julia> tanh.(-3:3f0)
+7-element Vector{Float32}:
+ -0.9950548
+ -0.9640276
+ -0.7615942
+  0.0
+  0.7615942
+  0.9640276
+  0.9950548
+
+julia> tan.(im .* (1:3f0))
+3-element Vector{ComplexF32}:
+ 0.0f0 + 0.7615941f0im
+ 0.0f0 + 0.96402764f0im
+ 0.0f0 + 0.9950547f0im
+```
 """
 tanh(x::Number)
 
@@ -426,6 +446,19 @@ standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function. Note that by c
 `atan(0.0,x)` is defined as ``\\pi`` and `atan(-0.0,x)` is defined as ``-\\pi`` when `x < 0`.
 
 See also [`atand`](@ref) for degrees.
+
+# Examples
+
+```jldoctest
+julia> rad2deg(atan(-1/√3))
+-30.000000000000004
+
+julia> rad2deg(atan(-1, √3))
+-30.000000000000004
+
+julia> rad2deg(atan(1, -√3))
+150.0
+```
 """
 atan(x::Number)
 
@@ -449,6 +482,33 @@ asinh(x::Number)
 Compute sine of `x`, where `x` is in radians.
 
 See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asin`](@ref).
+
+# Examples
+```jldoctest
+julia> round.(sin.(range(0, 2pi, length=9)), digits=3)
+9-element Vector{Float64}:
+  0.0
+  0.707
+  1.0
+  0.707
+  0.0
+ -0.707
+ -1.0
+ -0.707
+ -0.0
+
+julia> sind(45)
+0.7071067811865476
+
+julia> sinpi(1/4)
+0.7071067811865476
+
+julia> sincos(pi/6)
+(0.49999999999999994, 0.8660254037844387)
+
+julia> cis(pi/6)
+0.8660254037844387 + 0.49999999999999994im
+```
 """
 sin(x::Number)
 
@@ -472,6 +532,17 @@ tan(x::Number)
     asin(x)
 
 Compute the inverse sine of `x`, where the output is in radians.
+
+See also [`asind`](@ref) for output in degrees.
+
+# Examples
+```jldoctest
+julia> asin.((0, 1/2, 1))
+(0.0, 0.5235987755982989, 1.5707963267948966)
+
+julia> asind.((0, 1/2, 1))
+(0.0, 30.000000000000004, 90.0)
+```
 """
 asin(x::Number)
 
@@ -515,6 +586,12 @@ log will only return a complex result if called with a complex argument. Try log
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
+
+julia> log.(exp.(-1:1))
+3-element Vector{Float64}:
+ -1.0
+  0.0
+  1.0
 ```
 """
 log(x::Number)
@@ -541,6 +618,12 @@ log2 will only return a complex result if called with a complex argument. Try lo
 Stacktrace:
  [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
+
+julia> log2.(2.0 .^ (-1:1))
+3-element Vector{Float64}:
+ -1.0
+  0.0
+  1.0
 ```
 """
 log2(x)
