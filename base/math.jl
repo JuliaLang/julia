@@ -503,11 +503,14 @@ julia> sind(45)
 julia> sinpi(1/4)
 0.7071067811865476
 
-julia> sincos(pi/6)
-(0.49999999999999994, 0.8660254037844387)
+julia> round.(sincos(pi/6), digits=3)
+(0.5, 0.866)
 
-julia> cis(pi/6)
-0.8660254037844387 + 0.49999999999999994im
+julia> round(cis(pi/6), digits=3)
+0.866 + 0.5im
+
+julia> round(exp(im*pi/6), digits=3)
+0.866 + 0.5im
 ```
 """
 sin(x::Number)
