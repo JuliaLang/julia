@@ -419,19 +419,22 @@ function _show_default(io::IO, @nospecialize(x))
     nb = sizeof(x)::Int
     if nf != 0 || nb == 0
         if !show_circular(io, x)
+            valsbuff = IOBuffer()
+            valsio = IOContext(IOContext(valsbuff, io), Pair{Symbol,Any}(:SHOWN_SET, x),
+                                    Pair{Symbol,Any}(:typeinfo, Any))
             newline = false
             for i in 1:nf
                 buff = IOBuffer()
-                recur_io = IOContext(IOContext(buff, io), Pair{Symbol,Any}(:SHOWN_SET, x),
+                recur_io = IOContext(IOContext(buff, valsio), Pair{Symbol,Any}(:SHOWN_SET, x),
                                     Pair{Symbol,Any}(:typeinfo, Any))
                 f = fieldname(t, i)
                 if !isdefined(x, f)
                     if newline
-                        println(io)
-                        write(io, " " ^ 4)
+                        println(valsio)
+                        write(valsio, " " ^ 4)
                         newline = false
                     end
-                    print(io, undef_ref_str)
+                    print(valsio, undef_ref_str)
                 else
                     fx = getfield(x, i)
                     show(recur_io, fx)
@@ -439,26 +442,36 @@ function _show_default(io::IO, @nospecialize(x))
                     buffsize = length(read(buff, String))
                     seek(buff, 0)
                     is_complex_struct = any(isstructtype(inferencebarrier(typeof(getfield(fx, j)))) for j ∈ 1:nfields(fx))
-                    if !is_complex_struct && buffsize < displaysize()[2] ÷ 4 && i > 1
+                    if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
                         if newline
-                            println(io)
-                            write(io, " " ^ 4)
+                            println(valsio)
+                            #write(valsio, " " ^ 4)
                             newline = false
                         end
-                        write(io, buff)
+                        write(valsio, buff)
                     else
-                        seek(buff, 0)
-                        println(io)
+                        i > 1 && println(valsio)
                         for l ∈ readlines(buff; keep = true)
-                            write(io, " " ^ 4)
-                            write(io, l)
+                            #write(valsio, " " ^ 4)
+                            write(valsio, l)
                         end
                         newline = true
                     end
                 end
                 if i < nf
-                    print(io, ", ")
+                    print(valsio, ", ")
                 end
+            end
+            seek(valsbuff, 0)
+            lines = readlines(valsbuff; keep = true)
+            if length(lines) > 1
+                println(io)
+                for l ∈ lines
+                    write(io, " " ^ 4)
+                    write(io, l)
+                end
+            elseif length(lines) == 1
+                write(io, lines[1])
             end
         end
     else
