@@ -309,6 +309,8 @@ end
 
 Convert `x` from radians to degrees.
 
+See also [`deg2rad`](@ref).
+
 # Examples
 ```jldoctest
 julia> rad2deg(pi)
@@ -322,7 +324,7 @@ rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
 
 Convert `x` from degrees to radians.
 
-See also: [`rad2deg`](@ref), [`sind`](@ref).
+See also [`rad2deg`](@ref), [`sind`](@ref), [`pi`](@ref).
 
 # Examples
 ```jldoctest
@@ -404,6 +406,8 @@ cosh(x::Number)
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
+
+See also [`tan`](@ref), [`atanh`](@ref).
 """
 tanh(x::Number)
 
@@ -420,6 +424,8 @@ For two arguments, this is the angle in radians between the positive *x*-axis an
 point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
 standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function. Note that by convention
 `atan(0.0,x)` is defined as ``\\pi`` and `atan(-0.0,x)` is defined as ``-\\pi`` when `x < 0`.
+
+See also [`atand`](@ref) for degrees.
 """
 atan(x::Number)
 
@@ -438,7 +444,7 @@ asinh(x::Number)
 
 # functions that return NaN on non-NaN argument for domain error
 """
-    sin(x)
+    sin(x::Number)
 
 Compute sine of `x`, where `x` is in radians.
 
