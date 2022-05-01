@@ -395,6 +395,22 @@ show(x) = show(stdout, x)
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
 
+ComplexStruct2(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+    ComplexStruct2(
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+        ComplexStruct2(
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10  …  41, 42, 43, 44, 45, 46, 47, 48, 49, 50],
+            nothing, 3.0 + 6.0im, true,
+            read(::Union{Base.DevNull, Core.CoreSTDERR, Core.CoreSTDOUT}, ::Type{UInt8}) in Base at coreio.jl:23,
+            5, "test", false),
+        3.0 + 6.0im, true,
+        read(::Union{Base.DevNull, Core.CoreSTDERR, Core.CoreSTDOUT}, ::Type{UInt8}) in Base at coreio.jl:23,
+        5,"test", false),
+    3.0 + 6.0im, true,
+    read(::Union{Base.DevNull, Core.CoreSTDERR, Core.CoreSTDOUT}, ::Type{UInt8}) in Base at coreio.jl:23,
+    5, "test", false)
+
 function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)
     show(io, inferencebarrier(t)::DataType)
@@ -417,23 +433,22 @@ function _show_default(io::IO, @nospecialize(x))
                     end
                     print(io, undef_ref_str)
                 else
-                    println(io)
                     fx = getfield(x, i)
                     show(recur_io, fx)
                     seek(buff, 0)
                     buffsize = length(read(buff, String))
                     seek(buff, 0)
                     is_complex_struct = any(isstructtype(inferencebarrier(typeof(getfield(fx, j)))) for j ∈ 1:nfields(fx))
-                    if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
+                    if !is_complex_struct && buffsize < displaysize()[2] ÷ 4 && i > 1
                         if newline
-                            #println(io)
+                            println(io)
                             write(io, " " ^ 4)
                             newline = false
                         end
                         write(io, buff)
                     else
                         seek(buff, 0)
-                        #println(io)
+                        println(io)
                         for l ∈ readlines(buff; keep = true)
                             write(io, " " ^ 4)
                             write(io, l)
