@@ -139,7 +139,7 @@ function fixup_stdlib_path(path::String)
         STDLIB = Sys.STDLIB::String
         if BUILD_STDLIB_PATH != STDLIB
             # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-            path = replace(path, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+            path = replace(normpath(path), normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
         end
     end
     return path
