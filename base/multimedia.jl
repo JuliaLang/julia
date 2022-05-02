@@ -110,7 +110,7 @@ julia> struct Day
        n::Int
        end
 
-julia> Base.show(io::IO, ::MIME"text/plain", d::Day) = print(io, "$(d.n) day")
+julia> Base.show(io::IO, ::MIME"text/plain", d::Day) = print(io, d.n, " day")
 
 julia> Day(1)
 1 day
