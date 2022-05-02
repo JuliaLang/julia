@@ -240,6 +240,10 @@ end
     @test typeof(widen(Int64(-3))) == Int128
     @test typeof(widen(Int128(-3))) == BigInt
 
+    @test typeof(widen(UInt16(65535))) == UInt32
+    @test typeof(widen(UInt32(4294967295))) == UInt64
+    @test typeof(widen(UInt64(1999999999999999990))) == UInt128
+
     @test widen(UInt16(65535)) === UInt32(65535)
     @test widen(UInt32(4294967295)) === UInt64(4294967295)
     @test widen(UInt64(1999999999999999990)) === UInt128(1999999999999999990)
