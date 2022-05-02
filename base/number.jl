@@ -182,9 +182,6 @@ julia> abs2(3.0 + 4.0im)
 
 julia> sum(abs2, [1+2im, 3+4im])
 30
-
-julia> abs2.(Int8.(8:12)) |> Tuple  # overflow, since 12 * 12 > typemax(Int8)
-(64, 81, 100, 121, -112)
 ```
 """
 abs2(x::Number) = abs(x)^2
