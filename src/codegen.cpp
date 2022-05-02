@@ -5079,7 +5079,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 jl_is_concrete_type(jl_tparam0(ty))) {
             assert(nargs <= jl_datatype_nfields(jl_tparam0(ty)) + 1);
             jl_cgval_t res = emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, &argv[1], is_promotable);
-            if (is_promotable && res.promotion_point)
+            if (is_promotable && res.promotion_point && res.promotion_ssa==-1)
                 res.promotion_ssa = ssaidx_0based;
             return res;
         }
