@@ -1748,12 +1748,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         if (tbaa)
             tbaa_decorate(tbaa, store);
     }
-    else if (isswapfield && !isboxed) {
-        // we can't handle isboxed here as a workaround for really bad LLVM
-        // design issue: plain Xchg only works with integers
 #if JL_LLVM_VERSION >= 130000
+    else if (isswapfield && isStrongerThanMonotonic(Order)) {
         auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Align(alignment), Order);
 #else
+    else if (isswapfield && !isboxed) {
         auto *store = ctx.builder.CreateAtomicRMW(AtomicRMWInst::Xchg, ptr, r, Order);
         store->setAlignment(Align(alignment));
 #endif
@@ -1764,7 +1763,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         instr = store;
     }
     else {
-        // replacefield, modifyfield, or swapfield (isboxed && atomic)
+        // replacefield, modifyfield, or swapfield (isboxed && atomic && LLVM < 13)
         DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg", ctx.f);
         bool needloop;
         PHINode *Succ = nullptr, *Current = nullptr;
