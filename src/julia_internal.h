@@ -1550,6 +1550,8 @@ uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
 #define JL_PROBE_GC_STOP_THE_WORLD() do ; while (0)
 #define JL_PROBE_GC_MARK_BEGIN() do ; while (0)
 #define JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes) do ; while (0)
+#define JL_PROBE_GC_MARK_STOP_THE_WORLD_SWEEP_BEGIN() do; while(0)
+#define JL_PROBE_GC_MARK_STOP_THE_WORLD_SWEEP_END() do; while(0)
 #define JL_PROBE_GC_SWEEP_BEGIN(full) do ; while (0)
 #define JL_PROBE_GC_SWEEP_END() do ; while (0)
 #define JL_PROBE_GC_END() do ; while (0)

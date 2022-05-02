@@ -2206,28 +2206,13 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 // running gc)
 void jl_gc_set_recruit(jl_ptls_t ptls, void *addr)
 {
-    jl_fence();
-    jl_atomic_store_relaxed(&jl_gc_recruiting_location, addr);
+    jl_atomic_store_release(&jl_gc_recruiting_location, addr);
     if (jl_n_threads > 1)
         jl_wake_libuv();
     for (int i = 0; i < jl_n_threads; i++) {
         if (i == ptls->tid)
             continue;
         jl_wakeup_thread(i);
-    }
-}
-
-// Clear the mark loop recruitment location, ensuring that all threads finished marking
-void jl_gc_clear_recruit(jl_ptls_t ptls)
-{
-    jl_atomic_store_relaxed(&jl_gc_recruiting_location, NULL);
-    for (int i = 0; i < jl_n_threads; i++) {
-        if (i == ptls->tid)
-            continue;
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        while (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL &&
-               jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL)
-            jl_cpu_pause();
     }
 }
 
@@ -3261,8 +3246,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     // 3. walk roots
     mark_roots(gc_cache, &sp);
-    export_gc_state(ptls, &sp);
     if (gc_cblist_root_scanner) {
+        export_gc_state(ptls, &sp);
         gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
             gc_cblist_root_scanner, (collection));
         import_gc_state(ptls, &sp);
@@ -3270,11 +3255,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_set_recruit(ptls, (void *)gc_mark_loop_recruited);
     uint8_t old_state = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
     gc_mark_loop(ptls, sp);
+    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_PARALLEL);
-    jl_gc_clear_recruit(ptls);
+    JL_PROBE_GC_MARK_STOP_THE_WORLD_SWEEP_BEGIN();
+    jl_safepoint_wait_gc();
+    JL_PROBE_GC_MARK_STOP_THE_WORLD_SWEEP_END();
     gc_mark_sp_init(gc_cache, &sp);
     gc_num.since_sweep += gc_num.allocd;
-    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
     gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes);
     int64_t actual_allocd = gc_num.since_sweep;

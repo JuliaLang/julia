@@ -21,6 +21,7 @@ extern "C" {
 JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
 _Atomic(uint32_t) jl_gc_running = 0;
 _Atomic(void *) jl_gc_recruiting_location = NULL;
+_Atomic(int32_t) jl_gc_safepoint_master = -1;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
 // The first page, is the SIGINT page, only used by the master thread.
@@ -44,6 +45,9 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // load/store so that threads waiting for the GC doesn't have to also
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
+
+extern uv_mutex_t *sleep_locks;
+extern uv_cond_t *wake_signals;
 
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
@@ -150,13 +154,118 @@ void jl_safepoint_end_gc(void)
     uv_mutex_unlock(&safepoint_lock);
 }
 
+// Thread recruitment scheme inspired by Hassanein, 
+// Understanding and Improving JVM GC Work Stealing at the
+// Data Center Scale
+
+size_t jl_safepoint_master_count_work(jl_ptls_t ptls)
+{
+    size_t work = 0;
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL &&
+            jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
+            // This count can be slightly off, but for recruitment heuristics
+            // it doesn't matter
+            jl_gc_mark_cache_t *gc_cache2 = &ptls2->gc_cache;
+            jl_gc_public_mark_sp_t *public_sp2 = &gc_cache2->public_sp;
+            jl_gc_ws_bottom_t bottom2 = jl_atomic_load_relaxed(&public_sp2->bottom);
+            jl_gc_ws_top_t top2 = jl_atomic_load_relaxed(&public_sp2->top);
+            work += bottom2.pc_offset - top2.offset;
+        }
+    }
+    return work;
+}
+
+void jl_safepoint_master_notify_all(jl_ptls_t ptls)
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        uv_cond_signal(&wake_signals[i]);
+    }
+}
+
+// void jl_safepoint_master_recruit_workers(jl_ptls_t ptls, size_t num_notified)
+// {
+//     // TODO: better way to broadcast in libuv?
+//     for (int i = 0; i < jl_n_threads && num_notified > 0; i++) {
+//         if (i == ptls->tid)
+//             continue;
+//         jl_ptls_t ptls2 = jl_all_tls_states[i];
+//         if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_WAITING &&
+//             jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
+//             uv_cond_signal(&wake_signals[i]);
+//             num_notified--;
+//         }
+//     }
+// }
+
+void jl_safepoint_try_recruit(jl_ptls_t ptls)
+{
+    uint8_t state0 = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
+    void *location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
+    if (location) {
+        ((void (*)(jl_ptls_t))location)(ptls);
+    }
+    jl_gc_state_set(ptls, state0, JL_GC_STATE_PARALLEL);
+}
+
+int jl_safepoint_master_end_marking(jl_ptls_t ptls)
+{
+    int no_master = -1;
+    if (jl_atomic_cmpswap(&jl_gc_safepoint_master, &no_master, ptls->tid)) {
+        spin: {
+            // Check if all threads are done with marking
+            for (int i = 0; i < jl_n_threads; i++) {
+                if (i == ptls->tid)
+                    continue;
+                jl_ptls_t ptls2 = jl_all_tls_states[i];
+                if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL ||
+                    jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
+                    size_t work = jl_safepoint_master_count_work(ptls);
+                    // If there is enough work, recruit workers and also become a worker,
+                    // relinquishing `safepoint master` status
+                    if (work > 2) {
+                        // jl_safepoint_master_recruit_workers(ptls, work - 1);
+                        jl_atomic_store_release(&jl_gc_safepoint_master, -1);
+                        jl_safepoint_try_recruit(ptls);
+                        return 0;
+                    }
+                    goto spin;
+                }
+            }
+        }
+        jl_atomic_store_release(&jl_gc_recruiting_location, NULL);
+        jl_atomic_store_release(&jl_gc_safepoint_master, -1);
+        jl_safepoint_master_notify_all(ptls);
+        return 1;
+    }
+    return 0;
+}
+
 void jl_safepoint_wait_gc(void)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;   
-    // Use normal volatile load in the loop for speed until GC finishes.
-    // Then use an acquire load to make sure the GC result is visible on this thread.
-    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running))
-        jl_gc_try_recruit(ptls);
+    jl_ptls_t ptls = jl_current_task->ptls;
+    uint64_t timeout = 1; 
+    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
+        if (jl_safepoint_master_end_marking(ptls)) {
+            return;
+        }
+        // In case of timeout, should just go to the top of the loop and try
+        // to become a spin master again
+        // if (uv_cond_timedwait(&wake_signals[ptls->tid], 
+        //                       &sleep_locks[ptls->tid], timeout) != 0) {
+        //     continue;
+        // }
+        // Stopped waiting because it got a notification 
+        // from safepoint master: try to get recruited
+        if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
+            jl_safepoint_try_recruit(ptls);
+        }
+    }
 }
 
 void jl_safepoint_enable_sigint(void)

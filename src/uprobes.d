@@ -5,6 +5,8 @@ provider julia {
     probe gc__stop_the_world();
     probe gc__mark__begin();
     probe gc__mark__end(int64_t scanned_bytes, int64_t perm_scanned_bytes);
+    probe gc__mark__stop__the_world__sweep__begin();
+    probe gc__mark__stop__the_world__sweep__end();
     probe gc__sweep__begin(int full);
     probe gc__sweep__end();
     probe gc__end();
