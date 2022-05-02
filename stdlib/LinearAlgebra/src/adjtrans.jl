@@ -36,8 +36,6 @@ julia> copy(adjoint(A)) # materialize the adjoint matrix
  3-2im  8-7im
  9-2im  4-6im
 ```
-
-See also [transpose](@ref).
 """
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
@@ -70,8 +68,6 @@ julia> copy(transpose(A)) # materialize the transposed matrix
  3+2im  8+7im
  9+2im  4+6im
 ```
-
-See also [adjoint](@ref).
 """
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
@@ -139,8 +135,6 @@ julia> C' # adjoint acts recursively on the blocks
  [3-2im 8-7im; 9-2im 4-6im]       [6-4im 16-14im; 18-4im 8-12im]
  [9-6im 24-21im; 27-6im 12-18im]  [12-8im 32-28im; 36-8im 16-24im]
 ```
-
-See also [transpose](@ref).
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
 
@@ -204,8 +198,6 @@ julia> transpose(D) # blocks are recursively transposed
  [1 2; 3 4]   [2 4; 6 8]
  [3 6; 9 12]  [4 8; 12 16]
 ```
-
-See also [adjoint](@ref).
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
 
