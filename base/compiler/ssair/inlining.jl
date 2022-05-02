@@ -1182,20 +1182,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         return nothing
     end
     if (sig.f === modifyfield! || sig.ft ⊑ typeof(modifyfield!)) && 5 <= length(stmt.args) <= 6
-        let info = ir.stmts[idx][:info]
-            info isa MethodResultPure && (info = info.info)
-            info isa ConstCallInfo && (info = info.call)
-            info isa MethodMatchInfo || return nothing
-            length(info.results) == 1 || return nothing
-            match = info.results[1]::MethodMatch
-            match.fully_covers || return nothing
-            case = compileable_specialization(state.et, match, Effects())
-            case === nothing && return nothing
-            stmt.head = :invoke_modify
-            pushfirst!(stmt.args, case.invoke)
-            ir.stmts[idx][:inst] = stmt
-            optimize_modifyop!(ir.stmts[idx], sig, match, state)
-        end
+        optimize_modifyfield!(ir.stmts[idx], sig, state)
         return nothing
     end
 
@@ -1242,57 +1229,82 @@ is_emit_atomicrmw_eligible(@nospecialize f) =
     f === Intrinsics.sub_float
 
 """
-    optimize_modifyop!(
-        inst::Instruction, modifysig::Signature, opmatch::MethodMatch, state::InliningState)
+    optimize_modifyfield!(inst::Instruction, modifysig::Signature, state::InliningState)
 
-Optimize `:invoke_modify` in `inst` in-place.
+Optimize `modifyfield!` in `inst` in-place.
 
 If `inst` is of form `modifyfield!(struct, field, op, arg2, order)` where `op` is (a method
 wrapping) a simple call of intrinsic, transform `inst[:inst]` to a `:call` to the builtin
 function `modifyfield!`.  This is detected in codegen and lowered to `atomicrmw` instruction
 (see `emit_atomicrmw`).
+
+Otherwise, `inst` is transformed to `:invoke_modify` which is lowered to method invocation
+combined atomic replace in codegen.
 """
-function optimize_modifyop!(
-    inst::Instruction, modifysig::Signature, opmatch::MethodMatch, state::InliningState)
-    @assert inst[:inst].head === :invoke_modify
+function optimize_modifyfield!(inst::Instruction, modifysig::Signature, state::InliningState)
+    stmt = inst[:inst]
+    @assert stmt.head === :call
+
+    info = inst[:info]
+    info isa MethodResultPure && (info = info.info)
+    info isa ConstCallInfo && (info = info.call)
+    info isa MethodMatchInfo || return nothing
+    length(info.results) == 1 || return nothing
+    opmatch = info.results[1]::MethodMatch
+    opmatch.fully_covers || return nothing
+    opcase = compileable_specialization(state.et, opmatch, Effects())
+    opcase === nothing && return nothing
+
+    optimize_modifyfield_as_intrinsic!(inst, modifysig, opcase, opmatch, state) &&
+        return nothing
+
+    stmt.head = :invoke_modify
+    pushfirst!(stmt.args, opcase.invoke)
+
+    return nothing
+end
+
+function optimize_modifyfield_as_intrinsic!(
+    inst::Instruction, modifysig::Signature, opcase::InvokeCase, opmatch::MethodMatch,
+    state::InliningState)
+
+    @assert inst[:inst].head === :call
 
     # Extract argument types for `op(arg1, arg2)` from the signature of
     # `modifyfield!(struct, field, op, arg2, order)`.
     fieldarg = modifysig.argtypes[3]
-    fieldarg isa Const || return
+    fieldarg isa Const || return false
     field = fieldarg.val
-    field isa Union{Int,Symbol} || return
+    field isa Union{Int,Symbol} || return false
     structtype = widenconst(modifysig.argtypes[2])
     arg1type = fieldtype(structtype, field)
     arg2type = widenconst(modifysig.argtypes[5])
-    (isconcretetype(arg1type) && isconcretetype(arg2type) && arg1type == arg2type) || return
+    (isconcretetype(arg1type) && isconcretetype(arg2type) && arg1type == arg2type) ||
+        return false
     ftype = modifysig.argtypes[4]
     argtypes = Any[ftype, arg1type, arg2type]
 
-    mi = inst[:inst].args[1]::MethodInstance
-    item = resolve_todo(InliningTodo(mi, opmatch, argtypes), state, inst[:flag])
-    item isa InliningTodo || return
+    item = resolve_todo(InliningTodo(opcase.invoke, opmatch, argtypes), state, inst[:flag])
+    item isa InliningTodo || return false
     spec = item.spec::ResolvedInliningSpec
-    spec.linear_inline_eligible || return
+    spec.linear_inline_eligible || return false
 
     # Replace `op` with its definition if possible so that codegen can optimize the case
     # where `op` is a supported intrinsic function.
-    length(spec.ir.stmts) == 2 || return
-    spec.ir.stmts[2][:inst] === ReturnNode(SSAValue(1)) || return
+    length(spec.ir.stmts) == 2 || return false
+    spec.ir.stmts[2][:inst] === ReturnNode(SSAValue(1)) || return false
     call = spec.ir.stmts[1][:inst]
-    isexpr(call, :call, 3) || return
-    (call.args[2] == Argument(2) && call.args[3] == Argument(3)) || return
-    widenconst(spec.ir.stmts[1][:type]) === arg1type || return  # no `convert`
+    isexpr(call, :call, 3) || return false
+    (call.args[2] == Argument(2) && call.args[3] == Argument(3)) || return false
+    widenconst(spec.ir.stmts[1][:type]) === arg1type || return false  # no `convert`
 
     sig = call_sig(spec.ir, call)
-    sig === nothing && return
-    is_emit_atomicrmw_eligible(sig.f) || return
+    sig === nothing && return false
+    is_emit_atomicrmw_eligible(sig.f) || return false
 
-    inst[:inst].head = :call
-    deleteat!(inst[:inst].args, 1)
     inst[:inst].args[4] = sig.f
 
-    return
+    return true
 end
 
 # TODO inline non-`isdispatchtuple`, union-split callsites?
