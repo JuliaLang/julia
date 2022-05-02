@@ -1227,6 +1227,21 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
 end
 
 """
+    is_emit_atomicrmw_eligible(f)
+
+Check if a function `f` is an `IntrinsicFunction` that can be handled by `emit_atomicrmw`
+(codegen).
+"""
+is_emit_atomicrmw_eligible(@nospecialize f) =
+    f === Intrinsics.add_int ||
+    f === Intrinsics.sub_int ||
+    f === Intrinsics.and_int ||
+    f === Intrinsics.or_int ||
+    f === Intrinsics.xor_int ||
+    f === Intrinsics.add_float ||
+    f === Intrinsics.sub_float
+
+"""
     optimize_modifyop!(
         inst::Instruction, modifysig::Signature, opmatch::MethodMatch, state::InliningState)
 
@@ -1271,17 +1286,7 @@ function optimize_modifyop!(
 
     sig = call_sig(spec.ir, call)
     sig === nothing && return
-
-    # The following cases have to be matched with what `emit_atomicrmw` (codegen) can
-    # handle:
-    sig.f === Intrinsics.add_int ||
-        sig.f === Intrinsics.sub_int ||
-        sig.f === Intrinsics.and_int ||
-        sig.f === Intrinsics.or_int ||
-        sig.f === Intrinsics.xor_int ||
-        sig.f === Intrinsics.add_float ||
-        sig.f === Intrinsics.sub_float ||
-        return
+    is_emit_atomicrmw_eligible(sig.f) || return
 
     inst[:inst].head = :call
     deleteat!(inst[:inst].args, 1)
