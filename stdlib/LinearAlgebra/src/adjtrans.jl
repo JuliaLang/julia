@@ -30,7 +30,14 @@ julia> adjoint(A)
 2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3-2im  8-7im
  9-2im  4-6im
+
+julia> copy(adjoint(A)) # materialize the adjoint matrix
+2×2 Matrix{Complex{Int64}}:
+ 3-2im  8-7im
+ 9-2im  4-6im
 ```
+
+See also [transpose](@ref).
 """
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
@@ -57,7 +64,14 @@ julia> transpose(A)
 2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
+
+julia> copy(transpose(A)) # materialize the transposed matrix
+2×2 Matrix{Complex{Int64}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
 ```
+
+See also [adjoint](@ref).
 """
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
@@ -91,19 +105,42 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  3+2im  9+2im
  8+7im  4+6im
 
-julia> adjoint(A)
+julia> B = adjoint(A)
 2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3-2im  8-7im
  9-2im  4-6im
+
+julia> B[1,2] = 4 + 5im; # modifying B will automatically modify A
+
+julia> A[2,1]
+4 - 5im
 
 julia> x = [3, 4im]
 2-element Vector{Complex{Int64}}:
  3 + 0im
  0 + 4im
 
-julia> x'x
+julia> x'
+1×2 adjoint(::Vector{Complex{Int64}}) with eltype Complex{Int64}:
+ 3+0im  0-4im
+
+julia> x'x # compute the dot product, equivalently x' * x
 25 + 0im
+
+julia> A = [3+2im 9+2im; 8+7im  4+6im];
+
+julia> C = reshape([A, 2A, 3A, 4A], 2, 2) # construct a block matrix
+2×2 Matrix{Matrix{Complex{Int64}}}:
+ [3+2im 9+2im; 8+7im 4+6im]      [9+6im 27+6im; 24+21im 12+18im]
+ [6+4im 18+4im; 16+14im 8+12im]  [12+8im 36+8im; 32+28im 16+24im]
+
+julia> C' # adjoint acts recursively on the blocks
+2×2 adjoint(::Matrix{Matrix{Complex{Int64}}}) with eltype Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
+ [3-2im 8-7im; 9-2im 4-6im]       [6-4im 16-14im; 18-4im 8-12im]
+ [9-6im 24-21im; 27-6im 12-18im]  [12-8im 32-28im; 36-8im 16-24im]
 ```
+
+See also [transpose](@ref).
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
 
@@ -124,11 +161,51 @@ julia> A = [3+2im 9+2im; 8+7im  4+6im]
  3+2im  9+2im
  8+7im  4+6im
 
-julia> transpose(A)
+julia> B = transpose(A)
 2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  3+2im  8+7im
  9+2im  4+6im
+
+julia> copy(B) # materialize the transposed matrix 
+2×2 Matrix{Complex{Int64}}:
+ 3+2im  8+7im
+ 9+2im  4+6im
+
+julia> B[1,2] = 4 + 5im; # modifying B will automatically modify A
+
+julia> A[2,1]
+4 + 5im
+
+julia> v = [1,2,3]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+
+julia> transpose(v) # returns a row-vector
+1×3 transpose(::Vector{Int64}) with eltype Int64:
+ 1  2  3
+
+julia> transpose(v) * v # compute the dot product
+14
+
+julia> C = reshape(1:4, 2, 2)
+2×2 reshape(::UnitRange{Int64}, 2, 2) with eltype Int64:
+ 1  3
+ 2  4
+
+julia> D = reshape([C, 2C, 3C, 4C], 2, 2) # construct a block matrix
+2×2 Matrix{Matrix{Int64}}:
+ [1 3; 2 4]  [3 9; 6 12]
+ [2 6; 4 8]  [4 12; 8 16]
+
+julia> transpose(D) # blocks are recursively transposed
+2×2 transpose(::Matrix{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
+ [1 2; 3 4]   [2 4; 6 8]
+ [3 6; 9 12]  [4 8; 12 16]
 ```
+
+See also [adjoint](@ref).
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
 
