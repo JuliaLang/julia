@@ -46,8 +46,10 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
 
-extern uv_mutex_t *sleep_locks;
-extern uv_cond_t *wake_signals;
+extern uv_mutex_t *safepoint_sleep_locks;
+extern uv_cond_t *safepoint_wake_signals;
+
+const uint64_t timeout_ns = 1000;
 
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
@@ -158,6 +160,33 @@ void jl_safepoint_end_gc(void)
 // `Understanding and Improving JVM GC Work Stealing at the
 // Data Center Scale`
 
+int jl_safepoint_all_workers_done(jl_ptls_t ptls)
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int jl_safepoint_try_recruit(jl_ptls_t ptls)
+{
+    void *location = NULL;
+    if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
+        uint8_t state0 = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
+        location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
+        if (location) {
+            ((void (*)(jl_ptls_t))location)(ptls);
+        }
+        jl_gc_state_set(ptls, state0, JL_GC_STATE_PARALLEL);
+    }
+    return (location != NULL);
+}
+
 size_t jl_safepoint_master_count_work(jl_ptls_t ptls)
 {
     size_t work = 0;
@@ -165,8 +194,7 @@ size_t jl_safepoint_master_count_work(jl_ptls_t ptls)
         if (i == ptls->tid)
             continue;
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL &&
-            jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
+        if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
             jl_gc_mark_cache_t *gc_cache2 = &ptls2->gc_cache;
             jl_gc_public_mark_sp_t *public_sp2 = &gc_cache2->public_sp;
             // This count can be slightly off, but it doesn't matter 
@@ -184,50 +212,21 @@ void jl_safepoint_master_notify_all(jl_ptls_t ptls)
     for (int i = 0; i < jl_n_threads; i++) {
         if (i == ptls->tid)
             continue;
-        uv_cond_signal(&wake_signals[i]);
+        uv_cond_signal(&safepoint_wake_signals[i]);
     }
 }
 
-void jl_safepoint_master_recruit_workers(jl_ptls_t ptls, size_t num_notified)
+void jl_safepoint_master_recruit_workers(jl_ptls_t ptls, size_t nworkers)
 {
-    for (int i = 0; i < jl_n_threads && num_notified > 0; i++) {
+    for (int i = 0; i < jl_n_threads && nworkers > 0; i++) {
         if (i == ptls->tid)
             continue;
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_WAITING &&
-            jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
-            uv_cond_signal(&wake_signals[i]);
-            num_notified--;
+        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
+            uv_cond_signal(&safepoint_wake_signals[i]);
+            nworkers--;
         }
     }
-}
-
-int jl_safepoint_try_recruit(jl_ptls_t ptls)
-{
-    void *location = NULL;
-    if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
-        uint8_t state0 = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
-        location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
-        if (location) {
-            ((void (*)(jl_ptls_t))location)(ptls);
-        }
-        jl_gc_state_set(ptls, state0, JL_GC_STATE_PARALLEL);
-    }
-    return (location != NULL);
-}
-
-int jl_safepoint_all_workers_done(jl_ptls_t ptls)
-{
-    for (int i = 0; i < jl_n_threads; i++) {
-        if (i == ptls->tid)
-            continue;
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL ||
-            jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
-            return 0;
-        }
-    }
-    return 1;
 }
 
 int jl_safepoint_master_end_marking(jl_ptls_t ptls)
@@ -262,21 +261,19 @@ int jl_safepoint_master_end_marking(jl_ptls_t ptls)
 
 void jl_safepoint_wait_gc(void)
 {
-    uint64_t timeout = 1; 
     jl_ptls_t ptls = jl_current_task->ptls;
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
         if (jl_safepoint_master_end_marking(ptls)) {
             break;
         }
-        // In case of timeout, should just go to the top of the loop and try
-        // to become a spin master
-        // if (uv_cond_timedwait(&wake_signals[ptls->tid], 
-        //                       &sleep_locks[ptls->tid], timeout) != 0) {
-        //     continue;
-        // }
-        // Stopped waiting because it got a notification 
+        // Stopped waiting because we got a notification 
         // from safepoint master: try to get recruited
-        jl_safepoint_try_recruit(ptls);
+        if (!uv_cond_timedwait(&safepoint_wake_signals[ptls->tid], 
+                               &safepoint_sleep_locks[ptls->tid], timeout_ns)) {
+            jl_safepoint_try_recruit(ptls);
+        }
+        // Otherwise, just go to the top of the loop and try
+        // to become a safepoint master
     }
 }
 
