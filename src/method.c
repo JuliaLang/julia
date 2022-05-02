@@ -377,7 +377,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
-
+        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
+            li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint8_set(li->ssaflags, j, 0);
         else {
@@ -471,6 +473,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
+    src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->purity.bits = 0;

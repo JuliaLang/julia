@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Core.Compiler: has_typevar
+
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
     get(io, :compact, false) && return
@@ -544,8 +546,6 @@ function print_without_params(@nospecialize(x))
     b = unwrap_unionall(x)
     return isa(b, DataType) && b.name.wrapper === x
 end
-
-has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
 
 function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
     for (key, val) in io.dict

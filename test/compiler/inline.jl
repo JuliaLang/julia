@@ -1394,9 +1394,7 @@ let src = code_typed1(Tuple{Any}) do x
             DoAllocNoEscapeSparam(x)
         end
     end
-    # This requires more inlining enhancments. For now just make sure this
-    # doesn't error.
-    @test count(isnew, src.code) in (0, 1) # == 0
+    @test count(isnew, src.code) == 0
 end
 
 # Test noinline finalizer
@@ -1519,3 +1517,27 @@ function oc_capture_oc(z)
     return oc2(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
+
+@testset "Inlining with unmatched type parameters" begin
+    @eval struct OldVal{T}
+        x::T
+        (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
+    end
+    let f(x) = OldVal{x}()
+        g() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
+        h() = begin
+                f(x::OldVal{i}) where {i} = i
+                r = 0
+                for i = 1:10000
+                    r += f(OldVal{i}())
+                end
+                return r
+            end
+        srcs = (code_typed1(f, (Any,)),
+                code_typed1(g),
+                code_typed1(h))
+        for src in srcs
+            @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+        end
+    end
+end
