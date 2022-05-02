@@ -22,8 +22,23 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
     return 1;
 }
 
-jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_value_t *source_, jl_value_t **env, size_t nenv)
+static jl_value_t *prepend_type(jl_value_t *t0, jl_tupletype_t *t)
+{
+    jl_svec_t *sig_args = NULL;
+    JL_GC_PUSH1(&sig_args);
+    size_t nsig = 1 + jl_svec_len(t->parameters);
+    sig_args = jl_alloc_svec_uninit(nsig);
+    jl_svecset(sig_args, 0, t0);
+    for (size_t i = 0; i < nsig-1; ++i) {
+        jl_svecset(sig_args, 1+i, jl_tparam(t, i));
+    }
+    jl_value_t *sigtype = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
+    JL_GC_POP();
+    return sigtype;
+}
+
+static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_value_t *source_, jl_value_t *captures)
 {
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
@@ -40,26 +55,19 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
     }
     if (jl_nparams(argt) + 1 - jl_is_va_tuple(argt) < source->nargs - source->isva)
         jl_error("Argument type tuple has too few required arguments for method");
-    jl_task_t *ct = jl_current_task;
+    jl_value_t *sigtype = NULL;
+    JL_GC_PUSH1(&sigtype);
+    sigtype = prepend_type(jl_typeof(captures), argt);
+
     jl_value_t *oc_type JL_ALWAYS_LEAFTYPE;
     oc_type = jl_apply_type2((jl_value_t*)jl_opaque_closure_type, (jl_value_t*)argt, rt_ub);
     JL_GC_PROMISE_ROOTED(oc_type);
-    jl_value_t *captures = NULL, *sigtype = NULL;
-    jl_svec_t *sig_args = NULL;
-    JL_GC_PUSH3(&captures, &sigtype, &sig_args);
-    captures = jl_f_tuple(NULL, env, nenv);
 
-    size_t nsig = 1 + jl_svec_len(argt->parameters);
-    sig_args = jl_alloc_svec_uninit(nsig);
-    jl_svecset(sig_args, 0, jl_typeof(captures));
-    for (size_t i = 0; i < nsig-1; ++i) {
-        jl_svecset(sig_args, 1+i, jl_tparam(argt, i));
-    }
-    sigtype = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
     jl_method_instance_t *mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_code_instance_t *ci = jl_compile_method_internal(mi, world);
 
+    jl_task_t *ct = jl_current_task;
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);
     JL_GC_POP();
     oc->source = source;
@@ -79,6 +87,52 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
         oc->invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->invoke);
     }
     oc->world = world;
+    return oc;
+}
+
+jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_value_t *source_, jl_value_t **env, size_t nenv)
+{
+    jl_value_t *captures = jl_f_tuple(NULL, env, nenv);
+    JL_GC_PUSH1(&captures);
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures);
+    JL_GC_POP();
+    return oc;
+}
+
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
+
+JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
+        jl_method_instance_t *mi, jl_value_t *rettype,
+        jl_value_t *inferred_const, jl_value_t *inferred,
+        int32_t const_flags, size_t min_world, size_t max_world,
+        uint32_t ipo_effects, uint32_t effects, jl_value_t *argescapes,
+        uint8_t relocatability);
+
+JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
+                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
+
+JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env)
+{
+    if (!ci->inferred)
+        jl_error("CodeInfo must already be inferred");
+    jl_value_t *root = NULL, *sigtype = NULL;
+    jl_code_instance_t *inst = NULL;
+    JL_GC_PUSH3(&root, &sigtype, &inst);
+    root = jl_box_long(lineno);
+    root = jl_new_struct(jl_linenumbernode_type, root, file);
+    root = (jl_value_t*)jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva);
+
+    sigtype = prepend_type(jl_typeof(env), argt);
+    jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
+    inst = jl_new_codeinst(mi, rt_ub, NULL, (jl_value_t*)ci,
+        0, ((jl_method_t*)root)->primary_world, -1, 0, 0, jl_nothing, 0);
+    jl_mi_cache_insert(mi, inst);
+
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env);
+    JL_GC_POP();
     return oc;
 }
 

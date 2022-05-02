@@ -58,10 +58,13 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInter
     interp::I
 end
 
+is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
+    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+
 function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
                          mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
-        src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+        src_inferred = is_source_inferred(src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
@@ -73,7 +76,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         inf_result === nothing && return nothing
         src = inf_result.src
         if isa(src, CodeInfo)
-            src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+            src_inferred = is_source_inferred(src)
             return src_inferred ? src : nothing
         else
             return nothing

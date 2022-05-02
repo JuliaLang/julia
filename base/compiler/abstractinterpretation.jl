@@ -902,7 +902,13 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
         return false
     else
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+        if isa(rt, Const)
+            if result.edge_effects.nothrow !== ALWAYS_TRUE
+                # Could still be improved to Bottom (or at least could see the effects improved)
+                return true
+            end
+        end
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
         return false
     end
 end
