@@ -1,7 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-export threadid, nthreads, @threads, @spawn,
+export THREADPOOL_DEFAULT, THREADPOOL_INTERACTIVE, threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
+
+@enum ThreadPoolID::Int8 THREADPOOL_DEFAULT THREADPOOL_INTERACTIVE
+
+function ThreadPoolID(name::Symbol)
+    if name === :default
+        return THREADPOOL_DEFAULT
+    elseif name === :interactive
+        return THREADPOOL_INTERACTIVE
+    else
+        error("invalid threadpool: ", name)
+    end
+end
 
 """
     Threads.threadid() -> Int
@@ -12,7 +24,8 @@ ID `1`.
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 """
-    Threads.nthreads([:default|:interactive]) -> Int
+    Threads.nthreads() -> Int
+    Threads.nthreads(THREADPOOL_DEFAULT|THREADPOOL_INTERACTIVE|:default|:interactive) -> Int
 
 Get the number of threads (across all thread pools or within the specified
 thread pool) available to Julia. The number of threads across all thread
@@ -25,30 +38,20 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 function nthreads end
 
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
-function nthreads(pool::Symbol)
-    if pool == :default
-        tpid = Int8(0)
-    elseif pool == :interactive
-        tpid = Int8(1)
-    else
-        error("invalid threadpool specified")
-    end
-    return _nthreads_in_pool(tpid)
-end
+nthreads(tpid::ThreadPoolID) = _nthreads_in_pool(Int8(tpid))
+nthreads(pool::Symbol) = nthreads(ThreadPoolID(pool))
 function _nthreads_in_pool(tpid::Int8)
     p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
     return Int(unsafe_load(p, tpid + 1))
 end
 
 """
-    Threads.threadpool(tid = threadid()) -> Symbol
+    Threads.threadpool(tid = threadid()) -> THREADPOOL_DEFAULT or THREADPOOL_INTERACTIVE
 
-Returns the specified thread's threadpool; either `:default` or `:interactive`.
+Returns the specified thread's threadpool; either `Threads.THREADPOOL_DEFAULT` or
+`Threads.THREADPOOL_INTERACTIVE`.
 """
-function threadpool(tid = threadid())
-    tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
-    return tpid == 0 ? :default : :interactive
-end
+threadpool(tid = threadid()) = ThreadPoolID(ccall(:jl_threadpoolid, Int8, (Int16,), tid-1))
 
 """
     Threads.nthreadpools() -> Int

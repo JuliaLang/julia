@@ -3,6 +3,7 @@
 module Enums
 
 import Core.Intrinsics.bitcast
+using Base: MIME_text_plain
 export Enum, @enum
 
 function namemap end
@@ -46,14 +47,14 @@ function Base.show(io::IO, x::Enum)
     print(io, sym)
 end
 
-function Base.show(io::IO, ::MIME"text/plain", x::Enum)
+function Base.show(io::IO, ::MIME_text_plain, x::Enum)
     print(io, x, "::")
     show(IOContext(io, :compact => true), typeof(x))
     print(io, " = ")
     show(io, Integer(x))
 end
 
-function Base.show(io::IO, m::MIME"text/plain", t::Type{<:Enum})
+function Base.show(io::IO, m::MIME_text_plain, t::Type{<:Enum})
     if isconcretetype(t)
         print(io, "Enum ")
         Base.show_datatype(io, t)
@@ -63,7 +64,7 @@ function Base.show(io::IO, m::MIME"text/plain", t::Type{<:Enum})
             show(io, Integer(x))
         end
     else
-        invoke(show, Tuple{IO, MIME"text/plain", Type}, io, m, t)
+        invoke(show, Tuple{IO, MIME_text_plain, Type}, io, m, t)
     end
 end
 
@@ -79,10 +80,10 @@ function membershiptest(expr, values)
     end
 end
 
-# give Enum types scalar behavior in broadcasting
-Base.broadcastable(x::Enum) = Ref(x)
-
-@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
+function enum_argument_error(typename, x)
+    @noinline
+    throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
+end
 
 """
     @enum EnumName[::BaseType] value1[=x] value2[=y]

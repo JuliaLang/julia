@@ -2,7 +2,7 @@
 
 module Multimedia
 
-import .Base: show, print, convert, repr
+import .Base: MIME, show, print, convert, repr
 
 export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay,
     MIME, @MIME_str, istextmime,
@@ -29,7 +29,7 @@ julia> show(stdout, MIME("text/plain"), "hi")
 "hi"
 ```
 """
-struct MIME{mime} end
+MIME
 
 """
     @MIME_str

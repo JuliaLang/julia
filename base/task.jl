@@ -251,10 +251,8 @@ true
 istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
-function Threads.threadpool(t::Task)
-    tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), t)
-    return tpid == 0 ? :default : :interactive
-end
+Threads.threadpool(t::Task) =
+    Threads.ThreadPoolID(ccall(:jl_get_task_threadpoolid, Int8, (Any,), t))
 
 task_result(t::Task) = t.result
 

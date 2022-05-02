@@ -67,6 +67,9 @@ include("coreio.jl")
 eval(x) = Core.eval(Base, x)
 eval(m::Module, x) = Core.eval(m, x)
 
+struct MIME{mime} end
+const MIME_text_plain = MIME{Symbol("text/plain")}
+
 # init core docsystem
 import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 if isdefined(Core, :Compiler)
@@ -126,6 +129,10 @@ include("refvalue.jl")
 include("refpointer.jl")
 include("checked.jl")
 using .Checked
+
+# enums
+include("Enums.jl")
+using .Enums
 
 # Lazy strings
 include("strings/lazy.jl")
@@ -346,10 +353,6 @@ include("fastmath.jl")
 using .FastMath
 
 function deepcopy_internal end
-
-# enums
-include("Enums.jl")
-using .Enums
 
 # BigInts
 include("gmp.jl")
