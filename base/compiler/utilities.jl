@@ -208,23 +208,6 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-# This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
-            end
-        end
-    end
-    return nothing
-end
-
 #########
 # types #
 #########

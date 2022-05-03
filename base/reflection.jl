@@ -782,7 +782,7 @@ function fieldcount(@nospecialize t)
         if t === nothing
             throw(ArgumentError("type does not have a definite number of fields"))
         end
-    elseif t == Union{}
+    elseif t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
