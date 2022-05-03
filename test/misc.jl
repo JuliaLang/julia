@@ -356,14 +356,11 @@ end # redirect_stdout
 
 macro capture_stdout(ex)
     quote
-        let oldout = stdout
-            rdout, wrout = redirect_stdout()
-            try
+        let p = Pipe()
+            redirect_stdout(p) do
                 $(esc(ex))
-                String(readavailable(rdout))
-            finally
-                redirect_stdout(oldout)
             end
+            String(readavailable(p))
         end
     end
 end
