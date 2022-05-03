@@ -71,10 +71,31 @@ static void jl_encode_int32(jl_ircode_state *s, int32_t x)
     }
 }
 
+static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
+{
+    rle_reference rr;
+
+    literal_val_id(&rr, s, v);
+    int id = rr.index;
+    assert(id >= 0);
+    if (rr.key) {
+        write_uint8(s->s, TAG_RELOC_METHODROOT);
+        write_int64(s->s, rr.key);
+    }
+    if (id < 256) {
+        write_uint8(s->s, TAG_METHODROOT);
+        write_uint8(s->s, id);
+    }
+    else {
+        assert(id <= UINT16_MAX);
+        write_uint8(s->s, TAG_LONG_METHODROOT);
+        write_uint16(s->s, id);
+    }
+}
+
 static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
 {
     size_t i;
-    rle_reference rr;
 
     if (v == NULL) {
         write_uint8(s->s, TAG_NULL);
@@ -240,6 +261,16 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         write_uint8(s->s, TAG_RETURNNODE);
         jl_encode_value(s, jl_get_nth_field(v, 0));
     }
+    else if (jl_is_quotenode(v)) {
+        write_uint8(s->s, TAG_QUOTENODE);
+        jl_value_t *inner = jl_quotenode_value(v);
+        // we might need to return this exact object at run time, therefore codegen might
+        // need to reference it as well, so it is more likely useful to give it a root
+        if (jl_is_expr(inner) || jl_is_phinode(inner) || jl_is_phicnode(inner))
+            jl_encode_as_indexed_root(s, inner);
+        else
+            jl_encode_value(s, inner);
+    }
     else if (jl_typeis(v, jl_int64_type)) {
         void *data = jl_data_ptr(v);
         if (*(int64_t*)data >= INT16_MIN && *(int64_t*)data <= INT16_MAX) {
@@ -325,28 +356,9 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
                 ios_write(s->s, jl_array_typetagdata(ar), l);
         }
     }
-    else {
-        if (!as_literal && !(jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_tuple(v) ||
-                             jl_is_linenode(v) || jl_is_upsilonnode(v) || jl_is_pinode(v) ||
-                             jl_is_slot(v) || jl_is_ssavalue(v))) {
-            literal_val_id(&rr, s, v);
-            int id = rr.index;
-            assert(id >= 0);
-            if (rr.key) {
-                write_uint8(s->s, TAG_RELOC_METHODROOT);
-                write_int64(s->s, rr.key);
-            }
-            if (id < 256) {
-                write_uint8(s->s, TAG_METHODROOT);
-                write_uint8(s->s, id);
-            }
-            else {
-                assert(id <= UINT16_MAX);
-                write_uint8(s->s, TAG_LONG_METHODROOT);
-                write_uint16(s->s, id);
-            }
-            return;
-        }
+    else if (as_literal || jl_is_uniontype(v) || jl_is_newvarnode(v) || jl_is_linenode(v) ||
+             jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
+             (jl_isbits(jl_typeof(v)) && jl_datatype_size(jl_typeof(v)) <= 64)) {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         if (t->size <= 255) {
             write_uint8(s->s, TAG_SHORT_GENERAL);
@@ -387,6 +399,9 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         char *ptr = data + jl_datatype_size(t);
         if (ptr > last)
             ios_write(s->s, last, ptr - last);
+    }
+    else {
+        jl_encode_as_indexed_root(s, v);
     }
 }
 
