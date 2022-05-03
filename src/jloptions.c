@@ -38,7 +38,9 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // cmds
                         NULL, // image_file (will be filled in below)
                         NULL, // cpu_target ("native", "core2", etc...)
+                        0,    // nthreadpools
                         0,    // nthreads
+                        NULL, // nthreads_per_pool
                         0,    // nprocs
                         NULL, // machine_file
                         NULL, // project
@@ -112,16 +114,19 @@ static const char opts[]  =
     " -L, --load <file>          Load <file> immediately on all processors\n\n"
 
     // parallel options
-    " -t, --threads {N|auto}     Enable N threads; \"auto\" tries to infer a useful default number\n"
-    "                            of threads to use but the exact behavior might change in the future.\n"
-    "                            Currently, \"auto\" uses the number of CPUs assigned to this julia\n"
-    "                            process based on the OS-specific affinity assignment interface, if\n"
-    "                            supported (Linux and Windows). If this is not supported (macOS) or\n"
-    "                            process affinity is not configured, it uses the number of CPU\n"
-    "                            threads.\n"
-    " -p, --procs {N|auto}       Integer value N launches N additional local worker processes\n"
-    "                            \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
-    " --machine-file <file>      Run processes on hosts listed in <file>\n\n"
+    " -t, --threads {auto|N[,auto|M]}\n"
+    "                           Enable N[+M] threads; N threads are assigned to the `default`\n"
+    "                           threadpool, and if M is specified, M threads are assigned to the\n"
+    "                           `interactive` threadpool; \"auto\" tries to infer a useful\n"
+    "                           default number of threads to use but the exact behavior might change\n"
+    "                           in the future. Currently sets N to the number of CPUs assigned to\n"
+    "                           this Julia process based on the OS-specific affinity assignment\n"
+    "                           interface if supported (Linux and Windows) or to the number of CPU\n"
+    "                           threads if not supported (MacOS) or if process affinity is not\n"
+    "                           configured, and sets M to 1.\n"
+    " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
+    "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
+    " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
     " -i                         Interactive mode; REPL runs and `isinteractive()` is true\n"
@@ -242,7 +247,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
-        // with the required arguments defined in base/client.jl `process_options()`
+        // with the required arguments defined in base/options.jl `struct JLOptions`
         { "version",         no_argument,       0, 'v' },
         { "help",            no_argument,       0, 'h' },
         { "help-hidden",     no_argument,       0, opt_help_hidden },
@@ -447,15 +452,45 @@ restart_switch:
             break;
         case 't': // threads
             errno = 0;
-            if (!strcmp(optarg,"auto")) {
+            jl_options.nthreadpools = 1;
+            long nthreads = -1, nthreadsi = 0;
+            if (!strncmp(optarg, "auto", 4)) {
                 jl_options.nthreads = -1;
+                if (optarg[4] == ',') {
+                    if (!strncmp(&optarg[5], "auto", 4))
+                        nthreadsi = 1;
+                    else {
+                        errno = 0;
+                        nthreadsi = strtol(&optarg[5], &endptr, 10);
+                        if (errno != 0 || endptr == &optarg[5] || *endptr != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=auto,<m>; m must be an integer >= 1");
+                    }
+                    jl_options.nthreadpools++;
+                }
             }
             else {
-                long nthreads = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *endptr != 0 || nthreads < 1 || nthreads >= INT_MAX)
-                    jl_errorf("julia: -t,--threads=<n> must be an integer >= 1");
-                jl_options.nthreads = (int)nthreads;
+                nthreads = strtol(optarg, &endptr, 10);
+                if (errno != 0 || optarg == endptr || nthreads < 1 || nthreads >= INT16_MAX)
+                    jl_errorf("julia: -t,--threads=<n>[,auto|<m>]; n must be an integer >= 1");
+                if (*endptr == ',') {
+                    if (!strncmp(&endptr[1], "auto", 4))
+                        nthreadsi = 1;
+                    else {
+                        errno = 0;
+                        char *endptri;
+                        nthreadsi = strtol(&endptr[1], &endptri, 10);
+                        if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=<n>,<m>; n and m must be integers >= 1");
+                    }
+                    jl_options.nthreadpools++;
+                }
+                jl_options.nthreads = nthreads + nthreadsi;
             }
+            int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
+            ntpp[0] = (int16_t)nthreads;
+            if (jl_options.nthreadpools == 2)
+                ntpp[1] = (int16_t)nthreadsi;
+            jl_options.nthreads_per_pool = ntpp;
             break;
         case 'p': // procs
             errno = 0;
@@ -464,7 +499,7 @@ restart_switch:
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT_MAX)
+                if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT16_MAX)
                     jl_errorf("julia: -p,--procs=<n> must be an integer >= 1");
                 jl_options.nprocs = (int)nprocs;
             }

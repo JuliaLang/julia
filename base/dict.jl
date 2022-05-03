@@ -240,16 +240,10 @@ end
 function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
-    newsz = min(newsz, max_values(T)::Int)
+    newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
-    newsz = cld(3 * newsz, 2)
-    if newsz <= oldsz
-        # todo: shrink
-        # be careful: rehash!() assumes everything fits. it was only designed
-        # for growing.
-        return d
-    end
-    rehash!(d, newsz)
+    newsz = _tablesz(cld(3 * newsz, 2))
+    return newsz == oldsz ? d : rehash!(d, newsz)
 end
 
 """

@@ -3357,3 +3357,11 @@ demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
     @test y == Core.svec(2, 3)
     @test z == 4
 end
+
+# rewriting inner constructors with return type decls
+struct InnerCtorRT{T}
+    InnerCtorRT()::Int = new{Int}()
+    InnerCtorRT{T}() where {T} = ()->new()
+end
+@test_throws MethodError InnerCtorRT()
+@test InnerCtorRT{Int}()() isa InnerCtorRT{Int}

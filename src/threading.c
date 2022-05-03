@@ -292,11 +292,22 @@ JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time = 0;
 
 // return calling thread's ID
-// Also update the suspended_threads list in signals-mach when changing the
-// type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void)
 {
     return jl_atomic_load_relaxed(&jl_current_task->tid);
+}
+
+JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
+{
+    if (tid < 0 || tid >= jl_n_threads)
+        jl_error("invalid tid");
+    int n = 0;
+    for (int i = 0; i < jl_n_threadpools; i++) {
+        n += jl_n_threads_per_pool[i];
+        if (tid < n)
+            return (int8_t)i;
+    }
+    jl_error("internal error: couldn't determine threadpool id");
 }
 
 jl_ptls_t jl_init_threadtls(int16_t tid)
@@ -452,22 +463,55 @@ void jl_init_threading(void)
     jl_check_tls();
 #endif
 
-    // how many threads available, usable
+    // Determine how many threads and pools are requested. This may have been
+    // specified on the command line (and so are in `jl_options`) or by the
+    // environment variable. Set the globals `jl_n_threadpools`, `jl_n_threads`
+    // and `jl_n_threads_per_pool`.
+    jl_n_threadpools = 1;
     jl_n_threads = JULIA_NUM_THREADS;
-    if (jl_options.nthreads < 0) { // --threads=auto
-        jl_n_threads = jl_effective_threads();
+    int16_t nthreads = jl_n_threads, nthreadsi = 0;
+    char *endptr, *endptri;
+
+    if (jl_options.nthreads != 0) { // --threads specified
+        jl_n_threadpools = jl_options.nthreadpools;
+        nthreads = jl_options.nthreads_per_pool[0];
+        if (nthreads < 0)
+            nthreads = jl_effective_threads();
+        if (jl_n_threadpools == 2)
+            nthreadsi = jl_options.nthreads_per_pool[1];
     }
-    else if (jl_options.nthreads > 0) { // --threads=N
-        jl_n_threads = jl_options.nthreads;
+    else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
+        if (!strncmp(cp, "auto", 4)) {
+            nthreads = jl_effective_threads();
+            cp += 4;
+        }
+        else {
+            errno = 0;
+            nthreads = strtol(cp, &endptr, 10);
+            if (errno != 0 || endptr == cp || nthreads <= 0)
+                nthreads = 1;
+            cp = endptr;
+        }
+        if (*cp == ',') {
+            cp++;
+            if (!strncmp(cp, "auto", 4))
+                nthreadsi = 1;
+            else {
+                errno = 0;
+                nthreadsi = strtol(cp, &endptri, 10);
+                if (errno != 0 || endptri == cp || nthreadsi < 0)
+                    nthreadsi = 0;
+            }
+            if (nthreadsi > 0)
+                jl_n_threadpools++;
+        }
     }
-    else if ((cp = getenv(NUM_THREADS_NAME))) {
-        if (strcmp(cp, "auto"))
-            jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
-        else
-            jl_n_threads = jl_effective_threads(); // ENV[NUM_THREADS_NAME] == "auto"
-    }
-    if (jl_n_threads <= 0)
-        jl_n_threads = 1;
+
+    jl_n_threads = nthreads + nthreadsi;
+    jl_n_threads_per_pool = (int *)malloc(2 * sizeof(int));
+    jl_n_threads_per_pool[0] = nthreads;
+    jl_n_threads_per_pool[1] = nthreadsi;
+
 #ifndef __clang_gcanalyzer__
     jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
@@ -513,7 +557,7 @@ void jl_start_threads(void)
     uv_barrier_init(&thread_init_done, nthreads);
 
     for (i = 1; i < nthreads; ++i) {
-        jl_threadarg_t *t = (jl_threadarg_t*)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
+        jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
         uv_thread_create(&uvtid, jl_threadfun, t);

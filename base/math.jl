@@ -442,7 +442,7 @@ asinh(x::Number)
 
 Compute sine of `x`, where `x` is in radians.
 
-See also [`sind`], [`sinpi`], [`sincos`], [`cis`].
+See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 sin(x::Number)
 
@@ -451,7 +451,7 @@ sin(x::Number)
 
 Compute cosine of `x`, where `x` is in radians.
 
-See also [`cosd`], [`cospi`], [`sincos`], [`cis`].
+See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 cos(x::Number)
 
@@ -496,7 +496,7 @@ atanh(x::Number)
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
-See also [`log1p`], [`log2`], [`log10`].
+See also [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"

@@ -890,7 +890,13 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
-    t_before = time_ns()
+    timing_imports = TIMING_IMPORTS[] > 0
+    try
+    if timing_imports
+        t_before = time_ns()
+        cumulative_compile_timing(true)
+        t_comp_before = cumulative_compile_time_ns()
+    end
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(sourcepath, path_to_try)
@@ -922,17 +928,29 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
-            if TIMING_IMPORTS[] > 0
+            if timing_imports
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
+                comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 tree_prefix = depth == 0 ? "" : "  "^(depth-1)*"┌ "
                 print(lpad(elapsed, 9), " ms  ")
                 printstyled(tree_prefix, color = :light_black)
-                println(pkg.name)
+                print(pkg.name)
+                if comp_time > 0
+                    printstyled(" ", Ryu.writefixed(Float64(100 * comp_time / (elapsed * 1e6)), 2), "% compilation time", color = Base.info_color())
+                end
+                if recomp_time > 0
+                    perc = Float64(100 * recomp_time / comp_time)
+                    printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+                end
+                println()
             end
             return restored
         end
     end
     return !isempty(paths)
+    finally
+        timing_imports && cumulative_compile_timing(false)
+    end
 end
 
 # to synchronize multiple tasks trying to import/using something

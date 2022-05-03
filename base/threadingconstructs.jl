@@ -1,26 +1,62 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-export threadid, nthreads, @threads, @spawn
+export threadid, nthreads, @threads, @spawn,
+       threadpool, nthreadpools
 
 """
-    Threads.threadid()
+    Threads.threadid() -> Int
 
-Get the ID number of the current thread of execution. The master thread has ID `1`.
+Get the ID number of the current thread of execution. The master thread has
+ID `1`.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
-# Inclusive upper bound on threadid()
 """
-    Threads.nthreads()
+    Threads.nthreads([:default|:interactive]) -> Int
 
-Get the number of threads available to the Julia process. This is the inclusive upper bound
-on [`threadid()`](@ref).
+Get the number of threads (across all thread pools or within the specified
+thread pool) available to Julia. The number of threads across all thread
+pools is the inclusive upper bound on [`threadid()`](@ref).
 
 See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 [`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
 [`Distributed`](@ref man-distributed) standard library.
 """
+function nthreads end
+
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+function nthreads(pool::Symbol)
+    if pool == :default
+        tpid = Int8(0)
+    elseif pool == :interactive
+        tpid = Int8(1)
+    else
+        error("invalid threadpool specified")
+    end
+    return _nthreads_in_pool(tpid)
+end
+function _nthreads_in_pool(tpid::Int8)
+    p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
+    return Int(unsafe_load(p, tpid + 1))
+end
+
+"""
+    Threads.threadpool(tid = threadid()) -> Symbol
+
+Returns the specified thread's threadpool; either `:default` or `:interactive`.
+"""
+function threadpool(tid = threadid())
+    tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
+    return tpid == 0 ? :default : :interactive
+end
+
+"""
+    Threads.nthreadpools() -> Int
+
+Returns the number of threadpools currently configured.
+"""
+nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
+
 
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
@@ -48,7 +84,7 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         let range = $(esc(range))
-        function threadsfor_fun(tid=1; onethread=false)
+        function threadsfor_fun(tid = 1; onethread = false)
             r = range # Load into local variable
             lenr = length(r)
             # divide loop iterations among threads
@@ -232,35 +268,63 @@ macro threads(args...)
 end
 
 """
-    Threads.@spawn expr
+    Threads.@spawn [:default|:interactive] expr
 
-Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available thread.
-The task is allocated to a thread after it becomes available. To wait for the task
-to finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref) to
-wait and then obtain its return value.
+Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
+thread in the specified threadpool (`:default` if unspecified). The task is
+allocated to a thread once one becomes available. To wait for the task to
+finish, call [`wait`](@ref) on the result of this macro, or call
+[`fetch`](@ref) to wait and then obtain its return value.
 
-Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
-constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the asynchronous code from changes to the variable's value in the current task.
+Values can be interpolated into `@spawn` via `\$`, which copies the value
+directly into the constructed underlying closure. This allows you to insert
+the _value_ of a variable, isolating the asynchronous code from changes to
+the variable's value in the current task.
 
 !!! note
-    See the manual chapter on threading for important caveats.
+    See the manual chapter on [multi-threading](@ref man-multithreading)
+    for important caveats. See also the chapter on [threadpools](@ref man-threadpools).
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
 
 !!! compat "Julia 1.4"
     Interpolating values via `\$` is available as of Julia 1.4.
-"""
-macro spawn(expr)
-    letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+!!! compat "Julia 1.9"
+    A threadpool may be specified as of Julia 1.9.
+"""
+macro spawn(args...)
+    tpid = Int8(0)
+    na = length(args)
+    if na == 2
+        ttype, ex = args
+        if ttype isa QuoteNode
+            ttype = ttype.value
+        elseif ttype isa Symbol
+            # TODO: allow unquoted symbols
+            ttype = nothing
+        end
+        if ttype === :interactive
+            tpid = Int8(1)
+        elseif ttype !== :default
+            throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+        end
+    elseif na == 1
+        ex = args[1]
+    else
+        throw(ArgumentError("wrong number of arguments in @spawn"))
+    end
+
+    letargs = Base._lift_one_interp!(ex)
+
+    thunk = esc(:(()->($ex)))
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
+            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), task, $tpid)
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

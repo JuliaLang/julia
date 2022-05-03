@@ -1002,24 +1002,30 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH2(&src, &jlrettype);
-    jl_value_t *ci = jl_rettype_inferred(mi, world, world);
-    if (ci != jl_nothing) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)codeinst->inferred;
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
-        jlrettype = codeinst->rettype;
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
-        if (src)
-            jlrettype = src->rettype;
-        else if (jl_is_method(mi->def.method)) {
-            src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
-            if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+        src = (jl_code_info_t*)mi->def.method->source;
+        if (src && !jl_is_code_info(src))
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    } else {
+        jl_value_t *ci = jl_rettype_inferred(mi, world, world);
+        if (ci != jl_nothing) {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+            src = (jl_code_info_t*)codeinst->inferred;
+            if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+            jlrettype = codeinst->rettype;
         }
-        // TODO: use mi->uninferred
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            src = jl_type_infer(mi, world, 0);
+            if (src)
+                jlrettype = src->rettype;
+            else if (jl_is_method(mi->def.method)) {
+                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            }
+            // TODO: use mi->uninferred
+        }
     }
 
     // emit this function into a new llvm module

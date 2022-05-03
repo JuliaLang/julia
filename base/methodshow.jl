@@ -79,6 +79,9 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
+    if m.sig === Tuple # OpaqueClosure
+        return Symbol[]
+    end
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
