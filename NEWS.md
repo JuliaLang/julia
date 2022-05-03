@@ -54,9 +54,9 @@ Library changes
   tasks mutating the dictionary or set ([#44534]).
 * Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
-
 
 Standard library changes
 ------------------------

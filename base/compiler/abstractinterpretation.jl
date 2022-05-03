@@ -501,58 +501,10 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     # Returns the topmost occurrence of that repeated edge.
     edgecycle = false
     edgelimited = false
-    # The `method_for_inference_heuristics` will expand the given method's generator if
-    # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
-    # The other `CodeInfo`s we inspect will already have this field inflated, so we just
-    # access it directly instead (to avoid regeneration).
-    callee_method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
-    sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
-    sv_method2 isa Method || (sv_method2 = nothing) # Union{Method, Nothing}
-
-    function matches_sv(parent::InferenceState)
-        parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
-        parent_method2 isa Method || (parent_method2 = nothing) # Union{Method, Nothing}
-        return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
-    end
-
-    function edge_matches_sv(frame::InferenceState)
-        inf_method2 = frame.src.method_for_inference_limit_heuristics # limit only if user token match
-        inf_method2 isa Method || (inf_method2 = nothing) # Union{Method, Nothing}
-        if callee_method2 !== inf_method2
-            return false
-        end
-        if !hardlimit
-            # if this is a soft limit,
-            # also inspect the parent of this edge,
-            # to see if they are the same Method as sv
-            # in which case we'll need to ensure it is convergent
-            # otherwise, we don't
-
-            # check in the cycle list first
-            # all items in here are mutual parents of all others
-            if !_any(matches_sv, frame.callers_in_cycle)
-                let parent = frame.parent
-                    parent !== nothing || return false
-                    parent = parent::InferenceState
-                    (parent.cached || parent.parent !== nothing) || return false
-                    matches_sv(parent) || return false
-                end
-            end
-
-            # If the method defines a recursion relation, give it a chance
-            # to tell us that this recursion is actually ok.
-            if isdefined(method, :recursion_relation)
-                if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame.linfo.specTypes])
-                    return false
-                end
-            end
-        end
-        return true
-    end
 
     for infstate in InfStackUnwind(sv)
         if method === infstate.linfo.def
-            if infstate.linfo.specTypes == sig
+            if infstate.linfo.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
                 # TODO: merge call cycle and return right away
                 if call_result_unused(sv)
@@ -568,7 +520,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 break
             end
             topmost === nothing || continue
-            if edge_matches_sv(infstate)
+            if edge_matches_sv(infstate, method, sig, sparams, hardlimit, sv)
                 topmost = infstate
                 edgecycle = true
             end
@@ -585,7 +537,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = sv.linfo.specTypes
-            l_comparison = length(unwrap_unionall(comparison).parameters)::Int
+            l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
             spec_len = max(spec_len, l_comparison)
         else
             comparison = method.sig
@@ -667,6 +619,72 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         edge_effects = Effects(edge_effects; terminates=TRISTATE_UNKNOWN)
     end
     return MethodCallResult(rt, edgecycle, edgelimited, edge, edge_effects)
+end
+
+function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, sv::InferenceState)
+    # The `method_for_inference_heuristics` will expand the given method's generator if
+    # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
+    # The other `CodeInfo`s we inspect will already have this field inflated, so we just
+    # access it directly instead (to avoid regeneration).
+    callee_method2 = method_for_inference_heuristics(method, sig, sparams) # Union{Method, Nothing}
+
+    inf_method2 = frame.src.method_for_inference_limit_heuristics # limit only if user token match
+    inf_method2 isa Method || (inf_method2 = nothing)
+    if callee_method2 !== inf_method2
+        return false
+    end
+    if !hardlimit
+        # if this is a soft limit,
+        # also inspect the parent of this edge,
+        # to see if they are the same Method as sv
+        # in which case we'll need to ensure it is convergent
+        # otherwise, we don't
+
+        # check in the cycle list first
+        # all items in here are mutual parents of all others
+        if !_any(p::InferenceState->matches_sv(p, sv), frame.callers_in_cycle)
+            let parent = frame.parent
+                parent !== nothing || return false
+                parent = parent::InferenceState
+                (parent.cached || parent.parent !== nothing) || return false
+                matches_sv(parent, sv) || return false
+            end
+        end
+
+        # If the method defines a recursion relation, give it a chance
+        # to tell us that this recursion is actually ok.
+        if isdefined(method, :recursion_relation)
+            if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame.linfo.specTypes])
+                return false
+            end
+        end
+    end
+    return true
+end
+
+# This function is used for computing alternate limit heuristics
+function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
+    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
+        method_instance = specialize_method(method, sig, sparams)
+        if isa(method_instance, MethodInstance)
+            cinfo = get_staged(method_instance)
+            if isa(cinfo, CodeInfo)
+                method2 = cinfo.method_for_inference_limit_heuristics
+                if method2 isa Method
+                    return method2
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+function matches_sv(parent::InferenceState, sv::InferenceState)
+    sv_method2 = sv.src.method_for_inference_limit_heuristics # limit only if user token match
+    sv_method2 isa Method || (sv_method2 = nothing)
+    parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
+    parent_method2 isa Method || (parent_method2 = nothing)
+    return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
 end
 
 # keeps result and context information of abstract_method_call, which will later be used for
@@ -759,13 +777,13 @@ function concrete_eval_call(interp::AbstractInterpreter,
         Core._call_in_world_total(world, f, args...)
     catch
         # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-        return ConstCallResults(Union{}, ConcreteResult(result.edge, result.edge_effects), result.edge_effects)
+        return ConstCallResults(Union{}, ConcreteResult(result.edge::MethodInstance, result.edge_effects), result.edge_effects)
     end
     if is_inlineable_constant(value) || call_result_unused(sv)
         # If the constant is not inlineable, still do the const-prop, since the
         # code that led to the creation of the Const may be inlineable in the same
         # circumstance and may be optimizable.
-        return ConstCallResults(Const(value), ConcreteResult(result.edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
+        return ConstCallResults(Const(value), ConcreteResult(result.edge::MethodInstance, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
     end
     return nothing
 end
@@ -801,7 +819,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     end
     val = concrete_eval_call(interp, f, result, arginfo, sv)
     if val !== nothing
-        add_backedge!(result.edge, sv)
+        add_backedge!(val.const_result.mi, sv)
         return val
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
@@ -841,8 +859,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects)
 end
 
-# if there's a possibility we could get a better result (hopefully without doing too much work)
-# returns `MethodInstance` with constant arguments, returns nothing otherwise
+# if there's a possibility we could get a better result with these constant arguments
+# (hopefully without doing too much work), returns `MethodInstance`, or nothing otherwise
 function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
                                          @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
                                          sv::InferenceState)
@@ -902,7 +920,13 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
         return false
     else
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable return type)")
+        if isa(rt, Const)
+            if result.edge_effects.nothrow !== ALWAYS_TRUE
+                # Could still be improved to Bottom (or at least could see the effects improved)
+                return true
+            end
+        end
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
         return false
     end
 end
@@ -1964,8 +1988,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
         cconv = e.args[5]
-        if isa(cconv, QuoteNode) && isa(cconv.value, Tuple{Symbol, UInt8})
-            effects = cconv.value[2]::UInt8
+        if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
+            effects = v[2]
             effects = decode_effects_override(effects)
             tristate_merge!(sv, Effects(
                 effects.consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
