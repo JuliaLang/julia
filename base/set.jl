@@ -65,6 +65,8 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
+# This avoids hashing and probing twice and it works the same as
+# in!(x, s::Set) = in(x, s) ? true : (push!(s, x); false)
 function in!(x, s::Set)
     idx, sh = ht_keyindex2_shorthash!(s.dict, x)
     idx > 0 && return true
