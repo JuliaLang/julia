@@ -194,16 +194,6 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
-# LLDB still relies on plenty of python 2.x infrastructure, without checking
-llvm_python_location=$(shell /usr/bin/env python2 -c 'import sys; print(sys.executable)')
-llvm_python_workaround=$(SRCCACHE)/python2_path
-$(llvm_python_workaround):
-	mkdir -p $@
-	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
-	/usr/bin/env python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	ln -sf $(llvm_python_location) "$@/python" && \
-	ln -sf $(llvm_python_location)-config "$@/python-config"
-
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
 
@@ -242,31 +232,26 @@ endif
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
 
-$(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(CMAKE) $(SRCCACHE)/$(LLVM_SRC_DIR)/llvm $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE) \
 		|| { echo '*** To install a newer version of cmake, run contrib/download_cmake.sh ***' && false; }
 	echo 1 > $@
 
-$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
 		  $(CMAKE) --build .)
 	echo 1 > $@
 
-$(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		  $(CMAKE) --build . --target check
 endif
 	echo 1 > $@
-
-$(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 LLVM_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir) && \
