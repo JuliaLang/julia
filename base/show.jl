@@ -407,6 +407,7 @@ function _show_default(io::IO, @nospecialize(x))
     nf = nfields(x)
     nb = sizeof(x)::Int
     if nf != 0 || nb == 0
+        iscompact = get(io, :compact, false)::Bool
         if !show_circular(io, x)
             valsbuff = IOBuffer()
             valsio = IOContext(IOContext(valsbuff, io), Pair{Symbol,Any}(:SHOWN_SET, x),
@@ -418,7 +419,7 @@ function _show_default(io::IO, @nospecialize(x))
                                     Pair{Symbol,Any}(:typeinfo, Any))
                 f = fieldname(t, i)
                 if !isdefined(x, f)
-                    if newline
+                    if !iscompact && newline
                         println(valsio)
                         write(valsio, " " ^ 4)
                         newline = false
@@ -432,17 +433,23 @@ function _show_default(io::IO, @nospecialize(x))
                     seek(buff, 0)
                     is_complex_struct = any(isstructtype(inferencebarrier(typeof(getfield(fx, j)))) for j ∈ 1:nfields(fx))
                     if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
-                        if newline
+                        if !iscompact && newline
                             println(valsio)
                             newline = false
                         end
                         write(valsio, buff)
                     else
-                        i > 1 && println(valsio)
-                        for l ∈ readlines(buff; keep = true)
-                            write(valsio, l)
+                        if !iscompact
+                            i > 1 && println(valsio)
+                            for l ∈ readlines(buff; keep = true)
+                                write(valsio, l)
+                            end
+                            newline = true
+                        else
+                            for l ∈ readlines(buff; keep = true)
+                                write(valsio, l)
+                            end
                         end
-                        newline = true
                     end
                 end
                 if i < nf
@@ -453,7 +460,7 @@ function _show_default(io::IO, @nospecialize(x))
             seek(valsbuff, 0)
             lines = readlines(valsbuff; keep = true)
             if length(lines) > 1
-                println(io)
+                iscompact || println(io)
                 for l ∈ lines
                     write(io, " " ^ 4)
                     write(io, l)
