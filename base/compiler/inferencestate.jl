@@ -4,8 +4,8 @@
 # (only used in abstractinterpret, doesn't appear in optimize)
 struct VarState
     typ
-    undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+    undef::Union{Nothing,Bool} # nothing if unanalyzed
+    VarState(@nospecialize(typ), undef::Union{Nothing,Bool}) = new(typ, undef)
 end
 
 """
@@ -152,7 +152,7 @@ mutable struct InferenceState
         stmt_types[1] = stmt_type1 = VarTable(undef, nslots)
         for i in 1:nslots
             argtyp = (i > nargs) ? Bottom : argtypes[i]
-            stmt_type1[i] = VarState(argtyp, i > nargs)
+            stmt_type1[i] = VarState(argtyp, i > nargs && nothing)
             slottypes[i] = argtyp
         end
 

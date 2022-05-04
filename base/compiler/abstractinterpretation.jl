@@ -1835,7 +1835,13 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber) || isa(e, Argument)
-        return vtypes[slot_id(e)].typ
+        sn = slot_id(e)
+        s = vtypes[sn]
+        if s.undef === true || # may not be defined
+           s.typ === Bottom    # never analyzed
+            sv.src.slotflags[sn] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
+        end
+        return s.typ
     elseif isa(e, GlobalRef)
         return abstract_eval_global(e.mod, e.name, sv)
     end
@@ -2022,10 +2028,11 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         sym = e.args[1]
         t = Bool
         if isa(sym, SlotNumber)
-            vtyp = vtypes[slot_id(sym)]
+            sn = slot_id(sym)
+            vtyp = vtypes[sn]
             if vtyp.typ === Bottom
                 t = Const(false) # never assigned previously
-            elseif !vtyp.undef
+            elseif vtyp.undef === false
                 t = Const(true) # definitely assigned previously
             end
         elseif isa(sym, Symbol)
@@ -2332,9 +2339,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if isa(fname, SlotNumber)
                     changes = StateUpdate(fname, VarState(Any, false), changes, false)
                 end
-            elseif hd === :code_coverage_effect ||
-                    (hd !== :boundscheck && # :boundscheck can be narrowed to Bool
-                    hd !== nothing && is_meta_expr_head(hd))
+            elseif hd === :code_coverage_effect || (hd !== nothing &&
+                    hd !== :boundscheck && # :boundscheck can be narrowed to Bool
+                    is_meta_expr_head(hd))
                 # these do not generate code
             else
                 t = abstract_eval_statement(interp, stmt, changes, frame)

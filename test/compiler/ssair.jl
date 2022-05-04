@@ -334,3 +334,25 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     stderr = IOBuffer()
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
 end
+
+let src = code_typed() do
+        local a
+        try
+            a = a + 1
+        catch err
+            @isdefined a
+        end
+    end |> only |> first
+    @test any(src.code) do @nospecialize x
+        Meta.isexpr(x, :throw_undef_if_not) && x.args[1] === :a
+    end
+end
+let src = code_typed() do
+        a = @isdefined x
+        x = 42
+        b = @isdefined x
+        a, b
+    end |> only |> first
+    ret = (only(src.code)::Core.ReturnNode).val
+    @test ret === (false, true)
+end

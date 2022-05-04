@@ -342,7 +342,17 @@ widenconst(t::TypeVar) = error("unhandled TypeVar")
 widenconst(t::TypeofVararg) = error("unhandled Vararg")
 widenconst(t::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
-issubstate(a::VarState, b::VarState) = (a.typ ⊑ b.typ && a.undef <= b.undef)
+function issubstate(a::VarState, b::VarState)
+    a.typ ⊑ b.typ || return false
+    aundef, bundef = a.undef, b.undef
+    if aundef === nothing
+        return true
+    elseif bundef === nothing
+        return false
+    else
+        return aundef <= bundef
+    end
+end
 
 function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sa === sb && return sa
@@ -350,7 +360,16 @@ function smerge(sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
     sb === NOT_FOUND && return sa
     issubstate(sa, sb) && return sb
     issubstate(sb, sa) && return sa
-    return VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
+    t = tmerge(sa.typ, sb.typ)
+    aundef, bundef = sa.undef, sb.undef
+    if aundef === nothing
+        undef = bundef
+    elseif bundef === nothing
+        undef = aundef
+    else
+        undef = aundef | bundef
+    end
+    return VarState(t, undef)
 end
 
 @inline tchanged(@nospecialize(n), @nospecialize(o)) = o === NOT_FOUND || (n !== NOT_FOUND && !(n ⊑ o))

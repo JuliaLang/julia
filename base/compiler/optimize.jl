@@ -91,19 +91,26 @@ mutable struct OptimizationState
     linfo::MethodInstance
     src::CodeInfo
     ir::Union{Nothing, IRCode}
+    was_reached::Union{Nothing, BitSet}
     stmt_info::Vector{Any}
     mod::Module
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     inlining::InliningState
     function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
+        was_reached = BitSet()
+        for i = 1:length(frame.stmt_types)
+            if isa(frame.stmt_types[i], VarTable)
+                push!(was_reached, i)
+            end
+        end
         s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
             interp)
         return new(frame.linfo,
-                   frame.src, nothing, frame.stmt_info, frame.mod,
+                   frame.src, nothing, was_reached, frame.stmt_info, frame.mod,
                    frame.sptypes, frame.slottypes, inlining)
     end
     function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
@@ -131,10 +138,12 @@ mutable struct OptimizationState
             WorldView(code_cache(interp), get_world_counter()),
             interp)
         return new(linfo,
-                   src, nothing, stmt_info, mod,
+                   src, nothing, nothing, stmt_info, mod,
                    sptypes_from_meth_instance(linfo), slottypes, inlining)
     end
 end
+
+was_reached((; was_reached)::OptimizationState, pc::Int) = was_reached === nothing || pc in was_reached
 
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
     src = retrieve_code_info(linfo)
@@ -554,21 +563,13 @@ function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult
 end
 
 function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
-    code = copy_exprargs(ci.code)
     coverage = coverage_enabled(sv.mod)
-    # Go through and add an unreachable node after every
-    # Union{} call. Then reindex labels.
-    idx = 1
-    oldidx = 1
-    changemap = fill(0, length(code))
-    prevloc = zero(eltype(ci.codelocs))
-    stmtinfo = sv.stmt_info
-    codelocs = ci.codelocs
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    ssaflags = ci.ssaflags
+    linetable = ci.linetable
+    if !isa(linetable, Vector{LineInfoNode})
+        linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
+    end
     if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
-        for line in ci.linetable
-            line = line::LineInfoNode
+        for line in linetable
             if is_file_tracked(line.file)
                 # if any line falls in a tracked file enable coverage for all
                 coverage = true
@@ -576,8 +577,39 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             end
         end
     end
+    # Go through and add an unreachable node after every
+    # Union{} call. Then reindex labels
+    code = copy_exprargs(ci.code)
+    stmtinfo = sv.stmt_info
+    codelocs = ci.codelocs
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssaflags = ci.ssaflags
+    meta = Expr[]
+    idx = 1
+    oldidx = 1
+    changemap = fill(0, length(code))
     labelmap = coverage ? fill(0, length(code)) : changemap
+    prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
+        stmt = code[idx]
+        if process_meta!(meta, stmt) || !(is_meta_expr(stmt) || was_reached(sv, oldidx))
+            if oldidx < length(labelmap)
+                changemap[oldidx] != 0 && (changemap[oldidx+1] = changemap[oldidx])
+                if coverage && labelmap[oldidx] != 0
+                    labelmap[oldidx + 1] = labelmap[oldidx]
+                end
+                changemap[oldidx] = -1
+                coverage && (labelmap[oldidx] = -1)
+            end
+            # TODO: It would be more efficient to do this in bulk
+            deleteat!(code, idx)
+            deleteat!(codelocs, idx)
+            deleteat!(ssavaluetypes, idx)
+            deleteat!(stmtinfo, idx)
+            deleteat!(ssaflags, idx)
+            oldidx += 1
+            continue
+        end
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
             # insert a side-effect instruction before the current instruction in the same basic block
@@ -593,7 +625,16 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             idx += 1
             prevloc = codeloc
         end
-        if code[idx] isa Expr && ssavaluetypes[idx] === Union{}
+        if isa(stmt, GotoIfNot)
+            # replace GotoIfNot with:
+            # - GotoNode if the fallthrough target is unreachable
+            # - no-op if the branch target is unreachable
+            if !was_reached(sv, oldidx + 1)
+                code[idx] = GotoNode(stmt.dest)
+            elseif !was_reached(sv, stmt.dest)
+                code[idx] = nothing
+            end
+        elseif stmt isa Expr && ssavaluetypes[idx] === Union{}
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
                 # insert unreachable in the same basic block after the current instruction (splitting it)
                 insert!(code, idx + 1, ReturnNode())
@@ -611,28 +652,22 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         idx += 1
         oldidx += 1
     end
+
     renumber_ir_elements!(code, changemap, labelmap)
 
-    meta = Expr[]
-    for i = 1:length(code)
-        code[i] = process_meta!(meta, code[i])
-    end
     strip_trailing_junk!(ci, code, stmtinfo)
-    cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    linetable = ci.linetable
-    isa(linetable, Vector{LineInfoNode}) || (linetable = collect(LineInfoNode, linetable::Vector{Any}))
-    ir = IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
-    return ir
+    cfg = compute_basic_blocks(code)
+    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
     if isexpr(stmt, :meta) && length(stmt.args) ≥ 1
         push!(meta, stmt)
-        return nothing
+        return true
     end
-    return stmt
+    return false
 end
 
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
@@ -794,7 +829,9 @@ end
 
 function cumsum_ssamap!(ssamap::Vector{Int})
     rel_change = 0
+    any_change = false
     for i = 1:length(ssamap)
+        any_change = any_change || ssamap[i] != 0
         rel_change += ssamap[i]
         if ssamap[i] == -1
             # Keep a marker that this statement was deleted
@@ -803,16 +840,15 @@ function cumsum_ssamap!(ssamap::Vector{Int})
             ssamap[i] = rel_change
         end
     end
+    return any_change
 end
 
 function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
-    cumsum_ssamap!(labelchangemap)
+    any_change = cumsum_ssamap!(labelchangemap)
     if ssachangemap !== labelchangemap
-        cumsum_ssamap!(ssachangemap)
+        any_change |= cumsum_ssamap!(ssachangemap)
     end
-    if labelchangemap[end] == 0 && ssachangemap[end] == 0
-        return
-    end
+    any_change || return
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -822,7 +858,8 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             if isa(cond, SSAValue)
                 cond = SSAValue(cond.id + ssachangemap[cond.id])
             end
-            body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
+            was_deleted = labelchangemap[el.dest] == typemin(Int)
+            body[i] = was_deleted ? cond : GotoIfNot(cond, el.dest + labelchangemap[el.dest])
         elseif isa(el, ReturnNode)
             if isdefined(el, :val)
                 val = el.val

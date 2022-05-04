@@ -507,7 +507,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
-        type_annotate!(me, doopt)
+        type_annotate!(me)
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
         else
@@ -565,49 +565,6 @@ function widen_all_consts!(src::CodeInfo)
     return src
 end
 
-function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    head = e.head
-    i0 = 1
-    if is_meta_expr_head(head) || head === :const
-        return
-    end
-    if head === :(=) || head === :method
-        i0 = 2
-    end
-    for i = i0:length(e.args)
-        subex = e.args[i]
-        if isa(subex, Expr)
-            annotate_slot_load!(subex, vtypes, sv, undefs)
-        elseif isa(subex, SlotNumber)
-            e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
-        end
-    end
-end
-
-function annotate_slot_load(@nospecialize(e), vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    if isa(e, Expr)
-        annotate_slot_load!(e, vtypes, sv, undefs)
-    elseif isa(e, SlotNumber)
-        return visit_slot_load!(e, vtypes, sv, undefs)
-    end
-    return e
-end
-
-function visit_slot_load!(sl::SlotNumber, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    id = slot_id(sl)
-    s = vtypes[id]
-    vt = widenconditional(ignorelimited(s.typ))
-    if s.undef
-        # find used-undef variables
-        undefs[id] = true
-    end
-    # add type annotations where needed
-    if !(sv.slottypes[id] ⊑ vt)
-        return TypedSlot(id, vt)
-    end
-    return sl
-end
-
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -618,9 +575,9 @@ function record_slot_assign!(sv::InferenceState)
     ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
     for i = 1:length(body)
         expr = body[i]
-        st_i = states[i]
+        state = states[i]
         # find all reachable assignments to locals
-        if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
+        if isa(state, VarTable) && isa(expr, Expr) && expr.head === :(=)
             lhs = expr.args[1]
             rhs = expr.args[2]
             if isa(lhs, SlotNumber)
@@ -641,11 +598,42 @@ function record_slot_assign!(sv::InferenceState)
     end
 end
 
-# annotate types of all symbols in AST
-function type_annotate!(sv::InferenceState, run_optimizer::Bool)
-    # as an optimization, we delete dead statements immediately if we're going to run the optimizer
-    # (otherwise, we'll perhaps run the optimization passes later, outside of inference)
+function annotate_slots!(sv::InferenceState)
+    states = sv.stmt_types
+    body = sv.src.code::Vector{Any}
+    slottypes = sv.slottypes::Vector{Any}
+    for i = 1:length(body)
+        state = states[i]
+        if isa(state, VarTable)
+            body[i] = annotate_slot(slottypes, state, body[i])
+        end
+    end
+end
 
+function annotate_slot(slottypes::Vector{Any}, vtypes::VarTable, @nospecialize x)
+    if isa(x, Expr)
+        head = x.head
+        i0 = (head === :(=) || head === :method) ? 2 : 1
+        for i = i0:length(x.args)
+            x.args[i] = annotate_slot(slottypes, vtypes, x.args[i])
+        end
+        return x
+    elseif isa(x, ReturnNode) && isdefined(x, :val)
+        return ReturnNode(annotate_slot(slottypes, vtypes, x.val))
+    elseif isa(x, GotoIfNot)
+        return GotoIfNot(annotate_slot(slottypes, vtypes, x.cond), x.dest)
+    elseif isa(x, SlotNumber)
+        id = slot_id(x)
+        typ = widenconditional(ignorelimited(vtypes[id].typ))
+        if !(slottypes[id] ⊑ typ)
+            return TypedSlot(id, typ)
+        end
+    end
+    return x
+end
+
+# annotate types of all symbols in AST
+function type_annotate!(sv::InferenceState)
     # remove all unused ssa values
     src = sv.src
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
@@ -661,75 +649,11 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     @assert !(sv.bestguess isa LimitedAccuracy)
     sv.src.rettype = sv.bestguess
 
-    # annotate variables load types
-    # remove dead code optimization
-    # and compute which variables may be used undef
-    states = sv.stmt_types
-    nslots = length(states[1]::VarTable)
-    undefs = fill(false, nslots)
-    body = src.code::Array{Any,1}
-    nexpr = length(body)
+    # TODO move this to convert_to_ircode (https://github.com/JuliaLang/julia/pull/43999)
+    # add type annotations where needed
+    annotate_slots!(sv)
 
-    # replace GotoIfNot with its condition if the branch target is unreachable
-    for i = 1:nexpr
-        expr = body[i]
-        if isa(expr, GotoIfNot)
-            if !isa(states[expr.dest], VarTable)
-                body[i] = Expr(:call, GlobalRef(Core, :typeassert), expr.cond, GlobalRef(Core, :Bool))
-            end
-        end
-    end
-
-    i = 1
-    oldidx = 0
-    changemap = fill(0, nexpr)
-
-    while i <= nexpr
-        oldidx += 1
-        st_i = states[i]
-        expr = body[i]
-        if isa(st_i, VarTable)
-            # st_i === nothing  =>  unreached statement  (see issue #7836)
-            if isa(expr, Expr)
-                annotate_slot_load!(expr, st_i, sv, undefs)
-            elseif isa(expr, ReturnNode) && isdefined(expr, :val)
-                body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
-            elseif isa(expr, GotoIfNot)
-                body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
-            elseif isa(expr, SlotNumber)
-                body[i] = visit_slot_load!(expr, st_i, sv, undefs)
-            end
-        else
-            if isa(expr, Expr) && is_meta_expr_head(expr.head)
-                # keep any lexically scoped expressions
-            elseif run_optimizer
-                deleteat!(body, i)
-                deleteat!(states, i)
-                deleteat!(ssavaluetypes, i)
-                deleteat!(src.codelocs, i)
-                deleteat!(sv.stmt_info, i)
-                deleteat!(src.ssaflags, i)
-                nexpr -= 1
-                changemap[oldidx] = -1
-                continue
-            else
-                body[i] = Const(expr) # annotate that this statement actually is dead
-            end
-        end
-        i += 1
-    end
-
-    if run_optimizer
-        renumber_ir_elements!(body, changemap)
-    end
-
-    # finish marking used-undef variables
-    for j = 1:nslots
-        if undefs[j]
-            src.slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
-        end
-    end
-    nothing
+    return nothing
 end
 
 # at the end, all items in b's cycle
