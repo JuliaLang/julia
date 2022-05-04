@@ -88,7 +88,7 @@ function compute_basic_blocks(stmts::Vector{Any})
     bb_starts = basic_blocks_starts(stmts)
     # Compute ranges
     pop!(bb_starts, 1)
-    basic_block_index = collect(bb_starts)
+    basic_block_index = sort!(collect(bb_starts); alg=QuickSort)
     blocks = BasicBlock[]
     sizehint!(blocks, length(basic_block_index))
     let first = 1
