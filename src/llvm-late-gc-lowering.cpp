@@ -2234,7 +2234,6 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
 
-
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     auto T_int32 = Type::getInt32Ty(F.getContext());
     auto T_size = getSizeTy(F.getContext());
@@ -2247,8 +2246,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     PointerType *T_pprjlvalue = nullptr;
     AllocaInst *Frame = nullptr;
     if (T_prjlvalue) {
+       // assert(F.getParent()->getDataLayout().getAllocaAddrSpace() != 5 && "address space IS equal to 5");
         T_pprjlvalue = T_prjlvalue->getPointerTo();
-        Frame = new AllocaInst(T_prjlvalue, 0,
+        Frame = new AllocaInst(T_prjlvalue, F.getParent()->getDataLayout().getAllocaAddrSpace(),
             ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
     std::vector<CallInst*> write_barriers;

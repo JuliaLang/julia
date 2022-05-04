@@ -72,7 +72,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     // Create the GC frame.
     AllocaInst *gcframe = new AllocaInst(
         T_prjlvalue,
-        0,
+        F.getParent()->getDataLayout().getAllocaAddrSpace(),
         ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2),
         Align(16));
     gcframe->insertAfter(target);

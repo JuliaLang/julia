@@ -168,7 +168,7 @@ static bool lowerExcHandlers(Function &F) {
     Instruction *firstInst = &F.getEntryBlock().front();
     std::vector<AllocaInst *> buffs;
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), 0,
+        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), F.getParent()->getDataLayout().getAllocaAddrSpace(),
                 handler_sz, Align(16), "", firstInst);
         buffs.push_back(buff);
     }
