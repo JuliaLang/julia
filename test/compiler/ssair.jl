@@ -350,6 +350,20 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
 end
 
+function undefcheck_before_assignment()
+    d = @isdefined o
+    o = nothing
+    return d
+end
+let src = code_typed(undefcheck_before_assignment, ; optimize=false) |> only |> first
+    i = findfirst(n->n===:o, src.slotnames)::Int
+    @test src.slotflags[i] & Core.Compiler.SLOT_USEDUNDEF == 0
+end
+let; Base.Experimental.@force_compile
+    undefcheck_before_assignment()
+    @test undefcheck_before_assignment() === false
+end
+
 @testset "code_ircode" begin
     @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa

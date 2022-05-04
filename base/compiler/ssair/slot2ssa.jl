@@ -127,16 +127,11 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
     if isexpr(stmt, :isdefined)
         val = stmt.args[1]
         if isa(val, UnoptSlot)
-            slot = slot_id(val)
-            if (ci.slotflags[slot] & SLOT_USEDUNDEF) == 0
+            ssa = rename_slot(val)
+            if ssa === UNDEF_TOKEN
+                return false
+            elseif !isa(ssa, SSAValue) && !isa(ssa, NewSSAValue)
                 return true
-            else
-                ssa = rename_slot(val)
-                if ssa === UNDEF_TOKEN
-                    return false
-                elseif !isa(ssa, SSAValue) && !isa(ssa, NewSSAValue)
-                    return true
-                end
             end
             # temporarily corrupt the isdefined node. type_lift_pass! will fix it
             stmt.args[1] = ssa

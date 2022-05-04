@@ -654,7 +654,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
     elseif isa(x, Expr)
         head = x.head
         i0 = 1
-        if is_meta_expr_head(head) || head === :const
+        if is_meta_expr_head(head) || head === :const || head === :isdefined
             return x
         end
         if head === :(=) || head === :method
