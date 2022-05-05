@@ -737,3 +737,73 @@ end
 macro ccall_effects(effects::UInt8, expr)
     return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
 end
+
+
+"""
+    @cglobal [library.]symbol[::type=Cvoid]
+    @cglobal \$sym_ptr[::type=Cvoid]
+
+Obtain a pointer to a global variable in a C-exported shared library, specified as in [`@ccall`](@ref]).
+
+See also: [`cglobal`](@ref).
+
+# Examples
+
+```julia-repl
+julia> @cglobal errno::Cint
+Ptr{Int32} @0x00007ffaf3c396b8
+
+julia> @cglobal "./mylib.so".y::Cint
+Ptr{Int32} @0x00007ffaf3246028
+
+julia> libh = Libdl.dlopen("libccalltest");
+
+julia> sym = Libdl.dlsym(libh, :global_var)
+Ptr{Nothing} @0x00007ffaf3239190
+
+julia> @cglobal \$sym::Cint
+Ptr{Int32} @0x00007f08380c9190
+"""
+macro cglobal(expr)
+    result_expr = []
+    maybe_quote(x) = x isa Symbol ? QuoteNode(x) : x
+
+    # Peel of return value
+    if !Meta.isexpr(expr, :(::))
+        rettype = Cvoid
+    else
+        rettype = expr.args[2]
+        expr = expr.args[1]
+    end
+
+    # Pointer interpolation
+    if Meta.isexpr(expr, :$)
+        sym = expr
+        push!(result_expr, Expr(:(=), :sym, esc(sym.args[1])))
+        name = QuoteNode(sym.args[1])
+        sym = :sym
+        check = quote
+            if !isa(sym, Ptr{Cvoid})
+                name = $name
+                throw(ArgumentError("interpolated  `$name` was not a Ptr{Cvoid}, but $(typeof(sym))"))
+            end
+        end
+        push!(result_expr, check)
+        push!(result_expr, :(cglobal($sym, $rettype)))
+    else
+        # Peel of library
+        lib = nothing
+        if Meta.isexpr(expr, :(.))
+            lib = maybe_quote(expr.args[1])
+            expr = expr.args[2]
+        end
+
+        sym = maybe_quote(expr)
+        if lib === nothing
+            push!(result_expr, :(cglobal($sym, $rettype)))
+        else
+            push!(result_expr, :(cglobal(($sym, $lib), $rettype)))
+        end
+    end
+    return Expr(:block, result_expr...)
+end

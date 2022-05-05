@@ -44,6 +44,7 @@ New library functions
 ---------------------
 
 * `Iterators.flatmap` was added ([#44792]).
+* `@cglobal`, macro version of `cglobal` to access global variables ([#????]).
 
 Library changes
 ---------------
