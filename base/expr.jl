@@ -9,7 +9,7 @@ const is_expr = isexpr
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names.
+Generates a symbol which will not conflict with other variable names (in the same module).
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
