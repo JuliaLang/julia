@@ -290,7 +290,7 @@ end
 @testset "missing in findmin/findmax" begin
     B = [1.0 missing NaN;
          5.0 NaN missing]
-    B′ = [1.0 missing NaN;
+    B′ = [1.0 missing -NaN;
           -5.0 NaN missing]
     for (tup, rval, rind) in [(1, [5.0 missing missing], [CartesianIndex(2, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
                               (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
