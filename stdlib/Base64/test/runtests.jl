@@ -38,16 +38,30 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     # Byte-by-byte encode and decode.
     buf = IOBuffer()
     pipe = Base64EncodePipe(buf)
+    @test !isreadable(pipe) && iswritable(pipe)
     for char in inputText
         write(pipe, UInt8(char))
     end
     close(pipe)
     pipe = Base64DecodePipe(IOBuffer(take!(buf)))
+    @test isreadable(ipipe) && !iswritable(ipipe)
     decoded = UInt8[]
     while !eof(pipe)
         push!(decoded, read(pipe, UInt8))
     end
     @test String(decoded) == inputText
+
+    buf = IOBuffer(write=false)
+    pipe = Base64EncodePipe(buf)
+    @test !isreadable(pipe) && !iswritable(pipe)
+    @test_throws ArgumentError write(pipe, "Hello!")
+    close(pipe)
+    buf = IOBuffer(read=false)
+    write(buf, "SGVsbG8h")
+    pipe = Base64DecodePipe(buf)
+    @test !isreadable(pipe) && !iswritable(pipe)
+    @test isempty(read(pipe))
+
 
     # Encode to string and decode
     @test String(base64decode(base64encode(inputText))) == inputText
@@ -73,6 +87,21 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
 
     # issue #32397
     @test String(base64decode(longEncodedText)) == longDecodedText;
+
+    # Optional padding
+    @test base64decode("AQ==") == base64decode("AQ")
+    @test base64decode("zzzzAQ==") == base64decode("zzzzAQ")
+    @test base64decode("AQI=") == base64decode("AQI")
+
+    # Too short, 6 bits do not cover a full byte.
+    @test_throws ArgumentError base64decode("a")
+    @test_throws ArgumentError base64decode("a===")
+    @test_throws ArgumentError base64decode("ZZZZa")
+    @test_throws ArgumentError base64decode("ZZZZa===")
+
+    # Bit padding should be ignored, which means that `jl` and `jk` should give the same result.
+    @test base64decode("jl") == base64decode("jk") == base64decode("jk==") == [142]
+    @test base64decode("Aa") == base64decode("AS") == base64decode("AS==") == [1]
 end
 
 @testset "Random data" begin

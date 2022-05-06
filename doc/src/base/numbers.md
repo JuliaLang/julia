@@ -111,7 +111,7 @@ Base.@int128_str
 Base.@uint128_str
 ```
 
-## BigFloats and BigInts
+## [BigFloats and BigInts](@id BigFloats-and-BigInts)
 
 The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
 arbitrary-precision floating point and integer arithmetic, respectively. For
@@ -122,7 +122,6 @@ and for [`BigInt`](@ref) the [GNU Multiple Precision Arithmetic Library (GMP)]
 ```@docs
 Base.MPFR.BigFloat(::Any, rounding::RoundingMode)
 Base.precision
-Base.MPFR.precision(::Type{BigFloat})
 Base.MPFR.setprecision
 Base.GMP.BigInt(::Any)
 Base.@big_str

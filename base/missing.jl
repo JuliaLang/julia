@@ -12,7 +12,7 @@ where it is not supported. The error message, in the `msg` field
 may provide more specific details.
 """
 struct MissingException <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 showerror(io::IO, ex::MissingException) =
@@ -34,9 +34,9 @@ Any
 ```
 
 !!! compat "Julia 1.3"
-  This function is exported as of Julia 1.3.
+    This function is exported as of Julia 1.3.
 """
-nonmissingtype(::Type{T}) where {T} = Core.Compiler.typesubtract(T, Missing)
+nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
 
 function nonmissingtype_checked(T::Type)
     R = nonmissingtype(T)
@@ -91,10 +91,11 @@ isapprox(::Missing, ::Any; kwargs...) = missing
 isapprox(::Any, ::Missing; kwargs...) = missing
 
 # Unary operators/functions
-for f in (:(!), :(~), :(+), :(-), :(zero), :(one), :(oneunit),
+for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
+          :(zero), :(one), :(oneunit),
           :(isfinite), :(isinf), :(isodd),
           :(isinteger), :(isreal), :(isnan),
-          :(iszero), :(transpose), :(adjoint), :(float), :(conj),
+          :(iszero), :(transpose), :(adjoint), :(float), :(complex), :(conj),
           :(abs), :(abs2), :(iseven), :(ispow2),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
@@ -104,6 +105,13 @@ for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
     @eval function $(f)(::Type{Union{T, Missing}}) where T
         T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
         $f(T)
+    end
+end
+for f in (:(Base.float), :(Base.complex))
+    @eval $f(::Type{Missing}) = Missing
+    @eval function $f(::Type{Union{T, Missing}}) where T
+        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+        Union{$f(T), Missing}
     end
 end
 
@@ -171,8 +179,8 @@ xor(b::Bool, a::Missing) = missing
 xor(::Missing, ::Integer) = missing
 xor(::Integer, ::Missing) = missing
 
-*(d::Missing, x::AbstractString) = missing
-*(d::AbstractString, x::Missing) = missing
+*(d::Missing, x::Union{AbstractString,AbstractChar}) = missing
+*(d::Union{AbstractString,AbstractChar}, x::Missing) = missing
 
 function float(A::AbstractArray{Union{T, Missing}}) where {T}
     U = typeof(float(zero(T)))
@@ -193,6 +201,8 @@ Use [`collect`](@ref) to obtain an `Array` containing the non-`missing` values i
 be a `Vector` since it is not possible to remove missings while preserving dimensions
 of the input.
 
+See also [`coalesce`](@ref), [`ismissing`](@ref), [`something`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = skipmissing([1, missing, 2])
@@ -212,17 +222,17 @@ julia> argmax(x)
 3
 
 julia> collect(keys(x))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  3
 
 julia> collect(skipmissing([1, missing, 2]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 
 julia> collect(skipmissing([1 missing; 2 missing]))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  2
 ```
@@ -273,24 +283,24 @@ mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
 
 function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     A = itr.x
-    local ai
+    ai = missing
     inds = LinearIndices(A)
     i = first(inds)
     ilast = last(inds)
-    while i <= ilast
+    for outer i in i:ilast
         @inbounds ai = A[i]
-        ai === missing || break
-        i += 1
+        ai !== missing && break
     end
-    i > ilast && return mapreduce_empty(f, op, eltype(itr))
+    ai === missing && return mapreduce_empty(f, op, eltype(itr))
     a1::eltype(itr) = ai
+    i == typemax(typeof(i)) && return mapreduce_first(f, op, a1)
     i += 1
-    while i <= ilast
+    ai = missing
+    for outer i in i:ilast
         @inbounds ai = A[i]
-        ai === missing || break
-        i += 1
+        ai !== missing && break
     end
-    i > ilast && return mapreduce_first(f, op, a1)
+    ai === missing && return mapreduce_first(f, op, a1)
     # We know A contains at least two non-missing entries: the result cannot be nothing
     something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
 end
@@ -304,32 +314,35 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
 @noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
                                   ifirst::Integer, ilast::Integer, blksize::Int)
     A = itr.x
-    if ifirst == ilast
+    if ifirst > ilast
+        return nothing
+    elseif ifirst == ilast
         @inbounds a1 = A[ifirst]
         if a1 === missing
             return nothing
         else
             return Some(mapreduce_first(f, op, a1))
         end
-    elseif ifirst + blksize > ilast
+    elseif ilast - ifirst < blksize
         # sequential portion
-        local ai
+        ai = missing
         i = ifirst
-        while i <= ilast
+        for outer i in i:ilast
             @inbounds ai = A[i]
-            ai === missing || break
-            i += 1
+            ai !== missing && break
         end
-        i > ilast && return nothing
+        ai === missing && return nothing
         a1 = ai::eltype(itr)
+        i == typemax(typeof(i)) && return Some(mapreduce_first(f, op, a1))
         i += 1
-        while i <= ilast
+        ai = missing
+        for outer i in i:ilast
             @inbounds ai = A[i]
-            ai === missing || break
-            i += 1
+            ai !== missing && break
         end
-        i > ilast && return Some(mapreduce_first(f, op, a1))
+        ai === missing && return Some(mapreduce_first(f, op, a1))
         a2 = ai::eltype(itr)
+        i == typemax(typeof(i)) && return Some(op(f(a1), f(a2)))
         i += 1
         v = op(f(a1), f(a2))
         @simd for i = i:ilast
@@ -341,7 +354,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         return Some(v)
     else
         # pairwise portion
-        imid = (ifirst + ilast) >> 1
+        imid = ifirst + (ilast - ifirst) >> 1
         v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
         v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
         if v1 === nothing && v2 === nothing
@@ -368,12 +381,12 @@ but with all missing elements and those for which `f` returns `false` removed.
 # Examples
 ```jldoctest
 julia> x = [1 2; missing 4]
-2×2 Array{Union{Missing, Int64},2}:
+2×2 Matrix{Union{Missing, Int64}}:
  1         2
   missing  4
 
 julia> filter(isodd, skipmissing(x))
-1-element Array{Int64,1}:
+1-element Vector{Int64}:
  1
 ```
 """
@@ -388,12 +401,12 @@ function filter(f, itr::SkipMissing{<:AbstractArray})
 end
 
 """
-    coalesce(x, y...)
+    coalesce(x...)
 
 Return the first value in the arguments which is not equal to [`missing`](@ref),
 if any. Otherwise return `missing`.
 
-See also [`something`](@ref).
+See also [`skipmissing`](@ref), [`something`](@ref), [`@coalesce`](@ref).
 
 # Examples
 
@@ -415,3 +428,38 @@ function coalesce end
 coalesce() = missing
 coalesce(x::Missing, y...) = coalesce(y...)
 coalesce(x::Any, y...) = x
+
+
+"""
+    @coalesce(x...)
+
+Short-circuiting version of [`coalesce`](@ref).
+
+# Examples
+```jldoctest
+julia> f(x) = (println("f(\$x)"); missing);
+
+julia> a = 1;
+
+julia> a = @coalesce a f(2) f(3) error("`a` is still missing")
+1
+
+julia> b = missing;
+
+julia> b = @coalesce b f(2) f(3) error("`b` is still missing")
+f(2)
+f(3)
+ERROR: `b` is still missing
+[...]
+```
+
+!!! compat "Julia 1.7"
+    This macro is available as of Julia 1.7.
+"""
+macro coalesce(args...)
+    expr = :(missing)
+    for arg in reverse(args)
+        expr = :((val = $arg) !== missing ? val : $expr)
+    end
+    return esc(:(let val; $expr; end))
+end

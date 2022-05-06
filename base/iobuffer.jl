@@ -216,7 +216,7 @@ end
     if ptr > size
         throw(EOFError())
     end
-    @inbounds byte = from.data[ptr]
+    @inbounds byte = from.data[ptr]::UInt8
     from.ptr = ptr + 1
     return byte
 end
@@ -226,7 +226,7 @@ function peek(from::GenericIOBuffer, ::Type{UInt8})
     if from.ptr > from.size
         throw(EOFError())
     end
-    return from.data[from.ptr]
+    return from.data[from.ptr]::UInt8
 end
 
 read(from::GenericIOBuffer, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(from, UInt))
@@ -334,6 +334,12 @@ end
 
 eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
 
+function closewrite(io::GenericIOBuffer)
+    io.writable = false
+    # OR throw(_UVError("closewrite", UV_ENOTSOCK))
+    nothing
+end
+
 @noinline function close(io::GenericIOBuffer{T}) where T
     io.readable = false
     io.writable = false
@@ -353,8 +359,7 @@ isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || bytes
 """
     take!(b::IOBuffer)
 
-Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
-`IOBuffer` is reset to its initial state.
+Obtain the contents of an `IOBuffer` as an array. Afterwards, the `IOBuffer` is reset to its initial state.
 
 # Examples
 ```jldoctest
@@ -405,12 +410,12 @@ function take!(io::IOBuffer)
     return data
 end
 
-function write(to::GenericIOBuffer, from::GenericIOBuffer)
+function write(to::IO, from::GenericIOBuffer)
     if to === from
         from.ptr = from.size + 1
         return 0
     end
-    written::Int = write_sub(to, from.data, from.ptr, bytesavailable(from))
+    written::Int = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(bytesavailable(from)))
     from.ptr += written
     return written
 end
@@ -418,7 +423,7 @@ end
 function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
-    written = Int(min(nb, length(to.data) - ptr + 1))
+    written = Int(min(nb, Int(length(to.data))::Int - ptr + 1))
     towrite = written
     d = to.data
     while towrite > 0
@@ -432,14 +437,6 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
         to.ptr += written
     end
     return written
-end
-
-function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
-    require_one_based_indexing(a)
-    if offs+nel-1 > length(a) || offs < 1 || nel < 0
-        throw(BoundsError())
-    end
-    GC.@preserve a unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
 @inline function write(to::GenericIOBuffer, a::UInt8)

@@ -4,7 +4,7 @@
 #define JL_IOS_H
 
 #include <stdarg.h>
-#include "uv.h"
+#include <sys/types.h>
 #include "analyzer_annotations.h"
 
 #ifdef __cplusplus
@@ -16,7 +16,7 @@ extern "C" {
 // never moves out.
 
 //make it compatible with UV Handles
-typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
+typedef enum { bm_none=1000, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54
@@ -89,6 +89,7 @@ JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos) JL_NOTSAFEPOINT; // absolut
 JL_DLLEXPORT int64_t ios_seek_end(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
 JL_DLLEXPORT int64_t ios_pos(ios_t *s) JL_NOTSAFEPOINT;  // get current position
+JL_DLLEXPORT int64_t ios_filesize(ios_t *s);
 JL_DLLEXPORT int ios_trunc(ios_t *s, size_t size) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int ios_eof(ios_t *s);
 JL_DLLEXPORT int ios_eof_blocking(ios_t *s);
@@ -108,6 +109,8 @@ JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim) JL_NOTSAFE
 JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite);
 // ensure at least n bytes are buffered if possible. returns # available.
 JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
+// fill the buffer and determine whether it contains the whole rest of the file
+JL_DLLEXPORT ssize_t ios_fillbuf(ios_t *s);
 
 /* stream creation */
 JL_DLLEXPORT

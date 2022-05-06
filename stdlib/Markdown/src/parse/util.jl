@@ -26,8 +26,7 @@ Skip any leading blank lines. Returns the number skipped.
 function skipblank(io::IO)
     start = position(io)
     i = 0
-    while !eof(io)
-        c = read(io, Char)
+    for c in readeach(io, Char)
         c == '\n' && (start = position(io); i+=1; continue)
         c == '\r' && (start = position(io); i+=1; continue)
         c in whitespace || break
@@ -183,8 +182,7 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
         !eof(stream) && peek(stream, Char) in whitespace && return nothing
 
         buffer = IOBuffer()
-        while !eof(stream)
-            char = read(stream, Char)
+        for char in readeach(stream, Char)
             write(buffer, char)
             if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0

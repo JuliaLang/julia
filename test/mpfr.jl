@@ -338,23 +338,6 @@ end
     @test *(a, b, c, d, f) == parse(BigFloat,"5.214588134765625e+04")
     @test *(a, b, c, d, f, g) == parse(BigFloat,"1.6295587921142578125e+03")
 end
-@testset "< / > / <= / >=" begin
-    x = BigFloat(12)
-    y = BigFloat(42)
-    z = BigFloat(30)
-    @test y > x
-    @test y >= x
-    @test y > z
-    @test y >= z
-    @test x < y
-    @test x <= y
-    @test z < y
-    @test z <= y
-    @test y - x >= z
-    @test y - x <= z
-    @test !(x >= z)
-    @test !(y <= z)
-end
 @testset "rounding modes" begin
     setprecision(4) do
         # default mode is round to nearest
@@ -371,7 +354,6 @@ end
         end
     end
 end
-
 @testset "copysign / sign" begin
     x = BigFloat(1)
     y = BigFloat(-1)
@@ -473,10 +455,11 @@ end
     @test isnan(nextfloat(BigFloat(NaN), 1))
     @test isnan(prevfloat(BigFloat(NaN), 1))
 end
+
 # sqrt DomainError
 @test_throws DomainError sqrt(BigFloat(-1))
 
-@testset "precision" begin
+@testset "setprecision" begin
     old_precision = precision(BigFloat)
     x = BigFloat(0)
     @test precision(x) == old_precision
@@ -492,7 +475,8 @@ end
     @test precision(z) == 240
     x = BigFloat(12)
     @test precision(x) == old_precision
-    @test_throws DomainError setprecision(1)
+    @test precision(setprecision(1) do; BigFloat(23); end) == 1  # minimum-precision
+    @test_throws DomainError setprecision(0)
     @test_throws DomainError BigFloat(1, precision = 0)
     @test_throws DomainError BigFloat(big(1.1), precision = 0)
     @test_throws DomainError BigFloat(2.5, precision = -900)
@@ -512,7 +496,6 @@ end
     @test !isinteger(-BigFloat(Inf))
     @test !isinteger(BigFloat(NaN))
 end
-
 @testset "comparisons" begin
     x = BigFloat(1)
     y = BigFloat(-1)
@@ -521,9 +504,11 @@ end
     imi = BigFloat(-Inf)
     @test x > y
     @test x >= y
+    @test !(y >= x)
     @test x >= x
     @test y < x
     @test y <= x
+    @test !(x <= y)
     @test y <= y
     @test x < ipl
     @test x <= ipl
@@ -622,7 +607,8 @@ end
         @test log(x) == log(42)
         @test isinf(log(BigFloat(0)))
         @test_throws DomainError log(BigFloat(-1))
-        @test log2(x) == log2(42)
+        # issue #41450
+        @test_skip log2(x) == log2(42)
         @test isinf(log2(BigFloat(0)))
         @test_throws DomainError log2(BigFloat(-1))
         @test log10(x) == log10(42)
@@ -667,6 +653,10 @@ end
     @test typeof(round(Int64, x)) == Int64 && round(Int64, x) == 42
     @test typeof(round(Int, x)) == Int && round(Int, x) == 42
     @test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
+
+    # Issue #44662
+    @test_throws InexactError round(Integer, big(Inf))
+    @test_throws InexactError round(Integer, big(NaN))
 end
 @testset "string representation" begin
     str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012"
@@ -675,14 +665,17 @@ end
     end
     setprecision(21) do
         @test string(parse(BigFloat, "0.1")) == "0.10000002"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
     end
     setprecision(40) do
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
+        @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
     end
 end
@@ -857,6 +850,45 @@ end
     # Issue #33676
     @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
     @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
+
+    @testset "inexact limits ($T)" for T in Base.BitInteger_types
+        typemin_and_half = BigFloat(typemin(T)) - 0.5
+        typemax_and_half = BigFloat(typemax(T)) + 0.5
+        typemin_and_one = BigFloat(typemin(T)) - 1
+        typemax_and_one = BigFloat(typemax(T)) + 1
+
+        @test trunc(T, typemin_and_half) == typemin(T)
+        @test trunc(T, typemax_and_half) == typemax(T)
+        @test_throws InexactError trunc(T, typemin_and_one)
+        @test_throws InexactError trunc(T, typemax_and_one)
+
+        @test_throws InexactError floor(T, typemin_and_half)
+        @test floor(T, typemax_and_half) == typemax(T)
+        @test_throws InexactError floor(T, typemin_and_one)
+        @test_throws InexactError floor(T, typemax_and_one)
+
+        @test ceil(T, typemin_and_half) == typemin(T)
+        @test_throws InexactError ceil(T, typemax_and_half)
+        @test_throws InexactError ceil(T, typemin_and_one)
+        @test_throws InexactError ceil(T, typemax_and_one)
+
+        if iseven(typemin(T))
+            @test round(T, typemin_and_half) == typemin(T)
+        else
+            @test_throws InexactError round(T, typemin_and_half)
+        end
+
+        if iseven(typemax(T))
+            @test round(T, typemax_and_half) == typemax(T)
+        else
+            @test_throws InexactError round(T, typemax_and_half)
+        end
+
+        @test round(T, BigFloat(typemin(T)) - 0.4) == typemin(T)
+        @test round(T, BigFloat(typemax(T)) + 0.4) == typemax(T)
+        @test_throws InexactError round(T, typemin_and_one)
+        @test_throws InexactError round(T, typemax_and_one)
+    end
 end
 @testset "div" begin
     @test div(big"1.0",big"0.1") == 9
@@ -888,6 +920,7 @@ end
     @test i3+1 > f
     @test i3+1 >= f
 end
+
 # issue #8318
 @test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000
 
@@ -896,6 +929,7 @@ end
     @test MPFR.get_emin() == MPFR.get_emin_min()
     @test MPFR.get_emax() == MPFR.get_emax_max()
 end
+
 # issue #10994: handle embedded NUL chars for string parsing
 @test_throws ArgumentError parse(BigFloat, "1\0")
 
@@ -986,10 +1020,22 @@ end
         @test to_string(big"-1.0") == "-1.0"
     end
 end
-
 @testset "big(::Type)" begin
     for x in (2f0, pi, 7.8, big(ℯ))
         @test big(typeof(x)) == typeof(big(x))
         @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+    end
+end
+
+@testset "precision base" begin
+    setprecision(53) do
+        @test precision(Float64, base=10) == precision(BigFloat, base=10) == 15
+    end
+    for (p, b) in ((100,10), (50,100))
+        setprecision(p, base=b) do
+            @test precision(BigFloat, base=10) == 100
+            @test precision(BigFloat, base=100) == 50
+            @test precision(BigFloat) == precision(BigFloat, base=2) == 333
+        end
     end
 end

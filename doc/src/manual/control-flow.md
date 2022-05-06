@@ -4,7 +4,7 @@ Julia provides a variety of control flow constructs:
 
   * [Compound Expressions](@ref man-compound-expressions): `begin` and `;`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
-  * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
+  * [Short-Circuit Evaluation](@ref): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
   * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
@@ -247,11 +247,18 @@ no
 
 ## Short-Circuit Evaluation
 
+The `&&` and `||` operators in Julia correspond to logical “and” and “or” operations, respectively,
+and are typically used for this purpose.  However, they have an additional property of *short-circuit*
+evaluation: they don't necessarily evaluate their second argument, as explained below.  (There
+are also bitwise `&` and `|` operators that can be used as logical “and” and “or” *without*
+short-circuit behavior, but beware that `&` and `|` have higher precedence than `&&` and `||` for evaluation order.)
+
 Short-circuit evaluation is quite similar to conditional evaluation. The behavior is found in
 most imperative programming languages having the `&&` and `||` boolean operators: in a series
 of boolean expressions connected by these operators, only the minimum number of expressions are
-evaluated as are necessary to determine the final boolean value of the entire chain. Explicitly,
-this means that:
+evaluated as are necessary to determine the final boolean value of the entire chain. Some
+languages (like Python) refer to them as `and` (`&&`) and `or` (`||`). Explicitly, this means
+that:
 
   * In the expression `a && b`, the subexpression `b` is only evaluated if `a` evaluates to `true`.
   * In the expression `a || b`, the subexpression `b` is only evaluated if `a` evaluates to `false`.
@@ -547,6 +554,21 @@ julia> for i = 1:2, j = 3:4
 If this example were rewritten to use a `for` keyword for each variable, then the output would
 be different: the second and fourth values would contain `0`.
 
+Multiple containers can be iterated over at the same time in a single `for` loop using [`zip`](@ref):
+
+```jldoctest
+julia> for (j, k) in zip([1 2 3], [4 5 6 7])
+           println((j,k))
+       end
+(1, 4)
+(2, 5)
+(3, 6)
+```
+
+Using [`zip`](@ref) will create an iterator that is a tuple containing the subiterators for the containers passed to it.
+The `zip` iterator will iterate over all subiterators in order, choosing the ``i``th element of each subiterator in the
+``i``th iteration of the `for` loop. Once any of the subiterators run out, the `for` loop will stop.
+
 ## Exception Handling
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
@@ -795,7 +817,7 @@ The power of the `try/catch` construct lies in the ability to unwind a deeply ne
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
 is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
-and [`Base.catch_stack`](@ref) functions for more advanced error handling.
+and [`current_exceptions`](@ref) functions for more advanced error handling.
 
 ### `finally` Clauses
 

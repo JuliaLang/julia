@@ -13,7 +13,7 @@ Mostly used to represent files returned by [`open`](@ref).
 mutable struct IOStream <: IO
     handle::Ptr{Cvoid}
     ios::Array{UInt8,1}
-    name::AbstractString
+    name::String
     mark::Int64
     lock::ReentrantLock
     _dolock::Bool
@@ -219,6 +219,15 @@ function position(s::IOStream)
     return pos
 end
 
+function filesize(s::IOStream)
+    sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
+    if sz == -1
+        err = Libc.errno()
+        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+    end
+    return sz
+end
+
 _eof_nolock(s::IOStream) = ccall(:ios_eof_blocking, Cint, (Ptr{Cvoid},), s.ios) != 0
 eof(s::IOStream) = @_lock_ios s _eof_nolock(s)
 
@@ -263,7 +272,7 @@ safe multi-threaded access.
 !!! compat "Julia 1.5"
     The `lock` argument is available as of Julia 1.5.
 """
-function open(fname::AbstractString; lock = true,
+function open(fname::String; lock = true,
     read     :: Union{Bool,Nothing} = nothing,
     write    :: Union{Bool,Nothing} = nothing,
     create   :: Union{Bool,Nothing} = nothing,
@@ -290,6 +299,7 @@ function open(fname::AbstractString; lock = true,
     end
     return s
 end
+open(fname::AbstractString; kwargs...) = open(convert(String, fname)::String; kwargs...)
 
 """
     open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream
@@ -370,6 +380,10 @@ bytesavailable(s::IOStream) = @_lock_ios s ccall(:jl_nb_available, Int32, (Ptr{C
 function readavailable(s::IOStream)
     lock(s.lock)
     nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+    if nb == 0
+        ccall(:ios_fillbuf, Cssize_t, (Ptr{Cvoid},), s.ios)
+        nb = ccall(:jl_nb_available, Int32, (Ptr{Cvoid},), s.ios)
+    end
     a = Vector{UInt8}(undef, nb)
     nr = ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, a, nb)
     if nr != nb
@@ -391,13 +405,15 @@ end
 if ENDIAN_BOM == 0x04030201
 function read(s::IOStream, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64}})
     n = sizeof(T)
-    lock(s.lock)
+    l = s._dolock
+    _lock = s.lock
+    l && lock(_lock)
     if ccall(:jl_ios_buffer_n, Cint, (Ptr{Cvoid}, Csize_t), s.ios, n) != 0
-        unlock(s.lock)
+        l && unlock(_lock)
         throw(EOFError())
     end
     x = ccall(:jl_ios_get_nbyte_int, UInt64, (Ptr{Cvoid}, Csize_t), s.ios, n) % T
-    unlock(s.lock)
+    l && unlock(_lock)
     return x
 end
 
@@ -432,19 +448,29 @@ function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
-function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
+function readbytes_all!(s::IOStream,
+                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
+                        nb::Integer)
     olb = lb = length(b)
     nr = 0
-    @_lock_ios s begin
-    GC.@preserve b while nr < nb
-        if lb < nr+1
-            lb = max(65536, (nr+1) * 2)
-            resize!(b, lb)
+    let l = s._dolock, slock = s.lock
+        l && lock(slock)
+        GC.@preserve b while nr < nb
+            if lb < nr+1
+                try
+                    lb = max(65536, (nr+1) * 2)
+                    resize!(b, lb)
+                catch
+                    l && unlock(slock)
+                    rethrow()
+                end
+            end
+            thisr = Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
+                            s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
+            nr += thisr
+            (nr == nb || thisr == 0 || _eof_nolock(s)) && break
         end
-        nr += Int(ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
-                        s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
-        _eof_nolock(s) && break
-    end
+        l && unlock(slock)
     end
     if lb > olb && lb > nr
         resize!(b, max(olb, nr)) # shrink to just contain input data if was resized
@@ -452,7 +478,9 @@ function readbytes_all!(s::IOStream, b::Array{UInt8}, nb)
     return nr
 end
 
-function readbytes_some!(s::IOStream, b::Array{UInt8}, nb)
+function readbytes_some!(s::IOStream,
+                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
+                         nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -481,26 +509,41 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b); all::Bool=true)
+function readbytes!(s::IOStream,
+                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
+                    nb=length(b);
+                    all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
 function read(s::IOStream)
-    sz = try # filesize is just a hint, so ignore if `fstat` fails
-            filesize(s)
-        catch ex
-            ex isa IOError || rethrow()
-            Int64(0)
-        end
-    if sz > 0
-        pos = position(s)
-        if pos > 0
-            sz -= pos
+    # First we try to fill the buffer. If that gives us the whole file,
+    # copy it out and return. Otherwise look at the file size and use it
+    # to prealloate space. Determining the size requires extra syscalls,
+    # which we want to avoid for small files.
+    @_lock_ios s begin
+        nb = ccall(:ios_fillbuf, Cssize_t, (Ptr{Cvoid},), s.ios)
+        if nb != -1
+            b = StringVector(nb)
+            readbytes_all!(s, b, nb)
+        else
+            sz = try # filesize is just a hint, so ignore if it fails
+                filesize(s)
+            catch ex
+                ex isa IOError || rethrow()
+                Int64(-1)
+            end
+            if sz > 0
+                pos = position(s)
+                if pos > 0
+                    sz -= pos
+                end
+            end
+            b = StringVector(sz < 0 ? 1024 : sz)
+            nr = readbytes_all!(s, b, sz < 0 ? typemax(Int) : sz)
+            resize!(b, nr)
         end
     end
-    b = StringVector(sz <= 0 ? 1024 : sz)
-    nr = readbytes_all!(s, b, typemax(Int))
-    resize!(b, nr)
     return b
 end
 

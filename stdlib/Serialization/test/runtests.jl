@@ -609,3 +609,44 @@ let s = join(rand('a':'z', 1024)), io = IOBuffer()
     s2 = deserialize(io)
     @test Base.summarysize(s2) < 2*sizeof(s)
 end
+
+# issue #39895
+@eval Main begin
+    using Test, Serialization
+    let g = gensym(:g)
+        closure = eval(:(f -> $g(x) = f(x)))
+        inc(x) = x + 1
+        b = IOBuffer()
+        serialize(b, closure(inc))
+        seekstart(b)
+        f = deserialize(b)
+        # this should not crash
+        @test_broken f(1) == 2
+    end
+end
+
+let c1 = Threads.Condition()
+    c2 = Threads.Condition(c1.lock)
+    lock(c2)
+    t = @task nothing
+    Base._wait2(c1, t)
+    c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
+    @test c3.lock === c4.lock
+    @test islocked(c1)
+    @test !islocked(c3)
+    @test !isempty(c1.waitq)
+    @test isempty(c2.waitq)
+    @test isempty(c3.waitq)
+    @test isempty(c4.waitq)
+    notify(c1)
+    unlock(c2)
+    wait(t)
+end
+
+@testset "LazyString" begin
+    l1 = lazy"a $1 b $2"
+    l2 = deserialize(IOBuffer(sprint(serialize, l1)))
+    @test l2.str === l1.str
+    @test l2 == l1
+    @test l2.parts === ()
+end

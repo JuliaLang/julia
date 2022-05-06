@@ -47,7 +47,6 @@ static uint32_t sysimg_init_cb(const void *id)
             best_idx = i;
         }
     }
-    target = sysimg[best_idx];
     jit_targets.push_back(std::move(target));
     return best_idx;
 }
@@ -118,7 +117,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
@@ -159,4 +158,14 @@ extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
 extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
 {
     return isZero;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_get_default_nans(void)
+{
+    return 0;
+}
+
+extern "C" JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault)
+{
+    return isDefault;
 }

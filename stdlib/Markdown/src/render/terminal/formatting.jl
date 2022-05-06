@@ -9,25 +9,30 @@ end
 words(s) = split(s, " ")
 lines(s) = split(s, "\n")
 
-# This could really be more efficient
-function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
-    if occursin(r"\n", s)
-        return vcat(map(s->wrapped_lines(io, s, width = width, i = i), split(s, "\n"))...)
-    end
+function wrapped_line(io::IO, s::AbstractString, width, i)
     ws = words(s)
-    lines = AbstractString[ws[1]]
-    i += ws[1] |> ansi_length
-    for word in ws[2:end]
+    lines = String[]
+    for word in ws
         word_length = ansi_length(word)
-        if i + word_length + 1 > width
+        word_length == 0 && continue
+        if isempty(lines) || i + word_length + 1 > width
             i = word_length
             push!(lines, word)
         else
             i += word_length + 1
-            lines[end] *= " " * word
+            lines[end] *= " " * word   # this could be more efficient
         end
     end
-    return lines
+    return i, lines
+end
+
+function wrapped_lines(io::IO, s::AbstractString; width = 80, i = 0)
+    ls = String[]
+    for ss in lines(s)
+        i, line = wrapped_line(io, ss, width, i)
+        append!(ls, line)
+    end
+    return ls
 end
 
 wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
@@ -35,6 +40,7 @@ wrapped_lines(io::IO, f::Function, args...; width = 80, i = 0) =
 
 function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
     lines = wrapped_lines(io, s..., width = width, i = i)
+    isempty(lines) && return 0, 0
     print(io, lines[1])
     for line in lines[2:end]
         print(io, '\n', pre, line)
