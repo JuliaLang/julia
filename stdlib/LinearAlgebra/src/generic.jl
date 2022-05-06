@@ -8,8 +8,7 @@
 # inside this function.
 function *ₛ end
 Broadcast.broadcasted(::typeof(*ₛ), out, beta) =
-    iszero(beta::Number) ? false :
-    isone(beta::Number) ? broadcasted(identity, out) : broadcasted(*, out, beta)
+    iszero(beta::Number) ? false : broadcasted(*, out, beta)
 
 """
     MulAddMul(alpha, beta)
@@ -1398,9 +1397,27 @@ true
 isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)
 isdiag(x::Number) = true
 
+"""
+    axpy!(α, x::AbstractArray, y::AbstractArray)
 
-# BLAS-like in-place y = x*α+y function (see also the version in blas.jl
-#                                          for BlasFloat Arrays)
+Overwrite `y` with `x * α + y` and return `y`.
+If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
+
+See also [`BLAS.axpy!`](@ref)
+
+# Examples
+```jldoctest
+julia> x = [1; 2; 3];
+
+julia> y = [4; 5; 6];
+
+julia> axpy!(2, x, y)
+3-element Vector{Int64}:
+  6
+  9
+ 12
+```
+"""
 function axpy!(α, x::AbstractArray, y::AbstractArray)
     n = length(x)
     if n != length(y)
@@ -1426,6 +1443,27 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     y
 end
 
+"""
+    axpby!(α, x::AbstractArray, β, y::AbstractArray)
+
+Overwrite `y` with `x * α + y * β` and return `y`.
+If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
+
+See also [`BLAS.axpby!`](@ref)
+
+# Examples
+```jldoctest
+julia> x = [1; 2; 3];
+
+julia> y = [4; 5; 6];
+
+julia> axpby!(2, x, 2, y)
+3-element Vector{Int64}:
+ 10
+ 14
+ 18
+```
+"""
 function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
@@ -1434,6 +1472,24 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
         @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
     y
+end
+
+DenseLike{T} = Union{DenseArray{T}, Base.StridedReshapedArray{T}, Base.StridedReinterpretArray{T}}
+StridedVecLike{T} = Union{DenseLike{T}, Base.FastSubArray{T,<:Any,<:DenseLike{T}}}
+axpy!(α::Number, x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasFloat} = BLAS.axpy!(α, x, y)
+axpby!(α::Number, x::StridedVecLike{T}, β::Number, y::StridedVecLike{T}) where {T<:BlasFloat} = BLAS.axpby!(α, x, β, y)
+function axpy!(α::Number,
+    x::StridedVecLike{T}, rx::AbstractRange{<:Integer},
+    y::StridedVecLike{T}, ry::AbstractRange{<:Integer},
+) where {T<:BlasFloat}
+    if Base.has_offset_axes(rx, ry)
+        return Base.@invoke axpy!(α,
+            x::AbstractArray, rx::AbstractArray{<:Integer},
+            y::AbstractArray, ry::AbstractArray{<:Integer},
+        )
+    end
+    @views BLAS.axpy!(α, x[rx], y[ry])
+    return y
 end
 
 """
@@ -1539,9 +1595,9 @@ julia> det(M)
 2.0
 ```
 """
-function det(A::AbstractMatrix{T}) where T
+function det(A::AbstractMatrix{T}) where {T}
     if istriu(A) || istril(A)
-        S = typeof((one(T)*zero(T) + zero(T))/one(T))
+        S = promote_type(T, typeof((one(T)*zero(T) + zero(T))/one(T)))
         return convert(S, det(UpperTriangular(A)))
     end
     return det(lu(A; check = false))
@@ -1734,11 +1790,12 @@ end
 end
 
 """
-    normalize(a::AbstractArray, p::Real=2)
+    normalize(a, p::Real=2)
 
-Normalize the array `a` so that its `p`-norm equals unity,
-i.e. `norm(a, p) == 1`.
-See also [`normalize!`](@ref) and [`norm`](@ref).
+Normalize `a` so that its `p`-norm equals unity,
+i.e. `norm(a, p) == 1`. For scalars, this is similar to sign(a),
+except normalize(0) = NaN.
+See also [`normalize!`](@ref), [`norm`](@ref), and [`sign`](@ref).
 
 # Examples
 ```jldoctest
@@ -1775,15 +1832,26 @@ julia> normalize(a)
  0.154303  0.308607  0.617213
  0.154303  0.308607  0.617213
 
+julia> normalize(3, 1)
+1.0
+
+julia> normalize(-8, 1)
+-1.0
+
+julia> normalize(0, 1)
+NaN
 ```
 """
 function normalize(a::AbstractArray, p::Real = 2)
     nrm = norm(a, p)
     if !isempty(a)
-        aa = copy_oftype(a, typeof(first(a)/nrm))
+        aa = copymutable_oftype(a, typeof(first(a)/nrm))
         return __normalize!(aa, nrm)
     else
         T = typeof(zero(eltype(a))/nrm)
         return T[]
     end
 end
+
+normalize(x) = x / norm(x)
+normalize(x, p::Real) = x / norm(x, p)

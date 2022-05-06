@@ -9,14 +9,36 @@ of functions).
 This type is designed to be cheap to construct at runtime, trying to offload
 as much work as possible to either the macro or later printing operations.
 
+# Examples
+
+```jldoctest
+julia> n = 5; str = LazyString("n is ", n)
+"n is 5"
+```
+
+See also [`@lazy_str`](@ref).
+
 !!! compat "Julia 1.8"
     `LazyString` requires Julia 1.8 or later.
+
+# Extended help
+## Safety properties for concurrent programs
+
+A lazy string itself does not introduce any concurrency problems even if it is printed in
+multiple Julia tasks.  However, if `print` methods on a captured value can have a
+concurrency issue when invoked without synchronizations, printing the lazy string may cause
+an issue.  Furthermore, the `print` methods on the captured values may be invoked multiple
+times, though only exactly one result will be returned.
+
+!!! compat "Julia 1.9"
+    `LazyString` is safe in the above sense in Julia 1.9 and later.
 """
 mutable struct LazyString <: AbstractString
-    parts::Tuple
+    const parts::Tuple
     # Created on first access
-    str::String
-    LazyString(args...) = new(args)
+    @atomic str::Union{String,Nothing}
+    global _LazyString(parts, str) = new(parts, str)
+    LazyString(args...) = new(args, nothing)
 end
 
 """
@@ -25,6 +47,18 @@ end
 Create a [`LazyString`](@ref) using regular string interpolation syntax.
 Note that interpolations are *evaluated* at LazyString construction time,
 but *printing* is delayed until the first access to the string.
+
+See [`LazyString`](@ref) documentation for the safety properties for concurrent programs.
+
+# Examples
+
+```
+julia> n = 5; str = lazy"n is \$n"
+"n is 5"
+
+julia> typeof(str)
+LazyString
+```
 
 !!! compat "Julia 1.8"
     `lazy"str"` requires Julia 1.8 or later.
@@ -44,14 +78,15 @@ macro lazy_str(text)
 end
 
 function String(l::LazyString)
-    if !isdefined(l, :str)
-        l.str = sprint() do io
-            for p in l.parts
-                print(io, p)
-            end
+    old = @atomic :acquire l.str
+    old === nothing || return old
+    str = sprint() do io
+        for p in l.parts
+            print(io, p)
         end
     end
-    return l.str
+    old, ok = @atomicreplace :acquire_release :acquire l.str nothing => str
+    return ok ? str : (old::String)
 end
 
 hash(s::LazyString, h::UInt64) = hash(String(s), h)

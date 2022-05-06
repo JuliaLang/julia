@@ -197,7 +197,7 @@ julia> S.L*S.D*S.L' - A[S.p, S.p]
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
-    bunchkaufman!(copy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
+    bunchkaufman!(copymutable_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
 BunchKaufman{T}(B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)

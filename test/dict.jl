@@ -1199,6 +1199,7 @@ end
         map!(v->v-1, values(testdict))
         @test testdict[:a] == 0
         @test testdict[:b] == 1
+        @test sizehint!(testdict, 1) === testdict
     end
     @testset "Dict" begin
         testdict = Dict(:a=>1, :b=>2)
@@ -1245,4 +1246,11 @@ let c = bar()
 end
 let c = bar()
     @test c === missing || c == ComparesWithGC38727(1)
+end
+
+@testset "shrinking" begin
+    d = Dict(i => i for i = 1:1000)
+    filter!(x -> x.first < 10, d)
+    sizehint!(d, 10)
+    @test length(d.slots) < 100
 end

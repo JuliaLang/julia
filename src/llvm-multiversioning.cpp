@@ -13,6 +13,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
@@ -24,6 +25,7 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #include "julia.h"
@@ -242,7 +244,7 @@ struct CloneCtx {
             return cast<Function>(vmap->lookup(orig_f));
         }
     };
-    CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG);
+    CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG, bool allow_bad_fvars);
     void clone_bases();
     void collect_func_infos();
     void clone_all_partials();
@@ -292,10 +294,11 @@ private:
     std::set<uint32_t> alias_relocs;
     bool has_veccall{false};
     bool has_cloneall{false};
+    bool allow_bad_fvars{false};
 };
 
 template<typename T>
-static inline std::vector<T*> consume_gv(Module &M, const char *name)
+static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow_bad_fvars)
 {
     // Get information about sysimg export functions from the two global variables.
     // Strip them from the Module so that it's easier to handle the uses.
@@ -304,8 +307,17 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name)
     auto *ary = cast<ConstantArray>(gv->getInitializer());
     unsigned nele = ary->getNumOperands();
     std::vector<T*> res(nele);
-    for (unsigned i = 0; i < nele; i++)
-        res[i] = cast<T>(ary->getOperand(i)->stripPointerCasts());
+    unsigned i = 0;
+    while (i < nele) {
+        llvm::Value *val = ary->getOperand(i)->stripPointerCasts();
+        if (allow_bad_fvars && (!isa<T>(val) || (isa<Function>(val) && cast<Function>(val)->isDeclaration()))) {
+            // Shouldn't happen in regular use, but can happen in bugpoint.
+            nele--;
+            continue;
+        }
+        res[i++] = cast<T>(val);
+    }
+    res.resize(nele);
     assert(gv->use_empty());
     gv->eraseFromParent();
     if (ary->use_empty())
@@ -314,14 +326,15 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name)
 }
 
 // Collect basic information about targets and functions.
-CloneCtx::CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG)
+CloneCtx::CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG, bool allow_bad_fvars)
     : tbaa_const(tbaa_make_child_with_context(M.getContext(), "jtbaa_const", nullptr, true).first),
       specs(jl_get_llvm_clone_targets()),
-      fvars(consume_gv<Function>(M, "jl_sysimg_fvars")),
-      gvars(consume_gv<Constant>(M, "jl_sysimg_gvars")),
+      fvars(consume_gv<Function>(M, "jl_sysimg_fvars", allow_bad_fvars)),
+      gvars(consume_gv<Constant>(M, "jl_sysimg_gvars", false)),
       M(M),
       GetLI(GetLI),
-      GetCG(GetCG)
+      GetCG(GetCG),
+      allow_bad_fvars(allow_bad_fvars)
 {
     groups.emplace_back(0, specs[0]);
     uint32_t ntargets = specs.size();
@@ -636,6 +649,12 @@ uint32_t CloneCtx::get_func_id(Function *F)
 {
     auto &ref = func_ids[F];
     if (!ref) {
+        if (allow_bad_fvars && F->isDeclaration()) {
+            // This should never happen in regular use, but can happen if
+            // bugpoint deletes the function. Just do something here to
+            // allow bugpoint to proceed.
+            return (uint32_t)-1;
+        }
         fvars.push_back(F);
         ref = fvars.size();
     }
@@ -927,10 +946,15 @@ Constant *CloneCtx::emit_offset_table(const std::vector<T*> &vars, StringRef nam
 
 void CloneCtx::emit_metadata()
 {
+    uint32_t nfvars = fvars.size();
+    if (allow_bad_fvars && nfvars == 0) {
+        // Will result in a non-loadable sysimg, but `allow_bad_fvars` is for bugpoint only
+        return;
+    }
+
     // Store back the information about exported functions.
     auto fbase = emit_offset_table(fvars, "jl_sysimg_fvars");
     auto gbase = emit_offset_table(gvars, "jl_sysimg_gvars");
-    uint32_t nfvars = fvars.size();
 
     uint32_t ntargets = specs.size();
     SmallVector<Target*, 8> targets(ntargets);
@@ -1057,7 +1081,7 @@ void CloneCtx::emit_metadata()
     }
 }
 
-static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG)
+static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG, bool allow_bad_fvars)
 {
     // Group targets and identify cloning bases.
     // Also initialize function info maps (we'll update these maps as we go)
@@ -1070,7 +1094,13 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     if (M.getName() == "sysimage")
         return false;
 
-    CloneCtx clone(M, GetLI, GetCG);
+    GlobalVariable *fvars = M.getGlobalVariable("jl_sysimg_fvars");
+    GlobalVariable *gvars = M.getGlobalVariable("jl_sysimg_gvars");
+    if (allow_bad_fvars && (!fvars || !fvars->hasInitializer() || !isa<ConstantArray>(fvars->getInitializer()) ||
+                            !gvars || !gvars->hasInitializer() || !isa<ConstantArray>(gvars->getInitializer())))
+        return false;
+
+    CloneCtx clone(M, GetLI, GetCG, allow_bad_fvars);
 
     // Collect a list of original functions and clone base functions
     clone.clone_bases();
@@ -1105,13 +1135,15 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
 
+    assert(!verifyModule(M));
+
     return true;
 }
 
 struct MultiVersioningLegacy: public ModulePass {
     static char ID;
-    MultiVersioningLegacy()
-        : ModulePass(ID)
+    MultiVersioningLegacy(bool allow_bad_fvars=false)
+        : ModulePass(ID), allow_bad_fvars(allow_bad_fvars)
     {}
 
 private:
@@ -1122,6 +1154,7 @@ private:
         AU.addRequired<CallGraphWrapperPass>();
         AU.addPreserved<LoopInfoWrapperPass>();
     }
+    bool allow_bad_fvars;
 };
 
 bool MultiVersioningLegacy::runOnModule(Module &M)
@@ -1132,7 +1165,7 @@ bool MultiVersioningLegacy::runOnModule(Module &M)
     auto GetCG = [this]() -> CallGraph & {
         return getAnalysis<CallGraphWrapperPass>().getCallGraph();
     };
-    return runMultiVersioning(M, GetLI, GetCG);
+    return runMultiVersioning(M, GetLI, GetCG, allow_bad_fvars);
 }
 
 
@@ -1152,7 +1185,7 @@ PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
     auto GetCG = [&]() -> CallGraph & {
         return AM.getResult<CallGraphAnalysis>(M);
     };
-    if (runMultiVersioning(M, GetLI, GetCG)) {
+    if (runMultiVersioning(M, GetLI, GetCG, false)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<LoopAnalysis>();
         return preserved;
@@ -1160,12 +1193,12 @@ PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
     return PreservedAnalyses::all();
 }
 
-Pass *createMultiVersioningPass()
+Pass *createMultiVersioningPass(bool allow_bad_fvars)
 {
-    return new MultiVersioningLegacy();
+    return new MultiVersioningLegacy(allow_bad_fvars);
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
 {
-    unwrap(PM)->add(createMultiVersioningPass());
+    unwrap(PM)->add(createMultiVersioningPass(false));
 }

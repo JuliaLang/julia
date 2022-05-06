@@ -58,10 +58,13 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInter
     interp::I
 end
 
+is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
+    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+
 function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
                          mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
-        src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+        src_inferred = is_source_inferred(src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
@@ -73,7 +76,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         inf_result === nothing && return nothing
         src = inf_result.src
         if isa(src, CodeInfo)
-            src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+            src_inferred = is_source_inferred(src)
             return src_inferred ? src : nothing
         else
             return nothing
@@ -396,7 +399,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     (; def, specTypes) = linfo
 
     analyzed = nothing # `ConstAPI` if this call can use constant calling convention
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
+    force_noinline = _any(x::Expr -> x.head === :meta && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     result = caller.result
@@ -558,12 +561,22 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     idx = 1
     oldidx = 1
     changemap = fill(0, length(code))
-    labelmap = coverage ? fill(0, length(code)) : changemap
     prevloc = zero(eltype(ci.codelocs))
     stmtinfo = sv.stmt_info
     codelocs = ci.codelocs
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     ssaflags = ci.ssaflags
+    if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
+        for line in ci.linetable
+            line = line::LineInfoNode
+            if is_file_tracked(line.file)
+                # if any line falls in a tracked file enable coverage for all
+                coverage = true
+                break
+            end
+        end
+    end
+    labelmap = coverage ? fill(0, length(code)) : changemap
     while idx <= length(code)
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -600,9 +613,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     end
     renumber_ir_elements!(code, changemap, labelmap)
 
-    meta = Any[]
+    meta = Expr[]
     for i = 1:length(code)
-        code[i] = remove_meta!(code[i], meta)
+        code[i] = process_meta!(meta, code[i])
     end
     strip_trailing_junk!(ci, code, stmtinfo)
     cfg = compute_basic_blocks(code)
@@ -614,16 +627,10 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     return ir
 end
 
-function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
-    if isa(stmt, Expr)
-        head = stmt.head
-        if head === :meta
-            args = stmt.args
-            if length(args) > 0
-                push!(meta, stmt)
-            end
-            return nothing
-        end
+function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
+    if isexpr(stmt, :meta) && length(stmt.args) ≥ 1
+        push!(meta, stmt)
+        return nothing
     end
     return stmt
 end

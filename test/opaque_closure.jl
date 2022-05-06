@@ -1,5 +1,6 @@
 using Test
 using InteractiveUtils
+using Core: OpaqueClosure
 
 const_int() = 1
 
@@ -227,6 +228,39 @@ const GLOBAL_OPAQUE_CLOSURE = @opaque () -> 123
 call_global_opaque_closure() = GLOBAL_OPAQUE_CLOSURE()
 @test call_global_opaque_closure() == 123
 
+let foo::Int = 42
+    Base.Experimental.@force_compile
+    oc = Base.Experimental.@opaque a::Int->sin(a) + cos(foo)
+
+    @test only(Base.return_types(oc, (Int,))) === Float64
+    code, rt = first(code_typed(oc, (Int,)))
+    @test rt === Float64
+end
+
 let oc = @opaque a->sin(a)
     @test length(code_typed(oc, (Int,))) == 1
+end
+
+# constructing an opaque closure from IRCode
+let ci = code_typed(+, (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
+    @test OpaqueClosure(ci)(40, 2) == 42
+
+    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+    @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
+    @test isa(OpaqueClosure(ir; nargs=2, isva=false), Core.OpaqueClosure{Tuple{Int, Int}, Int})
+    @test_throws TypeError OpaqueClosure(ir; nargs=2, isva=false)(40.0, 2)
+end
+
+let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test OpaqueClosure(ir; nargs=2, isva=true)(40, 2) === (40, (2,))
+    @test OpaqueClosure(ci)(40, 2) === (40, (2,))
+end
+
+let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test_throws MethodError OpaqueClosure(ir; nargs=2, isva=true)(1, 2, 3)
+    @test_throws MethodError OpaqueClosure(ci)(1, 2, 3)
 end

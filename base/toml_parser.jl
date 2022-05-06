@@ -672,7 +672,7 @@ function push!!(v::Vector, el)
         out[1] = el
         return out
     else
-        if typeof(T) === Union
+        if T isa Union
             newT = Any
         else
             newT = Union{T, typeof(el)}

@@ -150,8 +150,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
-                # note: use jl_set_global to make sure value isn't passed through `expand`
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -287,7 +286,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, val)
+                Base.istrivialerror(val) || setglobal!(Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -304,13 +303,13 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
             end
             break
-        catch
+        catch ex
             if iserr
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
-                    ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, excs)
+                    setglobal!(Main, :err, excs)
                     Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to

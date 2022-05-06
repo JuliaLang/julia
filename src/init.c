@@ -10,8 +10,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <fcntl.h>
-
 #include <errno.h>
+#include <libgen.h> // defines dirname
 
 #if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 #include <getopt.h>
@@ -33,8 +33,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <libgen.h>
 
 #ifdef _OS_WINDOWS_
 extern int needsSymRefreshModuleList;
@@ -167,8 +165,7 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     switch(handle->type) {
     case UV_PROCESS:
         // cause Julia to forget about the Process object
-        if (handle->data)
-            jl_uv_call_close_callback((jl_value_t*)handle->data);
+        handle->data = NULL;
         // and make libuv think it is already dead
         ((uv_process_t*)handle)->pid = 0;
         // fall-through
@@ -597,6 +594,13 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     }
 }
 
+JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
+{
+    const char* path_ = jl_symbol_name(path);
+    int tpath_len = strlen(jl_options.tracked_path);
+    return (strlen(path_) >= tpath_len) && (strncmp(path_, jl_options.tracked_path, tpath_len) == 0);
+}
+
 static void jl_set_io_wait(int v)
 {
     jl_task_t *ct = jl_current_task;
@@ -678,11 +682,12 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
         jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
     }
 
+    jl_init_rand();
     jl_init_runtime_ccall();
-    jl_gc_init();
     jl_init_tasks();
     jl_init_threading();
 
+    jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
@@ -724,17 +729,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         post_boot_hooks();
     }
 
-    if (jl_base_module != NULL) {
-        // Do initialization needed before starting child threads
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
-        if (f) {
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_get_world_counter();
-            jl_apply(&f, 1);
-            ct->world_age = last_age;
-        }
-    }
-    else {
+    if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_n_threads = 1;
     }
@@ -773,7 +768,6 @@ static void post_boot_hooks(void)
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");
     jl_int16_type   = (jl_datatype_t*)core("Int16");
-    jl_uint16_type  = (jl_datatype_t*)core("UInt16");
     jl_float16_type = (jl_datatype_t*)core("Float16");
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");
@@ -785,10 +779,11 @@ static void post_boot_hooks(void)
 
     jl_bool_type->super = jl_integer_type;
     jl_uint8_type->super = jl_unsigned_type;
-    jl_int32_type->super = jl_signed_type;
-    jl_int64_type->super = jl_signed_type;
+    jl_uint16_type->super = jl_unsigned_type;
     jl_uint32_type->super = jl_unsigned_type;
     jl_uint64_type->super = jl_unsigned_type;
+    jl_int32_type->super = jl_signed_type;
+    jl_int64_type->super = jl_signed_type;
 
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
