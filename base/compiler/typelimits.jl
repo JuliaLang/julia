@@ -313,7 +313,7 @@ function issimplertype(@nospecialize(typea), @nospecialize(typeb))
     if typea isa PartialStruct
         aty = widenconst(typea)
         for i = 1:length(typea.fields)
-            ai = typea.fields[i]
+            ai = unwrapva(typea.fields[i])
             bi = fieldtype(aty, i)
             is_lattice_equal(ai, bi) && continue
             tni = _typename(widenconst(ai))

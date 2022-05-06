@@ -1094,7 +1094,7 @@ first argument:
   with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
 - as a 2-element tuple, containing a string of module IR and a string representing the name
   of the entry-point function to call;
-- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
+- as a 2-element tuple, but with the module provided as an `Vector{UInt8}` with bitcode.
 
 Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
@@ -2523,14 +2523,14 @@ union [`Union{}`](@ref) is the bottom type of Julia.
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 :: IntOrString
-1
+julia> 1 isa IntOrString
+true
 
-julia> "Hello!" :: IntOrString
-"Hello!"
+julia> "Hello!" isa IntOrString
+true
 
-julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
+julia> 1.0 isa IntOrString
+false
 ```
 """
 Union

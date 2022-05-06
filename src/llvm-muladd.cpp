@@ -8,6 +8,7 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
@@ -17,6 +18,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
@@ -24,6 +26,7 @@
 #include "julia_assert.h"
 
 using namespace llvm;
+STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
 
 /**
  * Combine
@@ -36,10 +39,8 @@ using namespace llvm;
  * when `%v0` has no other use
  */
 
-// Return true if this function shouldn't be called again on the other operand
-// This will always return false on LLVM 5.0+
-static bool checkCombine(Module *m, Instruction *addOp, Value *maybeMul, Value *addend,
-                         bool negadd, bool negres)
+// Return true if we changed the mulOp
+static bool checkCombine(Value *maybeMul)
 {
     auto mulOp = dyn_cast<Instruction>(maybeMul);
     if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
@@ -48,14 +49,18 @@ static bool checkCombine(Module *m, Instruction *addOp, Value *maybeMul, Value *
         return false;
     // On 5.0+ we only need to mark the mulOp as contract and the backend will do the work for us.
     auto fmf = mulOp->getFastMathFlags();
-    fmf.setAllowContract(true);
-    mulOp->copyFastMathFlags(fmf);
+    if (!fmf.allowContract()) {
+        ++TotalContracted;
+        fmf.setAllowContract(true);
+        mulOp->copyFastMathFlags(fmf);
+        return true;
+    }
     return false;
 }
 
 static bool combineMulAdd(Function &F)
 {
-    Module *m = F.getParent();
+    bool modified = false;
     for (auto &BB: F) {
         for (auto it = BB.begin(); it != BB.end();) {
             auto &I = *it;
@@ -64,15 +69,13 @@ static bool combineMulAdd(Function &F)
             case Instruction::FAdd: {
                 if (!I.isFast())
                     continue;
-                checkCombine(m, &I, I.getOperand(0), I.getOperand(1), false, false) ||
-                    checkCombine(m, &I, I.getOperand(1), I.getOperand(0), false, false);
+                modified |= checkCombine(I.getOperand(0)) || checkCombine(I.getOperand(1));
                 break;
             }
             case Instruction::FSub: {
                 if (!I.isFast())
                     continue;
-                checkCombine(m, &I, I.getOperand(0), I.getOperand(1), true, false) ||
-                    checkCombine(m, &I, I.getOperand(1), I.getOperand(0), true, true);
+                modified |= checkCombine(I.getOperand(0)) || checkCombine(I.getOperand(1));
                 break;
             }
             default:
@@ -80,7 +83,8 @@ static bool combineMulAdd(Function &F)
             }
         }
     }
-    return true;
+    assert(!verifyFunction(F));
+    return modified;
 }
 
 PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM)

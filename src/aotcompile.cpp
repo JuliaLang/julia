@@ -251,17 +251,21 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
-    orc::ThreadSafeModule backing;
-    if (!llvmmod) {
-        backing = jl_create_llvm_module("text", jl_ExecutionEngine->getContext());
-    }
-    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
-    auto ctxt = clone.getContext();
+    CompilationPolicy policy = (CompilationPolicy) _policy;
+    bool imaging = imaging_default() || policy == CompilationPolicy::ImagingMode;
     jl_workqueue_t emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&jl_codegen_lock);
+    orc::ThreadSafeContext ctx;
+    orc::ThreadSafeModule backing;
+    if (!llvmmod) {
+        ctx = jl_ExecutionEngine->acquireContext();
+        backing = jl_create_llvm_module("text", ctx, imaging);
+    }
+    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
+    auto ctxt = clone.getContext();
     jl_codegen_params_t params(ctxt);
     params.params = cgparams;
     uint64_t compiler_start_time = 0;
@@ -269,9 +273,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    CompilationPolicy policy = (CompilationPolicy) _policy;
-    if (policy == CompilationPolicy::ImagingMode)
-        imaging_mode = 1;
+    params.imaging = imaging;
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -305,7 +307,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     orc::ThreadSafeModule result_m = jl_create_llvm_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
+                            params.tsctx, params.imaging,
+                            clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
                     jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
                     if (result_m)
@@ -401,8 +404,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    if (policy == CompilationPolicy::ImagingMode)
-        imaging_mode = 0;
+    if (ctx.getContext()) {
+        jl_ExecutionEngine->releaseContext(std::move(ctx));
+    }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
@@ -456,11 +460,11 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine> TM(
-        jl_ExecutionEngine->getTargetMachine().getTarget().createTargetMachine(
+        jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_ExecutionEngine->getTargetMachine().getTargetCPU(),
-            jl_ExecutionEngine->getTargetMachine().getTargetFeatureString(),
-            jl_ExecutionEngine->getTargetMachine().Options,
+            jl_ExecutionEngine->getTargetCPU(),
+            jl_ExecutionEngine->getTargetFeatureString(),
+            jl_ExecutionEngine->getTargetOptions(),
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
             Reloc::PIC_,
 #else
@@ -477,7 +481,7 @@ void jl_dump_native_impl(void *native_code,
             ));
 
     legacy::PassManager PM;
-    addTargetPasses(&PM, TM.get());
+    addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -498,7 +502,7 @@ void jl_dump_native_impl(void *native_code,
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
+        addMachinePasses(&PM, jl_options.opt_level);
     }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
@@ -521,7 +525,7 @@ void jl_dump_native_impl(void *native_code,
     Type *T_psize = T_size->getPointerTo();
 
     // add metadata information
-    if (imaging_mode) {
+    if (imaging_default()) {
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
         emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 
@@ -591,14 +595,14 @@ void jl_dump_native_impl(void *native_code,
     delete data;
 }
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
 {
-    PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
-    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
@@ -853,9 +857,9 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
+        addTargetPasses(&Adapter, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
         addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
-        addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
+        addMachinePasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -989,42 +993,49 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     static legacy::PassManager *PM;
     if (!PM) {
         PM = new legacy::PassManager();
-        addTargetPasses(PM, &jl_ExecutionEngine->getTargetMachine());
+        addTargetPasses(PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level);
+        addMachinePasses(PM, jl_options.opt_level);
     }
 
     // get the source code for this function
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH2(&src, &jlrettype);
-    jl_value_t *ci = jl_rettype_inferred(mi, world, world);
-    if (ci != jl_nothing) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)codeinst->inferred;
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
-        jlrettype = codeinst->rettype;
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
-        if (src)
-            jlrettype = src->rettype;
-        else if (jl_is_method(mi->def.method)) {
-            src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
-            if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+        src = (jl_code_info_t*)mi->def.method->source;
+        if (src && !jl_is_code_info(src))
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    } else {
+        jl_value_t *ci = jl_rettype_inferred(mi, world, world);
+        if (ci != jl_nothing) {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+            src = (jl_code_info_t*)codeinst->inferred;
+            if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+            jlrettype = codeinst->rettype;
         }
-        // TODO: use mi->uninferred
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            src = jl_type_infer(mi, world, 0);
+            if (src)
+                jlrettype = src->rettype;
+            else if (jl_is_method(mi->def.method)) {
+                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            }
+            // TODO: use mi->uninferred
+        }
     }
 
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
         JL_LOCK(&jl_codegen_lock);
-        jl_codegen_params_t output(jl_ExecutionEngine->getContext());
+        auto ctx = jl_ExecutionEngine->getContext();
+        jl_codegen_params_t output(*ctx);
         output.world = world;
         output.params = &params;
-        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx);
+        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx, output.imaging);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
