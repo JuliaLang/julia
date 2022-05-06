@@ -575,7 +575,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val, ()->nothing, idx)::LiftedValue
+        lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -592,10 +592,21 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
+mutable struct LazyDomtree
+    ir::IRCode
+    domtree::DomTree
+    LazyDomtree(ir::IRCode) = new(ir)
+end
+function get(x::LazyDomtree)
+    isdefined(x, :domtree) && return x.domtree
+    return @timeit "domtree 2" x.domtree = construct_domtree(x.ir.cfg.blocks)
+end
+
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val), get_domtree, idx::Int)
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val),
+    lazydomtree::Union{LazyDomtree,Nothing})
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
 
     # Check if all the lifted leaves are the same
@@ -618,8 +629,8 @@ function perform_lifting!(compact::IncrementalCompact,
 
     if all_same
         dominates_all = true
-        domtree = get_domtree()
-        if domtree !== nothing
+        if lazydomtree !== nothing
+            domtree = get(lazydomtree)
             for item in visited_phinodes
                 if !dominates_ssa(compact, domtree, the_leaf_val, item)
                     dominates_all = false
@@ -729,13 +740,7 @@ function sroa_pass!(ir::IRCode)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     # initialization of domtree is delayed to avoid the expensive computation in many cases
-    local domtree = nothing
-    function get_domtree()
-        if domtree === nothing
-            @timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks)
-        end
-        return domtree
-    end
+    lazydomtree = LazyDomtree(ir)
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
@@ -889,7 +894,7 @@ function sroa_pass!(ir::IRCode)
         end
 
         val = perform_lifting!(compact,
-            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, get_domtree, idx)
+            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
 
         # Insert the undef check if necessary
         if any_undef
@@ -916,7 +921,7 @@ function sroa_pass!(ir::IRCode)
         used_ssas = copy(compact.used_ssas)
         simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas, get_domtree)
+        sroa_mutables!(ir, defuses, used_ssas, lazydomtree)
         return ir
     else
         simple_dce!(compact)
@@ -924,7 +929,7 @@ function sroa_pass!(ir::IRCode)
     end
 end
 
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, get_domtree)
+function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -991,7 +996,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get_domtree())
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get(lazydomtree))
             end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
@@ -999,7 +1004,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 for i = 1:length(du.uses)
                     use = du.uses[i]
                     if use.kind === :isdefined
-                        if has_safe_def(ir, get_domtree(), allblocks, du, newidx, use.idx)
+                        if has_safe_def(ir, get(lazydomtree), allblocks, du, newidx, use.idx)
                             ir[SSAValue(use.idx)][:inst] = true
                         else
                             all_eliminated = false
@@ -1012,7 +1017,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                             continue
                         end
                     end
-                    has_safe_def(ir, get_domtree(), allblocks, du, newidx, use.idx) || @goto skip
+                    has_safe_def(ir, get(lazydomtree), allblocks, du, newidx, use.idx) || @goto skip
                 end
             else # always have some definition at the allocation site
                 for i = 1:length(du.uses)
@@ -1027,7 +1032,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
-        domtree = get_domtree()
+        domtree = get(lazydomtree)
         local preserve_uses = nothing
         for fidx in 1:ndefuse
             du = fielddefuse[fidx]
@@ -1276,6 +1281,7 @@ function adce_pass!(ir::IRCode)
         to_drop = Int[]
         stmt = compact[phi]
         stmt === nothing && continue
+        stmt = stmt::PhiNode
         for i = 1:length(stmt.values)
             if !isassigned(stmt.values, i)
                 # Should be impossible to have something used only by PiNodes that's undef

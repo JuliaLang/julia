@@ -1,11 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+const is_expr = isexpr
+
 ## symbols ##
 
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names.
+Generates a symbol which will not conflict with other variable names (in the same module).
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
@@ -337,12 +341,17 @@ end
 
 """
     @pure ex
-    @pure(ex)
 
 `@pure` gives the compiler a hint for the definition of a pure function,
 helping for type inference.
 
-This macro is intended for internal compiler use and may be subject to changes.
+!!! warning
+    This macro is intended for internal compiler use and may be subject to changes.
+
+!!! warning
+    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
+    This is because `@assume_effects` allows a finer grained control over Julia's purity
+    modeling and the effect system enables a wider range of optimizations.
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
@@ -350,7 +359,6 @@ end
 
 """
     @constprop setting ex
-    @constprop(setting, ex)
 
 `@constprop` controls the mode of interprocedural constant propagation for the
 annotated function. Two `setting`s are supported:
@@ -373,10 +381,34 @@ end
 
 """
     @assume_effects setting... ex
-    @assume_effects(setting..., ex)
 
 `@assume_effects` overrides the compiler's effect modeling for the given method.
 `ex` must be a method definition or `@ccall` expression.
+
+```jldoctest
+julia> Base.@assume_effects :terminates_locally function pow(x)
+           # this :terminates_locally allows `pow` to be constant-folded
+           res = 1
+           1 < x < 20 || error("bad pow")
+           while x > 1
+               res *= x
+               x -= 1
+           end
+           return res
+       end
+pow (generic function with 1 method)
+
+julia> code_typed() do
+           pow(12)
+       end
+1-element Vector{Any}:
+ CodeInfo(
+1 ─     return 479001600
+) => Int64
+
+julia> Base.@assume_effects :total_may_throw @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
+Vector{Int64} (alias for Array{Int64, 1})
+```
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
@@ -512,11 +544,26 @@ This `setting` combines the following other assertions:
 - `:terminates_globally`
 and is a convenient shortcut.
 
+---
+# `:total_may_throw`
+
+This `setting` combines the following other assertions:
+- `:consistent`
+- `:effect_free`
+- `:terminates_globally`
+and is a convenient shortcut.
+
 !!! note
-    `@assume_effects :total` is similar to `@Base.pure` with the primary
+    This setting is particularly useful since it allows the compiler to evaluate a call of
+    the applied method when all the call arguments are fully known to be constant, no matter
+    if the call results in an error or not.
+
+    `@assume_effects :total_may_throw` is similar to [`@pure`](@ref) with the primary
     distinction that the `:consistent`-cy requirement applies world-age wise rather
     than globally as described above. However, in particular, a method annotated
-    `@Base.pure` is always `:total`.
+    `@pure` should always be `:total` or `:total_may_throw`.
+    Another advantage is that effects introduced by `@assume_effects` are propagated to
+    callers interprocedurally while a purity defined by `@pure` is not.
 """
 macro assume_effects(args...)
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally) =
@@ -537,12 +584,14 @@ macro assume_effects(args...)
             terminates_locally = true
         elseif setting === :total
             consistent = effect_free = nothrow = terminates_globally = true
+        elseif setting === :total_may_throw
+            consistent = effect_free = terminates_globally = true
         else
             throw(ArgumentError("@assume_effects $setting not supported"))
         end
     end
     ex = args[end]
-    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in @constprop [settings] ex"))
+    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
     if ex.head === :macrocall && ex.args[1] == Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
@@ -725,7 +774,7 @@ end
 
 """
     @generated f
-    @generated(f)
+
 `@generated` is used to annotate a function which will be generated.
 In the body of the generated function, only types of arguments can be read
 (not the values). The function returns a quoted expression evaluated when the

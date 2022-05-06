@@ -383,14 +383,15 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
                 jl_binding_t *b = jl_get_binding(mod, name);
-                if (b && b->value && b->constp)
-                    called = b->value;
+                if (b && b->constp) {
+                    called = jl_atomic_load_relaxed(&b->value);
+                }
             }
         }
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
-        if (called) {
+        if (called != NULL) {
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_intrinsics = 1;
             }
@@ -591,7 +592,8 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
-        if ((!b->constp && b->owner != m) || (b->value && b->value != (jl_value_t*)import)) {
+        jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
+        if ((!b->constp && b->owner != m) || (bv && bv != (jl_value_t*)import)) {
             jl_errorf("importing %s into %s conflicts with an existing global",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
@@ -601,7 +603,8 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
         b->imported = 1;
     }
     if (!b->constp) {
-        b->value = (jl_value_t*)import;
+        // TODO: constp is not threadsafe
+        jl_atomic_store_release(&b->value, (jl_value_t*)import);
         b->constp = 1;
         jl_gc_wb(m, (jl_value_t*)import);
     }

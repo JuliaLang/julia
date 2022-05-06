@@ -100,8 +100,6 @@ n = 5 # should be odd
         Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
             MyDual(convert(T, x.val), convert(T, x.eps))
         if elty <: Real
-            @show elty
-            @show istriu(triu(MyDual.(A, zero(A))))
             @test det(triu(MyDual.(A, zero(A)))) isa MyDual
         end
     end
@@ -327,9 +325,20 @@ end
 @testset "LinearAlgebra.axp(b)y! for non strides input" begin
     a = rand(5, 5)
     @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
-    @test_broken LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
     @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
     @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
+@testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test LinearAlgebra.axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test LinearAlgebra.axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test LinearAlgebra.axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test LinearAlgebra.axpy!(1, b, zeros(T, size(b))) == b
+    end
 end
 
 @testset "norm and normalize!" begin
@@ -364,6 +373,13 @@ end
     end
 
     @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
+end
+
+@testset "normalize for scalars" begin
+    @test normalize(8.0) == 1.0
+    @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
+    @test isnan(normalize(0.0))
 end
 
 @testset "Issue #30466" begin

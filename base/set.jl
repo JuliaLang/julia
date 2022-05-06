@@ -64,6 +64,16 @@ end
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
+
+# This avoids hashing and probing twice and it works the same as
+# in!(x, s::Set) = in(x, s) ? true : (push!(s, x); false)
+function in!(x, s::Set)
+    idx, sh = ht_keyindex2_shorthash!(s.dict, x)
+    idx > 0 && return true
+    _setindex!(s.dict, nothing, x, -idx, sh)
+    return false
+end
+
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
@@ -137,10 +147,7 @@ function unique(itr)
         out = Vector{T}()
         seen = Set{T}()
         for x in itr
-            if !in(x, seen)
-                push!(seen, x)
-                push!(out, x)
-            end
+            !in!(x, seen) && push!(out, x)
         end
         return out
     end
@@ -164,16 +171,10 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
             R = promote_typejoin(S, T)
             seenR = convert(Set{R}, seen)
             outR = convert(Vector{R}, out)
-            if !in(x, seenR)
-                push!(seenR, x)
-                push!(outR, x)
-            end
+            !in!(x, seenR) && push!(outR, x)
             return _unique_from(itr, outR, seenR, i)
         end
-        if !in(x, seen)
-            push!(seen, x)
-            push!(out, x)
-        end
+        !in!(x, seen) && push!(out, x)
     end
     return out
 end
@@ -199,11 +200,7 @@ function unique(f, C; seen::Union{Nothing,Set}=nothing)
     out = Vector{eltype(C)}()
     if seen !== nothing
         for x in C
-            y = f(x)
-            if y ∉ seen
-                push!(out, x)
-                push!(seen, y)
-            end
+            !in!(f(x), seen) && push!(out, x)
         end
         return out
     end
@@ -401,23 +398,19 @@ false
 ```
 """
 function allunique(C)
-    seen = Dict{eltype(C), Nothing}()
+    seen = Set{eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
             v, s = x
-            idx, sh = ht_keyindex2_shorthash!(seen, v)
-            idx > 0 && return false
-            _setindex!(seen, nothing, v, -idx, sh)
+            in!(v, seen) && return false
             x = iterate(C, s)
         end
         sizehint!(seen, length(C))
     end
     while x !== nothing
         v, s = x
-        idx, sh = ht_keyindex2_shorthash!(seen, v)
-        idx > 0 && return false
-        _setindex!(seen, nothing, v, -idx, sh)
+        in!(v, seen) && return false
         x = iterate(C, s)
     end
     return true

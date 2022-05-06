@@ -1,10 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete
+using Core: CodeInfo, SimpleVector, donotdelete, arrayref
 
 const Callable = Union{Function,Type}
 
 const Bottom = Union{}
+
+# Define minimal array interface here to help code used in macros:
+length(a::Array) = arraylen(a)
+
+# This is more complicated than it needs to be in order to get Win64 through bootstrap
+eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
+eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
 
 """
     AbstractSet{T}
@@ -54,12 +61,12 @@ end
     @nospecialize
 
 Applied to a function argument name, hints to the compiler that the method
-should not be specialized for different types of that argument,
-but instead to use precisely the declared type for each argument.
-This is only a hint for avoiding excess code generation.
-Can be applied to an argument within a formal argument list,
+implementation should not be specialized for different types of that argument,
+but instead use the declared type for that argument.
+It can be applied to an argument within a formal argument list,
 or in the function body.
-When applied to an argument, the macro must wrap the entire argument expression.
+When applied to an argument, the macro must wrap the entire argument expression, e.g.,
+`@nospecialize(x::Real)` or `@nospecialize(i::Integer...)` rather than wrapping just the argument name.
 When used in a function body, the macro must occur in statement position and
 before any code.
 
@@ -87,6 +94,38 @@ end
 f(y) = [x for x in y]
 @specialize
 ```
+
+!!! note
+    `@nospecialize` affects code generation but not inference: it limits the diversity
+    of the resulting native code, but it does not impose any limitations (beyond the
+    standard ones) on type-inference.
+
+# Example
+
+```julia
+julia> f(A::AbstractArray) = g(A)
+f (generic function with 1 method)
+
+julia> @noinline g(@nospecialize(A::AbstractArray)) = A[1]
+g (generic function with 1 method)
+
+julia> @code_typed f([1.0])
+CodeInfo(
+1 ─ %1 = invoke Main.g(_2::AbstractArray)::Float64
+└──      return %1
+) => Float64
+```
+
+Here, the `@nospecialize` annotation results in the equivalent of
+
+```julia
+f(A::AbstractArray) = invoke(g, Tuple{AbstractArray}, A)
+```
+
+ensuring that only one version of native code will be generated for `g`,
+one that is generic for any `AbstractArray`.
+However, the specific return type is still inferred for both `g` and `f`,
+and this is still used in optimizing the callers of `f` and `g`.
 """
 macro nospecialize(vars...)
     if nfields(vars) === 1
@@ -151,9 +190,37 @@ macro isdefined(s::Symbol)
     return Expr(:escape, Expr(:isdefined, s))
 end
 
-macro _pure_meta()
-    return Expr(:meta, :pure)
+function _is_internal(__module__)
+    if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
+       nameof(__module__) === :Base
+        return true
+    end
+    return false
 end
+
+# can be used in place of `@pure` (supposed to be used for bootstrapping)
+macro _pure_meta()
+    return _is_internal(__module__) && Expr(:meta, :pure)
+end
+# can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
+macro _total_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#true,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false))
+end
+# can be used in place of `@assume_effects :total_may_throw` (supposed to be used for bootstrapping)
+macro _total_may_throw_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false))
+end
+
 # another version of inlining that propagates an inbounds context
 macro _propagate_inbounds_meta()
     return Expr(:meta, :inline, :propagate_inbounds)

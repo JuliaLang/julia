@@ -444,12 +444,12 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
-function show_function(io::IO, f::Function, compact::Bool)
+function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
     ft = typeof(f)
     mt = ft.name.mt
     if mt === Symbol.name.mt
         # uses shared method table
-        show_default(io, f)
+        fallback(io, f)
     elseif compact
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
@@ -461,12 +461,12 @@ function show_function(io::IO, f::Function, compact::Bool)
             show_sym(io, mt.name)
         end
     else
-        show_default(io, f)
+        fallback(io, f)
     end
 end
 
-show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
-print(io::IO, f::Function) = show_function(io, f, true)
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool, show_default)
+print(io::IO, f::Function) = show_function(io, f, true, show)
 
 function show(io::IO, f::Core.IntrinsicFunction)
     if !(get(io, :compact, false)::Bool)
@@ -990,19 +990,31 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     istuple = x.name === Tuple.name
     n = length(parameters)
 
-    # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
+    # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
+    max_n = 3
     if istuple
-        if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
+        taillen = 1
+        for i in (n-1):-1:1
+            if parameters[i] === parameters[n]
+                taillen += 1
+            else
+                break
+            end
+        end
+        if n == taillen > max_n
             print(io, "NTuple{", n, ", ")
             show(io, parameters[1])
             print(io, "}")
         else
             print(io, "Tuple{")
-            # join(io, params, ", ") params but `show` it
-            first = true
-            for param in parameters
-                first ? (first = false) : print(io, ", ")
-                show(io, param)
+            for i = 1:(taillen > max_n ? n-taillen : n)
+                i > 1 && print(io, ", ")
+                show(io, parameters[i])
+            end
+            if taillen > max_n
+                print(io, ", Vararg{")
+                show(io, parameters[n])
+                print(io, ", ", taillen, "}")
             end
             print(io, "}")
         end
@@ -1477,8 +1489,6 @@ function operator_associativity(s::Symbol)
     end
     return :left
 end
-
-const is_expr = isexpr
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true

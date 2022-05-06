@@ -552,9 +552,7 @@ s"Hello \\g<name>, it's \\1"
 
 julia> typeof(subst)
 SubstitutionString{String}
-
 ```
-
 """
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T

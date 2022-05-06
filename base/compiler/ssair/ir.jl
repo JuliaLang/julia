@@ -284,9 +284,9 @@ struct IRCode
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
-    meta::Vector{Any}
+    meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -1224,11 +1224,12 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                     compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
             # There's only one predecessor left - just replace it
-            @assert !isa(values[1], NewSSAValue)
-            if isa(values[1], SSAValue)
-                used_ssas[values[1].id] -= 1
+            v = values[1]
+            @assert !isa(v, NewSSAValue)
+            if isa(v, SSAValue)
+                used_ssas[v.id] -= 1
             end
-            ssa_rename[idx] = values[1]
+            ssa_rename[idx] = v
         else
             result[result_idx][:inst] = PhiNode(edges, values)
             result_idx += 1

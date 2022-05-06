@@ -409,7 +409,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
             tv = Any[]
-            sig0 = method.sig
+            if func isa Core.OpaqueClosure
+                sig0 = signature_type(func, typeof(func).parameters[1])
+            else
+                sig0 = method.sig
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 iob = IOContext(iob, :unionall_env => sig0.var)
