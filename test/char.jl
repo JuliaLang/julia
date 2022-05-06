@@ -2,6 +2,7 @@
 
 @testset "basic properties" begin
 
+    @test typemax(Char) == reinterpret(Char, typemax(UInt32))
     @test typemin(Char) == Char(0)
     @test typemax(Char) == reinterpret(Char, 0xffffffff)
     @test ndims(Char) == 0
@@ -20,7 +21,7 @@
 
     @test widen('a') === 'a'
     # just check this works
-    @test_throws Base.CodePointError Base.code_point_err(UInt32(1))
+    @test_throws Base.CodePointError Base.throw_code_point_err(UInt32(1))
 end
 
 @testset "ASCII conversion to/from Integer" begin
@@ -100,6 +101,7 @@ end
     #getindex(c::Char) = c
     for x in testarrays
         @test getindex(x) == x
+        @test getindex(x, CartesianIndex()) == x
     end
 
     #first(c::Char) = c
@@ -248,6 +250,7 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
 
 @testset "abstractchar" begin
     @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+    @test convert(AbstractChar, 2.0) == Char(2)
 
     @test isascii(ASCIIChar('x'))
     @test ASCIIChar('x') < 'y'
@@ -255,6 +258,9 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"
+    @test length(ASCIIChar('x')) == 1
+    @test !isempty(ASCIIChar('x'))
+    @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end
@@ -291,6 +297,7 @@ end
 
 @testset "broadcasting of Char" begin
     @test identity.('a') == 'a'
+    @test 'a' .* ['b', 'c'] == ["ab", "ac"]
 end
 
 @testset "code point format of U+ syntax (PR 33291)" begin

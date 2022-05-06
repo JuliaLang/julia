@@ -2,7 +2,7 @@
 
 using Test
 using Unicode
-using Unicode: normalize, isassigned
+using Unicode: normalize, isassigned, julia_chartransform
 
 @testset "string normalization" begin
     # normalize (Unicode normalization etc.):
@@ -25,6 +25,11 @@ using Unicode: normalize, isassigned
     @test normalize("\t\r", stripcc=true) == "  "
     @test normalize("\t\r", stripcc=true, newline2ls=true) == " \u2028"
     @test normalize("\u0072\u0307\u0323", :NFC) == "\u1E5B\u0307" #26917
+
+    # julia_chartransform identifier normalization
+    @test normalize("julia\u025B\u00B5\u00B7\u0387\u2212", chartransform=julia_chartransform) ==
+        "julia\u03B5\u03BC\u22C5\u22C5\u002D"
+    @test julia_chartransform('\u00B5') === '\u03BC'
 end
 
 @testset "unicode sa#15" begin
@@ -93,7 +98,7 @@ end
 @testset "#5939 uft8proc character predicates" begin
     alower=['a', 'd', 'j', 'y', 'z']
     ulower=['α', 'β', 'γ', 'δ', 'ф', 'я']
-    for c in vcat(alower,ulower)
+    for c in vcat(alower,ulower,['ª'])
         @test islowercase(c) == true
         @test isuppercase(c) == false
         @test isdigit(c) == false
@@ -101,17 +106,20 @@ end
     end
 
     aupper=['A', 'D', 'J', 'Y', 'Z']
-    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'ǅ', 'Ж', 'Д']
+    uupper= ['Δ', 'Γ', 'Π', 'Ψ', 'Ж', 'Д']
 
-    for c in vcat(aupper,uupper)
+    for c in vcat(aupper,uupper,['Ⓐ'])
         @test islowercase(c) == false
         @test isuppercase(c) == true
         @test isdigit(c) == false
         @test isnumeric(c) == false
     end
 
+    @test !isuppercase('ǅ') # titlecase is not uppercase
+    @test Base.Unicode.iscased('ǅ') # but is "cased"
+
     nocase=['א','ﺵ']
-    alphas=vcat(alower,ulower,aupper,uupper,nocase)
+    alphas=vcat(alower,ulower,aupper,uupper,nocase,['ǅ'])
 
     for c in alphas
         @test isletter(c) == true
@@ -260,6 +268,19 @@ end
             end
         end
     end
+
+    @test Base.Unicode.isgraphemebreak('α', 'β')
+    @test !Base.Unicode.isgraphemebreak('α', '\u0302')
+
+    for pre in ("","ä"), post in ("","x̂")
+        prelen = length(graphemes(pre))
+        @test graphemes(pre * "öü" * post, (1:2) .+ prelen) == "öü"
+        @test graphemes(pre * "ö" * post, (1:1) .+ prelen) == "ö"
+    end
+    @test graphemes("äöüx", 6:5)::SubString{String} == ""
+    @test_throws BoundsError graphemes("äöüx", 2:5)
+    @test_throws BoundsError graphemes("äöüx", 5:5)
+    @test_throws ArgumentError graphemes("äöüx", 0:1)
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin
@@ -330,6 +351,12 @@ end
     @test collect(g) == ["1","2","3","α","5"]
 end
 
+@testset "#37680: initial graphemes" begin
+    @test collect(graphemes("🤦🏼‍♂️")) == ["🤦🏼‍♂️"]
+    @test collect(graphemes("👨🏻‍🤝‍👨🏽")) == ["👨🏻‍🤝‍👨🏽"]
+    @test collect(graphemes("🇸🇪🇸🇪")) == ["🇸🇪","🇸🇪"]
+end
+
 @testset "uppercasefirst/lowercasefirst" begin
     @test uppercasefirst("Hola")=="Hola"
     @test uppercasefirst("hola")=="Hola"
@@ -379,6 +406,7 @@ end
         @test titlecase("abc-def")                     == "Abc-Def"
         @test titlecase("abc-def", wordsep = !Base.Unicode.iscased) == "Abc-Def"
         @test titlecase("abc-def", wordsep = isspace)  == "Abc-def"
+        @test titlecase("bôrked") == "Bôrked"
     end
 end
 
@@ -425,4 +453,17 @@ end
     @test gi isa Base.Unicode.GraphemeIterator{String}
     @test Base.Unicode.isvalid(Char, 'c')
     @test !Base.Unicode.isvalid(Char, overlong_char)
+end
+                                              
+@testset "Unicode equivalence" begin
+    @test isequal_normalized("no\u00EBl", "noe\u0308l")
+    @test !isequal_normalized("no\u00EBl", "noe\u0308l ")
+    @test isequal_normalized("", "")
+    @test !isequal_normalized("", " ")
+    @test !isequal_normalized("no\u00EBl", "NOËL")
+    @test isequal_normalized("no\u00EBl", "NOËL", casefold=true)
+    @test !isequal_normalized("no\u00EBl", "noel")
+    @test isequal_normalized("no\u00EBl", "noel", stripmark=true)
+    @test isequal_normalized("no\u00EBl", "NOEL", stripmark=true, casefold=true)
+    @test isequal_normalized("\u00B5\u0302m", "\u03BC\u0302m", chartransform=julia_chartransform)
 end

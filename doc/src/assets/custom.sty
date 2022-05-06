@@ -1,0 +1,45 @@
+%% Load the macro package required for the cover.
+
+
+%% pkg for make cover page BEGIN ----------------------------------------------
+% Load `geometry' to modify margins later
+\usepackage{geometry}
+% "some": use \BgThispage to change background
+% ref: background@v2.1,# 2.1 Options, "pages="
+%   http://mirrors.ctan.org/macros/latex/contrib/background/background.pdf
+\usepackage[pages=some]{background}
+
+%% Color definitions for Julia
+%%  https://github.com/JuliaLang/julia-logo-graphics#color-definitions
+\definecolor{julia_blue}  {HTML}{4063D8}
+\definecolor{julia_green} {HTML}{389826}
+\definecolor{julia_purple}{HTML}{9558B2}
+\definecolor{julia_red}   {HTML}{CB3C33}
+\definecolor{splash_gary} {HTML}{1A1A33}
+
+% ---- define heading background
+% ref: background.pdf, #2.1 Options
+\backgroundsetup{
+scale=1,    % scaling factor
+angle=0,    % counterclockwise angle
+opacity=1,  % transparency
+contents={
+%% Place the background image `title-bg' in the right place via `tikz'.
+% tikz option "remember picture", "overlay"
+% ref: pgfmanual@3.1.9a, #17.13.1 Referencing a Node in a Different Picture\
+%   http://mirrors.ctan.org/graphics/pgf/base/doc/pgfmanual.pdf
+\begin{tikzpicture}[remember picture,overlay,draw=white]
+  \draw [path picture={
+    % ref: pgfmanual, 15.6, "Predefined node path picture bounding box"
+    \node at (path picture bounding box.center){
+      \input{assets/cover-splash}
+  };}] (-0.5\paperwidth,4cm) rectangle (0.5\paperwidth,11cm);
+  % Put picture to right place
+  %   ref: pgfmanual, #2.6 Rectangle Path Construction
+\end{tikzpicture}
+}}%
+
+% ---- Heading font style
+\DeclareFixedFont{\MainHeading}{T1}{phv}{b}{n}{1.5cm}
+\DeclareFixedFont{\SecondaryHeading}{T1}{phv}{b}{n}{0.8cm}
+%% cover page END -------------------------------------------------------------
