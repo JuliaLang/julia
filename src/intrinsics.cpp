@@ -6,6 +6,35 @@ namespace JL_I {
 
 #include "ccall.cpp"
 
+//Mark our stats as being from intrinsics irgen
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_intrinsics"
+
+STATISTIC(EmittedConstants, "Number of constants emitted");
+STATISTIC(EmittedCoercedUnboxes, "Number of unbox coercions emitted");
+STATISTIC(EmittedUnboxes, "Number of unboxes emitted");
+STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
+STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
+STATISTIC(Emitted_arraylen, "Number of arraylen calls emitted");
+STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
+STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
+STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
+STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
+STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
+STATISTIC(Emitted_bitcast, "Number of bitcast calls emitted");
+STATISTIC(Emitted_trunc_int, "Number of trunc_int calls emitted");
+STATISTIC(Emitted_sext_int, "Number of sext_int calls emitted");
+STATISTIC(Emitted_zext_int, "Number of zext_int calls emitted");
+STATISTIC(Emitted_uitofp, "Number of uitofp calls emitted");
+STATISTIC(Emitted_sitofp, "Number of sitofp calls emitted");
+STATISTIC(Emitted_fptoui, "Number of fptoui calls emitted");
+STATISTIC(Emitted_fptosi, "Number of fptosi calls emitted");
+STATISTIC(Emitted_fptrunc, "Number of fptrunc calls emitted");
+STATISTIC(Emitted_fpext, "Number of fpext calls emitted");
+STATISTIC(Emitted_not_int, "Number of not_int calls emitted");
+STATISTIC(Emitted_have_fma, "Number of have_fma calls emitted");
+STATISTIC(EmittedUntypedIntrinsics, "Number of untyped intrinsics emitted");
+
 using namespace JL_I;
 
 FunctionType *get_intr_args1(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C)}, false); }
@@ -14,7 +43,11 @@ FunctionType *get_intr_args3(LLVMContext &C) { return FunctionType::get(JuliaTyp
 FunctionType *get_intr_args4(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
 FunctionType *get_intr_args5(LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C), JuliaType::get_prjlvalue_ty(C)}, false); }
 
-static JuliaFunction *runtime_func[num_intrinsics] = {
+const auto &runtime_func() {
+    static struct runtime_funcs_t {
+        std::array<JuliaFunction *, num_intrinsics> runtime_func;
+        runtime_funcs_t() :
+        runtime_func{
 #define ADD_I(name, nargs) new JuliaFunction{XSTR(jl_##name), get_intr_args##nargs, nullptr},
 #define ADD_HIDDEN ADD_I
 #define ALIAS(alias, base) nullptr,
@@ -22,12 +55,8 @@ static JuliaFunction *runtime_func[num_intrinsics] = {
 #undef ADD_I
 #undef ADD_HIDDEN
 #undef ALIAS
-};
-
-static bool float_func[num_intrinsics];
-
-static void jl_init_intrinsic_functions_codegen(void)
-{
+        }
+        {
 #define ADD_I(name, nargs)
 #define ADD_HIDDEN(name, nargs)
 #define ALIAS(alias, base) runtime_func[alias] = runtime_func[base];
@@ -35,38 +64,50 @@ static void jl_init_intrinsic_functions_codegen(void)
 #undef ADD_I
 #undef ADD_HIDDEN
 #undef ALIAS
+        }
+    } runtime_funcs;
+    return runtime_funcs.runtime_func;
+}
 
-    float_func[neg_float] = true;
-    float_func[neg_float_fast] = true;
-    float_func[add_float] = true;
-    float_func[sub_float] = true;
-    float_func[mul_float] = true;
-    float_func[div_float] = true;
-    float_func[rem_float] = true;
-    float_func[add_float_fast] = true;
-    float_func[sub_float_fast] = true;
-    float_func[mul_float_fast] = true;
-    float_func[div_float_fast] = true;
-    float_func[rem_float_fast] = true;
-    float_func[fma_float] = true;
-    float_func[muladd_float] = true;
-    float_func[eq_float] = true;
-    float_func[ne_float] = true;
-    float_func[lt_float] = true;
-    float_func[le_float] = true;
-    float_func[eq_float_fast] = true;
-    float_func[ne_float_fast] = true;
-    float_func[lt_float_fast] = true;
-    float_func[le_float_fast] = true;
-    float_func[fpiseq] = true;
-    float_func[abs_float] = true;
-    float_func[copysign_float] = true;
-    float_func[ceil_llvm] = true;
-    float_func[floor_llvm] = true;
-    float_func[trunc_llvm] = true;
-    float_func[rint_llvm] = true;
-    float_func[sqrt_llvm] = true;
-    float_func[sqrt_llvm_fast] = true;
+const auto &float_func() {
+    static struct float_funcs_t {
+        std::bitset<num_intrinsics> float_func;
+        float_funcs_t() {
+            float_func[neg_float] = true;
+            float_func[neg_float_fast] = true;
+            float_func[add_float] = true;
+            float_func[sub_float] = true;
+            float_func[mul_float] = true;
+            float_func[div_float] = true;
+            float_func[rem_float] = true;
+            float_func[add_float_fast] = true;
+            float_func[sub_float_fast] = true;
+            float_func[mul_float_fast] = true;
+            float_func[div_float_fast] = true;
+            float_func[rem_float_fast] = true;
+            float_func[fma_float] = true;
+            float_func[muladd_float] = true;
+            float_func[eq_float] = true;
+            float_func[ne_float] = true;
+            float_func[lt_float] = true;
+            float_func[le_float] = true;
+            float_func[eq_float_fast] = true;
+            float_func[ne_float_fast] = true;
+            float_func[lt_float_fast] = true;
+            float_func[le_float_fast] = true;
+            float_func[fpiseq] = true;
+            float_func[abs_float] = true;
+            float_func[copysign_float] = true;
+            float_func[ceil_llvm] = true;
+            float_func[floor_llvm] = true;
+            float_func[trunc_llvm] = true;
+            float_func[rint_llvm] = true;
+            float_func[sqrt_llvm] = true;
+            float_func[sqrt_llvm_fast] = true;
+        }
+    } float_funcs;
+
+    return float_funcs.float_func;
 }
 
 extern "C"
@@ -423,7 +464,7 @@ static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
 
 static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs)
 {
-    Function *func = prepare_call(runtime_func[f]);
+    Function *func = prepare_call(runtime_func()[f]);
     Value **argvalues = (Value**)alloca(sizeof(Value*) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
         argvalues[i] = boxed(ctx, argv[i]);
@@ -1078,6 +1119,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     switch (f) {
     case arraylen: {
+        ++Emitted_arraylen;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         jl_value_t *typ = jl_unwrap_unionall(x.typ);
@@ -1086,54 +1128,70 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return mark_julia_type(ctx, emit_arraylen(ctx, x), false, jl_long_type);
     }
     case pointerref:
+        ++Emitted_pointerref;
         assert(nargs == 3);
         return emit_pointerref(ctx, argv);
     case pointerset:
+        ++Emitted_pointerset;
         assert(nargs == 4);
         return emit_pointerset(ctx, argv);
     case atomic_fence:
+        ++Emitted_atomic_fence;
         assert(nargs == 1);
         return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
+        ++Emitted_atomic_pointerref;
         assert(nargs == 2);
         return emit_atomic_pointerref(ctx, argv);
     case atomic_pointerset:
     case atomic_pointerswap:
     case atomic_pointermodify:
     case atomic_pointerreplace:
+        ++Emitted_atomic_pointerop;
         return emit_atomic_pointerop(ctx, f, argv, nargs, nullptr);
     case bitcast:
+        ++Emitted_bitcast;
         assert(nargs == 2);
         return generic_bitcast(ctx, argv);
     case trunc_int:
+        ++Emitted_trunc_int;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::Trunc, argv, true, true);
     case sext_int:
+        ++Emitted_sext_int;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::SExt, argv, true, true);
     case zext_int:
+        ++Emitted_zext_int;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::ZExt, argv, true, true);
     case uitofp:
+        ++Emitted_uitofp;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::UIToFP, argv, false, true);
     case sitofp:
+        ++Emitted_sitofp;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::SIToFP, argv, false, true);
     case fptoui:
+        ++Emitted_fptoui;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPToUI, argv, true, false);
     case fptosi:
+        ++Emitted_fptosi;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPToSI, argv, true, false);
     case fptrunc:
+        ++Emitted_fptrunc;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPTrunc, argv, false, false);
     case fpext:
+        ++Emitted_fpext;
         assert(nargs == 2);
         return generic_cast(ctx, f, Instruction::FPExt, argv, false, false);
 
     case not_int: {
+        ++Emitted_not_int;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!jl_is_primitivetype(x.typ))
@@ -1149,6 +1207,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
     }
 
     case have_fma: {
+        ++Emitted_have_fma;
         assert(nargs == 1);
         const jl_cgval_t &x = argv[0];
         if (!x.constant || !jl_is_datatype(x.constant))
@@ -1177,7 +1236,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext());
-        if (float_func[f])
+        if (float_func()[f])
             xtyp = FLOATT(xtyp);
         else
             xtyp = INTT(xtyp);
@@ -1230,6 +1289,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **argvalues, size_t nargs,
                                      jl_datatype_t **newtyp, jl_value_t *xtyp)
 {
+    ++EmittedUntypedIntrinsics;
     Value *x = nargs > 0 ? argvalues[0] : NULL;
     Value *y = nargs > 1 ? argvalues[1] : NULL;
     Value *z = nargs > 2 ? argvalues[2] : NULL;
@@ -1500,3 +1560,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
     }
     assert(0 && "unreachable");
 }
+
+//Redefine us as being part of codegen
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_codegen"

@@ -21,6 +21,14 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
+static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
+    if (sizeof(size_t) > sizeof(uint32_t)) {
+        return llvm::Type::getInt64Ty(ctxt);
+    } else {
+        return llvm::Type::getInt32Ty(ctxt);
+    }
+}
+
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
         return llvm::StructType::get(C);
@@ -63,8 +71,12 @@ namespace JuliaType {
         return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
     }
 
+    static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {
+        return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false);
+    }
+
     static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
-        return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false)->getPointerTo();
+        return get_voidfunc_ty(C)->getPointerTo();
     }
 }
 
@@ -81,7 +93,7 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T);
 };
 
-unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> &irbuilder);
+unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::Type *DTy, llvm::IRBuilder<> &irbuilder);
 std::vector<llvm::Value*> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
 
 static inline void llvm_dump(llvm::Value *v)
@@ -147,9 +159,7 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
-        Type *jl_value_addr =
-                PointerType::get(cast<PointerType>(jl_value)->getElementType(),
-                                 v->getType()->getPointerAddressSpace());
+        Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
         return builder.CreateBitCast(v, jl_value_addr);
     }
     else {
@@ -297,6 +307,15 @@ inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
     return L.hasAttributesAtIndex(Index);
 #else
     return L.hasAttributes(Index);
+#endif
+}
+
+inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.getAttributeAtIndex(Index, Kind);
+#else
+    return L.getAttribute(Index, Kind);
 #endif
 }
 

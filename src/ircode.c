@@ -731,6 +731,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 
     jl_code_info_flags_t flags = code_info_flags(code->pure, code->propagate_inbounds, code->inlineable, code->inferred, code->constprop);
     write_uint8(s.s, flags.packed);
+    write_uint8(s.s, code->purity.bits);
 
     size_t nslots = jl_array_len(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
@@ -753,6 +754,11 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         }
         jl_encode_value_(&s, jl_get_nth_field((jl_value_t*)code, i), copy);
     }
+
+    // For opaque closure, also save the slottypes. We technically only need the first slot type,
+    // but this is simpler for now. We may want to refactor where this gets stored in the future.
+    if (m->is_for_opaque_closure)
+        jl_encode_value_(&s, code->slottypes, 1);
 
     if (m->generator)
         // can't optimize generated functions
@@ -820,6 +826,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->inlineable = flags.bits.inlineable;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->pure = flags.bits.pure;
+    code->purity.bits = read_uint8(s.s);
 
     size_t nslots = read_int32(&src);
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
@@ -832,6 +839,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         jl_value_t **fld = (jl_value_t**)((char*)jl_data_ptr(code) + jl_field_offset(jl_code_info_type, i));
         *fld = jl_decode_value(&s);
     }
+    if (m->is_for_opaque_closure)
+        code->slottypes = jl_decode_value(&s);
 
     jl_value_t *slotnames = jl_decode_value(&s);
     if (!jl_is_string(slotnames))
@@ -935,7 +944,7 @@ JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data)
     }
     else {
         assert(jl_typeis(data, jl_array_uint8_type));
-        int nslots = jl_load_unaligned_i32((char*)data->data + 1);
+        int nslots = jl_load_unaligned_i32((char*)data->data + 2);
         return nslots;
     }
 }
@@ -946,7 +955,7 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i)
     if (jl_is_code_info(data))
         return ((uint8_t*)((jl_code_info_t*)data)->slotflags->data)[i];
     assert(jl_typeis(data, jl_array_uint8_type));
-    return ((uint8_t*)data->data)[1 + sizeof(int32_t) + i];
+    return ((uint8_t*)data->data)[2 + sizeof(int32_t) + i];
 }
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)

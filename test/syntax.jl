@@ -1212,6 +1212,17 @@ let a = [], b = [4,3,2,1]
     @test a == [1,2]
 end
 
+# issue #44239
+struct KWGetindex end
+Base.getindex(::KWGetindex, args...; kws...) = (args, NamedTuple(kws))
+let A = KWGetindex(), a = [], b = [4,3,2,1]
+    f() = (push!(a, 1); 2)
+    g() = (push!(a, 2); ())
+    @test A[f(), g()..., k = f()] === ((2,), (k = 2,))
+    @test a == [1, 2, 1]
+    @test A[var"end"=1] === ((), (var"end" = 1,))
+end
+
 @testset "raw_str macro" begin
     @test raw"$" == "\$"
     @test raw"\n" == "\\n"
@@ -1440,6 +1451,14 @@ invalid assignment location "function (s, o...)
     end
 end\""""
 end
+
+let ex = Meta.lower(@__MODULE__, :(function g end = 1))
+    @test isa(ex, Expr) && ex.head === :error
+    @test ex.args[1] == """
+invalid assignment location "function g
+end\""""
+end
+
 
 # issue #15229
 @test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
@@ -1898,7 +1917,12 @@ f31404(a, b; kws...) = (a, b, values(kws))
 # issue #28992
 macro id28992(x) x end
 @test @id28992(1 .+ 2) == 3
-@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
+@test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
+let m = @__MODULE__
+    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\"")
+    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\"")
+end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
@@ -2286,6 +2310,9 @@ h35201(x; k=1) = (x, k)
 f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
+# issue #44343
+f44343(;kw...) = NamedTuple(kw)
+@test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
     # Test these evals shouldnt segfault
@@ -2503,7 +2530,11 @@ end
 end
 
 module Mod2
+import ..Mod.x as x_from_mod
+import ..Mod.x as x_from_mod2
 const y = 2
+
+export x_from_mod2
 end
 
 import .Mod: x as x2
@@ -2543,6 +2574,17 @@ import .Mod.@mac as @m
 @test_throws ErrorException eval(:(import .Mod.func as @notmacro))
 @test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
 @test_throws ErrorException eval(:(using .Mod: func as @notmacro))
+
+import .Mod2.x_from_mod
+
+@test @isdefined(x_from_mod)
+@test x_from_mod == Mod.x
+
+using .Mod2
+
+@test_nowarn @eval x_from_mod2
+@test @isdefined(x_from_mod2)
+@test x_from_mod2 == x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
@@ -2626,8 +2668,6 @@ end
     @test x == 1 && y == 2
     @test z == (3:5,)
 
-    @test Meta.isexpr(Meta.@lower(begin a, b..., c = 1:3 end), :error)
-    @test Meta.isexpr(Meta.@lower(begin a, b..., c = 1, 2, 3 end), :error)
     @test Meta.isexpr(Meta.@lower(begin a, b..., c... = 1, 2, 3 end), :error)
 
     @test_throws BoundsError begin x, y, z... = 1:1 end
@@ -2961,15 +3001,15 @@ end
 end
 
 @testset "slurping into function def" begin
-    x, f()... = [1, 2, 3]
+    x, f1()... = [1, 2, 3]
     @test x == 1
-    @test f() == [2, 3]
+    @test f1() == [2, 3]
     # test that call to `Base.rest` is outside the definition of `f`
-    @test f() === f()
+    @test f1() === f1()
 
-    x, f()... = 1, 2, 3
+    x, f2()... = 1, 2, 3
     @test x == 1
-    @test f() == (2, 3)
+    @test f2() == (2, 3)
 end
 
 @testset "long function bodies" begin
@@ -3248,3 +3288,80 @@ end
     @test m.Foo.bar === 1
     @test Core.get_binding_type(m.Foo, :bar) == Any
 end
+
+# issue 44723
+demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
+@test demo44723()() == 1
+
+@testset "slurping in non-final position" begin
+    res = begin x, y..., z = 1:7 end
+    @test res == 1:7
+    @test x == 1
+    @test y == Vector(2:6)
+    @test z == 7
+
+    res = begin x, y..., z = [1, 2] end
+    @test res == [1, 2]
+    @test x == 1
+    @test y == Int[]
+    @test z == 2
+
+    x, y, z... = 1:7
+    res = begin y, z..., x = z..., x, y end
+    @test res == ((3:7)..., 1, 2)
+    @test y == 3
+    @test z == ((4:7)..., 1)
+    @test x == 2
+
+    res = begin x, _..., y = 1, 2 end
+    @test res == (1, 2)
+    @test x == 1
+    @test y == 2
+
+    res = begin x, y..., z = 1, 2:4, 5 end
+    @test res == (1, 2:4, 5)
+    @test x == 1
+    @test y == (2:4,)
+    @test z == 5
+
+    @test_throws ArgumentError begin x, y..., z = 1:1 end
+    @test_throws BoundsError begin x, y, _..., z = 1, 2 end
+
+    last((a..., b)) = b
+    front((a..., b)) = a
+    @test last(1:3) == 3
+    @test front(1:3) == [1, 2]
+
+    res = begin x, y..., z = "abcde" end
+    @test res == "abcde"
+    @test x == 'a'
+    @test y == "bcd"
+    @test z == 'e'
+
+    res = begin x, y..., z = (a=1, b=2, c=3, d=4) end
+    @test res == (a=1, b=2, c=3, d=4)
+    @test x == 1
+    @test y == (b=2, c=3)
+    @test z == 4
+
+    v = rand(Bool, 7)
+    res = begin x, y..., z = v end
+    @test res === v
+    @test x == v[1]
+    @test y == v[2:6]
+    @test z == v[end]
+
+    res = begin x, y..., z = Core.svec(1, 2, 3, 4) end
+    @test res == Core.svec(1, 2, 3, 4)
+    @test x == 1
+    @test y == Core.svec(2, 3)
+    @test z == 4
+end
+
+# rewriting inner constructors with return type decls
+struct InnerCtorRT{T}
+    InnerCtorRT()::Int = new{Int}()
+    InnerCtorRT{T}() where {T} = ()->new()
+end
+@test_throws MethodError InnerCtorRT()
+@test InnerCtorRT{Int}()() isa InnerCtorRT{Int}

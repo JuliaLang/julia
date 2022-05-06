@@ -22,7 +22,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition, flatmap
 
 """
     Iterators.map(f, iterators...)
@@ -1163,6 +1163,33 @@ reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 last(f::Flatten) = last(last(f.it))
 
 """
+    Iterators.flatmap(f, iterators...)
+
+Equivalent to `flatten(map(f, iterators...))`.
+
+See also [`Iterators.flatten`](@ref), [`Iterators.map`](@ref).
+
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
+
+# Examples
+```jldoctest
+julia> Iterators.flatmap(n->-n:2:n, 1:3) |> collect
+9-element Vector{Int64}:
+ -1
+  1
+ -2
+  0
+  2
+ -3
+ -1
+  1
+  3
+```
+"""
+flatmap(f, c...) = flatten(map(f, c...))
+
+"""
     partition(collection, n)
 
 Iterate over a collection `n` elements at a time.
@@ -1426,5 +1453,8 @@ only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+
+Base.intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
 
 end

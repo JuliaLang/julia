@@ -174,6 +174,7 @@ julia> abs2(-3)
 9
 ```
 """
+abs2(x::Number) = abs(x)^2
 abs2(x::Real) = x*x
 
 """

@@ -28,7 +28,7 @@ The difference between an intrinsic and a builtin is that a builtin is a first c
 that can be used like any other Julia function.  An intrinsic can operate only on unboxed data,
 and therefore its arguments must be statically typed.
 
-### Alias Analysis
+### [Alias Analysis](@id LLVM-Alias-Analysis)
 
 Julia currently uses LLVM's [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata).
 To find the comments that document the inclusion relationships, look for `static MDNode*` in

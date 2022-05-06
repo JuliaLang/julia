@@ -528,7 +528,7 @@ module M1 var"#foo#"() = 2 end
 module var"#43932#" end
 @test endswith(sprint(show, var"#43932#"), ".var\"#43932#\"")
 
-# issue #12477
+# issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
 # Function and array reference precedence
@@ -843,7 +843,7 @@ end
             end
             lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if length(str) + 2 ≤ limit
+            if length(str) + 2 ≤ limit
                 @test eval(Meta.parse(out)) == str
             else
                 @test limit-!isascii(str) <= length(out) <= limit
@@ -1338,6 +1338,8 @@ test_repr("(:).a")
 @test repr(NTuple{7,Int64}) == "NTuple{7, Int64}"
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
+@test repr(Tuple{String, Int64, Int64, Int64}) == "Tuple{String, Int64, Int64, Int64}"
+@test repr(Tuple{String, Int64, Int64, Int64, Int64}) == "Tuple{String, Vararg{Int64, 4}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -1452,6 +1454,9 @@ struct var"%X%" end  # Invalid name without '#'
         @test v == eval(Meta.parse(static_shown(v)))
     end
 end
+
+# Test that static show prints something reasonable for `<:Function` types
+@test static_shown(:) == "Base.Colon()"
 
 # Test @show
 let fname = tempname()

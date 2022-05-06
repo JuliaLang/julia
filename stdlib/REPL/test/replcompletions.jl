@@ -7,7 +7,7 @@ using REPL
     @testset "Check symbols previously not shown by REPL.doc_completions()" begin
     symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
         for i in symbols
-            @test REPL.doc_completions(i)[1]==i
+            @test i ∈ REPL.doc_completions(i)
         end
     end
 let ex = quote
@@ -1030,12 +1030,12 @@ let current_dir, forbidden
      # Issue #19310
     if Sys.iswindows()
         current_dir = pwd()
-        cd("C:")
+        cd("C:\\")
         test_complete("C"); @test true
         test_complete("C:"); @test true
         test_complete("C:\\"); @test true
-        if isdir("D:")
-            cd("D:")
+        if isdir("D:\\")
+            cd("D:\\")
             test_complete("C"); @test true
             test_complete("C:"); @test true
             test_complete("C:\\"); @test true

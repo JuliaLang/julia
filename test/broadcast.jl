@@ -691,16 +691,19 @@ end
     @test a == [1 1; 2 2; 3 3]
 end
 
-@testset "scalar .=" begin
-    A = [[1,2,3],4:5,6]
+@testset "scalar .= and promotion" begin
+    A = [[1, 2, 3], 4:5, 6]
+    @test A isa Vector{Any}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
-    A = [[1,2,3],4:5]
+    A = [[1, 2, 3], 4:5]
+    @test A isa Vector{Vector{Int}}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test A[2] == [0, 0]
 end
 
 # Issue #22180
@@ -1079,3 +1082,8 @@ end
     y = randn(2)
     @inferred(test(x, y)) == [0, 0]
 end
+
+# test that `Broadcast` definition is defined as total and eligible for concrete evaluation
+import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
+@test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
+    Core.Compiler.is_concrete_eval_eligible

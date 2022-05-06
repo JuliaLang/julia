@@ -264,7 +264,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-        write(stdin_write, """ -e "println(\\"HI\\")\" """)
+        write(stdin_write, """ -e "println(\\"HI\\")\"""")
         readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
@@ -751,6 +751,7 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
     # Test switching repl modes
+    redirect_stdout(devnull) do # to suppress "foo" echoes
     sendrepl2("""\e[200~
             julia> A = 1
             1
@@ -775,6 +776,7 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(c)
     @test Main.A == 1
     @test Main.B == 2
+    end # redirect_stdout
 
     # Close repl
     write(stdin_write, '\x04')

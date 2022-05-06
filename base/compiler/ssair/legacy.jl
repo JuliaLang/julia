@@ -3,7 +3,7 @@
 function inflate_ir(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(linfo, nothing, false)
+        argtypes, _ = matching_cache_argtypes(linfo, nothing)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
@@ -32,7 +32,7 @@ function inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
         ssavaluetypes isa Vector{Any} ? copy(ssavaluetypes) : Any[ Any for i = 1:(ssavaluetypes::Int) ]
     end
     stmts = InstructionStream(code, ssavaluetypes, Any[nothing for i = 1:nstmts], copy(ci.codelocs), copy(ci.ssaflags))
-    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Any[], sptypes)
+    ir = IRCode(stmts, cfg, collect(LineInfoNode, ci.linetable), argtypes, Expr[], sptypes)
     return ir
 end
 

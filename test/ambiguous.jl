@@ -100,6 +100,24 @@ ambig(x::Union{Char, Int16}) = 's'
 @test ambig(Int16(1)) == 's'
 
 # Automatic detection of ambiguities
+
+const allowed_undefineds = Set([
+    GlobalRef(Base, :active_repl),
+    GlobalRef(Base, :active_repl_backend),
+    GlobalRef(Base.Filesystem, :JL_O_TEMPORARY),
+    GlobalRef(Base.Filesystem, :JL_O_SHORT_LIVED),
+    GlobalRef(Base.Filesystem, :JL_O_SEQUENTIAL),
+    GlobalRef(Base.Filesystem, :JL_O_RANDOM),
+])
+
+let Distributed = get(Base.loaded_modules,
+                      Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
+                      nothing)
+    if Distributed !== nothing
+        push!(allowed_undefineds, GlobalRef(Distributed, :cluster_manager))
+    end
+end
+
 module Ambig1
 ambig(x, y) = 1
 ambig(x::Integer, y) = 2
@@ -153,21 +171,12 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
-    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false)))
-        @test isempty(ambig)
-        expect = []
+    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds)))
         good = true
-        while !isempty(ambig)
-            sigs = pop!(ambig)
-            i = findfirst(==(sigs), expect)
-            if i === nothing
-                println(stderr, "push!(expect, (", sigs[1], ", ", sigs[2], "))")
-                good = false
-                continue
-            end
-            deleteat!(expect, i)
+        for (sig1, sig2) in ambig
+            @test sig1 === sig2 # print this ambiguity
+            good = false
         end
-        @test isempty(expect)
         @test good
     end
 
@@ -183,7 +192,7 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 
     # List standard libraries. Exclude modules such as Main, Base, and Core.
     let modules = [mod for (pkg, mod) in Base.loaded_modules if pkg.uuid !== nothing && String(pkg.name) in STDLIBS]
-        @test isempty(detect_ambiguities(modules...; recursive=true))
+        @test isempty(detect_ambiguities(modules...; recursive=true, allowed_undefineds))
     end
 end
 
@@ -313,7 +322,7 @@ end
         @test need_to_handle_undef_sparam == Set()
     end
     let need_to_handle_undef_sparam =
-            Set{Method}(detect_unbound_args(Base; recursive=true))
+            Set{Method}(detect_unbound_args(Base; recursive=true, allowed_undefineds))
         pop!(need_to_handle_undef_sparam, which(Base._totuple, (Type{Tuple{Vararg{E}}} where E, Any, Any)))
         pop!(need_to_handle_undef_sparam, which(Base.eltype, Tuple{Type{Tuple{Any}}}))
         pop!(need_to_handle_undef_sparam, first(methods(Base.same_names)))

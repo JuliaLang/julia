@@ -29,6 +29,7 @@ macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
 convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 
 # essential files and libraries
 include("essentials.jl")
@@ -56,6 +57,9 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+
+# the same constructor as defined in float.jl, but with a different name to avoid redefinition
+_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 
 # checked arithmetic
 const checked_add = +
@@ -97,6 +101,8 @@ ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core docsystem
 include("docs/core.jl")
+import Core.Compiler.CoreDocs
+Core.atdoc!(CoreDocs.docm)
 
 # sorting
 function sort end

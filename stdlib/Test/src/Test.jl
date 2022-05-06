@@ -22,6 +22,7 @@ export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
+export TestLogger, LogRecord
 
 using Random
 using Random: AbstractRNG, default_rng
@@ -651,7 +652,7 @@ function do_test(result::ExecutionResult, orig_expr)
         @assert isa(result, Threw)
         testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
     end
-    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
+    isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
 end
 
@@ -1316,6 +1317,9 @@ macro testset(args...)
     end
 end
 
+trigger_test_failure_break(@nospecialize(err)) =
+    ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
+
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
@@ -1359,6 +1363,7 @@ function testset_beginend_call(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
+            trigger_test_failure_break(err)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
@@ -1434,6 +1439,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
+            trigger_test_failure_break(err)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         end
     end
@@ -1659,7 +1665,9 @@ function is_in_mods(m::Module, recursive::Bool, mods)
 end
 
 """
-    detect_ambiguities(mod1, mod2...; recursive=false, ambiguous_bottom=false)
+    detect_ambiguities(mod1, mod2...; recursive=false,
+                                      ambiguous_bottom=false,
+                                      allowed_undefineds=nothing)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
@@ -1668,10 +1676,17 @@ Use `recursive=true` to test in all submodules.
 `ambiguous_bottom` controls whether ambiguities triggered only by
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
+
+See [`Test.detect_unbound_args`](@ref) for an explanation of
+`allowed_undefineds`.
+
+!!! compat "Julia 1.8"
+    `allowed_undefineds` requires at least Julia 1.8.
 """
 function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
-                            ambiguous_bottom::Bool = false)
+                            ambiguous_bottom::Bool = false,
+                            allowed_undefineds = nothing)
     @nospecialize
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
@@ -1708,7 +1723,11 @@ function detect_ambiguities(mods::Module...;
         for n in names(mod, all = true)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
-                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
+                if is_in_mods(mod, recursive, mods)
+                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
+                        println("Skipping ", mod, '.', n)  # typically stale exports
+                    end
+                end
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
@@ -1725,13 +1744,29 @@ function detect_ambiguities(mods::Module...;
 end
 
 """
-    detect_unbound_args(mod1, mod2...; recursive=false)
+    detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
 Returns a vector of `Method`s which may have unbound type parameters.
 Use `recursive=true` to test in all submodules.
+
+By default, any undefined symbols trigger a warning. This warning can
+be suppressed by supplying a collection of `GlobalRef`s for which
+the warning can be skipped. For example, setting
+
+```
+allow_undefineds = Set([GlobalRef(Base, :active_repl),
+                        GlobalRef(Base, :active_repl_backend)])
+```
+
+would suppress warnings about `Base.active_repl` and
+`Base.active_repl_backend`.
+
+!!! compat "Julia 1.8"
+    `allowed_undefineds` requires at least Julia 1.8.
 """
 function detect_unbound_args(mods...;
-                             recursive::Bool = false)
+                             recursive::Bool = false,
+                             allowed_undefineds=nothing)
     @nospecialize mods
     ambs = Set{Method}()
     mods = collect(mods)::Vector{Module}
@@ -1744,7 +1779,7 @@ function detect_unbound_args(mods...;
                 params = tuple_sig.parameters[1:(end - 1)]
                 tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
                 world = Base.get_world_counter()
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, world)
+                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tuple_sig, nothing, world)
                 if mf !== nothing && mf !== m && mf.sig <: tuple_sig
                     continue
                 end
@@ -1759,7 +1794,11 @@ function detect_unbound_args(mods...;
         for n in names(mod, all = true)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
-                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
+                if is_in_mods(mod, recursive, mods)
+                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
+                        println("Skipping ", mod, '.', n)  # typically stale exports
+                    end
+                end
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))

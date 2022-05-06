@@ -114,6 +114,9 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
+    || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_ARM_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -127,6 +130,37 @@ static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
     }
     jl_set_safe_restore(old_buf);
     return i;
+}
+#endif
+
+static double profile_autostop_time = -1.0;
+static double profile_peek_duration = 1.0; // seconds
+
+double jl_get_profile_peek_duration(void)
+{
+    return profile_peek_duration;
+}
+void jl_set_profile_peek_duration(double t)
+{
+    profile_peek_duration = t;
+}
+
+uintptr_t profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+{
+    profile_show_peek_cond_loc = cond;
+}
+
+static void jl_check_profile_autostop(void)
+{
+    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+        profile_autostop_time = -1.0;
+        jl_profile_stop_timer();
+        jl_safe_printf("\n==============================================================\n");
+        jl_safe_printf("Profile collected. A report will print at the next yield point\n");
+        jl_safe_printf("==============================================================\n\n");
+        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+    }
 }
 
 #if defined(_WIN32)
@@ -311,7 +345,7 @@ JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
             profile_round_robin_thread_order[i] = i;
         }
     }
-    seed_cong(&profile_cong_rng_seed);
+    profile_cong_rng_seed = jl_rand();
     unbias_cong(jl_n_threads, &profile_cong_rng_unbias);
     bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
     if (bt_data_prof == NULL && maxsize > 0)

@@ -85,6 +85,10 @@ controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
 
+!!! warning "Warning"
+    The output of this function may contain sensitive information. Before sharing the output,
+    please review the output and remove any data that should not be shared publicly.
+
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -124,7 +128,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
     end
 
     if verbose
@@ -137,6 +141,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)

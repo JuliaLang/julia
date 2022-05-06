@@ -97,9 +97,8 @@ julia> round(357.913; sigdigits=4, base=2)
     Rounding to specified digits in bases other than 2 can be inexact when
     operating on binary floating point numbers. For example, the [`Float64`](@ref)
     value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2.
+    rounded to 1.2. For example:
 
-    # Examples
     ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
@@ -234,6 +233,10 @@ end
 # Java-style round
 function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
     copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
+end
+
+function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
+    signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
 end
 
 # isapprox: approximate equality of numbers
@@ -419,8 +422,8 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use a software emulated fma
-fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+@assume_effects :consistent fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+@assume_effects :consistent fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
 
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.

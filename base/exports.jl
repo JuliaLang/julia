@@ -122,6 +122,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
@@ -497,6 +498,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,

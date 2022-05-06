@@ -43,6 +43,10 @@ export File,
        JL_O_CREAT,
        JL_O_EXCL,
        JL_O_TRUNC,
+       JL_O_TEMPORARY,
+       JL_O_SHORT_LIVED,
+       JL_O_SEQUENTIAL,
+       JL_O_RANDOM,
        JL_O_NOCTTY,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
@@ -258,5 +262,17 @@ end
 
 fd(f::File) = f.handle
 stat(f::File) = stat(f.handle)
+
+function touch(f::File)
+    @static if Sys.isunix()
+        ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+        systemerror(:futimes, ret != 0)
+    else
+        t = time()
+        futime(f, t, t)
+    end
+    f
+end
+
 
 end

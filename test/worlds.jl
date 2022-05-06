@@ -191,7 +191,7 @@ f_gen265(x::Type{Int}) = 3
 # intermediate worlds by later additions to the method table that
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
-g26506(x) = f26506(x[1])
+g26506(x) = Base.inferencebarrier(f26506)(x[1])
 z = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z) # Places an entry for f26506(::String) in mt.name.cache

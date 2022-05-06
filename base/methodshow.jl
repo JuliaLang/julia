@@ -79,6 +79,9 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
+    if m.sig === Tuple # OpaqueClosure
+        return Symbol[]
+    end
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
@@ -131,9 +134,15 @@ const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB::String
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB::String))
+    if isdefined(@__MODULE__, :Sys)
+        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
+        STDLIB = Sys.STDLIB::String
+        if BUILD_STDLIB_PATH != STDLIB
+            # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+            npath = normpath(path)
+            npath′ = replace(npath, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+            return npath == npath′ ? path : npath′
+        end
     end
     return path
 end
