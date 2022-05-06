@@ -1128,6 +1128,7 @@ julia> h(4.0)
 ```
 
 However, you should *not* define local methods conditionally or subject to control flow, as in
+
 ```julia
 function f2(inc)
     if inc
@@ -1143,6 +1144,17 @@ function f3()
     g() = 0
 end
 ```
-as this leads to undefined behavior.
+as it is not clear what function will end up getting defined. In the future, it might be an error to define local methods in this manner.
+
+For cases like this use anonymous functions instead:
+
+```julia
+function f2(inc)
+    g = if inc
+        x -> x + 1
+    else
+        x -> x - 1
+    end
+end
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
