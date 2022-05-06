@@ -433,7 +433,7 @@ kw"."
 `let` blocks create a new hard scope and optionally introduce new local bindings.
 
 Just like the [other scope constructs](@ref man-scope-table), `let` blocks define
-and may restrict the visibility of names used within the expressions it contains.
+the block of code where newly introduced local variables are accessible.
 Additionally, the syntax has a special meaning for comma-separated assignments
 and variable names that may optionally appear on the same line as the `let`:
 
@@ -443,7 +443,7 @@ let var1 = value1, var2, var3 = value3
 end
 ```
 
-The variables introduced on this line are `local` to the `let` block and the assignments are
+The variables introduced on this line are local to the `let` block and the assignments are
 evaluated in order, with each right-hand side evaluated in the scope
 without considering the name on the left-hand side. Therefore it makes
 sense to write something like `let x = x`, since the two `x` variables are distinct with
