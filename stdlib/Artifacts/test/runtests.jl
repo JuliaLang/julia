@@ -157,3 +157,10 @@ end
         end
     end
 end
+
+@testset "`Artifacts.artifact_names` and friends" begin
+    n = length(Artifacts.artifact_names)
+    @test length(Base.project_names) == n
+    @test length(Base.manifest_names) == n
+    @test length(Base.preferences_names) == n
+end

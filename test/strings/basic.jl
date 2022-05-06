@@ -854,7 +854,7 @@ end
                     p = prevind(s, p)
                     @test prevind(s, x, j) == p
                 end
-                if n ≤ ncodeunits(s)
+                if n ≤ ncodeunits(s)
                     n = nextind(s, n)
                     @test nextind(s, x, j) == n
                 end
@@ -1039,7 +1039,7 @@ let s = "∀x∃y", u = codeunits(s)
     @test u[1] == 0xe2
     @test u[2] == 0x88
     @test u[8] == 0x79
-    @test_throws ErrorException (u[1] = 0x00)
+    @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
@@ -1093,4 +1093,15 @@ end
     @test sprint(summary, "foα") == "4-codeunit String"
     @test sprint(summary, SubString("foα", 2)) == "3-codeunit SubString{String}"
     @test sprint(summary, "") == "empty String"
+end
+
+@testset "LazyString" begin
+    @test repr(lazy"$(1+2) is 3") == "\"3 is 3\""
+    let d = Dict(lazy"$(1+2) is 3" => 3)
+        @test d["3 is 3"] == 3
+    end
+    l = lazy"1+2"
+    @test codeunit(l) == UInt8
+    @test codeunit(l,2) == 0x2b
+    @test isvalid(l, 1)
 end

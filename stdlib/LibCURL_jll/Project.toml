@@ -1,6 +1,6 @@
 name = "LibCURL_jll"
 uuid = "deac9b47-8bc7-5906-a0fe-35ac56dc84c0"
-version = "7.73.0+4"
+version = "7.81.0+0"
 
 [deps]
 LibSSH2_jll = "29816b5a-b9ab-546f-933c-edad1886dfa8"
@@ -17,4 +17,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Test"]
 
 [compat]
-julia = "1.6"
+julia = "1.8"

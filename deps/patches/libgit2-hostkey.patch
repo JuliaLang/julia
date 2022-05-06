@@ -1,48 +1,16 @@
-diff --git a/include/git2/cert.h b/include/git2/cert.h
-index e8cd2d180..54293cd31 100644
---- a/include/git2/cert.h
-+++ b/include/git2/cert.h
-@@ -111,6 +111,14 @@ typedef struct {
- 	 * have the SHA-256 hash of the hostkey.
- 	 */
- 	unsigned char hash_sha256[32];
-+
-+	/**
-+	 * Hostkey itself.
-+	 */
-+	int hostkey_type;
-+	size_t hostkey_len;
-+	unsigned char hostkey[1024];
-+
- } git_cert_hostkey;
- 
- /**
 diff --git a/src/transports/ssh.c b/src/transports/ssh.c
-index f4ed05bb1..ec6366a5f 100644
+index 471c3273ed..32189d0979 100644
 --- a/src/transports/ssh.c
 +++ b/src/transports/ssh.c
-@@ -523,6 +523,7 @@ static int _git_ssh_setup_conn(
+@@ -525,6 +525,7 @@ static int _git_ssh_setup_conn(
  	git_credential *cred = NULL;
- 	LIBSSH2_SESSION* session=NULL;
- 	LIBSSH2_CHANNEL* channel=NULL;
+ 	LIBSSH2_SESSION *session=NULL;
+ 	LIBSSH2_CHANNEL *channel=NULL;
 +	char *host_and_port;
  
  	t->current_stream = NULL;
  
-@@ -566,6 +567,12 @@ post_extract:
- 
- 		cert.parent.cert_type = GIT_CERT_HOSTKEY_LIBSSH2;
- 
-+		key = libssh2_session_hostkey(session, &cert.hostkey_len, &cert.hostkey_type);
-+		bzero(&cert.hostkey, sizeof(cert.hostkey));
-+		if (cert.hostkey_len > sizeof(cert.hostkey))
-+			cert.hostkey_len = sizeof(cert.hostkey);
-+		memcpy(&cert.hostkey, key, cert.hostkey_len);
-+
- #ifdef LIBSSH2_HOSTKEY_HASH_SHA256
- 		key = libssh2_hostkey_hash(session, LIBSSH2_HOSTKEY_HASH_SHA256);
- 		if (key != NULL) {
-@@ -597,7 +604,15 @@ post_extract:
+@@ -636,7 +637,15 @@ post_extract:
  
  		cert_ptr = &cert;
  

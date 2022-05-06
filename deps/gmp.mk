@@ -22,12 +22,30 @@ $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 checksum-gmp: $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-$(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
+# Apply fix to avoid using Apple ARM reserved register X18
+# Necessary for version 6.2.1, remove after next gmp release
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp-HG-changeset.patch
 	echo 1 > $@
 
-$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/build-patched
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied
+	cd $(dir $@) && \
+		patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
+	echo 1 > $@
+
+$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied \
+	$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) F77= --enable-cxx --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
@@ -54,11 +72,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
 
 clean-gmp:
-	-rm $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
+	-rm -f $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/gmp-$(GMP_VER) clean
 
 distclean-gmp:
-	-rm -rf $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2 \
 		$(SRCCACHE)/gmp-$(GMP_VER) \
 		$(BUILDDIR)/gmp-$(GMP_VER)
 

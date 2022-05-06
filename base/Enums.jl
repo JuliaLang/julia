@@ -25,10 +25,16 @@ Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 
 Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
 
-Base.print(io::IO, x::Enum) = print(io, Symbol(x))
+function _symbol(x::Enum)
+    names = namemap(typeof(x))
+    x = Integer(x)
+    get(() -> Symbol("<invalid #$x>"), names, x)::Symbol
+end
+
+Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 
 function Base.show(io::IO, x::Enum)
-    sym = Symbol(x)
+    sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
         def = typeof(x).name.module
@@ -118,6 +124,13 @@ To list all the instances of an enum use `instances`, e.g.
 ```jldoctest fruitenum
 julia> instances(Fruit)
 (apple, orange, kiwi)
+```
+
+It is possible to construct a symbol from an enum instance:
+
+```jldoctest fruitenum
+julia> Symbol(apple)
+:apple
 ```
 """
 macro enum(T::Union{Symbol,Expr}, syms...)

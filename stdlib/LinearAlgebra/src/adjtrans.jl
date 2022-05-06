@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds, @_inline_meta
+using Base: @propagate_inbounds
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -34,10 +34,6 @@ julia> adjoint(A)
 """
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
-    function Adjoint{T,S}(A::S) where {T,S}
-        checkeltype_adjoint(T, eltype(A))
-        new(A)
-    end
 end
 """
     Transpose
@@ -65,30 +61,6 @@ julia> transpose(A)
 """
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
-    function Transpose{T,S}(A::S) where {T,S}
-        checkeltype_transpose(T, eltype(A))
-        new(A)
-    end
-end
-
-function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
-    Expected = Base.promote_op(adjoint, ParentEltype)
-    ResultEltype === Expected || error(string(
-        "Element type mismatch. Tried to create an `Adjoint{", ResultEltype, "}` ",
-        "from an object with eltype `", ParentEltype, "`, but the element type of ",
-        "the adjoint of an object with eltype `", ParentEltype, "` must be ",
-        "`", Expected, "`."))
-    return nothing
-end
-
-function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype, ParentEltype}
-    Expected = Base.promote_op(transpose, ParentEltype)
-    ResultEltype === Expected || error(string(
-        "Element type mismatch. Tried to create a `Transpose{", ResultEltype, "}` ",
-        "from an object with eltype `", ParentEltype, "`, but the element type of ",
-        "the transpose of an object with eltype `", ParentEltype, "` must be ",
-        "`", Expected, "`."))
-    return nothing
 end
 
 # basic outer constructors
@@ -192,8 +164,9 @@ const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
 # for internal use below
-wrapperop(A::Adjoint) = adjoint
-wrapperop(A::Transpose) = transpose
+wrapperop(_) = identity
+wrapperop(::Adjoint) = adjoint
+wrapperop(::Transpose) = transpose
 
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
@@ -203,8 +176,8 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
-@propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])
-@propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])
+@propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
+@propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where {T} = wrapperop(A)(A.parent[j, i])::T
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)
 @propagate_inbounds setindex!(A::AdjOrTransAbsMat, x, i::Int, j::Int) = (setindex!(A.parent, wrapperop(A)(x), j, i); A)
 # AbstractArray interface, additional definitions to retain wrapper over vectors where appropriate
@@ -238,6 +211,9 @@ similar(A::AdjOrTrans) = similar(A.parent, eltype(A), axes(A))
 similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, axes(A))
 similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent, T, dims)
 
+# AbstractMatrix{T} constructor for adjtrans vector: preserve wrapped type
+AbstractMatrix{T}(A::AdjOrTransAbsVec) where {T} = wrapperop(A)(AbstractVector{T}(A.parent))
+
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
 vec(v::TransposeAbsVec{<:Number}) = parent(v)
@@ -252,7 +228,7 @@ _adjoint_hcat(avs::Union{Number,AdjointAbsVec}...) = adjoint(vcat(map(adjoint, a
 _transpose_hcat(tvs::Union{Number,TransposeAbsVec}...) = transpose(vcat(map(transpose, tvs)...))
 typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = adjoint(typed_vcat(T, map(adjoint, avs)...))
 typed_hcat(::Type{T}, tvs::Union{Number,TransposeAbsVec}...) where {T} = transpose(typed_vcat(T, map(transpose, tvs)...))
-# otherwise-redundant definitions necessary to prevent hitting the concat methods in sparse/sparsevector.jl
+# otherwise-redundant definitions necessary to prevent hitting the concat methods in LinearAlgebra/special.jl
 hcat(avs::Adjoint{<:Any,<:Vector}...) = _adjoint_hcat(avs...)
 hcat(tvs::Transpose{<:Any,<:Vector}...) = _transpose_hcat(tvs...)
 hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)

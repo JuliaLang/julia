@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Eigensolvers for symmetric and Hermitian matrices
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) = Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
+eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
+    Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
 
 function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
     T = eltype(A)
@@ -9,12 +10,13 @@ function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothin
     eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
 end
 
-eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
+eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
+    Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
 
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -40,7 +42,7 @@ eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {
 """
     eigen(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -60,13 +62,16 @@ function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
     eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
 end
 
-eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) =
-    LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
+    vals = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
+    !isnothing(sortby) && sort!(vals, by=sortby)
+    return vals
+end
 
-function eigvals(A::RealHermSymComplexHerm)
+function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
     T = eltype(A)
     S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
 end
 
 """
@@ -81,7 +86,7 @@ eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRang
 """
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
 
-Returns the eigenvalues of `A`. It is possible to calculate only a subset of the
+Return the eigenvalues of `A`. It is possible to calculate only a subset of the
 eigenvalues by specifying a [`UnitRange`](@ref) `irange` covering indices of the sorted eigenvalues,
 e.g. the 2nd to 8th eigenvalues.
 
@@ -122,7 +127,7 @@ eigvals!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where
 """
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values
 
-Returns the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
+Return the eigenvalues of `A`. It is possible to calculate only a subset of the eigenvalues
 by specifying a pair `vl` and `vu` for the lower and upper boundaries of the eigenvalues.
 
 # Examples
@@ -263,9 +268,14 @@ function _UtiAsymUi_diag!(uplo, A, U)
     return A
 end
 
-eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} =
-    LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
-eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
-    LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
-
+function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
+    vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
+    isnothing(sortby) || sort!(vals, by=sortby)
+    return vals
+end
+function eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasComplex,S<:StridedMatrix}
+    vals = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))[1]
+    isnothing(sortby) || sort!(vals, by=sortby)
+    return vals
+end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))

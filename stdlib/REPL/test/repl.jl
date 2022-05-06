@@ -264,7 +264,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-        write(stdin_write, """ -e "println(\\"HI\\")\" """)
+        write(stdin_write, """ -e "println(\\"HI\\")\"""")
         readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)
@@ -750,6 +750,34 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "begin")
     @test readuntil(stdout_read, "end", keep=true) == "\n\r\e[7C    α=1\n\r\e[7C    β=2\n\r\e[7Cend"
 
+    # Test switching repl modes
+    redirect_stdout(devnull) do # to suppress "foo" echoes
+    sendrepl2("""\e[200~
+            julia> A = 1
+            1
+
+            shell> echo foo
+            foo
+
+            shell> echo foo
+                   foo
+            foo foo
+
+            help?> Int
+            Dummy docstring
+
+                Some text
+
+                julia> error("If this error throws, the paste handler has failed to ignore this docstring example")
+
+            julia> B = 2
+            2\e[201~
+             """)
+    wait(c)
+    @test Main.A == 1
+    @test Main.B == 2
+    end # redirect_stdout
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
@@ -851,7 +879,7 @@ mutable struct Error19864 <: Exception; end
 function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
-    fake_response = (Any[(Error19864(), Ptr{Cvoid}[])], true)
+    fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
     REPL.print_response(buf, fake_response, false, false, nothing)
     return String(take!(buf))
 end
@@ -859,13 +887,13 @@ end
 
 # Test containers in error messages are limited #18726
 let io = IOBuffer()
-    Base.display_error(io,
-        try
+    Base.display_error(io, Base.ExceptionStack(Any[(exception =
+        (try
             [][trues(6000)]
             @assert false
         catch e
             e
-        end, [])
+        end), backtrace = [])]))
     @test length(String(take!(io))) < 1500
 end
 
@@ -887,16 +915,29 @@ end
 let ends_with_semicolon = REPL.ends_with_semicolon
     @test !ends_with_semicolon("")
     @test ends_with_semicolon(";")
-    @test !ends_with_semicolon("a")
+    @test !ends_with_semicolon("ä")
+    @test !ends_with_semicolon("ä # äsdf ;")
+    @test ends_with_semicolon("""a * "#ä" ;""")
+    @test ends_with_semicolon("a; #=#=# =# =#\n")
     @test ends_with_semicolon("1;")
     @test ends_with_semicolon("1;\n")
     @test ends_with_semicolon("1;\r")
     @test ends_with_semicolon("1;\r\n   \t\f")
-    @test ends_with_semicolon("1;#text\n")
-    @test ends_with_semicolon("a; #=#=# =# =#\n")
+    @test ends_with_semicolon("1;#äsdf\n")
+    @test ends_with_semicolon("""1;\n#äsdf\n""")
+    @test !ends_with_semicolon("\"\\\";\"#\"")
+    @test ends_with_semicolon("\"\\\\\";#\"")
     @test !ends_with_semicolon("begin\na;\nb;\nend")
     @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
     @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
+    @test ends_with_semicolon("f()= 1; # é ; 2")
+    @test ends_with_semicolon("f()= 1; # é")
+    @test !ends_with_semicolon("f()= 1; \"é\"")
+    @test !ends_with_semicolon("""("f()= 1; # é")""")
+    @test !ends_with_semicolon(""" "f()= 1; # é" """)
+    @test ends_with_semicolon("f()= 1;")
+    # the next result does not matter because this is not legal syntax
+    @test_nowarn ends_with_semicolon("1; #=# 2")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
@@ -1096,6 +1137,9 @@ end
 # Issue 39427
 @test occursin("does not exist", sprint(show, help_result(":=")))
 
+# Issue #40563
+@test occursin("does not exist", sprint(show, help_result("..")))
+
 # Issue #25930
 
 # Brief and extended docs (issue #25930)
@@ -1291,4 +1335,97 @@ Base.wait(frontend_task)
 
 macro throw_with_linenumbernode(err)
     Expr(:block, LineNumberNode(42, Symbol("test.jl")), :(() -> throw($err)))
+end
+
+@testset "Install missing packages via hooks" begin
+    @testset "Parse AST for packages" begin
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        @test mods == [:Foo, :Bar]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        @test mods == [:Foo]
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        @test isempty(mods)
+
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        @test mods == [:Foo]
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        @test isempty(mods)
+        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        @test mods == [:Foo]
+    end
+end
+
+# err should reprint error if deeper than top-level
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    # initialize `err` to `nothing`
+    write(stdin_write, "global err = nothing\n")
+    readline(stdout_read)
+    readline(stdout_read) == "\e[0m"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # generate top-level error
+    write(stdin_write, "foobar\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    @test readline(stdout_read) == ""
+    readuntil(stdout_read, "julia> ", keep=true)
+    # check that top-level error did not change `err`
+    write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # generate deeper error
+    write(stdin_write, "foo() = foobar\n")
+    readline(stdout_read)
+    readuntil(stdout_read, "julia> ", keep=true)
+    write(stdin_write, "foo()\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    readuntil(stdout_read, "julia> ", keep=true)
+    # check that deeper error did set `err`
+    write(stdin_write, "err\n")
+    readline(stdout_read)
+    @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
+    @test readline(stdout_read) == "UndefVarError: foobar not defined"
+    @test readline(stdout_read) == "Stacktrace:"
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
 end

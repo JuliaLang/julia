@@ -42,7 +42,7 @@ function replace_ref_begin_end_!(ex, withex)
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S)),:($lastindex($S,$n))))
+                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))))
                     used_S |= used
                     ex.args[j] = exj
                     if isa(exj,Expr) && exj.head === :...
@@ -213,6 +213,8 @@ Convert every array-slicing operation in the given expression
 to return a view. Scalar indices, non-array types, and
 explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
+
+Similarly, `@views` converts string slices into [`SubString`](@ref) views.
 
 !!! note
     The `@views` macro only affects `array[...]` expressions

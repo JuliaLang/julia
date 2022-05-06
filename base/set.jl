@@ -3,13 +3,21 @@
 struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Nothing}
 
-    Set{T}() where {T} = new(Dict{T,Nothing}())
-    Set{T}(s::Set{T}) where {T} = new(Dict{T,Nothing}(s.dict))
+    global _Set(dict::Dict{T,Nothing}) where {T} = new{T}(dict)
 end
 
+Set{T}() where {T} = _Set(Dict{T,Nothing}())
+Set{T}(s::Set{T}) where {T} = _Set(Dict{T,Nothing}(s.dict))
 Set{T}(itr) where {T} = union!(Set{T}(), itr)
 Set() = Set{Any}()
 
+function Set{T}(s::KeySet{T, <:Dict{T}}) where {T}
+    d = s.dict
+    slots = copy(d.slots)
+    keys = copy(d.keys)
+    vals = similar(d.vals, Nothing)
+    _Set(Dict{T,Nothing}(slots, keys, vals, d.ndel, d.count, d.age, d.idxfloor, d.maxprobe))
+end
 
 """
     Set([itr])
@@ -36,7 +44,7 @@ empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
-_similar_for(c::AbstractSet, ::Type{T}, itr, isz) where {T} = empty(c, T)
+_similar_for(c::AbstractSet, ::Type{T}, itr, isz, len) where {T} = empty(c, T)
 
 function show(io::IO, s::Set)
     if isempty(s)
@@ -56,6 +64,16 @@ end
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
+
+# This avoids hashing and probing twice and it works the same as
+# in!(x, s::Set) = in(x, s) ? true : (push!(s, x); false)
+function in!(x, s::Set)
+    idx, sh = ht_keyindex2_shorthash!(s.dict, x)
+    idx > 0 && return true
+    _setindex!(s.dict, nothing, x, -idx, sh)
+    return false
+end
+
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
@@ -107,7 +125,7 @@ as determined by [`isequal`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref).
+See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -129,10 +147,7 @@ function unique(itr)
         out = Vector{T}()
         seen = Set{T}()
         for x in itr
-            if !in(x, seen)
-                push!(seen, x)
-                push!(out, x)
-            end
+            !in!(x, seen) && push!(out, x)
         end
         return out
     end
@@ -156,16 +171,10 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
             R = promote_typejoin(S, T)
             seenR = convert(Set{R}, seen)
             outR = convert(Vector{R}, out)
-            if !in(x, seenR)
-                push!(seenR, x)
-                push!(outR, x)
-            end
+            !in!(x, seenR) && push!(outR, x)
             return _unique_from(itr, outR, seenR, i)
         end
-        if !in(x, seen)
-            push!(seen, x)
-            push!(out, x)
-        end
+        !in!(x, seen) && push!(out, x)
     end
     return out
 end
@@ -191,11 +200,7 @@ function unique(f, C; seen::Union{Nothing,Set}=nothing)
     out = Vector{eltype(C)}()
     if seen !== nothing
         for x in C
-            y = f(x)
-            if y ∉ seen
-                push!(out, x)
-                push!(seen, y)
-            end
+            !in!(f(x), seen) && push!(out, x)
         end
         return out
     end
@@ -375,7 +380,7 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
-See also: [`unique`](@ref), [`issorted`](@ref).
+See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -393,23 +398,19 @@ false
 ```
 """
 function allunique(C)
-    seen = Dict{eltype(C), Nothing}()
+    seen = Set{eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
             v, s = x
-            idx = ht_keyindex2!(seen, v)
-            idx > 0 && return false
-            _setindex!(seen, nothing, v, -idx)
+            in!(v, seen) && return false
             x = iterate(C, s)
         end
         sizehint!(seen, length(C))
     end
     while x !== nothing
         v, s = x
-        idx = ht_keyindex2!(seen, v)
-        idx > 0 && return false
-        _setindex!(seen, nothing, v, -idx)
+        in!(v, seen) && return false
         x = iterate(C, s)
     end
     return true
@@ -418,6 +419,40 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+"""
+    allequal(itr) -> Bool
+
+Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
+
+See also: [`unique`](@ref), [`allunique`](@ref).
+
+!!! compat "Julia 1.8"
+    The `allequal` function requires at least Julia 1.8.
+
+# Examples
+```jldoctest
+julia> allequal([])
+true
+
+julia> allequal([1])
+true
+
+julia> allequal([1, 1])
+true
+
+julia> allequal([1, 2])
+false
+
+julia> allequal(Dict(:a => 1, :b => 1))
+false
+```
+"""
+allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+
+allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+
+allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
@@ -548,6 +583,9 @@ replaced.
 
 See also [`replace!`](@ref), [`splice!`](@ref), [`delete!`](@ref), [`insert!`](@ref).
 
+!!! compat "Julia 1.7"
+    Version 1.7 is required to replace elements of a `Tuple`.
+
 # Examples
 ```jldoctest
 julia> replace([1, 2, 1, 3], 1=>0, 2=>4, count=2)
@@ -596,6 +634,9 @@ Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
+!!! compat "Julia 1.7"
+    Version 1.7 is required to replace elements of a `Tuple`.
+
 # Examples
 ```jldoctest
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
@@ -621,7 +662,6 @@ replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, 
 replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b, c)))
 replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b)))
 replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
-replace(a::AbstractString, b::Pair, c::Pair) = throw(MethodError(replace, (a, b, c)))
 
 ### replace! for AbstractDict/AbstractSet
 
@@ -756,7 +796,7 @@ replace(f::Callable, t::Tuple; count::Integer=typemax(Int)) =
 
 function _replace(t::Tuple, count::Int, old_new::Tuple{Vararg{Pair}})
     _replace(t, count) do x
-        @_inline_meta
+        @inline
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
         end

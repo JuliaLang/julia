@@ -21,6 +21,20 @@ g = Float16(1.)
     @test isequal(Float16(0.0), Float16(0.0))
     @test !isequal(Float16(-0.0), Float16(0.0))
     @test !isequal(Float16(0.0), Float16(-0.0))
+
+    for T = Base.BitInteger_types
+        @test -Inf16 < typemin(T)
+        @test -Inf16 <= typemin(T)
+        @test typemin(T) > -Inf16
+        @test typemin(T) >= -Inf16
+        @test typemin(T) != -Inf16
+
+        @test Inf16 > typemax(T)
+        @test Inf16 >= typemax(T)
+        @test typemax(T) < Inf16
+        @test typemax(T) <= Inf16
+        @test typemax(T) != Inf16
+    end
 end
 
 @testset "convert" begin
@@ -80,6 +94,9 @@ end
 
     # no domain error is thrown for negative values
     @test cbrt(Float16(-1.0)) == -1.0
+    # test zero and Inf
+    @test cbrt(Float16(0.0)) == Float16(0.0)
+    @test cbrt(Inf16) == Inf16
 end
 @testset "binary ops" begin
     @test f+g === Float16(3f0)
@@ -157,6 +174,10 @@ end
     # halfway between and last bit is 0
     ff = reinterpret(Float32,                           0b00111110101010100001000000000000)
     @test Float32(Float16(ff)) === reinterpret(Float32, 0b00111110101010100000000000000000)
+
+    for x = (typemin(Int64), typemin(Int128)), R = (RoundUp, RoundToZero)
+        @test Float16(x, R) == nextfloat(-Inf16)
+    end
 end
 
 # issue #5948
@@ -181,3 +202,25 @@ const minsubf16_32 = Float32(minsubf16)
 
 # issues #33076
 @test Float16(1f5) == Inf16
+
+@testset "conversion to Float16 from" begin
+    for T in (Float32, Float64, BigFloat)
+        @testset "conversion from $T" begin
+            for i in 1:2^16
+                f = reinterpret(Float16, UInt16(i-1))
+                isfinite(f) || continue
+                if f < 0
+                    epsdown = T(eps(f))/2
+                    epsup   = issubnormal(f) ? epsdown : T(eps(nextfloat(f)))/2
+                else
+                    epsup   = T(eps(f))/2
+                    epsdown = issubnormal(f) ? epsup : T(eps(prevfloat(f)))/2
+                end
+                @test isequal(f*(-1)^(f === Float16(0)),  Float16(nextfloat(T(f) - epsdown)))
+                @test isequal(f*(-1)^(f === -Float16(0)), Float16(prevfloat(T(f) + epsup)))
+                @test isequal(prevfloat(f), Float16(prevfloat(T(f) - epsdown)))
+                @test isequal(nextfloat(f), Float16(nextfloat(T(f) + epsup)))
+            end
+        end
+    end
+end

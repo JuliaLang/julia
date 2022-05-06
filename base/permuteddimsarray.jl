@@ -24,7 +24,7 @@ Given an AbstractArray `A`, create a view `B` such that the
 dimensions appear to be permuted. Similar to `permutedims`, except
 that no copying occurs (`B` shares storage with `A`).
 
-See also: [`permutedims`](@ref), [`invperm`](@ref).
+See also [`permutedims`](@ref), [`invperm`](@ref).
 
 # Examples
 ```jldoctest
@@ -86,7 +86,7 @@ end
 Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`
 specifying the permutation.
 
-See also: [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
+See also [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
 
 # Examples
 ```jldoctest
