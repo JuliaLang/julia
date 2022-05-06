@@ -399,7 +399,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     (; def, specTypes) = linfo
 
     analyzed = nothing # `ConstAPI` if this call can use constant calling convention
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
+    force_noinline = _any(x::Expr -> x.head === :meta && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     result = caller.result
@@ -613,9 +613,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     end
     renumber_ir_elements!(code, changemap, labelmap)
 
-    meta = Any[]
+    meta = Expr[]
     for i = 1:length(code)
-        code[i] = remove_meta!(code[i], meta)
+        code[i] = process_meta!(meta, code[i])
     end
     strip_trailing_junk!(ci, code, stmtinfo)
     cfg = compute_basic_blocks(code)
@@ -627,16 +627,10 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     return ir
 end
 
-function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
-    if isa(stmt, Expr)
-        head = stmt.head
-        if head === :meta
-            args = stmt.args
-            if length(args) > 0
-                push!(meta, stmt)
-            end
-            return nothing
-        end
+function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
+    if isexpr(stmt, :meta) && length(stmt.args) ≥ 1
+        push!(meta, stmt)
+        return nothing
     end
     return stmt
 end

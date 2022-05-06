@@ -284,9 +284,9 @@ struct IRCode
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
-    meta::Vector{Any}
+    meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
