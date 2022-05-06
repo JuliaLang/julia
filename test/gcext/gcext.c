@@ -561,8 +561,10 @@ void sweep_stack_data(jl_value_t *p)
 {
     obj_sweeps++;
     dynstack_t *stk = (dynstack_t *)p;
-    if (stk->size > stk->capacity)
-        jl_error("internal error during sweeping");
+    if (stk->size > stk->capacity) {
+        assert(0 && "internal error during sweeping");
+        abort();
+    }
 }
 
 // Safely execute Julia code

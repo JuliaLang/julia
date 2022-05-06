@@ -157,7 +157,7 @@ This is why we don't use the `Cstring` type here: as the array is uninitialized,
 NUL bytes. Converting to a `Cstring` as part of the [`ccall`](@ref) checks for contained NUL bytes
 and could therefore throw a conversion error.
 
-Deferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
+Dereferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as it requires access to
 the memory allocated for `hostname` that may have been in the meanwhile garbage collected. The macro
 [`GC.@preserve`](@ref) prevents this from happening and therefore accessing an invalid memory location.
 
@@ -185,6 +185,10 @@ Julia function. The arguments to [`@cfunction`](@ref) are:
     `@cfunction`-generated pointers cannot be used in calls where WINAPI expects a `stdcall`
     function on 32-bit Windows, but can be used on WIN64 (where `stdcall` is unified with the
     C calling convention).
+
+!!! note
+    Callback functions exposed via `@cfunction` should not throw errors, as that will
+    return control to the Julia runtime unexpectedly and may leave the program in an undefined state.
 
 A classic example is the standard C library `qsort` function, declared as:
 
@@ -657,7 +661,7 @@ For translating a C argument list to Julia:
       * `Ref{Any}`
       * argument list must be a valid Julia object (or `C_NULL`)
       * cannot be used for an output parameter, unless the user is able to
-        manage to separate arrange for the object to be GC-preserved
+        separately arrange for the object to be GC-preserved
   * `T*`
 
       * `Ref{T}`, where `T` is the Julia type corresponding to `T`
@@ -721,7 +725,8 @@ For translating a C return type to Julia:
           * `Ptr{T}`, where `T` is the Julia type corresponding to `T`
   * `T (*)(...)` (e.g. a pointer to a function)
 
-      * `Ptr{Cvoid}` (you may need to use [`@cfunction`](@ref) explicitly to create this pointer)
+      * `Ptr{Cvoid}` to call this directly from Julia you will need to pass this as the first argument to [`ccall`](@ref).
+        See [Indirect Calls](@ref).
 
 ### Passing Pointers for Modifying Inputs
 
@@ -840,7 +845,7 @@ the Julia pointer to a Julia array data structure into a form understandable by 
 
 ## Fortran Wrapper Example
 
-The following example utilizes ccall to call a function in a common Fortran library (libBLAS) to
+The following example utilizes `ccall` to call a function in a common Fortran library (libBLAS) to
 computes a dot product. Notice that the argument mapping is a bit different here than above, as
 we need to map from Julia to Fortran.  On every argument type, we specify `Ref` or `Ptr`. This
 mangling convention may be specific to your fortran compiler and operating system, and is likely
@@ -928,7 +933,7 @@ macro dlsym(func, lib)
         let zlocal = $z[]
             if zlocal == C_NULL
                 zlocal = dlsym($(esc(lib))::Ptr{Cvoid}, $(esc(func)))::Ptr{Cvoid}
-                $z[] = $zlocal
+                $z[] = zlocal
             end
             zlocal
         end
@@ -1003,12 +1008,12 @@ hn = Vector{UInt8}(undef, 256)
 err = ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 ```
 
-For more information, please see the [LLVM Language Reference](http://llvm.org/docs/LangRef.html#calling-conventions).
+For more information, please see the [LLVM Language Reference](https://llvm.org/docs/LangRef.html#calling-conventions).
 
 There is one additional special calling convention [`llvmcall`](@ref Base.llvmcall),
 which allows inserting calls to LLVM intrinsics directly.
 This can be especially useful when targeting unusual platforms such as GPGPUs.
-For example, for [CUDA](http://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
+For example, for [CUDA](https://llvm.org/docs/NVPTXUsage.html), we need to be able to read the thread index:
 
 ```julia
 ccall("llvm.nvvm.read.ptx.sreg.tid.x", llvmcall, Int32, ())

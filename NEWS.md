@@ -1,15 +1,19 @@
-Julia v1.7 Release Notes
+Julia v1.9 Release Notes
 ========================
 
 New language features
 ---------------------
 
-* `(; a, b) = x` can now be used to destructure properties `a` and `b` of `x`. This syntax is equivalent to `a = getproperty(x, :a)`
-  and similarly for `b`. ([#39285])
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
+* Slurping in assignments is now also allowed in non-final position. This is
+  handled via `Base.split_rest`. ([#42902])
 
 Language changes
 ----------------
 
+* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
+  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
+  `getfield`. ([#44137])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -18,10 +22,19 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
+  process affinity which is set typically in HPC and cloud environments ([#42340]).
+* `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
+* The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
+  number of interactive threads to create (`auto` currently means 1) ([#42302]).
 
 Multi-threading changes
 -----------------------
-* If the `JULIA_NUM_THREADS` environment variable is set to `auto`, then the number of threads will be set to the number of CPU threads ([#38952])
+
+* `Threads.@spawn` now accepts an optional first argument: `:default` or `:interactive`.
+  An interactive task desires low latency and implicitly agrees to be short duration or to
+  yield frequently. Interactive tasks will run on interactive threads, if any are specified
+  when Julia is started ([#42302]).
 
 Build system changes
 --------------------
@@ -30,72 +43,82 @@ Build system changes
 New library functions
 ---------------------
 
-* Two argument methods `findmax(f, domain)`, `argmax(f, domain)` and the corresponding `min` versions ([#27613]).
-* `isunordered(x)` returns true if `x` is value that is normally unordered, such as `NaN` or `missing`.
-* New macro `Base.@invokelatest f(args...; kwargs...)` provides a convenient way to call `Base.invokelatest(f, args...; kwargs...)` ([#37971])
-* New macro `Base.@invoke f(arg1::T1, arg2::T2; kwargs...)` provides an easier syntax to call `invoke(f, Tuple{T1,T2}; kwargs...)` ([#38438])
+* `Iterators.flatmap` was added ([#44792]).
 
-New library features
---------------------
+Library changes
+---------------
 
+* A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
+  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
+  now be called on a dictionary or set shared by arbitrary tasks provided that there are no
+  tasks mutating the dictionary or set ([#44534]).
+* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 
 Standard library changes
 ------------------------
 
-* `count` and `findall` now accept an `AbstractChar` argument to search for a character in a string ([#38675]).
-* `range` now supports the `range(start, stop)` and `range(start, stop, length)` methods ([#39228]).
-* `range` now supports `start` as an optional keyword argument ([#38041]).
-* `islowercase` and `isuppercase` are now compliant with the Unicode lower/uppercase categories ([#38574]).
-* `iseven` and `isodd` functions now support non-`Integer` numeric types ([#38976]).
-* `escape_string` can now receive a collection of characters in the keyword
-  `keep` that are to be kept as they are. ([#38597]).
-* `getindex` can now be used on `NamedTuple`s with multiple values ([#38878])
-* `keys(::RegexMatch)` is now defined to return the capture's keys, by name if named, or by index if not ([#37299]).
-* `RegexMatch` now iterate to give their captures. ([#34355]).
-
 #### Package Manager
-
 
 #### LinearAlgebra
 
+* The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector,
+  which were equivalent to `a * pinv(b)`, have been removed due to the
+  risk of confusion with elementwise division ([#44358]).
+* We are now wholly reliant on libblastrampoline (LBT) for calling
+  BLAS and LAPACK. OpenBLAS is shipped by default, but building the
+  system image with other BLAS/LAPACK libraries is not
+  supported. Instead, it is recommended that the LBT mechanism be used
+  for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
 
 #### Markdown
 
-
 #### Printf
-
 
 #### Random
 
+* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
 
 #### REPL
 
-
 #### SparseArrays
-
 
 #### Dates
 
-* The `Dates.periods` function can be used to get the `Vector` of `Period`s that comprise a `CompoundPeriod` ([#39169]).
+#### Downloads
 
 #### Statistics
 
-
 #### Sockets
 
+#### Tar
 
 #### Distributed
 
+* The package environment (active project, `LOAD_PATH`, `DEPOT_PATH`) are now propagated
+  when adding *local* workers (e.g. with `addprocs(N::Int)` or through the `--procs=N`
+  command line flag) ([#43270]).
+* `addprocs` for local workers now accept the `env` keyword argument for passing
+  environment variables to the workers processes. This was already supported for
+  remote workers ([#43270]).
 
 #### UUIDs
 
+#### Unicode
+
+* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
 
 #### Mmap
+
+#### DelimitedFiles
 
 
 Deprecated or removed
 ---------------------
-- Multiple successive semicolons in an array expresion were previously ignored (e.g. `[1 ;; 2] == [1 ; 2]`). Multiple semicolons are being reserved for future syntax and may have different behavior in a future release.
 
 
 External dependencies
@@ -104,6 +127,5 @@ External dependencies
 
 Tooling Improvements
 ---------------------
-
 
 <!--- generated by NEWS-update.jl: -->

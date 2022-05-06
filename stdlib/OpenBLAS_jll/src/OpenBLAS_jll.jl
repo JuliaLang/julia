@@ -17,7 +17,7 @@ artifact_dir = ""
 libopenblas_handle = C_NULL
 libopenblas_path = ""
 
-if arch(HostPlatform()) in ("x86_64", "powerpc64le")
+if Base.USE_BLAS64
     const libsuffix = "64_"
 else
     const libsuffix = ""
@@ -32,6 +32,11 @@ else
 end
 
 function __init__()
+    # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
+    if !haskey(ENV, "OPENBLAS_MAIN_FREE")
+        ENV["OPENBLAS_MAIN_FREE"] = "1"
+    end
+
     global libopenblas_handle = dlopen(libopenblas)
     global libopenblas_path = dlpath(libopenblas_handle)
     global artifact_dir = dirname(Sys.BINDIR)
