@@ -1997,18 +1997,41 @@ See also: [`digits`](@ref), [`iszero`](@ref), [`NaN`](@ref).
 """
 Bool
 
-for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
-    @eval begin
-        """
-            Float$($bit) <: AbstractFloat
+"""
+    Float64 <: AbstractFloat <: Real
 
-        $($bit)-bit floating point number type (IEEE 754 standard).
+64-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 11 exponent, 52 fraction bits.
 
-        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
-        """
-        $(Symbol("Float", bit))
-    end
-end
+This is the default for floating point literals, `3.141 isa Float64`.
+The exponent for scientific notation can be entered as `e` or `E`, 
+thus `2e3 === 2E3 === 2.0 * 10^3`. This is strongly preferred over 
+`10^n` because integers overflow, thus `10^19 < 0`.
+
+See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
+"""
+Float64
+
+"""
+    Float32 <: AbstractFloat <: Real
+
+32-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 8 exponent, 23 fraction bits.
+
+The exponent for scientific notation should be entered as lower-case `f`, 
+thus `2f3 === 2f0 * 10^3 === Float32(2_000)`.
+
+See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float64`](@ref), [`Float16`](@ref).
+"""
+Float32
+
+"""
+    Float16 <: AbstractFloat <: Real
+
+16-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 5 exponent, 10 fraction bits.
+"""
+Float16
 
 for bit in (8, 16, 32, 64, 128)
     @eval begin
