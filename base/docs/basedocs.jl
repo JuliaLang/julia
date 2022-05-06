@@ -2754,7 +2754,7 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
+The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
 max, c, :sequentially_consistent))`, where the first argument must be a
 `getfield` expression and is modified atomically.
 
