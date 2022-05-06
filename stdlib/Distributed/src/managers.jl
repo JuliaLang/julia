@@ -194,7 +194,7 @@ function parse_machine(machine::AbstractString)
 
     if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
         ipv6_end = findlast(']', machine)
-        if ipv6_end == nothing
+        if ipv6_end === nothing
             throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine\""))
         end
         hoststr = machine[begin+1 : prevind(machine,ipv6_end)]
