@@ -765,7 +765,7 @@ Boolean properties:
     state of the method caches or other mutable global state.
 
 
-UInt8 settings:
+`UInt8` settings:
 
   * `constprop`
 
