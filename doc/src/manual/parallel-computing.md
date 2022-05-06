@@ -8,7 +8,7 @@ Julia supports these four categories of concurrent and parallel programming:
     for I/O, event handling, producer-consumer processes, and similar patterns.
     Tasks can synchronize through operations like [`wait`](@ref) and [`fetch`](@ref), and
     communicate via [`Channel`](@ref)s. While strictly not parallel computing by themselves,
-    Julia lets you schedule `Task`s on several threads.
+    Julia lets you schedule [`Task`](@ref)s on several threads.
 
 2. **Multi-threading**:
 
@@ -21,7 +21,7 @@ Julia supports these four categories of concurrent and parallel programming:
 3. **Distributed computing**:
 
     Distributed computing runs multiple Julia processes with separate memory spaces. These can be on the same
-    computer or multiple computers. The `Distributed` standard library provides the capability for remote execution
+    computer or multiple computers. The [`Distributed`](@ref man-distributed) standard library provides the capability for remote execution
     of a Julia function. With this basic building block, it is possible to build many different kinds of
     distributed computing abstractions. Packages like [`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl)
     are an example of such an abstraction. On the other hand, packages like [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) and

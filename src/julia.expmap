@@ -1,20 +1,13 @@
 {
   global:
-    __asan*;
-    __tsan*;
     pthread*;
     __stack_chk_guard;
     asprintf;
     bitvector_*;
-    ev_break;
-    get_exename;
-    getlocalip;
-    int32hash;
-    int64hash;
-    int64to32hash;
     ios_*;
-    iswprint;
+    small_arraylist_grow;
     jl_*;
+    ijl_*;
     rec_backtrace;
     julia_*;
     libsupport_init;
@@ -33,10 +26,12 @@
     utf8proc_*;
     jlbacktrace;
     jlbacktracet;
-    julia_type_to_llvm;
     _IO_stdin_used;
-    __ZN4llvm23createLowerSimdLoopPassEv;
+    _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
+    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
+    _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
     LLVMExtra*;
+    llvmGetPassPluginInfo;
 
     /* freebsd */
     environ;

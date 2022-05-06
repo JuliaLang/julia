@@ -1,20 +1,32 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/LoopPass.h>
 #include "llvm/Analysis/LoopIterator.h"
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
+#include <llvm/Analysis/ValueTracking.h>
 
 #include "llvm-pass-helpers.h"
 #include "julia.h"
+#include "llvm-alloc-helpers.h"
+#include "codegen_shared.h"
 
 #define DEBUG_TYPE "julia-licm"
 
 using namespace llvm;
+
+STATISTIC(HoistedPreserveBegin, "Number of gc_preserve_begin instructions hoisted out of a loop");
+STATISTIC(SunkPreserveEnd, "Number of gc_preserve_end instructions sunk out of a loop");
+STATISTIC(ErasedPreserveEnd, "Number of gc_preserve_end instructions removed from nonterminating loops");
+STATISTIC(HoistedWriteBarrier, "Number of write barriers hoisted out of a loop");
+STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 
 /*
  * Julia LICM pass.
@@ -25,11 +37,25 @@ using namespace llvm;
 
 namespace {
 
-struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
+struct JuliaLICMPassLegacy : public LoopPass {
     static char ID;
-    JuliaLICMPass() : LoopPass(ID) {};
+    JuliaLICMPassLegacy() : LoopPass(ID) {};
 
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override
+    bool runOnLoop(Loop *L, LPPassManager &LPM) override;
+
+    protected:
+        void getAnalysisUsage(AnalysisUsage &AU) const override {
+            getLoopAnalysisUsage(AU);
+        }
+};
+
+struct JuliaLICM : public JuliaPassContext {
+    function_ref<DominatorTree &()> GetDT;
+    function_ref<LoopInfo &()> GetLI;
+    JuliaLICM(function_ref<DominatorTree &()> GetDT,
+              function_ref<LoopInfo &()> GetLI) : GetDT(GetDT), GetLI(GetLI) {}
+
+    bool runOnLoop(Loop *L)
     {
         // Get the preheader block to move instructions into,
         // required to run this pass.
@@ -37,14 +63,17 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
         if (!preheader)
             return false;
         BasicBlock *header = L->getHeader();
+        const llvm::DataLayout &DL = header->getModule()->getDataLayout();
         initFunctions(*header->getModule());
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
-        if (!gc_preserve_begin_func)
+        // We also hoist write barriers here, so we don't exit if write_barrier_func exists
+        if (!gc_preserve_begin_func && !write_barrier_func && !write_barrier_binding_func &&
+            !alloc_obj_func)
             return false;
-        auto LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-        auto DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+        auto LI = &GetLI();
+        auto DT = &GetDT();
 
         // Lazy initialization of exit blocks insertion points.
         bool exit_pts_init = false;
@@ -81,7 +110,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                 // corresponding `end` can be moved to the loop exit.
                 if (callee == gc_preserve_begin_func) {
                     bool canhoist = true;
-                    for (Use &U : call->arg_operands()) {
+                    for (Use &U : call->args()) {
                         // Check if all arguments are generated outside the loop
                         auto origin = dyn_cast<Instruction>(U.get());
                         if (!origin)
@@ -93,6 +122,7 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                     }
                     if (!canhoist)
                         continue;
+                    ++HoistedPreserveBegin;
                     call->moveBefore(preheader->getTerminator());
                     changed = true;
                 }
@@ -103,38 +133,107 @@ struct JuliaLICMPass : public LoopPass, public JuliaPassContext {
                     changed = true;
                     auto exit_pts = get_exit_pts();
                     if (exit_pts.empty()) {
+                        ++ErasedPreserveEnd;
                         call->eraseFromParent();
                         continue;
                     }
+                    ++SunkPreserveEnd;
                     call->moveBefore(exit_pts[0]);
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
                         CallInst::Create(call, {}, exit_pts[i]);
                     }
                 }
+                else if (callee == write_barrier_func ||
+                         callee == write_barrier_binding_func) {
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
+                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (valid) {
+                        ++HoistedWriteBarrier;
+                        call->moveBefore(preheader->getTerminator());
+                        changed = true;
+                    }
+                }
+                else if (callee == alloc_obj_func) {
+                    jl_alloc::AllocUseInfo use_info;
+                    jl_alloc::CheckInst::Stack check_stack;
+                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                    jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
+                    if (use_info.escaped || use_info.addrescaped) {
+                        continue;
+                    }
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
+                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                            valid = false;
+                            break;
+                        }
+                    }
+                    if (use_info.refstore) {
+                        // We need to add write barriers to any stores
+                        // that may start crossing generations
+                        continue;
+                    }
+                    if (valid) {
+                        ++HoistedAllocation;
+                        call->moveBefore(preheader->getTerminator());
+                        changed = true;
+                    }
+                }
             }
         }
+        assert(!verifyFunction(*L->getHeader()->getParent()));
         return changed;
-    }
-
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        getLoopAnalysisUsage(AU);
     }
 };
 
-char JuliaLICMPass::ID = 0;
-static RegisterPass<JuliaLICMPass>
+bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
+    auto GetDT = [this]() -> DominatorTree & {
+        return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+    };
+    auto GetLI = [this]() -> LoopInfo & {
+        return getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+    };
+    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    return juliaLICM.runOnLoop(L);
+}
+
+char JuliaLICMPassLegacy::ID = 0;
+static RegisterPass<JuliaLICMPassLegacy>
         Y("JuliaLICM", "LICM for julia specific intrinsics.",
           false, false);
+} //namespace
+
+PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U)
+{
+    auto GetDT = [&AR]() -> DominatorTree & {
+        return AR.DT;
+    };
+    auto GetLI = [&AR]() -> LoopInfo & {
+        return AR.LI;
+    };
+    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    if (juliaLICM.runOnLoop(&L)) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<LoopAnalysis>();
+        preserved.preserve<DominatorTreeAnalysis>();
+        return preserved;
+    }
+    return PreservedAnalyses::all();
 }
 
 Pass *createJuliaLICMPass()
 {
-    return new JuliaLICMPass();
+    return new JuliaLICMPassLegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraJuliaLICMPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraJuliaLICMPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createJuliaLICMPass());
 }

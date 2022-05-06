@@ -102,24 +102,30 @@ end
 function \(F::Union{Factorization, Adjoint{<:Any,<:Factorization}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    ldiv!(F, BB)
+    ldiv!(F, copy_similar(B, TFB))
 end
 
 function /(B::AbstractMatrix, F::Union{Factorization, Adjoint{<:Any,<:Factorization}})
     require_one_based_indexing(B)
     TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
-    BB = similar(B, TFB, size(B))
-    copyto!(BB, B)
-    rdiv!(BB, F)
+    rdiv!(copy_similar(B, TFB), F)
 end
 /(adjB::AdjointAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjB.parent)
 /(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
 
 
-# support the same 3-arg idiom as in our other in-place A_*_B functions:
-function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
+function ldiv!(Y::AbstractVector, A::Factorization, B::AbstractVector)
+    require_one_based_indexing(Y, B)
+    m, n = size(A, 1), size(A, 2)
+    if m > n
+        Bc = copy(B)
+        ldiv!(A, Bc)
+        return copyto!(Y, 1, Bc, 1, n)
+    else
+        return ldiv!(A, copyto!(Y, B))
+    end
+end
+function ldiv!(Y::AbstractMatrix, A::Factorization, B::AbstractMatrix)
     require_one_based_indexing(Y, B)
     m, n = size(A, 1), size(A, 2)
     if m > n
@@ -127,7 +133,8 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
         ldiv!(A, Bc)
         return copyto!(Y, view(Bc, 1:n, :))
     else
-        return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
+        copyto!(view(Y, 1:m, :), view(B, 1:m, :))
+        return ldiv!(A, Y)
     end
 end
 

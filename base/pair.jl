@@ -1,18 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct Pair{A, B}
-    first::A
-    second::B
-    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
-        @_inline_meta
-        # if we didn't inline this, it's probably because the callsite was actually dynamic
-        # to avoid potentially compiling many copies of this, we mark the arguments with `@nospecialize`
-        # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
-        # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
-        return new(a, b)
-    end
-end
-Pair(a, b) = Pair{typeof(a), typeof(b)}(a, b)
 const => = Pair
 
 """

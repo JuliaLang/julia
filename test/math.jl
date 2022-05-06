@@ -2,6 +2,7 @@
 
 using Random
 using LinearAlgebra
+using Base.Experimental: @force_compile
 
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
@@ -53,6 +54,11 @@ end
     @test occursin("3.14159", sprint(show, MIME"text/plain"(), π))
     @test repr(Any[pi ℯ; ℯ pi]) == "Any[π ℯ; ℯ π]"
     @test string(pi) == "π"
+
+    @test sin(π) === sinpi(1) == tan(π) == sinpi(1 // 1) == 0
+    @test cos(π) === cospi(1) == sec(π) == cospi(1 // 1) == -1
+    @test csc(π) == 1/0 && cot(π) == -1/0
+    @test sincos(π) === sincospi(1) == (0, -1)
 end
 
 @testset "frexp,ldexp,significand,exponent" begin
@@ -141,14 +147,16 @@ end
 # We compare to BigFloat instead of hard-coding
 # values, assuming that BigFloat has an independently tested implementation.
 @testset "basic math functions" begin
-    @testset "$T" for T in (Float32, Float64)
+    @testset "$T" for T in (Float16, Float32, Float64)
         x = T(1//3)
         y = T(1//2)
         yi = 4
         @testset "Random values" begin
-            @test x^y ≈ big(x)^big(y)
+            @test x^y === T(big(x)^big(y))
             @test x^1 === x
-            @test x^yi ≈ big(x)^yi
+            @test x^yi === T(big(x)^yi)
+            @test (-x)^yi == x^yi
+            @test (-x)^(yi+1) == -(x^(yi+1))
             @test acos(x) ≈ acos(big(x))
             @test acosh(1+x) ≈ acosh(big(1+x))
             @test asin(x) ≈ asin(big(x))
@@ -192,7 +200,7 @@ end
             @test atan(T(1),T(1)) ≈ T(pi)/4 atol=eps(T)
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
-            @test isequal(cbrt(T(1000000000)), T(1000))
+            @test isequal(cbrt(T(1000000000))^3, T(1000)^3)
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
@@ -221,7 +229,7 @@ end
             @test sin(T(pi)) ≈ T(0) atol=eps(T)
             @test isequal(sqrt(T(0)), T(0))
             @test isequal(sqrt(T(1)), T(1))
-            @test isequal(sqrt(T(100000000)), T(10000))
+            @test isequal(sqrt(T(100000000))^2, T(10000)^2)
             @test isequal(tan(T(0)), T(0))
             @test tan(T(pi)/4) ≈ T(1) atol=eps(T)
             @test isequal(sec(T(pi)), -one(T))
@@ -230,6 +238,14 @@ end
             @test isequal(cscd(T(90)), one(T))
             @test isequal(sech(log(one(T))), one(T))
             @test isequal(csch(zero(T)), T(Inf))
+            @test zero(T)^y === zero(T)
+            @test zero(T)^zero(T) === one(T)
+            @test zero(T)^(-y) === T(Inf)
+            @test zero(T)^T(NaN) === T(NaN)
+            @test one(T)^y === one(T)
+            @test one(T)^zero(T) === one(T)
+            @test one(T)^T(NaN) === one(T)
+            @test isnan(T(NaN)^T(-.5))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -297,46 +313,31 @@ end
     end
 end
 
-@testset "exp function" for T in (Float64, Float32)
-    @testset "$T accuracy" begin
-        X = map(T, vcat(-10:0.0002:10, -80:0.001:80, 2.0^-27, 2.0^-28, 2.0^-14, 2.0^-13))
-        for x in X
-            y, yb = exp(x), exp(big(x))
-            @test abs(y-yb) <= 1.0*eps(T(yb))
+@testset "exponential functions" for T in (Float64, Float32, Float16)
+    for (func, invfunc) in ((exp2, log2), (exp, log), (exp10, log10))
+        @testset "$T $func accuracy" begin
+            minval, maxval = invfunc(floatmin(T)),prevfloat(invfunc(floatmax(T)))
+            # Test range and extensively test numbers near 0.
+            X = Iterators.flatten((minval:T(.1):maxval,
+                                   minval/100:T(.0021):maxval/100,
+                                   minval/10000:T(.000021):maxval/10000,
+                                   nextfloat(zero(T)),
+                                   T(-100):T(1):T(100) ))
+            for x in X
+                y, yb = func(x), func(widen(x))
+                if isfinite(eps(T(yb)))
+                    @test abs(y-yb) <= 1.2*eps(T(yb))
+                end
+            end
         end
-    end
-    @testset "$T edge cases" begin
-        @test isnan_type(T, exp(T(NaN)))
-        @test exp(T(-Inf)) === T(0.0)
-        @test exp(T(Inf)) === T(Inf)
-        @test exp(T(0.0)) === T(1.0) # exact
-        @test exp(T(5000.0)) === T(Inf)
-        @test exp(T(-5000.0)) === T(0.0)
-    end
-end
-
-@testset "exp10 function" begin
-    @testset "accuracy" begin
-        X = map(Float64, vcat(-10:0.00021:10, -35:0.0023:100, -300:0.001:300))
-        for x in X
-            y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float64(yb))
+        @testset "$T $func edge cases" begin
+            @test func(T(-Inf)) === T(0.0)
+            @test func(T(Inf)) === T(Inf)
+            @test func(T(NaN)) === T(NaN)
+            @test func(T(0.0)) === T(1.0) # exact
+            @test func(T(5000.0)) === T(Inf)
+            @test func(T(-5000.0)) === T(0.0)
         end
-        X = map(Float32, vcat(-10:0.00021:10, -35:0.0023:35, -35:0.001:35))
-        for x in X
-            y, yb = exp10(x), exp10(big(x))
-            @test abs(y-yb) <= 1.2*eps(Float32(yb))
-        end
-    end
-    @testset "$T edge cases" for T in (Float64, Float32)
-        @test isnan_type(T, exp10(T(NaN)))
-        @test exp10(T(-Inf)) === T(0.0)
-        @test exp10(T(Inf)) === T(Inf)
-        @test exp10(T(0.0)) === T(1.0) # exact
-        @test exp10(T(1.0)) === T(10.0)
-        @test exp10(T(3.0)) === T(1000.0)
-        @test exp10(T(5000.0)) === T(Inf)
-        @test exp10(T(-5000.0)) === T(0.0)
     end
 end
 
@@ -652,14 +653,14 @@ end
 end
 
 @testset "modf" begin
-    @testset "$elty" for elty in (Float16, Float32, Float64)
-        @test modf( convert(elty,1.2) )[1] ≈ convert(elty,0.2)
-        @test modf( convert(elty,1.2) )[2] ≈ convert(elty,1.0)
-        @test modf( convert(elty,1.0) )[1] ≈ convert(elty,0.0)
-        @test modf( convert(elty,1.0) )[2] ≈ convert(elty,1.0)
-        @test isequal(modf( convert(elty,-Inf) ), (-0.0, -Inf))
-        @test isequal(modf( convert(elty,Inf) ), (0.0, Inf))
-        @test isequal(modf( convert(elty,NaN) ), (NaN, NaN))
+    @testset "$T" for T in (Float16, Float32, Float64)
+        @test modf(T(1.25)) === (T(0.25), T(1.0))
+        @test modf(T(1.0))  === (T(0.0), T(1.0))
+        @test modf(T(-Inf)) === (T(-0.0), T(-Inf))
+        @test modf(T(Inf))  === (T(0.0), T(Inf))
+        @test modf(T(NaN))  === (T(NaN), T(NaN))
+        @test modf(T(-0.0)) === (T(-0.0), T(-0.0))
+        @test modf(T(-1.0)) === (T(-0.0), T(-1.0))
     end
 end
 
@@ -1284,4 +1285,155 @@ end
     for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
         @test_throws MethodError f(x)
     end
+end
+
+@testset "fma" begin
+    fma_list = (fma, Base.fma_emulated)
+    if !(Sys.islinux() && Int == Int32) # test runtime fma (skip linux32)
+        fma_list = (fma_list..., Base.fma_float)
+    end
+    for func in fma_list
+        @test func(nextfloat(1.),nextfloat(1.),-1.0) === 4.440892098500626e-16
+        @test func(nextfloat(1f0),nextfloat(1f0),-1f0) === 2.3841858f-7
+        @testset "$T" for T in (Float32, Float64)
+            @test func(floatmax(T), T(2), -floatmax(T)) === floatmax(T)
+            @test func(floatmax(T), T(1), eps(floatmax((T)))) === T(Inf)
+            @test func(T(Inf), T(Inf), T(Inf)) === T(Inf)
+            @test func(floatmax(T), floatmax(T), -T(Inf)) === -T(Inf)
+            @test func(floatmax(T), -floatmax(T), T(Inf)) === T(Inf)
+            @test isnan_type(T, func(T(Inf), T(1), -T(Inf)))
+            @test isnan_type(T, func(T(Inf), T(0), -T(0)))
+            @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
+            for _ in 1:2^18
+                a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
+                @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+            end
+        end
+        @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
+        @test func(floatmax(Float32), nextfloat(1f0), -floatmax(Float32)) === 4.0564817f31
+        @test func(1.6341681540852291e308, -2., floatmax(Float64)) == -1.4706431733081426e308 # case where inv(a)*c*a == Inf
+        @test func(-2., 1.6341681540852291e308, floatmax(Float64)) == -1.4706431733081426e308 # case where inv(b)*c*b == Inf
+        @test func(-1.9369631f13, 2.1513551f-7, -1.7354427f-24) == -4.1670958f6
+    end
+end
+
+@testset "pow" begin
+    for T in (Float16, Float32, Float64)
+        for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
+            for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
+                got, expected = T(x)^T(y), T(big(x))^T(y)
+                @test isnan_type(T, got) && isnan_type(T, expected) || (got === expected)
+            end
+        end
+        for _ in 1:2^16
+            x=rand(T)*100; y=rand(T)*200-100
+            got, expected = x^y, widen(x)^y
+            if isfinite(eps(T(expected)))
+                @test abs(expected-got) <= 1.3*eps(T(expected)) || (x,y)
+            end
+        end
+        for _ in 1:2^10
+            x=rand(T)*floatmin(T); y=rand(T)*2-1
+            got, expected = x^y, widen(x)^y
+            if isfinite(eps(T(expected)))
+                @test abs(expected-got) <= 1.3*eps(T(expected)) || (x,y)
+            end
+        end
+        # test (-x)^y for y larger than typemax(Int)
+        @test T(-1)^floatmax(T) === T(1)
+        @test prevfloat(T(-1))^floatmax(T) === T(Inf)
+        @test nextfloat(T(-1))^floatmax(T) === T(0.0)
+    end
+    # test for large negative exponent where error compensation matters
+    @test 0.9999999955206014^-1.0e8 == 1.565084574870928
+end
+
+# Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
+# This happened on old glibc versions.
+# Test case from https://sourceware.org/bugzilla/show_bug.cgi?id=14032.
+@testset "sqrt double rounding" begin
+    testdata = [
+        (0x1.fffffffffffffp+1023, 0x1.fffffffffffffp+511),
+        (0x1.ffffffffffffbp+1023, 0x1.ffffffffffffdp+511),
+        (0x1.ffffffffffff7p+1023, 0x1.ffffffffffffbp+511),
+        (0x1.ffffffffffff3p+1023, 0x1.ffffffffffff9p+511),
+        (0x1.fffffffffffefp+1023, 0x1.ffffffffffff7p+511),
+        (0x1.fffffffffffebp+1023, 0x1.ffffffffffff5p+511),
+        (0x1.fffffffffffe7p+1023, 0x1.ffffffffffff3p+511),
+        (0x1.fffffffffffe3p+1023, 0x1.ffffffffffff1p+511),
+        (0x1.fffffffffffdfp+1023, 0x1.fffffffffffefp+511),
+        (0x1.fffffffffffdbp+1023, 0x1.fffffffffffedp+511),
+        (0x1.fffffffffffd7p+1023, 0x1.fffffffffffebp+511),
+        (0x1.0000000000003p-1022, 0x1.0000000000001p-511),
+        (0x1.0000000000007p-1022, 0x1.0000000000003p-511),
+        (0x1.000000000000bp-1022, 0x1.0000000000005p-511),
+        (0x1.000000000000fp-1022, 0x1.0000000000007p-511),
+        (0x1.0000000000013p-1022, 0x1.0000000000009p-511),
+        (0x1.0000000000017p-1022, 0x1.000000000000bp-511),
+        (0x1.000000000001bp-1022, 0x1.000000000000dp-511),
+        (0x1.000000000001fp-1022, 0x1.000000000000fp-511),
+        (0x1.0000000000023p-1022, 0x1.0000000000011p-511),
+        (0x1.0000000000027p-1022, 0x1.0000000000013p-511),
+        (0x1.000000000002bp-1022, 0x1.0000000000015p-511),
+        (0x1.000000000002fp-1022, 0x1.0000000000017p-511),
+        (0x1.0000000000033p-1022, 0x1.0000000000019p-511),
+        (0x1.0000000000037p-1022, 0x1.000000000001bp-511),
+        (0x1.7167bc36eaa3bp+6, 0x1.3384c7db650cdp+3),
+        (0x1.7570994273ad7p+6, 0x1.353186e89b8ffp+3),
+        (0x1.7dae969442fe6p+6, 0x1.389640fb18b75p+3),
+        (0x1.7f8444fcf67e5p+6, 0x1.395659e94669fp+3),
+        (0x1.8364650e63a54p+6, 0x1.3aea9efe1a3d7p+3),
+        (0x1.85bedd274edd8p+6, 0x1.3bdf20c867057p+3),
+        (0x1.8609cf496ab77p+6, 0x1.3bfd7e14b5eabp+3),
+        (0x1.873849c70a375p+6, 0x1.3c77ed341d27fp+3),
+        (0x1.8919c962cbaaep+6, 0x1.3d3a7113ee82fp+3),
+        (0x1.8de4493e22dc6p+6, 0x1.3f27d448220c3p+3),
+        (0x1.924829a17a288p+6, 0x1.40e9552eec28fp+3),
+        (0x1.92702cd992f12p+6, 0x1.40f94a6fdfddfp+3),
+        (0x1.92b763a8311fdp+6, 0x1.4115af614695fp+3),
+        (0x1.947da013c7293p+6, 0x1.41ca91102940fp+3),
+        (0x1.9536091c494d2p+6, 0x1.4213e334c77adp+3),
+        (0x1.61b04c6p-1019, 0x1.a98b88f18b46dp-510),
+        (0x1.93789f1p-1018, 0x1.4162ae43d5821p-509),
+        (0x1.a1989b4p-1018, 0x1.46f6736eb44bbp-509),
+        (0x1.f93bc9p-1018, 0x1.67a36ec403bafp-509),
+        (0x1.2f675e3p-1017, 0x1.8a22ab6dcfee1p-509),
+        (0x1.a158508p-1017, 0x1.ce418a96cf589p-509),
+        (0x1.cd31f078p-1017, 0x1.e5ef1c65dccebp-509),
+        (0x1.33b43b08p-1016, 0x1.18a9f607e1701p-508),
+        (0x1.6e66a858p-1016, 0x1.324402a00b45fp-508),
+        (0x1.8661cbf8p-1016, 0x1.3c212046bfdffp-508),
+        (0x1.bbb221b4p-1016, 0x1.510681b939931p-508),
+        (0x1.c4942f3cp-1016, 0x1.5461e59227ab5p-508),
+        (0x1.dbb258c8p-1016, 0x1.5cf7b0f78d3afp-508),
+        (0x1.57103ea4p-1015, 0x1.a31ab946d340bp-508),
+        (0x1.9b294f88p-1015, 0x1.cad197e28e85bp-508),
+        (0x1.0000000000001p+0, 0x1p+0),
+        (0x1.fffffffffffffp-1, 0x1.fffffffffffffp-1),
+    ]
+    for (x,y) in testdata
+        # Runtime version
+        @test sqrt(x) === y
+        # Interpreter compile-time version
+        @test Base.invokelatest((@eval ()->sqrt(Base.inferencebarrier($x)))) == y
+        # Inference const-prop version
+        @test Base.invokelatest((@eval ()->sqrt($x))) == y
+        # LLVM constant folding version
+        @test Base.invokelatest((@eval ()->(@force_compile; sqrt(Base.inferencebarrier($x))))) == y
+    end
+end
+
+# Test inference of x^0.0 (tested here because
+# it requires annotations in the math code. If
+# the compiler ever gets good enough to figure
+# that out by itself, move this to inference).
+@test code_typed(x->Val{x^0.0}(), Tuple{Float64})[1][2] == Val{1.0}
+
+function f44336()
+    as = ntuple(_ -> rand(), Val(32))
+    @inline hypot(as...)
+end
+@testset "Issue #44336" begin
+    f44336()
+    @test (@allocated f44336()) == 0
 end

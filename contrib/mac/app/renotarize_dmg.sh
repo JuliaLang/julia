@@ -13,28 +13,28 @@ if [[ -z "${APPLEID}" ]] || [[ -z "${APPLEID_PASSWORD}" ]]; then
     exit 1
 fi
 
-# Translate from `s3://` URL to `https://` url:
+# Use `aws` to download an `s3://` URL, otherwise use `curl`
 URL="$1"
 if [[ "$URL" == s3://* ]]; then
-    # Chop off `s3://`
-    URL="${URL:5}"
-    # Split into bucket.s3.aws.com/path
-    URL="https://${URL%%/*}.s3.amazonaws.com/${URL#*/}"
+    aws s3 cp "${URL}" .
+elif [[ "${URL}" == http* ]]; then
+    # Download .dmg
+    curl -L "${URL}" -O
+else
+    echo "Unknown URL format: '${URL}'" >&2
+    exit 1
 fi
-
-# Download .dmg
-curl -L "${URL}" -O
 
 # Unpack dmg into our `dmg` folder
 rm -rf dmg
+DMG_NAME=$(basename "${URL}")
 
 # Copy app over to our `dmg` folder
 for j in /Volumes/Julia-*; do hdiutil detach "${j}"; done
-hdiutil mount "$(basename "$1")"
+hdiutil mount "${DMG_NAME}"
 cp -Ra /Volumes/Julia-* dmg
 
-# Override some important Makefile variables
-DMG_NAME=$(basename "$1")
+# Autodetect APP_NAME and VOL_NAME
 APP_NAME=$(basename dmg/*.app)
 VOL_NAME=$(basename /Volumes/Julia-*)
 
@@ -47,3 +47,8 @@ for j in /Volumes/Julia-*; do hdiutil detach "${j}"; done
 
 # Run notarization
 make notarize "DMG_NAME=${DMG_NAME}" "APP_NAME=${APP_NAME}" "VOL_NAME=${VOL_NAME}"
+
+# If it was an s3 bucket, auto-upload it
+if [[ "${URL}" == s3://* ]]; then
+    aws s3 cp --acl public-read "${DMG_NAME}" "${URL}"
+fi

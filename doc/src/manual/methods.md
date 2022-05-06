@@ -41,7 +41,7 @@ for structuring and organizing programs.
     it can be omitted altogether, writing just `meth(arg1,arg2)`, with `this` implied as the receiving
     object.
 !!! note
-    All the examples in this chapter assume that you are defining modules for a function in the *same*
+    All the examples in this chapter assume that you are defining methods for a function in the *same*
     module. If you want to add methods to a function in *another* module, you have to `import` it or
     use the name qualified with module names. See the section on [namespace management](@ref
     namespace-management).
@@ -605,7 +605,6 @@ For instance, you might have some sort of abstract array with an arbitrary eleme
 and want to write your computation on it with a specific element type.
 We must implement a method for each `AbstractArray{T}` subtype that describes how to compute this type transform.
 There is no general transform of one subtype into another subtype with a different parameter.
-(Quick review: do you see why this is?)
 
 The subtypes of `AbstractArray` typically implement two methods to
 achieve this:

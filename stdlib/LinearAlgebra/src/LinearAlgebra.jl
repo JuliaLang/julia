@@ -9,15 +9,19 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
-    cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
-    oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
-    setindex!, show, similar, sin, sincos, sinh, size, sqrt,
-    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
+    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
+    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
+    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
+    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
+    vec, zero
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
+    splat
 using Base.Broadcast: Broadcasted, broadcasted
+using OpenBLAS_jll
+using libblastrampoline_jll
 import Libdl
 
 export
@@ -261,9 +265,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-
 @noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
-
 
 """
     ldiv!(Y, A, B) -> Y
@@ -290,14 +292,14 @@ julia> ldiv!(Y, qr(A), X);
 julia> Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983806
-  0.10020661157024781
+ -0.051652892561983674
+  0.10020661157024757
 
 julia> A\\X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198342
-  0.1002066115702479
+ -0.05165289256198333
+  0.10020661157024785
 ```
 """
 ldiv!(Y, A, B)
@@ -327,14 +329,14 @@ julia> ldiv!(qr(A), X);
 julia> X
 3-element Vector{Float64}:
   0.7128099173553719
- -0.051652892561983806
-  0.10020661157024781
+ -0.051652892561983674
+  0.10020661157024757
 
 julia> A\\Y
 3-element Vector{Float64}:
   0.7128099173553719
- -0.05165289256198342
-  0.1002066115702479
+ -0.05165289256198333
+  0.10020661157024785
 ```
 """
 ldiv!(A, B)
@@ -354,8 +356,47 @@ control over the factorization of `B`.
 """
 rdiv!(A, B)
 
+"""
+    copy_oftype(A, T)
+
+Creates a copy of `A` with eltype `T`. No assertions about mutability of the result are
+made. When `eltype(A) == T`, then this calls `copy(A)` which may be overloaded for custom
+array types. Otherwise, this calls `convert(AbstractArray{T}, A)`.
+"""
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+"""
+    copymutable_oftype(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T)`.
+
+The resulting matrix typically has similar algebraic structure as `A`. For
+example, supplying a tridiagonal matrix results in another tridiagonal matrix.
+In general, the type of the output corresponds to that of `similar(A, T)`.
+
+In LinearAlgebra, mutable copies (of some desired eltype) are created to be passed
+to in-place algorithms (such as `ldiv!`, `rdiv!`, `lu!` and so on). If the specific
+algorithm is known to preserve the algebraic structure, use `copymutable_oftype`.
+If the algorithm is known to return a dense matrix (or some wrapper backed by a dense
+matrix), then use `copy_similar`.
+
+See also: `Base.copymutable`, `copy_similar`.
+"""
+copymutable_oftype(A::AbstractArray, ::Type{S}) where {S} = copyto!(similar(A, S), A)
+
+"""
+    copy_similar(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
+
+Compared to `copymutable_oftype`, the result can be more flexible. In general, the type
+of the output corresponds to that of the three-argument method `similar(A, T, size(A))`.
+
+See also: `copymutable_oftype`.
+"""
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -402,6 +443,12 @@ export ⋅, ×
 ## vectors to matrices.
 _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+# SymTridiagonal ev can be the same length as dv, but the last element is
+# ignored. However, some methods can fail if they read the entired ev
+# rather than just the meaningful elements. This is a helper function
+# for getting only the meaningful elements of ev. See #41089
+_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
@@ -490,49 +537,42 @@ end
 
 
 function versioninfo(io::IO=stdout)
+    indent = "  "
     config = BLAS.get_config()
-    println(io, "BLAS: $(BLAS.libblastrampoline) ($(join(string.(config.build_flags), ", ")))")
+    build_flags = join(string.(config.build_flags), ", ")
+    println(io, "BLAS: ", BLAS.libblastrampoline, " (", build_flags, ")")
     for lib in config.loaded_libs
-        println(io, " --> $(lib.libname) ($(uppercase(string(lib.interface))))")
+        interface = uppercase(string(lib.interface))
+        println(io, indent, "--> ", lib.libname, " (", interface, ")")
+    end
+    println(io, "Threading:")
+    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
+    println(io, "Relevant environment variables:")
+    env_var_names = [
+        "JULIA_NUM_THREADS",
+        "MKL_DYNAMIC",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+    ]
+    printed_at_least_one_env_var = false
+    for name in env_var_names
+        if haskey(ENV, name)
+            value = ENV[name]
+            println(io, indent, name, " = ", value)
+            printed_at_least_one_env_var = true
+        end
+    end
+    if !printed_at_least_one_env_var
+        println(io, indent, "[none]")
     end
     return nothing
 end
 
-function find_library_path(name)
-    shlib_ext = string(".", Libdl.dlext)
-    if !endswith(name, shlib_ext)
-        name_ext = string(name, shlib_ext)
-    end
-
-    # On windows, we look in `bin` and never in `lib`
-    @static if Sys.iswindows()
-        path = joinpath(Sys.BINDIR, name_ext)
-        isfile(path) && return path
-    else
-        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
-        isfile(path) && return path
-
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
-        isfile(path) && return path
-    end
-
-    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
-    return name
-end
-
 function __init__()
     try
-        libblas_path = find_library_path(Base.libblas_name)
-        liblapack_path = find_library_path(Base.liblapack_name)
-        BLAS.lbt_forward(libblas_path; clear=true)
-        if liblapack_path != libblas_path
-            BLAS.lbt_forward(liblapack_path)
-        end
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
         BLAS.check()
-        Threads.resize_nthreads!(Abuf)
-        Threads.resize_nthreads!(Bbuf)
-        Threads.resize_nthreads!(Cbuf)
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end

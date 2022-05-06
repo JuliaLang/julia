@@ -6,7 +6,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 
-HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h) $(addprefix $(JULIAHOME)/src/,support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
+HEADERS := $(addprefix $(SRCDIR)/,jl_exports.h loader.h) $(addprefix $(JULIAHOME)/src/,julia_fasttls.h support/platform.h support/dirpath.h jl_exported_data.inc jl_exported_funcs.inc)
 
 LOADER_CFLAGS = $(JCFLAGS) -I$(BUILDROOT)/src -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(build_includedir) -ffreestanding
 LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir)
@@ -65,7 +65,6 @@ $(DIRS):
 	@mkdir -p $@
 
 ifeq ($(OS),WINNT)
-ifneq ($(USEMSVC), 1)
 $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
@@ -74,7 +73,6 @@ $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERS
 	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
 EXE_OBJS += $(BUILDDIR)/julia_res.o
 EXE_DOBJS += $(BUILDDIR)/julia_res.o
-endif
 endif
 
 # Embed an Info.plist in the julia executable
@@ -116,7 +114,7 @@ endif
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
 		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
-	@$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@.tmp
+	@$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)
 endif

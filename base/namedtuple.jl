@@ -96,6 +96,15 @@ if nameof(@__MODULE__) === :Base
     $(Expr(:splatnew, :(NamedTuple{names,T}), :(T(args))))
 end
 
+function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
+    if @generated
+        Expr(:new, :(NamedTuple{names, T}),
+             Any[ :(convert(fieldtype(T, $n), getfield(nt, $(QuoteNode(names[n]))))) for n in 1:length(names) ]...)
+    else
+        NamedTuple{names, T}(map(Fix1(getfield, nt), names))
+    end
+end
+
 function NamedTuple{names}(nt::NamedTuple) where {names}
     if @generated
         idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
@@ -103,7 +112,7 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
         types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length(names))...}
-        NamedTuple{names, types}(Tuple(getfield(nt, n) for n in 1:length(names)))
+        NamedTuple{names, types}(map(Fix1(getfield, nt), names))
     end
 end
 
@@ -165,7 +174,8 @@ function show(io::IO, t::NamedTuple)
         typeinfo = get(io, :typeinfo, Any)
         print(io, "(")
         for i = 1:n
-            print(io, fieldname(typeof(t),i), " = ")
+            show_sym(io, fieldname(typeof(t), i))
+            print(io, " = ")
             show(IOContext(io, :typeinfo =>
                            t isa typeinfo <: NamedTuple ? fieldtype(typeinfo, i) : Any),
                  getfield(t, i))
@@ -208,7 +218,7 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[an...]
     for n in bn
@@ -219,7 +229,7 @@ end
     (names...,)
 end
 
-@pure function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
     @nospecialize names a b
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
@@ -306,12 +316,12 @@ end
 keys(nt::NamedTuple{names}) where {names} = names
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
-get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = haskey(nt, key) ? getfield(nt, key) : default
-get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = haskey(nt, key) ? getfield(nt, key) : f()
+get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
+get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key) ? getfield(nt, key) : f()
 tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
 
-@pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[]
     for n in an
@@ -338,7 +348,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
     else
         names = diff_names(an, bn)
         types = Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
-        NamedTuple{names,types}(map(n->getfield(a, n), names))
+        NamedTuple{names,types}(map(Fix1(getfield, a), names))
     end
 end
 
@@ -404,4 +414,10 @@ macro NamedTuple(ex)
     vars = [QuoteNode(e isa Symbol ? e : e.args[1]) for e in decls]
     types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
+end
+
+function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
+    _check_length_split_rest(length(t), n)
+    names_front, names_last_n = split_rest(names, n, st...)
+    return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)
 end

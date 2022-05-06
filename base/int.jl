@@ -87,6 +87,10 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+negate(x) = -x
+negate(x::Unsigned) = -convert(Signed, x)
+#widenegate(x) = -convert(widen(signed(typeof(x))), x)
+
 inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::T, y::T) where {T<:Integer} = float(x) / float(y)
 # skip promotion for system integer types
@@ -96,6 +100,9 @@ inv(x::Integer) = float(one(x)) / float(x)
     isodd(x::Number) -> Bool
 
 Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -113,6 +120,9 @@ isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
     iseven(x::Number) -> Bool
 
 Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -583,14 +593,26 @@ unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
     trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to `x`.
+is less than or equal to the absolute value of `x`.
 
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 
-See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref).
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> trunc(2.22)
+2.0
+
+julia> trunc(-2.22, digits=1)
+-2.2
+
+julia> trunc(Int, -2.22)
+-2
+```
 """
 function trunc end
 
@@ -635,8 +657,8 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
     @int128_str str
     @int128_str(str)
 
-`@int128_str` parses a string into a Int128
-Throws an `ArgumentError` if the string is not a valid integer
+`@int128_str` parses a string into a Int128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro int128_str(s)
     return parse(Int128, s)
@@ -646,8 +668,8 @@ end
     @uint128_str str
     @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128
-Throws an `ArgumentError` if the string is not a valid integer
+`@uint128_str` parses a string into a UInt128.
+Throws an `ArgumentError` if the string is not a valid integer.
 """
 macro uint128_str(s)
     return parse(UInt128, s)
@@ -671,25 +693,30 @@ julia> big"7891.5"
 ```
 """
 macro big_str(s)
+    message = "invalid number format $s for BigInt or BigFloat"
+    throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
         # remove _ in s[2:end-1]
         bf = IOBuffer(maxsize=lastindex(s))
-        print(bf, s[1])
+        c = s[1]
+        print(bf, c)
+        is_prev_underscore = (c == '_')
+        is_prev_dot = (c == '.')
         for c in SubString(s, 2, lastindex(s)-1)
             c != '_' && print(bf, c)
+            c == '_' && is_prev_dot && return throw_error
+            c == '.' && is_prev_underscore && return throw_error
+            is_prev_underscore = (c == '_')
+            is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        seekstart(bf)
-        n = tryparse(BigInt, String(take!(bf)))
-        n === nothing || return n
-    else
-        n = tryparse(BigInt, s)
-        n === nothing || return n
-        n = tryparse(BigFloat, s)
-        n === nothing || return n
+        s = String(take!(bf))
     end
-    message = "invalid number format $s for BigInt or BigFloat"
-    return :(throw(ArgumentError($message)))
+    n = tryparse(BigInt, s)
+    n === nothing || return n
+    n = tryparse(BigFloat, s)
+    n === nothing || return n
+    return throw_error
 end
 
 ## integer promotions ##

@@ -95,11 +95,127 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
 
 ## Unary operators ##
 
-conj(x::AbstractArray{<:Real}) = x
+"""
+    conj!(A)
+
+Transform an array to its complex conjugate in-place.
+
+See also [`conj`](@ref).
+
+# Examples
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> conj!(A);
+
+julia> A
+2×2 Matrix{Complex{Int64}}:
+ 1-1im  2+1im
+ 2-2im  3-1im
+```
+"""
+conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 conj!(x::AbstractArray{<:Real}) = x
 
-real(x::AbstractArray{<:Real}) = x
-imag(x::AbstractArray{<:Real}) = zero(x)
+"""
+    conj(A::AbstractArray)
+
+Return an array containing the complex conjugate of each entry in array `A`.
+
+Equivalent to `conj.(A)`, except that when `eltype(A) <: Real`
+`A` is returned without copying, and that when `A` has zero dimensions,
+a 0-dimensional array is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> conj([1, 2im, 3 + 4im])
+3-element Vector{Complex{Int64}}:
+ 1 + 0im
+ 0 - 2im
+ 3 - 4im
+
+julia> conj(fill(2 - im))
+0-dimensional Array{Complex{Int64}, 0}:
+2 + 1im
+```
+"""
+conj(A::AbstractArray) = broadcast_preserving_zero_d(conj, A)
+conj(A::AbstractArray{<:Real}) = A
+
+"""
+    real(A::AbstractArray)
+
+Return an array containing the real part of each entry in array `A`.
+
+Equivalent to `real.(A)`, except that when `eltype(A) <: Real`
+`A` is returned without copying, and that when `A` has zero dimensions,
+a 0-dimensional array is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> real([1, 2im, 3 + 4im])
+3-element Vector{Int64}:
+ 1
+ 0
+ 3
+
+julia> real(fill(2 - im))
+0-dimensional Array{Int64, 0}:
+2
+```
+"""
+real(A::AbstractArray) = broadcast_preserving_zero_d(real, A)
+real(A::AbstractArray{<:Real}) = A
+
+"""
+    imag(A::AbstractArray)
+
+Return an array containing the imaginary part of each entry in array `A`.
+
+Equivalent to `imag.(A)`, except that when `A` has zero dimensions,
+a 0-dimensional array is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> imag([1, 2im, 3 + 4im])
+3-element Vector{Int64}:
+ 0
+ 2
+ 4
+
+julia> imag(fill(2 - im))
+0-dimensional Array{Int64, 0}:
+-1
+```
+"""
+imag(A::AbstractArray) = broadcast_preserving_zero_d(imag, A)
+imag(A::AbstractArray{<:Real}) = zero(A)
+
+"""
+    reim(A::AbstractArray)
+
+Return a tuple of two arrays containing respectively the real and the imaginary
+part of each entry in `A`.
+
+Equivalent to `(real.(A), imag.(A))`, except that when `eltype(A) <: Real`
+`A` is returned without copying to represent the real part, and that when `A` has
+zero dimensions, a 0-dimensional array is returned (rather than a scalar).
+
+# Examples
+```jldoctest
+julia> reim([1, 2im, 3 + 4im])
+([1, 0, 3], [0, 2, 4])
+
+julia> reim(fill(2 - im))
+(fill(2), fill(-1))
+```
+"""
+reim(A::AbstractArray)
+
+-(A::AbstractArray) = broadcast_preserving_zero_d(-, A)
 
 +(x::AbstractArray{<:Number}) = x
 *(x::AbstractArray{<:Number,2}) = x
@@ -385,7 +501,6 @@ function repeat_outer(arr::AbstractArray{<:Any,N}, dims::NTuple{N,Any}) where {N
 end
 
 function repeat_inner(arr, inner)
-    basedims = size(arr)
     outsize = map(*, size(arr), inner)
     out = similar(arr, outsize)
     for I in CartesianIndices(arr)

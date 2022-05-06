@@ -21,7 +21,7 @@ typedef struct _jl_threadarg_t {
 } jl_threadarg_t;
 
 // each thread must initialize its TLS
-void jl_init_threadtls(int16_t tid);
+jl_ptls_t jl_init_threadtls(int16_t tid);
 
 // provided by a threading infrastructure
 void jl_init_threadinginfra(void);

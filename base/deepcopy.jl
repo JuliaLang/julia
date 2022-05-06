@@ -53,7 +53,7 @@ end
 function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
-    if T.name.mutable
+    if ismutable(x)
         if haskey(stackdict, x)
             return stackdict[x]
         end
@@ -125,4 +125,22 @@ function deepcopy_internal(x::Union{Dict,IdDict}, stackdict::IdDict)
         dest[deepcopy_internal(k, stackdict)] = deepcopy_internal(v, stackdict)
     end
     dest
+end
+
+function deepcopy_internal(x::AbstractLock, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
+    y = typeof(x)()
+    stackdict[x] = y
+    return y
+end
+
+function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]
+    end
+    y = typeof(x)(deepcopy_internal(x.lock))
+    stackdict[x] = y
+    return y
 end

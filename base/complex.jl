@@ -91,7 +91,7 @@ imag(x::Real) = zero(x)
 """
     reim(z)
 
-Return both the real and imaginary parts of the complex number `z`.
+Return a tuple of the real and imaginary parts of the complex number `z`.
 
 # Examples
 ```jldoctest
@@ -347,30 +347,37 @@ muladd(z::Complex, w::Complex, x::Real) =
 
 function /(a::Complex{T}, b::Complex{T}) where T<:Real
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
-    if abs(bre) <= abs(bim)
-        if isinf(bre) && isinf(bim)
-            r = sign(bre)/sign(bim)
-        else
-            r = bre / bim
+    if (isinf(bre) | isinf(bim))
+        if isfinite(a)
+            return complex(zero(T)*sign(are)*sign(bre), -zero(T)*sign(aim)*sign(bim))
         end
+        return T(NaN)+T(NaN)*im
+    end
+    if abs(bre) <= abs(bim)
+        r = bre / bim
         den = bim + r*bre
         Complex((are*r + aim)/den, (aim*r - are)/den)
     else
-        if isinf(bre) && isinf(bim)
-            r = sign(bim)/sign(bre)
-        else
-            r = bim / bre
-        end
+        r = bim / bre
         den = bre + r*bim
         Complex((are + aim*r)/den, (aim - are*r)/den)
     end
 end
 
-inv(z::Complex{<:Union{Float16,Float32}}) =
-    oftype(z, inv(widen(z)))
-
-/(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}} =
-    oftype(z, widen(z)*inv(widen(w)))
+function /(z::Complex{T}, w::Complex{T}) where {T<:Union{Float16,Float32}}
+    c, d = reim(widen(w))
+    a, b = reim(widen(z))
+    if (isinf(c) | isinf(d))
+        if isfinite(z)
+            return complex(zero(T)*sign(real(z))*sign(real(w)), -zero(T)*sign(imag(z))*sign(imag(w)))
+        end
+        return T(NaN)+T(NaN)*im
+    end
+    mag = inv(muladd(c, c, d^2))
+    re_part = muladd(a, c, b*d)
+    im_part = muladd(b, c, -a*d)
+    return oftype(z, Complex(re_part*mag, im_part*mag))
+end
 
 # robust complex division for double precision
 # variables are scaled & unscaled to avoid over/underflow, if necessary
@@ -382,7 +389,12 @@ function /(z::ComplexF64, w::ComplexF64)
     a, b = reim(z); c, d = reim(w)
     absa = abs(a); absb = abs(b);  ab = absa >= absb ? absa : absb # equiv. to max(abs(a),abs(b)) but without NaN-handling (faster)
     absc = abs(c); absd = abs(d);  cd = absc >= absd ? absc : absd
-
+    if (isinf(c) | isinf(d))
+        if isfinite(z)
+            return complex(0.0*sign(a)*sign(c), -0.0*sign(b)*sign(d))
+        end
+        return NaN+NaN*im
+    end
     halfov = 0.5*floatmax(Float64)              # overflow threshold
     twounϵ = floatmin(Float64)*2.0/eps(Float64) # underflow threshold
 
@@ -449,6 +461,12 @@ function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64
     end
 end
 
+function inv(z::Complex{T}) where T<:Union{Float16,Float32}
+    c, d = reim(widen(z))
+    (isinf(c) | isinf(d)) && return complex(copysign(zero(T), c), flipsign(-zero(T), d))
+    mag = inv(muladd(c, c, d^2))
+    return oftype(z, Complex(c*mag, -d*mag))
+end
 function inv(w::ComplexF64)
     c, d = reim(w)
     (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
@@ -535,18 +553,12 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
-# compute exp(im*theta)
-function cis(theta::Real)
-    s, c = sincos(theta)
-    Complex(c, s)
-end
-
 """
-    cis(z)
+    cis(x)
 
-Return ``\\exp(iz)``.
+More efficient method for `exp(im*x)` by using Euler's formula: ``cos(x) + i sin(x) = \\exp(i x)``.
 
-See also [`cispi`](@ref), [`angle`](@ref).
+See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
@@ -554,23 +566,29 @@ julia> cis(π) ≈ -1
 true
 ```
 """
+function cis end
+function cis(theta::Real)
+    s, c = sincos(theta)
+    Complex(c, s)
+end
+
 function cis(z::Complex)
     v = exp(-imag(z))
     s, c = sincos(real(z))
     Complex(v * c, v * s)
 end
 
-cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
-
 """
-    cispi(z)
+    cispi(x)
 
-Compute ``\\exp(i\\pi x)`` more accurately than `cis(pi*x)`, especially for large `x`.
+More accurate method for `cis(pi*x)` (especially for large `x`).
+
+See also [`cis`](@ref), [`sincospi`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
-julia> cispi(1)
--1.0 + 0.0im
+julia> cispi(10000)
+1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
 0.030556854645952924 + 0.030556854645952924im
@@ -579,6 +597,9 @@ julia> cispi(0.25 + 1im)
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
+function cispi end
+cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
+
 function cispi(z::Complex)
     sipi, copi = sincospi(z)
     return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))

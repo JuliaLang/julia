@@ -73,7 +73,7 @@ a `~/.julia/artifacts/Override.toml` file with the following contents:
 This file defines four overrides; two which override specific artifacts identified
 through their content hashes, two which override artifacts based on their bound names
 within a particular package's UUID.  In both cases, there are two different targets of
-the override: overriding to an on-disk location through an absolutet path, and
+the override: overriding to an on-disk location through an absolute path, and
 overriding to another artifact by its content-hash.
 """
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)
@@ -272,17 +272,17 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict{Symbol, String}()
+    tags = Dict{String, String}()
     for (k, v) in entry
         if v isa String
-            tags[Symbol(k)] = v
+            tags[k] = v
         end
     end
     # Removing some known entries that shouldn't be passed through `tags`
-    delete!(tags, :os)
-    delete!(tags, :arch)
-    delete!(tags, Symbol("git-tree-sha1"))
-    return Platform(entry["arch"], entry["os"]; tags...)
+    delete!(tags, "os")
+    delete!(tags, "arch")
+    delete!(tags, "git-tree-sha1")
+    return Platform(entry["arch"], entry["os"], tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -717,5 +717,10 @@ split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
     artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+
+# Precompilation to reduce latency
+precompile(load_artifacts_toml, (String,))
+precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
+precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 
 end # module Artifacts

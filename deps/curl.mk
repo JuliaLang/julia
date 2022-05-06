@@ -51,7 +51,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/sour
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
 		--without-ssl --without-gnutls --without-gssapi --disable-ares \
-		--without-libidn --without-libidn2 --without-libmetalink --without-librtmp \
+		--without-libidn --without-libidn2 --without-librtmp \
 		--without-nss --without-polarssl --without-spnego --without-libpsl \
 		--disable-ldap --disable-ldaps --without-zsh-functions-dir --disable-static \
 		--with-libssh2=$(build_prefix) --with-zlib=$(build_prefix) --with-nghttp2=$(build_prefix) \
@@ -75,11 +75,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libcurl.$$(SHLIB_EXT) $$(build_shlibdir)/libcurl.$$(SHLIB_EXT)))
 
 clean-curl:
-	-rm $(BUILDDIR)/curl-$(CURL_VER)/build-configured $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
+	-rm -f $(BUILDDIR)/curl-$(CURL_VER)/build-configured $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
 
 distclean-curl:
-	-rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
+	rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
 
 get-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 extract-curl: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted

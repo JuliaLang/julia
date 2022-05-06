@@ -84,27 +84,33 @@ end
 
 function scrub_repl_backtrace(bt)
     if bt !== nothing && !(bt isa Vector{Any}) # ignore our sentinel value types
-        bt = stacktrace(bt)
+        bt = bt isa Vector{StackFrame} ? copy(bt) : stacktrace(bt)
         # remove REPL-related frames from interactive printing
         eval_ind = findlast(frame -> !frame.from_c && frame.func === :eval, bt)
         eval_ind === nothing || deleteat!(bt, eval_ind:length(bt))
     end
     return bt
 end
+scrub_repl_backtrace(stack::ExceptionStack) =
+    ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
-function display_error(io::IO, er, bt)
-    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = scrub_repl_backtrace(bt)
-    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
-    println(io)
-end
+istrivialerror(stack::ExceptionStack) =
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
-    bt = Any[ (x[1], scrub_repl_backtrace(x[2])) for x in stack ]
-    show_exception_stack(IOContext(io, :limit => true), bt)
+    show_exception_stack(IOContext(io, :limit => true), stack)
     println(io)
 end
 display_error(stack::ExceptionStack) = display_error(stderr, stack)
+
+# these forms are depended on by packages outside Julia
+function display_error(io::IO, er, bt)
+    printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
+    showerror(IOContext(io, :limit => true), er, bt, backtrace = bt!==nothing)
+    println(io)
+end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
@@ -117,13 +123,15 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 print(color_normal)
             end
             if lasterr !== nothing
+                lasterr = scrub_repl_backtrace(lasterr)
+                istrivialerror(lasterr) || setglobal!(Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -134,7 +142,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                         @error "Evaluation succeeded, but an error occurred while displaying the value" typeof(value)
                         rethrow()
                     end
-                    println()
                 end
             end
             break
@@ -143,7 +150,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 @error "SYSTEM: display_error(errio, lasterr) caused an error"
             end
             errcount += 1
-            lasterr = current_exceptions()
+            lasterr = scrub_repl_backtrace(current_exceptions())
+            setglobal!(Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -198,9 +206,6 @@ function incomplete_tag(ex::Expr)
     return :other
 end
 
-# call include() on a file, ignoring if not found
-include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
-
 function exec_options(opts)
     if !isempty(ARGS)
         idxs = findall(x -> x == "--", ARGS)
@@ -252,13 +257,16 @@ function exec_options(opts)
         invokelatest(Main.Distributed.process_opts, opts)
     end
 
+    interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
+    is_interactive::Bool |= interactiveinput
+
     # load ~/.julia/config/startup.jl file
     if startup
         try
             load_julia_startup()
         catch
-            invokelatest(display_error, current_exceptions())
-            !(repl || is_interactive) && exit(1)
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
+            !(repl || is_interactive::Bool) && exit(1)
         end
     end
 
@@ -289,19 +297,20 @@ function exec_options(opts)
             exit_on_sigint(true)
         end
         try
-            include(Main, PROGRAM_FILE)
+            if PROGRAM_FILE == "-"
+                include_string(Main, read(stdin, String), "stdin")
+            else
+                include(Main, PROGRAM_FILE)
+            end
         catch
-            invokelatest(display_error, current_exceptions())
+            invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             if !is_interactive::Bool
                 exit(1)
             end
         end
     end
-    repl |= is_interactive::Bool
-    if repl
-        interactiveinput = isa(stdin, TTY)
+    if repl || is_interactive::Bool
         if interactiveinput
-            global is_interactive = true
             banner = (opts.banner != 0) # --banner!=no
         else
             banner = (opts.banner == 1) # --banner=yes
@@ -311,17 +320,33 @@ function exec_options(opts)
     nothing
 end
 
-function load_julia_startup()
+function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
-    #   If it is not found, then continue on to the relative path based on Sys.BINDIR
-    BINDIR = Sys.BINDIR::String
-    SYSCONFDIR = Base.SYSCONFDIR::String
-    if !isempty(SYSCONFDIR) && isfile(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-        include(Main, abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-    else
-        include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
+    # If it is not found, then continue on to the relative path based on Sys.BINDIR
+    BINDIR = Sys.BINDIR
+    SYSCONFDIR = Base.SYSCONFDIR
+    if !isempty(SYSCONFDIR)
+        p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
+        isfile(p1) && return p1
     end
-    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
+    p2 = abspath(BINDIR, "..", "etc", "julia", "startup.jl")
+    isfile(p2) && return p2
+    return nothing
+end
+
+function _local_julia_startup_file()
+    if !isempty(DEPOT_PATH)
+        path = abspath(DEPOT_PATH[1], "config", "startup.jl")
+        isfile(path) && return path
+    end
+    return nothing
+end
+
+function load_julia_startup()
+    global_file = _global_julia_startup_file()
+    (global_file !== nothing) && include(Main, global_file)
+    local_file = _local_julia_startup_file()
+    (local_file !== nothing) && include(Main, local_file)
     return nothing
 end
 
@@ -472,6 +497,8 @@ Returns the result of the last evaluated expression of the input file. During in
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
 interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
 
 The optional first argument `mapexpr` can be used to transform the included code before
 it is evaluated: for each parsed expression `expr` in `path`, the `include` function
@@ -487,14 +514,10 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-        # clear old invalid pointers
-        PCRE.__init__()
-    end
     try
         exec_options(JLOptions())
     catch
-        invokelatest(display_error, current_exceptions())
+        invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
         exit(1)
     end
     if is_interactive && get(stdout, :color, false)

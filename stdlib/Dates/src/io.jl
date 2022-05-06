@@ -150,7 +150,7 @@ struct Decimal3 end
     len = ii - i
     if len > 3
         ms, r = divrem(ms0, Int64(10) ^ (len - 3))
-        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+        r == 0 || return nothing
     else
         ms = ms0 * Int64(10) ^ (3 - len)
     end
@@ -332,6 +332,23 @@ const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond, AMPM),
 )
 
+# The `DateFormat(format, locale)` method just below consumes the following Regex.
+# Constructing this Regex is fairly expensive; doing so in the method itself can
+# consume half or better of `DateFormat(format, locale)`'s runtime. So instead we
+# construct and cache it outside the method body. Note, however, that when
+# `keys(CONVERSION_SPECIFIERS)` changes, the cached Regex must be updated accordingly;
+# hence the mutability (Ref-ness) of the cache, the helper method with which to populate
+# the cache, the cache of the hash of `keys(CONVERSION_SPECIFIERS)` (to facilitate checking
+# for changes), and the lock (to maintain consistency of these objects across threads when
+# threads simultaneously modify `CONVERSION_SPECIFIERS` and construct `DateFormat`s).
+function compute_dateformat_regex(conversion_specifiers)
+    letters = String(collect(keys(conversion_specifiers)))
+    return Regex("(?<!\\\\)([\\Q$letters\\E])\\1*")
+end
+const DATEFORMAT_REGEX_LOCK = ReentrantLock()
+const DATEFORMAT_REGEX_HASH = Ref(hash(keys(CONVERSION_SPECIFIERS)))
+const DATEFORMAT_REGEX_CACHE = Ref(compute_dateformat_regex(CONVERSION_SPECIFIERS))
+
 """
     DateFormat(format::AbstractString, locale="english") -> DateFormat
 
@@ -379,8 +396,20 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev = ()
     prev_offset = 1
 
-    letters = String(collect(keys(CONVERSION_SPECIFIERS)))
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+    # To understand this block, please see the comments attached to the definitions of
+    # DATEFORMAT_REGEX_LOCK, DATEFORMAT_REGEX_HASH, and DATEFORMAT_REGEX_CACHE.
+    lock(DATEFORMAT_REGEX_LOCK)
+    try
+        dateformat_regex_hash = hash(keys(CONVERSION_SPECIFIERS))
+        if dateformat_regex_hash != DATEFORMAT_REGEX_HASH[]
+            DATEFORMAT_REGEX_HASH[] = dateformat_regex_hash
+            DATEFORMAT_REGEX_CACHE[] = compute_dateformat_regex(CONVERSION_SPECIFIERS)
+        end
+    finally
+        unlock(DATEFORMAT_REGEX_LOCK)
+    end
+
+    for m in eachmatch(DATEFORMAT_REGEX_CACHE[], f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
@@ -512,9 +541,23 @@ const Locale = Union{DateLocale, String}
 Construct a `DateTime` by parsing the `dt` date time string following the
 pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many date time strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> DateTime("2020-01-01", "yyyy-mm-dd")
+2020-01-01T00:00:00
+
+julia> a = ("2020-01-01", "2020-01-02");
+
+julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
+2-element Vector{DateTime}:
+ 2020-01-01T00:00:00
+ 2020-01-02T00:00:00
+```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     return parse(DateTime, dt, DateFormat(format, locale))
@@ -538,9 +581,23 @@ DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime,
 Construct a `Date` by parsing the `d` date string following the pattern given
 in the `format` string (see [`DateFormat`](@ref) for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many date strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> Date("2020-01-01", "yyyy-mm-dd")
+2020-01-01
+
+julia> a = ("2020-01-01", "2020-01-02");
+
+julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
+2-element Vector{Date}:
+ 2020-01-01
+ 2020-01-02
+```
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(Date, d, DateFormat(format, locale))
@@ -564,9 +621,23 @@ Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 Construct a `Time` by parsing the `t` time string following the pattern given
 in the `format` string (see [`DateFormat`](@ref) for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many time strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> Time("12:34pm", "HH:MMp")
+12:34:00
+
+julia> a = ("12:34pm", "2:34am");
+
+julia> [Time(d, dateformat"HH:MMp") for d ∈ a] # preferred
+2-element Vector{Time}:
+ 12:34:00
+ 02:34:00
+```
 """
 function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(Time, t, DateFormat(format, locale))

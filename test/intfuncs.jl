@@ -2,6 +2,8 @@
 
 using Random
 
+is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
+
 @testset "gcd/lcm" begin
     # All Integer data types take different code paths -- test all
     # TODO: Test gcd and lcm for BigInt.
@@ -146,6 +148,11 @@ using Random
     @test gcd(0xf, 20) == 5
     @test gcd(UInt32(6), Int8(-50)) == 2
     @test gcd(typemax(UInt), -16) == 1
+
+    @testset "effects" begin
+        @test is_effect_free(gcd, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
+    end
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -264,6 +271,9 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
+    @test prevpow(Int64(10), Int64(1234567890123456789)) === Int64(1000000000000000000)
+    @test prevpow(10, 101.0) === 100
+    @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end
@@ -325,6 +335,8 @@ end
 
 end
 
+primitive type BitString128 128 end
+
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
@@ -356,6 +368,7 @@ end
     @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 
 @testset "digits/base" begin
@@ -475,4 +488,26 @@ end
 # issue #22837
 for b in [-100:-2; 2:100;]
     @test Base.ndigits0z(0, b) == 0
+end
+
+@testset "constant prop in gcd" begin
+    ci = code_typed(() -> gcd(14, 21))[][1]
+    @test ci.code == Any[Core.ReturnNode(7)]
+
+    ci = code_typed(() -> 14 // 21)[][1]
+    @test ci.code == Any[Core.ReturnNode(2 // 3)]
+end
+@testset "binomial" begin
+    for T in (Int8, Int16, Int32, Int64)
+        for x in rand(-isqrt(typemax(T)):isqrt(typemax(T)), 1000)
+            @test binomial(x,T(1)) == x
+            x>=0 && @test binomial(x,x-T(1)) == x
+            @test binomial(x,T(2)) == div(x*(x-1), 2)
+            x>=0 && @test binomial(x,x-T(2)) == div(x*(x-1), 2)
+        end
+        @test @inferred(binomial(one(T),one(T))) isa T
+    end
+    for x in ((false,false), (false,true), (true,false), (true,true))
+        @test binomial(x...) == (x != (false,true))
+    end
 end
