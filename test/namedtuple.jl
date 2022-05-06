@@ -9,6 +9,7 @@
 @test_throws ErrorException NamedTuple{(:a,:a),Tuple{Int,Int}}
 @test_throws ErrorException NamedTuple{(:a,:a)}((1,2))
 @test_throws ErrorException NamedTuple{(:a, :b, :a), NTuple{3, Int}}((1, 2, 3))
+@test_throws ArgumentError NamedTuple{(:a, :b, :c), NTuple{3, Int}}((1, 2))
 
 @test fieldcount(NamedTuple{(:a,:b,:c)}) == 3
 @test fieldcount(NamedTuple{<:Any,Tuple{Int,Int}}) == 2
@@ -20,13 +21,36 @@
 @test (a=3,)[:a] == 3
 @test (x=4, y=5, z=6).y == 5
 @test (x=4, y=5, z=6).z == 6
+@test (x=4, y=5, z=6)[(:x, :y)] == (x=4, y=5)
+@test (x=4, y=5, z=6)[(:x,)] == (x=4,)
+@test (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
+@test (x=4, y=5, z=6)[[:x]] == (x=4,)
+@test (x=4, y=5, z=6)[()] == NamedTuple()
+@test NamedTuple()[()] == NamedTuple()
 @test_throws ErrorException (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]
 @test_throws BoundsError (a=2,)[2]
+@test_throws ErrorException (x=4, y=5, z=6)[(:a,)]
+@test_throws ErrorException (x=4, y=5, z=6)[(:x, :a)]
+@test_throws ErrorException (x=4, y=5, z=6)[[:a]]
+@test_throws ErrorException (x=4, y=5, z=6)[[:x, :a]]
+@test_throws ErrorException (x=4, y=5, z=6)[(:x, :x)]
 
 @test length(NamedTuple()) == 0
 @test length((a=1,)) == 1
 @test length((a=1, b=0)) == 2
+
+@test firstindex((a=1, b=0)) == 1
+@test firstindex((a=1,)) == 1
+@test firstindex(NamedTuple()) == 1
+@test lastindex((a=1, b=0)) == 2
+@test lastindex((a=1,)) == 1
+@test lastindex(NamedTuple()) == 0
+
+@test isempty(NamedTuple())
+@test !isempty((a=1,))
+@test empty((a=1,)) === NamedTuple()
+@test isempty(empty((a=1,)))
 
 @test (a=1,b=2) === (a=1,b=2)
 @test (a=1,b=2) !== (b=1,a=2)
@@ -35,6 +59,7 @@
 @test (a=1,b=2) != (b=1,a=2)
 @test NamedTuple() === NamedTuple()
 @test NamedTuple() != (a=1,)
+@test !isequal(NamedTuple(), (a=1,))
 
 @test string((a=1,)) == "(a = 1,)"
 @test string((name="", day=:today)) == "(name = \"\", day = :today)"
@@ -55,6 +80,8 @@ end
     NamedTuple{(:a,), Tuple{Union{Int,Nothing}}}((2,))
 
 @test eltype((a=[1,2], b=[3,4])) === Vector{Int}
+@test eltype(NamedTuple{(:x, :y),Tuple{Union{Missing, Int},Union{Missing, Float64}}}(
+    (missing, missing))) === Union{Real, Missing}
 
 @test Tuple((a=[1,2], b=[3,4])) == ([1,2], [3,4])
 @test Tuple(NamedTuple()) === ()
@@ -63,10 +90,19 @@ end
 @test Tuple((a=1, b=2, c=3)) == (1, 2, 3)
 
 @test isless((a=1,b=2), (a=1,b=3))
-@test_broken isless((a=1,), (a=1,b=2))
+@test_throws MethodError isless((a=1,), (a=1,b=2))
 @test !isless((a=1,b=2), (a=1,b=2))
 @test !isless((a=2,b=1), (a=1,b=2))
 @test_throws MethodError isless((a=1,), (x=2,))
+
+@test (a=1,b=2) < (a=1,b=3)
+@test_throws MethodError (a=1,) < (a=1,b=2)
+@test !((a=1,b=2) < (a=1,b=2))
+@test !((a=2,b=1) < (a=1,b=2))
+@test_throws MethodError (a=1,) < (x=2,)
+@test !((a=-0.0,) < (a=0.0,))
+@test ismissing((a=missing,) < (a=1,))
+@test ismissing((a=missing,) < (a=missing,))
 
 @test map(-, (x=1, y=2)) == (x=-1, y=-2)
 @test map(+, (x=1, y=2), (x=10, y=20)) == (x=11, y=22)
@@ -84,7 +120,7 @@ end
 let nt = merge(NamedTuple{(:a,:b),Tuple{Int32,Union{Int32,Nothing}}}((1,Int32(2))),
                NamedTuple{(:a,:c),Tuple{Union{Int8,Nothing},Float64}}((nothing,1.0)))
     @test typeof(nt) == NamedTuple{(:a,:b,:c),Tuple{Union{Int8,Nothing},Union{Int32,Nothing},Float64}}
-    @test repr(nt) == "NamedTuple{(:a, :b, :c),Tuple{Union{Nothing, Int8},Union{Nothing, Int32},Float64}}((nothing, 2, 1.0))"
+    @test repr(nt) == "NamedTuple{(:a, :b, :c), Tuple{Union{Nothing, Int8}, Union{Nothing, Int32}, Float64}}((nothing, 2, 1.0))"
 end
 
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
@@ -105,6 +141,12 @@ end
 @test get(()->0, (a=1, b=2, c=3), :a) == 1
 @test get(()->0, NamedTuple(), :a) == 0
 @test get(()->0, (a=1,), :b) == 0
+@test Base.tail((a = 1, b = 2.0, c = 'x')) ≡ (b = 2.0, c = 'x')
+@test Base.tail((a = 1, )) ≡ NamedTuple()
+@test Base.front((a = 1, b = 2.0, c = 'x')) ≡ (a = 1, b = 2.0)
+@test Base.front((a = 1, )) ≡ NamedTuple()
+@test_throws ArgumentError Base.tail(NamedTuple())
+@test_throws ArgumentError Base.front(NamedTuple())
 
 # syntax errors
 
@@ -117,7 +159,7 @@ end
 @test Meta.lower(Main, Meta.parse("(; f(x))")) == Expr(:error, "invalid named tuple element \"f(x)\"")
 @test Meta.lower(Main, Meta.parse("(;1=0)")) == Expr(:error, "invalid named tuple field name \"1\"")
 
-@test Meta.parse("(;)") == quote end
+@test eval(Expr(:tuple, Expr(:parameters))) === NamedTuple()
 @test Meta.lower(Main, Meta.parse("(1,;2)")) == Expr(:error, "unexpected semicolon in tuple")
 
 # splatting
@@ -134,6 +176,8 @@ let d = [:a=>1, :b=>2, :c=>3]   # use an array to preserve order
     y = (w=30, z=40)
     @test (;t..., y...) == (x=1, y=20, w=30, z=40)
     @test (;t..., y=0, y...) == (x=1, y=0, w=30, z=40)
+
+    @test NamedTuple(d) === (a=1, b=2, c=3)
 end
 
 # inference tests
@@ -143,7 +187,7 @@ namedtuple_get_a(x) = x.a
 @test Base.return_types(namedtuple_get_a, (typeof((b=1,a="")),)) == Any[String]
 
 namedtuple_fieldtype_a(x) = fieldtype(typeof(x), :a)
-@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Type]
+@test Base.return_types(namedtuple_fieldtype_a, (NamedTuple,)) == Any[Union{Type, TypeVar}]
 @test Base.return_types(namedtuple_fieldtype_a, (typeof((b=1,a="")),)) == Any[Type{String}]
 namedtuple_fieldtype__(x, y) = fieldtype(typeof(x), y)
 @test Base.return_types(namedtuple_fieldtype__, (typeof((b=1,a="")),Symbol))[1] >: Union{Type{Int}, Type{String}}
@@ -240,3 +284,55 @@ y = map(v -> (a=v.a, b=v.a + v.b), [(a=1, b=missing), (a=1, b=2)])
 # Iterator constructor
 @test NamedTuple{(:a, :b), Tuple{Int, Float64}}(Any[1.0, 2]) === (a=1, b=2.0)
 @test NamedTuple{(:a, :b)}(Any[1.0, 2]) === (a=1.0, b=2)
+
+# Left-associative merge, issue #29215
+@test merge((a=1, b=2), (b=3, c=4), (c=5,)) === (a=1, b=3, c=5)
+@test merge((a=1, b=2), (b=3, c=(d=1,)), (c=(d=2,),)) === (a=1, b=3, c=(d=2,))
+@test merge((a=1, b=2)) === (a=1, b=2)
+
+# issue #33270
+let n = NamedTuple{(:T,), Tuple{Type{Float64}}}((Float64,))
+    @test n isa NamedTuple{(:T,), Tuple{Type{Float64}}}
+    @test n.T === Float64
+end
+
+# setindex
+let nt0 = NamedTuple(), nt1 = (a=33,), nt2 = (a=0, b=:v)
+    @test Base.setindex(nt0, 33, :a) == nt1
+    @test Base.setindex(Base.setindex(nt1, 0, :a), :v, :b) == nt2
+    @test Base.setindex(nt1, "value", :a) == (a="value",)
+    @test Base.setindex(nt1, "value", :a) isa NamedTuple{(:a,),<:Tuple{AbstractString}}
+end
+
+# @NamedTuple
+@testset "@NamedTuple" begin
+    @test @NamedTuple{a::Int, b::String} === NamedTuple{(:a, :b),Tuple{Int,String}} ===
+        @NamedTuple begin
+            a::Int
+            b::String
+        end
+    @test @NamedTuple{a::Int, b} === NamedTuple{(:a, :b),Tuple{Int,Any}}
+    @test_throws LoadError include_string(Main, "@NamedTuple{a::Int, b, 3}")
+    @test_throws LoadError include_string(Main, "@NamedTuple(a::Int, b)")
+end
+
+# issue #29333, implicit names
+let x = 1, y = 2
+    @test (;y) === (y = 2,)
+    a = (; x, y)
+    @test a === (x=1, y=2)
+    @test (; a.y, a.x) === (y=2, x=1)
+    y = 3
+    @test Meta.lower(Main, Meta.parse("(; a.y, y)")) == Expr(:error, "field name \"y\" repeated in named tuple")
+    @test (; a.y, x) === (y=2, x=1)
+end
+
+# issue #37926
+@test nextind((a=1,), 1) == nextind((1,), 1) == 2
+@test prevind((a=1,), 2) == prevind((1,), 2) == 1
+
+# issue #43045
+@test merge(NamedTuple(), Iterators.reverse(pairs((a=1,b=2)))) === (b = 2, a = 1)
+
+# issue #44086
+@test NamedTuple{(:x, :y, :z), Tuple{Int8, Int16, Int32}}((z=1, x=2, y=3)) === (x = Int8(2), y = Int16(3), z = Int32(1))

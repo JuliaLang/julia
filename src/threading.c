@@ -1,18 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-/*
-  threading infrastructure
-  . thread and threadgroup creation
-  . thread function
-  . invoke Julia function from multiple threads
-
-TODO:
-  . fix interface to properly support thread groups
-  . add queue per thread for tasks
-  . add reduction; reduce values returned from thread function
-  . make code generation thread-safe and remove the lock
-*/
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,8 +34,33 @@ TODO:
 extern "C" {
 #endif
 
-#include "threadgroup.h"
 #include "threading.h"
+
+JL_DLLEXPORT void *jl_get_ptls_states(void)
+{
+    // mostly deprecated: use current_task instead
+    return jl_current_task->ptls;
+}
+
+#if !defined(_OS_WINDOWS_)
+static pthread_key_t jl_safe_restore_key;
+
+__attribute__((constructor)) void _jl_init_safe_restore(void)
+{
+    pthread_key_create(&jl_safe_restore_key, NULL);
+}
+
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
+{
+    return (jl_jmp_buf*)pthread_getspecific(jl_safe_restore_key);
+}
+
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
+{
+    pthread_setspecific(jl_safe_restore_key, (void*)sr);
+}
+#endif
+
 
 // The tls_states buffer:
 //
@@ -63,44 +75,46 @@ extern "C" {
 // as the fallback in the shared object. For better efficiency, we also
 // create a `__thread` variable in the main executable using a static TLS
 // model.
-#ifdef JULIA_ENABLE_THREADING
-#  if defined(_OS_DARWIN_)
+#if defined(_OS_DARWIN_)
 // Mac doesn't seem to have static TLS model so the runtime TLS getter
 // registration will only add overhead to TLS access. The `__thread` variables
 // are emulated with `pthread_key_t` so it is actually faster to use it directly.
-static pthread_key_t jl_tls_key;
+static pthread_key_t jl_pgcstack_key;
 
-__attribute__((constructor)) void jl_mac_init_tls(void)
+__attribute__((constructor)) void jl_init_tls(void)
 {
-    pthread_key_create(&jl_tls_key, NULL);
+    pthread_key_create(&jl_pgcstack_key, NULL);
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
 {
-    void *ptls = pthread_getspecific(jl_tls_key);
-    if (__unlikely(!ptls)) {
-        ptls = calloc(1, sizeof(jl_tls_states_t));
-        pthread_setspecific(jl_tls_key, ptls);
-    }
-    return (jl_ptls_t)ptls;
+    return (jl_gcframe_t**)pthread_getspecific(jl_pgcstack_key);
 }
 
-// This is only used after the tls is already initialized on the thread
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fast(void)
+void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
-    return (jl_ptls_t)pthread_getspecific(jl_tls_key);
+    pthread_setspecific(jl_pgcstack_key, (void*)pgcstack);
 }
 
-jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+void jl_pgcstack_getkey(jl_get_pgcstack_func **f, pthread_key_t *k)
 {
     // for codegen
-    return &jl_get_ptls_states_fast;
+    *f = pthread_getspecific;
+    *k = jl_pgcstack_key;
 }
-#  elif defined(_OS_WINDOWS_)
+
+
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, pthread_key_t k)
+{
+    jl_safe_printf("ERROR: Attempt to change TLS address.\n");
+}
+
+#elif defined(_OS_WINDOWS_)
 // Apparently windows doesn't have a static TLS model (or one that can be
 // reliably used from a shared library) either..... Use `TLSAlloc` instead.
 
-static DWORD jl_tls_key;
+static DWORD jl_pgcstack_key;
+static DWORD jl_safe_restore_key;
 
 // Put this here for now. We can move this out later if we find more use for it.
 BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
@@ -108,162 +122,211 @@ BOOLEAN WINAPI DllMain(IN HINSTANCE hDllHandle, IN DWORD nReason,
 {
     switch (nReason) {
     case DLL_PROCESS_ATTACH:
-        jl_tls_key = TlsAlloc();
-        assert(jl_tls_key != TLS_OUT_OF_INDEXES);
+        jl_pgcstack_key = TlsAlloc();
+        assert(jl_pgcstack_key != TLS_OUT_OF_INDEXES);
+        jl_safe_restore_key = TlsAlloc();
+        assert(jl_safe_restore_key != TLS_OUT_OF_INDEXES);
         // Fall through
     case DLL_THREAD_ATTACH:
-        TlsSetValue(jl_tls_key, calloc(1, sizeof(jl_tls_states_t)));
         break;
     case DLL_THREAD_DETACH:
-        free(TlsGetValue(jl_tls_key));
-        TlsSetValue(jl_tls_key, NULL);
         break;
     case DLL_PROCESS_DETACH:
-        free(TlsGetValue(jl_tls_key));
-        TlsFree(jl_tls_key);
+        TlsFree(jl_pgcstack_key);
+        TlsFree(jl_safe_restore_key);
         break;
     }
     return 1; // success
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+#if defined(_CPU_X86_64_)
+#define SAVE_ERRNO \
+    DWORD *plast_error = (DWORD*)(__readgsqword(0x30) + 0x68); \
+    DWORD last_error = *plast_error
+#define LOAD_ERRNO \
+    *plast_error = last_error
+#elif defined(_CPU_X86_)
+#define SAVE_ERRNO \
+    DWORD *plast_error = (DWORD*)(__readfsdword(0x18) + 0x34); \
+    DWORD last_error = *plast_error
+#define LOAD_ERRNO \
+    *plast_error = last_error
+#else
+#define SAVE_ERRNO \
+    DWORD last_error = GetLastError()
+#define LOAD_ERRNO \
+    SetLastError(last_error)
+#endif
+
+JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
 {
-    return (jl_ptls_t)TlsGetValue(jl_tls_key);
+    SAVE_ERRNO;
+    jl_jmp_buf *sr = (jl_jmp_buf*)TlsGetValue(jl_safe_restore_key);
+    LOAD_ERRNO;
+    return sr;
 }
 
-jl_get_ptls_states_func jl_get_ptls_states_getter(void)
+JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
+{
+    SAVE_ERRNO;
+    TlsSetValue(jl_safe_restore_key, (void*)sr);
+    LOAD_ERRNO;
+}
+
+JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
+{
+    SAVE_ERRNO;
+    jl_gcframe_t **pgcstack = (jl_gcframe_t**)TlsGetValue(jl_pgcstack_key);
+    LOAD_ERRNO;
+    return pgcstack;
+}
+
+void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
+{
+    // n.b.: this smashes GetLastError
+    TlsSetValue(jl_pgcstack_key, (void*)pgcstack);
+}
+
+void jl_pgcstack_getkey(jl_get_pgcstack_func **f, DWORD *k)
 {
     // for codegen
-    return &jl_get_ptls_states;
+    *f = jl_get_pgcstack;
+    *k = jl_pgcstack_key;
 }
-#  else
+
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, DWORD k)
+{
+    jl_safe_printf("ERROR: Attempt to change TLS address.\n");
+}
+
+
+#else
 // We use the faster static version in the main executable to replace
 // the slower version in the shared object. The code in different libraries
 // or executables, however, have to agree on which version to use.
-// The general solution is to add one more indirection in the C entry point
-// (see `jl_get_ptls_states_wrapper`).
+// The general solution is to add one more indirection in the C entry point.
 //
 // When `ifunc` is available, we can use it to trick the linker to use the
-// real address (`jl_get_ptls_states_static`) directly as the symbol address.
-// (see `jl_get_ptls_states_resolve`).
+// real address (`jl_get_pgcstack_static`) directly as the symbol address.
 //
 // However, since the detection of the static version in `ifunc`
 // is not guaranteed to be reliable, we still need to fallback to the wrapper
 // version as the symbol address if we didn't find the static version in `ifunc`.
 
 // fallback provided for embedding
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fallback(void)
+static jl_pgcstack_key_t jl_pgcstack_key;
+static __thread jl_gcframe_t **pgcstack_;
+static jl_gcframe_t **jl_get_pgcstack_fallback(void) JL_NOTSAFEPOINT
 {
-    static __thread jl_tls_states_t tls_states;
-    return &tls_states;
+    return pgcstack_;
 }
-#if JL_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC __attribute__((weak))
-jl_ptls_t jl_get_ptls_states_static(void);
-#endif
-static jl_ptls_t jl_get_ptls_states_init(void);
-static jl_get_ptls_states_func jl_tls_states_cb = jl_get_ptls_states_init;
-static jl_ptls_t jl_get_ptls_states_init(void)
+static jl_gcframe_t ***jl_pgcstack_addr_fallback(void) JL_NOTSAFEPOINT
+{
+    return &pgcstack_;
+}
+void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
+{
+    *jl_pgcstack_key() = pgcstack;
+}
+#  if JL_USE_IFUNC
+JL_DLLEXPORT __attribute__((weak))
+void jl_register_pgcstack_getter(void);
+#  endif
+static jl_gcframe_t **jl_get_pgcstack_init(void);
+static jl_get_pgcstack_func *jl_get_pgcstack_cb = jl_get_pgcstack_init;
+static jl_gcframe_t **jl_get_pgcstack_init(void)
 {
     // This 2-step initialization is used to detect calling
-    // `jl_set_ptls_states_getter` after the address of the TLS variables
+    // `jl_pgcstack_getkey` after the address of the TLS variables
     // are used. Since the address of TLS variables should be constant,
     // changing the getter address can result in weird crashes.
 
     // This is clearly not thread safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
-    jl_get_ptls_states_func cb = jl_get_ptls_states_fallback;
-#if JL_USE_IFUNC
-    if (jl_get_ptls_states_static)
-        cb = jl_get_ptls_states_static;
-#endif
-    jl_tls_states_cb = cb;
-    return cb();
+#  if JL_USE_IFUNC
+    if (jl_register_pgcstack_getter)
+        jl_register_pgcstack_getter();
+    else
+#  endif
+    {
+        jl_get_pgcstack_cb = jl_get_pgcstack_fallback;
+        jl_pgcstack_key = &jl_pgcstack_addr_fallback;
+    }
+    return jl_get_pgcstack_cb();
 }
 
-static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_wrapper(void)
+JL_DLLEXPORT void jl_pgcstack_setkey(jl_get_pgcstack_func *f, jl_pgcstack_key_t k)
 {
-    return (*jl_tls_states_cb)();
-}
-
-JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
-{
-    if (f == jl_tls_states_cb || !f)
+    if (f == jl_get_pgcstack_cb || !f)
         return;
     // only allow setting this once
-    if (jl_tls_states_cb == jl_get_ptls_states_init) {
-        jl_tls_states_cb = f;
-    }
-    else {
+    if (jl_get_pgcstack_cb != jl_get_pgcstack_init) {
         jl_safe_printf("ERROR: Attempt to change TLS address.\n");
         exit(1);
     }
+    jl_get_pgcstack_cb = f;
+    jl_pgcstack_key = k;
 }
 
-#if JL_USE_IFUNC
-static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
+JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 {
-    if (jl_tls_states_cb != jl_get_ptls_states_init)
-        return jl_tls_states_cb;
-    // If we can't find the static version, return the wrapper instead
-    // of the slow version so that we won't resolve to the slow version
-    // due to issues in the relocation order.
-    // This may not be necessary once `ifunc` support in glibc is more mature.
-    if (!jl_get_ptls_states_static)
-        return jl_get_ptls_states_wrapper;
-    jl_tls_states_cb = jl_get_ptls_states_static;
-    return jl_tls_states_cb;
+#ifndef __clang_gcanalyzer__
+    return jl_get_pgcstack_cb();
+#endif
 }
 
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
-    __attribute__((ifunc ("jl_get_ptls_states_resolve")));
-#else // JL_TLS_USE_IFUNC
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
+void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 {
-    return jl_get_ptls_states_wrapper();
-}
-#endif // JL_TLS_USE_IFUNC
-jl_get_ptls_states_func jl_get_ptls_states_getter(void)
-{
-    if (jl_tls_states_cb == jl_get_ptls_states_init)
-        jl_get_ptls_states_init();
+    if (jl_get_pgcstack_cb == jl_get_pgcstack_init)
+        jl_get_pgcstack_init();
     // for codegen
-    return jl_tls_states_cb;
-}
-#  endif
-#else
-JL_DLLEXPORT jl_tls_states_t jl_tls_states;
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void)
-{
-    return &jl_tls_states;
+    *f = jl_get_pgcstack_cb;
+    *k = jl_pgcstack_key;
 }
 #endif
 
-// thread ID
-JL_DLLEXPORT int jl_n_threads;     // # threads we're actually using
-jl_ptls_t *jl_all_tls_states;
+jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
+JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time = 0;
+JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time = 0;
 
 // return calling thread's ID
-// Also update the suspended_threads list in signals-mach when changing the
-// type of the thread id.
 JL_DLLEXPORT int16_t jl_threadid(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return ptls->tid;
+    return jl_atomic_load_relaxed(&jl_current_task->tid);
 }
 
-static void ti_initthread(int16_t tid)
+JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-#ifndef _OS_WINDOWS_
-    ptls->system_id = pthread_self();
+    if (tid < 0 || tid >= jl_n_threads)
+        jl_error("invalid tid");
+    int n = 0;
+    for (int i = 0; i < jl_n_threadpools; i++) {
+        n += jl_n_threads_per_pool[i];
+        if (tid < n)
+            return (int8_t)i;
+    }
+    jl_error("internal error: couldn't determine threadpool id");
+}
+
+jl_ptls_t jl_init_threadtls(int16_t tid)
+{
+    jl_ptls_t ptls = (jl_ptls_t)calloc(1, sizeof(jl_tls_states_t));
+    ptls->system_id = (jl_thread_t)(uintptr_t)uv_thread_self();
+    ptls->rngseed = jl_rand();
+#ifdef _OS_WINDOWS_
+    if (tid == 0) {
+        if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                             GetCurrentProcess(), &hMainThread, 0,
+                             FALSE, DUPLICATE_SAME_ACCESS)) {
+            jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
+            hMainThread = INVALID_HANDLE_VALUE;
+        }
+    }
 #endif
-    assert(ptls->world_age == 0);
-    ptls->world_age = 1; // OK to run Julia code on this thread
     ptls->tid = tid;
-    ptls->pgcstack = NULL;
-    ptls->gc_state = 0; // GC unsafe
+    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -273,186 +336,25 @@ static void ti_initthread(int16_t tid)
         ptls->safepoint = (size_t*)(jl_safepoint_pages + jl_page_size * 2 +
                                     sizeof(size_t));
     }
-    ptls->defer_signal = 0;
-    ptls->current_module = NULL;
-    void *bt_data = malloc(sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
-    memset(bt_data, 0, sizeof(uintptr_t) * (JL_MAX_BT_SIZE + 1));
-    if (bt_data == NULL) {
-        jl_printf(JL_STDERR, "could not allocate backtrace buffer\n");
-        gc_debug_critical_error();
-        abort();
-    }
-    ptls->bt_data = (uintptr_t*)bt_data;
+    jl_bt_element_t *bt_data = (jl_bt_element_t*)
+        malloc_s(sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
+    memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
+    ptls->bt_data = bt_data;
+    small_arraylist_new(&ptls->locks, 0);
     jl_init_thread_heap(ptls);
-    jl_install_thread_signal_handler(ptls);
 
     jl_all_tls_states[tid] = ptls;
+
+    return ptls;
 }
 
-static void ti_init_master_thread(void)
-{
-#ifdef _OS_WINDOWS_
-    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
-                         GetCurrentProcess(), &hMainThread, 0,
-                         FALSE, DUPLICATE_SAME_ACCESS)) {
-        jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
-        hMainThread = INVALID_HANDLE_VALUE;
-    }
-#endif
-    ti_initthread(0);
-}
-
-// all threads call this function to run user code
-static jl_value_t *ti_run_fun(jl_callptr_t fptr, jl_method_instance_t *mfunc,
-                              jl_value_t **args, uint32_t nargs)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    JL_TRY {
-        fptr(mfunc, args, nargs);
-    }
-    JL_CATCH {
-        // Lock this output since we know it'll likely happen on multiple threads
-        static jl_mutex_t lock;
-        JL_LOCK_NOGC(&lock);
-        jl_jmp_buf *old_buf = ptls->safe_restore;
-        jl_jmp_buf buf;
-        if (!jl_setjmp(buf, 0)) {
-            // Set up the safe_restore context so that the printing uses the thread safe version
-            ptls->safe_restore = &buf;
-            jl_printf(JL_STDERR, "\nError thrown in threaded loop on thread %d: ",
-                      (int)ptls->tid);
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
-        }
-        ptls->safe_restore = old_buf;
-        JL_UNLOCK_NOGC(&lock);
-    }
-    return jl_nothing;
-}
-
-
-// lock for code generation
-jl_mutex_t codegen_lock;
+JL_DLLEXPORT jl_mutex_t jl_codegen_lock;
 jl_mutex_t typecache_lock;
 
-#ifdef JULIA_ENABLE_THREADING
-
-// only one thread group for now
-static ti_threadgroup_t *tgworld;
-
-// for broadcasting work to threads
-static ti_threadwork_t threadwork;
-
-#if PROFILE_JL_THREADING
-uint64_t prep_ns;
-uint64_t *fork_ns;
-uint64_t *user_ns;
-uint64_t *join_ns;
-#endif
-
-static uv_barrier_t thread_init_done;
-
-// thread function: used by all except the main thread
-void ti_threadfun(void *arg)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ti_threadarg_t *ta = (ti_threadarg_t *)arg;
-    ti_threadgroup_t *tg;
-    ti_threadwork_t *work;
-
-    // initialize this thread (set tid, create heap, etc.)
-    ti_initthread(ta->tid);
-    jl_init_stack_limits(0);
-
-    // set up tasking
-    jl_init_root_task(ptls->stack_lo, ptls->stack_hi - ptls->stack_lo);
-#ifdef COPY_STACKS
-    jl_set_base_ctx((char*)&arg);
-#endif
-
-    // set the thread-local tid and wait for a thread group
-    while (jl_atomic_load_acquire(&ta->state) == TI_THREAD_INIT)
-        jl_cpu_pause();
-
-    // Assuming the functions called below doesn't contain unprotected GC
-    // critical region. In general, the following part of this function
-    // shouldn't call any managed code without calling `jl_gc_unsafe_enter`
-    // first.
-    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
-    uv_barrier_wait(&thread_init_done);
-    // initialize this thread in the thread group
-    tg = ta->tg;
-    ti_threadgroup_initthread(tg, ptls->tid);
-
-    // free the thread argument here
-    free(ta);
-
-    int init = 1;
-
-    // work loop
-    for (; ;) {
-#if PROFILE_JL_THREADING
-        uint64_t tstart = uv_hrtime();
-#endif
-
-        ti_threadgroup_fork(tg, ptls->tid, (void **)&work, init);
-        init = 0;
-        JL_GC_PROMISE_ROOTED(work);
-
-#if PROFILE_JL_THREADING
-        uint64_t tfork = uv_hrtime();
-        fork_ns[ptls->tid] += tfork - tstart;
-#endif
-
-        if (work) {
-            if (work->command == TI_THREADWORK_DONE) {
-                break;
-            }
-            else if (work->command == TI_THREADWORK_RUN) {
-                // TODO: return value? reduction?
-                // TODO: before we support getting return value from
-                //       the work, and after we have proper GC transition
-                //       support in the codegen and runtime we don't need to
-                //       enter GC unsafe region when starting the work.
-                int8_t gc_state = jl_gc_unsafe_enter(ptls);
-                // This is probably always NULL for now
-                jl_module_t *last_m = ptls->current_module;
-                size_t last_age = ptls->world_age;
-                JL_GC_PUSH1(&last_m);
-                ptls->current_module = work->current_module;
-                ptls->world_age = work->world_age;
-                ti_run_fun(work->fptr, work->mfunc, work->args, work->nargs);
-                ptls->current_module = last_m;
-                ptls->world_age = last_age;
-                JL_GC_POP();
-                jl_gc_unsafe_leave(ptls, gc_state);
-            }
-        }
-
-#if PROFILE_JL_THREADING
-        uint64_t tuser = uv_hrtime();
-        user_ns[ptls->tid] += tuser - tfork;
-#endif
-
-        ti_threadgroup_join(tg, ptls->tid);
-
-#if PROFILE_JL_THREADING
-        uint64_t tjoin = uv_hrtime();
-        join_ns[ptls->tid] += tjoin - tuser;
-#endif
-
-        // TODO:
-        // nowait should skip the join, but confirm that fork is reentrant
-    }
-}
-
-#if PROFILE_JL_THREADING
-void ti_reset_timings(void);
-#endif
-
-ssize_t jl_tls_offset = -1;
+JL_DLLEXPORT ssize_t jl_tls_offset = -1;
 
 #ifdef JL_ELF_TLS_VARIANT
-const int jl_tls_elf_support = 1;
+JL_DLLEXPORT const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
 // To detect such case, we find the size of the TLS segment in the main
 // executable and the thread pointer (TP) and then see if the TLS pointer on the
@@ -467,11 +369,11 @@ static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align
 {
     return LLT_ALIGN(orig_size, align) + size;
 }
-static inline ssize_t jl_check_tls_bound(void *tp, void *ptls, size_t tls_size)
+static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size)
 {
-    ssize_t offset = (char*)ptls - (char*)tp;
+    ssize_t offset = (char*)k0 - (char*)tp;
     if (offset < JL_ELF_TLS_INIT_SIZE ||
-        (size_t)offset + sizeof(jl_tls_states_t) > tls_size)
+        (size_t)offset + sizeof(*k0) > tls_size)
         return -1;
     return offset;
 }
@@ -482,10 +384,10 @@ static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align
 {
     return LLT_ALIGN(orig_size + size, align);
 }
-static inline ssize_t jl_check_tls_bound(void *tp, void *ptls, size_t tls_size)
+static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tls_size)
 {
-    ssize_t offset = (char*)tp - (char*)ptls;
-    if (offset < sizeof(jl_tls_states_t) || offset > tls_size)
+    ssize_t offset = (char*)tp - (char*)k0;
+    if (offset < sizeof(*k0) || offset > tls_size)
         return -1;
     return -offset;
 }
@@ -520,7 +422,12 @@ static int check_tls_cb(struct dl_phdr_info *info, size_t size, void *_data)
 
 static void jl_check_tls(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_get_pgcstack_func *f;
+    jl_gcframe_t ***(*k)(void);
+    jl_pgcstack_getkey(&f, &k);
+    jl_gcframe_t ***k0 = k();
+    if (k0 == NULL)
+        return;
     check_tls_cb_t data = {0};
     dl_iterate_phdr(check_tls_cb, &data);
     if (data.total_size == 0)
@@ -537,13 +444,14 @@ static void jl_check_tls(void)
 #else
 #  error "Cannot emit thread pointer for this architecture."
 #endif
-    ssize_t offset = jl_check_tls_bound(tp, ptls, data.total_size);
+    ssize_t offset = jl_check_tls_bound(tp, k0, data.total_size);
     if (offset == -1)
         return;
     jl_tls_offset = offset;
 }
 #else
-const int jl_tls_elf_support = 0;
+// !JL_ELF_TLS_VARIANT
+JL_DLLEXPORT const int jl_tls_elf_support = 0;
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe
@@ -555,40 +463,68 @@ void jl_init_threading(void)
     jl_check_tls();
 #endif
 
-    // how many threads available, usable
-    int max_threads = jl_cpu_threads();
+    // Determine how many threads and pools are requested. This may have been
+    // specified on the command line (and so are in `jl_options`) or by the
+    // environment variable. Set the globals `jl_n_threadpools`, `jl_n_threads`
+    // and `jl_n_threads_per_pool`.
+    jl_n_threadpools = 1;
     jl_n_threads = JULIA_NUM_THREADS;
-    cp = getenv(NUM_THREADS_NAME);
-    if (cp) {
-        jl_n_threads = (uint64_t)strtol(cp, NULL, 10);
+    int16_t nthreads = jl_n_threads, nthreadsi = 0;
+    char *endptr, *endptri;
+
+    if (jl_options.nthreads != 0) { // --threads specified
+        jl_n_threadpools = jl_options.nthreadpools;
+        nthreads = jl_options.nthreads_per_pool[0];
+        if (nthreads < 0)
+            nthreads = jl_effective_threads();
+        if (jl_n_threadpools == 2)
+            nthreadsi = jl_options.nthreads_per_pool[1];
     }
-    if (jl_n_threads > max_threads)
-        jl_n_threads = max_threads;
-    if (jl_n_threads <= 0)
-        jl_n_threads = 1;
+    else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
+        if (!strncmp(cp, "auto", 4)) {
+            nthreads = jl_effective_threads();
+            cp += 4;
+        }
+        else {
+            errno = 0;
+            nthreads = strtol(cp, &endptr, 10);
+            if (errno != 0 || endptr == cp || nthreads <= 0)
+                nthreads = 1;
+            cp = endptr;
+        }
+        if (*cp == ',') {
+            cp++;
+            if (!strncmp(cp, "auto", 4))
+                nthreadsi = 1;
+            else {
+                errno = 0;
+                nthreadsi = strtol(cp, &endptri, 10);
+                if (errno != 0 || endptri == cp || nthreadsi < 0)
+                    nthreadsi = 0;
+            }
+            if (nthreadsi > 0)
+                jl_n_threadpools++;
+        }
+    }
 
-    jl_all_tls_states = (jl_ptls_t*)malloc(jl_n_threads * sizeof(void*));
+    jl_n_threads = nthreads + nthreadsi;
+    jl_n_threads_per_pool = (int *)malloc(2 * sizeof(int));
+    jl_n_threads_per_pool[0] = nthreads;
+    jl_n_threads_per_pool[1] = nthreadsi;
 
-#if PROFILE_JL_THREADING
-    // set up space for profiling information
-    fork_ns = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);
-    user_ns = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);
-    join_ns = (uint64_t*)jl_malloc_aligned(jl_n_threads * sizeof(uint64_t), 64);
-    ti_reset_timings();
+#ifndef __clang_gcanalyzer__
+    jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
 #endif
-
-    // initialize this master thread (set tid, create heap, etc.)
-    ti_init_master_thread();
 }
+
+static uv_barrier_t thread_init_done;
 
 void jl_start_threads(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     int cpumasksize = uv_cpumask_size();
     char *cp;
     int i, exclusive;
     uv_thread_t uvtid;
-    ti_threadarg_t **targs;
     if (cpumasksize < jl_n_threads) // also handles error case
         cpumasksize = jl_n_threads;
     char *mask = (char*)alloca(cpumasksize);
@@ -596,16 +532,20 @@ void jl_start_threads(void)
     // do we have exclusive use of the machine? default is no
     exclusive = DEFAULT_MACHINE_EXCLUSIVE;
     cp = getenv(MACHINE_EXCLUSIVE_NAME);
-    if (cp)
-        exclusive = strtol(cp, NULL, 10);
+    if (cp && strcmp(cp, "0") != 0)
+        exclusive = 1;
 
     // exclusive use: affinitize threads, master thread on proc 0, rest
     // according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
+        if (jl_n_threads > jl_cpu_threads()) {
+            jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
+            exit(1);
+        }
         memset(mask, 0, cpumasksize);
         mask[0] = 1;
-        uvtid = (uv_thread_t)uv_thread_self();
+        uvtid = uv_thread_self();
         uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
         mask[0] = 0;
     }
@@ -614,225 +554,49 @@ void jl_start_threads(void)
     size_t nthreads = jl_n_threads;
 
     // create threads
-    targs = (ti_threadarg_t **)malloc((nthreads - 1) * sizeof (ti_threadarg_t *));
-
     uv_barrier_init(&thread_init_done, nthreads);
 
-    for (i = 0;  i < nthreads - 1;  ++i) {
-        targs[i] = (ti_threadarg_t *)malloc(sizeof (ti_threadarg_t));
-        targs[i]->state = TI_THREAD_INIT;
-        targs[i]->tid = i + 1;
-        uv_thread_create(&uvtid, ti_threadfun, targs[i]);
+    for (i = 1; i < nthreads; ++i) {
+        jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
+        t->tid = i;
+        t->barrier = &thread_init_done;
+        uv_thread_create(&uvtid, jl_threadfun, t);
         if (exclusive) {
-            mask[i + 1] = 1;
+            mask[i] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-            mask[i + 1] = 0;
+            mask[i] = 0;
         }
         uv_thread_detach(&uvtid);
     }
 
-    // set up the world thread group
-    ti_threadgroup_create(1, nthreads, 1, &tgworld);
-    for (i = 0;  i < nthreads;  ++i)
-        ti_threadgroup_addthread(tgworld, i, NULL);
-    ti_threadgroup_initthread(tgworld, ptls->tid);
-
-    // give the threads the world thread group; they will block waiting for fork
-    for (i = 0;  i < nthreads - 1;  ++i) {
-        targs[i]->tg = tgworld;
-        jl_atomic_store_release(&targs[i]->state, TI_THREAD_WORK);
-    }
-
     uv_barrier_wait(&thread_init_done);
-
-    // free the argument array; the threads will free their arguments
-    free(targs);
 }
 
-// TODO: is this needed? where/when/how to call it?
-void jl_shutdown_threading(void)
+_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
+
+JL_DLLEXPORT int jl_in_threaded_region(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // stop the spinning threads by sending them a command
-    ti_threadwork_t *work = &threadwork;
-
-    work->command = TI_THREADWORK_DONE;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work, 0);
-
-    sleep(1);
-
-    // destroy the world thread group
-    ti_threadgroup_destroy(tgworld);
-
-#if PROFILE_JL_THREADING
-    jl_free_aligned(join_ns);
-    jl_free_aligned(user_ns);
-    jl_free_aligned(fork_ns);
-    fork_ns = user_ns = join_ns = NULL;
-#endif
+    return jl_atomic_load_relaxed(&_threadedregion) != 0;
 }
 
-// interface to user code: specialize and compile the user thread function
-// and run it in all threads
-JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
+JL_DLLEXPORT void jl_enter_threaded_region(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // GC safe
-#if PROFILE_JL_THREADING
-    uint64_t tstart = uv_hrtime();
-#endif
-    uint32_t nargs;
-    jl_value_t **args;
-    if (!jl_is_svec(_args)) {
-        nargs = 1;
-        args = &_args;
+    jl_atomic_fetch_add(&_threadedregion, 1);
+}
+
+JL_DLLEXPORT void jl_exit_threaded_region(void)
+{
+    if (jl_atomic_fetch_add(&_threadedregion, -1) == 1) {
+        // make sure no more callbacks will run while user code continues
+        // outside thread region and might touch an I/O object.
+        JL_UV_LOCK();
+        JL_UV_UNLOCK();
+        // make sure thread 0 is not using the sleep_lock
+        // so that it may enter the libuv event loop instead
+        jl_wakeup_thread(0);
     }
-    else {
-        nargs = jl_svec_len(_args);
-        args = jl_svec_data(_args);
-    }
-
-    int8_t gc_state = jl_gc_unsafe_enter(ptls);
-
-    size_t world = jl_get_ptls_states()->world_age;
-    threadwork.command = TI_THREADWORK_RUN;
-    threadwork.mfunc = jl_lookup_generic(args, nargs,
-                                         jl_int32hash_fast(jl_return_address()), world);
-    // Ignore constant return value for now.
-    threadwork.fptr = jl_compile_method_internal(&threadwork.mfunc, world);
-    if (threadwork.fptr == jl_fptr_const_return)
-        return jl_nothing;
-    threadwork.args = args;
-    threadwork.nargs = nargs;
-    threadwork.ret = jl_nothing;
-    threadwork.current_module = ptls->current_module;
-    threadwork.world_age = world;
-
-#if PROFILE_JL_THREADING
-    uint64_t tcompile = uv_hrtime();
-    prep_ns += (tcompile - tstart);
-#endif
-
-    // fork the world thread group
-    ti_threadwork_t *tw = &threadwork;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw, 0);
-
-#if PROFILE_JL_THREADING
-    uint64_t tfork = uv_hrtime();
-    fork_ns[ptls->tid] += (tfork - tcompile);
-#endif
-
-    // this thread must do work too (TODO: reduction?)
-    JL_GC_PROMISE_ROOTED(threadwork.mfunc);
-    tw->ret = ti_run_fun(threadwork.fptr, threadwork.mfunc, args, nargs);
-
-#if PROFILE_JL_THREADING
-    uint64_t trun = uv_hrtime();
-    user_ns[ptls->tid] += (trun - tfork);
-#endif
-
-    // wait for completion (TODO: nowait?)
-    ti_threadgroup_join(tgworld, ptls->tid);
-
-#if PROFILE_JL_THREADING
-    uint64_t tjoin = uv_hrtime();
-    join_ns[ptls->tid] += (tjoin - trun);
-#endif
-
-    jl_gc_unsafe_leave(ptls, gc_state);
-
-    return tw->ret;
 }
 
-#if PROFILE_JL_THREADING
-
-void ti_reset_timings(void)
-{
-    int i;
-    prep_ns = 0;
-    for (i = 0;  i < jl_n_threads;  i++)
-        fork_ns[i] = user_ns[i] = join_ns[i] = 0;
-}
-
-void ti_timings(uint64_t *times, uint64_t *min, uint64_t *max, uint64_t *avg)
-{
-    int i;
-    *min = UINT64_MAX;
-    *max = *avg = 0;
-    for (i = 0;  i < jl_n_threads;  i++) {
-        if (times[i] < *min)
-            *min = times[i];
-        if (times[i] > *max)
-            *max = times[i];
-        *avg += times[i];
-    }
-    *avg /= jl_n_threads;
-}
-
-#define NS_TO_SECS(t)        ((t) / (double)1e9)
-
-JL_DLLEXPORT void jl_threading_profile(void)
-{
-    if (!fork_ns) return;
-
-    printf("\nti profile:\n");
-    printf("prep: %g (%" PRIu64 ")\n", NS_TO_SECS(prep_ns), prep_ns);
-
-    uint64_t min, max, avg;
-    ti_timings(fork_ns, &min, &max, &avg);
-    printf("fork: %g (%g - %g)\n", NS_TO_SECS(min), NS_TO_SECS(max),
-            NS_TO_SECS(avg));
-    ti_timings(user_ns, &min, &max, &avg);
-    printf("user: %g (%g - %g)\n", NS_TO_SECS(min), NS_TO_SECS(max),
-            NS_TO_SECS(avg));
-    ti_timings(join_ns, &min, &max, &avg);
-    printf("join: %g (%g - %g)\n", NS_TO_SECS(min), NS_TO_SECS(max),
-            NS_TO_SECS(avg));
-}
-
-#else //!PROFILE_JL_THREADING
-
-JL_DLLEXPORT void jl_threading_profile(void)
-{
-}
-
-#endif //!PROFILE_JL_THREADING
-
-#else // !JULIA_ENABLE_THREADING
-
-JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
-{
-    uint32_t nargs;
-    jl_value_t **args;
-    if (!jl_is_svec(_args)) {
-        nargs = 1;
-        args = &_args;
-    }
-    else {
-        nargs = jl_svec_len(_args);
-        args = jl_svec_data(_args);
-    }
-    jl_method_instance_t *mfunc = jl_lookup_generic(args, nargs,
-                                                    jl_int32hash_fast(jl_return_address()),
-                                                    jl_get_ptls_states()->world_age);
-    size_t world = jl_get_ptls_states()->world_age;
-    jl_callptr_t fptr = jl_compile_method_internal(&mfunc, world);
-    if (fptr == jl_fptr_const_return)
-        return jl_nothing;
-    return ti_run_fun(fptr, mfunc, args, nargs);
-}
-
-void jl_init_threading(void)
-{
-    static jl_ptls_t _jl_all_tls_states;
-    jl_all_tls_states = &_jl_all_tls_states;
-    jl_n_threads = 1;
-    ti_init_master_thread();
-}
-
-void jl_start_threads(void) { }
-
-#endif // !JULIA_ENABLE_THREADING
 
 // Make gc alignment available for threading
 // see threads.jl alignment

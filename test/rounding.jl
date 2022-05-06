@@ -91,8 +91,59 @@ end
     @test_throws DivideError round(Int64,badness,RoundNearestTiesUp)
 end
 
+@testset "rounding properties" for Tf in [Float16,Float32,Float64]
+    # these should hold for all u, but we just test the smallest and largest
+    # of each binade
+
+    for i in exponent(floatmin(Tf)):exponent(floatmax(Tf))
+        for u in [ldexp(Tf(1.0), i), -ldexp(Tf(1.0), i),
+                  ldexp(prevfloat(Tf(2.0)), i), -ldexp(prevfloat(Tf(2.0)), i)]
+
+            r = round(u, RoundNearest)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test abs(r-u) < 0.5 || abs(r-u) == 0.5 && isinteger(r/2)
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundNearestTiesAway)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test abs(r-u) < 0.5 || (r-u) == copysign(0.5,u)
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundNearestTiesUp)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test -0.5 < r-u <= 0.5
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+
+            r = round(u, RoundFromZero)
+            if isfinite(u)
+                @test isfinite(r)
+                @test isinteger(r)
+                @test signbit(u) ? (r == floor(u)) : (r == ceil(u))
+                @test signbit(u) == signbit(r)
+            else
+                @test u === r
+            end
+        end
+    end
+end
+
 @testset "rounding difficult values" begin
-    for x = 2^53-10:2^53+10
+    for x = Int64(2)^53-10:Int64(2)^53+10
         y = Float64(x)
         i = trunc(Int64,y)
         @test Int64(trunc(y)) == i
@@ -130,6 +181,7 @@ end
                 @test round.(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
                 @test broadcast(x -> round(x, RoundNearestTiesAway), y) ≈ t[(i+1+(i>=0))>>2 for i in r]
                 @test broadcast(x -> round(x, RoundNearestTiesUp), y) ≈ t[(i+2)>>2 for i in r]
+                @test broadcast(x -> round(x, RoundFromZero), y) ≈ t[(i+3*(i>=0))>>2 for i in r]
             end
         end
     end
@@ -149,6 +201,10 @@ end
     @test round(Int,-2.5,RoundNearestTiesUp) == -2
     @test round(Int,-1.5,RoundNearestTiesUp) == -1
     @test round(Int,-1.9) == -2
+    @test round(Int,nextfloat(1.0),RoundFromZero) == 2
+    @test round(Int,-nextfloat(1.0),RoundFromZero) == -2
+    @test round(Int,prevfloat(1.0),RoundFromZero) == 1
+    @test round(Int,-prevfloat(1.0),RoundFromZero) == -1
     @test_throws InexactError round(Int64, 9.223372036854776e18)
     @test       round(Int64, 9.223372036854775e18) == 9223372036854774784
     @test_throws InexactError round(Int64, -9.223372036854778e18)

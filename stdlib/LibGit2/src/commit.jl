@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+repository(c::GitCommit) = c.owner
+
 """
     message(c::GitCommit, raw::Bool=false)
 
@@ -87,7 +89,7 @@ end
 """
     commit(repo::GitRepo, msg::AbstractString; kwargs...) -> GitHash
 
-Wrapper around [`git_commit_create`](https://libgit2.github.com/libgit2/#HEAD/group/commit/git_commit_create).
+Wrapper around [`git_commit_create`](https://libgit2.org/libgit2/#HEAD/group/commit/git_commit_create).
 Create a commit in the repository `repo`. `msg` is the commit message. Return the OID of the new commit.
 
 The keyword arguments are:

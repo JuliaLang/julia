@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
 using Printf: @sprintf
 
 using Base.Iterators
@@ -51,7 +51,7 @@ include("parse.jl")
 include("deprecated.jl")
 
 export Period, DatePeriod, TimePeriod,
-       Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
+       Year, Quarter, Month, Week, Day, Hour, Minute, Second, Millisecond,
        Microsecond, Nanosecond,
        TimeZone, UTC, TimeType, DateTime, Date, Time,
        # periods.jl

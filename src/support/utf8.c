@@ -509,7 +509,7 @@ size_t u8_vprintf(const char *fmt, va_list ap)
     if ((intptr_t)cnt < 0)
         return 0;
     if (cnt >= sz) {
-        buf = (char*)malloc(cnt + 1);
+        buf = (char*)malloc_s(cnt+1);
         needfree = 1;
         vsnprintf(buf, cnt+1, fmt, ap);
     }
@@ -517,7 +517,8 @@ size_t u8_vprintf(const char *fmt, va_list ap)
     nc = u8_toucs(wcs, cnt+1, buf, cnt);
     wcs[nc] = 0;
     printf("%ls", (wchar_t*)wcs);
-    if (needfree) free(buf);
+    if (needfree)
+        free(buf);
     return nc;
 }
 
@@ -570,6 +571,8 @@ chkutf8:
             return 0;
         // Check for surrogate chars
         if (byt == 0xed && *pnt > 0x9f) return 0;
+	// Check for overlong encoding
+	if (byt == 0xe0 && *pnt < 0xa0) return 0;
         pnt += 2;
     } else {                        // 4-byte sequence
         // Must have 3 valid continuation characters

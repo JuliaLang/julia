@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
-using Base: uv_error
+using Base: uv_error, Experimental
+
+@testset "FileWatching" begin
 
 # This script does the following
 # Sets up N unix pipes (or WSA sockets)
@@ -12,7 +14,7 @@ using Base: uv_error
 # Writable ends are always tested for write-ability before a write
 
 n = 20
-intvls = [2, .2, .1, .005]
+intvls = [2, .2, .1, .005, .00001]
 
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 for i in 1:n
@@ -22,28 +24,28 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? 0x7fff : (n + 60) # expectations on reasonable values
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    fd_in_limits =
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    # Dump out what file descriptors are open for easier debugging of failure modes
+    if !fd_in_limits && Sys.islinux()
+        run(`ls -la /proc/$(getpid())/fd`)
+    end
+    @test fd_in_limits
 end
 
 function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
-    t_elapsed = @elapsed begin
-        start_evt2 = Condition()
-        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-    end
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     @test !evt.timedout
     @test evt.readable
     @test !evt.writable
     @test evt === fetch(evt2)
-
-    # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
-    # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
-    # @test t_elapsed <= (intvl + 1)
 
     dout = zeros(UInt8, 1)
     @static if Sys.iswindows()
@@ -58,34 +60,26 @@ end
 function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
-    t_elapsed = @elapsed begin
-        start_evt2 = Condition()
-        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-        @test evt.timedout
-        @test !evt.readable
-        @test !evt.writable
-        @test evt === fetch(evt2)
-    end
-
-    # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
-    # @test intvl <= t_elapsed
-    # @test t_elapsed <= (intvl + 1)
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
+    @test evt.timedout
+    @test !evt.readable
+    @test !evt.writable
+    @test evt === fetch(evt2)
 end
-
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @sync begin
+    @Experimental.sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(undef, n)
         for idx in 1:n
             if isodd(idx)
-                t[idx] = @async pfd_tst_reads(idx, intvl)
+                @async pfd_tst_reads(idx, intvl)
             else
-                t[idx] = @async pfd_tst_timeout(idx, intvl)
+                @async pfd_tst_timeout(idx, intvl)
             end
         end
 
@@ -109,9 +103,6 @@ for (i, intvl) in enumerate(intvls)
             end
         end
         notify(ready_c, all=true)
-        for idx in 1:n
-            Base.wait(t[idx])
-        end
     end
 end
 
@@ -168,32 +159,32 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-const F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
-const F_PATH = F_GETPATH ? "afile.txt" : ""
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 
 # initialize a watch_folder instance and create afile.txt
 function test_init_afile()
     @test isempty(FileWatching.watched_folders)
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 2
+    @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
     @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test length(FileWatching.watched_folders) == 1
     @test unwatch_folder(dir) === nothing
     @test isempty(FileWatching.watched_folders)
-    @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 2
-    @test 0.001 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
     @test unwatch_folder(dir) === nothing
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 4
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.5
+    @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
+    @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     # like touch, but lets the operating system update the timestamp
     # for greater precision on some platforms (windows)
     @test close(open(file, "w")) === nothing
-    @test @elapsed(@test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))) <= 0.5
+    @test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))
     @test close(open(file, "w")) === nothing
     sleep(3)
     let c
-        @test @elapsed(c = watch_folder(dir, 0)) <= 0.5
+        c = watch_folder(dir, 0)
         if F_GETPATH
             @test c.first == F_PATH
             @test c.second.changed ⊻ c.second.renamed
@@ -205,8 +196,8 @@ function test_init_afile()
         end
     end
     @test unwatch_folder(dir) === nothing
-    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
-    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent()))) <= 1.5
+    @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
+    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
     @test length(FileWatching.watched_folders) == 1
     nothing
 end
@@ -384,8 +375,8 @@ mv(file * "~", file)
 let changes = []
     while true
         let c
-            timeout = Sys.iswindows() ? 0.1 : 0.0
-            @test @elapsed(c = watch_folder(dir, timeout)) < 0.5
+            Sys.iswindows() && sleep(0.1)
+            @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
             push!(changes, c)
             (c.second::FileWatching.FileEvent).timedout && break
         end
@@ -442,3 +433,9 @@ unwatch_folder(dir)
 @test isempty(FileWatching.watched_folders)
 rm(file)
 rm(dir)
+
+@testset "Pidfile" begin
+    include("pidfile.jl")
+end
+
+end # testset

@@ -36,16 +36,13 @@
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__ELF__)
 .size CNAME, . - CNAME
 #else
-#ifndef _MSC_VER
-.end
-#else
-CNAME endp
-end
+#ifdef _WIN64
+.seh_endproc
 #endif
 #endif
 
+
 #undef CNAME
-#undef HIDENAME
 #undef STR
 #undef XSTR
 #undef _START_ENTRY

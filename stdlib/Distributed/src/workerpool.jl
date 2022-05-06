@@ -1,19 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type AbstractWorkerPool end
+"""
+    AbstractWorkerPool
 
-# An AbstractWorkerPool should implement
-#
-# `push!` - add a new worker to the overall pool (available + busy)
-# `put!` - put back a worker to the available pool
-# `take!` - take a worker from the available pool (to be used for remote function execution)
-# `length` - number of workers available in the overall pool
-# `isready` - return false if a `take!` on the pool would block, else true
-#
-# The default implementations of the above (on a AbstractWorkerPool) require fields
-#    channel::Channel{Int}
-#    workers::Set{Int}
-#
+Supertype for worker pools such as [`WorkerPool`](@ref) and [`CachingPool`](@ref).
+An `AbstractWorkerPool` should implement:
+  - [`push!`](@ref) - add a new worker to the overall pool (available + busy)
+  - [`put!`](@ref) - put back a worker to the available pool
+  - [`take!`](@ref) - take a worker from the available pool (to be used for remote function execution)
+  - [`length`](@ref) - number of workers available in the overall pool
+  - [`isready`](@ref) - return false if a `take!` on the pool would block, else true
+
+The default implementations of the above (on a `AbstractWorkerPool`) require fields
+  - `channel::Channel{Int}`
+  - `workers::Set{Int}`
+where `channel` contains free worker pids and `workers` is the set of all workers associated with this pool.
+"""
+abstract type AbstractWorkerPool end
 
 mutable struct WorkerPool <: AbstractWorkerPool
     channel::Channel{Int}
@@ -127,12 +130,12 @@ end
 # NOTE: remotecall_fetch does it automatically, but this will be more efficient as
 # it avoids the overhead associated with a local remotecall.
 
-for func = (:length, :isready, :workers, :nworkers, :take!)
+for (func, rt) = ((:length, Int), (:isready, Bool), (:workers, Vector{Int}), (:nworkers, Int), (:take!, Int))
     func_local = Symbol(string("wp_local_", func))
     @eval begin
         function ($func)(pool::WorkerPool)
             if pool.ref.where != myid()
-                return remotecall_fetch(ref->($func_local)(fetch(ref).value), pool.ref.where, pool.ref)
+                return remotecall_fetch(ref->($func_local)(fetch(ref).value), pool.ref.where, pool.ref)::$rt
             else
                 return ($func_local)(pool)
             end
@@ -306,7 +309,7 @@ For global variables, only the bindings are captured in a closure, not the data.
 const foo = rand(10^8);
 wp = CachingPool(workers())
 let foo = foo
-    pmap(wp, i -> sum(foo) + i, 1:100);
+    pmap(i -> sum(foo) + i, wp, 1:100);
 end
 ```
 
