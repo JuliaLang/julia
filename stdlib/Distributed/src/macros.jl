@@ -1,14 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-let nextidx = 0
+let nextidx = Threads.Atomic{Int}(0)
     global nextproc
     function nextproc()
-        p = -1
-        if p == -1
-            p = workers()[(nextidx % nworkers()) + 1]
-            nextidx += 1
-        end
-        p
+        idx = Threads.atomic_add!(nextidx, 1)
+        return workers()[(idx % nworkers()) + 1]
     end
 end
 
@@ -226,10 +222,10 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                @sync_add remotecall(Core.eval, pid, m, ex)
+                @async_unwrap remotecall_wait(Core.eval, pid, m, ex)
             end
         end
-        yield() # ensure that the remotecall_fetch have had a chance to start
+        yield() # ensure that the remotecalls have had a chance to start
 
         # execute locally last as we do not want local execution to block serialization
         # of the request to remote nodes.
@@ -347,6 +343,9 @@ macro distributed(args...)
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
+    if Meta.isexpr(body, :block) && body.args[end] isa LineNumberNode
+        resize!(body.args, length(body.args) - 1)
+    end
     if na==1
         syncvar = esc(Base.sync_varname)
         return quote

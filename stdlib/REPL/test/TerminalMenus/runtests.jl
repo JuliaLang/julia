@@ -4,33 +4,22 @@ import REPL
 using REPL.TerminalMenus
 using Test
 
-function simulate_input(expected, menu::TerminalMenus.AbstractMenu, keys...;
-                        kwargs...)
-    keydict = Dict(:up => "\e[A",
-                   :down => "\e[B",
-                   :enter => "\r")
-    vimdict = Dict(:up => "k",
-                   :down => "j",
-                   :enter => " ")
-    errs = []
-    got = _simulate_input(keydict, deepcopy(menu), keys...; kwargs...)
-    got == expected || push!(errs, :arrows => got)
-    got = _simulate_input(vimdict, menu, keys...; kwargs...)
-    got == expected || push!(errs, :vim => got)
-    isempty(errs) || return errs
-end
+function simulate_input(menu::TerminalMenus.AbstractMenu, keys...; kwargs...)
+    keydict =  Dict(:up => "\e[A",
+                    :down => "\e[B",
+                    :enter => "\r")
 
-function _simulate_input(keydict, menu::TerminalMenus.AbstractMenu, keys...;
-                         kwargs...)
+    new_stdin = Base.BufferStream()
     for key in keys
         if isa(key, Symbol)
-            write(stdin.buffer, keydict[key])
+            write(new_stdin, keydict[key])
         else
-            write(stdin.buffer, "$key")
+            write(new_stdin, "$key")
         end
     end
+    TerminalMenus.terminal.in_stream = new_stdin
 
-    request(menu; suppress_output=true, kwargs...)
+    return request(menu; suppress_output=true, kwargs...)
 end
 
 include("radio_menu.jl")

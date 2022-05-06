@@ -40,15 +40,8 @@ julia> supertype(Int32)
 Signed
 ```
 """
-function supertype(T::DataType)
-    @_pure_meta
-    T.super
-end
-
-function supertype(T::UnionAll)
-    @_pure_meta
-    UnionAll(T.var, supertype(T.body))
-end
+supertype(T::DataType) = (@_total_meta; T.super)
+supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -137,7 +130,7 @@ julia> isequal(missing, missing)
 true
 ```
 """
-isequal(x, y) = x == y
+isequal(x, y) = (x == y)::Bool # all `missing` cases are handled in missing.jl
 
 signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
 signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
@@ -202,7 +195,7 @@ largest values and `isgreater` defines a descending total order with `NaN` and
 !!! note
 
     Like `min`, `isgreater` orders containers (tuples, vectors, etc)
-    lexigraphically with `isless(y, x)` rather than recursively with itself:
+    lexicographically with `isless(y, x)` rather than recursively with itself:
 
     ```jldoctest
     julia> Base.isgreater(1, NaN) # 1 is greater than NaN
@@ -234,7 +227,11 @@ isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
 """
     isunordered(x)
 
-Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+Return `true` if `x` is a value that is not orderable according to [`<`](@ref), such as `NaN`
+or `missing`.
+
+The values that evaluate to `true` with this predicate may be orderable with respect to other
+orderings such as [`isless`](@ref).
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
@@ -243,14 +240,8 @@ isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
 isunordered(x::Missing) = true
 
-function ==(T::Type, S::Type)
-    @_pure_meta
-    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
-end
-function !=(T::Type, S::Type)
-    @_pure_meta
-    return !(T == S)
-end
+==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
+!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
@@ -430,22 +421,6 @@ const ≥ = >=
 isless(x::Real, y::Real) = x<y
 
 """
-    ifelse(condition::Bool, x, y)
-
-Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?` or `if` in
-that it is an ordinary function, so all the arguments are evaluated first. In some cases,
-using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
-provide higher performance in tight loops.
-
-# Examples
-```jldoctest
-julia> ifelse(1 > 2, 1, 2)
-2
-```
-"""
-ifelse
-
-"""
     cmp(x,y)
 
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
@@ -480,7 +455,7 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments. See also the [`maximum`](@ref) function
+Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
 
 # Examples
@@ -494,7 +469,7 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments. See also the [`minimum`](@ref) function
+Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
 
 # Examples
@@ -508,7 +483,9 @@ min(x,y) = ifelse(isless(y, x), y, x)
 """
     minmax(x, y)
 
-Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
+Return `(min(x,y), max(x,y))`.
+
+See also [`extrema`](@ref) that returns `(minimum(x), maximum(x))`.
 
 # Examples
 ```jldoctest
@@ -517,58 +494,6 @@ julia> minmax('c','b')
 ```
 """
 minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
-
-"""
-    extrema(itr) -> Tuple
-
-Compute both the minimum and maximum element in a single pass, and return them as a 2-tuple.
-
-# Examples
-```jldoctest
-julia> extrema(2:10)
-(2, 10)
-
-julia> extrema([9,pi,4.5])
-(3.141592653589793, 9.0)
-```
-"""
-extrema(itr) = _extrema_itr(identity, itr)
-
-"""
-    extrema(f, itr) -> Tuple
-
-Compute both the minimum and maximum of `f` applied to each element in `itr` and return
-them as a 2-tuple. Only one pass is made over `itr`.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
-
-# Examples
-```jldoctest
-julia> extrema(sin, 0:π)
-(0.0, 0.9092974268256817)
-```
-"""
-extrema(f, itr) = _extrema_itr(f, itr)
-
-function _extrema_itr(f, itr)
-    y = iterate(itr)
-    y === nothing && throw(ArgumentError("collection must be non-empty"))
-    (v, s) = y
-    vmin = vmax = f(v)
-    while true
-        y = iterate(itr, s)
-        y === nothing && break
-        (x, s) = y
-        fx = f(x)
-        vmax = max(fx, vmax)
-        vmin = min(fx, vmin)
-    end
-    return (vmin, vmax)
-end
-
-extrema(x::Real) = (x, x)
-extrema(f, x::Real) = (y = f(x); (y, y))
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -585,7 +510,7 @@ julia> identity("Well, what did you expect?")
 "Well, what did you expect?"
 ```
 """
-identity(x) = x
+identity(@nospecialize x) = x
 
 +(x::Number) = x
 *(x::Number) = x
@@ -650,7 +575,7 @@ for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
         # that defining +(a,b) is sufficient for full functionality.
-        ($op)(a, b, c, xs...) = afoldl($op, ($op)(($op)(a,b),c), xs...)
+        ($op)(a, b, c, xs...) = (@inline; afoldl($op, ($op)(($op)(a,b),c), xs...))
         # a further concern is that it's easy for a type like (Int,Int...)
         # to match many definitions, so we need to keep the number of
         # definitions down to avoid losing type information.
@@ -715,13 +640,13 @@ julia> bitstring(Int8(12))
 See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
     oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(<<, (x, c)))
     end
@@ -760,7 +685,7 @@ julia> bitstring(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>, (x, c)))
     end
@@ -798,11 +723,11 @@ is equivalent to [`>>`](@ref).
 See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
-    @_inline_meta
+    @inline
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
 function >>>(x::Integer, c::Unsigned)
-    @_inline_meta
+    @inline
     if c isa UInt
         throw(MethodError(>>>, (x, c)))
     end
@@ -873,15 +798,24 @@ const ÷ = div
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
 in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
 
-See also: [`fld1`](@ref), [`fldmod1`](@ref).
+With integer arguments and positive `y`, this is equal to `mod(x, 1:y)`, and hence natural
+for 1-based indexing. By comparison, `mod(x, y) == mod(x, 0:y-1)` is natural for computations with
+offsets or strides.
+
+See also [`mod`](@ref), [`fld1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
 julia> mod1(4, 2)
 2
 
-julia> mod1(4, 3)
-1
+julia> mod1.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ 1  2  3  1  2  3  1  2  3  1  2
+
+julia> mod1.([-0.1, 0, 0.1, 1, 2, 2.9, 3, 3.1]', 3)
+1×8 Matrix{Float64}:
+ 2.9  3.0  0.1  1.0  2.0  2.9  3.0  0.1
 ```
 """
 mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
@@ -892,7 +826,7 @@ mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-See also: [`mod1`](@ref), [`fldmod1`](@ref).
+See also [`mod1`](@ref), [`fldmod1`](@ref).
 
 # Examples
 ```jldoctest
@@ -919,7 +853,7 @@ end
 
 Return `(fld1(x,y), mod1(x,y))`.
 
-See also: [`fld1`](@ref), [`mod1`](@ref).
+See also [`fld1`](@ref), [`mod1`](@ref).
 """
 fldmod1(x, y) = (fld1(x, y), mod1(x, y))
 
@@ -954,10 +888,11 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
     |>(x, f)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
+When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> x->x.^2 |> sum |> inv
+julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 0.01818181818181818
 ```
 """
@@ -984,7 +919,7 @@ julia> f.value
 ```
 
 !!! compat "Julia 1.7"
-    Returns requires at least Julia 1.7.
+    `Returns` requires at least Julia 1.7.
 """
 struct Returns{V} <: Function
     value::V
@@ -992,13 +927,8 @@ struct Returns{V} <: Function
     Returns(value) = new{Core.Typeof(value)}(value)
 end
 
-(obj::Returns)(args...; kw...) = obj.value
-function show(io::IO, obj::Returns)
-    show(io, typeof(obj))
-    print(io, "(")
-    show(io, obj.value)
-    print(io, ")")
-end
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
+
 # function composition
 
 """
@@ -1087,16 +1017,29 @@ end
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.outer)
+    c.outer isa ComposedFunction ? show(io, c.outer) : _showcomposed(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.inner)
+    _showcomposed(io, c.inner)
 end
+
+#shows !f instead of (!) ∘ f when ! is the outermost function
+function show(io::IO, c::ComposedFunction{typeof(!)})
+    print(io, '!')
+    _showcomposed(io, c.inner)
+end
+
+_showcomposed(io::IO, x) = show(io, x)
+#display operators like + and - inside parens
+_showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); show(io, f); print(io, ')')) : show(io, f)
+#nesting for chained composition
+_showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
+#no nesting when ! is the outer function in a composition chain
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
 
 """
     !f::Function
 
-Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`.
+Predicate function negation: when the argument of `!` is a function, it returns a composed function which computes the boolean negation of `f`.
 
 See also [`∘`](@ref).
 
@@ -1111,8 +1054,12 @@ julia> filter(isletter, str)
 julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
+
+!!! compat "Julia 1.9"
+    Starting with Julia 1.9, `!f` returns a [`ComposedFunction`](@ref) instead of an anonymous function.
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (!) ∘ f
+!(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
     Fix1(f, x)

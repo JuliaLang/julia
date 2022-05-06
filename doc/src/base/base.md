@@ -39,9 +39,10 @@ Base.methods
 Base.@show
 ans
 Base.active_project
+Base.set_active_project
 ```
 
-## Keywords
+## [Keywords](@id Keywords)
 
 This is the list of reserved keywords in Julia:
 `baremodule`, `begin`, `break`, `catch`, `const`, `continue`, `do`,
@@ -179,7 +180,12 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Core.fieldtype
+Base.fieldtypes
+Base.fieldcount
 Base.hasfield
+Core.nfields
+Base.isconst
 ```
 
 ### Memory layout
@@ -189,9 +195,6 @@ Base.sizeof(::Type)
 Base.isconcretetype
 Base.isbits
 Base.isbitstype
-Core.fieldtype
-Base.fieldtypes
-Base.fieldcount
 Base.fieldoffset
 Base.datatype_alignment
 Base.datatype_haspadding
@@ -229,6 +232,7 @@ Base.isnothing
 Base.notnothing
 Base.Some
 Base.something
+Base.@something
 Base.Enums.Enum
 Base.Enums.@enum
 Core.Expr
@@ -243,6 +247,7 @@ Core.Module
 Core.Function
 Base.hasmethod
 Core.applicable
+Base.isambiguous
 Core.invoke
 Base.@invoke
 Base.invokelatest
@@ -252,6 +257,8 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.Fix1
+Base.Fix2
 ```
 
 ## Syntax
@@ -278,6 +285,7 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@pure
+Base.@assume_effects
 Base.@deprecate
 ```
 
@@ -286,6 +294,7 @@ Base.@deprecate
 Base.Missing
 Base.missing
 Base.coalesce
+Base.@coalesce
 Base.ismissing
 Base.skipmissing
 Base.nonmissingtype
@@ -306,7 +315,9 @@ Base.ignorestatus
 Base.detach
 Base.Cmd
 Base.setenv
+Base.addenv
 Base.withenv
+Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
 Base.Libc.gethostname
@@ -314,6 +325,7 @@ Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
 Base.@time
+Base.@showtime
 Base.@timev
 Base.@timed
 Base.@elapsed
@@ -350,7 +362,7 @@ Core.throw
 Base.rethrow
 Base.backtrace
 Base.catch_backtrace
-Base.catch_stack
+Base.current_exceptions
 Base.@assert
 Base.Experimental.register_error_hint
 Base.Experimental.show_error_hints
@@ -410,8 +422,6 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
-Core.nfields
-Base.isconst
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
@@ -425,6 +435,7 @@ Base.GC.gc
 Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
+Base.GC.enable_logging
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
@@ -437,6 +448,7 @@ Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
 Base.precompile
+Base.jit_total_bytes
 ```
 
 ## Meta

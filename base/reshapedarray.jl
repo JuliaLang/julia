@@ -113,6 +113,7 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
+reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
@@ -241,7 +242,7 @@ end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
@@ -265,7 +266,7 @@ end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
@@ -286,8 +287,21 @@ viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLin
 viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
-    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+
+
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = size_to_strides(1, size(A)...) == strides(A)
+_checkcontiguous(::Type{Bool}, A::Array) = true
+_checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
+_checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
+
+function strides(a::ReshapedArray)
+    # We can handle non-contiguous parent if it's a StridedVector
+    ndims(parent(a)) == 1 && return size_to_strides(only(strides(parent(a))), size(a)...)
+    _checkcontiguous(Bool, a) || throw(ArgumentError("Parent must be contiguous."))
+    size_to_strides(1, size(a)...)
+end

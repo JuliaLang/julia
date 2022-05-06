@@ -81,19 +81,19 @@ julia> pi
 π = 3.1415926535897...
 
 julia> pi = 3
-ERROR: cannot assign a value to variable MathConstants.pi from module Main
+ERROR: cannot assign a value to imported variable MathConstants.pi from module Main
 
 julia> sqrt(100)
 10.0
 
 julia> sqrt = 4
-ERROR: cannot assign a value to variable Base.sqrt from module Main
+ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
 
 ## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
-points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
+points greater than 00A0; in particular, [Unicode character categories](https://www.fileformat.info/info/unicode/category/index.htm)
 Lu/Ll/Lt/Lm/Lo/Nl (letters), Sc/So (currency and other symbols), and a few other letter-like characters
 (e.g. a subset of the Sm math symbols) are allowed. Subsequent characters may also include ! and
 digits (0-9 and other characters in categories Nd/No), as well as other Unicode code points: diacritics
@@ -123,7 +123,7 @@ julia> y = ___
 ERROR: syntax: all-underscore identifier used as rvalue
 ```
 
-The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
+The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
 
 ```julia-repl
 julia> else = false
@@ -143,6 +143,7 @@ are treated as equivalent to the corresponding Greek letters. The middle dot
 `·` (U+00B7) and the Greek
 [interpunct](https://en.wikipedia.org/wiki/Interpunct) `·` (U+0387) are both
 treated as the mathematical dot operator `⋅` (U+22C5).
+The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign `-` (U+002D).
 
 ## Stylistic Conventions
 

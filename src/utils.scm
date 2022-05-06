@@ -79,6 +79,7 @@
 
 (define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
 (define (cdddddr x) (cdr (cdr (cdr (cdr (cdr x))))))
+(define (cadddddr x) (car (cdddddr x)))
 
 (define (table.clone t)
   (let ((nt (table)))
