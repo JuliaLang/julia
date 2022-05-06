@@ -160,4 +160,5 @@ LibGit2.CachedCredentials
 LibGit2.CredentialPayload
 LibGit2.approve
 LibGit2.reject
+LibGit2.Consts.GIT_CONFIG
 ```
