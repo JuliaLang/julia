@@ -177,6 +177,15 @@ static value_t fl_julia_current_line(fl_context_t *fl_ctx, value_t *args, uint32
     return fixnum(jl_lineno);
 }
 
+static int jl_is_number(jl_value_t *v)
+{
+    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+    for (; t->super != t; t = t->super)
+        if (t == jl_number_type)
+            return 1;
+    return 0;
+}
+
 // Check whether v is a scalar for purposes of inlining fused-broadcast
 // arguments when lowering; should agree with broadcast.jl on what is a
 // scalar.  When in doubt, return false, since this is only an optimization.
@@ -187,7 +196,7 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
         return fl_ctx->T;
     else if (iscvalue(args[0]) && fl_ctx->jl_sym == cv_type((cvalue_t*)ptr(args[0]))) {
         jl_value_t *v = *(jl_value_t**)cptr(args[0]);
-        if (jl_isa(v,(jl_value_t*)jl_number_type) || jl_is_string(v))
+        if (jl_is_number(v) || jl_is_string(v))
             return fl_ctx->T;
     }
     return fl_ctx->F;
@@ -198,7 +207,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
     { "current-julia-module-counter", fl_current_module_counter },
-    { "julia-scalar?", fl_julia_scalar }, // TODO: can we kill this safepoint? (from jl_isa)
+    { "julia-scalar?", fl_julia_scalar },
     { "julia-current-file", fl_julia_current_file },
     { "julia-current-line", fl_julia_current_line },
     { NULL, NULL }
