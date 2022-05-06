@@ -8,7 +8,7 @@ transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R
 
 function (*)(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    lmul!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
+    lmul!(convert(AbstractRotation{TS}, R), copy_similar(A, TS))
 end
 (*)(A::AbstractVector, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
 (*)(A::AbstractMatrix, adjR::Adjoint{<:Any,<:AbstractRotation}) = _absvecormat_mul_adjrot(A, adjR)
@@ -31,7 +31,7 @@ conjugated transpose right multiplication `A*G'`. The type doesn't have a `size`
 therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2)` for
 `G*A` or `i2<=size(A,1)` for `A*G'`.
 
-See also: [`givens`](@ref)
+See also [`givens`](@ref).
 """
 struct Givens{T} <: AbstractRotation{T}
     i1::Int
@@ -46,6 +46,7 @@ end
 convert(::Type{T}, r::T) where {T<:AbstractRotation} = r
 convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)
 
+Givens(i1, i2, c, s) = Givens(i1, i2, promote(c, s)...)
 Givens{T}(G::Givens{T}) where {T} = G
 Givens{T}(G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
 Rotation{T}(R::Rotation{T}) where {T} = R
@@ -248,6 +249,18 @@ function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     return cs, sn, r
 end
 
+# enable for unitful quantities
+function givensAlgorithm(f::T, g::T) where T
+    fs = f / oneunit(T)
+    gs = g / oneunit(T)
+    typeof(fs) === T && typeof(gs) === T &&
+    !isa(fs, Union{AbstractFloat,Complex{<:AbstractFloat}}) &&
+    throw(MethodError(givensAlgorithm, (fs, gs)))
+
+    c, s, r = givensAlgorithm(fs, gs)
+    return c, s, r * oneunit(T)
+end
+
 givensAlgorithm(f, g) = givensAlgorithm(promote(float(f), float(g))...)
 
 """
@@ -269,7 +282,7 @@ y[i1] = r
 y[i2] = 0
 ```
 
-See also: [`LinearAlgebra.Givens`](@ref)
+See also [`LinearAlgebra.Givens`](@ref).
 """
 function givens(f::T, g::T, i1::Integer, i2::Integer) where T
     if i1 == i2
@@ -280,7 +293,7 @@ function givens(f::T, g::T, i1::Integer, i2::Integer) where T
         s = -conj(s)
         i1,i2 = i2,i1
     end
-    Givens(i1, i2, convert(T, c), convert(T, s)), r
+    Givens(i1, i2, c, s), r
 end
 """
     givens(A::AbstractArray, i1::Integer, i2::Integer, j::Integer) -> (G::Givens, r)
@@ -295,7 +308,7 @@ B[i1,j] = r
 B[i2,j] = 0
 ```
 
-See also: [`LinearAlgebra.Givens`](@ref)
+See also [`LinearAlgebra.Givens`](@ref).
 """
 givens(A::AbstractMatrix, i1::Integer, i2::Integer, j::Integer) =
     givens(A[i1,j], A[i2,j],i1,i2)
@@ -314,7 +327,7 @@ B[i1] = r
 B[i2] = 0
 ```
 
-See also: [`LinearAlgebra.Givens`](@ref)
+See also [`LinearAlgebra.Givens`](@ref).
 """
 givens(x::AbstractVector, i1::Integer, i2::Integer) =
     givens(x[i1], x[i2], i1, i2)
@@ -390,11 +403,6 @@ end
 *(A::Adjoint{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractVector}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 *(A::Transpose{<:Any,<:AbstractMatrix}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-# disambiguation methods: *(Adj/Trans of AbsTri or RealHermSymComplex{Herm|Sym}, Adj of AbstractRotation)
-*(A::Adjoint{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractTriangular}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-*(A::Adjoint{<:Any,<:RealHermSymComplexHerm}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
-*(A::Transpose{<:Any,<:RealHermSymComplexSym}, B::Adjoint{<:Any,<:AbstractRotation}) = copy(A) * B
 # disambiguation methods: *(Diag/AbsTri, Adj of AbstractRotation)
 *(A::Diagonal, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)
 *(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractRotation}) = A * copy(B)

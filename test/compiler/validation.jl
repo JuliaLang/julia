@@ -19,9 +19,9 @@ function f22938(a, b, x...)
 end
 
 msig = Tuple{typeof(f22938),Int,Int,Int,Int}
-world = typemax(UInt)
-_, msp, m = Base._methods_by_ftype(msig, -1, world)[]
-mi = Core.Compiler.specialize_method(m, msig, msp, false)
+world = Base.get_world_counter()
+match = Base._methods_by_ftype(msig, -1, world)[]
+mi = Core.Compiler.specialize_method(match)
 c0 = Core.Compiler.retrieve_code_info(mi)
 
 @test isempty(Core.Compiler.validate_code(mi))
@@ -50,12 +50,12 @@ end
     c.code[1] = Expr(:(=), SlotNumber(2), GotoNode(1))
     c.code[2] = Expr(:(=), SlotNumber(2), LineNumberNode(2))
     i = 2
-    for h in (:gotoifnot, :line, :const, :meta)
+    for h in (:line, :const, :meta)
         c.code[i+=1] = Expr(:(=), SlotNumber(2), Expr(h))
     end
     errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 6
-    @test count(e.kind === Core.Compiler.INVALID_RVALUE for e in errors) == 6
+    @test length(errors) == 5
+    @test count(e.kind === Core.Compiler.INVALID_RVALUE for e in errors) == 5
 end
 
 @testset "INVALID_CALL_ARG" begin
@@ -64,12 +64,12 @@ end
     c.code[2] = Expr(:call, GlobalRef(Base,:-), Expr(:call, GlobalRef(Base,:sin), GotoNode(2)), 3)
     c.code[3] = Expr(:call, LineNumberNode(2))
     i = 3
-    for h in (:gotoifnot, :line, :const, :meta)
+    for h in (:line, :const, :meta)
         c.code[i+=1] = Expr(:call, GlobalRef(@__MODULE__,:f), Expr(h))
     end
     errors = Core.Compiler.validate_code(c)
-    @test length(errors) == 7
-    @test count(e.kind === Core.Compiler.INVALID_CALL_ARG for e in errors) == 7
+    @test length(errors) == 6
+    @test count(e.kind === Core.Compiler.INVALID_CALL_ARG for e in errors) == 6
 end
 
 @testset "EMPTY_SLOTNAMES" begin
@@ -103,6 +103,14 @@ end
     errors = Core.Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Core.Compiler.SSAVALUETYPES_MISMATCH_UNINFERRED
+end
+
+@testset "SSAFLAGS_MISMATCH" begin
+    c = copy(c0)
+    empty!(c.ssaflags)
+    errors = Core.Compiler.validate_code(c)
+    @test length(errors) == 1
+    @test errors[1].kind === Core.Compiler.SSAFLAGS_MISMATCH
 end
 
 @testset "SIGNATURE_NARGS_MISMATCH" begin

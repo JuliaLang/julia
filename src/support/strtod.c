@@ -43,9 +43,9 @@ JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 // Currently this is MinGW/Windows
 
 // The following code is derived from the Python function _PyOS_ascii_strtod
-// see http://hg.python.org/cpython/file/default/Python/pystrtod.c
+// see https://github.com/python/cpython/blob/master/Python/pystrtod.c
 //
-// Copyright © 2001-2014 Python Software Foundation; All Rights Reserved
+// Copyright © 2001-2020 Python Software Foundation; All Rights Reserved
 //
 // The following modifications have been made:
 // - Leading spaces are ignored

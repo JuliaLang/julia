@@ -32,23 +32,29 @@ OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
 LLT_release := $(LLT_BUILDDIR)/libsupport.a
 LLT_debug := $(LLT_BUILDDIR)/libsupport-debug.a
-LIBFILES_release := $(LLT_release) $(LIBUV) $(LIBUTF8PROC)
-LIBFILES_debug := $(LLT_debug) $(LIBUV) $(LIBUTF8PROC)
+LIBFILES_release := $(LLT_release) $(LIBUV)
+LIBFILES_debug := $(LLT_debug) $(LIBUV)
 LIBS :=
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
 
+ifeq ($(USE_SYSTEM_UTF8PROC),0)
+LIBFILES_release += $(LIBUTF8PROC)
+LIBFILES_debug += $(LIBUTF8PROC)
+else
+LIBS += $(LIBUTF8PROC)
+endif
+
+
 FLAGS := -I$(LLTSRCDIR) $(JCFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(UTF8PROC_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
         -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
-ifneq ($(USEMSVC), 1)
 ifneq ($(OS), emscripten)
 FLAGS += -DUSE_COMPUTED_GOTO
 endif
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden -Wpointer-arith -Wundef
 FLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
-endif
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
@@ -67,8 +73,8 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
-FLISP_SRCS := $(flisp.c cvalues.c types.c flisp.h print.c read.c equal.c:%=$(SRCDIR)/%)
-FLMAIN_SRCS := $(flmain.c flisp.h:%=$(SRCDIR)/%)
+FLISP_SRCS := $(addprefix $(SRCDIR)/,flisp.c cvalues.c types.c flisp.h print.c read.c equal.c)
+FLMAIN_SRCS := $(addprefix $(SRCDIR)/,flmain.c flisp.h)
 $(BUILDDIR)/flisp.o: $(FLISP_SRCS)
 $(BUILDDIR)/flisp.dbg.obj: $(FLISP_SRCS)
 $(BUILDDIR)/flmain.o: $(FLMAIN_SRCS)
@@ -87,11 +93,7 @@ $(BUILDDIR)/$(LIBTARGET).a: $(OBJS) | $(BUILDDIR)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
-ifneq ($(USEMSVC), 1)
 CCLD := $(CC)
-else
-CCLD := $(LD)
-endif
 
 $(BUILDDIR)/$(EXENAME)-debug$(EXE): $(DOBJS) $(LIBFILES_debug) $(BUILDDIR)/$(LIBTARGET)-debug.a $(BUILDDIR)/flmain.dbg.obj | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(DEBUGFLAGS) $(JLDFLAGS) $(DOBJS) $(BUILDDIR)/flmain.dbg.obj -o $@ $(BUILDDIR)/$(LIBTARGET)-debug.a $(LIBFILES_debug) $(LIBS) $(OSLIBS))
@@ -107,8 +109,12 @@ $(BUILDDIR)/host/Makefile:
 	@echo 'BUILDING_HOST_TOOLS=1' >> $@
 	@echo 'include $(SRCDIR)/Makefile' >> $@
 
-$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile
+$(BUILDDIR)/host/$(EXENAME): $(BUILDDIR)/host/Makefile | ${BUILDDIR}/host/flisp.boot
 	make -C $(BUILDDIR)/host $(EXENAME)
+
+
+$(BUILDDIR)/host/flisp.boot: $(SRCDIR)/flisp.boot | $(BUILDDIR)/host/Makefile
+	cp $< $@
 
 ifneq ($(BUILDDIR),.)
 ifneq ($(BUILDDIR),$(SRCDIR))
@@ -118,9 +124,7 @@ endif
 endif
 
 test:
-ifneq ($(USEMSVC), 1)
 	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
-endif
 
 clean:
 	rm -f $(BUILDDIR)/*.o

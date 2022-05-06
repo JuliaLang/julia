@@ -56,8 +56,8 @@ end
 Sampler(::Type{<:AbstractRNG}, I::FloatInterval{BigFloat}, ::Repetition) =
     SamplerBigFloat{typeof(I)}(precision(BigFloat))
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
-    z = BigFloat()
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat)
+    precision(z) == sp.prec || throw(ArgumentError("incompatible BigFloat precision"))
     limbs = sp.limbs
     rand!(rng, limbs)
     @inbounds begin
@@ -67,17 +67,17 @@ function _rand(rng::AbstractRNG, sp::SamplerBigFloat)
     end
     z.sign = 1
     GC.@preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
-    (z, randbool)
+    randbool
 end
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen12{BigFloat})
-    z = _rand(rng, sp)[1]
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat, ::CloseOpen12{BigFloat})
+    _rand!(rng, z, sp)
     z.exp = 1
     z
 end
 
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
-    z, randbool = _rand(rng, sp)
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat, ::CloseOpen01{BigFloat})
+    randbool = _rand!(rng, z, sp)
     z.exp = 0
     randbool &&
         ccall((:mpfr_sub_d, :libmpfr), Int32,
@@ -88,15 +88,21 @@ end
 
 # alternative, with 1 bit less of precision
 # TODO: make an API for requesting full or not-full precision
-function _rand(rng::AbstractRNG, sp::SamplerBigFloat, ::CloseOpen01{BigFloat}, ::Nothing)
-    z = _rand(rng, sp, CloseOpen12(BigFloat))
+function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat, ::CloseOpen01{BigFloat},
+                ::Nothing)
+    _rand!(rng, z, sp, CloseOpen12(BigFloat))
     ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Culong, Base.MPFR.MPFRRoundingMode),
           z, z, 1, Base.MPFR.ROUNDING_MODE[])
     z
 end
 
+rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat{T}
+      ) where {T<:FloatInterval{BigFloat}} =
+          _rand!(rng, z, sp, T())
+
 rand(rng::AbstractRNG, sp::SamplerBigFloat{T}) where {T<:FloatInterval{BigFloat}} =
-    _rand(rng, sp, T())
+    rand!(rng, BigFloat(; precision=sp.prec), sp)
+
 
 ### random integers
 
@@ -166,13 +172,24 @@ end
 
 ### BitInteger
 
-# there are two implemented samplers for unit ranges, which assume that Float64 (i.e.
-# 52 random bits) is the native type for the RNG:
-# 1) "Fast", which is the most efficient when the underlying RNG produces rand(Float64)
-#     "fast enough". The tradeoff is faster creation of the sampler, but more
-#     consumption of entropy bits
-# 2) "Default" which tries to use as few entropy bits as possible, at the cost of a
-#    a bigger upfront price associated with the creation of the sampler
+# there are three implemented samplers for unit ranges, the second one
+# assumes that Float64 (i.e. 52 random bits) is the native type for the RNG:
+# 1) "Fast" (SamplerRangeFast), which is most efficient when the range length is close
+#    (or equal) to a power of 2 from below.
+#    The tradeoff is faster creation of the sampler, but more consumption of entropy bits.
+# 2) "Slow" (SamplerRangeInt) which tries to use as few entropy bits as possible, at the
+#    cost of a bigger upfront price associated with the creation of the sampler.
+#    This sampler is most appropriate for slower random generators.
+# 3) "Nearly Division Less" (NDL) which is generally the fastest algorithm for types of size
+#    up to 64 bits. This is the default for these types since Julia 1.5.
+#    The "Fast" algorithm can be faster than NDL when the length of the range is
+#    less than and close to a power of 2.
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Base.BitInteger64} = SamplerRangeNDL(r)
+
+Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
+        ::Repetition) where {T<:Union{Int128,UInt128}} = SamplerRangeFast(r)
 
 #### helper functions
 
@@ -207,24 +224,36 @@ function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt32,T}) where T
     (x + a % UInt32) % T
 end
 
+has_fast_64(rng::AbstractRNG) = rng_native_52(rng) != Float64
+# for MersenneTwister, both options have very similar performance
+
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt64,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52 ? rand(rng, LessThan(m, Masked(mask, UInt52Raw()))) :
-                   rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    if !has_fast_64(rng) && bw <= 52
+        x = rand(rng, LessThan(m, Masked(mask, UInt52Raw())))
+    else
+        x = rand(rng, LessThan(m, Masked(mask, uniform(UInt64))))
+    end
     (x + a % UInt64) % T
 end
 
 function rand(rng::AbstractRNG, sp::SamplerRangeFast{UInt128,T}) where T
     a, bw, m, mask = sp.a, sp.bw, sp.m, sp.mask
-    x = bw <= 52  ?
-        rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
-    bw <= 104 ?
-        rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
-        rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    if has_fast_64(rng)
+        x = bw <= 64 ?
+            rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, uniform(UInt64)))) % UInt128 :
+            rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    else
+        x = bw <= 52  ?
+            rand(rng, LessThan(m % UInt64, Masked(mask % UInt64, UInt52Raw()))) % UInt128 :
+        bw <= 104 ?
+            rand(rng, LessThan(m, Masked(mask, UInt104Raw()))) :
+            rand(rng, LessThan(m, Masked(mask, uniform(UInt128))))
+    end
     x % T + a
 end
 
-#### Default
+#### "Slow" / SamplerRangeInt
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
@@ -274,10 +303,6 @@ function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
     SamplerRangeInt{T,U}(a, bw, k, mult) # overflow ok
 end
 
-Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{T},
-        ::Repetition) where {T<:BitInteger} = SamplerRangeInt(r)
-
-
 rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt32}) where {T<:BitInteger} =
     (unsigned(sp.a) + rem_knuth(rand(rng, LessThan(sp.u, UInt52Raw(UInt32))), sp.k)) % T
 
@@ -295,43 +320,94 @@ function rand(rng::AbstractRNG, sp::SamplerRangeInt{T,UInt128}) where T<:BitInte
     return ((sp.a % UInt128) + rem_knuth(x, sp.k)) % T
 end
 
+#### Nearly Division Less
+
+# cf. https://arxiv.org/abs/1805.10941 (algorithm 5)
+
+struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
+    a::T  # first element of the range
+    s::U  # range length or zero for full range
+end
+
+function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
+    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    a = first(r)
+    U = uint_sup(T)
+    s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
+    # mod(-s, s) could be put in the Sampler object for repeated calls, but
+    # this would be an advantage only for very big s and number of calls
+    SamplerRangeNDL(a, s)
+end
+
+function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
+    s = sp.s
+    x = widen(rand(rng, U))
+    m = x * s
+    l = m % U
+    if l < s
+        t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+        while l < t
+            x = widen(rand(rng, U))
+            m = x * s
+            l = m % U
+        end
+    end
+    (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
+end
+
 
 ### BigInt
 
-struct SamplerBigInt <: Sampler{BigInt}
+struct SamplerBigInt{SP<:Sampler{Limb}} <: Sampler{BigInt}
     a::BigInt         # first
     m::BigInt         # range length - 1
     nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
     nlimbsmax::Int    # max number of limbs for z+a
-    mask::Limb        # applied to the highest limb
+    highsp::SP        # sampler for the highest limb of z
 end
 
-function Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition)
+function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=Val(Inf)
+                       ) where {RNG<:AbstractRNG}
     m = last(r) - first(r)
-    m < 0 && throw(ArgumentError("range must be non-empty"))
-    nd = ndigits(m, base=2)
-    nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
-    highbits > 0 && (nlimbs += 1)
-    mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
+    m.size < 0 && throw(ArgumentError("range must be non-empty"))
+    nlimbs = Int(m.size)
+    hm = nlimbs == 0 ? Limb(0) : GC.@preserve m unsafe_load(m.d, nlimbs)
+    highsp = Sampler(RNG, Limb(0):hm, N)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
-    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
+    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, highsp)
 end
 
-function rand(rng::AbstractRNG, sp::SamplerBigInt)
-    x = MPZ.realloc2(sp.nlimbsmax*8*sizeof(Limb))
+Sampler(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition) where {RNG<:AbstractRNG} =
+    SamplerBigInt(RNG, r, N)
+
+rand(rng::AbstractRNG, sp::SamplerBigInt) =
+    rand!(rng, BigInt(nbits = sp.nlimbsmax*8*sizeof(Limb)), sp)
+
+function rand!(rng::AbstractRNG, x::BigInt, sp::SamplerBigInt)
+    nlimbs = sp.nlimbs
+    nlimbs == 0 && return MPZ.set!(x, sp.a)
+    MPZ.realloc2!(x, sp.nlimbsmax*8*sizeof(Limb))
+    @assert x.alloc >= nlimbs
+    # we randomize x ∈ [0, m] with rejection sampling:
+    # 1. the first nlimbs-1 limbs of x are uniformly randomized
+    # 2. the high limb hx of x is sampled from 0:hm where hm is the
+    #    high limb of m
+    # We repeat 1. and 2. until x <= m
+    hm = GC.@preserve sp unsafe_load(sp.m.d, nlimbs)
     GC.@preserve x begin
-        limbs = UnsafeView(x.d, sp.nlimbs)
+        limbs = UnsafeView(x.d, nlimbs-1)
         while true
             rand!(rng, limbs)
-            limbs[end] &= sp.mask
-            MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
+            hx = limbs[nlimbs] = rand(rng, sp.highsp)
+            hx < hm && break # avoid calling mpn_cmp most of the time
+            MPZ.mpn_cmp(x, sp.m, nlimbs) <= 0 && break
         end
         # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
-        x.size = sp.nlimbs
-        while x.size > 0
-            limbs[x.size] != 0 && break
-            x.size -= 1
+        while nlimbs > 0
+            limbs[nlimbs] != 0 && break
+            nlimbs -= 1
         end
+        x.size = nlimbs
     end
     MPZ.add!(x, sp.a)
 end
