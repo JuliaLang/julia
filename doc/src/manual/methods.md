@@ -1117,8 +1117,7 @@ julia> function f(x)
        end
 f (generic function with 1 method)
 
-julia> h = f(3)
-(::var"#g#6"{Int64}) (generic function with 2 methods)
+julia> h = f(3);
 
 julia> h(4)
 7
