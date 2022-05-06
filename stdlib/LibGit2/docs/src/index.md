@@ -53,6 +53,7 @@ LibGit2.StatusEntry
 LibGit2.StatusOptions
 LibGit2.StrArrayStruct
 LibGit2.TimeStruct
+LibGit2.addfile
 LibGit2.add!
 LibGit2.add_fetch!
 LibGit2.add_push!
