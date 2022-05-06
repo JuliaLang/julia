@@ -699,13 +699,13 @@ A (usually temporary) container for holding lowered source code.
 
     Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
 
-    * 0 = inbounds
-    * 1 = inline
-    * 2 = noinline
-    * 3 = <reserved> strict-ieee (strictfp)
-    * 4 = effect-free (may be deleted if unused)
-    * 5-6 = <unused>
-    * 7 = <reserved> has out-of-band info
+    * 0x01 << 0 = statement is marked as `@inbounds`
+    * 0x01 << 1 = statement is marked as `@inline`
+    * 0x01 << 2 = statement is marked as `@noinline`
+    * 0x01 << 3 = statement is within a block that leads to `throw` call
+    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
+    * 0x01 << 5-6 = <unused>
+    * 0x01 << 7 = <reserved> has out-of-band info
 
   * `linetable`
 
