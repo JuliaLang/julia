@@ -356,11 +356,13 @@ end # redirect_stdout
 
 macro capture_stdout(ex)
     quote
-        let p = Pipe()
-            redirect_stdout(p) do
-                $(esc(ex))
+        let fname = tempname()
+            open(fname, "w") do f
+                redirect_stdout(f) do
+                    $(esc(ex))
+                end
             end
-            String(readavailable(p))
+            read(fname, String)
         end
     end
 end
