@@ -729,7 +729,7 @@ uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
     return res;
 }
 
-static void rng_split(jl_task_t *from, jl_task_t *to) JL_NOTSAFEPOINT
+void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT
 {
     /* TODO: consider a less ad-hoc construction
        Ideally we could just use the output of the random stream to seed the initial
@@ -747,10 +747,10 @@ static void rng_split(jl_task_t *from, jl_task_t *to) JL_NOTSAFEPOINT
        0x3688cf5d48899fa7 == hash(UInt(3))|0x01
        0x867b4bb4c42e5661 == hash(UInt(4))|0x01
     */
-    to->rngState[0] = 0x02011ce34bce797f * jl_genrandom(from->rngState);
-    to->rngState[1] = 0x5a94851fb48a6e05 * jl_genrandom(from->rngState);
-    to->rngState[2] = 0x3688cf5d48899fa7 * jl_genrandom(from->rngState);
-    to->rngState[3] = 0x867b4bb4c42e5661 * jl_genrandom(from->rngState);
+    to[0] = 0x02011ce34bce797f * jl_genrandom(from);
+    to[1] = 0x5a94851fb48a6e05 * jl_genrandom(from);
+    to[2] = 0x3688cf5d48899fa7 * jl_genrandom(from);
+    to[3] = 0x867b4bb4c42e5661 * jl_genrandom(from);
 }
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
@@ -790,7 +790,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     // Inherit logger state from parent task
     t->logstate = ct->logstate;
     // Fork task-local random state from parent
-    rng_split(ct, t);
+    jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->sticky = 1;
