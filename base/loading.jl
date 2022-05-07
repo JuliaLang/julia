@@ -789,7 +789,7 @@ end
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(path::String, depmods::Vector{Any})
+function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
     if isa(sv, Exception)
         return sv
@@ -805,6 +805,11 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             register_root_module(M)
         end
     end
+
+    # Register this cache path now - If Requires.jl is loaded, Revise may end
+    # up looking at the cache path during the init callback.
+    get!(PkgOrigin, pkgorigins, pkg).cachepath = path
+
     inits = sv[2]::Vector{Any}
     if !isempty(inits)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
@@ -859,7 +864,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
     return nothing
 end
 
-function _require_from_serialized(path::String)
+function _require_from_serialized(pkg::PkgId, path::String)
     # loads a precompile cache file, ignoring stale_cachfile tests
     # load all of the dependent modules first
     local depmodnames
@@ -880,7 +885,7 @@ function _require_from_serialized(path::String)
         depmods[i] = dep::Module
     end
     # then load the file
-    return _include_from_serialized(path, depmods)
+    return _include_from_serialized(pkg, path, depmods)
 end
 
 # use an Int counter so that nested @time_imports calls all remain open
@@ -924,7 +929,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if staledeps === true
             continue
         end
-        restored = _include_from_serialized(path_to_try, staledeps)
+        restored = _include_from_serialized(pkg, path_to_try, staledeps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
@@ -1104,10 +1109,7 @@ require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 function _require_prelocked(uuidkey::PkgId)
     just_loaded_pkg = false
     if !root_module_exists(uuidkey)
-        cachefile = _require(uuidkey)
-        if cachefile !== nothing
-            get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
-        end
+        _require(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
         just_loaded_pkg = true
@@ -1244,11 +1246,11 @@ function _require(pkg::PkgId)
                     end
                     # fall-through to loading the file locally
                 else
-                    m = _require_from_serialized(cachefile)
+                    m = _require_from_serialized(pkg, cachefile)
                     if isa(m, Exception)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     else
-                        return cachefile
+                        return
                     end
                 end
             end
@@ -2037,8 +2039,6 @@ get_compiletime_preferences(::Nothing) = String[]
                 @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
                 return true
             end
-
-            get!(PkgOrigin, pkgorigins, id).cachepath = cachefile
         end
 
         return depmods # fresh cachefile
