@@ -5,15 +5,13 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, length, (:), iterate,
-    eachindex, axes, first, last, similar, zip, OrdinalRange,
-    AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
-    AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
-    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
-    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned
-
-using .Base: >>>, !==
+using .Base: length, first, last, axes, eltype, similar, iterate, keytype, copymutable,
+    fill, eachindex, zip, copyto!, resize!, LinearIndices, require_one_based_indexing,
+    AbstractVector, Vector, AbstractRange, OrdinalRange, UnitRange,
+    identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
+    reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned,
+    Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
+    (:), >, <, <=, >=, ==, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor
 
 import .Base:
     sort,
@@ -94,8 +92,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    inds = axes(v, 1)
-    sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
+    sort!(v, PartialQuickSort(k), o)
     maybeview(v, k)
 end
 
@@ -423,51 +420,37 @@ insorted(x, r::AbstractRange) = in(x, r)
 abstract type Algorithm end
 
 struct InsertionSortAlg <: Algorithm end
-struct QuickSortAlg     <: Algorithm end
 struct MergeSortAlg     <: Algorithm end
+struct AdaptiveSortAlg  <: Algorithm end
 
 """
-    AdaptiveSort(fallback)
+    PartialQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing})
 
-Indicate that a sorting function should use the fastest available algorithm.
+Indicate that a sorting function should use the partial quick sort algorithm.
 
-Adaptive sort will use the algorithm specified by `fallback` for types and orders that are
-not [`UIntMappable`](@ref). Otherwise, it will typically use:
-  * Insertion sort for short vectors
-  * Radix sort for long vectors
-  * Counting sort for vectors of integers spanning a short range
-
-Adaptive sort is guaranteed to be stable if the fallback algorithm is stable.
-"""
-struct AdaptiveSort{Fallback <: Algorithm} <: Algorithm
-    fallback::Fallback
-end
-"""
-    PartialQuickSort{T <: Union{Integer,OrdinalRange}}
-
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+Partial quick sort finds and sorts the elements that would end up in positions
+`lo:hi` using [`QuickSort`](@ref).
 
 Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
-    ignores case).
-  * *in-place* in memory.
+  * *stable*: preserves the ordering of elements which compare equal
+    (e.g. "a" and "A" in a sort of letters which ignores case).
+  * *not in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
 """
-struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
-    k::T
+struct PartialQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}} <: Algorithm
+    lo::L
+    hi::H
 end
-
+PartialQuickSort(k::Integer) = PartialQuickSort(missing, k)
+PartialQuickSort(k::OrdinalRange) = PartialQuickSort(first(k), last(k))
 
 """
     InsertionSort
 
-Indicate that a sorting function should use the insertion sort
-algorithm. Insertion sort traverses the collection one element
-at a time, inserting each element into its correct, sorted position in
-the output vector.
+Indicate that a sorting function should use the insertion sort algorithm.
+
+Insertion sort traverses the collection one element at a time, inserting
+each element into its correct, sorted position in the output vector.
 
 Characteristics:
   * *stable*: preserves the ordering of elements which
@@ -478,29 +461,34 @@ Characteristics:
     it is well-suited to small collections but should not be used for large ones.
 """
 const InsertionSort = InsertionSortAlg()
+
 """
     QuickSort
 
-Indicate that a sorting function should use the quick sort
-algorithm, which is *not* stable.
+Indicate that a sorting function should use the quick sort algorithm.
+
+Quick sort picks a pivot element, partitions the array based on the pivot,
+and then sorts the elements before and after the pivot recursively.
 
 Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
-    ignores case).
-  * *in-place* in memory.
+  * *stable*: preserves the ordering of elements which compare equal
+    (e.g. "a" and "A" in a sort of letters which ignores case).
+  * *not in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
-  * *good performance* for large collections.
+  * *good performance* for most large collections.
+  * *quadratic worst case runtime* in pathological cases 
+    (vanishingly rare for non-malicious input)
 """
-const QuickSort     = QuickSortAlg()
+const QuickSort = PartialQuickSort(missing, missing)
+
 """
     MergeSort
 
-Indicate that a sorting function should use the merge sort
-algorithm. Merge sort divides the collection into
-subcollections and repeatedly merges them, sorting each
-subcollection at each step, until the entire
-collection has been recombined in sorted form.
+Indicate that a sorting function should use the merge sort algorithm.
+
+Merge sort divides the collection into subcollections and
+repeatedly merges them, sorting each subcollection at each step,
+until the entire collection has been recombined in sorted form.
 
 Characteristics:
   * *stable*: preserves the ordering of elements which compare
@@ -509,10 +497,23 @@ Characteristics:
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
 """
-const MergeSort     = MergeSortAlg()
+const MergeSort = MergeSortAlg()
 
-const DEFAULT_UNSTABLE = AdaptiveSort(QuickSort)
-const DEFAULT_STABLE   = AdaptiveSort(MergeSort)
+"""
+    AdaptiveSort
+
+Indicate that a sorting function should use the fastest available stable algorithm.
+
+Currently, AdaptiveSort uses
+  * [`InsertionSort`](@ref) for short vectors
+  * [`QuickSort`](@ref) for vectors that are not [`UIntMappable`](@ref)
+  * Radix sort for long vectors
+  * Counting sort for vectors of integers spanning a short range
+"""
+const AdaptiveSort = AdaptiveSortAlg()
+
+const DEFAULT_UNSTABLE = AdaptiveSort
+const DEFAULT_STABLE   = AdaptiveSort
 const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
@@ -529,75 +530,107 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
     return v
 end
 
-# selectpivot!
+# TODO Stable doesnt make sense because rev may be true!!!!
+# return the index of the stable median of v[lo], v[mi], and v[hi]
+# that is, compare the elements and break ties using the index
 #
-# Given 3 locations in an array (lo, mi, and hi), sort v[lo], v[mi], v[hi]) and
-# choose the middle value as a pivot
+# for example, the stable median of [4, 4, 5] is the second
+# element and the stable median of [4, 4, 3] is the first element
 #
-# Upon return, the pivot is in v[lo], and v[hi] is guaranteed to be
-# greater than the pivot
+# TODO replace with rand(lo:hi) if Random is ever a part of Base
+function select_pivot(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+    mi = midpoint(lo, hi)
+    @inbounds a, b, c = v[lo], v[mi], v[hi]
 
-@inline function selectpivot!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+    if lt(o, b, a)
+        b, a = a, b
+        lo, mi = mi, lo
+    end
+
+    # a is stably less than b
+
+    if lt(o, c, a)
+        lo
+    elseif lt(o, c, b)
+        hi
+    else
+        mi
+    end
+end
+
+# select a pivot, partition v[lo:hi] according
+# to the pivot, and store the result in t[lo:hi].
+#
+# returns (pivot, pivot_index) where pivot_index is the location the pivot
+# should end up, but does not set t[pivot_index] = pivot
+function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v::AbstractVector, rev::Bool)
+    pivot_index = select_pivot(v, lo, hi, o)
+    trues = 0
     @inbounds begin
-        mi = midpoint(lo, hi)
-
-        # sort v[mi] <= v[lo] <= v[hi] such that the pivot is immediately in place
-        if lt(o, v[lo], v[mi])
-            v[mi], v[lo] = v[lo], v[mi]
+        pivot = v[pivot_index]
+        while lo < pivot_index
+            x = v[lo]
+            fx = rev ? !lt(o, x, pivot) : lt(o, pivot, x)
+            t[(fx ? hi : lo) - trues] = x
+            trues += fx
+            lo += 1
         end
-
-        if lt(o, v[hi], v[lo])
-            if lt(o, v[hi], v[mi])
-                v[hi], v[lo], v[mi] = v[lo], v[mi], v[hi]
-            else
-                v[hi], v[lo] = v[lo], v[hi]
-            end
+        while lo < hi
+            x = v[lo+1]
+            fx = rev ? lt(o, pivot, x) : !lt(o, x, pivot)
+            t[(fx ? hi : lo) - trues] = x
+            trues += fx
+            lo += 1
         end
-
-        # return the pivot
-        return v[lo]
     end
+
+    # pivot_index = lo-trues
+    # t[pivot_index] is whatever it was before
+    # t[<pivot_index] <* pivot, stable
+    # t[>pivot_index] >* pivot, reverse stable
+
+    pivot, lo-trues
 end
 
-# partition!
-#
-# select a pivot, and partition v according to the pivot
-
-function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
-    pivot = selectpivot!(v, lo, hi, o)
-    # pivot == v[lo], v[hi] > pivot
-    i, j = lo, hi
-    @inbounds while true
-        i += 1; j -= 1
-        while lt(o, v[i], pivot); i += 1; end;
-        while lt(o, pivot, v[j]); j -= 1; end;
-        i >= j && break
-        v[i], v[j] = v[j], v[i]
+# Needed for bootstrapping because `view` is not available.
+function reverse_view!(v, lo, hi)
+    for i in 0:div(hi-lo-1, 2)
+        @inbounds v[lo+i], v[hi-i] = v[hi-i], v[lo+i]
     end
-    v[j], v[lo] = pivot, v[j]
-
-    # v[j] == pivot
-    # v[k] >= pivot for k > j
-    # v[i] <= pivot for i < j
-    return j
+    v
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, o::Ordering)
-    @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-        j = partition!(v, lo, hi, o)
-        if j-lo < hi-j
-            # recurse on the smaller chunk
-            # this is necessary to preserve O(log(n))
-            # stack space in the worst case (rather than O(n))
-            lo < (j-1) && sort!(v, lo, j-1, a, o)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort, o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false)
+    while lo < hi && hi - lo > SMALL_THRESHOLD
+        pivot, j = swap ? partition!(v, lo, hi, o, t, rev) : partition!(t, lo, hi, o, v, rev)
+        @inbounds v[j] = pivot
+        swap = !swap
+
+        # For QuickSort, a.lo === a.hi === missing, so the first two branches get skipped
+        if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
+            swap && copyto!(v, lo, t, lo, j-lo)
+            rev && reverse_view!(v, lo, j-1)
             lo = j+1
-        else
-            j+1 < hi && sort!(v, j+1, hi, a, o)
+            rev = !rev
+        elseif !ismissing(a.hi) && a.hi <= j # Skip sorting the upper part
+            swap && copyto!(v, j+1, t, j+1, hi-j)
+            rev || reverse_view!(v, j+1, hi)
+            hi = j-1
+        elseif j-lo < hi-j
+            # Sort the lower part recursively because it is smaller. Recursing on the
+            # smaller part guarantees O(log(n)) stack space even on pathological inputs.
+            sort!(v, lo, j-1, a, o, t, swap, rev)
+            lo = j+1
+            rev = !rev
+        else # Sort the higher part recursively
+            sort!(v, j+1, hi, a, o, t, swap, !rev)
             hi = j-1
         end
     end
-    return v
+    hi < lo && return v
+    swap && copyto!(v, lo, t, lo, hi-lo+1)
+    rev && reverse_view!(v, lo, hi)
+    sort!(v, lo, hi, SMALL_ALGORITHM, o)
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::Ordering, t=similar(v,0))
@@ -635,32 +668,6 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::MergeSortAlg, o::
         end
     end
 
-    return v
-end
-
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
-               o::Ordering)
-    @inbounds while lo < hi
-        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-        j = partition!(v, lo, hi, o)
-
-        if j <= first(a.k)
-            lo = j+1
-        elseif j >= last(a.k)
-            hi = j-1
-        else
-            # recurse on the smaller chunk
-            # this is necessary to preserve O(log(n))
-            # stack space in the worst case (rather than O(n))
-            if j-lo < hi-j
-                lo < (j-1) && sort!(v, lo, j-1, a, o)
-                lo = j+1
-            else
-                hi > (j+1) && sort!(v, j+1, hi, a, o)
-                hi = j-1
-            end
-        end
-    end
     return v
 end
 
@@ -732,7 +739,7 @@ end
 
 # For AbstractVector{Bool}, counting sort is always best.
 # This is an implementation of counting sort specialized for Bools.
-function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
+function sort!(v::AbstractVector{<:Bool}, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
     @inbounds for i in lo:hi
@@ -756,11 +763,11 @@ function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
     end
     mn, mx
 end
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering)
     # if the sorting task is not UIntMappable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparison based.
     U = UIntMappable(eltype(v), o)
-    U === nothing && return sort!(v, lo, hi, a.fallback, o)
+    U === nothing && return sort!(v, lo, hi, QuickSort, o)
 
     # to avoid introducing excessive detection costs for the trivial sorting problem
     # and to avoid overflow, we check for small inputs before any other runtime checks
@@ -795,7 +802,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
                 return sort_int_range!(v, Int(v_range+1), v_min, o === Forward ? identity : reverse, lo, hi)
             end
         end
-        return sort!(v, lo, hi, a.fallback, o)
+        return sort!(v, lo, hi, QuickSort, o)
     end
 
     v_min, v_max = _extrema(v, lo, hi, o)
@@ -830,8 +837,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::AdaptiveSort, o::
     #     lenm1 < 3bits
     if lenm1 < 3bits
         # at lenm1 = 64*3-1, QuickSort is about 20% faster than InsertionSort.
-        alg = a.fallback === QuickSort && lenm1 > 120 ? QuickSort : SMALL_ALGORITHM
-        return sort!(v, lo, hi, alg, o)
+        return sort!(v, lo, hi, lenm1 > 120 ? QuickSort : SMALL_ALGORITHM, o)
     end
 
     # At this point, we are committed to radix sort.
@@ -1528,10 +1534,6 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, i,  hi, a, right(o))
     return v
 end
-
-
-fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
-    sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
 
 sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)

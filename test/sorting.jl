@@ -30,6 +30,17 @@ end
     @test -1 <= Base.Sort.midpoint(typemin(Int), typemax(Int)) <= 0
 end
 
+@testset "select_pivot" begin
+    @test Base.Sort.select_pivot([1, 1, 1], 1, 3, Forward) == 2
+    @test Base.Sort.select_pivot([1, 3, 1], 1, 3, Reverse) == 1
+    @test Base.Sort.select_pivot([2, 2, 3], 1, 3, Forward) == 2
+    @test Base.Sort.select_pivot([2, 3, 1, 3, 1], 1, 5, Forward) == 5
+    @test Base.Sort.select_pivot([2, 3, 1, 4, 2], 3, 5, Reverse) == 5
+    @test Base.Sort.select_pivot([2, 2, 1], 1, 3, Forward) == 1
+    @test Base.Sort.select_pivot([2, 2, 1], 1, 3, By(x -> 0)) == 2
+    @test Base.Sort.select_pivot([3, 2, 1], 1, 3, Reverse) == 2
+end
+
 @testset "sort" begin
     @test sort([2,3,1]) == [1,2,3] == sort([2,3,1]; order=Forward)
     @test sort([2,3,1], rev=true) == [3,2,1] == sort([2,3,1], order=Reverse)
@@ -59,6 +70,14 @@ end
     @test sum(randperm(6)) == 21
     @test length(reverse(0x1:0x2)) == 2
     @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
+end
+
+@testset "stability" begin
+    for Alg in [InsertionSort, MergeSort, QuickSort, Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE,
+        PartialQuickSort(missing, 1729), PartialQuickSort(1729, missing)]
+        @test issorted(sort(1:2000, alg=Alg, by=x->0))
+        @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
+    end
 end
 
 @testset "partialsort" begin
@@ -265,7 +284,7 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, UInt(1), Forward) == 5
 
     a = rand(1:10000, 1000)
-    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE]
 
         b = sort(a, alg=alg)
         @test issorted(b)
@@ -402,8 +421,8 @@ end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)
     # test PartialQuickSort only does a partial sort
-    let alg = PartialQuickSort(1:div(length(a), 10))
-        k = alg.k
+    let k = 1:div(length(a), 10)
+        alg = PartialQuickSort(k)
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
@@ -414,8 +433,8 @@ end
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
     end
-    let alg = PartialQuickSort(div(length(a), 10))
-        k = alg.k
+    let k = div(length(a), 10)
+        alg = PartialQuickSort(k)
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
@@ -432,6 +451,7 @@ end
     @test partialsortperm([3,6,30,1,9], 2, rev=true) == 5
     @test partialsortperm([3,6,30,1,9], 2, by=x->1/x) == 5
 end
+
 ## more advanced sorting tests ##
 
 randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
@@ -467,7 +487,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, Base.DEFAULT_STABLE]
+            for alg in [MergeSort, QuickSort, Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -511,8 +531,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort, Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -574,7 +593,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
