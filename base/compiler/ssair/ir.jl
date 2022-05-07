@@ -151,6 +151,20 @@ function first_insert_for_bb(code, cfg::CFG, block::Int)
     error("any insert position isn't found")
 end
 
+# SSA values that need renaming
+struct OldSSAValue
+    id::Int
+end
+
+# SSA values that are in `new_new_nodes` of an `IncrementalCompact` and are to
+# be actually inserted next time (they become `new_nodes` next time)
+struct NewSSAValue
+    id::Int
+end
+
+const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
+
+
 # SSA-indexed nodes
 
 struct NewInstruction
@@ -253,6 +267,10 @@ function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.flag[idx] = newval[:flag]
     return is
 end
+function setindex!(is::InstructionStream, newval::AnySSAValue, idx::Int)
+    is.inst[idx] = newval
+    return is
+end
 function setindex!(node::Instruction, newval::Instruction)
     node.data[node.idx] = newval
     return node
@@ -312,7 +330,7 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
-function setindex!(x::IRCode, repl::Instruction, s::SSAValue)
+function setindex!(x::IRCode, repl::Union{Instruction, AnySSAValue}, s::SSAValue)
     if s.id <= length(x.stmts)
         x.stmts[s.id] = repl
     else
@@ -320,19 +338,6 @@ function setindex!(x::IRCode, repl::Instruction, s::SSAValue)
     end
     return x
 end
-
-# SSA values that need renaming
-struct OldSSAValue
-    id::Int
-end
-
-# SSA values that are in `new_new_nodes` of an `IncrementalCompact` and are to
-# be actually inserted next time (they become `new_nodes` next time)
-struct NewSSAValue
-    id::Int
-end
-
-const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
 mutable struct UseRefIterator
     stmt::Any
