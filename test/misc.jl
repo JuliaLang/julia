@@ -398,6 +398,9 @@ let s = Set(1:100)
     @test summarysize([s]) > summarysize(s)
 end
 
+# issue #44780
+@test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
+
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
 # empty arrays
