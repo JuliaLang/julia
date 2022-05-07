@@ -1939,6 +1939,18 @@ Number
     Real <: Number
 
 Abstract supertype for all real numbers.
+
+```jldoctest
+julia> subtypes(Real)
+4-element Vector{Any}:
+ AbstractFloat
+ AbstractIrrational
+ Integer
+ Rational
+
+julia> supertypes(Real)
+(Real, Number, Any)
+```
 """
 Real
 
@@ -1953,6 +1965,26 @@ AbstractFloat
     Integer <: Real
 
 Abstract supertype for all integers.
+
+See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
+
+# Examples
+```
+julia> 42 isa Integer
+true
+
+julia> 1.0 isa Integer
+false
+
+julia> isinteger(1.0)
+true
+
+julia> subtypes(Integer)
+3-element Vector{Any}:
+ Bool
+ Signed
+ Unsigned
+```
 """
 Integer
 
@@ -1967,6 +1999,21 @@ Signed
     Unsigned <: Integer
 
 Abstract supertype for all unsigned integers.
+
+All are printed in hexadecimal, with prefix `0x`, 
+and can be entered in the same way.
+
+# Examples
+```
+julia> unsigned(true)
+0x0000000000000001
+
+julia> Int(0x000a)
+10
+
+julia> typemax(UInt8)
+0xff
+```
 """
 Unsigned
 
@@ -2034,18 +2081,30 @@ Binary format is 1 sign, 5 exponent, 10 fraction bits.
 Float16
 
 for bit in (8, 16, 32, 64, 128)
+    type = Symbol(:Int, bit)
+    default = eval(type) == Int ? "\n \n This is the default used for most integer literals (on $bit systems), \
+    and has an alias `Int === $type`" : ""
+    
+    unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
+    
     @eval begin
         """
-            Int$($bit) <: Signed
+            Int$($bit) <: Signed <: Integer
 
-        $($bit)-bit signed integer type.
+        $($bit)-bit signed integer type. $($(default))
+        
+        Note that integers overflow without warning, 
+        thus `typemax($($type)) + $($type)(1) < 0`.
+        See also [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
 
         """
-            UInt$($bit) <: Unsigned
+            UInt$($bit) <: Unsigned <: Integer
 
         $($bit)-bit unsigned integer type.
+        
+        Printed in hexadecimal, thus $($(unshow)) == $($(bit-1)).
         """
         $(Symbol("UInt", bit))
     end
@@ -2598,8 +2657,10 @@ julia> *(2, 7, 8)
 """
     /(x, y)
 
-Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
-floating-point results for integer arguments.
+Right division operator: multiplication of `x` by the inverse of `y` on the right. 
+
+Gives floating-point results for integer arguments.
+See [`÷`](@ref) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
 
 # Examples
 ```jldoctest
