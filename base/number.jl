@@ -168,7 +168,8 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 
 Squared absolute value of `x`.
 
-For complex numbers this is faster than `abs(x)^2`.
+This can be faster than `abs(x)^2`, especially for complex
+numbers where `abs(x)` requires a square root via [`hypot`](@ref).
 
 See also [`abs`](@ref), [`conj`](@ref), [`real`](@ref).
 
