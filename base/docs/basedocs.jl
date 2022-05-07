@@ -1939,18 +1939,6 @@ Number
     Real <: Number
 
 Abstract supertype for all real numbers.
-
-```jldoctest
-julia> subtypes(Real)
-4-element Vector{Any}:
- AbstractFloat
- AbstractIrrational
- Integer
- Rational
-
-julia> supertypes(Real)
-(Real, Number, Any)
-```
 """
 Real
 
@@ -1978,12 +1966,6 @@ false
 
 julia> isinteger(1.0)
 true
-
-julia> subtypes(Integer)
-3-element Vector{Any}:
- Bool
- Signed
- Unsigned
 ```
 """
 Integer
@@ -2592,7 +2574,7 @@ Infix `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`
 which by default then calls `(x+y) + z + ...` starting from the left.
 
 Note that overflow is possible for most integer types, including the
-default [`Int`](@ref), when adding large numbers.
+default `Int`, when adding large numbers.
 
 # Examples
 ```jldoctest
@@ -2694,7 +2676,7 @@ julia> x = [1, 2]; x'x  # adjoint vector * vector
 Right division operator: multiplication of `x` by the inverse of `y` on the right. 
 
 Gives floating-point results for integer arguments.
-See [`÷`](@ref) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
+See [`÷`](@ref div) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
 
 # Examples
 ```jldoctest
