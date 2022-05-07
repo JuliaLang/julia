@@ -2661,7 +2661,10 @@ julia> -(2, 4.5)
 """
     *(x, y...)
 
-Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+Multiplication operator. 
+
+Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`,
+which by default then calls `(x*y) * z * ...` starting from the left.
 
 # Examples
 ```jldoctest
@@ -2670,6 +2673,17 @@ julia> 2 * 7 * 8
 
 julia> *(2, 7, 8)
 112
+
+julia> [2 0; 0 3] * [1, 10]  # matrix * vector
+2-element Vector{Int64}:
+  2
+ 30
+
+julia> 1/2pi, 1/2*pi  # juxtaposition has higher precedence
+(0.15915494309189535, 1.5707963267948966)
+
+julia> x = [1, 2]; x'x  # adjoint vector * vector
+5
 ```
 """
 (*)(x, y...)
