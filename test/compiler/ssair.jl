@@ -66,7 +66,7 @@ let cfg = CFG(BasicBlock[
     make_bb([1]    , [4]   ),
     make_bb([2, 3] , [5]   ),
     make_bb([2, 4] , []    ),
-], Int[])
+])
     dfs = Compiler.DFS(cfg.blocks)
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
     let correct_idoms = Compiler.naive_idoms(cfg.blocks)
@@ -80,7 +80,7 @@ let cfg = CFG(BasicBlock[
                 b && (blocks[2] = make_bb(blocks[2].preds, reverse(blocks[2].succs)))
                 c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
-                cfg′ = CFG(blocks, cfg.index)
+                cfg′ = CFG(blocks)
                 @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
             end
         end
@@ -119,7 +119,7 @@ let cfg = CFG(BasicBlock[
     make_bb([]        , [4]   ), # should be removed
     make_bb([0, 1, 2] , [5]   ), # 0 predecessor should be preserved
     make_bb([2, 3]    , []    ),
-], Int[])
+])
     insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
     code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], Expr[], [])
     compact = Compiler.IncrementalCompact(code, true)
@@ -259,7 +259,7 @@ let cfg = CFG(BasicBlock[
         make_bb([3],    [6]),
         make_bb([2, 6], []),
         make_bb([4],    [5, 3]),
-    ], Int[])
+    ])
     domtree = Compiler.construct_domtree(cfg.blocks)
     @test domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]

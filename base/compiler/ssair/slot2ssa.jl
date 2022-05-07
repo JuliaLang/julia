@@ -505,7 +505,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     for i in 1:length(result)
         result[i][:inst] = renumber_ssa!(result[i][:inst], inst_rename, true)
     end
-    cfg = CFG(new_bbs, Int[first(bb.stmts) for bb in new_bbs[2:end]])
+    cfg = CFG(new_bbs)
     new_new_nodes = NewNodeStream(length(ir.new_nodes))
     for i = 1:length(ir.new_nodes)
         new_info = ir.new_nodes.info[i]

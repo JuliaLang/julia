@@ -6,11 +6,9 @@ isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) 
 
 struct CFG
     blocks::Vector{BasicBlock}
-    index::Vector{Int} # map from instruction => basic-block number
-                       # TODO: make this O(1) instead of O(log(n_blocks))?
 end
 
-copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
+copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks])
 
 function cfg_insert_edge!(cfg::CFG, from::Int, to::Int)
     # Assumes that this edge does not already exist
@@ -28,15 +26,12 @@ function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
     nothing
 end
 
-function block_for_inst(index::Vector{Int}, inst::Int)
-    return searchsortedfirst(index, inst, lt=(<=))
-end
-
 function block_for_inst(index::Vector{BasicBlock}, inst::Int)
     return searchsortedfirst(index, BasicBlock(StmtRange(inst, inst)), by=x->first(x.stmts), lt=(<=))-1
 end
 
-block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
+# TODO: make this O(1) instead of O(log(n_blocks))?
+block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.blocks, inst)
 
 function basic_blocks_starts(stmts::Vector{Any})
     jump_dests = BitSet()
@@ -88,12 +83,10 @@ function compute_basic_blocks(stmts::Vector{Any})
     bb_starts = basic_blocks_starts(stmts)
     # Compute ranges
     pop!(bb_starts, 1)
-    basic_block_index = sort!(collect(bb_starts); alg=QuickSort)
-    blocks = BasicBlock[]
-    sizehint!(blocks, length(basic_block_index))
+    blocks = Vector{BasicBlock}(undef, length(bb_starts))
     let first = 1
-        for last in basic_block_index
-            push!(blocks, BasicBlock(StmtRange(first, last - 1)))
+        for (i, last) in enumerate(bb_starts) # bb_starts::BitSet is already sorted
+            blocks[i] = BasicBlock(StmtRange(first, last - 1))
             first = last
         end
     end
@@ -105,14 +98,14 @@ function compute_basic_blocks(stmts::Vector{Any})
             continue
         end
         if isa(terminator, GotoNode)
-            block′ = block_for_inst(basic_block_index, terminator.label)
+            block′ = block_for_inst(blocks, terminator.label)
             push!(blocks[block′].preds, num)
             push!(b.succs, block′)
             continue
         end
         # Conditional Branch
         if isa(terminator, GotoIfNot)
-            block′ = block_for_inst(basic_block_index, terminator.dest)
+            block′ = block_for_inst(blocks, terminator.dest)
             if block′ == num + 1
                 # This GotoIfNot acts like a noop - treat it as such.
                 # We will drop it during SSA renaming
@@ -125,7 +118,7 @@ function compute_basic_blocks(stmts::Vector{Any})
                 # :enter gets a virtual edge to the exception handler and
                 # the exception handler gets a virtual edge from outside
                 # the function.
-                block′ = block_for_inst(basic_block_index, terminator.args[1]::Int)
+                block′ = block_for_inst(blocks, terminator.args[1]::Int)
                 push!(blocks[block′].preds, num)
                 push!(blocks[block′].preds, 0)
                 push!(b.succs, block′)
@@ -137,7 +130,7 @@ function compute_basic_blocks(stmts::Vector{Any})
             push!(b.succs, num + 1)
         end
     end
-    return CFG(blocks, basic_block_index)
+    return CFG(blocks)
 end
 
 # this function assumes insert position exists
@@ -1564,7 +1557,7 @@ end
 
 function complete(compact::IncrementalCompact)
     result_bbs = resize!(compact.result_bbs, compact.active_result_bb-1)
-    cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
+    cfg = CFG(result_bbs)
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
