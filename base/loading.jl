@@ -1577,7 +1577,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    rm(joinpath(cachepath, cachefiles[idx]))
+                    rm(joinpath(cachepath, cachefiles[idx]); force=true)
                 end
             end
 
