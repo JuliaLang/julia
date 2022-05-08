@@ -85,6 +85,7 @@ finally
 quote
 local
 global
+outer
 const
 struct
 mutable struct
