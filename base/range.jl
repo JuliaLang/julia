@@ -773,7 +773,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         else
             a = div(unsigned(diff), s) % typeof(diff)
         end
-        return Integer(a) + oneunit(a)
+        return convert(T, a) + oneunit(T)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
