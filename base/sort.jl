@@ -6,8 +6,8 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
 using .Base: length, first, last, axes, eltype, similar, iterate, keytype, copymutable,
-    fill, eachindex, zip, copyto!, resize!, LinearIndices, require_one_based_indexing,
-    AbstractVector, Vector, AbstractRange, OrdinalRange, UnitRange,
+    fill, eachindex, zip, copyto!, reverse!, resize!, require_one_based_indexing,
+    AbstractVector, Vector, AbstractRange, OrdinalRange, UnitRange, LinearIndices,
     identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
     reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned,
     Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
@@ -592,14 +592,6 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v:
     pivot, lo-trues
 end
 
-# Needed for bootstrapping because `view` is not available.
-function reverse_view!(v, lo, hi)
-    for i in 0:div(hi-lo-1, 2)
-        @inbounds v[lo+i], v[hi-i] = v[hi-i], v[lo+i]
-    end
-    v
-end
-
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort, o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false)
     while lo < hi && hi - lo > SMALL_THRESHOLD
         pivot, j = swap ? partition!(v, lo, hi, o, t, rev) : partition!(t, lo, hi, o, v, rev)
@@ -609,12 +601,12 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
         # For QuickSort, a.lo === a.hi === missing, so the first two branches get skipped
         if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
             swap && copyto!(v, lo, t, lo, j-lo)
-            rev && reverse_view!(v, lo, j-1)
+            rev && reverse!(v, lo, j-1)
             lo = j+1
             rev = !rev
         elseif !ismissing(a.hi) && a.hi <= j # Skip sorting the upper part
             swap && copyto!(v, j+1, t, j+1, hi-j)
-            rev || reverse_view!(v, j+1, hi)
+            rev || reverse!(v, j+1, hi)
             hi = j-1
         elseif j-lo < hi-j
             # Sort the lower part recursively because it is smaller. Recursing on the
@@ -629,7 +621,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
     end
     hi < lo && return v
     swap && copyto!(v, lo, t, lo, hi-lo+1)
-    rev && reverse_view!(v, lo, hi)
+    rev && reverse!(v, lo, hi)
     sort!(v, lo, hi, SMALL_ALGORITHM, o)
 end
 
