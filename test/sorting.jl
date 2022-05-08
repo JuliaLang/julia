@@ -833,4 +833,41 @@ end
     end
 end
 
+@testset "invalid lt (#11429)" begin
+    # lt must be a total linear order (e.g. < not <=) so this usage is
+    # not allowed. Consequently, none of the behavior tested in this
+    # testset is gaurunteed to work in future minor versions of Julia.
+
+    n = 1000
+    v = rand(1:5, n);
+    s = sort(v);
+
+    # Nevertheless, it still works...
+    for alg in [InsertionSort, MergeSort, QuickSort,
+            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        @test sort(v, alg=alg, lt = <=) == s
+    end
+    @test partialsort(v, 172, lt = <=) == s[172]
+    @test partialsort(v, 315:415, lt = <=) == s[315:415]
+
+    # ...and it is consistantly reverse stable. All these algorithms swap v[i] and v[j]
+    # where i < j if and only if lt(o, v[j], v[i]). This invariant holds even for
+    # this invalid lt order.
+    perm = reverse(sortperm(v, rev=true))
+    for alg in [InsertionSort, MergeSort, QuickSort,
+            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
+    end
+    @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
+    @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
+
+    # lt can be very poorly behaved and sort will still permute its input in some way.
+    for alg in [InsertionSort, MergeSort, QuickSort,
+            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        @test sort!(sort(v, alg=alg, lt = (x,y) -> rand([false, true]))) == s
+    end
+    @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
+    @test all(partialsort(v, 315:415, lt = (x,y) -> rand([false, true])) .∈ (1:5,))
+end
+
 end
