@@ -1297,7 +1297,7 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
     num >= 0 ? edit_splice!(buf, b => b, ' '^num, rigid_mark=false) :
                edit_splice!(buf, b => (b - num))
 
-function mode_idx(hist #=::REPLHistoryProvider =#, mode::TextInterface)
+function mode_idx(hist::HistoryProvider, mode::TextInterface)
     c = :julia
     for (k,v) in hist.mode_mapping
         isequal(v, mode) && (c = k)
@@ -1323,29 +1323,19 @@ function edit_input(s)
         filename *= ".sh"
     end
     buf = buffer(s)
-    data = buf.data
     pos = position(buf)
-    size0 = buf.size
-    resize!(data, buf.size) # to not write garbage into filename
-    line = 1 + count(==(_newline), view(data, 1:pos))
-    ct0 = open(filename, "w") do io
-        write(io, data)
-        ctime(io)
-    end
+    str = String(take!(buf))
+    line = 1 + count(==(_newline), view(str, 1:pos))
+    write(filename, str)
     InteractiveUtils.edit(filename, line)
-    n, ct = open(filename) do io
-        readbytes!(io, empty!(buf.data), typemax(Int)),
-        ctime(io)
-    end
+    str_mod = readchomp(filename)
     rm(filename)
-    @assert n == length(buf.data)
-    buf.size = n
-    buf.ptr = n+1
-    if ct0 != ct # something was changed, run the input
+    if str != str_mod # something was changed, run the input
+        write(buf, str_mod)
         commit_line(s)
         :done
     else # no change, the edit session probably unsuccessful
-        @assert n == size0
+        write(buf, str)
         seek(buf, pos) # restore state from before edit
         refresh_line(s)
     end
