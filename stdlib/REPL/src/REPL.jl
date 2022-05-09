@@ -526,6 +526,7 @@ end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Vector{String}
+    file_path::String
     history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
@@ -536,7 +537,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(String[], "", nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 invalid_history_message(path::String) = """
@@ -548,6 +549,12 @@ Invalid character: """
 munged_history_message(path::String) = """
 Invalid history file ($path) format:
 An editor may have converted tabs to spaces at line """
+
+function hist_open_file(hp::REPLHistoryProvider)
+    f = open(hp.file_path, read=true, write=true, create=true)
+    hp.history_file = f
+    seekend(f)
+end
 
 function hist_from_file(hp::REPLHistoryProvider, path::String)
     getline(lines, i) = i > length(lines) ? "" : lines[i]
@@ -617,7 +624,14 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     $(replace(str, r"^"ms => "\t"))
     """
     # TODO: write-lock history file
-    seekend(hist.history_file)
+    try
+        seekend(hist.history_file)
+    catch err
+        (err isa SystemError) || rethrow()
+        # File handle might get stale after a while, especially under network file systems
+        # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
+        hist_open_file(hist)
+    end
     print(hist.history_file, entry)
     flush(hist.history_file)
     nothing
@@ -993,11 +1007,10 @@ function setup_interface(
         try
             hist_path = find_hist_file()
             mkpath(dirname(hist_path))
-            f = open(hist_path, read=true, write=true, create=true)
-            hp.history_file = f
-            seekend(f)
+            hp.file_path = hist_path
+            hist_open_file(hp)
             finalizer(replc) do replc
-                close(f)
+                close(hp.history_file)
             end
             hist_from_file(hp, hist_path)
         catch

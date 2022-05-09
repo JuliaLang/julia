@@ -3365,3 +3365,7 @@ struct InnerCtorRT{T}
 end
 @test_throws MethodError InnerCtorRT()
 @test InnerCtorRT{Int}()() isa InnerCtorRT{Int}
+
+# issue #45162
+f45162(f) = f(x=1)
+@test first(methods(f45162)).called != 0
