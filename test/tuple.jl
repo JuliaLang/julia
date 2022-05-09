@@ -424,6 +424,11 @@ end
         @test_throws TypeError all((missing, 3.2, true))
         ts = (missing, true, false)
         @test @allocated(all(ts)) == 0  # PR #44063
+        @test (@inferred (()->all((missing, true)))()) === missing
+        @test (@inferred (()->all((true, missing)))()) === missing
+        @test (@inferred (()->all((missing, false)))()) === false
+        @test (@inferred (()->all((false, missing)))()) === false
+        @test (@inferred (()->all((missing, true, false)))()) === false
     end
 
     @testset "any" begin
@@ -450,6 +455,12 @@ end
         @test_throws TypeError any((missing, 3.2, true))
         ts = (missing, true, false)
         @test @allocated(any(ts)) == 0  # PR #44063
+        @test (@inferred (()->any((missing, true)))()) === true
+        @test (@inferred (()->any((true, missing)))()) === true
+        @test (@inferred (()->any((missing, false)))()) === missing
+        @test (@inferred (()->any((false, missing)))()) === missing
+        @test (@inferred (()->any((missing, true, false)))()) === true
+        @test (@inferred (()->any((missing, false, false)))()) === missing
     end
 end
 
