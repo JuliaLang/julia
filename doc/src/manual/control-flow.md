@@ -421,9 +421,11 @@ julia> for i = 1:5
 Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in another
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
-outside/afterwards. You'll either need a new interactive session instance or a different variable
+during which the variable is visible. A `for` loop always introduces a new iteration variable in
+its body, regardless of whether a variable of the same name exists in the enclosing scope.
+This implies that on the one hand `i` need not be declared before the loop. On the other hand it
+will not be visible outside the loop, nor will an outside variable of the same name be affected.
+You'll either need a new interactive session instance or a different variable
 name to test this:
 
 ```jldoctest
@@ -440,7 +442,26 @@ julia> j
 ERROR: UndefVarError: j not defined
 ```
 
-See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope and how it works in
+```jldoctest
+julia> j = 0
+0
+
+julia> for j = 1:5
+           println(j)
+       end
+1
+2
+3
+4
+5
+
+julia> j
+0
+```
+
+Use `for outer` to modify the latter behavior and reuse an existing local variable.
+
+See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
 Julia.
 
 In general, the `for` loop construct can iterate over any container. In these cases, the alternative
