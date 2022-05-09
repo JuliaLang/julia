@@ -870,13 +870,13 @@ end
     ys = 1:2:20
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
     @test IndexStyle(bc) == IndexLinear()
-    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
 
     xs2 = reshape(xs, 1, :)
     ys2 = reshape(ys, 1, :)
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
     @test IndexStyle(bc) == IndexCartesian()
-    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
 
     xs = 1:5:3*5
     ys = 1:4:3*4
