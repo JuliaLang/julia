@@ -454,7 +454,7 @@ end
     @test Base.Unicode.isvalid(Char, 'c')
     @test !Base.Unicode.isvalid(Char, overlong_char)
 end
-                                              
+
 @testset "Unicode equivalence" begin
     @test isequal_normalized("no\u00EBl", "noe\u0308l")
     @test !isequal_normalized("no\u00EBl", "noe\u0308l ")
