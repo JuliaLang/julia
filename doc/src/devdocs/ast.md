@@ -772,3 +772,14 @@ Boolean properties:
     * 0 = use heuristic
     * 1 = aggressive
     * 2 = none
+
+  * `purity`
+    Constructed from 5 bit flags:
+
+    * 0x01 << 0 = this method is guaranteed to return or terminate consistently (`:consistent`)
+    * 0x01 << 1 = this method is free from externally semantically visible side effects (`:effect_free`)
+    * 0x01 << 2 = this method is guaranteed to not throw an exception (`:nothrow`)
+    * 0x01 << 3 = this method is guaranteed to terminate (`:terminates_globally`)
+    * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
+
+    See [Base.@assume_effects](@ref) for more details.
