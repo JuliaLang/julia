@@ -115,7 +115,7 @@ struct jl_returninfo_t {
 };
 
 struct jl_llvmf_dump_t {
-    orc::ThreadSafeModule TSM;
+    orc::ThreadSafeModule *TSM;
     Function *F;
 };
 

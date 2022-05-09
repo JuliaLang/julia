@@ -497,7 +497,7 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
 
     {
         std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
-        dump->TSM.withModuleDo([&](Module &m) {
+        dump->TSM->withModuleDo([&](Module &m) {
             Function *llvmf = dump->F;
             if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
                 jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
@@ -1203,7 +1203,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
         Function *f = dump->F;
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         assert(!f->isDeclaration());
-        dump->TSM.withModuleDo([&](Module &m) {
+        dump->TSM->withModuleDo([&](Module &m) {
             for (auto &f2 : m.functions()) {
                 if (f != &f2 && !f->isDeclaration())
                     f2.deleteBody();
@@ -1217,7 +1217,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
             raw_svector_ostream obj_OS(ObjBufferSV);
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
                 return jl_an_empty_string;
-            dump->TSM.withModuleDo([&](Module &m) { PM.run(m); });
+            dump->TSM->withModuleDo([&](Module &m) { PM.run(m); });
         }
         else {
             MCContext *Context = addPassesToGenerateCode(TM, PM);
@@ -1261,7 +1261,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
                 return jl_an_empty_string;
             PM.add(Printer.release());
             PM.add(createFreeMachineFunctionPass());
-            dump->TSM.withModuleDo([&](Module &m){ PM.run(m); });
+            dump->TSM->withModuleDo([&](Module &m){ PM.run(m); });
         }
     }
     return jl_pchar_to_string(ObjBufferSV.data(), ObjBufferSV.size());
