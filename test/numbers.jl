@@ -2009,8 +2009,11 @@ end
     end
     @test nextpow(2, 56789) == 65536
     @test_throws DomainError nextpow(2, -56789)
+    @test_throws DomainError nextpow(Int8(4), 128)
     @test prevpow(2, 56789) == 32768
     @test_throws DomainError prevpow(2, -56789)
+    @test_throws DomainError prevpow(Int8(4), 128)
+    @test_throws OverflowError nextpow(Int8(4), 65)
     for i = 1:100
         @test nextpow(2, i) == nextpow(2, big(i))
         @test prevpow(2, i) == prevpow(2, big(i))
@@ -2018,6 +2021,14 @@ end
     for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
         @test nextpow(2, T(42)) === T(64)
         @test prevpow(2, T(42)) === T(32)
+    end
+    for T in (Float16, Float32, Float64)
+        @test prevpow(2, prevfloat(T(1024.0))) == T(512.0)
+        @test nextpow(2, nextfloat(T(1024.0))) == T(2048.0)
+        @test prevpow(T(2.0), prevfloat(T(1024.0))) == T(512.0)
+        @test nextpow(T(2.0), nextfloat(T(1024.0))) == T(2048.0)
+        @test prevpow(T(2.0), prevfloat(T(Inf))) < T(Inf)
+        @test nextpow(T(2.0), prevfloat(T(Inf))) == T(Inf)
     end
 end
 @testset "ispow2" begin
@@ -2416,6 +2427,12 @@ zero(::Type{TestNumber{Inner}}) where {Inner} = TestNumber(zero(Inner))
 big(test_number::TestNumber) = TestNumber(big(test_number.inner))
 @test big(TestNumber{Int}) == TestNumber{BigInt}
 
+# abstract abs2
+Base.:*(x::TestNumber, y::TestNumber) = TestNumber(x.inner*y.inner)
+Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
+Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
+@test abs2(TestNumber(3+4im)) == TestNumber(25)
+
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
         for d in denrange
@@ -2513,29 +2530,34 @@ end
     @test rem(T(1), T(2), RoundNearest) == 1
     @test rem(T(1), T(2), RoundDown)    == 1
     @test rem(T(1), T(2), RoundUp)      == -1
+    @test rem(T(1), T(2), RoundFromZero) == -1
     @test rem(T(1.5), T(2), RoundToZero)  == 1.5
     @test rem(T(1.5), T(2), RoundNearest) == -0.5
     @test rem(T(1.5), T(2), RoundDown)    == 1.5
     @test rem(T(1.5), T(2), RoundUp)      == -0.5
+    @test rem(T(1.5), T(2), RoundFromZero) == -0.5
     @test rem(T(-1), T(2), RoundToZero)  == -1
     @test rem(T(-1), T(2), RoundNearest) == -1
     @test rem(T(-1), T(2), RoundDown)    == 1
     @test rem(T(-1), T(2), RoundUp)      == -1
+    @test rem(T(-1), T(2), RoundFromZero) == 1
     @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
-    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp]
+    @test rem(T(-1.5), T(2), RoundFromZero) == 0.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero]
         @test isnan(rem(T(1), T(0), mode))
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
         # FIXME: The broken case erroneously returns -Inf
-        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode == RoundUp)
+        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode in (RoundUp,RoundFromZero))
     end
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
-    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),    0.0)
-    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),     0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),       0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundFromZero), 0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)

@@ -23,8 +23,9 @@ end
 function matching_cache_argtypes(
     linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#)
     (; fargs, argtypes) = arginfo
-    @assert isa(linfo.def, Method) # ensure the next line works
-    nargs::Int = linfo.def.nargs
+    def = linfo.def
+    @assert isa(def, Method) # ensure the next line works
+    nargs::Int = def.nargs
     cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)
     given_argtypes = Vector{Any}(undef, length(argtypes))
     local condargs = nothing
@@ -55,7 +56,7 @@ function matching_cache_argtypes(
         end
         given_argtypes[i] = widenconditional(argtype)
     end
-    isva = linfo.def.isva
+    isva = def.isva
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - isva)
@@ -106,7 +107,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
     if !toplevel && isva
-        if specTypes == Tuple
+        if specTypes::Type == Tuple
             if nargs > 1
                 linfo_argtypes = Any[Any for i = 1:nargs]
                 linfo_argtypes[end] = Vararg{Any}

@@ -40,15 +40,18 @@ end
 getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
 
 """
-    findall(sig::Type, view::MethodTableView; limit::Int=typemax(Int)) -> MethodLookupResult or missing
+    findall(sig::Type, view::MethodTableView; limit::Int=typemax(Int)) ->
+        (matches::MethodLookupResult, overlayed::Bool) or missing
 
-Find all methods in the given method table `view` that are applicable to the
-given signature `sig`. If no applicable methods are found, an empty result is
-returned. If the number of applicable methods exceeded the specified limit,
-`missing` is returned.
+Find all methods in the given method table `view` that are applicable to the given signature `sig`.
+If no applicable methods are found, an empty result is returned.
+If the number of applicable methods exceeded the specified limit, `missing` is returned.
+`overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
 function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=Int(typemax(Int32)))
-    return _findall(sig, nothing, table.world, limit)
+    result = _findall(sig, nothing, table.world, limit)
+    result === missing && return missing
+    return result, false
 end
 
 function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=Int(typemax(Int32)))
@@ -57,7 +60,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
     nr = length(result)
     if nr ≥ 1 && result[nr].fully_covers
         # no need to fall back to the internal method table
-        return result
+        return result, true
     end
     # fall back to the internal method table
     fallback_result = _findall(sig, nothing, table.world, limit)
@@ -68,7 +71,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         WorldRange(
             max(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
             min(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),
-        result.ambig | fallback_result.ambig)
+        result.ambig | fallback_result.ambig), !isempty(result)
 end
 
 function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt, limit::Int)
@@ -83,31 +86,38 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
 end
 
 """
-    findsup(sig::Type, view::MethodTableView) -> Tuple{MethodMatch, WorldRange} or nothing
+    findsup(sig::Type, view::MethodTableView) ->
+        (match::MethodMatch, valid_worlds::WorldRange, overlayed::Bool) or nothing
 
-Find the (unique) method `m` such that `sig <: m.sig`, while being more
-specific than any other method with the same property. In other words, find
-the method which is the least upper bound (supremum) under the specificity/subtype
-relation of the queried `signature`. If `sig` is concrete, this is equivalent to
-asking for the method that will be called given arguments whose types match the
-given signature. This query is also used to implement `invoke`.
+Find the (unique) method such that `sig <: match.method.sig`, while being more
+specific than any other method with the same property. In other words, find the method
+which is the least upper bound (supremum) under the specificity/subtype relation of
+the queried `sig`nature. If `sig` is concrete, this is equivalent to asking for the method
+that will be called given arguments whose types match the given signature.
+Note that this query is also used to implement `invoke`.
 
-Such a method `m` need not exist. It is possible that no method is an
-upper bound of `sig`, or it is possible that among the upper bounds, there
-is no least element. In both cases `nothing` is returned.
+Such a matching method `match` doesn't necessarily exist.
+It is possible that no method is an upper bound of `sig`, or
+it is possible that among the upper bounds, there is no least element.
+In both cases `nothing` is returned.
+
+`overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
 function findsup(@nospecialize(sig::Type), table::InternalMethodTable)
-    return _findsup(sig, nothing, table.world)
+    return (_findsup(sig, nothing, table.world)..., false)
 end
 
 function findsup(@nospecialize(sig::Type), table::OverlayMethodTable)
     match, valid_worlds = _findsup(sig, table.mt, table.world)
-    match !== nothing && return match, valid_worlds
+    match !== nothing && return match, valid_worlds, true
     # fall back to the internal method table
     fallback_match, fallback_valid_worlds = _findsup(sig, nothing, table.world)
-    return fallback_match, WorldRange(
-        max(valid_worlds.min_world, fallback_valid_worlds.min_world),
-        min(valid_worlds.max_world, fallback_valid_worlds.max_world))
+    return (
+        fallback_match,
+        WorldRange(
+            max(valid_worlds.min_world, fallback_valid_worlds.min_world),
+            min(valid_worlds.max_world, fallback_valid_worlds.max_world)),
+        false)
 end
 
 function _findsup(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt)

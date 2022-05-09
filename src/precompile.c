@@ -261,15 +261,15 @@ static void _compile_all_deq(jl_array_t *found)
         if (m->source == NULL) // TODO: generic implementations of generated functions
             continue;
         mi = jl_get_unspecialized(m);
-        assert(mi == m->unspecialized); // make sure we didn't get tricked by a generated function, since we can't handle those
+        assert(mi == jl_atomic_load_relaxed(&m->unspecialized)); // make sure we didn't get tricked by a generated function, since we can't handle those
         jl_code_instance_t *ucache = jl_get_method_inferred(mi, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
-        if (ucache->invoke != NULL)
+        if (jl_atomic_load_relaxed(&ucache->invoke) != NULL)
             continue;
         src = m->source;
         assert(src);
         // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
         //src = jl_type_infer(mi, jl_atomic_load_acquire(&jl_world_counter), 1);
-        //if (ucache->invoke != NULL)
+        //if (jl_atomic_load_relaxed(&ucache->invoke) != NULL)
         //    continue;
 
         // first try to create leaf signatures from the signature declaration and compile those
@@ -296,7 +296,7 @@ static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
 
 static int compile_all_enq_(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, compile_all_enq__, env);
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), compile_all_enq__, env);
     return 1;
 }
 
@@ -331,16 +331,16 @@ static void jl_compile_all_defs(void)
 static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closure)
 {
     assert(jl_is_method_instance(mi));
-    jl_code_instance_t *codeinst = mi->cache;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         int do_compile = 0;
-        if (codeinst->invoke != jl_fptr_const_return) {
+        if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
             if (codeinst->inferred && codeinst->inferred != jl_nothing &&
                 jl_ir_flag_inferred((jl_array_t*)codeinst->inferred) &&
                 !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) {
                 do_compile = 1;
             }
-            else if (codeinst->invoke != NULL || codeinst->precompile) {
+            else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
                 do_compile = 1;
             }
         }
@@ -362,7 +362,7 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
     else {
-        jl_svec_t *specializations = def->func.method->specializations;
+        jl_svec_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_value_t *mi = jl_svecref(specializations, i);
@@ -377,7 +377,7 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
 
 static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
 {
-    return jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), precompile_enq_all_specializations__, env);
 }
 
 static void *jl_precompile(int all)

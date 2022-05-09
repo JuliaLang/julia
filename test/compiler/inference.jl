@@ -7,6 +7,8 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+include("irutils.jl")
+
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
@@ -1562,6 +1564,17 @@ end
 @test arraysize_tfunc(Vector, Float64) === Union{}
 @test arraysize_tfunc(String, Int) === Union{}
 
+let tuple_tfunc
+    function tuple_tfunc(@nospecialize xs...)
+        return Core.Compiler.tuple_tfunc(Any[xs...])
+    end
+    @test Core.Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
+    # https://github.com/JuliaLang/julia/issues/44705
+    @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
+    @test tuple_tfunc(DataType) === Tuple{DataType}
+    @test tuple_tfunc(UnionAll) === Tuple{UnionAll}
+end
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -2032,6 +2045,13 @@ end
         end
         @test ts == Any[Any]
     end
+
+    # a tricky case: if constant inference derives `Const` while non-constant inference has
+    # derived `InterConditional`, we should not discard that constant information
+    iszero_simple(x) = x === 0
+    @test Base.return_types() do
+        iszero_simple(0) ? nothing : missing
+    end |> only === Nothing
 end
 
 @testset "branching on conditional object" begin
@@ -2075,7 +2095,7 @@ let M = Module()
             obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
             r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
             a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
             return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
         end |> only
     end
@@ -3999,15 +4019,33 @@ end
     @test ⊑(a, c)
     @test ⊑(b, c)
 
-    @test @eval Module() begin
-        const ginit = Base.ImmutableDict{Any,Any}()
-        Base.return_types() do
-            g = ginit
+    init = Base.ImmutableDict{Number,Number}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c) && ⊑(b, c)
+    @test c === typeof(init)
+
+    a = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c) && ⊑(b, c)
+    @test c.fields[2] === Any # or Number
+    @test c.fields[3] === ComplexF64
+
+    b = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+    @test c.fields[2] === Complex
+    @test c.fields[3] === Complex
+
+    global const ginit43784 = Base.ImmutableDict{Any,Any}()
+    @test Base.return_types() do
+            g = ginit43784
             while true
                 g = Base.ImmutableDict(g, 1=>2)
             end
         end |> only === Union{}
-    end
 end
 
 # Test that purity modeling doesn't accidentally introduce new world age issues
@@ -4038,3 +4076,60 @@ f_max_methods(x::Float64) = 2
 g_max_methods(x) = f_max_methods(x)
 @test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
 @test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
+
+# Unit tests for BitSetBoundedMinPrioritySet
+let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
+    Core.Compiler.push!(bsbmp, 2)
+    Core.Compiler.push!(bsbmp, 2)
+    @test Core.Compiler.popfirst!(bsbmp) == 2
+    Core.Compiler.push!(bsbmp, 1)
+    @test Core.Compiler.popfirst!(bsbmp) == 1
+    @test Core.Compiler.isempty(bsbmp)
+end
+
+# Make sure return_type_tfunc doesn't accidentally cause bad inference if used
+# at top level.
+@test let
+    Base.Experimental.@force_compile
+    Core.Compiler.return_type(+, NTuple{2, Rational})
+end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44965
+let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
+    @test Core.Compiler.issimplertype(t, t)
+end
+
+# https://github.com/JuliaLang/julia/issues/44763
+global x44763::Int = 0
+increase_x44763!(n) = (global x44763; x44763 += n)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
+@test Base.return_types() do
+    invoke44763(42)
+end |> only === Int
+@test x44763 == 0
+
+# backedge insertion for Any-typed, effect-free frame
+const CONST_DICT = let d = Dict()
+    for c in 'A':'z'
+        push!(d, c => Int(c))
+    end
+    d
+end
+Base.@assume_effects :total_may_throw getcharid(c) = CONST_DICT[c]
+@noinline callf(f, args...) = f(args...)
+function entry_to_be_invalidated(c)
+    return callf(getcharid, c)
+end
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> Core.Compiler.is_concrete_eval_eligible
+@test fully_eliminated(; retval=97) do
+    entry_to_be_invalidated('a')
+end
+getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> !Core.Compiler.is_concrete_eval_eligible
+@test !fully_eliminated() do
+    entry_to_be_invalidated('a')
+end

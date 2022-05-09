@@ -672,7 +672,7 @@ function push!!(v::Vector, el)
         out[1] = el
         return out
     else
-        if typeof(T) === Union
+        if T isa Union
             newT = Any
         else
             newT = Union{T, typeof(el)}
@@ -1165,7 +1165,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
 end
 
 function take_chunks(l::Parser, unescape::Bool)::String
-    nbytes = sum(length, l.chunks)
+    nbytes = sum(length, l.chunks; init=0)
     str = Base._string_n(nbytes)
     offset = 1
     for chunk in l.chunks
