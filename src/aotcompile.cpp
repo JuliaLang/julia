@@ -1067,7 +1067,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
         if (F)
-            return new jl_llvmf_dump_t{std::move(m), F};
+            return new jl_llvmf_dump_t{reinterpret_cast<LLVMOrcThreadSafeModuleRef>(new orc::ThreadSafeModule(std::move(m))), wrap(F)};
     }
 
     const char *mname = name_from_method_instance(mi);

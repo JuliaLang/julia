@@ -115,8 +115,8 @@ struct jl_returninfo_t {
 };
 
 struct jl_llvmf_dump_t {
-    orc::ThreadSafeModule TSM;
-    Function *F;
+    LLVMOrcThreadSafeModuleRef TSM;
+    LLVMValueRef F;
 };
 
 typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
