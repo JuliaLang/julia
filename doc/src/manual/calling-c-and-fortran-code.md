@@ -124,6 +124,26 @@ Dereferencing `pointer(hostname)` with `unsafe_string` is an unsafe operation as
 the memory allocated for `hostname` that may have been in the meanwhile garbage collected. The macro
 [`GC.@preserve`](@ref) prevents this from happening and therefore accessing an invalid memory location.
 
+Finally, here is an example of specifying a library via a path.
+We create a shared library with the following content
+
+```c
+#include <stdio.h>
+
+void say_y(int y)
+{
+    printf("Hello from C: got y = %d.\n", y);
+}
+```
+
+and compile it with `gcc -fPIC -shared -o mylib.so mylib.c`.
+It can then be called by specifying the (absolute) path as the library name:
+
+```julia-repl
+julia> @ccall "./mylib.so".say_y(5::Cint)::Cvoid
+Hello from C: got y = 5.
+```
+
 ## Creating C-Compatible Julia Function Pointers
 
 It is possible to pass Julia functions to native C functions that accept function pointer arguments.
