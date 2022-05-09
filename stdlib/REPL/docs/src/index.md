@@ -32,7 +32,7 @@ julia> string(1 + 2)
 "3"
 ```
 
-There are a number useful features unique to interactive work. In addition to showing the result,
+There are a number of useful features unique to interactive work. In addition to showing the result,
 the REPL also binds the result to the variable `ans`. A trailing semicolon on the line can be
 used as a flag to suppress showing the result.
 
