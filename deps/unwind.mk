@@ -1,11 +1,15 @@
 ## UNWIND ##
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC)
+LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz
 LIBUNWIND_CPPFLAGS :=
 
+ifeq ($(USE_SYSTEM_ZLIB),0)
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER)/libunwind-$(UNWIND_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER_TAG)/libunwind-$(UNWIND_VER).tar.gz
 
 $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted: $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -35,7 +39,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied: $(SRCCA
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
@@ -53,11 +57,11 @@ $(eval $(call staged-install, \
 	MAKE_INSTALL,,,))
 
 clean-unwind:
-	-rm $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
+	-rm -f $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
 
 distclean-unwind:
-	-rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
+	rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
 		$(SRCCACHE)/libunwind-$(UNWIND_VER) \
 		$(BUILDDIR)/libunwind-$(UNWIND_VER)
 
@@ -110,12 +114,12 @@ $(eval $(call staged-install, \
 	cp -fR $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/include/* $(build_includedir)))
 
 clean-llvmunwind:
-	-rm $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
-	-rm -r $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
+	-rm -f $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
+	rm -rf $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
 	-$(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
 
 distclean-llvmunwind:
-	-rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
+	rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
 		$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) \
 		$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)
 

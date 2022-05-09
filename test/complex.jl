@@ -1039,7 +1039,7 @@ end
 @testset "corner cases of division, issue #22983" begin
     # These results abide by ISO/IEC 10967-3:2006(E) and
     # mathematical definition of division of complex numbers.
-    for T in (Float32, Float64, BigFloat)
+    for T in (Float16, Float32, Float64, BigFloat)
         @test isequal(one(T) / zero(Complex{T}), one(Complex{T}) / zero(Complex{T}))
         @test isequal(one(T) / zero(Complex{T}), Complex{T}(NaN, NaN))
         @test isequal(one(Complex{T}) / zero(T), Complex{T}(Inf, NaN))
@@ -1050,7 +1050,7 @@ end
 end
 
 @testset "division by Inf, issue#23134" begin
-    @testset "$T" for T in (Float32, Float64, BigFloat)
+    @testset "$T" for T in (Float16, Float32, Float64, BigFloat)
         @test isequal(one(T) / complex(T(Inf)),         complex(zero(T), -zero(T)))
         @test isequal(one(T) / complex(T(Inf), one(T)), complex(zero(T), -zero(T)))
         @test isequal(one(T) / complex(T(Inf), T(NaN)), complex(zero(T), -zero(T)))
@@ -1088,8 +1088,10 @@ end
         @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
 
         # divide complex by complex Inf
-        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T))) broken=(T==Float64)
-        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T))) broken=(T in (Float32, Float64))
+        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(complex(T(Inf)) / complex(T(Inf), T(-Inf)), complex(T(NaN), T(NaN)))
+        @test isequal(complex(T(NaN)) / complex(T(-Inf), T(Inf)), complex(T(NaN), T(NaN)))
     end
 end
 

@@ -7,6 +7,8 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+include("irutils.jl")
+
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
@@ -1172,10 +1174,10 @@ end
 
 # issue #22875
 
-typeargs = (Type{Int},)
+typeargs = Tuple{Type{Int},}
 @test Base.Core.Compiler.return_type((args...) -> one(args...), typeargs) === Int
 
-typeargs = (Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int})
+typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}}
 @test Base.Core.Compiler.return_type(promote_type, typeargs) === Type{Int}
 
 # demonstrate that inference must converge
@@ -1232,7 +1234,7 @@ function get_linfo(@nospecialize(f), @nospecialize(t))
         throw(ArgumentError("argument is not a generic function"))
     end
     # get the MethodInstance for the method match
-    match = Base._which(Base.signature_type(f, t), typemax(UInt))
+    match = Base._which(Base.signature_type(f, t), Base.get_world_counter())
     precompile(match.spec_types)
     return Core.Compiler.specialize_method(match)
 end
@@ -1534,6 +1536,45 @@ using Core.Compiler: typeof_tfunc
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
+# arrayref / arrayset / arraysize
+import Core.Compiler: Const, arrayref_tfunc, arrayset_tfunc, arraysize_tfunc
+@test arrayref_tfunc(Const(true), Vector{Int}, Int) === Int
+@test arrayref_tfunc(Const(true), Vector{<:Integer}, Int) === Integer
+@test arrayref_tfunc(Const(true), Vector, Int) === Any
+@test arrayref_tfunc(Const(true), Vector{Int}, Int, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Vector{Int}, Vararg{Int}) === Int
+@test arrayref_tfunc(Const(true), Vector{Int}) === Union{}
+@test arrayref_tfunc(Const(true), String, Int) === Union{}
+@test arrayref_tfunc(Const(true), Vector{Int}, Float64) === Union{}
+@test arrayref_tfunc(Int, Vector{Int}, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Int) === Vector{Int}
+let ua = Vector{<:Integer}
+    @test arrayset_tfunc(Const(true), ua, Int, Int) === ua
+end
+@test arrayset_tfunc(Const(true), Vector, Int, Int) === Vector
+@test arrayset_tfunc(Const(true), Any, Int, Int) === Any
+@test arrayset_tfunc(Const(true), Vector{String}, String, Int, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String, Vararg{Int}) === Vector{String}
+@test arrayset_tfunc(Const(true), Vector{String}, String) === Union{}
+@test arrayset_tfunc(Const(true), String, Char, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Int, Float64) === Union{}
+@test arrayset_tfunc(Int, Vector{Int}, Int, Int) === Union{}
+@test arrayset_tfunc(Const(true), Vector{Int}, Float64, Int) === Union{}
+@test arraysize_tfunc(Vector, Int) === Int
+@test arraysize_tfunc(Vector, Float64) === Union{}
+@test arraysize_tfunc(String, Int) === Union{}
+
+let tuple_tfunc
+    function tuple_tfunc(@nospecialize xs...)
+        return Core.Compiler.tuple_tfunc(Any[xs...])
+    end
+    @test Core.Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
+    # https://github.com/JuliaLang/julia/issues/44705
+    @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
+    @test tuple_tfunc(DataType) === Tuple{DataType}
+    @test tuple_tfunc(UnionAll) === Tuple{UnionAll}
+end
+
 function f23024(::Type{T}, ::Int) where T
     1 + 1
 end
@@ -1608,7 +1649,7 @@ f_pure_add() = (1 + 1 == 2) ? true : "FAIL"
 @test Core.Compiler.getfield_tfunc(Core.TypeName, Const(:flags)) == UInt8
 
 # getfield on abstract named tuples. issue #32698
-import Core.Compiler.getfield_tfunc
+import Core.Compiler: getfield_tfunc, Const
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:y)) == Union{Missing, Float64}
 @test getfield_tfunc(NamedTuple{(:id, :y), T} where {T <: Tuple{Int, Union{Float64, Missing}}},
@@ -1621,6 +1662,130 @@ import Core.Compiler.getfield_tfunc
                      Int) == Union{Missing, Float64, Int}
 @test getfield_tfunc(NamedTuple{<:Any, T} where {T <: Tuple{Int, Union{Float64, Missing}}},
                      Const(:x)) == Union{Missing, Float64, Int}
+
+mutable struct ARef{T}
+    @atomic x::T
+end
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Bool) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Bool) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Vararg{Symbol}) === Int # `Vararg{Symbol}` might be empty
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Symbol}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Any) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Any,Vararg{Any}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Vararg{Any}) === Int
+@test getfield_tfunc(ARef{Int},Const(:x),Int) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Symbol) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Symbol,Symbol) === Union{}
+@test getfield_tfunc(ARef{Int},Const(:x),Bool,Bool) === Union{}
+
+import Core.Compiler: setfield!_tfunc, setfield!_nothrow, Const
+mutable struct XY{X,Y}
+    x::X
+    y::Y
+end
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:x), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Const(1), Int, Symbol) === Int
+@test setfield!_tfunc(Base.RefValue{Any}, Int, Int) === Int
+@test setfield!_tfunc(XY{Any,Any}, Const(1), Int) === Int
+@test setfield!_tfunc(XY{Any,Any}, Const(2), Float64) === Float64
+@test setfield!_tfunc(XY{Int,Float64}, Const(1), Int) === Int
+@test setfield!_tfunc(XY{Int,Float64}, Const(2), Float64) === Float64
+@test setfield!_tfunc(ABCDconst, Const(:c), Any) === Any
+@test setfield!_tfunc(ABCDconst, Const(3), Any) === Any
+@test setfield!_tfunc(ABCDconst, Symbol, Any) === Any
+@test setfield!_tfunc(ABCDconst, Int, Any) === Any
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(:x), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Const(1), Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Symbol, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue{Any},Some{Any}}, Int, Int) === Int
+@test setfield!_tfunc(Union{Base.RefValue,Some{Any}}, Int, Int) === Int
+@test setfield!_tfunc(Any, Symbol, Int) === Int
+@test setfield!_tfunc(Any, Int, Int) === Int
+@test setfield!_tfunc(Any, Any, Int) === Int
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(:x), Float64, Symbol) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Const(1), Float64, Symbol) === Union{}
+@test setfield!_tfunc(Base.RefValue{Int}, Int, Float64) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(:y), Int, Bool) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, Const(2), Int, Bool) === Union{}
+@test setfield!_tfunc(Base.RefValue{Any}, String, Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Const(:value), Int) === Union{}
+@test setfield!_tfunc(Some, Const(:value), Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Const(1), Int) === Union{}
+@test setfield!_tfunc(Some, Const(1), Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Symbol, Int) === Union{}
+@test setfield!_tfunc(Some, Symbol, Int) === Union{}
+@test setfield!_tfunc(Some{Any}, Int, Int) === Union{}
+@test setfield!_tfunc(Some, Int, Int) === Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Const(:v), Int) === Union{}
+@test setfield!_tfunc(Const(@__MODULE__), Int, Int) === Union{}
+@test setfield!_tfunc(Module, Const(:v), Int) === Union{}
+@test setfield!_tfunc(Union{Module,Base.RefValue{Any}}, Const(:v), Int) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:a), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:b), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(:d), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(1), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(2), Any) === Union{}
+@test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
+@test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
+@test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
+@test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
+@test setfield!_nothrow(Base.RefValue{Any}, Const(1), Int)
+@test setfield!_nothrow(XY{Any,Any}, Const(:x), Int)
+@test setfield!_nothrow(XY{Any,Any}, Const(:x), Any)
+@test setfield!_nothrow(XY{Int,Float64}, Const(:x), Int)
+@test setfield!_nothrow(ABCDconst, Const(:c), Any)
+@test setfield!_nothrow(ABCDconst, Const(3), Any)
+@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Any)
+@test !setfield!_nothrow(XY{Int,Float64}, Int, Any)
+@test !setfield!_nothrow(Base.RefValue{Int}, Const(:x), Any)
+@test !setfield!_nothrow(Base.RefValue{Int}, Const(1), Any)
+@test !setfield!_nothrow(Any[Base.RefValue{Any}, Const(:x), Int, Symbol])
+@test !setfield!_nothrow(Base.RefValue{Any}, Symbol, Int)
+@test !setfield!_nothrow(Base.RefValue{Any}, Int, Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Const(:y), Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Int)
+@test !setfield!_nothrow(XY{Int,Float64}, Int, Int)
+@test !setfield!_nothrow(ABCDconst, Const(:a), Any)
+@test !setfield!_nothrow(ABCDconst, Const(:b), Any)
+@test !setfield!_nothrow(ABCDconst, Const(:d), Any)
+@test !setfield!_nothrow(ABCDconst, Symbol, Any)
+@test !setfield!_nothrow(ABCDconst, Const(1), Any)
+@test !setfield!_nothrow(ABCDconst, Const(2), Any)
+@test !setfield!_nothrow(ABCDconst, Const(4), Any)
+@test !setfield!_nothrow(ABCDconst, Int, Any)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(:x), Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(1), Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Symbol, Int)
+@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Int, Int)
+@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Int, Int)
+@test !setfield!_nothrow(Any, Symbol, Int)
+@test !setfield!_nothrow(Any, Int, Int)
+@test !setfield!_nothrow(Any, Any, Int)
 
 struct Foo_22708
     x::Ptr{Foo_22708}
@@ -1880,6 +2045,13 @@ end
         end
         @test ts == Any[Any]
     end
+
+    # a tricky case: if constant inference derives `Const` while non-constant inference has
+    # derived `InterConditional`, we should not discard that constant information
+    iszero_simple(x) = x === 0
+    @test Base.return_types() do
+        iszero_simple(0) ? nothing : missing
+    end |> only === Nothing
 end
 
 @testset "branching on conditional object" begin
@@ -1923,7 +2095,7 @@ let M = Module()
             obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
             r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
             a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
             return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
         end |> only
     end
@@ -2985,11 +3157,12 @@ _use_unstable_kw_2() = _unstable_kw(x = 2, y = rand())
 @test Base.return_types(_use_unstable_kw_1) == Any[String]
 @test Base.return_types(_use_unstable_kw_2) == Any[String]
 @eval struct StructWithSplatNew
-    x::Int
+    x::String
     StructWithSplatNew(t) = $(Expr(:splatnew, :StructWithSplatNew, :t))
 end
 _construct_structwithsplatnew() = StructWithSplatNew(("",))
 @test Base.return_types(_construct_structwithsplatnew) == Any[StructWithSplatNew]
+@test isa(_construct_structwithsplatnew(), StructWithSplatNew)
 
 # case where a call cycle can be broken by constant propagation
 struct NotQRSparse
@@ -3164,7 +3337,7 @@ end
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Symbol
+@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Union{}
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
 @test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
@@ -3266,10 +3439,10 @@ end
     # Recursive function
     @eval module _Recursive f(n::Integer) = n == 0 ? 0 : f(n-1) + 1 end
     timing = time_inference() do
-        @eval _Recursive.f(5)
+        @eval _Recursive.f(Base.inferencebarrier(5))
     end
-    @test depth(timing) == 3  # root -> f -> +
-    @test length(flatten_times(timing)) == 3  # root, f, +
+    @test 2 <= depth(timing) <= 3  # root -> f (-> +)
+    @test 2 <= length(flatten_times(timing)) <= 3  # root, f, +
 
     # Functions inferred with multiple constants
     @eval module C
@@ -3567,12 +3740,12 @@ let
     Core.Compiler.replace_code_newstyle!(ci, ir, 4)
     ci.ssavaluetypes = length(ci.code)
     @test any(x->isa(x, Core.PhiNode), ci.code)
-    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
-        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(b, 1.0)
+    oc = @eval b->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(b, 1.0)
     @test Base.return_types(oc, Tuple{Bool}) == Any[Float64]
 
-    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, false, Any, Any,
-        Expr(:opaque_closure_method, nothing, 2, LineNumberNode(0, nothing), ci)))(true, 1.0)
+    oc = @eval ()->$(Expr(:new_opaque_closure, Tuple{Bool, Float64}, Any, Any,
+        Expr(:opaque_closure_method, nothing, 2, false, LineNumberNode(0, nothing), ci)))(true, 1.0)
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
 
@@ -3835,4 +4008,128 @@ end |> only == Int
             return nothing # dead branch
         end
     end |> only === Union{UnionNarrowingByIsdefinedA, UnionNarrowingByIsdefinedB}
+end
+
+# issue #43784
+@testset "issue #43784" begin
+    init = Base.ImmutableDict{Any,Any}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, Any])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+
+    init = Base.ImmutableDict{Number,Number}()
+    a = Const(init)
+    b = Core.PartialStruct(typeof(init), Any[Const(init), Any, ComplexF64])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c) && ⊑(b, c)
+    @test c === typeof(init)
+
+    a = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF64, ComplexF64])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c) && ⊑(b, c)
+    @test c.fields[2] === Any # or Number
+    @test c.fields[3] === ComplexF64
+
+    b = Core.PartialStruct(typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+    c = Core.Compiler.tmerge(a, b)
+    @test ⊑(a, c)
+    @test ⊑(b, c)
+    @test c.fields[2] === Complex
+    @test c.fields[3] === Complex
+
+    global const ginit43784 = Base.ImmutableDict{Any,Any}()
+    @test Base.return_types() do
+            g = ginit43784
+            while true
+                g = Base.ImmutableDict(g, 1=>2)
+            end
+        end |> only === Union{}
+end
+
+# Test that purity modeling doesn't accidentally introduce new world age issues
+f_redefine_me(x) = x+1
+f_call_redefine() = f_redefine_me(0)
+f_mk_opaque() = @Base.Experimental.opaque ()->Base.inferencebarrier(f_call_redefine)()
+const op_capture_world = f_mk_opaque()
+f_redefine_me(x) = x+2
+@test op_capture_world() == 1
+@test f_mk_opaque()() == 2
+
+# Test that purity doesn't try to accidentally run unreachable code due to
+# boundscheck elimination
+function f_boundscheck_elim(n)
+    # Inbounds here assumes that this is only ever called with n==0, but of
+    # course the compiler has no way of knowing that, so it must not attempt
+    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    ntuple(x->(@inbounds getfield(sin, x)), n)
+end
+@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
+
+@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+
+# Test that max_methods works as expected
+@Base.Experimental.max_methods 1 function f_max_methods end
+f_max_methods(x::Int) = 1
+f_max_methods(x::Float64) = 2
+g_max_methods(x) = f_max_methods(x)
+@test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
+@test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
+
+# Unit tests for BitSetBoundedMinPrioritySet
+let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
+    Core.Compiler.push!(bsbmp, 2)
+    Core.Compiler.push!(bsbmp, 2)
+    @test Core.Compiler.popfirst!(bsbmp) == 2
+    Core.Compiler.push!(bsbmp, 1)
+    @test Core.Compiler.popfirst!(bsbmp) == 1
+    @test Core.Compiler.isempty(bsbmp)
+end
+
+# Make sure return_type_tfunc doesn't accidentally cause bad inference if used
+# at top level.
+@test let
+    Base.Experimental.@force_compile
+    Core.Compiler.return_type(+, NTuple{2, Rational})
+end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44965
+let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
+    @test Core.Compiler.issimplertype(t, t)
+end
+
+# https://github.com/JuliaLang/julia/issues/44763
+global x44763::Int = 0
+increase_x44763!(n) = (global x44763; x44763 += n)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
+@test Base.return_types() do
+    invoke44763(42)
+end |> only === Int
+@test x44763 == 0
+
+# backedge insertion for Any-typed, effect-free frame
+const CONST_DICT = let d = Dict()
+    for c in 'A':'z'
+        push!(d, c => Int(c))
+    end
+    d
+end
+Base.@assume_effects :total_may_throw getcharid(c) = CONST_DICT[c]
+@noinline callf(f, args...) = f(args...)
+function entry_to_be_invalidated(c)
+    return callf(getcharid, c)
+end
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> Core.Compiler.is_concrete_eval_eligible
+@test fully_eliminated(; retval=97) do
+    entry_to_be_invalidated('a')
+end
+getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> !Core.Compiler.is_concrete_eval_eligible
+@test !fully_eliminated() do
+    entry_to_be_invalidated('a')
 end

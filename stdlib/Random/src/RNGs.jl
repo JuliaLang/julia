@@ -2,72 +2,6 @@
 
 ## RandomDevice
 
-if Sys.iswindows()
-    struct RandomDevice <: AbstractRNG
-        buffer::Vector{UInt128}
-
-        RandomDevice() = new(Vector{UInt128}(undef, 1))
-    end
-
-    function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
-        rand!(rd, rd.buffer)
-        @inbounds return rd.buffer[1] % sp[]
-    end
-
-    show(io::IO, ::RandomDevice) = print(io, RandomDevice, "()")
-
-else # !windows
-    struct RandomDevice <: AbstractRNG
-        unlimited::Bool
-
-        RandomDevice(; unlimited::Bool=true) = new(unlimited)
-    end
-
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
-    rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
-
-    mutable struct FileRef
-        @atomic file::Union{IOStream, Nothing}
-    end
-
-    const DEV_RANDOM  = FileRef(nothing)
-    const DEV_URANDOM = FileRef(nothing)
-
-    function getfile(rd::RandomDevice)
-        ref = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        fd = ref.file
-        if fd === nothing
-            fd = open(rd.unlimited ? "/dev/urandom" : "/dev/random")
-            old, ok = @atomicreplace ref.file nothing => fd
-            if !ok
-                close(fd)
-                fd = old::IOStream
-            end
-        end
-        return fd
-    end
-
-    show(io::IO, rd::RandomDevice) =
-        print(io, RandomDevice, rd.unlimited ? "()" : "(unlimited=false)")
-
-end # os-test
-
-# NOTE: this can't be put within the if-else block above
-for T in (Bool, BitInteger_types...)
-    if Sys.iswindows()
-        @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A)))
-            A
-        end
-    else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
-    end
-end
-
-# RandomDevice produces natively UInt64
-rng_native_52(::RandomDevice) = UInt64
 
 """
     RandomDevice()
@@ -76,10 +10,30 @@ Create a `RandomDevice` RNG object.
 Two such objects will always generate different streams of random numbers.
 The entropy is obtained from the operating system.
 """
-RandomDevice
-
-RandomDevice(::Nothing) = RandomDevice()
+struct RandomDevice <: AbstractRNG; end
+RandomDevice(seed::Nothing) = RandomDevice()
 seed!(rng::RandomDevice) = rng
+
+rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = Libc.getrandom!(Ref{sp[]}())[]
+rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
+function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
+    Libc.getrandom!(A)
+    # we need to mask the result so that only the LSB in each byte can be non-zero
+    GC.@preserve A begin
+        p = Ptr{UInt8}(pointer(A))
+        for i = 1:length(A)
+            unsafe_store!(p, unsafe_load(p) & 0x1)
+            p += 1
+        end
+    end
+    return A
+end
+for T in BitInteger_types
+    @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = Libc.getrandom!(A)
+end
+
+# RandomDevice produces natively UInt64
+rng_native_52(::RandomDevice) = UInt64
 
 
 ## MersenneTwister
@@ -329,18 +283,10 @@ end
 function make_seed()
     try
         return rand(RandomDevice(), UInt32, 4)
-    catch
-        println(stderr,
-                "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
-        seed = reinterpret(UInt64, time())
-        seed = hash(seed, getpid() % UInt)
-        try
-            seed = hash(seed, parse(UInt64,
-                                    read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    base = 16) % UInt)
-        catch
-        end
-        return make_seed(seed)
+    catch ex
+        ex isa IOError || rethrow()
+        @warn "Entropy pool not available to seed RNG; using ad-hoc entropy sources."
+        return make_seed(Libc.rand())
     end
 end
 
@@ -384,6 +330,19 @@ end
 # GLOBAL_RNG currently uses TaskLocalRNG
 typeof_rng(::_GLOBAL_RNG) = TaskLocalRNG
 
+"""
+    default_rng() -> rng
+
+Return the default global random number generator (RNG).
+
+!!! note
+    What the default RNG is is an implementation detail.  Across different versions of
+    Julia, you should not expect the default RNG to be always the same, nor that it will
+    return the same stream of random numbers for a given seed.
+
+!!! compat "Julia 1.3"
+    This function was introduced in Julia 1.3.
+"""
 @inline default_rng() = TaskLocalRNG()
 @inline default_rng(tid::Int) = TaskLocalRNG()
 
@@ -428,10 +387,6 @@ for T in BitInteger_types
 end
 
 function __init__()
-    @static if !Sys.iswindows()
-        @atomic DEV_RANDOM.file = nothing
-        @atomic DEV_URANDOM.file = nothing
-    end
     seed!(GLOBAL_RNG)
 end
 

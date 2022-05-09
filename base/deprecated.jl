@@ -15,11 +15,12 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new [ex=true]
+    @deprecate old new [export_old=true]
 
-Deprecate method `old` and specify the replacement call `new`. Prevent `@deprecate` from
-exporting `old` by setting `ex` to `false`. `@deprecate` defines a new method with the same
-signature as `old`.
+Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
+with the specified signature in the process.
+
+To prevent `old` from being exported, set `export_old` to `false`.
 
 !!! compat "Julia 1.5"
     As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
@@ -34,14 +35,31 @@ old (generic function with 1 method)
 julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
+
+Calls to `@deprecate` without explicit type-annotations will define deprecated methods
+accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
+the arguments of `old`. For example,
+```jldoctest; filter = r"in Main at.*"
+julia> new(x::Int) = x;
+
+julia> new(x::Float64) = 2x;
+
+julia> @deprecate old(x::Int) new(x);
+
+julia> methods(old)
+# 1 method for generic function "old":
+[1] old(x::Int64) in Main at deprecated.jl:70
+```
+will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
+define nor deprecate the method `old(x::Float64)`.
 """
-macro deprecate(old, new, ex=true)
+macro deprecate(old, new, export_old=true)
     meta = Expr(:meta, :noinline)
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
         Expr(:toplevel,
-            ex ? Expr(:export, esc(old)) : nothing,
+            export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
@@ -65,7 +83,7 @@ macro deprecate(old, new, ex=true)
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export, esc(oldsym)) : nothing,
+        export_old ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
                   depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
@@ -88,8 +106,13 @@ function depwarn(msg, funcsym; force::Bool=false)
         _module=begin
             bt = backtrace()
             frame, caller = firstcaller(bt, funcsym)
-            # TODO: Is it reasonable to attribute callers without linfo to Core?
-            caller.linfo isa Core.MethodInstance ? caller.linfo.def.module : Core
+            linfo = caller.linfo
+            if linfo isa Core.MethodInstance
+                def = linfo.def
+                def isa Module ? def : def.module
+            else
+                Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
+            end
         end,
         _file=String(caller.file),
         _line=caller.line,
@@ -228,11 +251,11 @@ getindex(match::Core.MethodMatch, field::Int) =
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_pure_meta
+    @_total_may_throw_meta
     Tuple{S, T.parameters...}
 end
 function parameter_upper_bound(t::UnionAll, idx)
-    @_pure_meta
+    @_total_may_throw_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
@@ -266,7 +289,8 @@ end
 
 # BEGIN 1.8 deprecations
 
-@deprecate var"@_inline_meta"   var"@inline"   false
-@deprecate var"@_noinline_meta" var"@noinline" false
+const var"@_inline_meta" = var"@inline"
+const var"@_noinline_meta" = var"@noinline"
+@deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations

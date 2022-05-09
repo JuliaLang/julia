@@ -1,0 +1,25 @@
+--- !tapi-tbd
+# copied from XCode's libSystem.tbd (current-version: 1311)
+# to provide weak-linkage info for new symbols on old systems
+tbd-version:     4
+targets:         [ x86_64-macos, x86_64-maccatalyst, arm64-macos, arm64-maccatalyst,
+                   arm64e-macos, arm64e-maccatalyst ]
+uuids:
+  - target:          x86_64-macos
+    value:           AFE6C76A-B47A-35F5-91D0-4E9FC439E90D
+  - target:          x86_64-maccatalyst
+    value:           AFE6C76A-B47A-35F5-91D0-4E9FC439E90D
+  - target:          arm64-macos
+    value:           2EA09BDB-811B-33AA-BB58-4B53AA2DB522
+  - target:          arm64-maccatalyst
+    value:           2EA09BDB-811B-33AA-BB58-4B53AA2DB522
+  - target:          arm64e-macos
+    value:           09AB3723-C26D-3762-93BA-98E9C38B89C1
+  - target:          arm64e-maccatalyst
+    value:           09AB3723-C26D-3762-93BA-98E9C38B89C1
+install-name:    '/usr/lib/libSystem.B.dylib'
+exports:
+  - targets:         [ arm64-macos, arm64e-macos, x86_64-macos, x86_64-maccatalyst,
+                       arm64-maccatalyst, arm64e-maccatalyst ]
+    symbols:         [ __dyld_atfork_parent, __dyld_atfork_prepare ]
+...

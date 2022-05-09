@@ -50,6 +50,9 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	make -C $(JULIAHOME) binary-dist
 	tar zxf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
 	find $@/Contents/Resources/julia -type f -exec chmod -w {} \;
+	# Even though the tarball may already be signed, we re-sign here to make it easier to add
+	# unsigned executables (like the app launcher) and whatnot, without needing to maintain lists
+	# of what is or is not signed.  Codesigning is cheap, so might as well do it early and often.
 	if [ -n "$$MACOS_CODESIGN_IDENTITY" ]; then \
 	    echo "Codesigning with identity $$MACOS_CODESIGN_IDENTITY"; \
 		MACHO_FILES=$$(find "$@" -type f -perm -0111 | cut -d: -f1); \

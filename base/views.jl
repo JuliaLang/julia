@@ -214,6 +214,8 @@ to return a view. Scalar indices, non-array types, and
 explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
 
+Similarly, `@views` converts string slices into [`SubString`](@ref) views.
+
 !!! note
     The `@views` macro only affects `array[...]` expressions
     that appear explicitly in the given `expression`, not array slicing that

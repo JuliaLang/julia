@@ -170,7 +170,7 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
     if sym_isconst
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
-        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, sym, v)
+        setglobal!(Main, sym, v)
     end
     return nothing
 end
@@ -243,7 +243,7 @@ An exception is raised if a global constant is requested to be cleared.
 """
 function clear!(syms, pids=workers(); mod=Main)
     @sync for p in pids
-        @sync_add remotecall(clear_impl!, p, syms, mod)
+        @async_unwrap remotecall_wait(clear_impl!, p, syms, mod)
     end
 end
 clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)

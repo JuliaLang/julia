@@ -12,7 +12,13 @@ an integer according to the rounding mode `r`. In other words, the quantity
 
 without any intermediate rounding.
 
+!!! compat "Julia 1.4"
+    The three-argument method taking a `RoundingMode` requires Julia 1.4 or later.
+
 See also [`fld`](@ref) and [`cld`](@ref), which are special cases of this function.
+
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9.
 
 # Examples:
 ```jldoctest
@@ -29,6 +35,10 @@ julia> div(-5, 2, RoundNearest)
 julia> div(-5, 2, RoundNearestTiesAway)
 -3
 julia> div(-5, 2, RoundNearestTiesUp)
+-2
+julia> div(4, 3, RoundFromZero)
+2
+julia> div(-4, 3, RoundFromZero)
 -2
 ```
 """
@@ -60,6 +70,13 @@ without any intermediate rounding.
   `[0,-y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
   `abs(x) < abs(y)`. See also [`RoundUp`](@ref).
 
+- if `r == RoundFromZero`, then the result is in the interval `(-y, 0]` if `y` is positive, or
+  `[0, -y)` otherwise. The result may not be exact if `x` and `y` have the same sign, and
+  `abs(x) < abs(y)`. See also [`RoundFromZero`](@ref).
+
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9.
+
 # Examples:
 ```jldoctest
 julia> x = 9; y = 4;
@@ -82,6 +99,10 @@ rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
 rem(x, y, r::RoundingMode{:Nearest}) = x - y*div(x, y, r)
 rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
+
+function rem(x, y, ::typeof(RoundFromZero))
+    signbit(x) == signbit(y) ? rem(x, y, RoundUp) : rem(x, y, RoundDown)
+end
 
 """
     fld(x, y)
@@ -237,6 +258,10 @@ function divrem(x::Integer, y::Integer, rnd::typeof(RoundNearestTiesUp))
     end
 end
 
+function divrem(x, y, ::typeof(RoundFromZero))
+    signbit(x) == signbit(y) ? divrem(x, y, RoundUp) : divrem(x, y, RoundDown)
+end
+
 """
     fldmod(x, y)
 
@@ -273,12 +298,16 @@ function div(x::Integer, y::Integer, rnd::Union{typeof(RoundNearest),
     divrem(x, y, rnd)[1]
 end
 
+function div(x::Integer, y::Integer, ::typeof(RoundFromZero))
+    signbit(x) == signbit(y) ? div(x, y, RoundUp) : div(x, y, RoundDown)
+end
+
 # For bootstrapping purposes, we define div for integers directly. Provide the
 # generic signature also
 div(a::T, b::T, ::typeof(RoundToZero)) where {T<:Union{BitSigned, BitUnsigned64}} = div(a, b)
 div(a::Bool, b::Bool, r::RoundingMode) = div(a, b)
 # Prevent ambiguities
-for rm in (RoundUp, RoundDown, RoundToZero)
+for rm in (RoundUp, RoundDown, RoundToZero, RoundFromZero)
     @eval div(a::Bool, b::Bool, r::$(typeof(rm))) = div(a, b)
 end
 function div(x::Bool, y::Bool, rnd::Union{typeof(RoundNearest),
