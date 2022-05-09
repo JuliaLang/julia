@@ -435,6 +435,9 @@ end
         @test all(x -> x == "12", svec)
         @test svec isa Vector{AbstractString}
     end
+    # test startswith and endswith for AbstractString
+    @test endswith(GenericString("abcd"), GenericString("cd"))
+    @test startswith(GenericString("abcd"), GenericString("ab"))
 end
 
 @testset "issue #10307" begin
