@@ -782,4 +782,4 @@ Boolean properties:
     * 0x01 << 3 = this method is guaranteed to terminate (`:terminates_globally`)
     * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
 
-    See [`Base.@assume_effects`](@ref) for more details.
+    See the documentation of `Base.@assume_effects` for more details.
