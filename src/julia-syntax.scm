@@ -3254,6 +3254,11 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
+           ;; calls to functions with keyword args go through `kwfunc` first
+           (if (and (length= e 3) (equal? (cadr e) '(core kwfunc)))
+               (let ((vi2 (get tab (caddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                      (cdr e))))
         ((decl)

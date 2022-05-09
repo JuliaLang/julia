@@ -3274,3 +3274,7 @@ end
 # issue 44723
 demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
 @test demo44723()() == 1
+
+# issue #45162
+f45162(f) = f(x=1)
+@test first(methods(f45162)).called != 0
