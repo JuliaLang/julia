@@ -274,16 +274,22 @@ end
 end
 
 # findmin/findmax function arguments: output type inference
-A = ["1" "22"; "333" "4444"]
-for (tup, rval, rind) in [((1,), [1 2], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
-                          ((2,), reshape([1, 3], 2, 1), reshape([CartesianIndex(1, 1), CartesianIndex(2, 1)], 2, 1)),
-                          ((1,2), fill(1,1,1), fill(CartesianIndex(1,1),1,1))]
-    @test (rval, rind) == findmin(length, A, dims=tup)
-end
-for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
-                          ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
-                          ((1,2), fill(4,1,1), fill(CartesianIndex(2,2),1,1))]
-    @test (rval, rind) == findmax(length, A, dims=tup)
+@testset "findmin/findmax output type inference" begin
+    A = ["1" "22"; "333" "4444"]
+    for (tup, rval, rind) in [((1,), [1 2], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
+                              ((2,), reshape([1, 3], 2, 1), reshape([CartesianIndex(1, 1), CartesianIndex(2, 1)], 2, 1)),
+                              ((1,2), fill(1,1,1), fill(CartesianIndex(1,1),1,1))]
+        rval′, rind′ = findmin(length, A, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval′) <: Array{Int}
+    end
+    for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
+                              ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
+                              ((1,2), fill(4,1,1), fill(CartesianIndex(2,2),1,1))]
+        rval′, rind′ = findmax(length, A, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) <: Array{Int}
+    end
 end
 
 
