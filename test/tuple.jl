@@ -241,6 +241,7 @@ end
     foo(x, y) = x + y
     foo(x, y, z) = x + y + z
     longtuple = ntuple(identity, 20)
+    vlongtuple = ntuple(identity, 33)
 
     @testset "1 argument" begin
         @test map(foo, ()) === ()
@@ -248,6 +249,7 @@ end
         @test map(foo, (1,2)) === (2,4)
         @test map(foo, (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple) === ntuple(i->2i,33)
     end
 
     @testset "2 arguments" begin
@@ -256,6 +258,7 @@ end
         @test map(foo, (1,2), (1,2)) === (2,4)
         @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple, vlongtuple) === ntuple(i->2i,33)
         @test_throws BoundsError map(foo, (), (1,))
         @test_throws BoundsError map(foo, (1,), ())
     end
@@ -266,13 +269,14 @@ end
         @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
         @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, vlongtuple, vlongtuple, vlongtuple) === ntuple(i->3i,33)
         @test_throws BoundsError map(foo, (), (1,), (1,))
         @test_throws BoundsError map(foo, (1,), (1,), ())
     end
 end
 
 @testset "foreach" begin
-    longtuple = ntuple(identity, 20)
+    longtuple = ntuple(identity, 33)
 
     @testset "1 argument" begin
         foo(x) = push!(a, x)
@@ -351,8 +355,8 @@ end
     @test hash((1,)) === hash(1, Base.tuplehash_seed)
     @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
 
-    # Test Any16 methods
-    t = ntuple(identity, 16)
+    # Test Any32 methods
+    t = ntuple(identity, 32)
     @test isequal((t...,1,2,3), (t...,1,2,3))
     @test !isequal((t...,1,2,3), (t...,1,2,4))
     @test !isequal((t...,1,2,3), (t...,1,2))
@@ -371,7 +375,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,(),UInt(0)])
+    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
 end
 
 @testset "functions" begin
