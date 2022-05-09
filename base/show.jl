@@ -73,13 +73,12 @@ function iterate(I::IgnoreAnsiIterator, (i, m_st)=(1, iterate(I.captures)))
     return (i_prev => c), (i, m_st)
 end
 
-function _truncate_at_width_or_chars(io::IO, str, width, chars="", truncmark="…")
+function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
     truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
     wid = truncidx = lastidx = 0
-    color = get(io, :color, false) && match(ansi_regex, str) !== nothing
-    color && (truncmark = "\e[0m" * truncmark)
-    I = color ? IgnoreAnsiIterator(str) : pairs(str)
+    ignore_ansi &= match(ansi_regex, str) !== nothing
+    I = ignore_ansi ? IgnoreAnsiIterator(str) : pairs(str)
     for (_lastidx, c) in I
         lastidx = _lastidx
         wid += textwidth(c)
@@ -122,7 +121,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 
         if limit
             str = sprint(show, v, context=io, sizehint=0)
-            str = _truncate_at_width_or_chars(io, str, cols, "\r\n")
+            str = _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n")
             print(io, str)
         else
             show(io, v)
@@ -180,7 +179,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         end
 
         if limit
-            key = rpad(_truncate_at_width_or_chars(recur_io, ks[i], keylen, "\r\n"), keylen)
+            key = rpad(_truncate_at_width_or_chars(get(recur_io, :color, false), ks[i], keylen, "\r\n"), keylen)
         else
             key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
@@ -188,7 +187,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         print(io, " => ")
 
         if limit
-            val = _truncate_at_width_or_chars(recur_io, vs[i], cols - keylen, "\r\n")
+            val = _truncate_at_width_or_chars(get(recur_io, :color, false), vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
             show(recur_io_v, v)
@@ -232,7 +231,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
 
         if limit
             str = sprint(show, v, context=recur_io, sizehint=0)
-            print(io, _truncate_at_width_or_chars(io, str, cols, "\r\n"))
+            print(io, _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n"))
         else
             show(recur_io, v)
         end
