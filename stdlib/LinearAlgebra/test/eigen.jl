@@ -3,7 +3,7 @@
 module TestEigen
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
+using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted, UtiAUi!
 
 n = 10
 
@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(12343219)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -73,6 +73,31 @@ aimg  = randn(n,n)/2
             d,v = eigen(asym_sg, a_sg'a_sg)
             @test d == f.values
             @test v == f.vectors
+
+            # solver for in-place U' \ A / U (#14896)
+            if !(eltya <: Integer)
+                for atyp in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
+                    for utyp in (UpperTriangular, Diagonal)
+                        A = atyp(asym_sg)
+                        U = utyp(a_sg'a_sg)
+                        @test UtiAUi!(copy(A), U) ≈ U' \ A / U
+                    end
+                end
+            end
+
+            # matrices of different types (#14896)
+            if eltya <: Real
+                fs = eigen(Symmetric(asym_sg), a_sg'a_sg)
+                @test fs.values ≈ f.values
+                @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
+                gs = eigen(Symmetric(asym_sg), Diagonal(a_sg'a_sg))
+                @test Symmetric(asym_sg)*gs.vectors ≈ (Diagonal(a_sg'a_sg)*gs.vectors) * Diagonal(gs.values)
+            end
+            fh = eigen(Hermitian(asym_sg), a_sg'a_sg)
+            @test fh.values ≈ f.values
+            @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
+            gh = eigen(Hermitian(asym_sg), Diagonal(a_sg'a_sg))
+            @test Hermitian(asym_sg)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
         end
         @testset "Non-symmetric generalized eigenproblem" begin
             if isa(a, Array)
@@ -82,14 +107,15 @@ aimg  = randn(n,n)/2
                 a1_nsg = view(a, 1:n1, 1:n1)
                 a2_nsg = view(a, n1+1:n2, n1+1:n2)
             end
-            f = eigen(a1_nsg, a2_nsg)
+            sortfunc = x -> real(x) + imag(x)
+            f = eigen(a1_nsg, a2_nsg; sortby = sortfunc)
             @test a1_nsg*f.vectors ≈ (a2_nsg*f.vectors) * Diagonal(f.values)
-            @test f.values ≈ eigvals(a1_nsg, a2_nsg)
-            @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg)) atol=50000ε
-            @test eigvecs(a1_nsg, a2_nsg) == f.vectors
+            @test f.values ≈ eigvals(a1_nsg, a2_nsg; sortby = sortfunc)
+            @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg, sortby = sortfunc)) atol=50000ε
+            @test eigvecs(a1_nsg, a2_nsg; sortby = sortfunc) == f.vectors
             @test_throws ErrorException f.Z
 
-            d,v = eigen(a1_nsg, a2_nsg)
+            d,v = eigen(a1_nsg, a2_nsg; sortby = sortfunc)
             @test d == f.values
             @test v == f.vectors
         end
@@ -101,8 +127,12 @@ end
         @test_throws(ArgumentError, eigen(fill(eltya, 1, 1)))
         @test_throws(ArgumentError, eigen(fill(eltya, 2, 2)))
         test_matrix = rand(typeof(eltya),3,3)
-        test_matrix[2,2] = eltya
+        test_matrix[1,3] = eltya
         @test_throws(ArgumentError, eigen(test_matrix))
+        @test_throws(ArgumentError, eigen(Symmetric(test_matrix)))
+        @test_throws(ArgumentError, eigen(Hermitian(test_matrix)))
+        @test eigen(Symmetric(test_matrix, :L)) isa Eigen
+        @test eigen(Hermitian(test_matrix, :L)) isa Eigen
     end
 end
 
@@ -133,6 +163,7 @@ end
 end
 
 @testset "eigen of an Adjoint" begin
+    Random.seed!(4)
     A = randn(3,3)
     @test eigvals(A') == eigvals(copy(A'))
     @test eigen(A')   == eigen(copy(A'))
@@ -140,5 +171,37 @@ end
     @test eigmax(A') == eigmax(copy(A'))
 end
 
+@testset "equality of eigen factorizations" begin
+    A = randn(3, 3)
+    @test eigen(A) == eigen(A)
+    @test hash(eigen(A)) == hash(eigen(A))
+    @test isequal(eigen(A), eigen(A))
+end
+
+@testset "Float16" begin
+    A = Float16[4. 12. -16.; 12. 37. -43.; -16. -43. 98.]
+    B = eigen(A)
+    B32 = eigen(Float32.(A))
+    C = Float16[3 -2; 4 -1]
+    D = eigen(C)
+    D32 = eigen(Float32.(C))
+    F = eigen(complex(C))
+    F32 = eigen(complex(Float32.(C)))
+    @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}}
+    @test B.values isa Vector{Float16}
+    @test B.vectors isa Matrix{Float16}
+    @test B.values ≈ B32.values
+    @test B.vectors ≈ B32.vectors
+    @test D isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}}
+    @test D.values isa Vector{ComplexF16}
+    @test D.vectors isa Matrix{ComplexF16}
+    @test D.values ≈ D32.values
+    @test D.vectors ≈ D32.vectors
+    @test F isa Eigen{ComplexF16, ComplexF16, Matrix{ComplexF16}, Vector{ComplexF16}}
+    @test F.values isa Vector{ComplexF16}
+    @test F.vectors isa Matrix{ComplexF16}
+    @test F.values ≈ F32.values
+    @test F.vectors ≈ F32.vectors
+end
 
 end # module TestEigen

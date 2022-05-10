@@ -65,8 +65,6 @@ format.
 ```jldoctest
 julia> using TOML
 
-julia> fname = tempname();
-
 julia> data = Dict(
           "names" => ["Julia", "Julio"],
           "age" => [10, 20],
@@ -75,6 +73,17 @@ julia> data = Dict(
 julia> TOML.print(data)
 names = ["Julia", "Julio"]
 age = [10, 20]
+
+julia> fname = tempname();
+
+julia> open(fname, "w") do io
+           TOML.print(io, data)
+       end
+
+julia> TOML.parsefile(fname)
+Dict{String, Any} with 2 entries:
+  "names" => ["Julia", "Julio"]
+  "age"   => [10, 20]
 ```
 
 Keys can be sorted according to some value

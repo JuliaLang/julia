@@ -34,11 +34,21 @@ for kws in ((charset=:ascii,),
     TerminalMenus.printmenu(buf, radio_menu, 2; init=true)
     @test startswith(String(take!(buf)), string("\e[2K   1\r\n\e[2K $c 2"))
 end
+@testset begin "cursor page"
+    radio_menu = RadioMenu(string.(1:20); charset=:ascii)
+    buf = IOBuffer()
+    TerminalMenus.printmenu(buf, radio_menu, 19; init=true)
+    @test String(take!(buf)) == "\e[2K^  11\r\n\e[2K   12\r\n\e[2K   13\r\n\e[2K   14\r\n\e[2K   15\r\n\e[2K   16\r\n\e[2K   17\r\n\e[2K   18\r\n\e[2K > 19\r\n\e[2K   20"
+    TerminalMenus.printmenu(buf, radio_menu, 8; init=true)
+    @test String(take!(buf)) == "\e[2K^  4\r\n\e[2K   5\r\n\e[2K   6\r\n\e[2K   7\r\n\e[2K > 8\r\n\e[2K   9\r\n\e[2K   10\r\n\e[2K   11\r\n\e[2K   12\r\n\e[2Kv  13"
+end
 
 # Test using stdin
 radio_menu = RadioMenu(string.(1:10); charset=:ascii)
-@test simulate_input(3, radio_menu, :down, :down, :enter)
+@test simulate_input(radio_menu, :down, :down, :enter) == 3
 radio_menu = RadioMenu(["single option"], charset=:ascii)
-@test simulate_input(1, radio_menu, :up, :up, :down, :up, :enter)
+@test simulate_input(radio_menu, :up, :up, :down, :up, :enter) == 1
 radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
-@test simulate_input(3, radio_menu, :down, :down, :down, :down, :enter)
+@test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3
+radio_menu = RadioMenu(["apple", "banana", "cherry"]; keybindings=collect('a':'c'), charset=:ascii)
+@test simulate_input(radio_menu, 'b') == 2

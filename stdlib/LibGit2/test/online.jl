@@ -90,4 +90,12 @@ mktempdir() do dir
     end
 end
 
+# needs to be run in separate process so it can re-initialize libgit2
+# with a useless self-signed certificate authority root certificate
+file = joinpath(@__DIR__, "bad_ca_roots.jl")
+cmd = `$(Base.julia_cmd()) --depwarn=no --startup-file=no $file`
+if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
+    error("bad CA roots tests failed, cmd : $cmd")
+end
+
 end # module

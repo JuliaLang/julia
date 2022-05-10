@@ -16,7 +16,7 @@ about strings:
   * Each `AbstractChar` in a string is encoded by one or more code units
   * Only the index of the first code unit of an `AbstractChar` is a valid index
   * The encoding of an `AbstractChar` is independent of what precedes or follows it
-  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
+  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
 
 [self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
 
@@ -35,8 +35,8 @@ model allows index arithmetic to work with out-of- bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 
-See also: [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref)
+See also [`codeunit`](@ref), [`ncodeunits`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref).
 """
 AbstractString
 
@@ -46,8 +46,8 @@ AbstractString
     ncodeunits(s::AbstractString) -> Int
 
 Return the number of code units in a string. Indices that are in bounds to
-access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indices
-are valid – they may not be the start of a character, but they will return a
+access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indices
+are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
 # Examples
@@ -62,8 +62,8 @@ julia> ncodeunits('∫'), ncodeunits('e'), ncodeunits('ˣ')
 (3, 1, 2)
 ```
 
-See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
-[`length`](@ref), [`lastindex`](@ref)
+See also [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
+[`length`](@ref), [`lastindex`](@ref).
 """
 ncodeunits(s::AbstractString)
 
@@ -77,7 +77,7 @@ limited to these three types, but it's hard to think of widely used string
 encodings that don't use one of these units. `codeunit(s)` is the same as
 `typeof(codeunit(s,1))` when `s` is a non-empty string.
 
-See also: [`ncodeunits`](@ref)
+See also [`ncodeunits`](@ref).
 """
 codeunit(s::AbstractString)
 
@@ -102,9 +102,9 @@ julia> typeof(a)
 UInt8
 ```
 
-See also: [`ncodeunits`](@ref), [`checkbounds`](@ref)
+See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
@@ -118,8 +118,8 @@ In order for `isvalid(s, i)` to be an O(1) function, the encoding of `s` must be
 [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code). This
 is a basic assumption of Julia's generic string support.
 
-See also: [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
-[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref)
+See also [`getindex`](@ref), [`iterate`](@ref), [`thisind`](@ref),
+[`nextind`](@ref), [`prevind`](@ref), [`length`](@ref).
 
 # Examples
 ```jldoctest
@@ -140,7 +140,7 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds isvalid(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
@@ -152,9 +152,9 @@ be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
 then a bounds error is raised. The `iterate` function, as part of the iteration
 protocol may assume that `i` is the start of a character in `s`.
 
-See also: [`getindex`](@ref), [`checkbounds`](@ref)
+See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds iterate(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
 
 ## basic generic definitions ##
@@ -183,7 +183,7 @@ isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
-    @inbounds return isvalid(s, i) ? iterate(s, i)[1] : string_index_err(s, i)
+    @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
 end
 
 getindex(s::AbstractString, i::Colon) = s
@@ -375,8 +375,8 @@ value `0`.
     the string because it counts the value on the fly. This is in contrast to
     the method for arrays, which is a constant-time operation.
 
-See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
-[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
+See also [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
+[`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref).
 
 # Examples
 ```jldoctest
@@ -389,7 +389,7 @@ length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
+        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -438,8 +438,8 @@ thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s)::Int + 1
     i == z && return i
-    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
+    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i
@@ -498,7 +498,7 @@ function prevind(s::AbstractString, i::Int, n::Int)
     z = ncodeunits(s) + 1
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && 1 < i
+    while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
     end
     return i - n
@@ -557,7 +557,7 @@ function nextind(s::AbstractString, i::Int, n::Int)
     z = ncodeunits(s)
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && i < z
+    while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)
     end
     return i + n
@@ -595,6 +595,15 @@ true
 
 julia> isascii("αβγ")
 false
+```
+For example, `isascii` can be used as a predicate function for [`filter`](@ref) or [`replace`](@ref)
+to remove or replace non-ASCII characters, respectively:
+```jldoctest
+julia> filter(isascii, "abcdeγfgh") # discard non-ASCII chars
+"abcdefgh"
+
+julia> replace("abcdeγfgh", !isascii=>' ') # replace non-ASCII chars with spaces
+"abcde fgh"
 ```
 """
 isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
@@ -676,13 +685,16 @@ cases where `v` contains non-ASCII characters.)
 
 # Examples
 ```jldoctest
-julia> r = reverse("Julia")
-"ailuJ"
+julia> s = "Julia🚀"
+"Julia🚀"
 
-julia> for i in 1:length(r)
-           print(r[reverseind("Julia", i)])
+julia> r = reverse(s)
+"🚀ailuJ"
+
+julia> for i in eachindex(s)
+           print(r[reverseind(r, i)])
        end
-Julia
+Julia🚀
 ```
 """
 reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
@@ -692,7 +704,7 @@ reverseind(s::AbstractString, i::Integer) = thisind(s, ncodeunits(s)-i+1)
 
 Repeat a string `r` times. This can be written as `s^r`.
 
-See also: [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer))
+See also [`^`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).
 
 # Examples
 ```jldoctest
@@ -707,7 +719,7 @@ repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 
-See also: [`repeat`](@ref)
+See also [`repeat`](@ref).
 
 # Examples
 ```jldoctest
@@ -737,7 +749,7 @@ end
 length(s::CodeUnits) = ncodeunits(s.s)
 sizeof(s::CodeUnits{T}) where {T} = ncodeunits(s.s) * sizeof(T)
 size(s::CodeUnits) = (length(s),)
-elsize(s::CodeUnits{T}) where {T} = sizeof(T)
+elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 @inline iterate(s::CodeUnits, i=1) = (i % UInt) - 1 < length(s) ? (@inbounds s[i], i + 1) : nothing
@@ -768,3 +780,16 @@ julia> codeunits("Juλia")
 ```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
+
+function _split_rest(s::AbstractString, n::Int)
+    lastind = lastindex(s)
+    i = try
+        prevind(s, lastind, n)
+    catch e
+        e isa BoundsError || rethrow()
+        _check_length_split_rest(length(s), n)
+    end
+    last_n = SubString(s, nextind(s, i), lastind)
+    front = s[begin:i]
+    return front, last_n
+end

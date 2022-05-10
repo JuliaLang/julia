@@ -24,9 +24,12 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	mkdir -p $(dir $@) && \
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
 	# Force-enable MD4
-	sed "s|//#define MBEDTLS_MD4_C|#define MBEDTLS_MD4_C|" -i $(SRCCACHE)/$(MBEDTLS_SRC)/include/mbedtls/config.h
+	sed -i.org "s|//#define MBEDTLS_MD4_C|#define MBEDTLS_MD4_C|" $(SRCCACHE)/$(MBEDTLS_SRC)/include/mbedtls/config.h
 	touch -c $(SRCCACHE)/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
+
+checksum-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
+	$(JLCHECKSUM) $<
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
@@ -61,19 +64,19 @@ $(eval $(call staged-install, \
 	MBEDTLS_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedtls.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedx509.0.dylib @rpath/libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.3.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.3.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedx509.1.dylib @rpath/libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.7.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.7.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedcrypto.$$(SHLIB_EXT)))
 
 
 clean-mbedtls:
-	-rm $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
+	-rm -f $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
 		$(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
+	rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
 		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 
@@ -87,9 +90,6 @@ fastcheck-mbedtls: #check-mbedtls
 check-mbedtls: $(BUILDDIR)/$(MBEDTLS_SRC)/build-checked
 
 else # USE_BINARYBUILDER_MBEDTLS
-
-MBEDTLS_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/MbedTLS_jll.jl/releases/download/MbedTLS-v$(MBEDTLS_VER)+$(MBEDTLS_BB_REL)
-MBEDTLS_BB_NAME := MbedTLS.v$(MBEDTLS_VER)
 
 $(eval $(call bb-install,mbedtls,MBEDTLS,false))
 
