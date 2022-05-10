@@ -184,7 +184,7 @@ end
 
 # issue 28618
 let bt, found = false
-    @info ""
+    @debug ""
     bt = backtrace()
     for frame in map(lookup, bt)
         if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
@@ -222,6 +222,19 @@ let trace = try
     @test trace[1].func == Symbol("top-level scope")
     @test trace[1].file == :a_filename
     @test trace[1].line == 2
+end
+
+# issue #45171
+linenum = @__LINE__; function f45171(;kwarg = true)
+    1
+    error()
+end
+let trace = try
+        f45171()
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[3].line == linenum
 end
 
 # issue #29695 (see also test for #28442)

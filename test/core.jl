@@ -2,12 +2,110 @@
 
 # test core language features
 
-using Random, SparseArrays, InteractiveUtils
+using Random, InteractiveUtils
 
 const Bottom = Union{}
 
 # For curmod_*
 include("testenv.jl")
+
+## tests that `const` field declarations
+
+# sanity tests that our built-in types are marked correctly for const fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:def]),
+        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
+        (Core.MethodTable, [:module]),
+        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapLevel, []),
+        (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (DataType, [:name, :super, :parameters, :instance, :hash]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    setfield!(Int, :name, Int.name))
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    (Base.Experimental.@force_compile; setfield!(Int, :name, Int.name)))
+
+@test_throws(ErrorException("invalid field attribute const for immutable struct"),
+    @eval struct ABCDconst
+        const abcd
+    end)
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+    mutable struct ABCDconst
+        const a
+        const b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+    mutable struct ABCDconst
+        a
+        b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+let abcd = ABCDconst(1, 2, 3, 4)
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+# repeat with the compiler
+let abcd = ABCDconst(1, 2, 3, 4)
+    Base.Experimental.@force_compile
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+
+# test `===` handling null pointer in struct #44712
+struct N44712
+    a::Some{Any}
+    b::Int
+    N44712() = new()
+end
+let a  = Int[0, 1], b = Int[0, 2]
+    GC.@preserve a b begin
+        @test unsafe_load(Ptr{N44712}(pointer(a))) !== unsafe_load(Ptr{N44712}(pointer(b)))
+    end
+end
+
+# another possible issue in #44712
+@test (("", 0),) !== (("", 1),)
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
@@ -239,6 +337,15 @@ end
 #struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
 @test_broken @isdefined S22624
 
+# issue #42297
+mutable struct Node42297{T, V}
+    value::V
+    next::Union{Node42297{T, T}, Node42297{T, Val{T}}, Nothing}
+    Node42297{T}(value) where {T} = new{T, typeof(value)}(value, nothing)
+end
+@test fieldtype(Node42297{Int,Val{Int}}, 1) === Val{Int}
+@test fieldtype(Node42297{Int,Int}, 1) === Int
+
 # issue #3890
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
@@ -320,9 +427,6 @@ function typeassert_instead_of_decl()
     return 0
 end
 @test_throws TypeError typeassert_instead_of_decl()
-
-# type declarations on globals not implemented yet
-@test_throws ErrorException eval(Meta.parse("global x20327::Int"))
 
 y20327 = 1
 @test_throws TypeError y20327::Float64
@@ -1442,6 +1546,12 @@ let
     i2169(a::Array{T}) where {T} = typemin(T)
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
+
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
 
 # issue #2365
 mutable struct B2365{T}
@@ -3518,9 +3628,10 @@ end
 @test_throws TypeError Union{Int, 1}
 
 @test_throws ErrorException Vararg{Any,-2}
-@test_throws ErrorException Vararg{Int, N} where N<:T where T
-@test_throws ErrorException Vararg{Int, N} where N<:Integer
-@test_throws ErrorException Vararg{Int, N} where N>:Integer
+# Disabled due to #39698, see src/jltypes.c
+#@test_throws ErrorException Vararg{Int, N} where N<:T where T
+#@test_throws ErrorException Vararg{Int, N} where N<:Integer
+#@test_throws ErrorException Vararg{Int, N} where N>:Integer
 
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
@@ -3574,7 +3685,7 @@ f12092(x::Int, y::Int...) = 2
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
 f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
 f12063(args...) = 2
-g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
+g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
@@ -4244,6 +4355,30 @@ let gc_enabled13995 = GC.enable(false)
     GC.enable(false)
     @test finalized13995 == [true, true, true, true]
     GC.enable(gc_enabled13995)
+end
+
+# Ensure an independent GC frame
+@noinline outlined(f) = f()
+
+@testset "finalizers must not change the sticky flag" begin
+    GC.enable(false)
+    try
+        outlined() do
+            local obj = Ref(0)
+            finalizer(obj) do _
+                @async nothing
+            end
+            Base.donotdelete(obj)
+        end
+        task = Threads.@spawn begin
+            GC.enable(true)
+            GC.gc()
+        end
+        wait(task)
+        @test !task.sticky
+    finally
+        GC.enable(true)
+    end
 end
 
 # issue #15283
@@ -7242,6 +7377,35 @@ end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
 
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
+
+# issue #44614
+struct T44614_1{T}
+    m::T
+end
+struct T44614_2{L}
+    tuple::NTuple{3, Int64}
+    T44614_2{L}(t::NTuple{3, Int64}) where {L} = new{sum(t)}(t)
+end
+struct T44614_3{L, N}
+    a::Tuple{T44614_2{L}}
+    param::NTuple{N, T44614_1}
+    T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
+end
+@test sizeof((T44614_2{L} where L).body) == 24
+let T = T44614_3{L,2} where L
+    # these values are computable, but we currently don't know how to compute them properly
+    ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
+    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T)
+    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test fieldoffset(T{1}, 2) == 24
+end
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
@@ -7615,4 +7779,24 @@ end
     a, b... = x
     @test a == 1
     @test b == Core.svec(2, 3)
+end
+
+@testset "setproperty! on modules" begin
+    m = Module()
+    @eval m global x::Int
+
+    setglobal!(m, :x, 1)
+    @test m.x === 1
+    setglobal!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+
+    m.x = 1
+    @test m.x === 1
+    setproperty!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
+    m.x = 4.
+    @test m.x === 4
 end

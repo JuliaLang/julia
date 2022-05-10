@@ -239,14 +239,14 @@ objects are printed in the Julia REPL.)
 struct TextDisplay <: AbstractDisplay
     io::IO
 end
-display(d::TextDisplay, M::MIME"text/plain", @nospecialize x) = show(d.io, M, x)
+display(d::TextDisplay, M::MIME"text/plain", @nospecialize x) = (show(d.io, M, x); println(d.io))
 display(d::TextDisplay, @nospecialize x) = display(d, MIME"text/plain"(), x)
 
 # if you explicitly call display("text/foo", x), it should work on a TextDisplay:
 displayable(d::TextDisplay, M::MIME) = istextmime(M)
 function display(d::TextDisplay, M::MIME, @nospecialize x)
     displayable(d, M) || throw(MethodError(display, (d, M, x)))
-    show(d.io, M, x)
+    show(d.io, M, x); println(d.io)
 end
 
 import Base: close, flush
@@ -300,7 +300,7 @@ xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D,
     display(mime, x)
     display(d::AbstractDisplay, mime, x)
 
-AbstractDisplay `x` using the topmost applicable display in the display stack, typically using the
+Display `x` using the topmost applicable display in the display stack, typically using the
 richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.

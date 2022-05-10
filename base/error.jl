@@ -20,6 +20,8 @@
     throw(e)
 
 Throw an object as an exception.
+
+See also: [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
@@ -259,7 +261,7 @@ function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, eb
     state[1] < 1 && return nothing
     next_n = state[1]-1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
+    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (Libc.rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
 length(ebo::ExponentialBackOff) = ebo.n
