@@ -124,6 +124,7 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
     @test UUID(UInt128(uuid)) == uuid
+    @test UUID(uuid) === uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 

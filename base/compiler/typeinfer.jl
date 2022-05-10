@@ -670,20 +670,27 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     body = src.code::Array{Any,1}
     nexpr = length(body)
 
-    # replace GotoIfNot with its condition if the branch target is unreachable
-    for i = 1:nexpr
-        expr = body[i]
-        if isa(expr, GotoIfNot)
-            if !isa(states[expr.dest], VarTable)
-                body[i] = Expr(:call, GlobalRef(Core, :typeassert), expr.cond, GlobalRef(Core, :Bool))
+    # eliminate GotoIfNot if either of branch target is unreachable
+    if run_optimizer
+        for idx = 1:nexpr
+            stmt = body[idx]
+            if isa(stmt, GotoIfNot) && widenconst(argextype(stmt.cond, src, sv.sptypes)) === Bool
+                # replace live GotoIfNot with:
+                # - GotoNode if the fallthrough target is unreachable
+                # - no-op if the branch target is unreachable
+                if states[idx+1] === nothing
+                    body[idx] = GotoNode(stmt.dest)
+                elseif states[stmt.dest] === nothing
+                    body[idx] = nothing
+                end
             end
         end
     end
 
+    # dead code elimination for unreachable regions
     i = 1
     oldidx = 0
     changemap = fill(0, nexpr)
-
     while i <= nexpr
         oldidx += 1
         st_i = states[i]
@@ -718,7 +725,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         end
         i += 1
     end
-
     if run_optimizer
         renumber_ir_elements!(body, changemap)
     end
@@ -944,7 +950,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.slotflags = fill(IR_FLAG_NULL, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
+                tree.linetable = [LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true
