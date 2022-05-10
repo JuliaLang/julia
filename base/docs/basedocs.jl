@@ -807,9 +807,7 @@ iterating over a sequence of values.
 
 The iteration variable is always a new variable, even if a variable of the same name
 exists in the enclosing scope.  
-Use `outer` to reuse an existing local variable for iteration.
-
-See also [`outer`](@ref).
+Use [`outer`](@ref) to reuse an existing local variable for iteration.
 
 # Examples
 ```jldoctest
