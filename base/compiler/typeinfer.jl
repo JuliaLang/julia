@@ -581,15 +581,13 @@ function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
     # to compute a lower bound on the storage required
-    states = sv.stmt_types
     body = sv.src.code::Vector{Any}
     slottypes = sv.slottypes::Vector{Any}
     ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
     for i = 1:length(body)
         expr = body[i]
-        st_i = states[i]
         # find all reachable assignments to locals
-        if isa(st_i, VarTable) && isexpr(expr, :(=))
+        if was_reached(sv, i) && isexpr(expr, :(=))
             lhs = expr.args[1]
             if isa(lhs, SlotNumber)
                 vt = widenconst(ssavaluetypes[i])
@@ -629,9 +627,9 @@ function annotate_slot_load!(undefs::Vector{Bool}, vtypes::VarTable, sv::Inferen
         end
         # add type annotations where needed
         typ = widenconditional(ignorelimited(vt.typ))
-        if !(sv.slottypes[id] ⊑ typ)
-            return TypedSlot(id, typ)
-        end
+        # if !(sv.slottypes[id] ⊑ typ)
+        #     return TypedSlot(id, typ)
+        # end
         return x
     elseif isa(x, Expr)
         head = x.head
@@ -667,7 +665,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # annotate variables load types
     # remove dead code optimization
     # and compute which variables may be used undef
-    states = sv.stmt_types
     stmt_info = sv.stmt_info
     src = sv.src
     body = src.code::Vector{Any}
@@ -687,9 +684,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 # replace live GotoIfNot with:
                 # - GotoNode if the fallthrough target is unreachable
                 # - no-op if the branch target is unreachable
-                if states[idx+1] === nothing
+                if !was_reached(sv, idx+1)
                     body[idx] = GotoNode(stmt.dest)
-                elseif states[stmt.dest] === nothing
+                elseif !was_reached(sv, stmt.dest)
                     body[idx] = nothing
                 end
             end
@@ -702,18 +699,17 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     changemap = fill(0, nexpr)
     while i <= nexpr
         oldidx += 1
-        st_i = states[i]
         expr = body[i]
-        if isa(st_i, VarTable)
+        if was_reached(sv, oldidx)
             # introduce temporary TypedSlot for the later optimization passes
             # and also mark used-undef slots
+            st_i = sv.bb_vartables[block_for_inst(sv.cfg, oldidx)]
             body[i] = annotate_slot_load!(undefs, st_i, sv, expr)
         else # unreached statement (see issue #7836)
             if is_meta_expr(expr)
                 # keep any lexically scoped expressions
             elseif run_optimizer
                 deleteat!(body, i)
-                deleteat!(states, i)
                 deleteat!(ssavaluetypes, i)
                 deleteat!(codelocs, i)
                 deleteat!(stmt_info, i)
@@ -737,6 +733,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
             slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
         end
     end
+
     nothing
 end
 

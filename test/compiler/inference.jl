@@ -4134,6 +4134,11 @@ end |> !Core.Compiler.is_concrete_eval_eligible
     entry_to_be_invalidated('a')
 end
 
+# control flow backedge should taint `terminates`
+@test Base.infer_effects((Int,)) do n
+    for i = 1:n; end
+end |> !Core.Compiler.is_terminates
+
 # Nothrow for assignment to globals
 global glob_assign_int::Int = 0
 f_glob_assign_int() = global glob_assign_int += 1

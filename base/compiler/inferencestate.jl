@@ -88,17 +88,22 @@ mutable struct InferenceState
     sptypes::Vector{Any}
     slottypes::Vector{Any}
     src::CodeInfo
+    cfg::CFG
 
     #= intermediate states for local abstract interpretation =#
+    currbb::Int
     currpc::Int
-    ip::BitSetBoundedMinPrioritySet # current active instruction pointers
+    ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
+    was_reached::BitSet
     handler_at::Vector{Int} # current exception handler info
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
-    stmt_types::Vector{Union{Nothing, VarTable}}
+    # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
+    bb_vartables::Vector{VarTable}
+    pc_vartable::VarTable
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
 
-    #= interprocedural intermediate states for abstract interpretation =#
+    #= intermediate states for interprocedural abstract interpretation =#
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
@@ -125,36 +130,40 @@ mutable struct InferenceState
     interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult,
-        src::CodeInfo, cache::Symbol, interp::AbstractInterpreter)
+    function InferenceState(result::InferenceResult, src::CodeInfo, cache::Symbol,
+        interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_world_counter(interp)
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
         sptypes = sptypes_from_meth_instance(linfo)
-
         code = src.code::Vector{Any}
-        nstmts = length(code)
-        currpc = 1
-        ip = BitSetBoundedMinPrioritySet(nstmts)
-        handler_at = compute_trycatch(code, ip.elems)
-        push!(ip, 1)
+        cfg = compute_basic_blocks(code)
+
+        currbb = currpc = 1
+        ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
+        was_reached = BitSet()
+        handler_at = compute_trycatch(code, BitSet())
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        stmt_types = Union{Nothing, VarTable}[ nothing for i = 1:nstmts ]
+        nstmts = length(code)
         stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
         stmt_info = Any[ nothing for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
+        pc_vartable = VarTable(undef, nslots)
+        bb_vartable_proto = VarTable(undef, nslots)
         argtypes = result.argtypes
-        nargs = length(argtypes)
-        stmt_types[1] = stmt_type1 = VarTable(undef, nslots)
+        nargtypes = length(argtypes)
         for i in 1:nslots
-            argtyp = (i > nargs) ? Bottom : argtypes[i]
-            stmt_type1[i] = VarState(argtyp, i > nargs)
+            argtyp = (i > nargtypes) ? Bottom : argtypes[i]
+            pc_vartable[i] = VarState(argtyp, i > nargtypes)
+            bb_vartable_proto[i] = VarState(Bottom, i > nargtypes)
             slottypes[i] = argtyp
         end
+        bb_vartables = VarTable[i == 1 ? copy(pc_vartable) : copy(bb_vartable_proto)
+            for i = 1:length(cfg.blocks)]
 
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
@@ -183,8 +192,8 @@ mutable struct InferenceState
         cached = cache === :global
 
         frame = new(
-            linfo, world, mod, sptypes, slottypes, src,
-            currpc, ip, handler_at, ssavalue_uses, stmt_types, stmt_edges, stmt_info,
+            linfo, world, mod, sptypes, slottypes, src, cfg,
+            currbb, currpc, ip, was_reached, handler_at, ssavalue_uses, bb_vartables, pc_vartable, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
             params, restrict_abstract_call_sites, cached,
@@ -225,6 +234,8 @@ function any_inbounds(code::Vector{Any})
     end
     return false
 end
+
+was_reached((; was_reached)::InferenceState, pc::Int) = pc in was_reached
 
 function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:
@@ -422,7 +433,7 @@ end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
-function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceState)
+function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
     old = ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
@@ -431,14 +442,19 @@ function record_ssa_assign(ssa_id::Int, @nospecialize(new), frame::InferenceStat
         # guarantee convergence we need to use tmerge here to ensure that is true
         ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
         W = frame.ip
-        s = frame.stmt_types
         for r in frame.ssavalue_uses[ssa_id]
-            if s[r] !== nothing # s[r] === nothing => unreached statement
-                push!(W, r)
+            if was_reached(frame, r)
+                usebb = block_for_inst(frame.cfg, r)
+                # We're guaranteed to visit the statement if it's in the current
+                # basic block, since SSA values can only ever appear after their
+                # def.
+                if usebb != frame.currbb
+                    push!(W, usebb)
+                end
             end
         end
     end
-    nothing
+    return nothing
 end
 
 function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
