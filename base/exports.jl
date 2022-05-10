@@ -57,6 +57,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    LazyString,
     Matrix,
     MergeSort,
     Missing,
@@ -121,6 +122,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
@@ -385,6 +387,7 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
@@ -495,6 +498,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,
@@ -803,6 +807,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    Splat,
 
 # I/O and events
     close,
@@ -944,6 +949,7 @@ export
     run,
     setenv,
     addenv,
+    setcpuaffinity,
     success,
     withenv,
 
@@ -984,6 +990,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @lazy_str, # lazy string
 
     # documentation
     @text_str,

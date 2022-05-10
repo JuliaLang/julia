@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+using Libdl
 
 @testset "Operating system predicates" begin
     @test !Sys.isunix(:Windows)
@@ -53,6 +54,18 @@ if Sys.iswindows()
                      Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR, Base.LIBEXECDIR)
             @test !occursin("/", path)
             @test !occursin("\\\\", path)
+        end
+    end
+end
+
+if Sys.islinux() && Sys.which("readelf") !== nothing
+    @testset "stack is not marked as executable" begin
+        for f in intersect(dllist(),
+                           [readdir(joinpath(Sys.BINDIR, Base.LIBDIR), join=true);
+                            readdir(joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), join=true)])
+            for l in eachline(open(`readelf -l $f`))
+                @test !(contains(l, "GNU_STACK") && contains(l, 'E'))
+            end
         end
     end
 end

@@ -39,6 +39,7 @@ Base.Condition
 Base.Threads.Condition
 Base.Threads.Event
 Base.notify
+Base.reset(::Base.Threads.Event)
 
 Base.Semaphore
 Base.acquire
@@ -55,6 +56,7 @@ Base.ReentrantLock
 ## Channels
 
 ```@docs
+Base.AbstractChannel
 Base.Channel
 Base.Channel(::Function)
 Base.put!(::Channel, ::Any)

@@ -733,3 +733,7 @@ name, if desired `"libglib-2.0".g_uri_escape_string(...`
 macro ccall(expr)
     return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
 end
+
+macro ccall_effects(effects::UInt8, expr)
+    return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
+end

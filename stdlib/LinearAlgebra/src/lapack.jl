@@ -5,16 +5,9 @@ module LAPACK
 Interfaces to LAPACK subroutines.
 """ LAPACK
 
-const libblastrampoline = "libblastrampoline"
-
-# Legacy binding maintained for backwards-compatibility but new packages
-# should not look at this, instead preferring to parse the output
-# of BLAS.get_config()
-const liblapack = libblastrampoline
-
 using ..LinearAlgebra.BLAS: @blasfunc, chkuplo
 
-using ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
+using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
     SingularException, PosDefException, chkstride1, checksquare,triu, tril, dot
 
 using Base: iszero, require_one_based_indexing

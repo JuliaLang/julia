@@ -124,6 +124,15 @@ cd(@__DIR__) do
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
+    println("""
+        Running parallel tests with:
+          nworkers() = $(nworkers())
+          nthreads() = $(Threads.nthreads())
+          Sys.CPU_THREADS = $(Sys.CPU_THREADS)
+          Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
+          Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+        """)
+
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
     workerheader = "(Worker)"
@@ -207,7 +216,7 @@ cd(@__DIR__) do
 
     local stdin_monitor
     all_tasks = Task[]
-    o_ts_duration = nothing
+    o_ts_duration = 0.0
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
