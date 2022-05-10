@@ -360,7 +360,7 @@ julia> write(filename, "Hello world!");
 julia> isfile(filename)
 true
 
-julia> rm("test_file.txt")
+julia> rm(filename)
                                                                                     
 julia> isfile(filename)
 false
