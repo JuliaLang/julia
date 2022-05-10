@@ -1451,7 +1451,7 @@ fakehistory_2 = """
 \txyz = 2
 # time: 2014-06-30 99:99:99 EDT
 # mode: extended
-user imported custom mode
+\tuser imported custom mode
 """
 
 # Test various history related issues
