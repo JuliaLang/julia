@@ -536,7 +536,7 @@ However, while the type layout must be known statically to compute the intended 
 the static parameters of the function are considered to be part of this static environment.
 The static parameters of the function may be used as type parameters in the call signature,
 as long as they don't affect the layout of the type.
-For example, `f(x::T) where {T} = @ccall valid(x::Ptr{T}):: Ptr{T}`
+For example, `f(x::T) where {T} = @ccall valid(x::Ptr{T})::Ptr{T}`
 is valid, since `Ptr` is always a word-size primitive type.
 But, `g(x::T) where {T} = @ccall notvalid(x::T)::T`
 is not valid, since the type layout of `T` is not known statically.
