@@ -63,7 +63,7 @@ inline AttributeSet getRetAttrs(const AttributeList &Attrs)
 #endif
 }
 
-static Instruction *replaceIntrinsicWith(IntrinsicInst *call, Type *RetType, ArrayRef<Value*> args)
+static Instruction *replaceIntrinsicWith(IntrinsicInst *call, Type *RetTy, ArrayRef<Value*> args)
 {
     Intrinsic::ID ID = call->getIntrinsicID();
     assert(ID);
@@ -73,7 +73,7 @@ static Instruction *replaceIntrinsicWith(IntrinsicInst *call, Type *RetType, Arr
     SmallVector<Type*, 8> argTys(nargs);
     for (unsigned i = 0; i < nargs; i++)
         argTys[i] = args[i]->getType();
-    auto newfType = FunctionType::get(RetType, argTys, oldfType->isVarArg());
+    auto newfType = FunctionType::get(RetTy, argTys, oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic
     // and compute the new name mangling schema
@@ -104,6 +104,8 @@ static Instruction *replaceIntrinsicWith(IntrinsicInst *call, Type *RetType, Arr
 
 static Value* CreateFPCast(Instruction::CastOps opcode, Value *V, Type *DestTy, IRBuilder<> &builder)
 {
+    Type *SrcTy = V->getType();
+    Type *RetTy = DestTy;
     if (auto *VC = dyn_cast<Constant>(V)) {
         // The input IR often has things of the form
         //   fcmp olt half %0, 0xH7C00
@@ -113,10 +115,22 @@ static Value* CreateFPCast(Instruction::CastOps opcode, Value *V, Type *DestTy, 
         if (VC)
             return VC;
     }
+    assert(SrcTy->isVectorTy() == DestTy->isVectorTy());
+    if (SrcTy->isVectorTy()) {
+        unsigned NumElems = cast<FixedVectorType>(SrcTy)->getNumElements();
+        assert(cast<FixedVectorType>(DestTy)->getNumElements() == NumElems && "Mismatched cast");
+        Value *NewV = UndefValue::get(DestTy);
+        RetTy = RetTy->getScalarType();
+        for (unsigned i = 0; i < NumElems; ++i) {
+            Value *I = builder.getInt32(i);
+            Value *Vi = builder.CreateExtractElement(V, I);
+            Vi = CreateFPCast(opcode, Vi, RetTy, builder);
+            NewV = builder.CreateInsertElement(NewV, Vi, I);
+        }
+        return NewV;
+    }
     auto &M = *builder.GetInsertBlock()->getModule();
     auto &ctx = M.getContext();
-    Type *SrcTy = V->getType();
-    Type *RetTy = DestTy;
     // Pick the Function to call in the Julia runtime
     StringRef Name;
     switch (opcode) {
@@ -147,10 +161,21 @@ static Value* CreateFPCast(Instruction::CastOps opcode, Value *V, Type *DestTy, 
         SrcTy = Type::getFloatTy(ctx);
         break;
     default:
+        errs() << Instruction::getOpcodeName(opcode) << ' ';
+        V->getType()->print(errs());
+        errs() << " to ";
+        DestTy->print(errs());
+        errs() << " is an ";
         llvm_unreachable("invalid cast");
     }
-    if (Name.empty())
+    if (Name.empty()) {
+        errs() << Instruction::getOpcodeName(opcode) << ' ';
+        V->getType()->print(errs());
+        errs() << " to ";
+        DestTy->print(errs());
+        errs() << " is an ";
         llvm_unreachable("illegal cast");
+    }
     // Coerce the source to the required size and type
     auto T_int16 = Type::getInt16Ty(ctx);
     if (SrcTy->isHalfTy())
@@ -188,10 +213,10 @@ static bool demoteFloat16(Function &F)
     for (auto &BB : F) {
         for (auto &I : BB) {
             // extend Float16 operands to Float32
-            bool Float16 = I.getType()->isHalfTy();
+            bool Float16 = I.getType()->getScalarType()->isHalfTy();
             for (size_t i = 0; !Float16 && i < I.getNumOperands(); i++) {
                 Value *Op = I.getOperand(i);
-                if (Op->getType()->isHalfTy())
+                if (Op->getType()->getScalarType()->isHalfTy())
                     Float16 = true;
             }
             if (!Float16)
@@ -232,12 +257,13 @@ static bool demoteFloat16(Function &F)
             IRBuilder<> builder(&I);
 
             // extend Float16 operands to Float32
+            // XXX: Calls to llvm.fma.f16 may need to go to f64 to be correct?
             SmallVector<Value *, 2> Operands(I.getNumOperands());
             for (size_t i = 0; i < I.getNumOperands(); i++) {
                 Value *Op = I.getOperand(i);
-                if (Op->getType()->isHalfTy()) {
+                if (Op->getType()->getScalarType()->isHalfTy()) {
                     ++TotalExt;
-                    Op = CreateFPCast(Instruction::FPExt, Op, T_float32, builder);
+                    Op = CreateFPCast(Instruction::FPExt, Op, Op->getType()->getWithNewType(T_float32), builder);
                 }
                 Operands[i] = (Op);
             }
@@ -285,10 +311,12 @@ static bool demoteFloat16(Function &F)
                 break;
             default:
                 if (auto intrinsic = dyn_cast<IntrinsicInst>(&I)) {
-                    Type *RetType = I.getType();
-                    if (RetType->isHalfTy())
-                        RetType = T_float32;
-                    NewI = replaceIntrinsicWith(intrinsic, RetType, Operands);
+                    // XXX: this is not correct in general
+                    // some obvious failures include llvm.convert.to.fp16.*, llvm.vp.*to*, llvm.experimental.constrained.*to*, llvm.masked.*
+                    Type *RetTy = I.getType();
+                    if (RetTy->getScalarType()->isHalfTy())
+                        RetTy = RetTy->getWithNewType(T_float32);
+                    NewI = replaceIntrinsicWith(intrinsic, RetTy, Operands);
                     break;
                 }
                 abort();

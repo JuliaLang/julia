@@ -15,9 +15,6 @@
 const unsigned int host_char_bit = 8;
 
 // float16 intrinsics
-// TODO: use LLVM's compiler-rt on all platforms (Xcode already links compiler-rt)
-
-#if !defined(_OS_DARWIN_)
 
 static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
 {
@@ -238,7 +235,7 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
 //HANDLE_LIBCALL(F16, I128, __fixunshfti)
 //HANDLE_LIBCALL(I128, F16, __floattihf)
 //HANDLE_LIBCALL(I128, F16, __floatuntihf)
-#endif
+
 
 // run time version of bitcast intrinsic
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
@@ -564,9 +561,9 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
     }
 
 #define fp_select(a, func) \
-    sizeof(a) == sizeof(float) ? func##f((float)a) : func(a)
+    sizeof(a) <= sizeof(float) ? func##f((float)a) : func(a)
 #define fp_select2(a, b, func) \
-    sizeof(a) == sizeof(float) ? func##f(a, b) : func(a, b)
+    sizeof(a) <= sizeof(float) ? func##f(a, b) : func(a, b)
 
 // fast-function generators //
 
@@ -1331,7 +1328,7 @@ static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
 fpiseq_n(float, 32)
 fpiseq_n(double, 64)
 #define fpiseq(a,b) \
-    sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
+    sizeof(a) <= sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
 bool_fintrinsic(eq,eq_float)
 bool_fintrinsic(ne,ne_float)
