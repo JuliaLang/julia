@@ -499,7 +499,7 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
         //RAII will release the struct itself
         std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
         //RAII will release the module
-        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(reinterpret_cast<orc::ThreadSafeModule*>(dump->TSM));
+        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
         //RAII will release the lock
         Optional<orc::ThreadSafeContext::Lock> lock;
@@ -1209,7 +1209,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
     SmallVector<char, 4096> ObjBufferSV;
     { // scope block
         std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(F));
-        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(reinterpret_cast<orc::ThreadSafeModule*>(dump->TSM));
+        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         TSM->withModuleDo([&](Module &m) {
             Function *f = cast<Function>(unwrap(dump->F));
