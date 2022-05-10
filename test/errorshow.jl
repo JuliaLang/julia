@@ -175,7 +175,7 @@ let no_kwsorter_match, e
     no_kwsorter_match() = 0
     no_kwsorter_match(a;y=1) = y
     e = try no_kwsorter_match(y=1) catch ex; ex; end
-    @test occursin(r"no method matching.+\(; y=1\)", sprint(showerror, e))
+    @test occursin(Regex("no method matching.+\\(; y::$(Int)\\)"), sprint(showerror, e))
 end
 
 ac15639line = @__LINE__
@@ -623,7 +623,7 @@ let err_str
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
     @test occursin("HasNoOne does not support `one`; did you mean `oneunit`?", err_str)
     err_str = @except_str one(HasNoOne(); value=2) MethodError
-    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
+    @test occursin(Regex("MethodError: no method matching one\\(::.*HasNoOne; value::$(Int)\\)"), err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
 pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
