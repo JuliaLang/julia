@@ -107,7 +107,7 @@ for that case. If a type benefits from custom human-readable output though,
 # Examples
 ```jldoctest
 julia> struct Day
-       n::Int
+           n::Int
        end
 
 julia> Base.show(io::IO, ::MIME"text/plain", d::Day) = print(io, d.n, " day")
