@@ -16,7 +16,7 @@ extern "C" {
 
 
 JL_DLLEXPORT int16_t jl_threadid(void);
-JL_DLLEXPORT void jl_threading_profile(void);
+JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
@@ -206,6 +206,7 @@ struct _jl_bt_element_t;
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     int16_t tid;
+    int8_t threadpoolid;
     uint64_t rngseed;
     volatile size_t *safepoint;
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads

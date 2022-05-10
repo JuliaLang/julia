@@ -223,38 +223,27 @@ end
             keys[index] = k
             vals[index] = v
             count += 1
-
-            if h.age != age0
-                # if `h` is changed by a finalizer, retry
-                return rehash!(h, newsz)
-            end
         end
     end
 
+    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    h.age += 1
     h.slots = slots
     h.keys = keys
     h.vals = vals
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
-    @assert h.age == age0
-
     return h
 end
 
 function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
-    newsz = min(newsz, max_values(T)::Int)
+    newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
-    newsz = cld(3 * newsz, 2)
-    if newsz <= oldsz
-        # todo: shrink
-        # be careful: rehash!() assumes everything fits. it was only designed
-        # for growing.
-        return d
-    end
-    rehash!(d, newsz)
+    newsz = _tablesz(cld(3 * newsz, 2))
+    return newsz == oldsz ? d : rehash!(d, newsz)
 end
 
 """

@@ -230,6 +230,7 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
+// the following mirrors `struct EffectsOverride` in `base/compiler/types.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint8_t ipo_consistent  : 1;
@@ -390,6 +391,8 @@ typedef struct _jl_code_instance_t {
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
+#ifdef JL_USE_ANON_UNIONS_FOR_PURITY_FLAGS
+    // see also encode_effects() and decode_effects() in `base/compiler/types.jl`,
     union {
         uint32_t ipo_purity_bits;
         struct {
@@ -410,6 +413,10 @@ typedef struct _jl_code_instance_t {
             uint8_t nonoverlayed:1;
         } purity_flags;
     };
+#else
+    uint32_t ipo_purity_bits;
+    uint32_t purity_bits;
+#endif
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
@@ -457,6 +464,7 @@ typedef struct {
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
+    _Atomic(jl_value_t*) Typeofwrapper;  // cache for Type{wrapper}
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
     struct _jl_methtable_t *mt;
@@ -1639,7 +1647,9 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
+extern JL_DLLIMPORT int jl_n_threadpools;
 extern JL_DLLIMPORT int jl_n_threads;
+extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1872,10 +1882,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *logstate;
     jl_function_t *start;
-    uint64_t rngState0; // really rngState[4], but more convenient to split
-    uint64_t rngState1;
-    uint64_t rngState2;
-    uint64_t rngState3;
+    uint64_t rngState[4];
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
@@ -1885,6 +1892,8 @@ typedef struct _jl_task_t {
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
+    // threadpool id
+    int8_t threadpoolid;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
@@ -1908,7 +1917,8 @@ typedef struct _jl_task_t {
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
-JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void);

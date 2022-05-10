@@ -1558,6 +1558,8 @@ function tuple_tfunc(argtypes::Vector{Any})
                 else
                     params[i] = Type
                 end
+            elseif iskindtype(x)
+                params[i] = x
             elseif !isvarargtype(x) && hasintersect(x, Type)
                 params[i] = Union{x, Type}
             else
@@ -2087,7 +2089,7 @@ end
 function getglobal_nothrow(argtypes::Vector{Any})
     2 ≤ length(argtypes) ≤ 3 || return false
     if length(argtypes) == 3
-        global_order_nothrow(o, true, false) || return false
+        global_order_nothrow(argtypes[3], true, false) || return false
     end
     M, s = argtypes
     if M isa Const && s isa Const

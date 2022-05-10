@@ -164,6 +164,11 @@ end
     @test Dict(t[1]=>t[2] for t in zip((1,"2"), (2,"2"))) == Dict{Any,Any}(1=>2, "2"=>"2")
 end
 
+@testset "empty tuple ctor" begin
+    h = Dict(())
+    @test length(h) == 0
+end
+
 @testset "type of Dict constructed from varargs of Pairs" begin
     @test Dict(1=>1, 2=>2.0) isa Dict{Int,Real}
     @test Dict(1=>1, 2.0=>2) isa Dict{Real,Int}
@@ -1246,4 +1251,11 @@ let c = bar()
 end
 let c = bar()
     @test c === missing || c == ComparesWithGC38727(1)
+end
+
+@testset "shrinking" begin
+    d = Dict(i => i for i = 1:1000)
+    filter!(x -> x.first < 10, d)
+    sizehint!(d, 10)
+    @test length(d.slots) < 100
 end

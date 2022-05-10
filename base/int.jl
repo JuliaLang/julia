@@ -655,10 +655,19 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 """
     @int128_str str
-    @int128_str(str)
 
-`@int128_str` parses a string into a Int128.
-Throws an `ArgumentError` if the string is not a valid integer.
+Parse `str` as an [`Int128`](@ref).
+Throw an `ArgumentError` if the string is not a valid integer.
+
+# Examples
+```jldoctest
+julia> int128"123456789123"
+123456789123
+
+julia> int128"123456789123.4"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
+[...]
+```
 """
 macro int128_str(s)
     return parse(Int128, s)
@@ -666,10 +675,19 @@ end
 
 """
     @uint128_str str
-    @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128.
-Throws an `ArgumentError` if the string is not a valid integer.
+Parse `str` as an [`UInt128`](@ref).
+Throw an `ArgumentError` if the string is not a valid integer.
+
+# Examples
+```
+julia> uint128"123456789123"
+0x00000000000000000000001cbe991a83
+
+julia> uint128"-123456789123"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
+[...]
+```
 """
 macro uint128_str(s)
     return parse(UInt128, s)
@@ -677,7 +695,6 @@ end
 
 """
     @big_str str
-    @big_str(str)
 
 Parse a string into a [`BigInt`](@ref) or [`BigFloat`](@ref),
 and throw an `ArgumentError` if the string is not a valid number.
@@ -690,6 +707,10 @@ julia> big"123_456"
 
 julia> big"7891.5"
 7891.5
+
+julia> big"_"
+ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
+[...]
 ```
 """
 macro big_str(s)

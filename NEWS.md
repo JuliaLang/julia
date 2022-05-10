@@ -5,6 +5,8 @@ New language features
 ---------------------
 
 * It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
+* Slurping in assignments is now also allowed in non-final position. This is
+  handled via `Base.split_rest`. ([#42902])
 
 Language changes
 ----------------
@@ -22,10 +24,17 @@ Command-line option changes
 
 * In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
   process affinity which is set typically in HPC and cloud environments ([#42340]).
+* `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
+* The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
+  number of interactive threads to create (`auto` currently means 1) ([#42302]).
 
 Multi-threading changes
 -----------------------
 
+* `Threads.@spawn` now accepts an optional first argument: `:default` or `:interactive`.
+  An interactive task desires low latency and implicitly agrees to be short duration or to
+  yield frequently. Interactive tasks will run on interactive threads, if any are specified
+  when Julia is started ([#42302]).
 
 Build system changes
 --------------------
@@ -34,6 +43,10 @@ Build system changes
 New library functions
 ---------------------
 
+* `Iterators.flatmap` was added ([#44792]).
+* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
+  inspecting which function `f` was originally wrapped. ([#42717])
+
 Library changes
 ---------------
 
@@ -41,7 +54,11 @@ Library changes
   as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
   now be called on a dictionary or set shared by arbitrary tasks provided that there are no
   tasks mutating the dictionary or set ([#44534]).
-
+* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 
 Standard library changes
 ------------------------
@@ -58,12 +75,15 @@ Standard library changes
   system image with other BLAS/LAPACK libraries is not
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
 
 #### Markdown
 
 #### Printf
 
 #### Random
+
+* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
 
 #### REPL
 
@@ -90,6 +110,10 @@ Standard library changes
 
 #### UUIDs
 
+#### Unicode
+
+* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
+
 #### Mmap
 
 #### DelimitedFiles
@@ -98,6 +122,7 @@ Standard library changes
 Deprecated or removed
 ---------------------
 
+* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
 
 External dependencies
 ---------------------

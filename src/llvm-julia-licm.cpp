@@ -3,11 +3,13 @@
 #include "llvm-version.h"
 #include "passes.h"
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/LoopPass.h>
 #include "llvm/Analysis/LoopIterator.h"
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
 #include <llvm/Analysis/ValueTracking.h>
 
@@ -19,6 +21,12 @@
 #define DEBUG_TYPE "julia-licm"
 
 using namespace llvm;
+
+STATISTIC(HoistedPreserveBegin, "Number of gc_preserve_begin instructions hoisted out of a loop");
+STATISTIC(SunkPreserveEnd, "Number of gc_preserve_end instructions sunk out of a loop");
+STATISTIC(ErasedPreserveEnd, "Number of gc_preserve_end instructions removed from nonterminating loops");
+STATISTIC(HoistedWriteBarrier, "Number of write barriers hoisted out of a loop");
+STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 
 /*
  * Julia LICM pass.
@@ -114,6 +122,7 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     if (!canhoist)
                         continue;
+                    ++HoistedPreserveBegin;
                     call->moveBefore(preheader->getTerminator());
                     changed = true;
                 }
@@ -124,9 +133,11 @@ struct JuliaLICM : public JuliaPassContext {
                     changed = true;
                     auto exit_pts = get_exit_pts();
                     if (exit_pts.empty()) {
+                        ++ErasedPreserveEnd;
                         call->eraseFromParent();
                         continue;
                     }
+                    ++SunkPreserveEnd;
                     call->moveBefore(exit_pts[0]);
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
@@ -143,6 +154,7 @@ struct JuliaLICM : public JuliaPassContext {
                         }
                     }
                     if (valid) {
+                        ++HoistedWriteBarrier;
                         call->moveBefore(preheader->getTerminator());
                         changed = true;
                     }
@@ -168,12 +180,14 @@ struct JuliaLICM : public JuliaPassContext {
                         continue;
                     }
                     if (valid) {
+                        ++HoistedAllocation;
                         call->moveBefore(preheader->getTerminator());
                         changed = true;
                     }
                 }
             }
         }
+        assert(!verifyFunction(*L->getHeader()->getParent()));
         return changed;
     }
 };

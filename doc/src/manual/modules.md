@@ -78,7 +78,7 @@ module-local.
 ### Export lists
 
 Names (referring to functions, types, global variables, and constants) can be added to the
-*export list* of a module with `export`. Typically, they are at or near the top of the module definition
+*export list* of a module with `export`: these are the symbols that are imported when `using` the module. Typically, they are at or near the top of the module definition
 so that readers of the source code can find them easily, as in
 
 ```jldoctest module_manual

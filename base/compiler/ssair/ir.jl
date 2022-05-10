@@ -88,7 +88,7 @@ function compute_basic_blocks(stmts::Vector{Any})
     bb_starts = basic_blocks_starts(stmts)
     # Compute ranges
     pop!(bb_starts, 1)
-    basic_block_index = collect(bb_starts)
+    basic_block_index = sort!(collect(bb_starts); alg=QuickSort)
     blocks = BasicBlock[]
     sizehint!(blocks, length(basic_block_index))
     let first = 1
@@ -150,6 +150,20 @@ function first_insert_for_bb(code, cfg::CFG, block::Int)
     end
     error("any insert position isn't found")
 end
+
+# SSA values that need renaming
+struct OldSSAValue
+    id::Int
+end
+
+# SSA values that are in `new_new_nodes` of an `IncrementalCompact` and are to
+# be actually inserted next time (they become `new_nodes` next time)
+struct NewSSAValue
+    id::Int
+end
+
+const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
+
 
 # SSA-indexed nodes
 
@@ -253,6 +267,10 @@ function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.flag[idx] = newval[:flag]
     return is
 end
+function setindex!(is::InstructionStream, newval::AnySSAValue, idx::Int)
+    is.inst[idx] = newval
+    return is
+end
 function setindex!(node::Instruction, newval::Instruction)
     node.data[node.idx] = newval
     return node
@@ -284,9 +302,9 @@ struct IRCode
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
-    meta::Vector{Any}
+    meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
@@ -312,7 +330,7 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
-function setindex!(x::IRCode, repl::Instruction, s::SSAValue)
+function setindex!(x::IRCode, repl::Union{Instruction, AnySSAValue}, s::SSAValue)
     if s.id <= length(x.stmts)
         x.stmts[s.id] = repl
     else
@@ -320,19 +338,6 @@ function setindex!(x::IRCode, repl::Instruction, s::SSAValue)
     end
     return x
 end
-
-# SSA values that need renaming
-struct OldSSAValue
-    id::Int
-end
-
-# SSA values that are in `new_new_nodes` of an `IncrementalCompact` and are to
-# be actually inserted next time (they become `new_nodes` next time)
-struct NewSSAValue
-    id::Int
-end
-
-const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 
 mutable struct UseRefIterator
     stmt::Any
@@ -1224,11 +1229,12 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                     compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
             # There's only one predecessor left - just replace it
-            @assert !isa(values[1], NewSSAValue)
-            if isa(values[1], SSAValue)
-                used_ssas[values[1].id] -= 1
+            v = values[1]
+            @assert !isa(v, NewSSAValue)
+            if isa(v, SSAValue)
+                used_ssas[v.id] -= 1
             end
-            ssa_rename[idx] = values[1]
+            ssa_rename[idx] = v
         else
             result[result_idx][:inst] = PhiNode(edges, values)
             result_idx += 1

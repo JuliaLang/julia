@@ -748,7 +748,7 @@ static void *signal_listener(void *arg)
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#if _POSIX_C_SOURCE >= 199309L
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         if (profile && !(info.si_code == SI_TIMER &&
 	            info.si_value.sival_ptr == &timerprof))
             profile = 0;
@@ -897,7 +897,7 @@ static void *signal_listener(void *arg)
                     jl_ptls_t ptls2 = jl_all_tls_states[idx];
                     nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
                 }
-                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", jl_getpid(), nrunning, jl_n_threads);
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, jl_n_threads);
 #endif
 
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
