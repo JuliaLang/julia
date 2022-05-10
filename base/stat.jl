@@ -361,7 +361,6 @@ julia> isfile(filename)
 true
 
 julia> rm(filename)
-                                                                                    
 julia> isfile(filename)
 false
 ```
