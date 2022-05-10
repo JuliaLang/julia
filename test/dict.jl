@@ -1279,19 +1279,3 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
 end
-
-using Random
-
-struct RainBowString
-    s::String
-end
-
-function Base.show(io::IO, rbs::RainBowString)
-    for s in rbs.s
-        _, color = rand(Base.text_colors)
-        print(io, color, s, "\e[0m")
-    end
-end
-
-
-d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
