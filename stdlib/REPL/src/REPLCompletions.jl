@@ -479,6 +479,11 @@ function try_get_type(sym::Expr, fn::Module)
         return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
     elseif sym.head === :. && sym.args[2] isa QuoteNode # second check catches broadcasting
         return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
+    elseif sym.head === :toplevel || sym.head === :block
+        isempty(sym.args) && return (nothing, true)
+        return try_get_type(sym.args[end], fn)
+    elseif sym.head === :escape || sym.head === :var"hygienic-scope"
+        return try_get_type(sym.args[1], fn)
     end
     return (Any, false)
 end
@@ -495,15 +500,22 @@ function get_type(sym::Expr, fn::Module)
         found || return Any, false
     end
     newsym = try
-        Meta.lower(fn, sym)
+        macroexpand(fn, sym; recursive=false)
     catch e
-        e isa LoadError && return Any, false
-        # If e is not a LoadError then Meta.lower crashed in an unexpected way.
-        # Since this is not a specific to the user code but an internal error,
-        # rethrow the error to allow reporting it.
-        rethrow()
+        # user code failed in macroexpand (ignore it)
+        return Any, false
     end
-    return try_get_type(newsym, fn)
+    val, found = try_get_type(newsym, fn)
+    if !found
+        newsym = try
+            Meta.lower(fn, sym)
+        catch e
+            # user code failed in lowering (ignore it)
+            return Any, false
+        end
+        val, found = try_get_type(newsym, fn)
+    end
+    return val, found
 end
 
 function get_type(sym, fn::Module)

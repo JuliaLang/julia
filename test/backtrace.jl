@@ -224,6 +224,19 @@ let trace = try
     @test trace[1].line == 2
 end
 
+# issue #45171
+linenum = @__LINE__; function f45171(;kwarg = true)
+    1
+    error()
+end
+let trace = try
+        f45171()
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[3].line == linenum
+end
+
 # issue #29695 (see also test for #28442)
 let code = """
     f29695(c) = g29695(c)

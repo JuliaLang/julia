@@ -914,9 +914,17 @@ end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src)
     i = Int(dstart)
-    for x in src
-        dest[i] = x
-        i += 1
+    if haslength(src) && length(dest) > 0
+        @boundscheck checkbounds(dest, i:(i + length(src) - 1))
+        for x in src
+            @inbounds dest[i] = x
+            i += 1
+        end
+    else
+        for x in src
+            dest[i] = x
+            i += 1
+        end
     end
     return dest
 end

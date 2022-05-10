@@ -6550,7 +6550,7 @@ static jl_llvm_functions_t
     else if (jl_array_len(src->linetable) > 0) {
         jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, 0);
         ctx.file = jl_symbol_name((jl_sym_t*)jl_fieldref_noalloc(locinfo, 2));
-        toplineno = jl_unbox_long(jl_fieldref(locinfo, 3));
+        toplineno = jl_unbox_int32(jl_fieldref(locinfo, 3));
     }
     if (ctx.file.empty())
         ctx.file = "<missing>";
@@ -7204,15 +7204,15 @@ static jl_llvm_functions_t
         topinfo.inlined_at = 0;
         topinfo.loc = topdebugloc;
         for (size_t i = 0; i < nlocs; i++) {
-            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int, inlined_at::Int)
+            // LineInfoNode(mod::Module, method::Any, file::Symbol, line::Int32, inlined_at::Int32)
             jl_value_t *locinfo = jl_array_ptr_ref(src->linetable, i);
             DebugLineTable &info = linetable[i + 1];
             assert(jl_typeis(locinfo, jl_lineinfonode_type));
             jl_module_t *module = (jl_module_t*)jl_fieldref_noalloc(locinfo, 0);
             jl_value_t *method = jl_fieldref_noalloc(locinfo, 1);
             jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 2);
-            info.line = jl_unbox_long(jl_fieldref(locinfo, 3));
-            info.inlined_at = jl_unbox_long(jl_fieldref(locinfo, 4));
+            info.line = jl_unbox_int32(jl_fieldref(locinfo, 3));
+            info.inlined_at = jl_unbox_int32(jl_fieldref(locinfo, 4));
             assert(info.inlined_at <= i);
             info.file = jl_symbol_name(filesym);
             if (info.file.empty())

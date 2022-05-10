@@ -1185,27 +1185,39 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    splat(f)
+    Splat(f)
 
-Defined as
+Equivalent to
 ```julia
-    splat(f) = args->f(args...)
+    my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
 its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument.
+passes a tuple as that single argument. Additionally has pretty printing.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.splat(+), zip(1:3,4:6))
+julia> map(Base.Splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
+
+julia> my_add = Base.Splat(+)
+Splat(+)
+
+julia> my_add((1,2,3))
+6
 ```
 """
-splat(f) = args->f(args...)
+struct Splat{F} <: Function
+    f::F
+    Splat(f) = new{Core.Typeof(f)}(f)
+end
+(s::Splat)(args) = s.f(args...)
+print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
 
