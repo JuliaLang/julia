@@ -70,6 +70,7 @@ end
     @test unsigned(Bool) === typeof(unsigned(true))
 end
 @testset "bswap" begin
+    @test bswap(true) == true
     @test bswap(Int8(3)) == 3
     @test bswap(UInt8(3)) === 0x3
     @test bswap(Int16(3)) == 256*3
