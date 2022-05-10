@@ -600,6 +600,12 @@ end
     @test Base.return_types() do
         findlast(==(0), (1.0,2,3f0))
     end == Any[Nothing]
+
+    @testset "long tuples" begin
+        longtuple = ntuple(i -> i in (15,17) ? 1 : 0, 40)
+        @test findfirst(isequal(1), longtuple) == 15
+        @test findlast(isequal(1), longtuple) == 17
+    end
 end
 
 @testset "properties" begin
