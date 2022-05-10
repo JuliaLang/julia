@@ -509,7 +509,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
                     StringRef val = attr.getValueAsString();
                     if (val != "") {
                         size_t ol = (size_t)val[0] - '0';
-                        if (ol >= 0 && ol < optlevel)
+                        if (ol < optlevel)
                             optlevel = ol;
                     }
                 }
