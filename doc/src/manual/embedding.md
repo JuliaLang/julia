@@ -246,8 +246,8 @@ Using `@cfunction` allows you to do the type conversions on the Julia side which
 the C side. The `sqrt` example above would with `@cfunction` be written as:
 
 ```c
-double (*sqrt_ptr)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt, Float64, (Float64,))"));
-double ret = (*sqrt_ptr)(2.0);
+double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt, Float64, (Float64,))"));
+double ret = sqrt_jl(2.0);
 ```
 
 where we first define a C callable function in Julia, extract the function pointer from it and finally call it.
