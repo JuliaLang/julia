@@ -1449,6 +1449,9 @@ fakehistory_2 = """
 # time: 2014-06-30 99:99:99 EDT
 # mode: julia
 \txyz = 2
+# time: 2014-06-30 99:99:99 EDT
+# mode: extended
+user imported custom mode
 """
 
 # Test various history related issues
