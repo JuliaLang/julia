@@ -58,6 +58,9 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 
+# the same constructor as defined in float.jl, but with a different name to avoid redefinition
+_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+
 # checked arithmetic
 const checked_add = +
 const checked_sub = -
@@ -138,8 +141,10 @@ include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
 
-# required for bootstrap
-# TODO: find why this is needed and remove it.
+# required for bootstrap because sort.jl uses extrema
+# to decide whether to dispatch to counting sort.
+#
+# TODO: remove it.
 function extrema(x::Array)
     isempty(x) && throw(ArgumentError("collection must be non-empty"))
     vmin = vmax = x[1]

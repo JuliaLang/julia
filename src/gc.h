@@ -72,6 +72,8 @@ typedef struct {
     size_t      interval;
     int         pause;
     int         full_sweep;
+    uint64_t    max_pause;
+    uint64_t    max_memory;
 } jl_gc_num_t;
 
 enum {

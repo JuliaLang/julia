@@ -465,6 +465,13 @@ end
     @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
 end
 
+@testset "eigvals should return a copy of the diagonal" begin
+    D = Diagonal([1, 2, 3])
+    lam = eigvals(D)
+    D[3,3] = 4 # should not affect lam
+    @test lam == [1, 2, 3]
+end
+
 @testset "eigmin (#27847)" begin
     for _ in 1:100
         d = randn(rand(1:10))

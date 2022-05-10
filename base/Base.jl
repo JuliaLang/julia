@@ -28,8 +28,7 @@ macro noinline() Expr(:meta, :noinline) end
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v) # to get a decent error
+getproperty(x::Module, f::Symbol) = (@inline; getglobal(x, f))
 getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
@@ -40,8 +39,12 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 
 dotgetproperty(x, f) = getproperty(x, f)
 
-getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x::Module, f::Symbol, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
+function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
+    @inline
+    val::Core.get_binding_type(x, f) = v
+    return setglobal!(x, f, val, order)
+end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
@@ -180,7 +183,7 @@ include("abstractarraymath.jl")
 include("arraymath.jl")
 
 # SIMD loops
-@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
+sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -274,6 +277,7 @@ include("condition.jl")
 include("threads.jl")
 include("lock.jl")
 include("channels.jl")
+include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
@@ -295,9 +299,6 @@ include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
-
-# RandomDevice support
-include("randomdevice.jl")
 
 # core math functions
 include("floatfuncs.jl")
@@ -488,8 +489,6 @@ end
 
 if is_primary_base_module
 function __init__()
-    # for the few uses of Libc.rand in Base:
-    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
@@ -504,6 +503,10 @@ function __init__()
     nothing
 end
 
+# enable threads support
+@eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
+
 end
+
 
 end # baremodule Base

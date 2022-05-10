@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
-sizehint!(s::AbstractSet, n) = nothing
+sizehint!(s::AbstractSet, n) = s
 
 function copy!(dst::AbstractSet, src::AbstractSet)
     dst === src && return dst
@@ -434,7 +434,7 @@ issetequal(a::AbstractSet, b) = issetequal(a, Set(b))
 function issetequal(a, b::AbstractSet)
     if haslength(a)
         # check b for too many unique elements
-        length(a) < length(b) && return false
+        length(a) < length(b) && return false
     end
     return issetequal(Set(a), b)
 end

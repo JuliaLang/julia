@@ -5,7 +5,6 @@ Interface to BLAS subroutines.
 """
 module BLAS
 
-import ..axpy!, ..axpby!
 import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
 
@@ -456,15 +455,13 @@ Overwrite `Y` with `X*a + Y`, where `a` is a scalar. Return `Y`.
 
 # Examples
 ```jldoctest
-julia> x = [1; 2; 3];
+julia> x = [1.; 2; 3];
 
-julia> y = [4; 5; 6];
+julia> y = [4. ;; 5 ;; 6];
 
 julia> BLAS.axpy!(2, x, y)
-3-element Vector{Int64}:
-  6
-  9
- 12
+1×3 Matrix{Float64}:
+ 6.0  9.0  12.0
 ```
 """
 function axpy! end
@@ -489,6 +486,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
+
 function axpy!(alpha::Number, x::AbstractArray{T}, y::AbstractArray{T}) where T<:BlasFloat
     if length(x) != length(y)
         throw(DimensionMismatch(lazy"x has length $(length(x)), but y has length $(length(y))"))

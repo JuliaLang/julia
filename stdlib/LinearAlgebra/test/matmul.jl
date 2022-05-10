@@ -226,6 +226,19 @@ end
     end
 end
 
+@testset "dot product of stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = randn(T, 10)
+        b = view(a, 1:10)
+        c = reshape(b, 5, 2)
+        d = view(c, :, 1:2)
+        r = sum(abs2, a)
+        for x in (a,b,c,d), y in (a,b,c,d)
+            @test dot(x, y) ≈ r
+        end
+    end
+end
+
 @testset "Complex matrix x real MatOrVec etc (issue #29224)" for T in (Float32, Float64)
     A0 = randn(complex(T), 10, 10)
     B0 = randn(T, 10, 10)
@@ -810,6 +823,17 @@ end
     @test Matrix{Any}(undef, 0, 2) * Matrix{Any}(undef, 2, 3) == Matrix{Any}(undef, 0, 3)
     @test_throws MethodError Matrix{Any}(undef, 2, 0) * Matrix{Any}(undef, 0, 3)
     @test Matrix{Int}(undef, 2, 0) * Matrix{Int}(undef, 0, 3) == zeros(Int, 2, 3)
+end
+
+struct BrokenInt <: Number
+   i::Int
+end
+Base.:*(::BrokenInt, ::BrokenInt) = BrokenInt(42)
+Base.:+(::BrokenInt, ::BrokenInt) = BrokenInt(42)
+Base.zero(::BrokenInt) = BrokenInt(0)
+Base.conj(b::BrokenInt) = b.i == 42 ? b : error()
+@testset "matmul uninit memory #40481" begin
+    @test fill(BrokenInt(42), 10,100)' * fill(BrokenInt(42), 100,10)' == fill(BrokenInt(42), 100, 100)
 end
 
 @testset "3-arg *, order by type" begin

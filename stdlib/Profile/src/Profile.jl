@@ -140,9 +140,12 @@ function __init__()
         delay = 0.001
     end
     init(n, delay, limitwarn = false)
-    PROFILE_PRINT_COND[] = Base.AsyncCondition()
-    ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-    errormonitor(Threads.@spawn(profile_printing_listener()))
+    @static if !Sys.iswindows()
+        # triggering a profile via signals is not implemented on windows
+        PROFILE_PRINT_COND[] = Base.AsyncCondition()
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
+        errormonitor(Threads.@spawn(profile_printing_listener()))
+    end
 end
 
 """

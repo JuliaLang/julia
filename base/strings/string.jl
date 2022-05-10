@@ -93,7 +93,7 @@ end
 Create a new `String` from an existing `AbstractString`.
 """
 String(s::AbstractString) = print_to_string(s)
-@pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+@assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
@@ -247,7 +247,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     end
     n = ncodeunits(s)
 
-    (i += 1) > n && @goto ret
+    (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 1
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16
@@ -287,7 +287,7 @@ length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
@@ -300,8 +300,8 @@ end
     @inbounds b = codeunit(s, i)
     @inbounds while true
         while true
-            (i += 1) ≤ n || return c
-            0xc0 ≤ b ≤ 0xf7 && break
+            (i += 1) ≤ n || return c
+            0xc0 ≤ b ≤ 0xf7 && break
             b = codeunit(s, i)
         end
         l = b
@@ -309,12 +309,12 @@ end
         c -= (x = b & 0xc0 == 0x80)
         x & (l ≥ 0xe0) || continue
 
-        (i += 1) ≤ n || return c
+        (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 2
         c -= (x = b & 0xc0 == 0x80)
         x & (l ≥ 0xf0) || continue
 
-        (i += 1) ≤ n || return c
+        (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 3
         c -= (b & 0xc0 == 0x80)
     end

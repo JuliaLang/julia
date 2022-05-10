@@ -159,7 +159,7 @@ function Base.hash(F::QRCompactWY, h::UInt)
     return hash(F.factors, foldr(hash, _triuppers_qr(F.T); init=hash(QRCompactWY, h)))
 end
 function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
-    return A.factors == B.factors && all(splat(==), zip(_triuppers_qr.((A.T, B.T))...))
+    return A.factors == B.factors && all(Splat(==), zip(_triuppers_qr.((A.T, B.T))...))
 end
 function Base.isequal(A::QRCompactWY, B::QRCompactWY)
     return isequal(A.factors, B.factors) && all(zip(_triuppers_qr.((A.T, B.T))...)) do (a, b)
@@ -579,11 +579,13 @@ Array(Q::AbstractQ) = Matrix(Q)
 
 size(F::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(F, :factors), dim)
 size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
-size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
-size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
+size(Q::Union{QRCompactWYQ,QRPackedQ}, dim::Integer) =
+    size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::Union{QRCompactWYQ,QRPackedQ}) = size(Q, 1), size(Q, 2)
 
-copy(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
-getindex(Q::AbstractQ, inds...) = copy(Q)[inds...]
+copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
+copy(Q::AbstractQ) = copymutable(Q)
+getindex(Q::AbstractQ, inds...) = copymutable(Q)[inds...]
 getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
 
 function getindex(Q::AbstractQ, ::Colon, j::Int)
@@ -655,7 +657,7 @@ function (*)(A::AbstractQ, b::StridedVector)
     TAb = promote_type(eltype(A), eltype(b))
     Anew = convert(AbstractMatrix{TAb}, A)
     if size(A.factors, 1) == length(b)
-        bnew = copy_oftype(b, TAb)
+        bnew = copymutable_oftype(b, TAb)
     elseif size(A.factors, 2) == length(b)
         bnew = [b; zeros(TAb, size(A.factors, 1) - length(b))]
     else
@@ -667,7 +669,7 @@ function (*)(A::AbstractQ, B::StridedMatrix)
     TAB = promote_type(eltype(A), eltype(B))
     Anew = convert(AbstractMatrix{TAB}, A)
     if size(A.factors, 1) == size(B, 1)
-        Bnew = copy_oftype(B, TAB)
+        Bnew = copymutable_oftype(B, TAB)
     elseif size(A.factors, 2) == size(B, 1)
         Bnew = [B; zeros(TAB, size(A.factors, 1) - size(B,1), size(B, 2))]
     else
@@ -721,7 +723,7 @@ end
 function *(adjQ::Adjoint{<:Any,<:AbstractQ}, B::StridedVecOrMat)
     Q = adjQ.parent
     TQB = promote_type(eltype(Q), eltype(B))
-    return lmul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copy_oftype(B, TQB))
+    return lmul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copymutable_oftype(B, TQB))
 end
 
 ### QBc/QcBc
@@ -773,7 +775,7 @@ end
 function (*)(A::StridedMatrix, Q::AbstractQ)
     TAQ = promote_type(eltype(A), eltype(Q))
 
-    return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
+    return rmul!(copymutable_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
 
 function (*)(a::Number, B::AbstractQ)

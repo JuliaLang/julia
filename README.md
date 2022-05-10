@@ -5,31 +5,31 @@
 </a>
 </div>
 
-Documentation:
-[![Documentation][docs-img]][docs-url]
-
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg "Documentation (version 1)"
-[docs-url]: https://docs.julialang.org
-
-Continuous integration:
-[![Continuous integration (master)][buildkite-master-img]][buildkite-master-url]
-
-<!--
-To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
-You need to go to the Buildkite website and get the SVG URL for the correct pipeline.
--->
-[buildkite-master-img]: https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master "Continuous integration (master)"
-[buildkite-master-url]: https://buildkite.com/julialang/julia-master
-
-Code coverage:
-[![Code coverage (Coveralls)][coveralls-img]][coveralls-url]
-[![Code coverage (Codecov)][codecov-img]][codecov-url]
-
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls "Code coverage (Coveralls)"
-[coveralls-url]: https://coveralls.io/r/JuliaLang/julia?branch=master
-
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov "Code coverage (Codecov)"
-[codecov-url]: https://codecov.io/github/JuliaLang/julia?branch=master
+<table>
+    <!-- Docs -->
+    <tr>
+        <td>Documentation</td>
+        <td>
+            <a href="https://docs.julialang.org"><img src='https://img.shields.io/badge/docs-v1-blue.svg'/></a>
+        </td>
+    </tr>
+    <!-- Continuous integration
+    To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+    You need to go to the Buildkite website and get the SVG URL for the correct pipeline. -->
+    <tr>
+        <td>Continuous integration</td>
+        <td>
+            <a href="https://buildkite.com/julialang/julia-master"><img src='https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master'/></a>
+        </td>
+    </tr>
+    <!-- Coverage -->
+    <tr>
+        <td>Code coverage</td>
+        <td>
+            <a href="https://coveralls.io/r/JuliaLang/julia?branch=master"><img src='https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls'/></a> <a href="https://codecov.io/github/JuliaLang/julia?branch=master"><img src='https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov'/></a>
+        </td>
+    </tr>
+</table>
 
 ## The Julia Language
 

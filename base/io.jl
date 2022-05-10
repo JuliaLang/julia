@@ -445,7 +445,7 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
-write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")
+write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), convert(String, filename)::String, "w")
 
 """
     read(filename::AbstractString, args...)
@@ -457,9 +457,9 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 
 Read the entire contents of a file as a string.
 """
-read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+read(filename::AbstractString, args...) = open(io->read(io, args...), convert(String, filename)::String)
 
-read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), convert(String, filename)::String)
 
 """
     read!(stream::IO, array::AbstractArray)
@@ -469,7 +469,7 @@ Read binary data from an I/O stream or file, filling in `array`.
 """
 function read! end
 
-read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, filename)::String)
 
 """
     readuntil(stream::IO, delim; keep::Bool = false)
@@ -496,7 +496,7 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
+readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), convert(String, filename)::String)
 
 """
     readline(io::IO=stdin; keep::Bool=false)

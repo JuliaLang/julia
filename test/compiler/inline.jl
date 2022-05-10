@@ -213,7 +213,7 @@ function f_div(x)
     div(x, 1)
     return x
 end
-@test fully_eliminated(f_div, (Int,)) == 1
+@test fully_eliminated(f_div, (Int,); retval=Core.Argument(2))
 # ...unless we div by an unknown amount
 function f_div(x, y)
     div(x, y)
@@ -276,10 +276,14 @@ f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
 @testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> (@inline; x))).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) @inline; x end)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x @inline; x end).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x x end).source)
 end
 
 const _a_global_array = [1]
@@ -810,6 +814,103 @@ let
     @test invoke(Any[10]) === false
 end
 
+# test union-split, non-dispatchtuple callsite inlining
+
+@constprop :none @noinline abstract_unionsplit(@nospecialize x::Any) = Base.inferencebarrier(:Any)
+@constprop :none @noinline abstract_unionsplit(@nospecialize x::Number) = Base.inferencebarrier(:Number)
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+@constprop :none @noinline abstract_unionsplit_fallback(@nospecialize x::Type) = Base.inferencebarrier(:Any)
+@constprop :none @noinline abstract_unionsplit_fallback(@nospecialize x::Number) = Base.inferencebarrier(:Number)
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit_fallback(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit_fallback), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit_fallback)), src.code) == 1 # fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit_fallback(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit_fallback), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+@constprop :aggressive @inline abstract_unionsplit(c, @nospecialize x::Any) = (c && println("erase me"); typeof(x))
+@constprop :aggressive @inline abstract_unionsplit(c, @nospecialize x::Number) = (c && println("erase me"); typeof(x))
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+@constprop :aggressive @inline abstract_unionsplit_fallback(c, @nospecialize x::Type) = (c && println("erase me"); typeof(x))
+@constprop :aggressive @inline abstract_unionsplit_fallback(c, @nospecialize x::Number) = (c && println("erase me"); typeof(x))
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit_fallback(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit_fallback)), src.code) == 1 # fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit_fallback(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+abstract_diagonal_dispatch(x::Int, y::Int) = 1
+abstract_diagonal_dispatch(x::Real, y::Int) = 2
+abstract_diagonal_dispatch(x::Int, y::Real) = 3
+function test_abstract_diagonal_dispatch(xs)
+    @test abstract_diagonal_dispatch(xs[1], xs[2]) == 1
+    @test abstract_diagonal_dispatch(xs[3], xs[4]) == 3
+    @test abstract_diagonal_dispatch(xs[5], xs[6]) == 2
+    @test_throws MethodError abstract_diagonal_dispatch(xs[7], xs[8])
+end
+test_abstract_diagonal_dispatch(Any[
+    1, 1,    # => 1
+    1, 1.0,  # => 3
+    1.0, 1,  # => 2
+    1.0, 1.0 # => MethodError
+])
+
+constrained_dispatch(x::T, y::T) where T<:Real = 0
+let src = code_typed1((Real,Real,)) do x, y
+        constrained_dispatch(x, y)
+    end
+    @test any(iscall((src, constrained_dispatch)), src.code) # should account for MethodError
+end
+@test_throws MethodError let
+    x, y = 1.0, 1
+    constrained_dispatch(x, y)
+end
+
 # issue 43104
 
 @inline isGoodType(@nospecialize x::Type) =
@@ -1035,14 +1136,14 @@ ambig_effect_test(a, b::Int) = 1
 ambig_effect_test(a, b) = 1
 global ambig_unknown_type_global=1
 @noinline function conditionally_call_ambig(b::Bool, a)
-	if b
-		ambig_effect_test(a, ambig_unknown_type_global)
-	end
-	return 0
+    if b
+        ambig_effect_test(a, ambig_unknown_type_global)
+    end
+    return 0
 end
 function call_call_ambig(b::Bool)
-	conditionally_call_ambig(b, 1)
-	return 1
+    conditionally_call_ambig(b, 1)
+    return 1
 end
 @test !fully_eliminated(call_call_ambig, Tuple{Bool})
 
@@ -1088,13 +1189,42 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
+const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
+Base.@assume_effects :total_may_throw concrete_eval(
+    f, args...; kwargs...) = f(args...; kwargs...)
+@test fully_eliminated() do
+    concrete_eval(getindex, ___CONST_DICT___, :a)
+end
+
+# https://github.com/JuliaLang/julia/issues/44732
+struct Component44732
+    v
+end
+struct Container44732
+    x::Union{Nothing,Component44732}
+end
+
+# NOTE make sure to prevent inference bail out
+validate44732(::Component44732) = nothing
+validate44732(::Any) = error("don't erase this error!")
+
+function issue44732(c::Container44732)
+    validate44732(c.x)
+    return nothing
+end
+
+let src = code_typed1(issue44732, (Container44732,))
+    @test any(isinvoke(:validate44732), src.code)
+end
+@test_throws ErrorException("don't erase this error!") issue44732(Container44732(nothing))
+
 global x44200::Int = 0
 function f44200()
-    global x = 0
-    while x < 10
-        x += 1
+    global x44200 = 0
+    while x44200 < 10
+        x44200 += 1
     end
-    x
+    x44200
 end
 let src = code_typed1(f44200)
     @test count(x -> isa(x, Core.PiNode), src.code) == 0
@@ -1107,4 +1237,25 @@ end
 g_call_peel(x) = f_peel(x)
 let src = code_typed1(g_call_peel, Tuple{Any})
     @test count(isinvoke(:f_peel), src.code) == 2
+end
+
+const my_defined_var = 42
+@test fully_eliminated((); retval=42) do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end
+@test !fully_eliminated() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
+end
+
+# Test for deletion of value-dependent control flow that is apparent
+# at inference time, but hard to delete later.
+function maybe_error_int(x::Int)
+    if x > 2
+        Base.donotdelete(Base.inferencebarrier(x))
+        error()
+    end
+    return 1
+end
+@test fully_eliminated() do
+    return maybe_error_int(1)
 end

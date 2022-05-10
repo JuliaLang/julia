@@ -426,6 +426,9 @@ end
     @test in(1, u)
     @test in(2, u)
     @test length(u) == 2
+    @test unique(iseven, []) == []
+    # type promotion
+    @test unique(x -> x^2, [1, 3.]) == [1, 3.]
     @test @inferred(unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 8]
     @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
     @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
@@ -448,6 +451,8 @@ end
 end
 
 @testset "unique!" begin
+    u = []
+    @test unique!(u) === u
     u = [1,1,3,2,1]
     @inferred(unique!(u))
     @test u == [1,3,2]
@@ -506,6 +511,7 @@ end
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
     @test allunique(('a':1:'c')[1:2]) == true
+    @test allunique(collect(1:1001))
     for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
              1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
              StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
@@ -852,4 +858,15 @@ end
 @testset "⊊, ⊋" begin
     @test !((1, 2) ⊊ (1, 2, 2))
     @test !((1, 2, 2) ⊋ (1, 2))
+end
+
+@testset "AbstractSet & Fallback" begin
+    mutable struct TestSet{T} <: AbstractSet{T}
+        set::Set{T}
+        function TestSet{T}() where T
+            new{T}(Set{T}())
+        end
+    end
+    set = TestSet{Any}()
+    @test sizehint!(set, 1) === set
 end

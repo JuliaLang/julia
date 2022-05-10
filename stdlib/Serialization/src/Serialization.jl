@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 18 # do not make changes without bumping the version #!
+const ser_version = 19 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -481,7 +481,7 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     if (g.mod === __deserialized_types__ ) ||
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
-        v = getfield(g.mod, g.name)
+        v = getglobal(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
             # handle references to types in Main by sending the whole type.
@@ -541,7 +541,7 @@ function should_send_whole_type(s, t::DataType)
         isanonfunction = mod === Main && # only Main
             t.super === Function && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-            (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
+            (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
         #TODO: iskw = startswith(tn.name, "#kw#") && ???
         #TODO: iskw && return send-as-kwftype
@@ -986,7 +986,7 @@ function deserialize_module(s::AbstractSerializer)
         end
         m = Base.root_module(mkey[1])
         for i = 2:length(mkey)
-            m = getfield(m, mkey[i])::Module
+            m = getglobal(m, mkey[i])::Module
         end
     else
         name = String(deserialize(s)::Symbol)
@@ -994,7 +994,7 @@ function deserialize_module(s::AbstractSerializer)
         m = Base.root_module(pkg)
         mname = deserialize(s)
         while mname !== ()
-            m = getfield(m, mname)::Module
+            m = getglobal(m, mname)::Module
             mname = deserialize(s)
         end
     end
@@ -1112,7 +1112,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::Union{Int32, Int}), Int32(deserialize(s)::Union{Int32, Int}))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})
@@ -1364,7 +1364,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     else
         name = deserialize(s)::Symbol
         mod = deserialize(s)::Module
-        ty = getfield(mod,name)
+        ty = getglobal(mod, name)
     end
     if isa(ty,DataType) && isempty(ty.parameters)
         t = ty
@@ -1565,5 +1565,7 @@ function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCond
     return cond
 end
 
+serialize(s::AbstractSerializer, l::LazyString) =
+    invoke(serialize, Tuple{AbstractSerializer,Any}, s, Base._LazyString((), string(l)))
 
 end

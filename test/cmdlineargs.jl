@@ -218,7 +218,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -t, --threads
     code = "print(Threads.nthreads())"
-    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
@@ -328,10 +328,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test_broken occursin(expected_good, got)
 
         # Ask for coverage in specific file
-        # TODO: Figure out why asking for a specific file/dir means some lines are under-counted
-        # NOTE that a different expected reference is loaded here
-        expected = replace(read(joinpath(helperdir, "coverage_file.info.bad2"), String),
-            "<FILENAME>" => realpath(inputfile))
         tfile = realpath(inputfile)
         @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tfile`) == "(3, $(repr(tfile)))"
@@ -514,7 +510,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test parse(Int,readchomp(`$exename --math-mode=ieee -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
         @test parse(Int,readchomp(`$exename --math-mode=fast -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
+            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
     # --worker takes default / custom as argument (default/custom arguments
