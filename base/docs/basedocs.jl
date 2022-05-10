@@ -3000,7 +3000,7 @@ unused and delete the entire benchmark code).
 
 # Examples
 
-```
+```julia
 function loop()
     for i = 1:1000
         # The complier must guarantee that there are 1000 program points (in the correct
