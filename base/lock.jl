@@ -26,6 +26,9 @@ finally
     unlock(l)
 end
 ```
+
+If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
+succeeds unless there are other tasks attempting to hold the lock "at the same time."
 """
 mutable struct ReentrantLock <: AbstractLock
     # offset = 16
@@ -88,7 +91,7 @@ function islocked end
 # `ReentrantLock`.
 
 function islocked(rl::ReentrantLock)
-    return rl.havelock != 0
+    return (@atomic :monotonic rl.havelock) != 0
 end
 
 """

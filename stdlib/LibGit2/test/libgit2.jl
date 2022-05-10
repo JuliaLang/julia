@@ -1473,7 +1473,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
+            @test readlines(joinpath(test_repo, test_file)) == readlines(joinpath(cache_repo, test_file))
         end
 
         @testset "tags & branches" begin

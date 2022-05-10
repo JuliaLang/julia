@@ -591,6 +591,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
         return;
     }
+    assert(codeinst != NULL); // handle by jl_serialize_generic, but this makes clang-sa happy
 
     int validate = 0;
     if (codeinst->max_world == ~(size_t)0)
@@ -2009,6 +2010,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             jl_gc_wb(tn, tn->names);
             tn->wrapper = jl_deserialize_value(s, &tn->wrapper);
             jl_gc_wb(tn, tn->wrapper);
+            tn->Typeofwrapper = NULL;
             tn->mt = (jl_methtable_t*)jl_deserialize_value(s, (jl_value_t**)&tn->mt);
             jl_gc_wb(tn, tn->mt);
             ios_read(s->s, (char*)&tn->hash, sizeof(tn->hash));

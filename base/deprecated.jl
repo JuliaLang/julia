@@ -251,11 +251,11 @@ getindex(match::Core.MethodMatch, field::Int) =
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_pure_meta
+    @_total_may_throw_meta
     Tuple{S, T.parameters...}
 end
 function parameter_upper_bound(t::UnionAll, idx)
-    @_pure_meta
+    @_total_may_throw_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
@@ -294,3 +294,9 @@ const var"@_noinline_meta" = var"@noinline"
 @deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations
+
+# BEGIN 1.9 deprecations
+
+@deprecate splat(x) Splat(x) false
+
+# END 1.9 deprecations

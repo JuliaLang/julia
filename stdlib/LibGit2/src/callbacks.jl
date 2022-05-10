@@ -91,12 +91,15 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
             cred.user = unsafe_string(username_ptr)
         end
 
-        cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
-            default = joinpath(homedir(), ".ssh", "id_rsa")
-            if isempty(cred.prvkey) && isfile(default)
-                default
-            else
-                cred.prvkey
+        if haskey(ENV, "SSH_KEY_PATH")
+            cred.prvkey = ENV["SSH_KEY_PATH"]
+        elseif isempty(cred.prvkey)
+            for keytype in ("rsa", "ecdsa")
+                private_key_file = joinpath(homedir(), ".ssh", "id_$keytype")
+                if isfile(private_key_file)
+                    cred.prvkey = private_key_file
+                    break
+                end
             end
         end
 

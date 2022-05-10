@@ -352,25 +352,28 @@ end
 @testset "rounding division" begin
     for x = -100:100
         for y = 1:100
-            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
                 @test div(x,y,rnd) == round(x/y,rnd)
                 @test div(x,-y,rnd) == round(x/-y,rnd)
             end
+            @test divrem(x,y,RoundFromZero) == (div(x,y,RoundFromZero), rem(x,y,RoundFromZero))
+            @test divrem(x,-y,RoundFromZero) == (div(x,-y,RoundFromZero), rem(x,-y,RoundFromZero))
         end
     end
-    for (a, b, nearest, away, up) in (
-            (3, 2, 2, 2, 2),
-            (5, 3, 2, 2, 2),
-            (-3, 2, -2, -2, -1),
-            (5, 2, 2, 3, 3),
-            (-5, 2, -2, -3, -2),
-            (-5, 3, -2, -2, -2),
-            (5, -3, -2, -2, -2))
+    for (a, b, nearest, away, up, from_zero) in (
+            (3, 2, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2, 2),
+            (-3, 2, -2, -2, -1, -2),
+            (5, 2, 2, 3, 3, 3),
+            (-5, 2, -2, -3, -2, -3),
+            (-5, 3, -2, -2, -2, -2),
+            (5, -3, -2, -2, -2, -2))
         for sign in (+1, -1)
             (a, b) = (a*sign, b*sign)
             @test div(a, b, RoundNearest) === nearest
             @test div(a, b, RoundNearestTiesAway) === away
             @test div(a, b, RoundNearestTiesUp) === up
+            @test div(a, b, RoundFromZero) === from_zero
         end
     end
 
@@ -381,7 +384,7 @@ end
     @test div(typemax(Int)-2, typemax(Int), RoundNearest) === 1
 
     # Exhaustively test (U)Int8 to catch any overflow-style issues
-    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
         for T in (UInt8, Int8)
             for x in typemin(T):typemax(T)
                 for y in typemin(T):typemax(T)

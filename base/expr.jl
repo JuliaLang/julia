@@ -1,11 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+const is_expr = isexpr
+
 ## symbols ##
 
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names.
+Generates a symbol which will not conflict with other variable names (in the same module).
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 

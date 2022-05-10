@@ -40,7 +40,7 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.world,
         copy(frame.sptypes),
         copy(frame.slottypes),
-        frame.nargs,
+        length(frame.result.argtypes),
     )
     return mi_info
 end
@@ -427,13 +427,34 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function rt_adjust_effects(@nospecialize(rt), ipo_effects::Effects)
+function adjust_effects(sv::InferenceState)
+    ipo_effects = Effects(sv)
+
     # Always throwing an error counts or never returning both count as consistent,
     # but we don't currently model idempontency using dataflow, so we don't notice.
     # Fix that up here to improve precision.
-    if !ipo_effects.inbounds_taints_consistency && rt === Union{}
-        return Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    if !ipo_effects.inbounds_taints_consistency && sv.bestguess === Union{}
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
+
+    # override the analyzed effects using manually annotated effect settings
+    def = sv.linfo.def
+    if isa(def, Method)
+        override = decode_effects_override(def.purity)
+        if is_effect_overridden(override, :consistent)
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :effect_free)
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :nothrow)
+            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
+        end
+        if is_effect_overridden(override, :terminates_globally)
+            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
+        end
+    end
+
     return ipo_effects
 end
 
@@ -495,25 +516,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     me.result.valid_worlds = me.valid_worlds
     me.result.result = me.bestguess
-    ipo_effects = rt_adjust_effects(me.bestguess, me.ipo_effects)
-    # override the analyzed effects using manually annotated effect settings
-    def = me.linfo.def
-    if isa(def, Method)
-        override = decode_effects_override(def.purity)
-        if is_effect_overridden(override, :consistent)
-            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :nothrow)
-            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
-        end
-        if is_effect_overridden(override, :terminates_globally)
-            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
-        end
-    end
-    me.ipo_effects = me.result.ipo_effects = ipo_effects
+    me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
 end
@@ -662,26 +665,32 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # remove dead code optimization
     # and compute which variables may be used undef
     states = sv.stmt_types
-    nargs = sv.nargs
     nslots = length(states[1]::VarTable)
     undefs = fill(false, nslots)
     body = src.code::Array{Any,1}
     nexpr = length(body)
 
-    # replace GotoIfNot with its condition if the branch target is unreachable
-    for i = 1:nexpr
-        expr = body[i]
-        if isa(expr, GotoIfNot)
-            if !isa(states[expr.dest], VarTable)
-                body[i] = Expr(:call, GlobalRef(Core, :typeassert), expr.cond, GlobalRef(Core, :Bool))
+    # eliminate GotoIfNot if either of branch target is unreachable
+    if run_optimizer
+        for idx = 1:nexpr
+            stmt = body[idx]
+            if isa(stmt, GotoIfNot) && widenconst(argextype(stmt.cond, src, sv.sptypes)) === Bool
+                # replace live GotoIfNot with:
+                # - GotoNode if the fallthrough target is unreachable
+                # - no-op if the branch target is unreachable
+                if states[idx+1] === nothing
+                    body[idx] = GotoNode(stmt.dest)
+                elseif states[stmt.dest] === nothing
+                    body[idx] = nothing
+                end
             end
         end
     end
 
+    # dead code elimination for unreachable regions
     i = 1
     oldidx = 0
     changemap = fill(0, nexpr)
-
     while i <= nexpr
         oldidx += 1
         st_i = states[i]
@@ -716,7 +725,6 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         end
         i += 1
     end
-
     if run_optimizer
         renumber_ir_elements!(body, changemap)
     end
@@ -835,8 +843,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
         if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
-            # we already inferred this edge previously and decided to discarded the inferred code
-            # but the inlinear will request to use it, we re-infer it here and keep it around in the local cache
+            # we already inferred this edge before and decided to discard the inferred code,
+            # nevertheless we re-infer it here again and keep it around in the local cache
+            # since the inliner will request to use it later
             cache = :local
         else
             effects = ipo_effects(code)
@@ -887,8 +896,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         typeinf(interp, frame)
         update_valid_age!(frame, caller)
         edge = frame.inferred ? mi : nothing
-        edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
-        return EdgeCallResult(frame.bestguess, edge, edge_effects)
+        return EdgeCallResult(frame.bestguess, edge, Effects(frame)) # effects are adjusted already within `finish`
     elseif frame === true
         # unresolvable cycle
         return EdgeCallResult(Any, nothing, Effects())
@@ -896,8 +904,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(frame, caller)
-    edge_effects = rt_adjust_effects(frame.bestguess, Effects(frame))
-    return EdgeCallResult(frame.bestguess, nothing, edge_effects)
+    return EdgeCallResult(frame.bestguess, nothing, adjust_effects(frame))
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
@@ -943,7 +950,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.slotflags = fill(IR_FLAG_NULL, nargs)
                 tree.ssavaluetypes = 1
                 tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
+                tree.linetable = [LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true

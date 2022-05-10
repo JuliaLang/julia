@@ -807,6 +807,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    Splat,
 
 # I/O and events
     close,
