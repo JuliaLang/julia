@@ -878,9 +878,11 @@ end
 
 Compute ``x \\times 2^n``.
 
+See also [`frexp`](@ref), [`exponent`](@ref).
+
 # Examples
 ```jldoctest
-julia> ldexp(5., 2)
+julia> ldexp(5.0, 2)
 20.0
 ```
 """
@@ -935,6 +937,8 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
 For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
 
+See also [`significand`](@ref), [`exponent`](@ref), [`ldexp`](@ref).
+
 # Examples
 ```jldoctest
 julia> exponent(8)
@@ -951,6 +955,11 @@ julia> exponent(16.0)
 
 julia> exponent(3.142e-4)
 -12
+
+julia> exponent(0.0)
+ERROR: DomainError with 0.0:
+Cannot be ±0.0.
+[...]
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -990,6 +999,8 @@ a non-zero finite number, then the result will be a number of the same type and
 sign as `x`, and whose absolute value is on the interval ``[1,2)``. Otherwise
 `x` is returned.
 
+See also [`frexp`](@ref), [`exponent`](@ref).
+
 # Examples
 ```jldoctest
 julia> significand(15.2)
@@ -1024,10 +1035,19 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+
+See also [`significand`](@ref), [`exponent`](@ref), [`ldexp`](@ref).
+
 # Examples
 ```jldoctest
-julia> frexp(12.8)
-(0.8, 4)
+julia> frexp(6.0)
+(0.75, 3)
+
+julia> significand(6.0), exponent(6.0)  # interval [1, 2) instead
+(1.5, 2)
+
+julia> frexp(0.0), frexp(NaN), frexp(-Inf)  # exponent would give an error
+((0.0, 0), (NaN, 0), (-Inf, 0))
 ```
 """
 function frexp(x::T) where T<:IEEEFloat

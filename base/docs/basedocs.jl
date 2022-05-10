@@ -2031,6 +2031,8 @@ Bool
 
 64-bit floating point number type (IEEE 754 standard).
 Binary format is 1 sign, 11 exponent, 52 fraction bits.
+See [`bitstring`](@ref), [`signbit`](@ref), [`exponent`](@ref), [`frexp`](@ref),
+and [`significand`](@ref) to access various bits.
 
 This is the default for floating point literals, `3.141 isa Float64`.
 The exponent for scientific notation can be entered as `e` or `E`, 
@@ -2050,7 +2052,7 @@ Binary format is 1 sign, 8 exponent, 23 fraction bits.
 The exponent for scientific notation should be entered as lower-case `f`, 
 thus `2f3 === 2f0 * 10^3 === Float32(2_000)`.
 
-See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float64`](@ref), [`Float16`](@ref).
+See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float16`](@ref), [`exponent`](@ref), [`frexp`](@ref).
 """
 Float32
 
