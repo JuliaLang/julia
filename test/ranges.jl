@@ -2031,7 +2031,8 @@ end
 end
 
 @testset "length(StepRange()) type stability" begin
-    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0)))
+    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0))) #bigints
+    typeof(length(StepRange(Int8(1),Int128(1),Int8(1)))) == typeof(length(StepRange(Int8(1),Int128(1),Int8(0)))) #smallints
     typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
 end
 

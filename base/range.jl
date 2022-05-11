@@ -801,7 +801,7 @@ let smallints = (Int === Int64 ?
     function length(r::OrdinalRange{<:smallints})
         s = step(r)
         isempty(r) && return 0
-        return div(Int(last(r)) - Int(first(r)), s) + 1
+        return Int(div(Int(last(r)) - Int(first(r)), s)) + 1
     end
     length(r::AbstractUnitRange{<:smallints}) = Int(last(r)) - Int(first(r)) + 1
     length(r::OneTo{<:smallints}) = Int(r.stop)
