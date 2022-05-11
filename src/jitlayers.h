@@ -54,6 +54,9 @@ using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
 
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
+
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis);
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
 void addMachinePasses(legacy::PassManagerBase *PM, int optlevel);
@@ -115,8 +118,8 @@ struct jl_returninfo_t {
 };
 
 struct jl_llvmf_dump_t {
-    orc::ThreadSafeModule TSM;
-    Function *F;
+    LLVMOrcThreadSafeModuleRef TSM;
+    LLVMValueRef F;
 };
 
 typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
