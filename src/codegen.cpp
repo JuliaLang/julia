@@ -1743,7 +1743,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 if (!union_isaBB) {
                     union_isaBB = BasicBlock::Create(ctx.builder.getContext(), "union_isa", ctx.f);
                     ctx.builder.SetInsertPoint(union_isaBB);
-                    union_box_dt = emit_typeof_or_null(ctx, v.Vboxed);
+                    union_box_dt = emit_typeof(ctx, v.Vboxed, skip != NULL);
                     post_union_isaBB = ctx.builder.GetInsertBlock();
                 }
             };
@@ -1842,7 +1842,6 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
         return ghostValue(ctx, typ);
     Value *new_tindex = NULL;
     if (jl_is_concrete_type(typ)) {
-        assert(skip == nullptr && "skip only valid for union type return");
         if (v.TIndex && !jl_is_pointerfree(typ)) {
             // discovered that this union-split type must actually be isboxed
             if (v.Vboxed) {
@@ -1850,14 +1849,20 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             }
             else {
                 // type mismatch: there weren't any boxed values in the union
-                CreateTrap(ctx.builder);
+                if (skip)
+                    *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+                else
+                    CreateTrap(ctx.builder);
                 return jl_cgval_t(ctx.builder.getContext());
             }
         }
         if (jl_is_concrete_type(v.typ) && !jl_is_kind(v.typ)) {
             if (jl_is_concrete_type(typ) && !jl_is_kind(typ)) {
                 // type mismatch: changing from one leaftype to another
-                CreateTrap(ctx.builder);
+                if (skip)
+                    *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+                else
+                    CreateTrap(ctx.builder);
                 return jl_cgval_t(ctx.builder.getContext());
             }
         }
@@ -2802,7 +2807,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     else if (f == jl_builtin_typeof && nargs == 1) {
-        *ret = emit_typeof(ctx, argv[1]);
+        *ret = emit_typeof(ctx, argv[1], false);
         return true;
     }
 
@@ -3944,7 +3949,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
             ctx.spvals_ptr,
             i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
     Value *sp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
-    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
+    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false),
             track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
     for (size_t j = 0; j < i; j++) {
@@ -4018,7 +4023,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
                 ctx.spvals_ptr,
                 i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
         Value *sp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
-        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
+        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false),
             track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     }
     else {
@@ -4191,7 +4196,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                 }
             }
             else {
-                emit_unionmove(ctx, vi.value.V, ctx.tbaa().tbaa_stack, rval_info, isboxed, vi.isVolatile);
+                emit_unionmove(ctx, vi.value.V, ctx.tbaa().tbaa_stack, rval_info, /*skip*/isboxed, vi.isVolatile);
             }
         }
     }
@@ -4655,7 +4660,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         jl_error("GotoIfNot in value position");
     }
     if (jl_is_pinode(expr)) {
-        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1));
+        Value *skip = NULL;
+        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1), &skip);
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;
@@ -7504,7 +7510,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     else {
                         // must be careful to emit undef here (rather than a bitcast or
                         // load of val) if the runtime type of val isn't phiType
-                        Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                        Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                         V = emit_guarded_test(ctx, isvalid, undef_value_for_type(VN->getType()), [&] {
                             return emit_unbox(ctx, VN->getType(), val, phiType);
                         });
@@ -7516,7 +7522,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     // must be careful to emit undef here (rather than a bitcast or
                     // load of val) if the runtime type of val isn't phiType
                     assert(lty != ctx.types().T_prjlvalue);
-                    Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                    Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                     emit_guarded_test(ctx, isvalid, nullptr, [&] {
                         (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest), ctx.tbaa().tbaa_stack);
                         return nullptr;
@@ -7558,7 +7564,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
                     RTindex = new_union.TIndex;
                     if (!RTindex) {
                         assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
-                        RTindex = compute_tindex_unboxed(ctx, new_union, phiType);
+                        RTindex = compute_tindex_unboxed(ctx, new_union, phiType, true);
                         if (dest) {
                             // If dest is not set, this is a ghost union, the recipient of which
                             // is often not prepared to handle a boxed representation of the ghost.
