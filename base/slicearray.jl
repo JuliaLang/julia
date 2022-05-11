@@ -172,8 +172,8 @@ See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 
-!!! compat "Julia 1.7"
-     Prior to Julia 1.7, this returned an iterator.
+!!! compat "Julia 1.9"
+     Prior to Julia 1.9, this returned an iterator.
 
 # Example
 
