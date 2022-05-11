@@ -280,6 +280,53 @@ julia> z
 kw"global"
 
 """
+    for outer
+
+Reuse an existing local variable for iteration in a `for` loop.
+
+See the [manual section on variable scoping](@ref scope-of-variables) for more information.
+
+See also [`for`](@ref).
+
+
+# Examples
+```jldoctest
+julia> function f()
+           i = 0
+           for i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+0
+```
+
+```jldoctest
+julia> function f()
+           i = 0
+           for outer i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+3
+```
+
+```jldoctest
+julia> i = 0 # global variable
+       for outer i = 1:3
+       end
+ERROR: syntax: no outer local variable declaration exists for "for outer"
+[...]
+```
+"""
+kw"outer"
+
+"""
     ' '
 
 A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
@@ -833,6 +880,10 @@ kw"?", kw"?:"
 
 `for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
+
+The iteration variable is always a new variable, even if a variable of the same name
+exists in the enclosing scope.
+Use [`outer`](@ref) to reuse an existing local variable for iteration.
 
 # Examples
 ```jldoctest
