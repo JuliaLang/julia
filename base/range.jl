@@ -689,6 +689,13 @@ step_hp(r::AbstractRange) = step(r)
 
 axes(r::AbstractRange) = (oneto(length(r)),)
 
+# Needed to ensure `has_offset_axes` can constant-fold.
+has_offset_axes(::StepRange) = false
+let baseints = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128}
+    global firstindex
+    firstindex(::StepRange{T,<:baseints}) where {T<:baseints} = sizeof(T) < sizeof(Int) ? 1 : one(T)
+end
+
 # n.b. checked_length for these is defined iff checked_add and checked_sub are
 # defined between the relevant types
 function checked_length(r::OrdinalRange{T}) where T

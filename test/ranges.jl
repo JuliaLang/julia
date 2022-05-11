@@ -2347,3 +2347,13 @@ end
 @test isempty(range(typemax(Int), length=0, step=UInt(2)))
 
 @test length(range(1, length=typemax(Int128))) === typemax(Int128)
+
+@testset "firstindex(::StepRange{T,T})" begin
+    test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
+    for T1 in (Int8,Int16,Int32,Int64,Int128), T2 in (Int8,Int16,Int32,Int64,Int128)
+        for T in (T1, unsigned(T1)), S in (T2, unsigned(T2))
+            @test test_firstindex(StepRange{T,S}(1,1,1))
+            @test test_firstindex(StepRange{T,S}(1,1,0))
+        end
+    end
+end
