@@ -2,6 +2,8 @@
 
 using Random
 
+is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
+
 @testset "gcd/lcm" begin
     # All Integer data types take different code paths -- test all
     # TODO: Test gcd and lcm for BigInt.
@@ -146,6 +148,11 @@ using Random
     @test gcd(0xf, 20) == 5
     @test gcd(UInt32(6), Int8(-50)) == 2
     @test gcd(typemax(UInt), -16) == 1
+
+    @testset "effects" begin
+        @test is_effect_free(gcd, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
+    end
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -264,6 +271,9 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
+    @test prevpow(Int64(10), Int64(1234567890123456789)) === Int64(1000000000000000000)
+    @test prevpow(10, 101.0) === 100
+    @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end

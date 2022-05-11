@@ -370,8 +370,7 @@ function serialize(s::ClusterSerializer, f::Future)
         p = worker_id_from_socket(s.io)
         (p !== f.where) && send_add_client(f, p)
     end
-    fc = Future((f.where, f.whence, f.id, v_cache)) # copy to be used for serialization (contains a reset lock)
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, fc)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f)
 end
 
 function serialize(s::ClusterSerializer, rr::RemoteChannel)

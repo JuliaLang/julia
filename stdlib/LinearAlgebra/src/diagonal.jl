@@ -77,8 +77,16 @@ Diagonal{T}(D::Diagonal{T}) where {T} = D
 Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
-Matrix(D::Diagonal) = diagm(0 => D.diag)
-Array(D::Diagonal) = Matrix(D)
+Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
+Array(D::Diagonal{T}) where {T} = Matrix(D)
+function Matrix{T}(D::Diagonal) where {T}
+    n = size(D, 1)
+    B = zeros(T, n, n)
+    @inbounds for i in 1:n
+        B[i,i] = D.diag[i]
+    end
+    return B
+end
 
 """
     Diagonal{T}(undef, n)
@@ -87,12 +95,8 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 """
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
-# For D<:Diagonal, similar(D[, neweltype]) should yield a Diagonal matrix.
-# On the other hand, similar(D, [neweltype,] shape...) should yield a sparse matrix.
-# The first method below effects the former, and the second the latter.
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
-# The method below is moved to SparseArrays for now
-# similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = spzeros(T, dims...)
+similar(::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
@@ -114,8 +118,8 @@ end
     end
     r
 end
-diagzero(::Diagonal{T},i,j) where {T} = zero(T)
-diagzero(D::Diagonal{<:AbstractMatrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
+diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -245,8 +249,8 @@ end
 (*)(D::Diagonal, A::AbstractMatrix) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
-rmul!(A::AbstractMatrix, D::Diagonal) = mul!(A, A, D)
-lmul!(D::Diagonal, B::AbstractVecOrMat) = mul!(B, D, B)
+rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
+lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
 #TODO: It seems better to call (D' * adjA')' directly?
 function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
@@ -281,35 +285,80 @@ function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
 end
 
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
-    if iszero(beta)
-        out .= (D.diag .* B) .*ₛ alpha
+    require_one_based_indexing(out)
+    if iszero(alpha)
+        _rmul_or_fill!(out, beta)
     else
-        out .= (D.diag .* B) .*ₛ alpha .+ out .* beta
+        if iszero(beta)
+            @inbounds for j in axes(B, 2)
+                @simd for i in axes(B, 1)
+                    out[i,j] = D.diag[i] * B[i,j] * alpha
+                end
+            end
+        else
+            @inbounds for j in axes(B, 2)
+                @simd for i in axes(B, 1)
+                    out[i,j] = D.diag[i] * B[i,j] * alpha + out[i,j] * beta
+                end
+            end
+        end
     end
     return out
 end
-
 @inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
-    if iszero(beta)
-        out .= (A .* permutedims(D.diag)) .*ₛ alpha
+    require_one_based_indexing(out)
+    if iszero(alpha)
+        _rmul_or_fill!(out, beta)
     else
-        out .= (A .* permutedims(D.diag)) .*ₛ alpha .+ out .* beta
+        if iszero(beta)
+            @inbounds for j in axes(A, 2)
+                dja = D.diag[j] * alpha
+                @simd for i in axes(A, 1)
+                    out[i,j] = A[i,j] * dja
+                end
+            end
+        else
+            @inbounds for j in axes(A, 2)
+                dja = D.diag[j] * alpha
+                @simd for i in axes(A, 1)
+                    out[i,j] = A[i,j] * dja + out[i,j] * beta
+                end
+            end
+        end
     end
     return out
 end
-
 @inline function __muldiag!(out::Diagonal, D1::Diagonal, D2::Diagonal, alpha, beta)
-    if iszero(beta)
-        out.diag .= (D1.diag .* D2.diag) .*ₛ alpha
+    d1 = D1.diag
+    d2 = D2.diag
+    if iszero(alpha)
+        _rmul_or_fill!(out.diag, beta)
     else
-        out.diag .= (D1.diag .* D2.diag) .*ₛ alpha .+ out.diag .* beta
+        if iszero(beta)
+            @inbounds @simd for i in eachindex(out.diag)
+                out.diag[i] = d1[i] * d2[i] * alpha
+            end
+        else
+            @inbounds @simd for i in eachindex(out.diag)
+                out.diag[i] = d1[i] * d2[i] * alpha + out.diag[i] * beta
+            end
+        end
     end
     return out
 end
-
-# only needed for ambiguity resolution, as mul! is explicitly defined for these arguments
-@inline __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta) =
-    mul!(out, D1, D2, alpha, beta)
+@inline function __muldiag!(out, D1::Diagonal, D2::Diagonal, alpha, beta)
+    require_one_based_indexing(out)
+    mA = size(D1, 1)
+    d1 = D1.diag
+    d2 = D2.diag
+    _rmul_or_fill!(out, beta)
+    if !iszero(alpha)
+        @inbounds @simd for i in 1:mA
+            out[i,i] += d1[i] * d2[i] * alpha
+        end
+    end
+    return out
+end
 
 @inline function _muldiag!(out, A, B, alpha, beta)
     _muldiag_size_check(out, A, B)
@@ -336,27 +385,14 @@ end
 @inline mul!(C::Diagonal, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
     _muldiag!(C, Da, Db, alpha, beta)
 
-function mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number)
-    _muldiag_size_check(C, Da, Db)
-    require_one_based_indexing(C)
-    mA = size(Da, 1)
-    da = Da.diag
-    db = Db.diag
-    _rmul_or_fill!(C, beta)
-    if iszero(beta)
-        @inbounds @simd for i in 1:mA
-            C[i,i] = Ref(da[i] * db[i]) .*ₛ alpha
-        end
-    else
-        @inbounds @simd for i in 1:mA
-            C[i,i] += Ref(da[i] * db[i]) .*ₛ alpha
-        end
-    end
-    return C
-end
+mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
+    _muldiag!(C, Da, Db, alpha, beta)
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
+_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
+    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
+_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
 
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -376,7 +412,13 @@ function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
     B
 end
 
-\(D::Diagonal, B::AbstractVecOrMat) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
+function \(D::Diagonal, B::AbstractVector)
+    j = findfirst(iszero, D.diag)
+    isnothing(j) || throw(SingularException(j))
+    return D.diag .\ B
+end
+\(D::Diagonal, B::AbstractMatrix) =
+    ldiv!(_init(\, D, B).(B), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -599,8 +641,8 @@ transpose(D::Diagonal{<:Number}) = D
 transpose(D::Diagonal) = Diagonal(transpose.(D.diag))
 adjoint(D::Diagonal{<:Number}) = conj(D)
 adjoint(D::Diagonal) = Diagonal(adjoint.(D.diag))
-Base.permutedims(D::Diagonal) = D
-Base.permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
+permutedims(D::Diagonal) = D
+permutedims(D::Diagonal, perm) = (Base.checkdims_perm(D, D, perm); D)
 
 function diag(D::Diagonal{T}, k::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
@@ -662,7 +704,7 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = copy(D.diag)
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
     [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
@@ -670,20 +712,38 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
     end
-    Eigen(sorteig!(eigvals(D), eigvecs(D), sortby)...)
+    Td = Base.promote_op(/, eltype(D), eltype(D))
+    λ = eigvals(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        λ = λ[p] # make a copy, otherwise this permutes D.diag
+        evecs = zeros(Td, size(D))
+        @inbounds for i in eachindex(p)
+            evecs[p[i],i] = one(Td)
+        end
+    else
+        evecs = Matrix{Td}(I, size(D))
+    end
+    Eigen(λ, evecs)
 end
 
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
 svdvals(D::Diagonal) = [svdvals(v) for v in D.diag]
-function svd(D::Diagonal{T}) where T<:Number
-    S   = abs.(D.diag)
-    piv = sortperm(S, rev = true)
-    U   = Diagonal(D.diag ./ S)
-    Up  = hcat([U[:,i] for i = 1:length(D.diag)][piv]...)
-    V   = Diagonal(fill!(similar(D.diag), one(T)))
-    Vp  = hcat([V[:,i] for i = 1:length(D.diag)][piv]...)
-    return SVD(Up, S[piv], copy(Vp'))
+function svd(D::Diagonal{T}) where {T<:Number}
+    d = D.diag
+    s = abs.(d)
+    piv = sortperm(s, rev = true)
+    S = s[piv]
+    Td  = typeof(oneunit(T)/oneunit(T))
+    U = zeros(Td, size(D))
+    Vt = copy(U)
+    for i in 1:length(d)
+        j = piv[i]
+        U[j,i] = d[j] / S[i]
+        Vt[i,j] = one(Td)
+    end
+    return SVD(U, S, Vt)
 end
 
 # disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
@@ -730,10 +790,10 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
     Cholesky(A, 'U', convert(BlasInt, info))
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
-
-cholesky(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true) =
-    cholesky!(cholcopy(A), NoPivot(); check = check)
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+@inline cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
+@inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copymutable_oftype(A, choltype(A))
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

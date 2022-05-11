@@ -475,6 +475,57 @@ Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.
 
 See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
+!!! compat "Julia 1.9"
+    `...` in non-final position of an assignment requires Julia 1.9
+
+Slurping in assignments can also occur in any other position. As opposed to slurping the end
+of a collection however, this will always be eager.
+
+```jldoctest
+julia> a, b..., c = 1:5
+1:5
+
+julia> a
+1
+
+julia> b
+3-element Vector{Int64}:
+ 2
+ 3
+ 4
+
+julia> c
+5
+
+julia> front..., tail = "Hi!"
+"Hi!"
+
+julia> front
+"Hi"
+
+julia> tail
+'!': ASCII/Unicode U+0021 (category Po: Punctuation, other)
+```
+
+This is implemented in terms of the function [`Base.split_rest`](@ref).
+
+Note that for variadic function definitions, slurping is still only allowed in final position.
+This does not apply to [single argument destructuring](@ref man-argument-destructuring) though,
+as that does not affect method dispatch:
+
+```jldoctest
+julia> f(x..., y) = x
+ERROR: syntax: invalid "..." on non-final argument
+Stacktrace:
+[...]
+
+julia> f((x..., y)) = x
+f (generic function with 1 method)
+
+julia> f((1, 2, 3))
+(1, 2)
+```
+
 ## Property destructuring
 
 Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names.
@@ -492,7 +543,7 @@ julia> b
 2
 ```
 
-## Argument destructuring
+## [Argument destructuring](@id man-argument-destructuring)
 
 The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
@@ -912,7 +963,7 @@ julia> (sqrt ∘ sum)(1:10)
 7.416198487095663
 ```
 
-The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described next).
+The pipe operator can also be used with broadcasting, as `.|>`, to provide a useful combination of the chaining/piping and dot vectorization syntax (described below).
 
 ```jldoctest
 julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length]
@@ -921,6 +972,19 @@ julia> ["a", "list", "of", "strings"] .|> [uppercase, reverse, titlecase, length
   "tsil"
   "Of"
  7
+```
+
+When combining pipes with anonymous functions, parentheses must be used if subsequent pipes are not to parsed as part of the anonymous function's body. Compare:
+
+```jldoctest
+julia> 1:3 .|> (x -> x^2) |> sum |> sqrt
+3.7416573867739413
+
+julia> 1:3 .|> x -> x^2 |> sum |> sqrt
+3-element Vector{Float64}:
+ 1.0
+ 2.0
+ 3.0
 ```
 
 ## [Dot Syntax for Vectorizing Functions](@id man-vectorized)
@@ -979,6 +1043,9 @@ julia> f.(A, B)
  26.0
  33.0
 ```
+
+Keyword arguments are not broadcasted over, but are simply passed through to each call of
+the function.  For example, `round.(x, digits=3)` is equivalent to `broadcast(x -> round(x, digits=3), x)`.
 
 Moreover, *nested* `f.(args...)` calls are *fused* into a single `broadcast` loop. For example,
 `sin.(cos.(X))` is equivalent to `broadcast(x -> sin(cos(x)), X)`, similar to `[sin(cos(x)) for x in X]`:

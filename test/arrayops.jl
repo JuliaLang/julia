@@ -6,8 +6,6 @@ using .Main.OffsetArrays
 
 isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
 
-using SparseArrays
-
 using Random, LinearAlgebra
 using Dates
 
@@ -1201,9 +1199,6 @@ end
     m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
-
-    # issue #21123
-    @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -1521,6 +1516,11 @@ end
     @test_throws BoundsError deleteat!([], [2])
     @test deleteat!([], []) == []
     @test deleteat!([], Bool[]) == []
+    let a = Vector{Any}(undef, 2)
+        a[1] = 1
+        @test isassigned(deleteat!(copy(a), [2]), 1)
+        @test !isassigned(deleteat!(copy(a), [1]), 1)
+    end
 end
 
 @testset "comprehensions" begin
@@ -1954,13 +1954,6 @@ end
     @test isless(CartesianIndex((2,1)), CartesianIndex((1,2)))
     @test !isless(CartesianIndex((1,2)), CartesianIndex((2,1)))
 
-    a = spzeros(2,3)
-    @test CartesianIndices(size(a)) == eachindex(a)
-    a[CartesianIndex{2}(2,3)] = 5
-    @test a[2,3] == 5
-    b = view(a, 1:2, 2:3)
-    b[CartesianIndex{2}(1,1)] = 7
-    @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
     @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
     @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
@@ -2013,16 +2006,6 @@ end
     y = iterate(itr, y[2])
     @test y === nothing
     @test r[val] == 3
-    r = sparse(2:3:8)
-    itr = eachindex(r)
-    y = iterate(itr)
-    @test y !== nothing
-    y = iterate(itr, y[2])
-    y = iterate(itr, y[2])
-    @test y !== nothing
-    val, state = y
-    @test r[val] == 8
-    @test iterate(itr, state) == nothing
 end
 
 R = CartesianIndices((1,3))
@@ -2120,6 +2103,16 @@ end
     @test_throws BoundsError copyto!(a,b)
     @test_throws ArgumentError copyto!(a,2:3,1:3,b,1:5,2:7)
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
+end
+
+@testset "empty copyto!" begin
+    @test isempty(copyto!(Int[], ()))
+    @test isempty(copyto!(Int[], Int[]))
+    @test copyto!([1,2], ()) == [1,2]
+
+    @test isempty(copyto!(Int[], 1, ()))
+    @test isempty(copyto!(Int[], 1, Int[]))
+    @test copyto!([1,2], 1, ()) == [1,2]
 end
 
 module RetTypeDecl
@@ -2335,10 +2328,12 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
     f40() = Float64[A A]
     f41() = [A B]
     f42() = Int[A B]
+    f43() = Int[A...]
+    f44() = Float64[A..., B...]
 
     for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
               f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
-              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
+              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43, f44]
         @test isconcretetype(Base.return_types(f, ())[1])
     end
 end

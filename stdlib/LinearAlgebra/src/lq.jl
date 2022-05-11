@@ -22,13 +22,13 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64, Matrix{Float64}}
+LQ{Float64, Matrix{Float64}, Vector{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  -8.60233   0.0
   4.41741  -0.697486
 Q factor:
-2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}}:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
  -0.581238  -0.813733
  -0.813733   0.581238
 
@@ -43,28 +43,31 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: Factorization{T}
     factors::S
-    τ::Vector{T}
+    τ::C
 
-    function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+    function LQ{T,S,C}(factors, τ) where {T,S<:AbstractMatrix{T},C<:AbstractVector{T}}
         require_one_based_indexing(factors)
-        new{T,S}(factors, τ)
+        new{T,S,C}(factors, τ)
     end
 end
-LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
-function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
-    LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
-end
+LQ(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T} =
+    LQ{T,typeof(factors),typeof(τ)}(factors, τ)
+LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
+    LQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(LQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
+           LQ{T,S,typeof(τ)}(factors, τ))
 
 # iteration for destructuring into components
 Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-struct LQPackedQ{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+struct LQPackedQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: AbstractMatrix{T}
     factors::S
-    τ::Vector{T}
+    τ::C
 end
 
 
@@ -96,13 +99,13 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64, Matrix{Float64}}
+LQ{Float64, Matrix{Float64}, Vector{Float64}}
 L factor:
 2×2 Matrix{Float64}:
  -8.60233   0.0
   4.41741  -0.697486
 Q factor:
-2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}}:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
  -0.581238  -0.813733
  -0.813733   0.581238
 
@@ -117,7 +120,7 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::AbstractMatrix{T}) where {T}  = lq!(copy_oftype(A, lq_eltype(T)))
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copymutable_oftype(A, lq_eltype(T)))
 lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
 
 lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
@@ -134,7 +137,7 @@ Array(A::LQ) = Matrix(A)
 
 adjoint(A::LQ) = Adjoint(A)
 Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
-    QR{T,typeof(F.parent.factors)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
+    QR{T,typeof(F.parent.factors),typeof(F.parent.τ)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
@@ -194,7 +197,7 @@ function lmul!(A::LQ, B::StridedVecOrMat)
 end
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    _cut_B(lmul!(convert(Factorization{TAB}, A), copy_oftype(B, TAB)), 1:size(A,1))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copymutable_oftype(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q
@@ -202,7 +205,7 @@ end
 lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    lmul!(AbstractMatrix{TAB}(A), copy_oftype(B, TAB))
+    lmul!(AbstractMatrix{TAB}(A), copymutable_oftype(B, TAB))
 end
 
 ### QcB
@@ -215,7 +218,7 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        lmul!(adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
+        lmul!(adjoint(AbstractMatrix{TAB}(A)), copymutable_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         lmul!(adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
@@ -266,7 +269,7 @@ rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCo
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return rmul!(copy_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
+    return rmul!(copymutable_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
@@ -290,7 +293,7 @@ end
 function *(A::StridedVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 2) == size(Q.factors, 2)
-        C = copy_oftype(A, TR)
+        C = copymutable_oftype(A, TR)
     elseif size(A, 2) == size(Q.factors, 1)
         C = zeros(TR, size(A, 1), size(Q.factors, 2))
         copyto!(C, 1, A, 1, length(A))

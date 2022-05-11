@@ -26,7 +26,7 @@ it makes avoiding unwanted copying of arrays difficult. By convention, a
 function name ending with a `!` indicates that it will mutate or destroy the
 value of one or more of its arguments (compare, for example, [`sort`](@ref) and [`sort!`](@ref)).
 Callees must make explicit copies to ensure that they don't modify inputs that
-they don't intend to change. Many non- mutating functions are implemented by
+they don't intend to change. Many non-mutating functions are implemented by
 calling a function of the same name with an added `!` at the end on an explicit
 copy of the input, and returning that copy.
 
@@ -65,7 +65,7 @@ omitted it will default to [`Float64`](@ref).
 | [`deepcopy(A)`](@ref)                          | copy `A`, recursively copying its elements                                                                                                                                                                                                   |
 | [`similar(A, T, dims...)`](@ref)               | an uninitialized array of the same type as `A` (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
 | [`reinterpret(T, A)`](@ref)                    | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
-| [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
+| [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values. For floating point types `T`, the values lie in the half-open interval ``[0, 1)``.                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref).                                                                                                                                                                                                                   |
 | [`range(start, stop, n)`](@ref)                | a range of `n` linearly spaced elements from `start` to `stop` |

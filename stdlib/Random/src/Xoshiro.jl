@@ -20,6 +20,28 @@ from the parent, and uses SIMD to generate in parallel (i.e. the bulk stream con
 multiple interleaved xoshiro instances).
 The virtual PRNGs are discarded once the bulk request has been serviced (and should cause
 no heap allocations).
+
+# Examples
+```jldoctest
+julia> using Random
+
+julia> rng = Xoshiro(1234);
+
+julia> x1 = rand(rng, 2)
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
+
+julia> rng = Xoshiro(1234);
+
+julia> x2 = rand(rng, 2)
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
+
+julia> x1 == x2
+true
+```
 """
 mutable struct Xoshiro <: AbstractRNG
     s0::UInt64

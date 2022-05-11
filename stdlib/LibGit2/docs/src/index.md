@@ -26,6 +26,7 @@ LibGit2.GitAnnotated
 LibGit2.GitBlame
 LibGit2.GitBlob
 LibGit2.GitCommit
+LibGit2.GitConfig
 LibGit2.GitHash
 LibGit2.GitObject
 LibGit2.GitRemote
@@ -52,6 +53,7 @@ LibGit2.StatusEntry
 LibGit2.StatusOptions
 LibGit2.StrArrayStruct
 LibGit2.TimeStruct
+LibGit2.addfile
 LibGit2.add!
 LibGit2.add_fetch!
 LibGit2.add_push!
@@ -158,4 +160,5 @@ LibGit2.CachedCredentials
 LibGit2.CredentialPayload
 LibGit2.approve
 LibGit2.reject
+LibGit2.Consts.GIT_CONFIG
 ```

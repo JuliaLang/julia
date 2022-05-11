@@ -23,7 +23,7 @@ Phi nodes are part of generic SSA abstraction (see the link above if you're not 
 the concept). In the Julia IR, these nodes are represented as:
 ```
 struct PhiNode
-    edges::Vector{Int}
+    edges::Vector{Int32}
     values::Vector{Any}
 end
 ```
