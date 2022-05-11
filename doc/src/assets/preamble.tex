@@ -1,0 +1,48 @@
+%% Copied from the default preamble of `Documenter.jl`.
+%%
+%%  With patch:
+%%  - inserting a custom cover
+
+
+%% Default preamble BEGIN
+\documentclass[oneside, a4paper]{memoir}
+
+\usepackage{./documenter}
+\usepackage{./custom}
+
+
+%% TOC settings
+% -- TOC depth
+%   value: [part, chapter, section, subsection,
+%           subsubsection, paragraph, subparagraph]
+\settocdepth{section}  % show "part+chapter+section" in TOC
+% -- TOC spacing
+%   ref: https://tex.stackexchange.com/questions/60317/toc-spacing-in-memoir
+%   doc: memoir/memman.pdf
+%       - Figure 9.2: Layout of a ToC
+%       - Table 9.3: Value of K in macros for styling entries
+\makeatletter
+% {part} to {chaper}
+\setlength{\cftbeforepartskip}{1.5em \@plus \p@}
+% {chaper} to {chaper}
+\setlength{\cftbeforechapterskip}{0.0em \@plus \p@}
+% Chapter num to chapter title spacing (Figure 9.2@memman)
+\setlength{\cftchapternumwidth}{2.5em \@plus \p@}
+% indent before section number
+\setlength{\cftsectionindent}{2.5em \@plus \p@}
+% Section num to section title spacing (Figure 9.2@memman)
+\setlength{\cftsectionnumwidth}{4.0em \@plus \p@}
+\makeatother
+
+%% Main document begin
+\begin{document}
+
+\frontmatter
+%% ---- Custom cover page
+% \maketitle
+\input{assets/cover.tex}  % insert cover page
+%% ---- Custom cover page
+\cleardoublepage % makes the next page a odd-numbered page
+\tableofcontents
+\mainmatter
+%% preamble END

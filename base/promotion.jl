@@ -10,9 +10,9 @@ they both inherit.
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), ts...) = (@_total_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_total_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -29,11 +29,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif a <: Tuple
+    end
+    # a and b are DataTypes
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
+    if a <: Tuple
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        ap, bp = a.parameters, b.parameters
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -77,7 +81,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
@@ -125,7 +128,7 @@ end
 # WARNING: this is wrong for some objects for which subtyping is broken
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_total_may_throw_meta
     if a <: b
         return Bottom
     end
@@ -177,7 +180,7 @@ function promote_typejoin_union(::Type{T}) where T
 end
 
 function typejoin_union_tuple(T::DataType)
-    @_pure_meta
+    @_total_may_throw_meta
     u = Base.unwrap_unionall(T)
     p = (u::DataType).parameters
     lr = length(p)::Int
@@ -207,16 +210,17 @@ function typejoin_union_tuple(T::DataType)
 end
 
 # Returns length, isfixed
-function full_va_len(p)
+function full_va_len(p::Core.SimpleVector)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        if isdefined(last, :N) && isa(last.N, Int)
-            return length(p)::Int + last.N - 1, true
+        if isdefined(last, :N)
+            N = last.N
+            isa(N, Int) && return length(p) + N - 1, true
         end
-        return length(p)::Int, false
+        return length(p), false
     end
-    return length(p)::Int, true
+    return length(p), true
 end
 
 # reduce typejoin over A[i:end]
@@ -234,7 +238,7 @@ end
 ## promotion mechanism ##
 
 """
-    promote_type(type1, type2)
+    promote_type(type1, type2, ...)
 
 Promotion refers to converting values of mixed types to a single common type.
 `promote_type` represents the default promotion behavior in Julia when
@@ -303,9 +307,9 @@ it for new types as appropriate.
 """
 function promote_rule end
 
-promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::Type, ::Type) = Bottom
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))

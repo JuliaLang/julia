@@ -62,4 +62,3 @@ end
 
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
                 underscore_bold, asterisk_italic, underscore_italic, image, footnote_link, link, autolink]
-

@@ -53,7 +53,8 @@ axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 keys(g::Generator) = keys(g.iter)
 last(g::Generator) = g.f(last(g.iter))
-
+isempty(g::Generator) = isempty(g.iter)
+isdone(g::Generator, state...) = isdone(g.iter, state...)
 
 ## iterator traits
 

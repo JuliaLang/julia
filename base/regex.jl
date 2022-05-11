@@ -11,6 +11,9 @@ const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 An abstract type representing any sort of pattern matching expression
 (typically a regular expression). `AbstractPattern` objects can be used to
 match strings with [`match`](@ref).
+
+!!! compat "Julia 1.6"
+    This type is available in Julia 1.6 and later.
 """
 abstract type AbstractPattern end
 
@@ -552,9 +555,7 @@ s"Hello \\g<name>, it's \\1"
 
 julia> typeof(subst)
 SubstitutionString{String}
-
 ```
-
 """
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T

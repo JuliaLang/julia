@@ -97,9 +97,8 @@ julia> round(357.913; sigdigits=4, base=2)
     Rounding to specified digits in bases other than 2 can be inexact when
     operating on binary floating point numbers. For example, the [`Float64`](@ref)
     value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2.
+    rounded to 1.2. For example:
 
-    # Examples
     ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
@@ -234,6 +233,10 @@ end
 # Java-style round
 function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
     copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
+end
+
+function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
+    signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
 end
 
 # isapprox: approximate equality of numbers
@@ -375,24 +378,31 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
             return aandbfinite ? c : abhi+c
         end
         (iszero(a) || iszero(b)) && return abhi+c
-        bias = exponent(a) + exponent(b)
+        # The checks above satisfy exponent's nothrow precondition
+        bias = Math._exponent_finite_nonzero(a) + Math._exponent_finite_nonzero(b)
         c_denorm = ldexp(c, -bias)
         if isfinite(c_denorm)
             # rescale a and b to [1,2), equivalent to ldexp(a, -exponent(a))
             issubnormal(a) && (a *= 0x1p52)
             issubnormal(b) && (b *= 0x1p52)
-            a = reinterpret(Float64, (reinterpret(UInt64, a) & 0x800fffffffffffff) | 0x3ff0000000000000)
-            b = reinterpret(Float64, (reinterpret(UInt64, b) & 0x800fffffffffffff) | 0x3ff0000000000000)
+            a = reinterpret(Float64, (reinterpret(UInt64, a) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
+            b = reinterpret(Float64, (reinterpret(UInt64, b) & ~Base.exponent_mask(Float64)) | Base.exponent_one(Float64))
             c = c_denorm
             abhi, ablo = twomul(a,b)
+            # abhi <= 4 -> isfinite(r)      (α)
             r = abhi+c
+            # s ≈ 0                         (β)
             s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
+            # α ⩓ β -> isfinite(sumhi)      (γ)
             sumhi = r+s
             # If result is subnormal, ldexp will cause double rounding because subnormals have fewer mantisa bits.
             # As such, we need to check whether round to even would lead to double rounding and manually round sumhi to avoid it.
             if issubnormal(ldexp(sumhi, bias))
                 sumlo = r-sumhi+s
-                bits_lost = -bias-exponent(sumhi)-1022
+                # finite: See γ
+                # non-zero: If sumhi == ±0., then ldexp(sumhi, bias) == ±0,
+                # so we don't take this branch.
+                bits_lost = -bias-Math._exponent_finite_nonzero(sumhi)-1022
                 sumhiInt = reinterpret(UInt64, sumhi)
                 if (bits_lost != 1) ⊻ (sumhiInt&1 == 1)
                     sumhi = nextfloat(sumhi, cmp(sumlo,0))
@@ -412,8 +422,8 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use a software emulated fma
-fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+@assume_effects :consistent fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
+@assume_effects :consistent fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
 
 function fma(a::Float16, b::Float16, c::Float16)
     Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.

@@ -370,8 +370,7 @@ function serialize(s::ClusterSerializer, f::Future)
         p = worker_id_from_socket(s.io)
         (p !== f.where) && send_add_client(f, p)
     end
-    fc = Future((f.where, f.whence, f.id, v_cache)) # copy to be used for serialization (contains a reset lock)
-    invoke(serialize, Tuple{ClusterSerializer, Any}, s, fc)
+    invoke(serialize, Tuple{ClusterSerializer, Any}, s, f)
 end
 
 function serialize(s::ClusterSerializer, rr::RemoteChannel)
@@ -631,7 +630,15 @@ function fetch(r::Future)
         # why? local put! performs caching and putting into channel under r.lock
 
         # for local put! use the cached value, for call_on_owner cases just take the v_local as it was just cached in r.v
-        v_cache = status ? v_local : v_old
+
+        # remote calls getting the value from `call_on_owner` used to return the value directly without wrapping it in `Some(x)`
+        # so we're doing the same thing here
+        if status
+            send_del_client(r)
+            return v_local
+        else # this `v_cache` is returned at the end of the function
+            v_cache = v_old
+        end
     end
 
     send_del_client(r)

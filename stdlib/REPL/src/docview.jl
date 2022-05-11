@@ -283,7 +283,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))
-            for (f, t) in zip(fieldnames(T), T.types)
+            for (f, t) in zip(fieldnames(T), fieldtypes(T))
                 println(io, rpad(f, pad), " :: ", t)
             end
             println(io, "```")
@@ -720,7 +720,19 @@ accessible(mod::Module) =
            map(names, moduleusings(mod))...;
            collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
-doc_completions(name) = fuzzysort(name, accessible(Main))
+function doc_completions(name)
+    res = fuzzysort(name, accessible(Main))
+
+    # to insert an entry like `raw""` for `"@raw_str"` in `res`
+    ms = match.(r"^@(.*?)_str$", res)
+    idxs = findall(!isnothing, ms)
+
+    # avoid messing up the order while inserting
+    for i in reverse(idxs)
+        insert!(res, i, "$(only(ms[i].captures))\"\"")
+    end
+    res
+end
 doc_completions(name::Symbol) = doc_completions(string(name))
 
 

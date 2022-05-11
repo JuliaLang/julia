@@ -6,7 +6,7 @@ Installation
 |[ mac/ ](https://github.com/JuliaLang/julia/blob/master/contrib/mac/) | Mac install files |
 |[ windows/ ](https://github.com/JuliaLang/julia/blob/master/contrib/windows/) | Windows install files |
 |[ add_license_to_files.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/add_license_to_files.jl ) | Add the Julia license to files in the Julia Project |
-|[ check-whitespace.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/check-whitespace.sh) | Check for trailing white space |
+|[ check-whitespace.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/check-whitespace.jl) | Check for white space issues |
 |[ commit-name.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/commit-name.sh) | Computes a version name for a commit |
 |[ fixup-libgfortran.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/fixup-libgfortran.sh) | Include libgfortran  and libquadmath for installations |
 |[ fixup-libstdc++.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/fixup-libstdc++.sh) | Include libstdc++ for    installations |

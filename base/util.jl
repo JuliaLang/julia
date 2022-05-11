@@ -18,6 +18,7 @@ const text_colors = Dict{Union{Symbol,Int},String}(
     :light_blue    => "\033[94m",
     :light_magenta => "\033[95m",
     :light_cyan    => "\033[96m",
+    :light_white   => "\033[97m",
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
@@ -126,13 +127,13 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 !!! compat "Julia 1.7"
     Keywords except `color` and `bold` were added in Julia 1.7.
 """
-printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+@constprop :none printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
-printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+@constprop :none printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
     printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()))
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -148,7 +149,7 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 !!! compat "Julia 1.5"
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -195,6 +196,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                 push!(addflags, "--code-coverage=user")
             elseif opts.code_coverage == 2
                 push!(addflags, "--code-coverage=all")
+            elseif opts.code_coverage == 3
+                push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
@@ -203,6 +206,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
         push!(addflags, "--track-allocation=all")
+    elseif opts.malloc_log == 3
+        push!(addflags, "--track-allocation=@$(unsafe_string(opts.tracked_path))")
     end
     if opts.color == 1
         push!(addflags, "--color=yes")
@@ -293,6 +298,16 @@ is encountered or EOF (^D) character is entered on a blank line. If a `default` 
 then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+
+# Example
+
+```julia-repl
+julia> your_name = Base.prompt("Enter your name");
+Enter your name: Logan
+
+julia> your_name
+"Logan"
+```
 """
 function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
@@ -558,7 +573,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
@@ -571,13 +586,17 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
+    delete!(ENV2, "JULIA_LOAD_PATH")
+    delete!(ENV2, "JULIA_PROJECT")
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
         buf = PipeBuffer()
+        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
         Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

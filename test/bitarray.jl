@@ -98,6 +98,20 @@ end
 
 timesofar("conversions")
 
+@testset "Promotions for size $sz" for (sz, T) in allsizes
+    @test isequal(promote(falses(sz...), zeros(sz...)),
+                 (zeros(sz...), zeros(sz...)))
+    @test isequal(promote(trues(sz...), ones(sz...)),
+                 (ones(sz...), ones(sz...)))
+    ae = falses(1, sz...)
+    ex = (@test_throws ErrorException promote(ae, ones(sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
+    ex = (@test_throws ErrorException promote(ae, falses(sz...))).value
+    @test startswith(ex.msg, "promotion of types Bit")
+end
+
+timesofar("promotions")
+
 @testset "utility functions" begin
     b1 = bitrand(v1)
     @test isequal(fill!(b1, true), trues(size(b1)))
@@ -201,6 +215,11 @@ timesofar("utils")
         @test_throws DimensionMismatch BitVector(false)
         @test_throws DimensionMismatch BitVector((iszero(i%4) for i in 1:n1, j in 1:n2))
         @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
+    end
+
+    @testset "constructor from infinite iterator" begin
+        inf_iter = Base.Iterators.cycle([true])
+        @test_throws ArgumentError BitArray(inf_iter)
     end
 
     @testset "constructor from NTuple" begin

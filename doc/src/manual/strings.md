@@ -242,8 +242,9 @@ The former is a single character value of type `Char`, while the latter is a str
 happens to contain only a single character. In Julia these are very different things.
 
 Range indexing makes a copy of the selected part of the original string.
-Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
-for example:
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref).
+More simply, using the [`@views`](@ref) macro on a block of code converts all string slices
+into substrings.  For example:
 
 ```jldoctest
 julia> str = "long string"
@@ -253,6 +254,9 @@ julia> substr = SubString(str, 1, 4)
 "long"
 
 julia> typeof(substr)
+SubString{String}
+
+julia> @views typeof(str[1:4]) # @views converts slices to SubStrings
 SubString{String}
 ```
 
@@ -687,29 +691,29 @@ You can search for the index of a particular character using the
 [`findfirst`](@ref) and [`findlast`](@ref) functions:
 
 ```jldoctest
-julia> findfirst(isequal('o'), "xylophone")
+julia> findfirst('o', "xylophone")
 4
 
-julia> findlast(isequal('o'), "xylophone")
+julia> findlast('o', "xylophone")
 7
 
-julia> findfirst(isequal('z'), "xylophone")
+julia> findfirst('z', "xylophone")
 ```
 
 You can start the search for a character at a given offset by using
 the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
-julia> findnext(isequal('o'), "xylophone", 1)
+julia> findnext('o', "xylophone", 1)
 4
 
-julia> findnext(isequal('o'), "xylophone", 5)
+julia> findnext('o', "xylophone", 5)
 7
 
-julia> findprev(isequal('o'), "xylophone", 5)
+julia> findprev('o', "xylophone", 5)
 4
 
-julia> findnext(isequal('o'), "xylophone", 8)
+julia> findnext('o', "xylophone", 8)
 ```
 
 You can use the [`occursin`](@ref) function to check if a substring is found within a string:
@@ -1088,7 +1092,7 @@ julia> x[1]
 0x31
 
 julia> x[1] = 0x32
-ERROR: setindex! not defined for Base.CodeUnits{UInt8, String}
+ERROR: CanonicalIndexError: setindex! not defined for Base.CodeUnits{UInt8, String}
 [...]
 
 julia> Vector{UInt8}(x)

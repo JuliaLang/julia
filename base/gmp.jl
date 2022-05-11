@@ -587,6 +587,7 @@ Number of ones in the binary representation of abs(x).
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
+divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
 
 cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
 cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
@@ -736,7 +737,7 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
         i, j = firstindex(a)-1, length(s)+1
         lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
         while i < lasti
-            # base ≤ 36: 0-9, plus a-z for 10-35
+            # base ≤ 36: 0-9, plus a-z for 10-35
             # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
             x = s[j -= 1]
             a[i += 1] = base ≤ 36 ? (x>0x39 ? x-0x57 : x-0x30) : (x>0x39 ? (x>0x60 ? x-0x3d : x-0x37) : x-0x30)
@@ -875,6 +876,8 @@ module MPQ
 import .Base: unsafe_rational, __throw_rational_argerror_zero
 import ..GMP: BigInt, MPZ, Limb, isneg
 
+gmpq(op::Symbol) = (Symbol(:__gmpq_, op), :libgmp)
+
 mutable struct _MPQ
     num_alloc::Cint
     num_size::Cint
@@ -907,68 +910,117 @@ end
 function Rational{BigInt}(num::BigInt, den::BigInt)
     if iszero(den)
         iszero(num) && __throw_rational_argerror_zero(BigInt)
-        num = isneg(num) ? -one(BigInt) : one(BigInt)
-        return unsafe_rational(BigInt, num, den)
+        return set_si(flipsign(1, num), 0)
     end
     xq = _MPQ(MPZ.set(num), MPZ.set(den))
     ccall((:__gmpq_canonicalize, :libgmp), Cvoid, (mpq_t,), xq)
     return sync_rational!(xq)
 end
 
-function Base.:+(x::Rational{BigInt}, y::Rational{BigInt})
+# define set, set_ui, set_si, set_z, and their inplace versions
+function set!(z::Rational{BigInt}, x::Rational{BigInt})
+    zq = _MPQ(z)
+    ccall((:__gmpq_set, :libgmp), Cvoid, (mpq_t, mpq_t), zq, _MPQ(x))
+    return sync_rational!(zq)
+end
+
+function set_z!(z::Rational{BigInt}, x::BigInt)
+    zq = _MPQ(z)
+    ccall((:__gmpq_set_z, :libgmp), Cvoid, (mpq_t, MPZ.mpz_t), zq, x)
+    return sync_rational!(zq)
+end
+
+for (op, T) in ((:set, Rational{BigInt}), (:set_z, BigInt))
+    op! = Symbol(op, :!)
+    @eval $op(a::$T) = $op!(unsafe_rational(BigInt(), BigInt()), a)
+end
+
+# note that rationals returned from set_ui and set_si are not checked,
+# set_ui(0, 0) will return 0//0 without errors, just like unsafe_rational
+for (op, T1, T2) in ((:set_ui, Culong, Culong), (:set_si, Clong, Culong))
+    op! = Symbol(op, :!)
+    @eval begin
+        function $op!(z::Rational{BigInt}, a, b)
+            zq = _MPQ(z)
+            ccall($(gmpq(op)), Cvoid, (mpq_t, $T1, $T2), zq, a, b)
+            return sync_rational!(zq)
+        end
+        $op(a, b) = $op!(unsafe_rational(BigInt(), BigInt()), a, b)
+    end
+end
+
+# define add, sub, mul, div, and their inplace versions
+function add!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
         if iszero(x.den) && iszero(y.den) && isneg(x.num) != isneg(y.num)
             throw(DivideError())
         end
-        return iszero(x.den) ? x : y
+        return set!(z, iszero(x.den) ? x : y)
     end
-    zq = _MPQ()
+    zq = _MPQ(z)
     ccall((:__gmpq_add, :libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
-function Base.:-(x::Rational{BigInt}, y::Rational{BigInt})
+
+function sub!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
         if iszero(x.den) && iszero(y.den) && isneg(x.num) == isneg(y.num)
             throw(DivideError())
         end
-        return iszero(x.den) ? x : -y
+        iszero(x.den) && return set!(z, x)
+        return set_si!(z, flipsign(-1, y.num), 0)
     end
-    zq = _MPQ()
+    zq = _MPQ(z)
     ccall((:__gmpq_sub, :libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
-function Base.:*(x::Rational{BigInt}, y::Rational{BigInt})
+
+function mul!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
         if iszero(x.num) || iszero(y.num)
             throw(DivideError())
         end
-        return xor(isneg(x.num),isneg(y.num)) ? -one(BigInt)//zero(BigInt) : one(BigInt)//zero(BigInt)
+        return set_si!(z, ifelse(xor(isneg(x.num), isneg(y.num)), -1, 1), 0)
     end
-    zq = _MPQ()
+    zq = _MPQ(z)
     ccall((:__gmpq_mul, :libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
 end
-function Base.://(x::Rational{BigInt}, y::Rational{BigInt})
+
+function div!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den)
         if iszero(y.den)
             throw(DivideError())
         end
-        return isneg(y.num) ? -x : x
+        isneg(y.num) || return set!(z, x)
+        return set_si!(z, flipsign(-1, x.num), 0)
     elseif iszero(y.den)
-        return y.den // y.num
+        return set_si!(z, 0, 1)
     elseif iszero(y.num)
         if iszero(x.num)
             throw(DivideError())
         end
-        return (isneg(x.num) ? -one(BigInt) : one(BigInt)) // y.num
+        return set_si!(z, flipsign(1, x.num), 0)
     end
-    zq = _MPQ()
+    zq = _MPQ(z)
     ccall((:__gmpq_div, :libgmp), Cvoid,
           (mpq_t,mpq_t,mpq_t), zq, _MPQ(x), _MPQ(y))
     return sync_rational!(zq)
+end
+
+for (fJ, fC) in ((:+, :add), (:-, :sub), (:*, :mul), (://, :div))
+    fC! = Symbol(fC, :!)
+    @eval begin
+        ($fC!)(x::Rational{BigInt}, y::Rational{BigInt}) = $fC!(x, x, y)
+        (Base.$fJ)(x::Rational{BigInt}, y::Rational{BigInt}) = $fC!(unsafe_rational(BigInt(), BigInt()), x, y)
+    end
+end
+
+function Base.cmp(x::Rational{BigInt}, y::Rational{BigInt})
+    Int(ccall((:__gmpq_cmp, :libgmp), Cint, (mpq_t, mpq_t), _MPQ(x), _MPQ(y)))
 end
 
 end # MPQ module

@@ -100,6 +100,12 @@ show(io,v"4.3.2+1.a")
 # construction from AbstractString
 @test VersionNumber("4.3.2+1.a") == v"4.3.2+1.a"
 
+# construct from VersionNumber
+let
+    v = VersionNumber("1.2.3")
+    @test VersionNumber(v) == v
+end
+
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"
 @test typemax(VersionNumber) == v"∞"
@@ -233,4 +239,3 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
-
