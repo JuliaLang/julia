@@ -2758,10 +2758,10 @@ The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
 max, c, :sequentially_consistent))`, where the first argument must be a
 `getfield` expression and is modified atomically.
 
-In the current implementation, the default implementation of `modifyproperty!` does not call
-`convert` automatically and an exception is thrown if `op` returns a value that cannot be
-stored in the field `f` of the object `x`.  This is different from the behavior of the
-default [`setproperty!`](@ref Base.setproperty!).
+Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
+`f` of the object `x` by default.  In particular, unlike the default behavior of
+[`setproperty!`](@ref Base.setproperty!), the `convert` function is not called
+automatically.
 
 See also [`modifyfield!`](@ref Core.modifyfield!)
 and [`setproperty!`](@ref Base.setproperty!).
