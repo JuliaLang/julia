@@ -931,6 +931,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,
