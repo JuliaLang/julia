@@ -52,7 +52,7 @@ the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> subtypes(AbstractFloat)
-4-element Array{Any,1}:
+4-element Vector{Any}:
  BigFloat
  Float16
  Float32
@@ -65,7 +65,7 @@ recursive application of [`subtypes`](@ref) may be used to inspect the full type
 ## DataType layout
 
 The internal representation of a `DataType` is critically important when interfacing with C code
-and several functions are available to inspect these details. [`isbits(T::DataType)`](@ref) returns
+and several functions are available to inspect these details. [`isbitstype(T::DataType)`](@ref) returns
 true if `T` is stored with C-compatible alignment. [`fieldoffset(T::DataType, i::Integer)`](@ref)
 returns the (byte) offset for field *i* relative to the start of the type.
 
@@ -77,13 +77,13 @@ table may be searched for methods accepting a given type using [`methodswith`](@
 ## Expansion and lowering
 
 As discussed in the [Metaprogramming](@ref) section, the [`macroexpand`](@ref) function gives
-the unquoted and interpolated expression (`Expr`) form for a given macro. To use `macroexpand`,
+the unquoted and interpolated expression ([`Expr`](@ref)) form for a given macro. To use `macroexpand`,
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> macroexpand(@__MODULE__, :(@edit println("")) )
-:((InteractiveUtils.edit)(println, (Base.typesof)("")))
+:(InteractiveUtils.edit(println, (Base.typesof)("")))
 ```
 
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
@@ -94,12 +94,13 @@ particular interest for understanding how language constructs map to primitive o
 as assignments, branches, and calls:
 
 ```jldoctest
-julia> Meta.lower(@__MODULE__, :([1+2, sin(0.5)]) )
+julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
- 1 ─ %1 = 1 + 2
- │   %2 = sin(0.5)
- │   %3 = (Base.vect)(%1, %2)
- └──      return %3
+    @ none within `top-level scope`
+1 ─ %1 = 1 + 2
+│   %2 = sin(0.5)
+│   %3 = Base.vect(%1, %2)
+└──      return %3
 ))))
 ```
 
@@ -121,14 +122,32 @@ calls and expand argument types automatically:
 
 ```julia-repl
 julia> @code_llvm +(1,1)
-
-; Function Attrs: sspreq
-define i64 @"julia_+_130862"(i64, i64) #0 {
+;  @ int.jl:87 within `+`
+; Function Attrs: sspstrong uwtable
+define i64 @"julia_+_476"(i64 signext %0, i64 signext %1) #0 {
 top:
-    %2 = add i64 %1, %0, !dbg !8
-    ret i64 %2, !dbg !8
+  %2 = add i64 %1, %0
+  ret i64 %2
 }
 ```
 
-See [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref),
+For more informations see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code_warntype`](@ref),
 [`@code_llvm`](@ref), and [`@code_native`](@ref).
+
+### Printing of debug information
+
+The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
+debug information printed.
+
+```julia-repl
+julia> @code_typed debuginfo=:source +(1,1)
+CodeInfo(
+    @ int.jl:53 within `+'
+1 ─ %1 = Base.add_int(x, y)::Int64
+└──      return %1
+) => Int64
+```
+
+Possible values for `debuginfo` are: `:none`, `:source`, and `:default`.
+Per default debug information is not printed, but that can be changed
+by setting `Base.IRShow.default_debuginfo[] = :source`.

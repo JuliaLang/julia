@@ -41,7 +41,6 @@
 #define EXT_(csym)          csym
 #define EXT(csym)           EXT_(csym)
 #endif
-#define HIDENAME(asmsym)    .asmsym
 .text
 _START_ENTRY
 .globl EXT(CNAME)
@@ -51,9 +50,7 @@ EXT(CNAME):
 #elif defined(_WIN32)
 #define EXT_(csym)          csym
 #define EXT(csym)           EXT_(csym)
-#define HIDENAME(asmsym)    .asmsym
 
-#ifndef _MSC_VER
 .intel_syntax noprefix
 .text
 _START_ENTRY
@@ -66,10 +63,8 @@ _START_ENTRY
 .scl 2
 .type 32
 .endef
+.seh_proc EXT(CNAME)
 EXT(CNAME):
-#else
-.code
-CNAME proc
-#endif
+.seh_endprologue
 
 #endif

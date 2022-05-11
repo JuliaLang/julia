@@ -11,12 +11,26 @@ end
 """
     Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
 
-Compute the amount of memory used by all unique objects reachable from the argument.
+Compute the amount of memory, in bytes, used by all unique objects reachable from the argument.
 
 # Keyword Arguments
 - `exclude`: specifies the types of objects to exclude from the traversal.
 - `chargeall`: specifies the types of objects to always charge the size of all of their
   fields, even if those fields would normally be excluded.
+
+See also [`sizeof`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.summarysize(1.0)
+8
+
+julia> Base.summarysize(Ref(rand(100)))
+848
+
+julia> sizeof(Ref(rand(100)))
+8
+```
 """
 function summarysize(obj;
                      exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
@@ -74,14 +88,25 @@ end
     end
     if isa(obj, UnionAll) || isa(obj, Union)
         # black-list of items that don't have a Core.sizeof
-        return 2 * sizeof(Int)
+        sz = 2 * sizeof(Int)
+    else
+        sz = Core.sizeof(obj)
     end
-    return Core.sizeof(obj)
+    if sz == 0
+        # 0-field mutable structs are not unique
+        return gc_alignment(0)
+    end
+    return sz
 end
 
 (::SummarySize)(obj::Symbol) = 0
 (::SummarySize)(obj::SummarySize) = 0
-(::SummarySize)(obj::String) = Core.sizeof(Int) + Core.sizeof(obj)
+
+function (ss::SummarySize)(obj::String)
+    key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
+    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    return Core.sizeof(Int) + Core.sizeof(obj)
+end
 
 function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
@@ -89,7 +114,9 @@ function (ss::SummarySize)(obj::DataType)
     size::Int = 7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)
     size += 4 * nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
     size += ss(obj.parameters)::Int
-    size += ss(obj.types)::Int
+    if isdefined(obj, :types)
+        size += ss(obj.types)::Int
+    end
     return size
 end
 
@@ -106,8 +133,14 @@ function (ss::SummarySize)(obj::Array)
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
-        size += Core.sizeof(obj)
-        if !isbitstype(eltype(obj)) && !isempty(obj)
+        dsize = Core.sizeof(obj)
+        T = eltype(obj)
+        if isbitsunion(T)
+            # add 1 union selector byte for each element
+            dsize += length(obj)
+        end
+        size += dsize
+        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
@@ -154,10 +187,10 @@ function (ss::SummarySize)(obj::Task)
         size += ss(obj.code)::Int
     end
     size += ss(obj.storage)::Int
-    size += ss(obj.backtrace)::Int
     size += ss(obj.donenotify)::Int
-    size += ss(obj.exception)::Int
     size += ss(obj.result)::Int
     # TODO: add stack size, and possibly traverse stack roots
     return size
 end
+
+(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj) + obj.alloc*sizeof(Base.GMP.Limb)

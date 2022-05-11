@@ -18,7 +18,7 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 
 ```c
 #include <julia.h>
-JULIA_DEFINE_FAST_TLS() /* only define this once, in an executable (not in a shared library) if you want fast code. */
+JULIA_DEFINE_FAST_TLS // only define this once, in an executable (not in a shared library) if you want fast code.
 
 int main(int argc, char *argv[])
 {
@@ -43,14 +43,11 @@ and link against `libjulia`. For instance, when Julia is installed to `$JULIA_DI
 compile the above test program `test.c` with `gcc` using:
 
 ```
-gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib test.c -ljulia $JULIA_DIR/lib/julia/libstdc++.so.6
+gcc -o test -fPIC -I$JULIA_DIR/include/julia -L$JULIA_DIR/lib -Wl,-rpath,$JULIA_DIR/lib test.c -ljulia
 ```
 
-Then if the environment variable `JULIA_BINDIR` is set to `$JULIA_DIR/bin`, the output `test` program
-can be executed.
-
 Alternatively, look at the `embedding.c` program in the Julia source tree in the `test/embedding/` folder.
-The file `ui/repl.c` program is another simple example of how to set `jl_options` options while
+The file `cli/loader_exe.c` program is another simple example of how to set `jl_options` options while
 linking against `libjulia`.
 
 The first thing that must be done before calling any other Julia C function is to
@@ -151,7 +148,6 @@ We start by opening Visual Studio and creating a new Console Application project
 'stdafx.h' header file, and add the following lines at the end:
 
 ```c
-#define JULIA_ENABLE_THREADING
 #include <julia.h>
 ```
 
@@ -249,20 +245,36 @@ jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
 Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is the number of
 arguments.
 
+There is also an alternative, possibly simpler, way of calling Julia functions and that is via [`@cfunction`](@ref).
+Using `@cfunction` allows you to do the type conversions on the Julia side which typically is easier than doing it on
+the C side. The `sqrt` example above would with `@cfunction` be written as:
+
+```c
+double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt, Float64, (Float64,))"));
+double ret = sqrt_jl(2.0);
+```
+
+where we first define a C callable function in Julia, extract the function pointer from it and finally call it.
+
 ## Memory Management
 
-As we have seen, Julia objects are represented in C as pointers. This raises the question of who
+As we have seen, Julia objects are represented in C as pointers of type `jl_value_t*`. This raises the question of who
 is responsible for freeing these objects.
 
-Typically, Julia objects are freed by a garbage collector (GC), but the GC does not automatically
+Typically, Julia objects are freed by the garbage collector (GC), but the GC does not automatically
 know that we are holding a reference to a Julia value from C. This means the GC can free objects
 out from under you, rendering pointers invalid.
 
-The GC can only run when Julia objects are allocated. Calls like `jl_box_float64` perform allocation,
-and allocation might also happen at any point in running Julia code. However, it is generally
-safe to use pointers in between `jl_...` calls. But in order to make sure that values can survive
-`jl_...` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done
-using the `JL_GC_PUSH` macros:
+The GC will only run when new Julia objects are being allocated. Calls like `jl_box_float64` perform allocation,
+but allocation might also happen at any point in running Julia code.
+
+When writing code that embeds Julia, it is generally safe to use `jl_value_t*` values in between `jl_...` calls
+(as GC will only get triggered by those calls). But in order to make sure that values can survive
+`jl_...` calls, we have to tell Julia that we still hold a reference to Julia
+[root](https://www.cs.purdue.edu/homes/hosking/690M/p611-fenichel.pdf) values, a process
+called "GC rooting". Rooting a value will ensure that the garbage collector does not accidentally
+identify this value as unused and free the memory backing that value. This can be done using the
+`JL_GC_PUSH` macros:
 
 ```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
@@ -272,12 +284,18 @@ JL_GC_POP();
 ```
 
 The `JL_GC_POP` call releases the references established by the previous `JL_GC_PUSH`. Note that
-`JL_GC_PUSH`  is working on the stack, so it must be exactly paired with a `JL_GC_POP` before
-the stack frame is destroyed.
+`JL_GC_PUSH` stores references on the C stack, so it must be exactly paired with a `JL_GC_POP`
+before the scope is exited. That is, before the function returns, or control flow otherwise
+leaves the block in which the `JL_GC_PUSH` was invoked.
 
-Several Julia values can be pushed at once using the `JL_GC_PUSH2` , `JL_GC_PUSH3` , and `JL_GC_PUSH4`
-macros. To push an array of Julia values one can use the  `JL_GC_PUSHARGS` macro, which can be
-used as follows:
+Several Julia values can be pushed at once using the `JL_GC_PUSH2` to `JL_GC_PUSH6` macros:
+```
+JL_GC_PUSH2(&ret1, &ret2);
+// ...
+JL_GC_PUSH6(&ret1, &ret2, &ret3, &ret4, &ret5, &ret6);
+```
+
+To push an array of Julia values one can use the `JL_GC_PUSHARGS` macro, which can be used as follows:
 
 ```c
 jl_value_t **args;
@@ -287,6 +305,112 @@ args[1] = some_other_value;
 // Do something with args (e.g. call jl_... functions)
 JL_GC_POP();
 ```
+
+Each scope must have only one call to `JL_GC_PUSH*`, and should be paired with only a single `JL_GC_POP` call.
+If all necessary variables you want to root cannot be pushed by a one single call to `JL_GC_PUSH*`, or if there are more than 6 variables to be pushed and using an array
+of arguments is not an option, then one can use inner blocks:
+
+```c
+jl_value_t *ret1 = jl_eval_string("sqrt(2.0)");
+JL_GC_PUSH1(&ret1);
+jl_value_t *ret2 = 0;
+{
+    jl_function_t *func = jl_get_function(jl_base_module, "exp");
+    ret2 = jl_call1(func, ret1);
+    JL_GC_PUSH1(&ret2);
+    // Do something with ret2.
+    JL_GC_POP();    // This pops ret2.
+}
+JL_GC_POP();    // This pops ret1.
+```
+
+Note that it is not necessary to have valid `jl_value_t*` values before calling
+`JL_GC_PUSH*`. It is fine to have a number of them initialized to `NULL`, pass those
+to `JL_GC_PUSH*` and then create the actual Julia values. For example:
+
+```
+jl_value_t *ret1 = NULL, *ret2 = NULL;
+JL_GC_PUSH2(&ret1, &ret2);
+ret1 = jl_eval_string("sqrt(2.0)");
+ret2 = jl_eval_string("sqrt(3.0)");
+// Use ret1 and ret2
+JL_GC_POP();
+```
+
+If it is required to hold the pointer to a variable between functions (or block scopes), then it is
+not possible to use `JL_GC_PUSH*`. In this case, it is necessary to create and keep a reference to the
+variable in the Julia global scope. One simple way to accomplish this is to use a global `IdDict` that
+will hold the references, avoiding deallocation by the GC. However, this method will only work
+properly with mutable types.
+
+```c
+// This functions shall be executed only once, during the initialization.
+jl_value_t* refs = jl_eval_string("refs = IdDict()");
+jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+
+...
+
+// `var` is the variable we want to protect between function calls.
+jl_value_t* var = 0;
+
+...
+
+// `var` is a `Vector{Float64}`, which is mutable.
+var = jl_eval_string("[sqrt(2.0); sqrt(4.0); sqrt(6.0)]");
+
+// To protect `var`, add its reference to `refs`.
+jl_call3(setindex, refs, var, var);
+```
+
+If the variable is immutable, then it needs to be wrapped in an equivalent mutable container or,
+preferably, in a `RefValue{Any}` before it is pushed to `IdDict`. In this approach, the container has
+to be created or filled in via C code using, for example, the function `jl_new_struct`. If the
+container is created by `jl_call*`, then you will need to reload the pointer to be used in C code.
+
+```c
+// This functions shall be executed only once, during the initialization.
+jl_value_t* refs = jl_eval_string("refs = IdDict()");
+jl_function_t* setindex = jl_get_function(jl_base_module, "setindex!");
+jl_datatype_t* reft = (jl_datatype_t*)jl_eval_string("Base.RefValue{Any}");
+
+...
+
+// `var` is the variable we want to protect between function calls.
+jl_value_t* var = 0;
+
+...
+
+// `var` is a `Float64`, which is immutable.
+var = jl_eval_string("sqrt(2.0)");
+
+// Protect `var` until we add its reference to `refs`.
+JL_GC_PUSH1(&var);
+
+// Wrap `var` in `RefValue{Any}` and push to `refs` to protect it.
+jl_value_t* rvar = jl_new_struct(reft, var);
+JL_GC_POP();
+
+jl_call3(setindex, refs, rvar, rvar);
+```
+
+The GC can be allowed to deallocate a variable by removing the reference to it from `refs` using
+the function `delete!`, provided that no other reference to the variable is kept anywhere:
+
+```c
+jl_function_t* delete = jl_get_function(jl_base_module, "delete!");
+jl_call2(delete, refs, rvar);
+```
+
+As an alternative for very simple cases, it is possible to just create a global container of type
+`Vector{Any}` and fetch the elements from that when necessary, or even to create one global variable
+per pointer using
+
+```c
+jl_binding_t *bp = jl_get_binding_wr(jl_main_module, jl_symbol("var"), 1);
+jl_checked_assignment(bp, val);
+```
+
+### Updating fields of GC-managed objects
 
 The garbage collector also operates under the assumption that it is aware of every
 older-generation object pointing to a younger-generation one. Any time a pointer is updated
@@ -399,7 +523,7 @@ that creates a 2D array and accesses its properties:
 
 ```c
 // Create 2D array of float64 type
-jl_value_t *array_type = jl_apply_array_type(jl_float64_type, 2);
+jl_value_t *array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 2);
 jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
 
 // Get array pointer
@@ -464,4 +588,112 @@ jl_errorf("argument x = %d is too large", x);
 ```
 
 where in this example `x` is assumed to be an integer.
+
+
+### Thread-safety
+
+In general, the Julia C API is not fully thread-safe. When embedding Julia in a multi-threaded application care needs to be taken not to violate
+the following restrictions:
+
+* `jl_init()` may only be called once in the application life-time. The same applies to `jl_atexit_hook()`, and it may only be called after `jl_init()`.
+* `jl_...()` API functions may only be called from the thread in which `jl_init()` was called, *or from threads started by the Julia runtime*. Calling Julia API functions from user-started threads is not supported, and may lead to undefined behaviour and crashes.
+
+The second condition above implies that you can not safely call `jl_...()` functions from threads that were not started by Julia (the thread calling `jl_init()` being the exception). For example, the following is not supported and will most likely segfault:
+
+```c
+void *func(void*)
+{
+    // Wrong, jl_eval_string() called from thread that was not started by Julia
+    jl_eval_string("println(Threads.nthreads())");
+    return NULL;
+}
+
+int main()
+{
+    pthread_t t;
+
+    jl_init();
+
+    // Start a new thread
+    pthread_create(&t, NULL, func, NULL);
+    pthread_join(t, NULL);
+
+    jl_atexit_hook(0);
+}
+```
+
+Instead, performing all Julia calls from the same user-created thread will work:
+
+```c
+void *func(void*)
+{
+    // Okay, all jl_...() calls from the same thread,
+    // even though it is not the main application thread
+    jl_init();
+    jl_eval_string("println(Threads.nthreads())");
+    jl_atexit_hook(0);
+    return NULL;
+}
+
+int main()
+{
+    pthread_t t;
+    // Create a new thread, which runs func()
+    pthread_create(&t, NULL, func, NULL);
+    pthread_join(t, NULL);
+}
+```
+
+An example of calling the Julia C API from a thread started by Julia itself:
+
+```c
+#include <julia/julia.h>
+JULIA_DEFINE_FAST_TLS
+
+double c_func(int i)
+{
+    printf("[C %08x] i = %d\n", pthread_self(), i);
+
+    // Call the Julia sqrt() function to compute the square root of i, and return it
+    jl_function_t *sqrt = jl_get_function(jl_base_module, "sqrt");
+    jl_value_t* arg = jl_box_int32(i);
+    double ret = jl_unbox_float64(jl_call1(sqrt, arg));
+
+    return ret;
+}
+
+int main()
+{
+    jl_init();
+
+    // Define a Julia function func() that calls our c_func() defined in C above
+    jl_eval_string("func(i) = ccall(:c_func, Float64, (Int32,), i)");
+
+    // Call func() multiple times, using multiple threads to do so
+    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
+    jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
+
+    jl_atexit_hook(0);
+}
+```
+
+If we run this code with 2 Julia threads we get the following output (note: the output will vary per run and system):
+
+```sh
+$ JULIA_NUM_THREADS=2 ./thread_example
+2
+[C 3bfd9c00] i = 1
+[C 23938640] i = 4
+[J 1] i = 1 -> 1.0
+[C 3bfd9c00] i = 2
+[J 1] i = 2 -> 1.4142135623730951
+[C 3bfd9c00] i = 3
+[J 2] i = 4 -> 2.0
+[C 23938640] i = 5
+[J 1] i = 3 -> 1.7320508075688772
+[J 2] i = 5 -> 2.23606797749979
+```
+
+As can be seen, Julia thread 1 corresponds to pthread ID 3bfd9c00, and Julia thread 2 corresponds to ID 23938640, showing that indeed multiple threads are used at the C level, and that we can safely call Julia C API routines from those threads.
 

@@ -66,6 +66,7 @@ Base.LinRange
 Base.isempty
 Base.empty!
 Base.length
+Base.checked_length
 ```
 
 Fully implemented by:
@@ -93,6 +94,7 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
+Base.allequal
 Base.reduce(::Any, ::Any)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
@@ -101,6 +103,7 @@ Base.maximum!
 Base.minimum
 Base.minimum!
 Base.extrema
+Base.extrema!
 Base.argmax
 Base.argmin
 Base.findmax
@@ -118,8 +121,6 @@ Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
 Base.all!
 Base.count
-Base.any(::Any, ::Any)
-Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
@@ -128,6 +129,8 @@ Base.mapfoldl(::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first
 Base.last
+Base.front
+Base.tail
 Base.step
 Base.collect(::Any)
 Base.collect(::Type, ::Any)
@@ -136,6 +139,8 @@ Base.filter!
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
+Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections
@@ -191,15 +196,14 @@ for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for e
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
+Base.AbstractDict
 Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
 Base.haskey
-Base.get(::Any, ::Any, ::Any)
 Base.get
-Base.get!(::Any, ::Any, ::Any)
-Base.get!(::Function, ::Any, ::Any)
+Base.get!
 Base.getkey
 Base.delete!
 Base.pop!(::Any, ::Any, ::Any)
@@ -207,8 +211,9 @@ Base.keys
 Base.values
 Base.pairs
 Base.merge
-Base.merge!(::AbstractDict, ::AbstractDict...)
-Base.merge!(::Function, ::AbstractDict, ::AbstractDict...)
+Base.mergewith
+Base.merge!
+Base.mergewith!
 Base.sizehint!
 Base.keytype
 Base.valtype
@@ -233,6 +238,7 @@ Partially implemented by:
 ## Set-Like Collections
 
 ```@docs
+Base.AbstractSet
 Base.Set
 Base.BitSet
 Base.union
@@ -247,6 +253,7 @@ Base.issubset
 Base.:⊈
 Base.:⊊
 Base.issetequal
+Base.isdisjoint
 ```
 
 Fully implemented by:
@@ -263,10 +270,12 @@ Partially implemented by:
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!
 Base.deleteat!
+Base.keepat!
 Base.splice!
 Base.resize!
 Base.append!

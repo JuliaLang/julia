@@ -18,12 +18,19 @@ end
 import Markdown
 Markdown.parse(String(take!(io)))
 ```
+Please read the [release notes](NEWS.md) to see what has changed since the last release.
 
-Please read the [release blog post](https://julialang.org/blog/2018/08/one-point-zero) for a general overview of the language and
-many of the changes since Julia v0.6. Note that version 0.7 was released alongside
-1.0 to provide an upgrade path for packages and code that predates the 1.0 release.
-The only difference between 0.7 and 1.0 is the removal of deprecation warnings.
-For a complete list of all the changes since 0.6, see the [release notes for version 0.7](https://docs.julialang.org/en/v0.7.0/NEWS/)
+```@eval
+release = isempty(VERSION.prerelease)
+file = release ? "julia-$(VERSION).pdf" :
+       "julia-$(VERSION.major).$(VERSION.minor).$(VERSION.patch)-$(first(VERSION.prerelease)).pdf"
+url = "https://raw.githubusercontent.com/JuliaLang/docs.julialang.org/assets/$(file)"
+import Markdown
+Markdown.parse("""
+!!! note
+    The documentation is also available in PDF format: [$file]($url).
+""")
+```
 
 ### [Introduction](@id man-introduction)
 
@@ -42,7 +49,8 @@ slow, we highly recommend reading through the [Performance Tips](@ref man-perfor
 else. Once you understand how Julia works, it's easy to write code that's nearly as fast as C.
 
 Julia features optional typing, multiple dispatch, and good performance, achieved using type inference
-and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation),
+and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation) (and
+[optional ahead-of-time compilation](https://github.com/JuliaLang/PackageCompiler.jl)),
 implemented using [LLVM](https://en.wikipedia.org/wiki/Low_Level_Virtual_Machine). It is multi-paradigm,
 combining features of imperative, functional, and object-oriented programming. Julia provides
 ease and expressiveness for high-level numerical computing, in the same way as languages such
@@ -54,7 +62,7 @@ and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
 
 The most significant departures of Julia from typical dynamic languages are:
 
-  * The core language imposes very little; Julia Base and the standard library is written in Julia itself, including
+  * The core language imposes very little; Julia Base and the standard library are written in Julia itself, including
     primitive operations like integer arithmetic
   * A rich language of types for constructing and describing objects, that can also optionally be
     used to make type declarations

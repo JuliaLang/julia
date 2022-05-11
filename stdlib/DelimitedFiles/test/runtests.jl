@@ -194,7 +194,7 @@ end
             "Ireland", "Sinead O'Connor", "Éire", "Sinéad O'Connor",
             "Israel", "Yehoram Gaon", "ישראל", "יהורם גאון",
             "Italy", "Fabrizio DeAndre", "Italia", "Fabrizio De André",
-            "Japan", "KUBOTA Toshinobu", "日本", "久保田    利伸",
+            "Japan", "KUBOTA Toshinobu", "日本", "久保田    利伸",
             "Japan", "HAYASHIBARA Megumi", "日本", "林原 めぐみ",
             "Japan", "Mori Ogai", "日本", "森鷗外",
             "Japan", "Tex Texin", "日本", "テクス テクサン",
@@ -206,8 +206,8 @@ end
             "Puerto Rico", "Olga Tanon", "Puerto Rico", "Olga Tañón",
             "Rep. of China", "Hsu Chi", "臺灣", "舒淇",
             "Rep. of China", "Ang Lee", "臺灣", "李安",
-            "Rep. of Korea", "AHN Sung-Gi", "한민국", "안성기",
-            "Rep. of Korea", "SHIM Eun-Ha", "한민국", "심은하",
+            "Rep. of Korea", "AHN Sung-Gi", "대한민국", "안성기",
+            "Rep. of Korea", "SHIM Eun-Ha", "대한민국", "심은하",
             "Russia", "Mikhail Gorbachev", "Россия", "Михаил Горбачёв",
             "Russia", "Boris Grebenshchikov", "Россия", "Борис Гребенщиков",
             "Slovenia", "\"Frane \"\"Jezek\"\" Milcinski", "Slovenija", "Frane Milčinski - Ježek",
@@ -250,6 +250,7 @@ end
 
 @testset "show with MIME types" begin
     @test sprint(show, "text/csv", [1 2; 3 4]) == "1,2\n3,4\n"
+    @test sprint(show, "text/tab-separated-values", [1 2; 3 4]) == "1\t2\n3\t4\n"
 
     for writefunc in ((io,x) -> show(io, "text/csv", x),
                       (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, ","))
@@ -266,6 +267,22 @@ end
             @test vec(readdlm(io, ',')) == x
         end
     end
+
+    for writefunc in ((io,x) -> show(io, "text/tab-separated-values", x),
+                      (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, "\t"))
+        # iterable collections of iterable rows:
+        let x = [(1,2), (3,4)], io = IOBuffer()
+            writefunc(io, x)
+            seek(io, 0)
+            @test readdlm(io, '\t') == [1 2; 3 4]
+        end
+        # vectors of strings:
+        let x = ["foo", "bar"], io = IOBuffer()
+            writefunc(io, x)
+            seek(io, 0)
+            @test vec(readdlm(io, '\t')) == x
+        end
+    end
 end
 
 # Test that we can read a write protected file
@@ -275,6 +292,13 @@ let fn = tempname()
     end
     chmod(fn, 0o444)
     readdlm(fn)[] == "Julia"
+    rm(fn)
+end
+
+# test writedlm with a filename instead of io input
+let fn = tempname(), x = ["a" "b"; "d" ""]
+    writedlm(fn, x, ',')
+    @test readdlm(fn, ',') == x
     rm(fn)
 end
 
@@ -288,13 +312,19 @@ let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
     @test readdlm(IOBuffer(data), ',') == Any[1 "灣\"灣灣灣灣" 3]
 end
 
+# reading from a byte array (#16731)
+let data = Vector{UInt8}("1,2,3\n4,5,6"), origdata = copy(data)
+    @test readdlm(data, ',') == [1 2 3; 4 5 6]
+    @test data == origdata
+end
+
 # issue #11484: useful error message for invalid readdlm filepath arguments
 @test_throws ArgumentError readdlm(tempdir())
 
-# displaying as text/csv
-let d = TextDisplay(IOBuffer())
-    display(d, "text/csv", [3 1 4])
-    @test String(take!(d.io)) == "3,1,4\n"
+# showing as text/csv
+let d = TextDisplay(PipeBuffer())
+    show(d.io, "text/csv", [3 1 4])
+    @test read(d.io, String) == "3,1,4\n"
 end
 
 @testset "complex" begin

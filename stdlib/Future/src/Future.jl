@@ -8,23 +8,21 @@ using Random
 
 ## copy!
 
+# This has now been moved to Base (#29178), and should be deprecated in the
+# next "deprecation phase".
+
 """
     Future.copy!(dst, src) -> dst
 
 Copy `src` into `dst`.
-For collections of the same type, copy the elements of `src` into `dst`,
-discarding any pre-existing elements in `dst`.
-Usually, `dst == src` holds after the call.
-"""
-copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
-copy!(dst::AbstractVector, src::AbstractVector) = append!(empty!(dst), src)
 
-function copy!(dst::AbstractArray, src::AbstractArray)
-    axes(dst) == axes(src) || throw(ArgumentError(
-        "arrays must have the same axes for copy! (consider using `copyto!`)"))
-    copyto!(dst, src)
-end
+!!! compat "Julia 1.1"
+    This function has moved to `Base` with Julia 1.1, consider using `copy!(dst, src)` instead.
+    `Future.copy!` will be deprecated in the future.
+"""
+copy!(dst::AbstractSet, src::AbstractSet) = Base.copy!(dst, src)
+copy!(dst::AbstractDict, src::AbstractDict) = Base.copy!(dst, src)
+copy!(dst::AbstractArray, src::AbstractArray) = Base.copy!(dst, src)
 
 
 ## randjump
@@ -38,7 +36,10 @@ One such step corresponds to the generation of two `Float64` numbers.
 For each different value of `steps`, a large polynomial has to be generated internally.
 One is already pre-computed for `steps=big(10)^20`.
 """
-randjump(r::MersenneTwister, steps::Integer) =
-    Random._randjump(r, Random.DSFMT.calc_jump(steps))
+function randjump(r::MersenneTwister, steps::Integer)
+    j = Random._randjump(r, Random.DSFMT.calc_jump(steps))
+    j.adv_jump += 2*big(steps) # convert to BigInt to prevent overflow
+    j
+end
 
 end # module Future

@@ -1,66 +1,39 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # LQ Factorizations
-
-struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
-    factors::S
-    τ::Vector{T}
-
-    function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
-        @assert !has_offset_axes(factors)
-        new{T,S}(factors, τ)
-    end
-end
-LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
-function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
-    LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
-end
-
-# iteration for destructuring into components
-Base.iterate(S::LQ) = (S.L, Val(:Q))
-Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
-Base.iterate(S::LQ, ::Val{:done}) = nothing
-
-struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
-    factors::Matrix{T}
-    τ::Vector{T}
-    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
-end
-LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
-
-
 """
-    lq!(A) -> LQ
+    LQ <: Factorization
 
-Compute the LQ factorization of `A`, using the input
-matrix as a workspace. See also [`lq`](@ref).
-"""
-lq!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
-"""
-    lq(A) -> S::LQ
+Matrix factorization type of the `LQ` factorization of a matrix `A`. The `LQ`
+decomposition is the [`QR`](@ref) decomposition of `transpose(A)`. This is the return
+type of [`lq`](@ref), the corresponding matrix factorization function.
 
-Compute the LQ decomposition of `A`. The decomposition's lower triangular
-component can be obtained from the `LQ` object `S` via `S.L`, and the
-orthogonal/unitary component via `S.Q`, such that `A ≈ S.L*S.Q`.
+If `S::LQ` is the factorization object, the lower triangular component can be
+obtained via `S.L`, and the orthogonal/unitary component via `S.Q`, such that
+`A ≈ S.L*S.Q`.
 
 Iterating the decomposition produces the components `S.L` and `S.Q`.
-
-The LQ decomposition is the QR decomposition of `transpose(A)`.
 
 # Examples
 ```jldoctest
 julia> A = [5. 7.; -2. -4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64,Array{Float64,2}} with factors L and Q:
-[-8.60233 0.0; 4.41741 -0.697486]
-[-0.581238 -0.813733; -0.813733 0.581238]
+LQ{Float64, Matrix{Float64}, Vector{Float64}}
+L factor:
+2×2 Matrix{Float64}:
+ -8.60233   0.0
+  4.41741  -0.697486
+Q factor:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
+ -0.581238  -0.813733
+ -0.813733   0.581238
 
 julia> S.L * S.Q
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
   5.0   7.0
  -2.0  -4.0
 
@@ -70,14 +43,93 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
-lq(x::Number) = lq(fill(x,1,1))
+struct LQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: Factorization{T}
+    factors::S
+    τ::C
+
+    function LQ{T,S,C}(factors, τ) where {T,S<:AbstractMatrix{T},C<:AbstractVector{T}}
+        require_one_based_indexing(factors)
+        new{T,S,C}(factors, τ)
+    end
+end
+LQ(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T} =
+    LQ{T,typeof(factors),typeof(τ)}(factors, τ)
+LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
+    LQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(LQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
+           LQ{T,S,typeof(τ)}(factors, τ))
+
+# iteration for destructuring into components
+Base.iterate(S::LQ) = (S.L, Val(:Q))
+Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
+Base.iterate(S::LQ, ::Val{:done}) = nothing
+
+struct LQPackedQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: AbstractMatrix{T}
+    factors::S
+    τ::C
+end
+
+
+"""
+    lq!(A) -> LQ
+
+Compute the [`LQ`](@ref) factorization of `A`, using the input
+matrix as a workspace. See also [`lq`](@ref).
+"""
+lq!(A::StridedMatrix{<:BlasFloat}) = LQ(LAPACK.gelqf!(A)...)
+"""
+    lq(A) -> S::LQ
+
+Compute the LQ decomposition of `A`. The decomposition's lower triangular
+component can be obtained from the [`LQ`](@ref) object `S` via `S.L`, and the
+orthogonal/unitary component via `S.Q`, such that `A ≈ S.L*S.Q`.
+
+Iterating the decomposition produces the components `S.L` and `S.Q`.
+
+The LQ decomposition is the QR decomposition of `transpose(A)`, and it is useful
+in order to compute the minimum-norm solution `lq(A) \\ b` to an underdetermined
+system of equations (`A` has more columns than rows, but has full row rank).
+
+# Examples
+```jldoctest
+julia> A = [5. 7.; -2. -4.]
+2×2 Matrix{Float64}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> S = lq(A)
+LQ{Float64, Matrix{Float64}, Vector{Float64}}
+L factor:
+2×2 Matrix{Float64}:
+ -8.60233   0.0
+  4.41741  -0.697486
+Q factor:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
+ -0.581238  -0.813733
+ -0.813733   0.581238
+
+julia> S.L * S.Q
+2×2 Matrix{Float64}:
+  5.0   7.0
+ -2.0  -4.0
+
+julia> l, q = S; # destructuring via iteration
+
+julia> l == S.L &&  q == S.Q
+true
+```
+"""
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copymutable_oftype(A, lq_eltype(T)))
+lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
+
+lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
 LQ{T}(A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-Factorization{T}(A::LQ{T}) where {T} = A
 Factorization{T}(A::LQ) where {T} = LQ{T}(A)
+
 AbstractMatrix(A::LQ) = A.L*A.Q
 AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
@@ -85,13 +137,13 @@ Array(A::LQ) = Matrix(A)
 
 adjoint(A::LQ) = Adjoint(A)
 Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
-    QR{T,typeof(F.parent.factors)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
+    QR{T,typeof(F.parent.factors),typeof(F.parent.τ)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
-    if d == :L
+    if d === :L
         return tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
-    elseif d == :Q
+    elseif d === :Q
         return LQPackedQ(getfield(F, :factors), getfield(F, :τ))
     else
         return getfield(F, d)
@@ -104,16 +156,19 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, C::LQ)
-    println(io, "$(typeof(C)) with factors L and Q:")
-    show(io, C.L)
-    println(io)
-    show(io, C.Q)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LQ)
+    summary(io, F); println(io)
+    println(io, "L factor:")
+    show(io, mime, F.L)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
 end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::LQPackedQ) where {T} = LQPackedQ{T}(Q)
-Matrix(A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
+Matrix{T}(A::LQPackedQ) where {T} = convert(Matrix{T}, LAPACK.orglq!(copy(A.factors),A.τ))
+Matrix(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
+Array{T}(A::LQPackedQ{T}) where {T} = Matrix{T}(A)
 Array(A::LQPackedQ) = Matrix(A)
 
 size(F::LQ, dim::Integer) = size(getfield(F, :factors), dim)
@@ -136,11 +191,13 @@ end
 
 
 ## Multiplication by LQ
-lmul!(A::LQ, B::StridedVecOrMat) =
-    lmul!(LowerTriangular(A.L), lmul!(A.Q, B))
+function lmul!(A::LQ, B::StridedVecOrMat)
+    lmul!(LowerTriangular(A.L), view(lmul!(A.Q, B), 1:size(A,1), axes(B,2)))
+    return B
+end
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    lmul!(Factorization{TAB}(A), copy_oftype(B, TAB))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copymutable_oftype(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q
@@ -148,20 +205,20 @@ end
 lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    lmul!(AbstractMatrix{TAB}(A), copy_oftype(B, TAB))
+    lmul!(AbstractMatrix{TAB}(A), copymutable_oftype(B, TAB))
 end
 
 ### QcB
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    (A = adjA.parent; LAPACK.ormlq!('L','T',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormlq!('L', 'T', A.factors, A.τ, B))
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
-    (A = adjA.parent; LAPACK.ormlq!('L','C',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormlq!('L', 'C', A.factors, A.τ, B))
 
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        lmul!(adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
+        lmul!(adjoint(AbstractMatrix{TAB}(A)), copymutable_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         lmul!(adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
@@ -178,11 +235,11 @@ function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     return lmul!(A, BB)
 end
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
-    A, B = adjA.parent, adjB.parent
-    TAB = promote_type(eltype(A), eltype(B))
+    B = adjB.parent
+    TAB = promote_type(eltype(adjA.parent), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
-    return lmul!(adjoint(A), BB)
+    return lmul!(adjA, BB)
 end
 
 # in-place right-application of LQPackedQs
@@ -212,7 +269,7 @@ rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCo
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return rmul!(copy_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
+    return rmul!(copymutable_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
@@ -236,7 +293,7 @@ end
 function *(A::StridedVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 2) == size(Q.factors, 2)
-        C = copy_oftype(A, TR)
+        C = copymutable_oftype(A, TR)
     elseif size(A, 2) == size(Q.factors, 1)
         C = zeros(TR, size(A, 1), size(Q.factors, 2))
         copyto!(C, 1, A, 1, length(A))
@@ -264,35 +321,39 @@ _rightappdimmismatch(rowsorcols) =
         "or (2) the number of rows of that (LQPackedQ) matrix's internal representation ",
         "(the factorization's originating matrix's number of rows)")))
 
-
-function (\)(A::LQ{TA}, b::StridedVector{Tb}) where {TA,Tb}
-    S = promote_type(TA,Tb)
-    m = checksquare(A)
-    m == length(b) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has length $(length(b))"))
-    AA = Factorization{S}(A)
-    x = ldiv!(AA, copy_oftype(b, S))
-    return x
-end
-function (\)(A::LQ{TA},B::StridedMatrix{TB}) where {TA,TB}
-    S = promote_type(TA,TB)
-    m = checksquare(A)
-    m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
-    AA = Factorization{S}(A)
-    X = ldiv!(AA, copy_oftype(B, S))
-    return X
-end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
-    @assert !has_offset_axes(B)
-    c2r = reshape(copy(transpose(reinterpret(T, reshape(B, (1, length(B)))))), size(B, 1), 2*size(B, 2))
-    x = ldiv!(F, c2r)
-    return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(x, div(length(x), 2), 2))))),
+    require_one_based_indexing(B)
+    X = zeros(T, size(F,2), 2*size(B,2))
+    X[1:size(B,1), 1:size(B,2)] .= real.(B)
+    X[1:size(B,1), size(B,2)+1:size(X,2)] .= imag.(B)
+    ldiv!(F, X)
+    return reshape(copy(reinterpret(Complex{T}, copy(transpose(reshape(X, div(length(X), 2), 2))))),
                            isa(B, AbstractVector) ? (size(F,2),) : (size(F,2), size(B,2)))
 end
 
 
-function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
-    lmul!(adjoint(A.Q), ldiv!(LowerTriangular(A.L),B))
+function ldiv!(A::LQ, B::StridedVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(A)
+    m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
+
+    ldiv!(LowerTriangular(A.L), view(B, 1:size(A,1), axes(B,2)))
+    return lmul!(adjoint(A.Q), B)
+end
+
+function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::StridedVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(Fadj)
+    m >= n || throw(DimensionMismatch("solver does not support underdetermined systems (more columns than rows)"))
+
+    F = parent(Fadj)
+    lmul!(F.Q, B)
+    ldiv!(UpperTriangular(adjoint(F.L)), view(B, 1:size(F,1), axes(B,2)))
     return B
 end
+
+# In LQ factorization, `Q` is expressed as the product of the adjoint of the
+# reflectors.  Thus, `det` has to be conjugated.
+det(Q::LQPackedQ) = conj(_det_tau(Q.τ))
