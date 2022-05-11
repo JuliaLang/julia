@@ -341,3 +341,13 @@ end
         @test f.(a, digits=9, base = 2) == map(x->f(x, digits=9, base = 2), a)
     end
 end
+
+@testset "rounding for F32/F64" begin
+    for T in [Float32, Float64]
+        old = rounding(T)
+        Base.Rounding.setrounding_raw(T, Base.Rounding.JL_FE_TOWARDZERO)
+        @test rounding(T) == RoundToZero
+        @test round(T(2.7)) == T(2.0)
+        Base.Rounding.setrounding_raw(T, Base.Rounding.to_fenv(old))
+    end
+end

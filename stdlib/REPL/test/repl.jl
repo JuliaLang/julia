@@ -1429,3 +1429,73 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
 end
+
+fakehistory_2 = """
+# time: 2014-06-29 20:44:29 EDT
+# mode: shell
+\txyz = 2
+# time: 2014-06-29 20:44:29 EDT
+# mode: julia
+\txyz = 2
+# time: 2014-06-29 21:44:29 EDT
+# mode: julia
+\txyz = 1
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\tabc = 3
+# time: 2014-06-30 17:32:59 EDT
+# mode: julia
+\txyz = 1
+# time: 2014-06-30 99:99:99 EDT
+# mode: julia
+\txyz = 2
+# time: 2014-06-30 99:99:99 EDT
+# mode: extended
+\tuser imported custom mode
+"""
+
+# Test various history related issues
+for prompt = ["TestΠ", () -> randstring(rand(1:10))]
+    fake_repl() do stdin_write, stdout_read, repl
+        # In the future if we want we can add a test that the right object
+        # gets displayed by intercepting the display
+        repl.specialdisplay = REPL.REPLDisplay(repl)
+
+        errormonitor(@async write(devnull, stdout_read)) # redirect stdout to devnull so we drain the output pipe
+
+        repl.interface = REPL.setup_interface(repl)
+        repl_mode = repl.interface.modes[1]
+        shell_mode = repl.interface.modes[2]
+        help_mode = repl.interface.modes[3]
+        histp = repl.interface.modes[4]
+        prefix_mode = repl.interface.modes[5]
+
+        hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
+                                                       :shell => shell_mode,
+                                                       :help  => help_mode))
+        hist_path = tempname()
+        write(hist_path, fakehistory_2)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
+        REPL.history_reset_state(hp)
+
+        histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+
+        s = LineEdit.init_state(repl.t, prefix_mode)
+        prefix_prev() = REPL.history_prev_prefix(s, hp, "x")
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 1"
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+        prefix_prev()
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+    end
+end
