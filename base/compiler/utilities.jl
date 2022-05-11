@@ -64,6 +64,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 

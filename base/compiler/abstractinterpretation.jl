@@ -2171,7 +2171,6 @@ function widenreturn_noconditional(@nospecialize(rt))
     return widenconst(rt)
 end
 
-
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
         if is_effect_overridden(frame, :terminates_globally)
@@ -2332,9 +2331,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 if isa(fname, SlotNumber)
                     changes = StateUpdate(fname, VarState(Any, false), changes, false)
                 end
-            elseif hd === :code_coverage_effect ||
-                    (hd !== :boundscheck && # :boundscheck can be narrowed to Bool
-                    hd !== nothing && is_meta_expr_head(hd))
+            elseif hd === :code_coverage_effect || (
+                    hd !== :boundscheck && # :boundscheck can be narrowed to Bool
+                    is_meta_expr(stmt))
                 # these do not generate code
             else
                 t = abstract_eval_statement(interp, stmt, changes, frame)
