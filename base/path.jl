@@ -517,7 +517,7 @@ end
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 
-See also: [`Base.contractuser`](@ref).
+See also: [`contractuser`](@ref).
 """
 expanduser(path::AbstractString)
 

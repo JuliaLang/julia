@@ -882,6 +882,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
