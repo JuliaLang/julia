@@ -356,13 +356,11 @@ end # redirect_stdout
 
 macro capture_stdout(ex)
     quote
-        let fname = tempname()
-            open(fname, "w") do f
-                redirect_stdout(f) do
-                    $(esc(ex))
-                end
+        mktemp() do fname, f
+            redirect_stdout(f) do
+                $(esc(ex))
             end
-            read(fname, String)
+            read(f, String)
         end
     end
 end
