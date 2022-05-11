@@ -1314,7 +1314,7 @@ function guess_current_mode_name(s)
 end
 
 # edit current input in editor
-function edit_input(s)
+function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, line))
     mode_name = guess_current_mode_name(s)
     filename = tempname()
     if mode_name == :julia
@@ -1327,7 +1327,7 @@ function edit_input(s)
     str = String(take!(buf))
     line = 1 + count(==(_newline), view(str, 1:pos))
     write(filename, str)
-    InteractiveUtils.edit(filename, line)
+    f(filename, line)
     str_mod = readchomp(filename)
     rm(filename)
     if str != str_mod # something was changed, run the input
