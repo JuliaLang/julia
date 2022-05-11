@@ -177,7 +177,7 @@ A classic example is the standard C library `qsort` function, declared as:
 
 ```c
 void qsort(void *base, size_t nitems, size_t size,
-           int (*compare)(const void *, const void*));
+           int (*compare)(const void*, const void*));
 ```
 
 The `base` argument is a pointer to an array of length `nitems`, with elements of `size` bytes
