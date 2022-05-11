@@ -1583,11 +1583,11 @@ end
     @test length(rr) == length(r)
 end
 
-struct FakeZeroDimArray <: AbstractArray{Int, 0} end
-Base.strides(::FakeZeroDimArray) = ()
-Base.size(::FakeZeroDimArray) = ()
+module IRUtils
+    include(normpath(@__DIR__, "./compiler/irutils.jl"))
+end
+
 @testset "strides for ReshapedArray" begin
-    # Type-based contiguous check is tested in test/compiler/inline.jl
     function check_strides(A::AbstractArray)
         # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
         dims = ntuple(identity, ndims(A))
@@ -1598,6 +1598,10 @@ Base.size(::FakeZeroDimArray) = ()
         end
         return true
     end
+    # Type-based contiguous Check
+    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
+    f(a) = only(strides(a));
+    @test IRUtils.fully_eliminated(f, Base.typesof(a)) && f(a) == 1
     # General contiguous check
     a = view(rand(10,10), 1:10, 1:10)
     @test check_strides(vec(a))
@@ -1629,6 +1633,9 @@ Base.size(::FakeZeroDimArray) = ()
     @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
     @test_throws "Input is not strided." strides(reshape(a,5,3,3,2))
     # Zero dimensional parent
+    struct FakeZeroDimArray <: AbstractArray{Int, 0} end
+    Base.strides(::FakeZeroDimArray) = ()
+    Base.size(::FakeZeroDimArray) = ()
     a = reshape(FakeZeroDimArray(),1,1,1)
     @test @inferred(strides(a)) == (1, 1, 1)
     # Dense parent (but not StridedArray)
@@ -1659,4 +1666,22 @@ end
     i = CIdx((1, 1))
     @test (@inferred A[i,i,i]) === A[1]
     @test (@inferred to_indices([], (1, CIdx(1, 1), 1, CIdx(1, 1), 1, CIdx(1, 1), 1))) == ntuple(Returns(1), 10)
+end
+
+@testset "type-based offset axes check" begin
+    a = randn(ComplexF64, 10)
+    ta = reinterpret(Float64, a)
+    tb = reinterpret(Float64, view(a, 1:2:10))
+    tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    # Issue #44040
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta,tc))
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc,tc))
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta,tc,tb))
+    # Ranges && CartesianIndices
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10,Base.OneTo(10),1.0:2.0,LinRange(1.0,2.0,2),1:2:10,CartesianIndices((1:2:10,1:2:10))))
+    # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
+    @inline _has_offset_axes(A) = @inline any(x->Int(first(x))::Int != 1, axes(A))
+    @inline _has_offset_axes(As...) = @inline any(_has_offset_axes, As)
+    a, b = zeros(2,2,2), zeros(2,2)
+    @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a,a,b,b))
 end
