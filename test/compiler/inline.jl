@@ -1288,3 +1288,90 @@ let src = code_typed1(Tuple{Int}) do x
     end
     @test count(x -> isa(x, Core.GlobalRef) && x.name === :nothing, src.code) == 0
 end
+
+# Test that we can inline a finalizer for a struct that does not otherwise escape
+@noinline nothrow_side_effect(x) =
+    @Base.assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
+
+mutable struct DoAllocNoEscape
+    function DoAllocNoEscape()
+        finalizer(new()) do this
+            nothrow_side_effect(nothing)
+        end
+    end
+end
+
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscape()
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that finalizer elision doesn't cause a throw to be inlined into a function
+# that shouldn't have it
+const finalizer_should_throw = Ref{Bool}(true)
+mutable struct DoAllocFinalizerThrows
+    function DoAllocFinalizerThrows()
+        finalizer(new()) do this
+            finalizer_should_throw[] && error("Unexpected finalizer throw")
+        end
+    end
+end
+
+function f_finalizer_throws()
+    prev = GC.enable(false)
+    for i = 1:100
+        DoAllocFinalizerThrows()
+    end
+    finalizer_should_throw[] = false
+    GC.enable(prev)
+    GC.gc()
+    return true
+end
+
+@test f_finalizer_throws()
+
+# Test finalizers with static parameters
+global last_finalizer_type::Type = Any
+mutable struct DoAllocNoEscapeSparam{T}
+    x::T
+    function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
+        nothrow_side_effect(nothing)
+        nothrow_side_effect(T)
+    end
+    function DoAllocNoEscapeSparam{T}(x::T) where {T}
+        finalizer(finalizer_sparam, new{T}(x))
+    end
+end
+DoAllocNoEscapeSparam(x::T) where {T} = DoAllocNoEscapeSparam{T}(x)
+
+let src = code_typed1(Tuple{Any}) do x
+        for i = 1:1000
+            DoAllocNoEscapeSparam(x)
+        end
+    end
+    # This requires more inlining enhancments. For now just make sure this
+    # doesn't error.
+    @test count(isnew, src.code) in (0, 1) # == 0
+end
+
+# Test noinline finalizer
+@noinline function noinline_finalizer(d)
+    nothrow_side_effect(nothing)
+end
+mutable struct DoAllocNoEscapeNoInline
+    function DoAllocNoEscapeNoInline()
+        finalizer(noinline_finalizer, new())
+    end
+end
+
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeNoInline()
+        end
+    end
+    @test count(isnew, src.code) == 1
+    @test count(isinvoke(:noinline_finalizer), src.code) == 1
+end
