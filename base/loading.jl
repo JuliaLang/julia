@@ -423,6 +423,7 @@ function env_project_file(env::String)::Union{Bool,String}
         project_file === nothing || return project_file
     end
     if isdir(env)
+        project_file = true
         for proj in project_names
             maybe_project_file = joinpath(env, proj)
             if isfile_casesensitive(maybe_project_file)
@@ -430,7 +431,6 @@ function env_project_file(env::String)::Union{Bool,String}
                 break
             end
         end
-        project_file =true
     elseif basename(env) in project_names && isfile_casesensitive(env)
         project_file = env
     else
