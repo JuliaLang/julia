@@ -47,6 +47,10 @@ Standard library changes
   system image with other BLAS/LAPACK libraries is not
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `lu` now supports a new pivoting strategy (besides the existing
+  `RowMaximum()` and `NoPivot()`), that seeks the first non-zero
+  element among the to be factorized rows. This strategy is chosen via
+  `lu(A::AbstractMatrix, RowNonZero())`. ([#44571])
 
 #### Markdown
 

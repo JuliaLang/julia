@@ -226,9 +226,18 @@ When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
-type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
-pivoting is chosen (default) the element type should also support [`abs`](@ref) and
-[`<`](@ref). Pivoting can be turned off by passing `pivot = NoPivot()`.
+type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`.
+
+The following pivoting strategies are supported, and chosen via the optional `pivot`
+argument:
+
+* `RowMaximum()` (default): the standard pivoting strategy; the pivot corresponds
+  to the element of maximum absolute value among the remaining, to be factorized rows.
+  This pivoting strategy requires the element type to also support [`abs`](@ref) and
+  [`<`](@ref).
+* `RowNonZero()`: the pivot corresponds to the first non-zero element among the remaining,
+  to be factorized rows.
+* `NoPivot()`: pivoting turned off.
 
 The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
