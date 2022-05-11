@@ -1970,9 +1970,8 @@ julia> eval(:x)
 `Symbol`s can also be constructed from strings or other values by calling the
 constructor `Symbol(x...)`.
 
-`Symbol`s are immutable and should be compared using `===`.
-The implementation re-uses the same object for all `Symbol`s with the same name,
-so comparison tends to be efficient (it can just compare pointers).
+`Symbol`s are immutable and their implementation re-uses the same object for all `Symbol`s
+with the same name.
 
 Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
 iteration over characters.
