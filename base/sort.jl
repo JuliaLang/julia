@@ -6,7 +6,7 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
 using .Base: copymutable, LinearIndices, length, (:), iterate,
-    eachindex, axes, first, last, similar, zip, OrdinalRange,
+    eachindex, axes, first, last, similar, zip, OrdinalRange, firstindex, lastindex,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
@@ -94,8 +94,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    inds = axes(v, 1)
-    sort!(v, first(inds), last(inds), PartialQuickSort(k), o)
+    sort!(v, firstindex(v), lastindex(v), PartialQuickSort(k), o)
     maybeview(v, k)
 end
 
@@ -293,7 +292,7 @@ searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
-        $s(v::AbstractVector, x, o::Ordering) = (inds = axes(v, 1); $s(v,x,first(inds),last(inds),o))
+        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,firstindex(v),lastindex(v),o)
         $s(v::AbstractVector, x;
            lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
             $s(v,x,ord(lt,by,rev,order))
@@ -862,8 +861,7 @@ defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 function sort!(v::AbstractVector, alg::Algorithm, order::Ordering)
-    inds = axes(v,1)
-    sort!(v,first(inds),last(inds),alg,order)
+    sort!(v,firstindex(v),lastindex(v),alg,order)
 end
 
 """
@@ -1055,7 +1053,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                             "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
     end
     if !initialized
-        @inbounds for i = axes(ix,1)
+        @inbounds for i in eachindex(ix)
             ix[i] = i
         end
     end
@@ -1156,7 +1154,7 @@ function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
         throw(ArgumentError("index vector must have the same length/indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
     end
     if !initialized
-        @inbounds for i = axes(v,1)
+        @inbounds for i in eachindex(v)
             x[i] = i
         end
     end
@@ -1393,7 +1391,7 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, axes, Missing, Type, reinterpret
+using ..Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
@@ -1445,7 +1443,7 @@ allowsmissing(::AbstractVector{<:Integer},
     T >: Missing
 
 function specials2left!(testf::Function, v::AbstractVector, o::Ordering,
-                        lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
+                        lo::Integer=firstindex(v), hi::Integer=lastindex(v))
     i = lo
     @inbounds while i <= hi && testf(o,v[i])
         i += 1
@@ -1461,7 +1459,7 @@ function specials2left!(testf::Function, v::AbstractVector, o::Ordering,
     return i, hi
 end
 function specials2right!(testf::Function, v::AbstractVector, o::Ordering,
-                         lo::Integer=first(axes(v,1)), hi::Integer=last(axes(v,1)))
+                         lo::Integer=firstindex(v), hi::Integer=lastindex(v))
     i = hi
     @inbounds while lo <= i && testf(o,v[i])
         i -= 1
@@ -1478,7 +1476,7 @@ function specials2right!(testf::Function, v::AbstractVector, o::Ordering,
 end
 
 function specials2left!(v::AbstractVector, a::Algorithm, o::Ordering)
-    lo, hi = first(axes(v,1)), last(axes(v,1))
+    lo, hi = firstindex(v), lastindex(v)
     if allowsmissing(v, o)
         i, _ = specials2left!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
         sort!(v, lo, i-1, a, o)
@@ -1488,7 +1486,7 @@ function specials2left!(v::AbstractVector, a::Algorithm, o::Ordering)
     end
 end
 function specials2right!(v::AbstractVector, a::Algorithm, o::Ordering)
-    lo, hi = first(axes(v,1)), last(axes(v,1))
+    lo, hi = firstindex(v), lastindex(v)
     if allowsmissing(v, o)
         _, i = specials2right!((v, o) -> ismissing(v, o) || isnan(v, o), v, o, lo, hi)
         sort!(v, i+1, hi, a, o)
@@ -1514,7 +1512,7 @@ issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     # fpsort!'s optimizations speed up comparisons, of which there are O(nlogn).
     # The overhead is O(n). For n < 10, it's not worth it.
-    length(v) < 10 && return sort!(v, first(axes(v,1)), last(axes(v,1)), SMALL_ALGORITHM, o)
+    length(v) < 10 && return sort!(v, firstindex(v), lastindex(v), SMALL_ALGORITHM, o)
 
     i, j = lo, hi = specials2end!(v,a,o)
     @inbounds while true
@@ -1531,7 +1529,7 @@ end
 
 
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
-    sort!(v, first(axes(v,1)), last(axes(v,1)), a, o)
+    sort!(v, firstindex(v), lastindex(v), a, o)
 
 sort!(v::FPSortable, a::Algorithm, o::DirectOrdering) =
     fpsort!(v, a, o)
