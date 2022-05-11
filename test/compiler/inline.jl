@@ -4,6 +4,8 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
+include(normpath(@__DIR__, "irutils.jl"))
+
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -150,19 +152,6 @@ end
     @test !any(x -> x isa Expr && x.head === :invoke, src.code)
 end
 
-function fully_eliminated(f, args)
-    @nospecialize f args
-    let code = code_typed(f, args)[1][1].code
-        return length(code) == 1 && isa(code[1], ReturnNode)
-    end
-end
-function fully_eliminated(f, args, retval)
-    @nospecialize f args
-    let code = code_typed(f, args)[1][1].code
-        return length(code) == 1 && isa(code[1], ReturnNode) && code[1].val == retval
-    end
-end
-
 # check that ismutabletype(type) can be fully eliminated
 f_mutable_nothrow(s::String) = Val{typeof(s).name.flags}
 @test fully_eliminated(f_mutable_nothrow, (String,))
@@ -224,7 +213,7 @@ function f_div(x)
     div(x, 1)
     return x
 end
-@test fully_eliminated(f_div, (Int,)) == 1
+@test fully_eliminated(f_div, (Int,); retval=Core.Argument(2))
 # ...unless we div by an unknown amount
 function f_div(x, y)
     div(x, y)
@@ -246,7 +235,7 @@ function f_subtype()
     T = SomeArbitraryStruct
     T <: Bool
 end
-@test fully_eliminated(f_subtype, Tuple{}, false)
+@test fully_eliminated(f_subtype, Tuple{}; retval=false)
 
 # check that pointerref gets deleted if unused
 f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
@@ -270,7 +259,7 @@ function foo_apply_apply_type_svec()
     B = Tuple{Float32, Float32}
     Core.apply_type(A..., B.types...)
 end
-@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}, NTuple{3, Float32})
+@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
 # The that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
@@ -284,13 +273,17 @@ b30118(x...) = c30118(x)
 f34900(x::Int, y) = x
 f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
-@test fully_eliminated(f34900, Tuple{Int, Int}, Core.Argument(2))
+@test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
 @testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline x -> x)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods( x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(@inline function f(x) x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), first(methods(function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> (@inline; x))).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> x)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) @inline; x end)).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) x end)).source)
+    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x @inline; x end).source)
+    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x x end).source)
 end
 
 const _a_global_array = [1]
@@ -324,10 +317,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-let ci = code_typed(NonIsBitsDims, Tuple{})[1].first
-    @test length(ci.code) == 1 && isa(ci.code[1], ReturnNode) &&
-        ci.code[1].val.value == NonIsBitsDims()
-end
+@test fully_eliminated(NonIsBitsDims, (); retval=QuoteNode(NonIsBitsDims()))
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
@@ -667,7 +657,7 @@ begin
     end
     @noinline a::Point +ₚ b::Point = Point(a.x + b.x, a.y + b.y)
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -675,11 +665,11 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 0 # successful inlining
     end
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -687,13 +677,13 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 2 # no inlining
     end
 
-    compute(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
+    compute_idem_n(42) # this execution should discard the cache of `+ₚ` since it's declared as `@noinline`
 
-    function compute(n)
+    function compute_idem_n(n)
         a = Point(1.5, 2.5)
         b = Point(2.25, 4.75)
         for i in 0:(n-1)
@@ -701,7 +691,7 @@ begin
         end
         return a.x, a.y
     end
-    let src = code_typed1(compute, (Int,))
+    let src = code_typed1(compute_idem_n, (Int,))
         @test count(isinvoke(:+ₚ), src.code) == 0 # no inlining !?
     end
 end
@@ -759,13 +749,18 @@ end
 import Base: @constprop
 
 # test union-split callsite with successful and unsuccessful constant-prop' results
-@constprop :aggressive @inline f42840(xs, a::Int) = xs[a]             # should be successful, and inlined
-@constprop :none @noinline f42840(xs::AbstractVector, a::Int) = xs[a] # should be unsuccessful, but still statically resolved
+# (also for https://github.com/JuliaLang/julia/issues/43287)
+@constprop :aggressive @inline f42840(cond::Bool, xs::Tuple, a::Int) =  # should be successful, and inlined with constant prop' result
+    cond ? xs[a] : @noinline(length(xs))
+@constprop :none @noinline f42840(::Bool, xs::AbstractVector, a::Int) = # should be unsuccessful, but still statically resolved
+    xs[a]
 let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
-             f42840(xs, 2)
+             f42840(true, xs, 2)
          end |> only |> first
-    # `(xs::Tuple{Int,Int,Int})[a::Const(2)]` => `getfield(xs, 2)`
+    # `f43287(true, xs::Tuple{Int,Int,Int}, 2)` => `getfield(xs, 2)`
+    # `f43287(true, xs::Vector{Int}, 2)` => `:invoke f43287(true, xs, 2)`
     @test count(iscall((src, getfield)), src.code) == 1
+    @test count(isinvoke(:length), src.code) == 0
     @test count(isinvoke(:f42840), src.code) == 1
 end
 # a bit weird, but should handle this kind of case as well
@@ -817,6 +812,103 @@ end
 let
     invoke(xs) = validate_unionsplit_inlining(true, xs[1])
     @test invoke(Any[10]) === false
+end
+
+# test union-split, non-dispatchtuple callsite inlining
+
+@constprop :none @noinline abstract_unionsplit(@nospecialize x::Any) = Base.inferencebarrier(:Any)
+@constprop :none @noinline abstract_unionsplit(@nospecialize x::Number) = Base.inferencebarrier(:Number)
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+@constprop :none @noinline abstract_unionsplit_fallback(@nospecialize x::Type) = Base.inferencebarrier(:Any)
+@constprop :none @noinline abstract_unionsplit_fallback(@nospecialize x::Number) = Base.inferencebarrier(:Number)
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit_fallback(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit_fallback), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit_fallback)), src.code) == 1 # fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit_fallback(x)
+    end
+    @test count(isinvoke(:abstract_unionsplit_fallback), src.code) == 2
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+@constprop :aggressive @inline abstract_unionsplit(c, @nospecialize x::Any) = (c && println("erase me"); typeof(x))
+@constprop :aggressive @inline abstract_unionsplit(c, @nospecialize x::Number) = (c && println("erase me"); typeof(x))
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+@constprop :aggressive @inline abstract_unionsplit_fallback(c, @nospecialize x::Type) = (c && println("erase me"); typeof(x))
+@constprop :aggressive @inline abstract_unionsplit_fallback(c, @nospecialize x::Number) = (c && println("erase me"); typeof(x))
+let src = code_typed1((Any,)) do x
+        abstract_unionsplit_fallback(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit_fallback)), src.code) == 1 # fallback dispatch
+end
+let src = code_typed1((Union{Type,Number},)) do x
+        abstract_unionsplit_fallback(false, x)
+    end
+    @test count(iscall((src, typeof)), src.code) == 2
+    @test count(isinvoke(:println), src.code) == 0
+    @test count(iscall((src, println)), src.code) == 0
+    @test count(iscall((src, abstract_unionsplit)), src.code) == 0 # no fallback dispatch
+end
+
+abstract_diagonal_dispatch(x::Int, y::Int) = 1
+abstract_diagonal_dispatch(x::Real, y::Int) = 2
+abstract_diagonal_dispatch(x::Int, y::Real) = 3
+function test_abstract_diagonal_dispatch(xs)
+    @test abstract_diagonal_dispatch(xs[1], xs[2]) == 1
+    @test abstract_diagonal_dispatch(xs[3], xs[4]) == 3
+    @test abstract_diagonal_dispatch(xs[5], xs[6]) == 2
+    @test_throws MethodError abstract_diagonal_dispatch(xs[7], xs[8])
+end
+test_abstract_diagonal_dispatch(Any[
+    1, 1,    # => 1
+    1, 1.0,  # => 3
+    1.0, 1,  # => 2
+    1.0, 1.0 # => MethodError
+])
+
+constrained_dispatch(x::T, y::T) where T<:Real = 0
+let src = code_typed1((Real,Real,)) do x, y
+        constrained_dispatch(x, y)
+    end
+    @test any(iscall((src, constrained_dispatch)), src.code) # should account for MethodError
+end
+@test_throws MethodError let
+    x, y = 1.0, 1
+    constrained_dispatch(x, y)
 end
 
 # issue 43104
@@ -874,4 +966,296 @@ end
         end |> only |> first
         @test count(iscall((src,UnionAll)), src.code) == 0
     end
+end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
+
+# bug where Conditional wasn't being properly marked as ConstAPI
+let
+    @noinline fcond(a, b) = a === b
+    ftest(a) = (fcond(a, nothing); a)
+    @test fully_eliminated(ftest, Tuple{Bool})
+end
+
+# sqrt not considered volatile
+f_sqrt() = sqrt(2)
+@test fully_eliminated(f_sqrt, Tuple{})
+
+# use constant prop' result even when the return type doesn't get refined
+const Gx = Ref{Any}()
+Base.@constprop :aggressive function conditional_escape!(cnd, x)
+    if cnd
+        Gx[] = x
+    end
+    return nothing
+end
+@test fully_eliminated((String,)) do x
+    Base.@invoke conditional_escape!(false::Any, x::Any)
+end
+
+@testset "strides for ReshapedArray (PR#44027)" begin
+    # Type-based contiguous check
+    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
+    f(a) = only(strides(a));
+    @test fully_eliminated(f, Tuple{typeof(a)}) && f(a) == 1
+end
+
+@testset "elimination of `get_binding_type`" begin
+    m = Module()
+    @eval m begin
+        global x::Int
+        f() = Core.get_binding_type($m, :x)
+        g() = Core.get_binding_type($m, :y)
+    end
+
+    @test fully_eliminated(m.f, Tuple{}; retval=Int)
+    src = code_typed(m.g, ())[][1]
+    @test count(iscall((src, Core.get_binding_type)), src.code) == 1
+    @test m.g() === Any
+end
+
+# have_fma elimination inside ^
+f_pow() = ^(2.0, -1.0)
+@test fully_eliminated(f_pow, Tuple{})
+
+# unused total, noinline function
+@noinline function f_total_noinline(x)
+    return x + 1.0
+end
+@noinline function f_voltatile_escape(ptr)
+    unsafe_store!(ptr, 0)
+end
+function f_call_total_noinline_unused(x)
+    f_total_noinline(x)
+    return x
+end
+function f_call_volatile_escape(ptr)
+    f_voltatile_escape(ptr)
+    return ptr
+end
+
+@test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
+@test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
+
+let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
+    @eval function f_sin_perf()
+        y = 0.0
+        $b
+        y
+    end
+end
+@test fully_eliminated(f_sin_perf, Tuple{})
+
+# Test that we inline the constructor of something that is not const-inlineable
+const THE_REF_NULL = Ref{Int}()
+const THE_REF = Ref{Int}(0)
+struct FooTheRef
+    x::Ref
+    FooTheRef(v) = new(v === nothing ? THE_REF_NULL : THE_REF)
+end
+let src = code_typed1() do
+        FooTheRef(nothing)
+    end
+    @test count(isnew, src.code) == 1
+end
+let src = code_typed1() do
+        FooTheRef(0)
+    end
+    @test count(isnew, src.code) == 1
+end
+let src = code_typed1() do
+        Base.@invoke FooTheRef(nothing::Any)
+    end
+    @test count(isnew, src.code) == 1
+end
+let src = code_typed1() do
+        Base.@invoke FooTheRef(0::Any)
+    end
+    @test count(isnew, src.code) == 1
+end
+@test fully_eliminated() do
+    FooTheRef(nothing)
+    nothing
+end
+@test fully_eliminated() do
+    FooTheRef(0)
+    nothing
+end
+@test fully_eliminated() do
+    Base.@invoke FooTheRef(nothing::Any)
+    nothing
+end
+@test fully_eliminated() do
+    Base.@invoke FooTheRef(0::Any)
+    nothing
+end
+
+# Test that the Core._apply_iterate bail path taints effects
+function f_apply_bail(f)
+    f(()...)
+    return nothing
+end
+f_call_apply_bail(f) = f_apply_bail(f)
+@test !fully_eliminated(f_call_apply_bail, Tuple{Function})
+
+# Test that arraysize has proper effect modeling
+@test fully_eliminated(M->(size(M, 2); nothing), Tuple{Matrix{Float64}})
+
+# DCE of non-inlined callees
+@noinline noninlined_dce_simple(a) = identity(a)
+@test fully_eliminated((String,)) do s
+    noninlined_dce_simple(s)
+    nothing
+end
+@noinline noninlined_dce_new(a::String) = Some(a)
+@test fully_eliminated((String,)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+mutable struct SafeRef{T}
+    x::T
+end
+Base.getindex(s::SafeRef) = getfield(s, 1)
+Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
+@noinline noninlined_dce_new(a::Symbol) = SafeRef(a)
+@test fully_eliminated((Symbol,)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+# should be resolved once we merge https://github.com/JuliaLang/julia/pull/43923
+@test_broken fully_eliminated((Union{Symbol,String},)) do s
+    noninlined_dce_new(s)
+    nothing
+end
+
+# Test that ambigous calls don't accidentally get nothrow effect
+ambig_effect_test(a::Int, b) = 1
+ambig_effect_test(a, b::Int) = 1
+ambig_effect_test(a, b) = 1
+global ambig_unknown_type_global=1
+@noinline function conditionally_call_ambig(b::Bool, a)
+    if b
+        ambig_effect_test(a, ambig_unknown_type_global)
+    end
+    return 0
+end
+function call_call_ambig(b::Bool)
+    conditionally_call_ambig(b, 1)
+    return 1
+end
+@test !fully_eliminated(call_call_ambig, Tuple{Bool})
+
+# Test that a missing methtable identification gets tainted
+# appropriately
+struct FCallback; f::Union{Nothing, Function}; end
+f_invoke_callback(fc) = let f=fc.f; (f !== nothing && f(); nothing); end
+function f_call_invoke_callback(f::FCallback)
+    f_invoke_callback(f)
+    return nothing
+end
+@test !fully_eliminated(f_call_invoke_callback, Tuple{FCallback})
+
+# https://github.com/JuliaLang/julia/issues/41694
+Base.@assume_effects :terminates_globally function issue41694(x)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+@test fully_eliminated() do
+    issue41694(2)
+end
+
+Base.@assume_effects :terminates_globally function recur_termination1(x)
+    x == 1 && return 1
+    1 < x < 20 || throw("bad")
+    return x * recur_termination1(x-1)
+end
+@test fully_eliminated() do
+    recur_termination1(12)
+end
+Base.@assume_effects :terminates_globally function recur_termination21(x)
+    x == 1 && return 1
+    1 < x < 20 || throw("bad")
+    return recur_termination22(x)
+end
+recur_termination22(x) = x * recur_termination21(x-1)
+@test fully_eliminated() do
+    recur_termination21(12) + recur_termination22(12)
+end
+
+const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
+Base.@assume_effects :total_may_throw concrete_eval(
+    f, args...; kwargs...) = f(args...; kwargs...)
+@test fully_eliminated() do
+    concrete_eval(getindex, ___CONST_DICT___, :a)
+end
+
+# https://github.com/JuliaLang/julia/issues/44732
+struct Component44732
+    v
+end
+struct Container44732
+    x::Union{Nothing,Component44732}
+end
+
+# NOTE make sure to prevent inference bail out
+validate44732(::Component44732) = nothing
+validate44732(::Any) = error("don't erase this error!")
+
+function issue44732(c::Container44732)
+    validate44732(c.x)
+    return nothing
+end
+
+let src = code_typed1(issue44732, (Container44732,))
+    @test any(isinvoke(:validate44732), src.code)
+end
+@test_throws ErrorException("don't erase this error!") issue44732(Container44732(nothing))
+
+global x44200::Int = 0
+function f44200()
+    global x44200 = 0
+    while x44200 < 10
+        x44200 += 1
+    end
+    x44200
+end
+let src = code_typed1(f44200)
+    @test count(x -> isa(x, Core.PiNode), src.code) == 0
+end
+
+# Test that peeling off one case from (::Any) doesn't introduce
+# a dynamic dispatch.
+@noinline f_peel(x::Int) = Base.inferencebarrier(1)
+@noinline f_peel(@nospecialize(x::Any)) = Base.inferencebarrier(2)
+g_call_peel(x) = f_peel(x)
+let src = code_typed1(g_call_peel, Tuple{Any})
+    @test count(isinvoke(:f_peel), src.code) == 2
+end
+
+const my_defined_var = 42
+@test fully_eliminated((); retval=42) do
+    getglobal(@__MODULE__, :my_defined_var, :monotonic)
+end
+@test !fully_eliminated() do
+    getglobal(@__MODULE__, :my_defined_var, :foo)
+end
+
+# Test for deletion of value-dependent control flow that is apparent
+# at inference time, but hard to delete later.
+function maybe_error_int(x::Int)
+    if x > 2
+        Base.donotdelete(Base.inferencebarrier(x))
+        error()
+    end
+    return 1
+end
+@test fully_eliminated() do
+    return maybe_error_int(1)
 end

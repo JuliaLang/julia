@@ -94,6 +94,7 @@ Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
+Base.allequal
 Base.reduce(::Any, ::Any)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
@@ -102,6 +103,7 @@ Base.maximum!
 Base.minimum
 Base.minimum!
 Base.extrema
+Base.extrema!
 Base.argmax
 Base.argmin
 Base.findmax
@@ -138,6 +140,7 @@ Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
 Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections

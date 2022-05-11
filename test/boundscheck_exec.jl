@@ -259,7 +259,10 @@ if bc_opt == bc_default || bc_opt == bc_off
     @test !occursin("arrayref(true", typed_40281)
 end
 
-@testset "pass inbounds meta to getindex on CartesianIndices (#42115)" begin
+# Given this is a sub-processed test file, not using @testsets avoids
+# leaking the report print into the Base test runner report
+begin # Pass inbounds meta to getindex on CartesianIndices (#42115)
+    @inline getindex_42115(r, i) = @inbounds getindex(r, i)
     @inline getindex_42115(r, i, j) = @inbounds getindex(r, i, j)
 
     R = CartesianIndices((5, 5))
@@ -270,6 +273,26 @@ end
         @test getindex_42115(R, -1, -1) == CartesianIndex(-1, -1)
         @test getindex_42115(R, 1, -1) == CartesianIndex(1, -1)
     end
+
+    if bc_opt == bc_on
+        @test_throws BoundsError getindex_42115(R, CartesianIndices((6, 6)))
+        @test_throws BoundsError getindex_42115(R, -1:3, :)
+    else
+        @test getindex_42115(R, CartesianIndices((6, 6))) == CartesianIndices((6, 6))
+        @test getindex_42115(R, -1:3, :) == CartesianIndices((-1:3, 1:5))
+    end
 end
+
+
+# Test that --check-bounds=off doesn't permit const prop of indices into
+# function that are not dynamically reachable (the same test for @inbounds
+# is in the compiler tests).
+function f_boundscheck_elim(n)
+    # Inbounds here assumes that this is only ever called with n==0, but of
+    # course the compiler has no way of knowing that, so it must not attempt
+    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
+    ntuple(x->getfield(sin, x), n)
+end
+@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
 
 end

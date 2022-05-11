@@ -6,37 +6,56 @@ function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,I
     return singleton_type(ft) === func
 end
 
+struct SSAUse
+    kind::Symbol
+    idx::Int
+end
+GetfieldUse(idx::Int)  = SSAUse(:getfield, idx)
+PreserveUse(idx::Int)  = SSAUse(:preserve, idx)
+NoPreserve()           = SSAUse(:nopreserve, 0)
+IsdefinedUse(idx::Int) = SSAUse(:isdefined, idx)
+
 """
     du::SSADefUse
 
 This struct keeps track of all uses of some mutable struct allocated in the current function:
-- `du.uses::Vector{Int}` are all instances of `getfield` on the struct
+- `du.uses::Vector{SSAUse}` are some "usages" (like `getfield`) of the struct
 - `du.defs::Vector{Int}` are all instances of `setfield!` on the struct
 The terminology refers to the uses/defs of the "slot bundle" that the mutable struct represents.
 
-In addition we keep track of all instances of a `:foreigncall` that preserves of this mutable
-struct in `du.ccall_preserve_uses`. Somewhat counterintuitively, we don't actually need to
-make sure that the struct itself is live (or even allocated) at a `ccall` site.
-If there are no other places where the struct escapes (and thus e.g. where its address is taken),
-it need not be allocated. We do however, need to make sure to preserve any elements of this struct.
+`du.uses` tracks all instances of `getfield` and `isdefined` calls on the struct.
+Additionally it also tracks all instances of a `:foreigncall` that preserves of this mutable
+struct. Somewhat counterintuitively, we don't actually need to make sure that the struct
+itself is live (or even allocated) at a `ccall` site. If there are no other places where
+the struct escapes (and thus e.g. where its address is taken), it need not be allocated.
+We do however, need to make sure to preserve any elements of this struct.
 """
 struct SSADefUse
-    uses::Vector{Int}
+    uses::Vector{SSAUse}
     defs::Vector{Int}
-    ccall_preserve_uses::Vector{Int}
 end
-SSADefUse() = SSADefUse(Int[], Int[], Int[])
+SSADefUse() = SSADefUse(SSAUse[], Int[])
 
-compute_live_ins(cfg::CFG, du::SSADefUse) = compute_live_ins(cfg, du.defs, du.uses)
+function compute_live_ins(cfg::CFG, du::SSADefUse)
+    uses = Int[]
+    for use in du.uses
+        use.kind === :isdefined && continue # filter out `isdefined` usages
+        push!(uses, use.idx)
+    end
+    compute_live_ins(cfg, du.defs, uses)
+end
 
-function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr)
-    field = stmt.args[3]
+# assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
+try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr) =
+    try_compute_field(ir, stmt.args[3])
+
+function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(field))
     # fields are usually literals, handle them manually
     if isa(field, QuoteNode)
         field = field.value
-    elseif isa(field, Int)
-    # try to resolve other constants, e.g. global reference
+    elseif isa(field, Int) || isa(field, Symbol)
     else
+        # try to resolve other constants, e.g. global reference
         field = argextype(field, ir)
         if isa(field, Const)
             field = field.val
@@ -44,8 +63,7 @@ function try_compute_field_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr
             return nothing
         end
     end
-    isa(field, Union{Int, Symbol}) || return nothing
-    return field
+    return isa(field, Union{Int, Symbol}) ? field : nothing
 end
 
 function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
@@ -63,7 +81,7 @@ function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
 end
 
 function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
-    ex = ir[SSAValue(def)]
+    ex = ir[SSAValue(def)][:inst]
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
@@ -84,7 +102,8 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
+function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+    du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
     def, useblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use)
     if def == 0
         if !haskey(phinodes, curblock)
@@ -293,7 +312,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
 end
 
 function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
-    for arg in (isexpr(def, :new) ? def.args : def.args[2:end])
+    args = isexpr(def, :new) ? def.args : def.args[2:end]
+    for i = 1:length(args)
+        arg = args[i]
         if !isbitstype(widenconst(argextype(arg, compact)))
             push!(new_preserves, arg)
         end
@@ -342,7 +363,8 @@ function lift_leaves(compact::IncrementalCompact,
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
     maybe_undef = false
-    for leaf in leaves
+    for i = 1:length(leaves)
+        leaf = leaves[i]
         cache_key = leaf
         if isa(leaf, AnySSAValue)
             (def, leaf) = walk_to_def(compact, leaf)
@@ -350,10 +372,7 @@ function lift_leaves(compact::IncrementalCompact,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
-                typ = widenconst(types(compact)[leaf])
-                if isa(typ, UnionAll)
-                    typ = unwrap_unionall(typ)
-                end
+                typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 @assert !ismutabletype(typ)
                 if length(def.args) < 1+field
@@ -388,8 +407,8 @@ function lift_leaves(compact::IncrementalCompact,
                     ocleaf = simple_walk(compact, ocleaf)
                 end
                 ocdef, _ = walk_to_def(compact, ocleaf)
-                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-5
-                    lift_arg!(compact, leaf, cache_key, ocdef, 5+field, lifted_leaves)
+                if isexpr(ocdef, :new_opaque_closure) && isa(field, Int) && 1 ≤ field ≤ length(ocdef.args)-4
+                    lift_arg!(compact, leaf, cache_key, ocdef, 4+field, lifted_leaves)
                     continue
                 end
                 return nothing
@@ -413,7 +432,7 @@ function lift_leaves(compact::IncrementalCompact,
         elseif isa(leaf, GlobalRef)
             mod, name = leaf.mod, leaf.name
             if isdefined(mod, name) && isconst(mod, name)
-                leaf = getfield(mod, name)
+                leaf = getglobal(mod, name)
             else
                 return nothing
             end
@@ -435,10 +454,15 @@ function lift_arg!(
     lifted = stmt.args[argidx]
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
+        if already_inserted(compact, lifted)
+            lifted = compact.ssa_rename[lifted.id]
+        end
     end
     if isa(lifted, GlobalRef) || isa(lifted, Expr)
         lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
+        compact[leaf] = nothing
         stmt.args[argidx] = lifted
+        compact[leaf] = stmt
         if isa(leaf, SSAValue) && leaf.id < compact.result_idx
             push!(compact.late_fixup, leaf.id)
         end
@@ -469,11 +493,11 @@ end
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
-    lift_comparison!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr)
 
-Replaces `φ(x, y)::Union{X,Y} === constant` by `φ(x === constant, y === constant)`,
-where `x === constant` and `y === constant` can be replaced with constant `Bool`eans.
-It helps codegen avoid generating expensive code for `===` with `Union` types.
+Replaces `cmp(φ(x, y)::Union{X,Y}, constant)` by `φ(cmp(x, constant), cmp(y, constant))`,
+where `cmp(x, constant)` and `cmp(y, constant)` can be replaced with constant `Bool`eans.
+It helps codegen avoid generating expensive code for `cmp` with `Union` types.
 In particular, this is supposed to improve the performance of the iteration protocol:
 ```julia
 while x !== nothing
@@ -481,50 +505,77 @@ while x !== nothing
 end
 ```
 """
-function lift_comparison!(compact::IncrementalCompact,
+function lift_comparison! end
+
+function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
-
     lhs, rhs = args[2], args[3]
     vl = argextype(lhs, compact)
     vr = argextype(rhs, compact)
     if isa(vl, Const)
         isa(vr, Const) && return
-        cmp = vl
-        typeconstraint = widenconst(vr)
         val = rhs
+        cmp = vl
     elseif isa(vr, Const)
-        cmp = vr
-        typeconstraint = widenconst(vl)
         val = lhs
+        cmp = vr
     else
         return
     end
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
+end
 
-    valtyp = widenconst(argextype(val, compact))
-    isa(valtyp, Union) || return # bail out if there won't be a good chance for lifting
+function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    args = stmt.args
+    length(args) == 3 || return
+    cmp = argextype(args[3], compact)
+    val = args[2]
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx)
+end
 
-    leaves, visited_phinodes = collect_leaves(compact, val, valtyp)
+function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    args = stmt.args
+    length(args) == 3 || return
+    cmp = argextype(args[3], compact)
+    isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
+    val = args[2]
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx)
+end
+
+function lift_comparison_leaves!(@specialize(tfunc),
+    compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
+    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int)
+    typeconstraint = widenconst(argextype(val, compact))
+    if isa(val, Union{OldSSAValue, SSAValue})
+        val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
+    end
+    isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
+    leaves, visited_phinodes = collect_leaves(compact, val, typeconstraint)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
-    # Let's check if we evaluate the comparison for each one of the leaves
+    # check if we can evaluate the comparison for each one of the leaves
     lifted_leaves = nothing
-    for leaf in leaves
-        r = egal_tfunc(argextype(leaf, compact), cmp)
-        if isa(r, Const)
+    for i = 1:length(leaves)
+        leaf = leaves[i]
+        result = tfunc(argextype(leaf, compact), cmp)
+        if isa(result, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
             end
-            lifted_leaves[leaf] = LiftedValue(r.val)
+            lifted_leaves[leaf] = LiftedValue(result.val)
         else
-            return # TODO In some cases it might be profitable to hoist the === here
+            return # TODO In some cases it might be profitable to hoist the comparison here
         end
     end
 
+    # perform lifting
     lifted_val = perform_lifting!(compact,
         visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val)::LiftedValue
+        lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
 
     compact[idx] = lifted_val.x
 end
@@ -541,24 +592,72 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
+mutable struct LazyDomtree
+    ir::IRCode
+    domtree::DomTree
+    LazyDomtree(ir::IRCode) = new(ir)
+end
+function get(x::LazyDomtree)
+    isdefined(x, :domtree) && return x.domtree
+    return @timeit "domtree 2" x.domtree = construct_domtree(x.ir.cfg.blocks)
+end
+
 function perform_lifting!(compact::IncrementalCompact,
     visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
     lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val))
+    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val),
+    lazydomtree::Union{LazyDomtree,Nothing})
     reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
+
+    # Check if all the lifted leaves are the same
+    local the_leaf
+    all_same = true
+    for (_, val) in lifted_leaves
+        if !@isdefined(the_leaf)
+            the_leaf = val
+            continue
+        end
+        if val !== the_leaf
+            all_same = false
+        end
+    end
+
+    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.x : nothing
+    if !isa(the_leaf_val, SSAValue)
+        all_same = false
+    end
+
+    if all_same
+        dominates_all = true
+        if lazydomtree !== nothing
+            domtree = get(lazydomtree)
+            for item in visited_phinodes
+                if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                    dominates_all = false
+                    break
+                end
+            end
+            if dominates_all
+                return the_leaf
+            end
+        end
+    end
 
     # Insert PhiNodes
     lifted_phis = LiftedPhi[]
     for item in visited_phinodes
-        # FIXME this cache retrieval is obviously broken
-        if (item, cache_key) in keys(lifting_cache)
-            ssa = lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)]
+        # FIXME this cache is broken somehow
+        # ckey = Pair{AnySSAValue, Any}(item, cache_key)
+        # cached = ckey in keys(lifting_cache)
+        cached = false
+        if cached
+            ssa = lifting_cache[ckey]
             push!(lifted_phis, LiftedPhi(ssa, compact[ssa]::PhiNode, false))
             continue
         end
         n = PhiNode()
         ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
-        lifting_cache[Pair{AnySSAValue, Any}(item, cache_key)] = ssa
+        # lifting_cache[ckey] = ssa
         push!(lifted_phis, LiftedPhi(ssa, n, true))
     end
 
@@ -597,10 +696,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 # Probably ignored by path condition, skip this
             end
         end
-    end
-
-    for lf in lifted_phis
-        count_added_node!(compact, lf.node)
+        count_added_node!(compact, new_node)
     end
 
     # Fixup the stmt itself
@@ -643,10 +739,12 @@ function sroa_pass!(ir::IRCode)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
+    # initialization of domtree is delayed to avoid the expensive computation in many cases
+    lazydomtree = LazyDomtree(ir)
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
-        is_setfield = false
+        is_setfield = is_isdefined = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
             4 <= length(stmt.args) <= 5 || continue
@@ -659,6 +757,13 @@ function sroa_pass!(ir::IRCode)
             if length(stmt.args) == 5
                 field_ordering = argextype(stmt.args[5], compact)
             elseif length(stmt.args) == 4
+                field_ordering = argextype(stmt.args[4], compact)
+                widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
+            end
+        elseif is_known_call(stmt, isdefined, compact)
+            3 <= length(stmt.args) <= 4 || continue
+            is_isdefined = true
+            if length(stmt.args) == 4
                 field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
@@ -683,10 +788,7 @@ function sroa_pass!(ir::IRCode)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = widenconst(argextype(SSAValue(defidx), compact))
-                        if isa(typ, UnionAll)
-                            typ = unwrap_unionall(typ)
-                        end
+                        typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
                         if typ isa DataType && !ismutabletype(typ)
                             record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
@@ -698,30 +800,29 @@ function sroa_pass!(ir::IRCode)
                     if defuses === nothing
                         defuses = IdDict{Int, Tuple{SPCSet, SSADefUse}}()
                     end
-                    mid, defuse = get!(defuses, defidx, (SPCSet(), SSADefUse()))
-                    push!(defuse.ccall_preserve_uses, idx)
+                    mid, defuse = get!(()->(SPCSet(),SSADefUse()), defuses, defidx)
+                    push!(defuse.uses, PreserveUse(idx))
                     union!(mid, intermediaries)
                 end
                 continue
             end
             if !isempty(new_preserves)
+                compact[idx] = nothing
                 compact[idx] = form_new_preserves(stmt, preserved, new_preserves)
             end
             continue
-        # TODO: This isn't the best place to put these
-        elseif is_known_call(stmt, typeassert, compact)
-            canonicalize_typeassert!(compact, idx, stmt)
-            continue
-        elseif is_known_call(stmt, (===), compact)
-            lift_comparison!(compact, idx, stmt, lifting_cache)
-            continue
-        # elseif is_known_call(stmt, isa, compact)
-            # TODO do a similar optimization as `lift_comparison!` for `===`
-        else
+        else # TODO: This isn't the best place to put these
+            if is_known_call(stmt, typeassert, compact)
+                canonicalize_typeassert!(compact, idx, stmt)
+            elseif is_known_call(stmt, (===), compact)
+                lift_comparison!(===, compact, idx, stmt, lifting_cache)
+            elseif is_known_call(stmt, isa, compact)
+                lift_comparison!(isa, compact, idx, stmt, lifting_cache)
+            end
             continue
         end
 
-        # analyze this `getfield` / `setfield!` call
+        # analyze this `getfield` / `isdefined` / `setfield!` call
 
         field = try_compute_field_stmt(compact, stmt)
         field === nothing && continue
@@ -732,10 +833,15 @@ function sroa_pass!(ir::IRCode)
         if isa(struct_typ, Union) && struct_typ <: Tuple
             struct_typ = unswitchtupleunion(struct_typ)
         end
+        if isa(struct_typ, Union) && is_isdefined
+            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            continue
+        end
         isa(struct_typ, DataType) || continue
 
         struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
-        if !(field_ordering === :unspecified || (field_ordering isa Const && field_ordering.val === :not_atomic))
+        if !((field_ordering === :unspecified) ||
+             (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
@@ -753,17 +859,21 @@ function sroa_pass!(ir::IRCode)
                 if defuses === nothing
                     defuses = IdDict{Int, Tuple{SPCSet, SSADefUse}}()
                 end
-                mid, defuse = get!(defuses, def.id, (SPCSet(), SSADefUse()))
+                mid, defuse = get!(()->(SPCSet(),SSADefUse()), defuses, def.id)
                 if is_setfield
                     push!(defuse.defs, idx)
+                elseif is_isdefined
+                    push!(defuse.uses, IsdefinedUse(idx))
                 else
-                    push!(defuse.uses, idx)
+                    push!(defuse.uses, GetfieldUse(idx))
                 end
                 union!(mid, intermediaries)
             end
             continue
         elseif is_setfield
             continue # invalid `setfield!` call, but just ignore here
+        elseif is_isdefined
+            continue # TODO?
         end
 
         # perform SROA on immutable structs here on
@@ -784,7 +894,7 @@ function sroa_pass!(ir::IRCode)
         end
 
         val = perform_lifting!(compact,
-            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val)
+            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
 
         # Insert the undef check if necessary
         if any_undef
@@ -811,7 +921,7 @@ function sroa_pass!(ir::IRCode)
         used_ssas = copy(compact.used_ssas)
         simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
         ir = complete(compact)
-        sroa_mutables!(ir, defuses, used_ssas)
+        sroa_mutables!(ir, defuses, used_ssas, lazydomtree)
         return ir
     else
         simple_dce!(compact)
@@ -819,16 +929,14 @@ function sroa_pass!(ir::IRCode)
     end
 end
 
-function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int})
-    # initialization of domtree is delayed to avoid the expensive computation in many cases
-    local domtree = nothing
+function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
         # escapes and we cannot eliminate the allocation. This works, because we're guaranteed
         # not to include any intermediaries that have dead uses. As a result, missing uses will only ever
         # show up in the nuses_total count.
-        nleaves = length(defuse.uses) + length(defuse.defs) + length(defuse.ccall_preserve_uses)
+        nleaves = length(defuse.uses) + length(defuse.defs)
         nuses = 0
         for idx in intermediaries
             nuses += used_ssas[idx]
@@ -836,22 +944,25 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         nuses_total = used_ssas[idx] + nuses - length(intermediaries)
         nleaves == nuses_total || continue
         # Find the type for this allocation
-        defexpr = ir[SSAValue(idx)]
+        defexpr = ir[SSAValue(idx)][:inst]
         isexpr(defexpr, :new) || continue
         newidx = idx
-        typ = ir.stmts[newidx][:type]
-        if isa(typ, UnionAll)
-            typ = unwrap_unionall(typ)
-        end
+        typ = unwrap_unionall(ir.stmts[newidx][:type])
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
         ismutabletype(typ) || continue
         typ = typ::DataType
         # Partition defuses by field
         fielddefuse = SSADefUse[SSADefUse() for _ = 1:fieldcount(typ)]
-        all_forwarded = true
+        all_eliminated = all_forwarded = true
         for use in defuse.uses
-            stmt = ir[SSAValue(use)] # == `getfield` call
+            if use.kind === :preserve
+                for du in fielddefuse
+                    push!(du.uses, use)
+                end
+                continue
+            end
+            stmt = ir[SSAValue(use.idx)][:inst] # == `getfield`/`isdefined` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
@@ -865,7 +976,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             push!(fielddefuse[field].uses, use)
         end
         for def in defuse.defs
-            stmt = ir[SSAValue(def)]::Expr # == `setfield!` call
+            stmt = ir[SSAValue(def)][:inst]::Expr # == `setfield!` call
             field = try_compute_fieldidx_stmt(ir, stmt, typ)
             field === nothing && @goto skip
             isconst(typ, field) && @goto skip # we discovered an attempt to mutate a const field, which must error
@@ -885,15 +996,35 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
-                domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, domtree)
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get(lazydomtree))
             end
             allblocks = sort(vcat(phiblocks, ldu.def_bbs))
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
-                for use in du.uses
-                    domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-                    has_safe_def(ir, domtree, allblocks, du, newidx, use) || @goto skip
+                for i = 1:length(du.uses)
+                    use = du.uses[i]
+                    if use.kind === :isdefined
+                        if has_safe_def(ir, get(lazydomtree), allblocks, du, newidx, use.idx)
+                            ir[SSAValue(use.idx)][:inst] = true
+                        else
+                            all_eliminated = false
+                        end
+                        continue
+                    elseif use.kind === :preserve
+                        if length(du.defs) == 1 # allocation with this field unintialized
+                            # there is nothing to preserve, just ignore this use
+                            du.uses[i] = NoPreserve()
+                            continue
+                        end
+                    end
+                    has_safe_def(ir, get(lazydomtree), allblocks, du, newidx, use.idx) || @goto skip
+                end
+            else # always have some definition at the allocation site
+                for i = 1:length(du.uses)
+                    use = du.uses[i]
+                    if use.kind === :isdefined
+                        ir[SSAValue(use.idx)][:inst] = true
+                    end
                 end
             end
         end
@@ -901,9 +1032,8 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
-        domtree === nothing && (@timeit "domtree 2" domtree = construct_domtree(ir.cfg.blocks))
-        preserve_uses = isempty(defuse.ccall_preserve_uses) ? nothing :
-            IdDict{Int, Vector{Any}}((idx=>Any[] for idx in SPCSet(defuse.ccall_preserve_uses)))
+        domtree = get(lazydomtree)
+        local preserve_uses = nothing
         for fidx in 1:ndefuse
             du = fielddefuse[fidx]
             ftyp = fieldtype(typ, fidx)
@@ -915,18 +1045,29 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                         NewInstruction(PhiNode(), ftyp))
                 end
                 # Now go through all uses and rewrite them
-                for stmt in du.uses
-                    ir[SSAValue(stmt)] = compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, stmt)
-                end
-                if !isbitstype(ftyp)
-                    if preserve_uses !== nothing
-                        for (use, list) in preserve_uses
-                            push!(list, compute_value_for_use(ir, domtree, allblocks, du, phinodes, fidx, use))
+                for use in du.uses
+                    if use.kind === :getfield
+                        ir[SSAValue(use.idx)][:inst] = compute_value_for_use(ir, domtree, allblocks,
+                            du, phinodes, fidx, use.idx)
+                    elseif use.kind === :isdefined
+                        continue # already rewritten if possible
+                    elseif use.kind === :nopreserve
+                        continue # nothing to preserve (may happen when there are unintialized fields)
+                    elseif use.kind === :preserve
+                        newval = compute_value_for_use(ir, domtree, allblocks,
+                            du, phinodes, fidx, use.idx)
+                        if !isbitstype(widenconst(argextype(newval, ir)))
+                            if preserve_uses === nothing
+                                preserve_uses = IdDict{Int, Vector{Any}}()
+                            end
+                            push!(get!(()->Any[], preserve_uses, use.idx), newval)
                         end
+                    else
+                        @assert false "sroa_mutables!: unexpected use"
                     end
                 end
                 for b in phiblocks
-                    n = ir[phinodes[b]]::PhiNode
+                    n = ir[phinodes[b]][:inst]::PhiNode
                     for p in ir.cfg.blocks[b].preds
                         push!(n.edges, p)
                         push!(n.values, compute_value_for_block(ir, domtree,
@@ -934,9 +1075,13 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     end
                 end
             end
+            all_eliminated || continue
+            # all "usages" (i.e. `getfield` and `isdefined` calls) are eliminated,
+            # now eliminate "definitions" (`setfield!`) calls
+            # (NOTE the allocation itself will be eliminated by DCE pass later)
             for stmt in du.defs
                 stmt == newidx && continue
-                ir[SSAValue(stmt)] = nothing
+                ir[SSAValue(stmt)][:inst] = nothing
             end
         end
         preserve_uses === nothing && continue
@@ -947,8 +1092,9 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             push!(intermediaries, newidx)
         end
         # Insert the new preserves
-        for (use, new_preserves) in preserve_uses
-            ir[SSAValue(use)] = form_new_preserves(ir[SSAValue(use)]::Expr, intermediaries, new_preserves)
+        for (useidx, new_preserves) in preserve_uses
+            ir[SSAValue(useidx)][:inst] = form_new_preserves(ir[SSAValue(useidx)][:inst]::Expr,
+                intermediaries, new_preserves)
         end
 
         @label skip
@@ -996,12 +1142,12 @@ function canonicalize_typeassert!(compact::IncrementalCompact, idx::Int, stmt::E
     compact.ssa_rename[compact.idx-1] = pi
 end
 
-function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int)
+function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx)
+        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
     end
 end
 
@@ -1030,6 +1176,16 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
     end
 end
 
+function is_some_union(@nospecialize(t))
+    isa(t, MaybeUndef) && (t = t.typ)
+    return isa(t, Union)
+end
+
+function is_union_phi(compact::IncrementalCompact, idx::Int)
+    inst = compact.result[idx]
+    return isa(inst[:inst], PhiNode) && is_some_union(inst[:type])
+end
+
 """
     adce_pass!(ir::IRCode) -> newir::IRCode
 
@@ -1052,31 +1208,103 @@ within `sroa_pass!` which redirects references of `typeassert`ed value to the co
 function adce_pass!(ir::IRCode)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
+    unionphis = Pair{Int,Any}[] # sorted
     compact = IncrementalCompact(ir)
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
-        elseif is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
-            # nullify safe `typeassert` calls
-            ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
-            if isexact && argextype(stmt.args[2], compact) ⊑ ty
-                compact[idx] = nothing
+            if is_some_union(compact.result[idx][:type])
+                push!(unionphis, Pair{Int,Any}(idx, Union{}))
+            end
+        elseif isa(stmt, PiNode)
+            val = stmt.val
+            if isa(val, SSAValue) && is_union_phi(compact, val.id)
+                r = searchsorted(unionphis, val.id; by = first)
+                if !isempty(r)
+                    unionphi = unionphis[first(r)]
+                    t = tmerge(unionphi[2], stmt.typ)
+                    unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
+                end
+            end
+        else
+            if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
+                # nullify safe `typeassert` calls
+                ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
+                if isexact && argextype(stmt.args[2], compact) ⊑ ty
+                    compact[idx] = nothing
+                    continue
+                end
+            end
+            for ur in userefs(stmt)
+                use = ur[]
+                if isa(use, SSAValue) && is_union_phi(compact, use.id)
+                    r = searchsorted(unionphis, use.id; by = first)
+                    if !isempty(r)
+                        deleteat!(unionphis, first(r))
+                    end
+                end
             end
         end
     end
     non_dce_finish!(compact)
     for phi in all_phis
-        count_uses(compact.result[phi][:inst]::PhiNode, phi_uses)
+        inst = compact.result[phi]
+        for ur in userefs(inst[:inst]::PhiNode)
+            use = ur[]
+            if isa(use, SSAValue)
+                phi_uses[use.id] += 1
+                stmt = compact.result[use.id][:inst]
+                if isa(stmt, PhiNode)
+                    r = searchsorted(unionphis, use.id; by=first)
+                    if !isempty(r)
+                        unionphi = unionphis[first(r)]
+                        unionphis[first(r)] = Pair{Int,Any}(unionphi[1],
+                            tmerge(unionphi[2], inst[:type]))
+                    end
+                end
+            end
+        end
+    end
+    # Narrow any union phi nodes that have unused branches
+    for i = 1:length(unionphis)
+        unionphi = unionphis[i]
+        phi = unionphi[1]
+        t = unionphi[2]
+        if t === Union{}
+            compact.result[phi][:inst] = nothing
+            continue
+        elseif t === Any
+            continue
+        elseif compact.result[phi][:type] ⊑ t
+            continue
+        end
+        to_drop = Int[]
+        stmt = compact[phi]
+        stmt === nothing && continue
+        stmt = stmt::PhiNode
+        for i = 1:length(stmt.values)
+            if !isassigned(stmt.values, i)
+                # Should be impossible to have something used only by PiNodes that's undef
+                push!(to_drop, i)
+            elseif !hasintersect(widenconst(argextype(stmt.values[i], compact)),
+                                 widenconst(t))
+                push!(to_drop, i)
+            end
+        end
+        compact.result[phi][:type] = t
+        isempty(to_drop) && continue
+        deleteat!(stmt.values, to_drop)
+        deleteat!(stmt.edges, to_drop)
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx)
+        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1095,7 +1323,7 @@ function adce_pass!(ir::IRCode)
             end
         end
         while !isempty(extra_worklist)
-            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist))
+            if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
             end
         end
@@ -1217,7 +1445,7 @@ function type_lift_pass!(ir::IRCode)
                         end
                     end
                     if which !== SSAValue(0)
-                        phi = ir[which]
+                        phi = ir[which][:inst]
                         if isa(phi, PhiNode)
                             phi.values[use] = new_phi
                         else
@@ -1237,10 +1465,45 @@ function type_lift_pass!(ir::IRCode)
     ir
 end
 
+function is_bb_empty(ir::IRCode, bb::BasicBlock)
+    isempty(bb.stmts) && return true
+    if length(bb.stmts) == 1
+        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        return stmt === nothing || isa(stmt, GotoNode)
+    end
+    return false
+end
+
+# TODO: This is terrible, we should change the IR for GotoIfNot to gain an else case
+function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
+    # If the block we're going to is the same as the fallthrow, it's always legal to drop
+    # the block.
+    length(bb.stmts) == 0 && return true
+    if length(bb.stmts) == 1
+        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        stmt === nothing && return true
+        ((stmt::GotoNode).label == bbidx + 1) && return true
+    end
+    # Otherwise make sure we're not the fallthrough case of any predecessor
+    for pred in bb.preds
+        if pred == bbidx - 1
+            terminator = ir[SSAValue(first(bb.stmts)-1)][:inst]
+            if isa(terminator, GotoIfNot)
+                if terminator.dest != bbidx
+                    return false
+                end
+            end
+            break
+        end
+    end
+    return true
+end
+
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
+    dropped_bbs = Vector{Int}() # sorted
     function follow_merge_into(idx::Int)
         while merge_into[idx] != 0
             idx = merge_into[idx]
@@ -1265,6 +1528,27 @@ function cfg_simplify!(ir::IRCode)
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
+            elseif is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
+                # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
+                # reference our predecessors.
+                found_interference = false
+                for idx in bbs[succ].stmts
+                    stmt = ir[SSAValue(idx)][:inst]
+                    stmt === nothing && continue
+                    isa(stmt, PhiNode) || break
+                    for edge in stmt.edges
+                        for pred in bb.preds
+                            if pred == edge
+                                found_interference = true
+                                @goto done
+                            end
+                        end
+                    end
+                end
+                @label done
+                if !found_interference
+                    push!(dropped_bbs, idx)
+                end
             end
         end
     end
@@ -1280,6 +1564,10 @@ function cfg_simplify!(ir::IRCode)
         # Drop blocks with no predecessors
         if i != 1 && length(ir.cfg.blocks[i].preds) == 0
             bb_rename_succ[i] = -1
+        end
+        # Mark dropped blocks for fixup
+        if !isempty(searchsorted(dropped_bbs, i))
+            bb_rename_succ[i] = -bbs[i].succs[1]
         end
 
         bb_rename_succ[i] != 0 && continue
@@ -1297,6 +1585,30 @@ function cfg_simplify!(ir::IRCode)
                 break
             end
             curr += 1
+            if !isempty(searchsorted(dropped_bbs, curr))
+                break
+            end
+        end
+    end
+
+    # Compute map from new to old blocks
+    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
+
+    # Fixup dropped BBs
+    resolved_all = false
+    while !resolved_all
+        # TODO: There are faster ways to do this
+        resolved_all = true
+        for bb in dropped_bbs
+            obb = bb_rename_succ[bb]
+            if obb < -1
+                nsucc = bb_rename_succ[-obb]
+                if nsucc == -1
+                    nsucc = -merge_into[-obb]
+                end
+                bb_rename_succ[bb] = nsucc
+                resolved_all = false
+            end
         end
     end
 
@@ -1309,12 +1621,13 @@ function cfg_simplify!(ir::IRCode)
             bb_rename_pred[i] = -1
             continue
         end
-        bbnum = follow_merge_into(i)
+        pred = i
+        while pred !== 1 && !isempty(searchsorted(dropped_bbs, pred))
+            pred = bbs[pred].preds[1]
+        end
+        bbnum = follow_merge_into(pred)
         bb_rename_pred[i] = bb_rename_succ[bbnum]
     end
-
-    # Compute map from new to old blocks
-    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
 
     # Compute new block lengths
     result_bbs_lengths = zeros(Int, max_bb_num-1)
@@ -1357,6 +1670,25 @@ function cfg_simplify!(ir::IRCode)
                        compute_preds(i),
                        compute_succs(i))
             for i = 1:length(result_bbs)]
+    end
+
+    # Fixup terminators for any blocks that would have caused double edges
+    for (bbidx, (new_bb, old_bb)) in enumerate(zip(cresult_bbs, result_bbs))
+        @assert length(new_bb.succs) <= 2
+        length(new_bb.succs) <= 1 && continue
+        if new_bb.succs[1] == new_bb.succs[2]
+            terminator = ir[SSAValue(last(bbs[old_bb].stmts))]
+            @assert isa(terminator[:inst], GotoIfNot)
+            terminator[:inst] = GotoNode(terminator[:inst].dest)
+            pop!(new_bb.succs)
+            new_succ = cresult_bbs[new_bb.succs[1]]
+            for (i, nsp) in enumerate(new_succ.preds)
+                if nsp == bbidx
+                    deleteat!(new_succ.preds, i)
+                    break
+                end
+            end
+        end
     end
 
     compact = IncrementalCompact(ir, true)
