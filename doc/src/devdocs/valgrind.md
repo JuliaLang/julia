@@ -81,20 +81,6 @@ This issue
 [has been reported](https://bugs.kde.org/show_bug.cgi?id=446401)
 to the Valgrind developers as they have requested.
 
-### Invalid file descriptors used by libunwind
-
-The following double warning can also be ignored:
-
-```
-==xxxxxx== Warning: invalid file descriptor -1 in syscall close()
-==xxxxxx== Warning: invalid file descriptor -1 in syscall close()
-```
-
-The code that causes this warning [has been fixed in recent versions of
-libunwind](https://github.com/libunwind/libunwind/commit/b256722d49a63719c69c0416eba9163a4d069584),
-but all supported Julia versions at the time of writing (1.6 LTS and
-1.7) are built with an older libunwind which does not contain this fix.
-
 ## Caveats
 
 Valgrind currently [does not support multiple rounding modes](https://bugs.kde.org/show_bug.cgi?id=136779),
