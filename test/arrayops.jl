@@ -2164,15 +2164,14 @@ end
 end
 
 # row/column/slice iterator tests
-using Base: eachrow, eachcol
 @testset "row/column/slice iterators" begin
     # check type aliases
-    @test Rows <: AbstractVector{<:AbstractVector}
-    @test eachrow(ones(3)) isa Rows
-    @test eachrow(ones(3,3)) isa Rows
-    @test Columns <: AbstractVector{<:AbstractVector}
-    @test eachcol(ones(3)) isa Columns
-    @test eachcol(ones(3,3)) isa Columns
+    @test RowSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test eachrow(ones(3)) isa RowSlices
+    @test eachrow(ones(3,3)) isa RowSlices
+    @test ColumnSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test eachcol(ones(3)) isa ColumnSlices
+    @test eachcol(ones(3,3)) isa ColumnSlices
 
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
@@ -2198,26 +2197,32 @@ using Base: eachrow, eachcol
     @test_throws MethodError collect(eachcol(M))
 
     S1 = eachslice(M, dims = 1)
+    @test S1 isa AbstractSlices{<:AbstractArray{Int, 3}, 1}
     @test size(S1) == (2,)
     @test S1[1] == M[1,:,:,:]
 
     S1K = eachslice(M, dims = 1, drop=false)
+    @test S1K isa AbstractSlices{<:AbstractArray{Int, 3}, 4}
     @test size(S1K) == (2,1,1,1)
     @test S1K[1,1,1,1] == M[1,:,:,:]
 
     S23 = eachslice(M, dims = (2,3))
+    @test S23 isa AbstractSlices{<:AbstractArray{Int, 2}, 2}
     @test size(S23) == (2,2)
     @test S23[2,1] == M[:,2,1,:]
 
     S23K = eachslice(M, dims = (2,3), drop=false)
+    @test S23K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
     @test size(S23K) == (1,2,2,1)
     @test S23K[1,2,1,1] == M[:,2,1,:]
 
     S32 = eachslice(M, dims = (3,2))
+    @test S32 isa AbstractSlices{<:AbstractArray{Int, 2}, 2}
     @test size(S32) == (2,2)
     @test S32[2,1] == M[:,1,2,:]
 
     S32K = eachslice(M, dims = (3,2), drop=false)
+    @test S32K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
     @test size(S32K) == (1,2,2,1)
     @test S32K[1,2,1,1] == M[:,2,1,:]
 end

@@ -1,14 +1,25 @@
 """
-    Slices{P,SM,AX,S,N} <: AbstractArray{S,N}
+    AbstractSlices{S,N} <: AbstractArray{S,N}
 
-An `AbstractArray` of slices into a parent array.
+Supertype for arrays of slices into a parent array over some dimension(s),
+returning views that select all the data from the other dimensions.
+
+`parent` will return the parent array.
+"""
+abstract type AbstractSlices{T,N} <: AbstractArray{T,N} end
+
+"""
+    Slices{P,SM,AX,S,N} <: AbstractSlices{S,N}
+
+An `AbstractArray` of slices into a parent array over specified dimension(s),
+returning views that select all the data from the other dimension(s).
 
 These should typically be constructed by [`eachslice`](@ref), [`eachcol`](@ref) or
 [`eachrow`](@ref).
 
-[`parent(S::Slices)`](@ref) will return the parent array.
+[`parent(s::Slices)`](@ref) will return the parent array.
 """
-struct Slices{P,SM,AX,S,N} <: AbstractArray{S,N}
+struct Slices{P,SM,AX,S,N} <: AbstractSlices{S,N}
     """
     Parent array
     """
@@ -74,36 +85,36 @@ the ordering of the dimensions will match those in `dims`. If `drop = false`, th
 `Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
-See also [`eachrow`](@ref), [`eachcol`](@ref), and [`selectdim`](@ref).
+See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 
-!!! compat "Julia 1.7"
-     Prior to Julia 1.7, this returned an iterator, and only a single dimension `dims` was supported.
+!!! compat "Julia 1.9"
+     Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
 
 # Example
 
 ```jldoctest
-julia> M = [1 2 3; 4 5 6; 7 8 9]
+julia> m = [1 2 3; 4 5 6; 7 8 9]
 3×3 Matrix{Int64}:
  1  2  3
  4  5  6
  7  8  9
 
-julia> S = eachslice(M, dims=1)
-3-element Rows{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+julia> s = eachslice(m, dims=1)
+3-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
 
-julia> S[1]
+julia> s[1]
 3-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
  3
 
-julia> T = eachslice(M, dims=1, drop=false)
+julia> eachslice(M, dims=1, drop=false)
 3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
  [1, 2, 3]
  [4, 5, 6]
@@ -117,16 +128,16 @@ end
 """
     eachrow(A::AbstractVecOrMat) <: AbstractVector
 
-Create a [`Rows`](@ref) object that is a vector of rows of matrix or vector `A`.
+Create a [`RowSlices`](@ref) object that is a vector of rows of matrix or vector `A`.
 Row slices are returned as `AbstractVector` views of `A`.
 
-See also [`eachcol`](@ref) and [`eachslice`](@ref).
+See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 
-!!! compat "Julia 1.7"
-     Prior to Julia 1.7, this returned an iterator.
+!!! compat "Julia 1.9"
+     Prior to Julia 1.9, this returned an iterator.
 
 # Example
 
@@ -136,12 +147,12 @@ julia> a = [1 2; 3 4]
  1  2
  3  4
 
-julia> S = eachrow(a)
-2-element Rows{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+julia> s = eachrow(a)
+2-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2]
  [3, 4]
 
-julia> S[1]
+julia> s[1]
 2-element view(::Matrix{Int64}, 1, :) with eltype Int64:
  1
  2
@@ -153,10 +164,10 @@ eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
 """
     eachcol(A::AbstractVecOrMat) <: AbstractVector
 
-Create a [`Columns`](@ref) object that is a vector of columns of matrix or vector `A`.
+Create a [`ColumnSlices`](@ref) object that is a vector of columns of matrix or vector `A`.
 Column slices are returned as `AbstractVector` views of `A`.
 
-See also [`eachrow`](@ref) and [`eachslice`](@ref).
+See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
@@ -172,12 +183,12 @@ julia> a = [1 2; 3 4]
  1  2
  3  4
 
-julia> S = eachcol(a)
-2-element Columns{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
+julia> s = eachcol(a)
+2-element ColumnSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 3]
  [2, 4]
 
-julia> S[1]
+julia> s[1]
 2-element view(::Matrix{Int64}, :, 1) with eltype Int64:
  1
  3
@@ -187,24 +198,24 @@ eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
 eachcol(A::AbstractVector) = eachcol(reshape(A, size(A, 1), 1))
 
 """
-    Rows{M,AX,S}
+    RowSlices{M,AX,S}
 
 A special case of [`Slices`](@ref) that is a vector of row slices of a matrix, as
 constructed by [`eachrow`](@ref).
 
-[`parent(S)`](@ref) can be used to get the underlying matrix.
+[`parent`](@ref) can be used to get the underlying matrix.
 """
-const Rows{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Int,Colon},AX,S,1}
+const RowSlices{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Int,Colon},AX,S,1}
 
 """
-    Columns{M,AX,S}
+    ColumnSlices{M,AX,S}
 
 A special case of [`Slices`](@ref) that is a vector of column slices of a matrix, as
 constructed by [`eachcol`](@ref).
 
-[`parent(S)`](@ref) can be used to get the underlying matrix.
+[`parent`](@ref) can be used to get the underlying matrix.
 """
-const Columns{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colon,Int},AX,S,1}
+const ColumnSlices{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colon,Int},AX,S,1}
 
 
 IteratorSize(::Type{Slices{P,SM,AX,S,N}}) where {P,SM,AX,S,N} = HasShape{N}()
