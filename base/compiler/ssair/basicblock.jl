@@ -29,4 +29,9 @@ function BasicBlock(old_bb, stmts)
     return BasicBlock(stmts, old_bb.preds, old_bb.succs)
 end
 
+==(a::BasicBlock, b::BasicBlock) =
+    a.stmts === b.stmts && a.preds == b.preds && a.succs == b.succs
+# Note: comparing `.stmts` using `===` instead of `==` since the equivalence class for
+# vectors is too coarse when `stmts.stop < stmts.start`.
+
 copy(bb::BasicBlock) = BasicBlock(bb.stmts, copy(bb.preds), copy(bb.succs))

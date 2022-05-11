@@ -42,6 +42,16 @@ end
 
 anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
+function _cumsum!(ys)
+    isempty(ys) && return ys
+    acc = ys[1]
+    for i in 2:length(ys)
+        acc += ys[i]
+        ys[i] = acc
+    end
+    return ys
+end
+
 ###########
 # scoping #
 ###########

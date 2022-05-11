@@ -11,6 +11,7 @@ struct CFG
 end
 
 copy(c::CFG) = CFG(BasicBlock[copy(b) for b in c.blocks], copy(c.index))
+==(a::CFG, b::CFG) = a.blocks == b.blocks && a.index == b.index
 
 function cfg_insert_edge!(cfg::CFG, from::Int, to::Int)
     # Assumes that this edge does not already exist
@@ -26,6 +27,14 @@ function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
     deleteat!(preds, findfirst(x->x === from, preds)::Int)
     deleteat!(succs, findfirst(x->x === to, succs)::Int)
     nothing
+end
+
+function cfg_reindex!(cfg::CFG)
+    resize!(cfg.index, length(cfg.blocks) - 1)
+    for ibb in 2:length(cfg.blocks)
+        cfg.index[ibb-1] = first(cfg.blocks[ibb].stmts)
+    end
+    return cfg
 end
 
 function block_for_inst(index::Vector{Int}, inst::Int)
@@ -242,6 +251,7 @@ function resize!(stmts::InstructionStream, len)
     end
     return stmts
 end
+iterate(is::InstructionStream, st::Int=1) = (st <= length(is)) ? (is[st], st + 1) : nothing
 
 struct Instruction
     data::InstructionStream
@@ -1594,4 +1604,374 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
         next_bb += 1
     end
     return (bb, idx), (idx + 1, next_bb)
+end
+
+###
+### CFG manipulation tools
+###
+
+"""
+    NewBlocksInfo
+
+Information on basic blocks newly allocated in `allocate_new_blocks!`.  See
+`allocate_new_blocks!` for explanation on the properties.
+"""
+struct NewBlocksInfo
+    target_blocks::BitSet
+    block_to_positions::Vector{Vector{Int}}
+    ssachangemap::Vector{Int}
+    bbchangemap::Vector{Int}
+end
+
+num_inserted_blocks(info::NewBlocksInfo, original_bb_index::Int) =
+    length(info.block_to_positions[original_bb_index])
+
+"""
+    allocate_new_blocks!(ir::IRCode, statement_positions) -> info::NewBlocksInfo
+
+Create new "singleton" basic blocks (i.e., it contains a single instruction)
+before `statement_positions`.  This function adds `2 * length(statement_positions)`
+blocks; i.e., `length(statement_positions)` blocks for the new singleton basic
+blocks and the remaining `length(statement_positions)` blocks for the basic
+block containing the instructions starting at each `statement_positions`.
+
+The caller must ensure that:
+
+    @assert issorted(statement_positions)
+    @assert all(1 <= p <= length(ir.stmts) for p in statement_positions)
+
+Note that this function does not wire up the CFG for newly created BBs. It just
+inserts the dummy `GotoNode(0)` at the end of the new singleton BBs and the BB
+_before_ (in terms of `ir.cfg.bocks`) it.  The predecessors of the BB just
+before the newly added singleton BB and the successors of the BB just after the
+newly added singleton BB are re-wired.  See `allocate_gotoifnot_sequence!` for
+an example for creating a valid CFG.
+
+For example, given an `ir` containing:
+
+    #bb
+        %1 = instruction_1
+        %2 = instruction_2
+
+`allocate_new_blocks!(ir, [2])` produces
+
+    #bb′
+        %1 = instruction_1
+        goto #0               # dummy
+    #new_bb_1
+        goto #0               # dummy
+    #new_bb_2
+        %2 = instruction_2
+
+The predecessors of `#bb′` are equivalent to the predecessors of `#bb`.  The successors of
+`#new_bb_2` are equivalent to the successors of `#bb`.
+
+The returned object `info` can be passed to `foreach_allocated_new_block` for
+iterating over allocated basic blocks.  An indexable object `info.ssachangemap`
+can be used for mapping old SSA values to the new locations.
+
+Properties of `info::NewBlocksInfo`:
+
+* `target_blocks`: A list of original IDs of the basic blocks in which new blocks are
+  inserted; i.e., the basic blocks containing instructions `statement_positions`.
+* `ssachangemap`: Given an original statement position `iold`, the new statement position is
+  `ssachangemap[iold]`.
+* `bbchangemap`: Given an original basic block id `iold`, the new basic block ID is
+  `bbchangemap[iold]`.
+"""
+function allocate_new_blocks!(ir::IRCode, statement_positions)
+    @assert issorted(statement_positions)
+    ssachangemap = Vector{Int}(undef, length(ir.stmts) + length(ir.new_nodes.stmts))
+    let iold = 1, inew = 1
+        for pos in statement_positions
+            while iold < pos
+                ssachangemap[iold] = inew
+                iold += 1
+                inew += 1
+            end
+            inew += 2
+        end
+        while iold <= length(ssachangemap)
+            ssachangemap[iold] = inew
+            iold += 1
+            inew += 1
+        end
+    end
+
+    # For the original ID `ibb` of a basic block in `target_blocks`,
+    # `block_to_positions[ibb]` is a list of positions appropriate for splitting the basic
+    # blocks.
+    block_to_positions = Vector{Vector{Int}}(undef, length(ir.cfg.blocks))
+
+    target_blocks = BitSet()
+    for ipos in statement_positions
+        @assert 1 <= ipos <= length(ir.stmts)
+        ibb = block_for_inst(ir.cfg, ipos)
+        if ibb in target_blocks
+            poss = block_to_positions[ibb]
+        else
+            push!(target_blocks, ibb)
+            poss = block_to_positions[ibb] = Int[]
+        end
+        push!(poss, ipos)
+    end
+
+    bbchangemap = _cumsum!(
+        Int[
+            if ibb in target_blocks
+                1 + 2 * length(block_to_positions[ibb])
+            else
+                1
+            end for ibb in 1:length(ir.cfg.blocks)
+        ],
+    )
+    newblocks = 2 * length(statement_positions)
+
+    # Insert `newblocks` new blocks:
+    oldnblocks = length(ir.cfg.blocks)
+    resize!(ir.cfg.blocks, oldnblocks + newblocks)
+    # Copy pre-existing blocks:
+    for iold in oldnblocks:-1:1
+        bb = ir.cfg.blocks[iold]
+        for labels in (bb.preds, bb.succs)
+            for (i, l) in pairs(labels)
+                labels[i] = bbchangemap[l]
+            end
+        end
+        start = ssachangemap[bb.stmts.start]
+        stop = ssachangemap[bb.stmts.stop]
+        ir.cfg.blocks[bbchangemap[iold]] = BasicBlock(bb, StmtRange(start, stop))
+    end
+    # Insert new blocks:
+    for iold in target_blocks
+        positions = block_to_positions[iold]
+        ilst = bbchangemap[iold]  # using bbchangemap as it's already moved
+        bblst = ir.cfg.blocks[ilst]
+
+        inew = get(bbchangemap, iold - 1, 0)
+        preoldpos = 0  # for detecting duplicated positions
+        p1 = first(bblst.stmts)
+        isfirst = true
+        for (i, oldpos) in pairs(positions)
+            if preoldpos == oldpos
+                p2 = p1
+            else
+                preoldpos = oldpos
+                p2 = get(ssachangemap, oldpos - 1, 0) + 1
+                if isfirst
+                    isfirst = false
+                    p1 = min(p1, p2)
+                end
+            end
+            p3 = p2 + 1
+            @assert p1 <= p2 < p3
+            ir.cfg.blocks[inew+1] = BasicBlock(StmtRange(p1, p2))
+            ir.cfg.blocks[inew+2] = BasicBlock(StmtRange(p3, p3))
+            p1 = p3 + 1
+            inew += 2
+        end
+        ifst = get(bbchangemap, iold - 1, 0) + 1
+        bbfst = ir.cfg.blocks[ifst]
+        for p in bblst.preds
+            k = findfirst(==(ilst), ir.cfg.blocks[p].succs)
+            @assert k !== nothing
+            ir.cfg.blocks[p].succs[k] = ifst
+        end
+        copy!(bbfst.preds, bblst.preds)
+        empty!(bblst.preds)
+        stmts = StmtRange(ssachangemap[positions[end]], last(bblst.stmts))
+        ir.cfg.blocks[bbchangemap[iold]] = BasicBlock(bblst, stmts)
+        @assert !isempty(stmts)
+    end
+    for bb in ir.cfg.blocks
+        @assert !isempty(bb.stmts)
+    end
+    cfg_reindex!(ir.cfg)
+
+    # Like `bbchangemap` but maps to the first added BB (not the last)
+    gotolabelchangemap = _cumsum!(
+        Int[
+            if ibb in target_blocks
+                1 + 2 * length(block_to_positions[ibb])
+            else
+                1
+            end for ibb in 0:length(ir.cfg.blocks)-1
+        ],
+    )
+
+    on_ssavalue(v) = SSAValue(ssachangemap[v.id])
+    on_phi_label(l) = bbchangemap[l]
+    on_goto_label(l) = gotolabelchangemap[l]
+    for stmts in (ir.stmts, ir.new_nodes.stmts)
+        for i in 1:length(stmts)
+            st = stmts[i]
+            inst = ssamap(on_ssavalue, st[:inst])
+            if inst isa PhiNode
+                edges = inst.edges::Vector{Int32}
+                for i in 1:length(edges)
+                    edges[i] = on_phi_label(edges[i])
+                end
+            elseif inst isa GotoNode
+                inst = GotoNode(on_goto_label(inst.label))
+            elseif inst isa GotoIfNot
+                inst = GotoIfNot(inst.cond, on_goto_label(inst.dest))
+            elseif isexpr(inst, :enter)
+                inst.args[1] = on_goto_label(inst.args[1])
+            end
+            st[:inst] = inst
+        end
+    end
+    minpos = statement_positions[1]  # it's sorted
+    for (i, info) in pairs(ir.new_nodes.info)
+        if info.pos >= minpos
+            ir.new_nodes.info[i] = if info.attach_after
+                NewNodeInfo(ssachangemap[info.pos], info.attach_after)
+            else
+                NewNodeInfo(get(ssachangemap, info.pos - 1, 0) + 1, info.attach_after)
+            end
+        end
+    end
+
+    # Fixup `ir.linetable` before mutating `ir.stmts.lines`:
+    linetablechangemap = Vector{Int32}(undef, length(ir.linetable))
+    fill!(linetablechangemap, 1)
+    let lines = ir.stmts.line
+        # Allocate two more spaces at `statement_positions`
+        for pos in statement_positions
+            linetablechangemap[lines[pos]] += 2
+        end
+    end
+    _cumsum!(linetablechangemap)
+    let newlength = linetablechangemap[end], ilast = newlength + 1
+        @assert newlength == length(ir.linetable) + newblocks
+        resize!(ir.linetable, newlength)
+        for iold in length(linetablechangemap):-1:1
+            inew = linetablechangemap[iold]
+            oldinfo = ir.linetable[iold]
+            inlined_at = oldinfo.inlined_at
+            if inlined_at != 0
+                inlined_at = linetablechangemap[inlined_at]
+            end
+            newinfo = LineInfoNode(
+                oldinfo.module,
+                oldinfo.method,
+                oldinfo.file,
+                oldinfo.line,
+                inlined_at,
+            )
+            for i in inew:ilast-1
+                ir.linetable[i] = newinfo
+            end
+            ilast = inew
+        end
+    end
+
+    # Fixup `ir.stmts.line`
+    let lines = ir.stmts.line, iold = length(lines), inew = iold + newblocks
+
+        resize!(lines, inew)
+        for i in length(statement_positions):-1:1
+            pos = statement_positions[i]
+            while pos <= iold
+                lines[inew] = linetablechangemap[lines[iold]]
+                iold -= 1
+                inew -= 1
+            end
+            lines[inew] = lines[inew-1] = linetablechangemap[lines[iold+1]]
+            inew -= 2
+        end
+        @assert inew == iold
+    end
+
+    # Fixup `ir.new_nodes.stmts.line`
+    let lines = ir.new_nodes.stmts.line
+        for i in 1:length(lines)
+            lines[i] = linetablechangemap[lines[i]]
+        end
+    end
+
+    function allocate_stmts!(xs, filler)
+        n = length(xs)
+        resize!(xs, length(xs) + newblocks)
+        for i in n:-1:1
+            xs[ssachangemap[i]] = xs[i]
+        end
+        for i in 2:n
+            for j in ssachangemap[i-1]+1:ssachangemap[i]-1
+                xs[j] = filler
+            end
+        end
+        for js in (1:ssachangemap[1]-1, ssachangemap[end]+1:length(xs))
+            for j in js
+                xs[j] = filler
+            end
+        end
+    end
+
+    allocate_stmts!(ir.stmts.inst, GotoNode(0))  # dummy
+    allocate_stmts!(ir.stmts.type, Any)
+    allocate_stmts!(ir.stmts.info, nothing)
+    allocate_stmts!(ir.stmts.flag, 0)
+
+    return NewBlocksInfo(target_blocks, block_to_positions, ssachangemap, bbchangemap)
+end
+
+"""
+    foreach_allocated_new_block(f, info::NewBlocksInfo)
+
+Evaluate `f(ibb)` for all `ibb` such that `ibb` is the basic block index of each "singleton"
+block newly allocated by `allocate_new_blocks!`.
+"""
+function foreach_allocated_new_block(f, blocks::NewBlocksInfo)
+    (; target_blocks, bbchangemap) = blocks
+    for iold in target_blocks
+        inew = get(bbchangemap, iold - 1, 0) + 2
+        for _ in 1:num_inserted_blocks(blocks, iold)
+            f(inew)
+            inew += 2
+        end
+    end
+end
+
+"""
+    allocate_gotoifnot_sequence!(ir::IRCode, statement_positions) -> info::NewBlocksInfo
+
+Insert a new basic block before each `statement_positions` and a `GotoIfNot`
+that jumps over the newly added BB.  Unlike `allocate_new_blocks!`, this
+function results in an IR with valid CFG.
+
+Read `allocate_new_blocks!` on the preconditions on `statement_positions`.
+
+For example, given an `ir` containing:
+
+    #bb
+        %1 = instruction_1
+        %2 = instruction_2
+
+`allocate_new_blocks!(ir, [2])` produces
+
+    #bb′
+        %1 = instruction_1
+        goto #new_bb_2 if not false
+    #new_bb_1                          # this bb is unreachable
+        goto #new_bb_2
+    #new_bb_2
+        %2 = instruction_2
+"""
+function allocate_gotoifnot_sequence!(ir::IRCode, statement_positions)
+    blocks = allocate_new_blocks!(ir, statement_positions)
+    foreach_allocated_new_block(blocks) do ibb1
+        ibb0 = ibb1 - 1
+        ibb2 = ibb1 + 1
+        b0 = ir.cfg.blocks[ibb0]
+        b1 = ir.cfg.blocks[ibb1]
+        cfg_insert_edge!(ir.cfg, ibb0, ibb1)
+        cfg_insert_edge!(ir.cfg, ibb0, ibb2)
+        cfg_insert_edge!(ir.cfg, ibb1, ibb2)
+        @assert ir.stmts.inst[last(b0.stmts)] === GotoNode(0)
+        @assert ir.stmts.inst[last(b1.stmts)] === GotoNode(0)
+        ir.stmts.inst[last(b0.stmts)] = GotoIfNot(false, ibb2)  # dummy
+        ir.stmts.inst[last(b1.stmts)] = GotoNode(ibb2)
+    end
+    return blocks
 end

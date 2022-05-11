@@ -388,6 +388,8 @@ include("errorshow.jl")
 
 include("initdefs.jl")
 
+include("compilerwrappers.jl")
+
 # worker threads
 include("threadcall.jl")
 
