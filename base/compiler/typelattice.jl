@@ -424,7 +424,7 @@ function stupdate!(state::VarTable, changes::StateUpdate)
     return newstate
 end
 
-function stupdate!(state::VarTable, changes::VarTable, ::Nothing=nothing)
+function stupdate!(state::VarTable, changes::VarTable)
     newstate = nothing
     for i = 1:length(state)
         newtype = changes[i]
@@ -437,36 +437,7 @@ function stupdate!(state::VarTable, changes::VarTable, ::Nothing=nothing)
     return newstate
 end
 
-function stupdate!(state::VarTable, changes::VarTable, update::StateUpdate)
-    newstate = nothing
-    changeid = slot_id(update.var)
-    for i = 1:length(state)
-        if i == changeid
-            newtype = update.vtype
-        else
-            newtype = changes[i]
-        end
-        oldtype = state[i]
-        # remove any Conditional for this slot from the vtable
-        # (unless this change is came from the conditional)
-        if !update.conditional && isa(newtype, VarState)
-            newtypetyp = ignorelimited(newtype.typ)
-            if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                newtypetyp = widenwrappedconditional(newtype.typ)
-                newtype = VarState(newtypetyp, newtype.undef)
-            end
-        end
-        if schanged(newtype, oldtype)
-            newstate = state
-            state[i] = smerge(oldtype, newtype)
-        end
-    end
-    return newstate
-end
-
-stupdate!(state::Nothing, changes::VarTable) = copy(changes)
-
-stupdate!(state::Nothing, changes::Nothing) = nothing
+stupdate!(::Nothing, changes::VarTable) = copy(changes)
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     changeid = slot_id(change.var)
@@ -501,7 +472,7 @@ function stoverwrite!(state::VarTable, newstate::VarTable)
     for i = 1:length(state)
         state[i] = newstate[i]
     end
-    return nothing
+    return state
 end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
@@ -526,6 +497,6 @@ function stoverwrite1!(state::VarTable, change::StateUpdate)
     # and update the type of it
     newtype = change.vtype
     state[changeid] = newtype
-    return nothing
+    return state
 end
-stoverwrite1!(state::VarTable, ::Nothing) = nothing
+stoverwrite1!(state::VarTable, ::Nothing) = state

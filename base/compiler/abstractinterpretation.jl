@@ -2261,6 +2261,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
+    analyzed_bbs = BitSet() # TODO a better check for unanalyzed states
 
     if frame.currbb != 1
         frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
@@ -2326,12 +2327,23 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             # We continue with the true branch, but process the false
                             # branch here.
                             if isa(condt, Conditional)
-                                newstate = stupdate!(frame.bb_vartables[falsebb], frame.pc_vartable,
+                                false_vartable = stoverwrite1!(copy(frame.pc_vartable),
                                     conditional_changes(frame.pc_vartable, condt.elsetype, condt.var))
+                                if falsebb in analyzed_bbs
+                                    newstate = stupdate!(frame.bb_vartables[falsebb], false_vartable)
+                                else
+                                    newstate = frame.bb_vartables[falsebb] = stupdate!(nothing, false_vartable)
+                                    push!(analyzed_bbs, falsebb)
+                                end
                                 stoverwrite1!(frame.pc_vartable,
                                     conditional_changes(frame.pc_vartable, condt.vtype, condt.var))
                             else
-                                newstate = stupdate!(frame.bb_vartables[falsebb], frame.pc_vartable)
+                                if falsebb in analyzed_bbs
+                                    newstate = stupdate!(frame.bb_vartables[falsebb], frame.pc_vartable)
+                                else
+                                    newstate = frame.bb_vartables[falsebb] = stupdate!(nothing, frame.pc_vartable)
+                                    push!(analyzed_bbs, falsebb)
+                                end
                             end
                             if newstate !== nothing || !was_reached(frame, first(bbs[falsebb].stmts))
                                 handle_control_backedge!(frame, frame.currpc, stmt.dest)
@@ -2381,7 +2393,13 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # Propagate entry info to exception handler
                     l = stmt.args[1]::Int
                     catchbb = block_for_inst(frame.cfg, l)
-                    if stupdate!(frame.bb_vartables[catchbb], frame.pc_vartable) !== nothing
+                    if catchbb in analyzed_bbs
+                        newstate = stupdate!(frame.bb_vartables[catchbb], frame.pc_vartable)
+                    else
+                        newstate = frame.bb_vartables[catchbb] = stupdate!(nothing, frame.pc_vartable)
+                        push!(analyzed_bbs, catchbb)
+                    end
+                    if newstate !== nothing
                         push!(W, catchbb)
                     end
                     ssavaluetypes[frame.currpc] = Any
@@ -2429,7 +2447,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
     # Case 2: Directly branch to a different BB
     @label branch
-        newstate = stupdate!(frame.bb_vartables[nextbb], frame.pc_vartable)
+        if nextbb in analyzed_bbs
+            newstate = stupdate!(frame.bb_vartables[nextbb], frame.pc_vartable)
+        else
+            newstate = frame.bb_vartables[nextbb] = stupdate!(nothing, frame.pc_vartable)
+            push!(analyzed_bbs, nextbb)
+        end
         if newstate !== nothing || !was_reached(frame, first(bbs[nextbb].stmts))
             push!(W, nextbb)
         end
