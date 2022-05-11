@@ -114,7 +114,7 @@ julia> s[1]
  2
  3
 
-julia> eachslice(M, dims=1, drop=false)
+julia> eachslice(m, dims=1, drop=false)
 3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
  [1, 2, 3]
  [4, 5, 6]
