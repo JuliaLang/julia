@@ -269,7 +269,7 @@ function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::SubString; offset::Integer=0)
+function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -301,7 +301,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::SubString, r::Regex)
+function startswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -333,7 +333,7 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::SubString, r::Regex)
+function endswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
