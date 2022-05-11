@@ -616,20 +616,25 @@ function record_bestguess!(sv::InferenceState)
     return nothing
 end
 
-function annotate_slot_load!(undefs::Vector{Bool}, vtypes::VarTable, sv::InferenceState,
-    @nospecialize x)
+function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState, @nospecialize x)
     if isa(x, SlotNumber)
         id = slot_id(x)
-        vt = vtypes[id]
-        if vt.undef
-            # mark used-undef variables
-            undefs[id] = true
+        pc = find_dominating_assignment(id, idx, sv)
+        if pc === nothing
+            block = block_for_inst(sv.cfg, idx)
+            state = sv.bb_vartables[block]
+            vt = state[id]
+            if vt.undef
+                undefs[id] = true
+            end
+            typ = widenconditional(ignorelimited(vt.typ))
+        else
+            typ = sv.src.ssavaluetypes[pc]
         end
         # add type annotations where needed
-        typ = widenconditional(ignorelimited(vt.typ))
-        # if !(sv.slottypes[id] ⊑ typ)
-        #     return TypedSlot(id, typ)
-        # end
+        if !(sv.slottypes[id] ⊑ typ)
+            return TypedSlot(id, typ)
+        end
         return x
     elseif isa(x, Expr)
         head = x.head
@@ -641,15 +646,31 @@ function annotate_slot_load!(undefs::Vector{Bool}, vtypes::VarTable, sv::Inferen
             i0 = 2
         end
         for i = i0:length(x.args)
-            x.args[i] = annotate_slot_load!(undefs, vtypes, sv, x.args[i])
+            x.args[i] = annotate_slot_load!(undefs, idx, sv, x.args[i])
         end
         return x
     elseif isa(x, ReturnNode) && isdefined(x, :val)
-        return ReturnNode(annotate_slot_load!(undefs, vtypes, sv, x.val))
+        return ReturnNode(annotate_slot_load!(undefs, idx, sv, x.val))
     elseif isa(x, GotoIfNot)
-        return GotoIfNot(annotate_slot_load!(undefs, vtypes, sv, x.cond), x.dest)
+        return GotoIfNot(annotate_slot_load!(undefs, idx, sv, x.cond), x.dest)
     end
     return x
+end
+
+# find the dominating assignment to the slot `id` in the block containing statement `idx`,
+# returns `nothing` otherwise
+function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
+    block = block_for_inst(sv.cfg, idx)
+    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignement is dominating this block
+        pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
+        stmt = sv.src.code[pc]
+        isexpr(stmt, :(=)) || continue
+        lhs = stmt.args[1]
+        isa(lhs, SlotNumber) || continue
+        slot_id(lhs) == id || continue
+        return pc
+    end
+    return nothing
 end
 
 # annotate types of all symbols in AST
@@ -667,10 +688,10 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # and compute which variables may be used undef
     stmt_info = sv.stmt_info
     src = sv.src
-    body = src.code::Vector{Any}
+    body = copy_exprargs(src.code::Vector{Any})
     nexpr = length(body)
     codelocs = src.codelocs
-    ssavaluetypes = src.ssavaluetypes
+    ssavaluetypes = copy(src.ssavaluetypes)
     ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)
@@ -703,10 +724,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         if was_reached(sv, oldidx)
             # introduce temporary TypedSlot for the later optimization passes
             # and also mark used-undef slots
-            st_i = sv.bb_vartables[block_for_inst(sv.cfg, oldidx)]
-            body[i] = annotate_slot_load!(undefs, st_i, sv, expr)
-        else # unreached statement (see issue #7836)
-            if is_meta_expr(expr)
+            body[i] = annotate_slot_load!(undefs, oldidx, sv, expr)
+        else # unreached statement  (see issue #7836)
+            if isa(expr, Expr) && is_meta_expr_head(expr.head)
                 # keep any lexically scoped expressions
             elseif run_optimizer
                 deleteat!(body, i)
@@ -733,6 +753,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
             slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
         end
     end
+
+    src.code = body
+    src.ssavaluetypes = ssavaluetypes
 
     nothing
 end
