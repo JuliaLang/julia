@@ -205,7 +205,6 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return false
-            is_return_type(f) && return true
             if isa(f, IntrinsicFunction)
                 intrinsic_effect_free_if_nothrow(f) || return false
                 return intrinsic_nothrow(f,

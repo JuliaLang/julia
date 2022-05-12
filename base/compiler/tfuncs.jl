@@ -2037,7 +2037,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     sv.restrict_abstract_call_sites = false
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
                     sv.restrict_abstract_call_sites = old_restrict
-                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
+                    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant

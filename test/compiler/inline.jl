@@ -1275,3 +1275,7 @@ end
     return_type_unused(x)
     return nothing
 end
+
+# Test that inlining doesn't accidentally delete a bad return_type call
+f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
+@test_throws MethodError f_bad_return_type()
