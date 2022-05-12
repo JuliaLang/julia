@@ -314,14 +314,21 @@ stack and its named direct dependencies.
 
 There `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
-otherwise it searches all recursive dependencies (from the resolved manifest)
-until it locates the context `where`, and from there resolves the name from its
-dependencies.
+otherwise it searches all recursive dependencies (from the resolved manifest of
+each environment) until it locates the context `where`, and from there
+identifies the depdencency with with the corresponding name.
+
+```julia-repl
+julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> using LinearAlgebra
+
+julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
+
+````
 """
 identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
-
-# identify_package computes the PkgId for `name` from the context of `where`
-# or return `nothing` if no mapping exists for it
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
     where.name === name && return where
     where.uuid === nothing && return identify_package(name) # ignore `where`
@@ -341,7 +348,6 @@ function identify_package(name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
-## package location: given a package identity, find file to load ##
 """
     Base.locate_package(pkg::PkgId)::Union{String, Nothing}
 
@@ -353,7 +359,7 @@ julia> pkg = Base.identify_package("Pkg")
 Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 
 julia> Base.locate_package(pkg)
-"/usr/bin/julia/stdlib/v1.9/Pkg/src/Pkg.jl"
+"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
 ```
 """
 function locate_package(pkg::PkgId)::Union{Nothing,String}

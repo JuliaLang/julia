@@ -27,8 +27,6 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.require
-Base.compilecache
 Base.__precompile__
 Base.include
 Base.MainInclude.include
@@ -433,6 +431,15 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+```
+
+## Code loading
+
+```@docs
+Base.identify_package
+Base.locate_package
+Base.require
+Base.compilecache
 ```
 
 ## Internals
