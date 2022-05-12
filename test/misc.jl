@@ -354,6 +354,50 @@ after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn t
 
 end # redirect_stdout
 
+macro capture_stdout(ex)
+    quote
+        mktemp() do fname, f
+            redirect_stdout(f) do
+                $(esc(ex))
+            end
+            seekstart(f)
+            read(f, String)
+        end
+    end
+end
+
+# compilation reports in @time
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @time $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @time $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
+
 # interactive utilities
 
 struct ambigconvert; end # inject a problematic `convert` method to ensure it still works
