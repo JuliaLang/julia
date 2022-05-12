@@ -502,6 +502,11 @@ function ssh_knownhost_check(
     return Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
 end
 
+function trace_callback(level::Cint, msg::Cstring)::Cint
+    println(stderr, "[$level]: $(unsafe_string(msg))")
+    return 0
+end
+
 "C function pointer for `mirror_callback`"
 mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
@@ -510,3 +515,5 @@ credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstr
 fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))
 "C function pointer for `certificate_callback`"
 certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{CertHostKey}, Cint, Ptr{Cchar}, Ptr{Cvoid}))
+"C function pointer for `trace_callback`"
+trace_cb() = @cfunction(trace_callback, Cint, (Cint, Cstring))

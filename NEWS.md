@@ -87,6 +87,9 @@ Standard library changes
 
 #### REPL
 
+* `Meta-e` now opens the current input in an editor. The content (if modified) will be
+  executed upon existing the editor.
+
 #### SparseArrays
 
 #### Dates

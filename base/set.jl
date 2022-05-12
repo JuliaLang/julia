@@ -384,20 +384,28 @@ See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1; 2; 3]
-3-element Vector{Int64}:
- 1
- 2
- 3
-
-julia> allunique(a)
+julia> allunique([1, 2, 3])
 true
 
-julia> allunique([a, a])
+julia> allunique([1, 2, 1, 2])
+false
+
+julia> allunique(Real[1, 1.0, 2])
+false
+
+julia> allunique([NaN, 2.0, NaN, 4.0])
 false
 ```
 """
 function allunique(C)
+    if haslength(C)
+        length(C) < 2 && return true
+        length(C) < 32 && return _indexed_allunique(collect(C))
+    end
+    return _hashed_allunique(C)
+end
+
+function _hashed_allunique(C)
     seen = Set{eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
@@ -419,6 +427,32 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+
+function _indexed_allunique(A)
+    length(A) < 2 && return true
+    iter = eachindex(A)
+    I = iterate(iter)
+    while I !== nothing
+        i, s = I
+        a = A[i]
+        for j in Iterators.rest(iter, s)
+            isequal(a, @inbounds A[j]) && return false
+        end
+        I = iterate(iter, s)
+    end
+    return true
+end
+
+function allunique(t::Tuple)
+    length(t) < 32 || return _hashed_allunique(t)
+    a = afoldl(true, tail(t)...) do b, x
+        b & !isequal(first(t), x)
+    end
+    return a && allunique(tail(t))
+end
+allunique(t::Tuple{}) = true
 
 """
     allequal(itr) -> Bool

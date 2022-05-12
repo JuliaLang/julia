@@ -59,7 +59,8 @@ import ..LineEdit:
     terminal,
     MIState,
     PromptState,
-    TextInterface
+    TextInterface,
+    mode_idx
 
 include("REPLCompletions.jl")
 using .REPLCompletions
@@ -601,14 +602,6 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
     return hp
 end
 
-function mode_idx(hist::REPLHistoryProvider, mode::TextInterface)
-    c = :julia
-    for (k,v) in hist.mode_mapping
-        isequal(v, mode) && (c = k)
-    end
-    return c
-end
-
 function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
@@ -746,7 +739,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):1:max_idx)
     for idx in idxs
-        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
+        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || get(hist.mode_mapping, hist.modes[idx], nothing) !== LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m === :ok
                 if idx == max_idx

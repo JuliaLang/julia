@@ -117,7 +117,7 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
-        return reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&data->M);
+        return wrap(&data->M);
     else
         return NULL;
 }
@@ -264,7 +264,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         ctx = jl_ExecutionEngine->acquireContext();
         backing = jl_create_llvm_module("text", ctx, imaging);
     }
-    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
+    orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
     auto ctxt = clone.getContext();
     jl_codegen_params_t params(ctxt);
     params.params = cgparams;
@@ -291,7 +291,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(wrap(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -1067,7 +1067,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
         if (F)
-            return new jl_llvmf_dump_t{std::move(m), F};
+            return new jl_llvmf_dump_t{wrap(new orc::ThreadSafeModule(std::move(m))), wrap(F)};
     }
 
     const char *mname = name_from_method_instance(mi);

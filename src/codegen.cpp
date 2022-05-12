@@ -1217,6 +1217,13 @@ struct jl_cgval_t {
     bool isboxed; // whether this value is a jl_value_t* allocated on the heap with the right type tag
     bool isghost; // whether this value is "ghost"
     MDNode *tbaa; // The related tbaa node. Non-NULL iff this holds an address.
+    // If non-null, this memory location may be promoted on use, by hoisting the
+    // destination memory above the promotion point.
+    Instruction *promotion_point;
+    // If promotion_ssa is non-null, the julia src ssa value that corresponds
+    // to the promotion point. This is used for dominator analysis, since LLVM's
+    // dominator analysis has algorithmic problems for large basic blocks.
+    ssize_t promotion_ssa;
     bool ispointer() const
     {
         // whether this value is compatible with `data_pointer`
@@ -1230,7 +1237,9 @@ struct jl_cgval_t {
         typ(typ),
         isboxed(isboxed),
         isghost(false),
-        tbaa(isboxed ? best_tbaa(tbaa_cache, typ) : nullptr)
+        tbaa(isboxed ? best_tbaa(tbaa_cache, typ) : nullptr),
+        promotion_point(nullptr),
+        promotion_ssa(-1)
     {
         if (Vboxed)
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
@@ -1247,7 +1256,9 @@ struct jl_cgval_t {
         typ(typ),
         isboxed(false),
         isghost(true),
-        tbaa(nullptr)
+        tbaa(nullptr),
+        promotion_point(nullptr),
+        promotion_ssa(-1)
     {
         assert(jl_is_datatype(typ));
         assert(constant);
@@ -1260,7 +1271,9 @@ struct jl_cgval_t {
         typ(typ),
         isboxed(v.isboxed),
         isghost(v.isghost),
-        tbaa(v.tbaa)
+        tbaa(v.tbaa),
+        promotion_point(v.promotion_point),
+        promotion_ssa(v.promotion_ssa)
     {
         if (Vboxed)
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
@@ -1281,7 +1294,9 @@ struct jl_cgval_t {
         typ(jl_bottom_type),
         isboxed(false),
         isghost(true),
-        tbaa(nullptr)
+        tbaa(nullptr),
+        promotion_point(nullptr),
+        promotion_ssa(-1)
     {
     }
 };
@@ -1330,6 +1345,7 @@ public:
     std::vector<jl_cgval_t> SAvalues;
     std::vector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>> PhiNodes;
     std::vector<bool> ssavalue_assigned;
+    std::vector<int> ssavalue_usecount;
     std::vector<orc::ThreadSafeModule> oc_modules;
     jl_module_t *module = NULL;
     jl_typecache_t type_cache;
@@ -1413,7 +1429,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction *theFptr, Value *t
                              const jl_cgval_t *args, size_t nargs, CallingConv::ID cc);
 static Value *emit_f_is(jl_codectx_t &ctx, const jl_cgval_t &arg1, const jl_cgval_t &arg2,
                         Value *nullcheck1 = nullptr, Value *nullcheck2 = nullptr);
-static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv);
+static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable=false);
 static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const jl_cgval_t *argv, size_t nargs, jl_value_t *rt);
 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
@@ -1816,7 +1832,7 @@ static jl_cgval_t convert_julia_type_union(jl_codectx_t &ctx, const jl_cgval_t &
                 if (!union_isaBB) {
                     union_isaBB = BasicBlock::Create(ctx.builder.getContext(), "union_isa", ctx.f);
                     ctx.builder.SetInsertPoint(union_isaBB);
-                    union_box_dt = emit_typeof_or_null(ctx, v.Vboxed);
+                    union_box_dt = emit_typeof(ctx, v.Vboxed, skip != NULL);
                     post_union_isaBB = ctx.builder.GetInsertBlock();
                 }
             };
@@ -1915,7 +1931,6 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
         return ghostValue(ctx, typ);
     Value *new_tindex = NULL;
     if (jl_is_concrete_type(typ)) {
-        assert(skip == nullptr && "skip only valid for union type return");
         if (v.TIndex && !jl_is_pointerfree(typ)) {
             // discovered that this union-split type must actually be isboxed
             if (v.Vboxed) {
@@ -1923,14 +1938,20 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
             }
             else {
                 // type mismatch: there weren't any boxed values in the union
-                CreateTrap(ctx.builder);
+                if (skip)
+                    *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+                else
+                    CreateTrap(ctx.builder);
                 return jl_cgval_t(ctx.builder.getContext());
             }
         }
         if (jl_is_concrete_type(v.typ) && !jl_is_kind(v.typ)) {
             if (jl_is_concrete_type(typ) && !jl_is_kind(typ)) {
                 // type mismatch: changing from one leaftype to another
-                CreateTrap(ctx.builder);
+                if (skip)
+                    *skip = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
+                else
+                    CreateTrap(ctx.builder);
                 return jl_cgval_t(ctx.builder.getContext());
             }
         }
@@ -2371,54 +2392,55 @@ static void mark_volatile_vars(jl_array_t *stmts, std::vector<jl_varinfo_t> &slo
 
 // a very simple, conservative use analysis
 // to eagerly remove slot assignments that are never read from
-static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
+
+template <typename callback>
+static void general_use_analysis(jl_codectx_t &ctx, jl_value_t *expr, callback &f)
 {
-    if (jl_is_slot(expr) || jl_is_argument(expr)) {
-        int i = jl_slot_number(expr) - 1;
-        ctx.slots[i].used = true;
+    if (f(expr)) {
+        return;
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == jl_method_sym) {
-            simple_use_analysis(ctx, jl_exprarg(e, 0));
+            general_use_analysis(ctx, jl_exprarg(e, 0), f);
             if (jl_expr_nargs(e) > 1) {
-                simple_use_analysis(ctx, jl_exprarg(e, 1));
-                simple_use_analysis(ctx, jl_exprarg(e, 2));
+                general_use_analysis(ctx, jl_exprarg(e, 1), f);
+                general_use_analysis(ctx, jl_exprarg(e, 2), f);
             }
         }
         else if (e->head == jl_assign_sym) {
             // don't consider assignment LHS as a variable "use"
-            simple_use_analysis(ctx, jl_exprarg(e, 1));
+            general_use_analysis(ctx, jl_exprarg(e, 1), f);
         }
         else {
             size_t i, elen = jl_array_dim0(e->args);
             for (i = 0; i < elen; i++) {
-                simple_use_analysis(ctx, jl_exprarg(e, i));
+                general_use_analysis(ctx, jl_exprarg(e, i), f);
             }
         }
     }
     else if (jl_is_returnnode(expr)) {
         jl_value_t *retexpr = jl_returnnode_value(expr);
         if (retexpr != NULL)
-            simple_use_analysis(ctx, retexpr);
+            general_use_analysis(ctx, retexpr, f);
     }
     else if (jl_is_gotoifnot(expr)) {
-        simple_use_analysis(ctx, jl_gotoifnot_cond(expr));
+        general_use_analysis(ctx, jl_gotoifnot_cond(expr), f);
     }
     else if (jl_is_pinode(expr)) {
-        simple_use_analysis(ctx, jl_fieldref_noalloc(expr, 0));
+        general_use_analysis(ctx, jl_fieldref_noalloc(expr, 0), f);
     }
     else if (jl_is_upsilonnode(expr)) {
         jl_value_t *val = jl_fieldref_noalloc(expr, 0);
         if (val)
-            simple_use_analysis(ctx, val);
+            general_use_analysis(ctx, val, f);
     }
     else if (jl_is_phicnode(expr)) {
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 0);
         size_t i, elen = jl_array_len(values);
         for (i = 0; i < elen; i++) {
             jl_value_t *v = jl_array_ptr_ref(values, i);
-            simple_use_analysis(ctx, v);
+            general_use_analysis(ctx, v, f);
         }
     }
     else if (jl_is_phinode(expr)) {
@@ -2427,9 +2449,22 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
         for (i = 0; i < elen; i++) {
             jl_value_t *v = jl_array_ptr_ref(values, i);
             if (v)
-                simple_use_analysis(ctx, v);
+                general_use_analysis(ctx, v, f);
         }
     }
+}
+
+static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
+{
+    auto scan_slot_arg = [&](jl_value_t *expr) {
+        if (jl_is_slot(expr) || jl_is_argument(expr)) {
+            int i = jl_slot_number(expr) - 1;
+            ctx.slots[i].used = true;
+            return true;
+        }
+        return false;
+    };
+    return general_use_analysis(ctx, expr, scan_slot_arg);
 }
 
 // --- gc root utils ---
@@ -2926,7 +2961,7 @@ static jl_llvm_functions_t
 
 static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                               const jl_cgval_t *argv, size_t nargs, jl_value_t *rt,
-                              jl_expr_t *ex)
+                              jl_expr_t *ex, bool is_promotable)
 // returns true if the call has been handled
 {
     ++EmittedBuiltinCalls;
@@ -2938,7 +2973,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     }
 
     else if (f == jl_builtin_typeof && nargs == 1) {
-        *ret = emit_typeof(ctx, argv[1]);
+        *ret = emit_typeof(ctx, argv[1], false);
         return true;
     }
 
@@ -3007,7 +3042,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return true;
         }
         if (jl_is_tuple_type(rt) && jl_is_concrete_type(rt) && nargs == jl_datatype_nfields(rt)) {
-            *ret = emit_new_struct(ctx, rt, nargs, &argv[1]);
+            *ret = emit_new_struct(ctx, rt, nargs, &argv[1], is_promotable);
             return true;
         }
     }
@@ -3982,7 +4017,7 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
     return mark_julia_type(ctx, callval, true, rt);
 }
 
-static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
+static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bool is_promotable)
 {
     ++EmittedCalls;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
@@ -4015,7 +4050,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt)
         if (f.constant == jl_builtin_ifelse && nargs == 4)
             return emit_ifelse(ctx, argv[1], argv[2], argv[3], rt);
         jl_cgval_t result(ctx.builder.getContext());
-        bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex);
+        bool handled = emit_builtin_call(ctx, &result, f.constant, argv, nargs - 1, rt, ex, is_promotable);
         if (handled) {
             return result;
         }
@@ -4129,7 +4164,7 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
             ctx.spvals_ptr,
             i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
     Value *sp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
-    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
+    Value *isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false),
             track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     jl_unionall_t *sparam = (jl_unionall_t*)ctx.linfo->def.method->sig;
     for (size_t j = 0; j < i; j++) {
@@ -4204,7 +4239,7 @@ static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
                 ctx.spvals_ptr,
                 i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
         Value *sp = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*))));
-        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp),
+        isnull = ctx.builder.CreateICmpNE(emit_typeof(ctx, sp, false),
             track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)jl_tvar_type)));
     }
     else {
@@ -4378,7 +4413,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                 }
             }
             else {
-                emit_unionmove(ctx, vi.value.V, ctx.tbaa().tbaa_stack, rval_info, isboxed, vi.isVolatile);
+                emit_unionmove(ctx, vi.value.V, ctx.tbaa().tbaa_stack, rval_info, /*skip*/isboxed, vi.isVolatile);
             }
         }
     }
@@ -4479,36 +4514,36 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     return;
 }
 
-static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
+static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_value_t *r)
 {
-    assert(!ctx.ssavalue_assigned.at(idx));
+    assert(!ctx.ssavalue_assigned.at(ssaidx_0based));
     if (jl_is_phinode(r)) {
-        return emit_phinode_assign(ctx, idx, r);
+        return emit_phinode_assign(ctx, ssaidx_0based, r);
     }
 
     jl_cgval_t slot(ctx.builder.getContext());
     if (jl_is_phicnode(r)) {
-        auto it = ctx.phic_slots.find(idx);
+        auto it = ctx.phic_slots.find(ssaidx_0based);
         if (it == ctx.phic_slots.end()) {
-            it = ctx.phic_slots.emplace(idx, jl_varinfo_t(ctx.builder.getContext())).first;
+            it = ctx.phic_slots.emplace(ssaidx_0based, jl_varinfo_t(ctx.builder.getContext())).first;
         }
         slot = emit_varinfo(ctx, it->second, jl_symbol("phic"));
     } else {
-        slot = emit_expr(ctx, r, idx); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
+        slot = emit_expr(ctx, r, ssaidx_0based); // slot could be a jl_value_t (unboxed) or jl_value_t* (ispointer)
     }
     if (slot.isboxed || slot.TIndex) {
         // see if inference suggested a different type for the ssavalue than the expression
         // e.g. sometimes the information is inconsistent after inlining getfield on a Tuple
         jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
         if (jl_is_array(ssavalue_types)) {
-            jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, idx);
+            jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, ssaidx_0based);
             if (declType != slot.typ) {
                 slot = update_julia_type(ctx, slot, declType);
             }
         }
     }
-    ctx.SAvalues.at(idx) = slot; // now SAvalues[idx] contains the SAvalue
-    ctx.ssavalue_assigned.at(idx) = true;
+    ctx.SAvalues.at(ssaidx_0based) = slot; // now SAvalues[ssaidx_0based] contains the SAvalue
+    ctx.ssavalue_assigned.at(ssaidx_0based) = true;
 }
 
 static void emit_varinfo_assign(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_cgval_t rval_info, jl_value_t *l=NULL)
@@ -4807,7 +4842,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
 // `expr` is not clobbered in JL_TRY
 JL_GCC_IGNORE_START("-Wclobbered")
-static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
+static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_0based)
 {
     if (jl_is_symbol(expr)) {
         jl_sym_t *sym = (jl_sym_t*)expr;
@@ -4840,7 +4875,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         jl_error("GotoIfNot in value position");
     }
     if (jl_is_pinode(expr)) {
-        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1));
+        Value *skip = NULL;
+        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1), &skip);
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;
@@ -4899,27 +4935,33 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (head == jl_invoke_sym) {
-        assert(ssaval >= 0);
+        assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
         return emit_invoke(ctx, ex, expr_t);
     }
     else if (head == jl_invoke_modify_sym) {
-        assert(ssaval >= 0);
+        assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
+            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
         return emit_invoke_modify(ctx, ex, expr_t);
     }
     else if (head == jl_call_sym) {
         jl_value_t *expr_t;
-        if (ssaval < 0)
+        bool is_promotable = false;
+        if (ssaidx_0based < 0)
             // TODO: this case is needed for the call to emit_expr in emit_llvmcall
             expr_t = (jl_value_t*)jl_any_type;
-        else
-            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaval);
-        jl_cgval_t res = emit_call(ctx, ex, expr_t);
+        else {
+            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
+            is_promotable = ctx.ssavalue_usecount[ssaidx_0based] == 1;
+        }
+        jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
         // some intrinsics (e.g. typeassert) can return a wider type
         // than what's actually possible
+        if (is_promotable && res.promotion_point) {
+            res.promotion_ssa = ssaidx_0based;
+        }
         res = update_julia_type(ctx, res, expr_t);
         if (res.typ == jl_bottom_type || expr_t == jl_bottom_type) {
             CreateTrap(ctx.builder);
@@ -4936,7 +4978,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
     }
     else if (head == jl_assign_sym) {
         assert(nargs == 2);
-        emit_assignment(ctx, args[0], args[1], ssaval);
+        emit_assignment(ctx, args[0], args[1], ssaidx_0based);
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (head == jl_static_parameter_sym) {
@@ -5028,6 +5070,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
         }
     }
     else if (head == jl_new_sym) {
+        bool is_promotable = false;
+        if (ssaidx_0based >= 0) {
+            is_promotable = ctx.ssavalue_usecount[ssaidx_0based] == 1;
+        }
         assert(nargs > 0);
         jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
         for (size_t i = 0; i < nargs; ++i) {
@@ -5038,7 +5084,10 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
                 jl_is_datatype(jl_tparam0(ty)) &&
                 jl_is_concrete_type(jl_tparam0(ty))) {
             assert(nargs <= jl_datatype_nfields(jl_tparam0(ty)) + 1);
-            return emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, &argv[1]);
+            jl_cgval_t res = emit_new_struct(ctx, jl_tparam0(ty), nargs - 1, &argv[1], is_promotable);
+            if (is_promotable && res.promotion_point && res.promotion_ssa==-1)
+                res.promotion_ssa = ssaidx_0based;
+            return res;
         }
         Value *val = emit_jlcall(ctx, jlnew_func, nullptr, argv, nargs, JLCALL_F_CC);
         // temporarily mark as `Any`, expecting `emit_ssaval_assign` to update
@@ -6187,7 +6236,7 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
                 //Safe b/c params holds context lock
-                gen_cfun_wrapper(reinterpret_cast<orc::ThreadSafeModule*>(llvmmod)->getModuleUnlocked(), params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
+                gen_cfun_wrapper(unwrap(llvmmod)->getModuleUnlocked(), params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
             }
             JL_GC_POP();
             return name;
@@ -6483,6 +6532,7 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
     return typ;
 }
 
+
 // Compile to LLVM IR, using a specialized signature if applicable.
 static jl_llvm_functions_t
     emit_function(
@@ -6573,6 +6623,7 @@ static jl_llvm_functions_t
     // create SAvalue locations for SSAValue objects
     ctx.ssavalue_assigned.assign(n_ssavalues, false);
     ctx.SAvalues.assign(n_ssavalues, jl_cgval_t(ctx.builder.getContext()));
+    ctx.ssavalue_usecount.assign(n_ssavalues, 0);
 
     bool specsig, needsparams;
     std::tie(specsig, needsparams) = uses_specsig(lam, jlrettype, params.params->prefer_specsig);
@@ -6974,9 +7025,20 @@ static jl_llvm_functions_t
 
     // Scan for PhiC nodes, emit their slots and record which upsilon nodes
     // yield to them.
+    // Also count ssavalue uses.
     {
         for (size_t i = 0; i < jl_array_len(stmts); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+
+            auto scan_ssavalue = [&](jl_value_t *val) {
+                if (jl_is_ssavalue(val)) {
+                    ctx.ssavalue_usecount[((jl_ssavalue_t*)val)->id-1] += 1;
+                    return true;
+                }
+                return false;
+            };
+            general_use_analysis(ctx, stmt, scan_ssavalue);
+
             if (jl_is_phicnode(stmt)) {
                 jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
                 for (size_t j = 0; j < jl_array_len(values); ++j) {
@@ -7717,7 +7779,7 @@ static jl_llvm_functions_t
                     else {
                         // must be careful to emit undef here (rather than a bitcast or
                         // load of val) if the runtime type of val isn't phiType
-                        Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                        Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                         V = emit_guarded_test(ctx, isvalid, undef_value_for_type(VN->getType()), [&] {
                             return emit_unbox(ctx, VN->getType(), val, phiType);
                         });
@@ -7729,7 +7791,7 @@ static jl_llvm_functions_t
                     // must be careful to emit undef here (rather than a bitcast or
                     // load of val) if the runtime type of val isn't phiType
                     assert(lty != ctx.types().T_prjlvalue);
-                    Value *isvalid = emit_isa(ctx, val, phiType, NULL).first;
+                    Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                     emit_guarded_test(ctx, isvalid, nullptr, [&] {
                         (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest), ctx.tbaa().tbaa_stack);
                         return nullptr;
@@ -7771,7 +7833,7 @@ static jl_llvm_functions_t
                     RTindex = new_union.TIndex;
                     if (!RTindex) {
                         assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
-                        RTindex = compute_tindex_unboxed(ctx, new_union, phiType);
+                        RTindex = compute_tindex_unboxed(ctx, new_union, phiType, true);
                         if (dest) {
                             // If dest is not set, this is a ghost union, the recipient of which
                             // is often not prepared to handle a boxed representation of the ghost.

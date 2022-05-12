@@ -12,6 +12,8 @@ import ..Terminals: raw!, width, height, cmove, getX,
 import Base: ensureroom, show, AnyDict, position
 using Base: something
 
+using InteractiveUtils: InteractiveUtils
+
 abstract type TextInterface end                # see interface immediately below
 abstract type ModeState end                    # see interface below
 abstract type HistoryProvider end
@@ -1295,6 +1297,49 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
     num >= 0 ? edit_splice!(buf, b => b, ' '^num, rigid_mark=false) :
                edit_splice!(buf, b => (b - num))
 
+function mode_idx(hist::HistoryProvider, mode::TextInterface)
+    c = :julia
+    for (k,v) in hist.mode_mapping
+        isequal(v, mode) && (c = k)
+    end
+    return c
+end
+
+function guess_current_mode_name(s)
+    try
+        mode_idx(s.current_mode.hist, s.current_mode)
+    catch
+        nothing
+    end
+end
+
+# edit current input in editor
+function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, line))
+    mode_name = guess_current_mode_name(s)
+    filename = tempname()
+    if mode_name == :julia
+        filename *= ".jl"
+    elseif mode_name == :shell
+        filename *= ".sh"
+    end
+    buf = buffer(s)
+    pos = position(buf)
+    str = String(take!(buf))
+    line = 1 + count(==(_newline), view(str, 1:pos))
+    write(filename, str)
+    f(filename, line)
+    str_mod = readchomp(filename)
+    rm(filename)
+    if str != str_mod # something was changed, run the input
+        write(buf, str_mod)
+        commit_line(s)
+        :done
+    else # no change, the edit session probably unsuccessful
+        write(buf, str)
+        seek(buf, pos) # restore state from before edit
+        refresh_line(s)
+    end
+end
 
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
@@ -2337,6 +2382,7 @@ AnyDict(
     "\eu" => (s::MIState,o...)->edit_upper_case(s),
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
+    "\ee" => (s::MIState,o...) -> edit_input(s),
 )
 
 const history_keymap = AnyDict(
