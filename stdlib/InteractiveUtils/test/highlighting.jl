@@ -2,6 +2,31 @@
 
 using InteractiveUtils, Test
 
+myzeros(::Type{T}, ::Type{S}, ::Type{R}, dims::Tuple{Vararg{Integer, N}}, dims2::Tuple{Vararg{Integer, M}}) where {T, R, S, M, N} = (x = 1)
+@testset "warntype content" begin
+    io = IOBuffer()
+    code_warntype(IOContext(io, :color => true), myzeros,
+                  Tuple{Type{<:Integer}, Type{>:String}, Type{T} where Signed<:T<:Real, Tuple{Vararg{Int}}, NTuple{4,Int}})
+    seekstart(io)
+    @test startswith(readline(io), "MethodInstance for ")
+    @test startswith(readline(io), "  from myzeros(::Type{T}, ::")
+    @test occursin(r"^Static Parameters$", readline(io))
+    @test occursin(r"^  T <: .*Integer", readline(io))
+    @test occursin(r"^  .*Signed.* <: R <: .*Real", readline(io))
+    @test occursin(r"^  S >: .*String", readline(io))
+    @test occursin(r"^  M = .*4", readline(io))
+    @test occursin(r"^  N::.*Int", readline(io))
+    @test occursin(r"^Arguments$", readline(io))
+    @test occursin(r"^  #self#.*::Core.Const", readline(io))
+    while readline(io) != "Locals"
+        eof(io) && throw(EOFError())
+    end
+    @test occursin(r"^  x.*::Int", readline(io))
+    @test occursin(r"^Body.*::Int", readline(io))
+    code = read(io, String)
+    @test endswith(code, "\n\n")
+end
+
 @testset "warntype highlighting" begin
     # Make sure that "expected" unions are highlighted with warning color instead of error color
     io = IOBuffer()

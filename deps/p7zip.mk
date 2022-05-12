@@ -9,7 +9,7 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
 	cd $(dir $@) && $(TAR) --strip-components 1 -jxf $<
-	echo $1 > $@
+	echo 1 > $@
 
 checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
 	$(JLCHECKSUM) $<
@@ -44,12 +44,12 @@ $(eval $(call staged-install, \
 	P7ZIP_INSTALL,,,))
 
 clean-p7zip:
-	-rm $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
-	-rm $(build_bindir)/7za
+	-rm -f $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
+	-rm -f $(build_bindir)/7za
 	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) clean
 
 distclean-p7zip:
-	-rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2 $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
+	rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2 $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
 
 
 get-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
@@ -61,8 +61,7 @@ check-p7zip: compile-p7zip
 
 
 else # USE_BINARYBUILDER_P7ZIP
-P7ZIP_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/p7zip_jll.jl/releases/download/p7zip-v$(P7ZIP_VER)+$(P7ZIP_BB_REL)
-P7ZIP_BB_NAME := p7zip.v$(P7ZIP_VER)
+
 $(eval $(call bb-install,p7zip,P7ZIP,false))
 
 endif

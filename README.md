@@ -5,18 +5,31 @@
 </a>
 </div>
 
-Code coverage:
-[![coveralls][coveralls-img]](https://coveralls.io/r/JuliaLang/julia?branch=master)
-[![codecov][codecov-img]](https://codecov.io/github/JuliaLang/julia?branch=master)
-
-Documentation:
-[![version 1][docs-img]](https://docs.julialang.org)
-
-[travis-img]: https://img.shields.io/travis/JuliaLang/julia/master.svg?label=Linux+/+macOS
-[appveyor-img]: https://img.shields.io/appveyor/ci/JuliaLang/julia/master.svg?label=Windows
-[coveralls-img]: https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls
-[codecov-img]: https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov
-[docs-img]: https://img.shields.io/badge/docs-v1-blue.svg
+<table>
+    <!-- Docs -->
+    <tr>
+        <td>Documentation</td>
+        <td>
+            <a href="https://docs.julialang.org"><img src='https://img.shields.io/badge/docs-v1-blue.svg'/></a>
+        </td>
+    </tr>
+    <!-- Continuous integration
+    To change the badge to point to a different pipeline, it is not sufficient to simply change the `?branch=` part.
+    You need to go to the Buildkite website and get the SVG URL for the correct pipeline. -->
+    <tr>
+        <td>Continuous integration</td>
+        <td>
+            <a href="https://buildkite.com/julialang/julia-master"><img src='https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master'/></a>
+        </td>
+    </tr>
+    <!-- Coverage -->
+    <tr>
+        <td>Code coverage</td>
+        <td>
+            <a href="https://coveralls.io/r/JuliaLang/julia?branch=master"><img src='https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls'/></a> <a href="https://codecov.io/github/JuliaLang/julia?branch=master"><img src='https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov'/></a>
+        </td>
+    </tr>
+</table>
 
 ## The Julia Language
 
@@ -46,7 +59,6 @@ helpful to start contributing to the Julia codebase.
 
 - [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
 - [**Twitter**](https://twitter.com/JuliaLanguage)
-- [**Meetup**](https://julia.meetup.com/)
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
@@ -71,17 +83,17 @@ recommend you use the official Julia binaries instead.
 ## Building Julia
 
 First, make sure you have all the [required
-dependencies](https://github.com/JuliaLang/julia/blob/master/doc/build/build.md#required-build-tools-and-external-libraries) installed.
+dependencies](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md#required-build-tools-and-external-libraries) installed.
 Then, acquire the source code by cloning the git repository:
 
-    git clone git://github.com/JuliaLang/julia.git
+    git clone https://github.com/JuliaLang/julia.git
 
 By default you will be building the latest unstable version of
-Julia. However, most users should use the most recent stable version
+Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.5.0
+    git checkout v1.7.2
 
 Now run `make` to build the `julia` executable.
 
@@ -103,8 +115,8 @@ You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
-In case this default build path did not work, detailed build instructions
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/build).
+Detailed build instructions, should they be necessary,
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
 
 ### Uninstalling Julia
 
@@ -122,10 +134,9 @@ The Julia source code is organized as follows:
 | `base/`           | source code for the Base module (part of Julia's standard library) |
 | `stdlib/`         | source code for other standard library packages                    |
 | `cli/`            | source for the command line interface/REPL                         |
-| `contrib/`        | editor support for Julia source, miscellaneous scripts             |
+| `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
-| `doc/src/manual/` | source for the user manual                                         |
-| `doc/build/`      | detailed notes for building Julia                                  |
+| `doc/src/`        | source for the user manual                                         |
 | `src/`            | source for Julia language core                                     |
 | `test/`           | test suites                                                        |
 | `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
@@ -146,10 +157,8 @@ Support for editing Julia is available for many
 [Sublime Text](https://github.com/JuliaEditorSupport/Julia-sublime), and many
 others.
 
-Supported IDEs include: [Juno](http://junolab.org/) (Atom plugin),
-[julia-vscode](https://github.com/JuliaEditorSupport/julia-vscode) (VS
-Code plugin), and
-[julia-intellij](https://github.com/JuliaEditorSupport/julia-intellij)
-(IntelliJ IDEA plugin). The popular [Jupyter](https://jupyter.org/)
-notebook interface is available through
-[IJulia](https://github.com/JuliaLang/IJulia.jl).
+For users who prefer IDEs, we recommend using VS Code with the
+[julia-vscode](https://www.julia-vscode.org/) plugin.
+For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
+[IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
+the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.

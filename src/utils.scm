@@ -78,6 +78,8 @@
         (else '())))
 
 (define (caddddr x) (car (cdr (cdr (cdr (cdr x))))))
+(define (cdddddr x) (cdr (cdr (cdr (cdr (cdr x))))))
+(define (cadddddr x) (car (cdddddr x)))
 
 (define (table.clone t)
   (let ((nt (table)))
@@ -93,3 +95,20 @@
         any
         (loop (cdr lst)
               (or (pred (car lst)) any)))))
+
+;; construct a table mapping each element of `lst` to its index (1-indexed)
+(define (symbol-to-idx-map lst)
+  (let ((tbl (table)))
+    (let loop ((xs lst) (i 1))
+      (if (pair? xs)
+          (begin (put! tbl (car xs) i)
+                 (loop (cdr xs) (+ i 1)))))
+    tbl))
+
+;; keep at most the first element matching a given predicate
+(define (keep-first pred lst)
+  (cond ((null? lst) lst)
+        ((pred (car lst))
+         (cons (car lst) (filter (lambda (x) (not (pred x))) (cdr lst))))
+        (else
+         (cons (car lst) (keep-first pred (cdr lst))))))

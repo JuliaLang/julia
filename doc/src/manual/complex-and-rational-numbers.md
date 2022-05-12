@@ -8,7 +8,7 @@ behave as expected.
 ## Complex Numbers
 
 The global constant [`im`](@ref) is bound to the complex number *i*, representing the principal
-square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant were rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
+square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant was rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
 

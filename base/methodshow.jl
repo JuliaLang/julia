@@ -4,16 +4,23 @@
 
 const empty_sym = Symbol("")
 function strip_gensym(sym)
-    if sym === Symbol("#self#") || sym === Symbol("#unused#")
+    if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
     return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[i]
-    if i == nargs && isva && !isvarargtype(t)
-        t = Vararg{t,length(sig.parameters)-nargs+1}
+    t = sig.parameters[unwrapva(min(i, end))]
+    if i == nargs && isva
+        va = sig.parameters[end]
+        if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
+            t = va
+        else
+            ntotal = length(sig.parameters)
+            isvarargtype(va) && (ntotal += va.N - 1)
+            t = Vararg{t,ntotal-nargs+1}
+        end
     end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
@@ -27,31 +34,20 @@ function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva:
         t === Any && return s, ""
     end
     if isvarargtype(t)
-        v1, v2 = nothing, nothing
-        if isa(t, UnionAll)
-            v1 = t.var
-            t = t.body
-            if isa(t, UnionAll)
-                v2 = t.var
-                t = t.body
-            end
-        end
-        ut = unwrap_unionall(t)
-        tt, tn = ut.parameters[1], ut.parameters[2]
-        if isa(tn, TypeVar) && (tn === v1 || tn === v2)
-            if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
+        if !isdefined(t, :N)
+            if unwrapva(t) === Any
                 return string(s, "..."), ""
             else
-                return s, string_with_env(env, tt) * "..."
+                return s, string_with_env(env, unwrapva(t)) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ", ", tn, "}")
+        return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
     return s, string_with_env(env, t)
 end
 
 function method_argnames(m::Method)
-    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
     isempty(argnames) && return argnames
     return argnames[1:m.nargs]
 end
@@ -73,7 +69,7 @@ function arg_decl_parts(m::Method, html=false)
         end
         decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
-        decls[1] = ("", sprint(show_signature_function, sig.parameters[1], false, decls[1][1], html,
+        decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
                                context = show_env))
     else
         decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
@@ -83,6 +79,9 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
+    if m.sig === Tuple # OpaqueClosure
+        return Symbol[]
+    end
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
@@ -135,9 +134,15 @@ const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
 function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB::String
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        path = replace(path, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB::String))
+    if isdefined(@__MODULE__, :Sys)
+        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
+        STDLIB = Sys.STDLIB::String
+        if BUILD_STDLIB_PATH != STDLIB
+            # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+            npath = normpath(path)
+            npath′ = replace(npath, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+            return npath == npath′ ? path : npath′
+        end
     end
     return path
 end
@@ -228,6 +233,7 @@ function show(io::IO, m::Method)
         file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
     end
+    nothing
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -236,24 +242,27 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     hasname = isdefined(mt.module, name) &&
               typeof(getfield(mt.module, name)) <: Function
     n = length(ms)
-    if mt.module === Core && n == 0 && mt.defs === nothing && mt.cache !== nothing
-        # try to detect Builtin
-        print(io, "# built-in function; no methods")
+    m = n==1 ? "method" : "methods"
+    print(io, "# $n $m")
+    sname = string(name)
+    namedisplay = namefmt(sname)
+    if hasname
+        what = (startswith(sname, '@') ?
+                    "macro"
+               : mt.module === Core && last(ms).sig === Tuple ?
+                    "builtin function"
+               : # else
+                    "generic function")
+        print(io, " for ", what, " ", namedisplay)
+    elseif '#' in sname
+        print(io, " for anonymous function ", namedisplay)
+    elseif mt === _TYPE_NAME.mt
+        print(io, " for type constructor")
     else
-        m = n==1 ? "method" : "methods"
-        print(io, "# $n $m")
-        sname = string(name)
-        namedisplay = namefmt(sname)
-        if hasname
-            what = startswith(sname, '@') ? "macro" : "generic function"
-            print(io, " for ", what, " ", namedisplay)
-        elseif '#' in sname
-            print(io, " for anonymous function ", namedisplay)
-        elseif mt === _TYPE_NAME.mt
-            print(io, " for type constructor")
-        end
-        print(io, ":")
+        print(io, " for callable object")
     end
+    n > 0 && print(io, ":")
+    nothing
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
@@ -271,7 +280,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
     for meth in ms
-        if max==-1 || n<max
+        if max == -1 || n < max
             n += 1
             println(io)
             print(io, "[$n] ")
@@ -296,9 +305,11 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             end
         end
     end
+    nothing
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
+show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)

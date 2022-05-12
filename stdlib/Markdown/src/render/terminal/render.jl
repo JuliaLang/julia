@@ -70,7 +70,7 @@ end
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
         print(io, ' '^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+2),
+        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+3),
                           i = 2margin+2) do io
             term(io, point, columns - 10)
         end

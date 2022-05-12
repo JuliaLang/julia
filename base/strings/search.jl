@@ -25,6 +25,9 @@ findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a
 findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
 
+findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
+findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
+
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
@@ -64,6 +67,9 @@ findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
+
+findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
+findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
@@ -162,17 +168,18 @@ in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
-    if isempty(t)
+    x = Iterators.peel(t)
+    if isnothing(x)
         return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(t)
+    t1, trest = x
     while true
         i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
         ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
-        matched = all(splat(==), zip(SubString(s, ii), a))
+        matched = all(Splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
         i = ii
     end
@@ -420,7 +427,7 @@ function _rsearchindex(s::AbstractString,
         return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(Iterators.reverse(t))
+    t1, trest = Iterators.peel(Iterators.reverse(t))::NTuple{2,Any}
     while true
         i = findprev(isequal(t1), s, i)
         i === nothing && return 0
@@ -428,7 +435,7 @@ function _rsearchindex(s::AbstractString,
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
-        matched = all(splat(==), zip(a, (x[2] for x in b)))
+        matched = all(Splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
             return nextind(s, popfirst!(b)[1])::Int
@@ -458,7 +465,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - sentinel
-    k < 1 && throw(BoundsError(s, _k))
+    k < 0 && throw(BoundsError(s, _k))
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : sentinel
@@ -616,9 +623,22 @@ julia> occursin(r"a.a", "abba")
 false
 ```
 
-See also: [`contains`](@ref).
+See also [`contains`](@ref).
 """
 occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0
 
-in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+"""
+    occursin(haystack)
+
+Create a function that checks whether its argument occurs in `haystack`, i.e.
+a function equivalent to `needle -> occursin(needle, haystack)`.
+
+The returned function is of type `Base.Fix2{typeof(occursin)}`.
+
+!!! compat "Julia 1.6"
+    This method requires Julia 1.6 or later.
+"""
+occursin(haystack) = Base.Fix2(occursin, haystack)
+
+in(::AbstractString, ::AbstractString) = error("use occursin(needle, haystack) for string containment")

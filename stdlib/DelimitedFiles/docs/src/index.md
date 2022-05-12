@@ -1,5 +1,7 @@
 # Delimited Files
 
+Utilities for reading and writing delimited files, for example ".csv".
+
 ```@docs
 DelimitedFiles.readdlm(::Any, ::AbstractChar, ::Type, ::AbstractChar)
 DelimitedFiles.readdlm(::Any, ::AbstractChar, ::AbstractChar)

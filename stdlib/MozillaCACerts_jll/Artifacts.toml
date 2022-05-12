@@ -1,6 +1,0 @@
-[MozillaCACerts]
-git-tree-sha1 = "bb24cbe35cf50be29d24135e8236a069533cca3a"
-
-    [[MozillaCACerts.download]]
-    sha256 = "3397e85496d9c25c8e79536a8baed72c523843afef3ddbb6074a74b030b368e8"
-    url = "https://github.com/JuliaBinaryWrappers/MozillaCACerts_jll.jl/releases/download/MozillaCACerts-v2020.7.22+0/MozillaCACerts.v2020.7.22.any.tar.gz"

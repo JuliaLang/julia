@@ -36,7 +36,7 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), 0, 0)
+#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), Int32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -121,7 +121,7 @@ let cfg = CFG(BasicBlock[
     make_bb([2, 3]    , []    ),
 ], Int[])
     insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], Expr[], [])
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end
@@ -309,4 +309,28 @@ let cfg = CFG(BasicBlock[
     Compiler.cfg_insert_edge!(cfg, 1, 3)
     Compiler.domtree_insert_edge!(domtree, cfg.blocks, 1, 3)
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
+end
+
+# Issue #41975 - SSA conversion drops type check
+f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
+@test_throws TypeError f_if_typecheck()
+
+@test let # https://github.com/JuliaLang/julia/issues/42258
+    code = quote
+        function foo()
+            a = @noinline rand(rand(0:10))
+            if isempty(a)
+                err = BoundsError(a)
+                throw(err)
+                return nothing
+            end
+            return a
+        end
+        code_typed(foo; optimize=true)
+
+        code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
+    end |> string
+    cmd = `$(Base.julia_cmd()) -g 2 -e $code`
+    stderr = IOBuffer()
+    success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
 end

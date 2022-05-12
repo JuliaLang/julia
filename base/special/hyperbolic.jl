@@ -14,19 +14,6 @@
 # is preserved.
 # ====================================================
 
-@inline function exthorner(x, p::Tuple)
-	# polynomial evaluation using compensated summation.
-	# much more accurate, especially when lo can be combined with other rounding errors
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = p[i]
-        prod = hi*x
-        err = fma(hi, x, -prod)
-        hi = pi+prod
-        lo = fma(lo, x, prod - (hi - pi) + err)
-    end
-    return hi, lo
-end
 
 # Hyperbolic functions
 # sinh methods
@@ -37,18 +24,15 @@ H_SMALL_X(::Type{Float32}) = 2f-12
 H_MEDIUM_X(::Type{Float32}) = 9f0
 
 H_LARGE_X(::Type{Float64}) = 709.7822265633563 # nextfloat(709.7822265633562)
-H_OVERFLOW_X(::Type{Float64}) = 710.475860073944 # nextfloat(710.4758600739439)
 
 H_LARGE_X(::Type{Float32}) = 88.72283f0
-H_OVERFLOW_X(::Type{Float32}) = 89.415985f0
 
 SINH_SMALL_X(::Type{Float64}) = 2.1
 SINH_SMALL_X(::Type{Float32}) = 3.0f0
 
 # For Float64, use DoubleFloat scheme for extra accuracy
 function sinh_kernel(x::Float64)
-    x2 = x*x
-    x2lo = fma(x,x,-x2)
+    x2, x2lo = two_mul(x,x)
     hi_order = evalpoly(x2, (8.333333333336817e-3, 1.9841269840165435e-4,
                              2.7557319381151335e-6, 2.5052096530035283e-8,
                              1.6059550718903307e-10, 7.634842144412119e-13,
@@ -65,6 +49,11 @@ function sinh_kernel(x::Float32)
     return Float32(res*x)
 end
 
+@inline function sinh16_kernel(x::Float32)
+    res = evalpoly(x*x, (1.0f0, 0.16666667f0, 0.008333337f0, 0.00019841001f0,
+                         2.7555539f-6, 2.514339f-8, 1.6260095f-10))
+    return Float16(res*x)
+end
 
 function sinh(x::T) where T<:Union{Float32,Float64}
     # Method
@@ -75,7 +64,7 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     #               approximate sinh(x) with a  minimax polynomial
     #      b)   SINH_SMALL_X <= x < H_LARGE_X
     #               return sinh(x) = (exp(x) - exp(-x))/2
-    #      d)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      d)   H_LARGE_X  <= x
     #               return sinh(x) = exp(x/2)/2 * exp(x/2)
     #               Note that this branch automatically deals with Infs and NaNs
 
@@ -89,7 +78,14 @@ function sinh(x::T) where T<:Union{Float32,Float64}
     E = exp(absx)
     return copysign(T(.5)*(E - 1/E),x)
 end
-sinh(x::Real) = sinh(float(x))
+
+function Base.sinh(a::Float16)
+    x = Float32(a)
+    absx = abs(x)
+    absx <= SINH_SMALL_X(Float32) && return sinh16_kernel(x)
+    E = exp(absx)
+    return Float16(copysign(.5f0*(E - 1/E),x))
+end
 
 COSH_SMALL_X(::Type{T}) where T= one(T)
 
@@ -113,9 +109,9 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     #               approximate sinh(x) with a minimax polynomial
     #      b)   COSH_SMALL_X <= x < H_LARGE_X
     #               return cosh(x) = = (exp(x) + exp(-x))/2
-    #      e)   H_LARGE_X  <= x < H_OVERFLOW_X
+    #      e)   H_LARGE_X  <= x
     #               return cosh(x) = exp(x/2)/2 * exp(x/2)
-    #      			Note that this branch automatically deals with Infs and NaNs
+    #               Note that this branch automatically deals with Infs and NaNs
 
     absx = abs(x)
     if absx <= COSH_SMALL_X(T)
@@ -127,11 +123,10 @@ function cosh(x::T) where T<:Union{Float32,Float64}
     E = exp(absx)
     return T(.5)*(E + 1/E)
 end
-cosh(x::Real) = cosh(float(x))
 
 # tanh methods
-TANH_LARGE_X(::Type{Float64}) = 22.0
-TANH_LARGE_X(::Type{Float32}) = 9.0f0
+TANH_LARGE_X(::Type{Float64}) = 44.0
+TANH_LARGE_X(::Type{Float32}) = 18.0f0
 TANH_SMALL_X(::Type{Float64}) = 1.0
 TANH_SMALL_X(::Type{Float32}) = 1.3862944f0       #2*log(2)
 @inline function tanh_kernel(x::Float64)
@@ -162,7 +157,6 @@ function tanh(x::T) where T<:Union{Float32, Float64}
     k = exp(abs2x)
     return copysign(1 - 2/(k+1), x)
 end
-tanh(x::Real) = tanh(float(x))
 
 # Inverse hyperbolic functions
 AH_LN2(::Type{Float64}) = 6.93147180559945286227e-01
@@ -203,7 +197,6 @@ function asinh(x::T) where T <: Union{Float32, Float64}
     end
     return copysign(w, x)
 end
-asinh(x::Real) = asinh(float(x))
 
 # acosh methods
 @noinline acosh_domain_error(x) = throw(DomainError(x, "acosh(x) is only defined for x ≥ 1."))
@@ -242,7 +235,6 @@ function acosh(x::T) where T <: Union{Float32, Float64}
         return log(x) + AH_LN2(T)
     end
 end
-acosh(x::Real) = acosh(float(x))
 
 # atanh methods
 @noinline atanh_domain_error(x) = throw(DomainError(x, "atanh(x) is only defined for |x| ≤ 1."))
@@ -250,14 +242,10 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     # Method
     # 1.Reduced x to positive by atanh(-x) = -atanh(x)
     # 2. Find the branch and the expression to calculate and return it
-    #     a) 0 <= x < 2^-28
-    #         return x
-    #     b) 2^-28 <= x < 0.5
-    #         return 0.5*log1p(2x+2x*x/(1-x))
-    #     c) 0.5 <= x < 1
-    #         return 0.5*log1p(2x/1-x)
-    #     d) x = 1
-    #         return Inf
+    #     a) 0 <= x < 0.5
+    #         return 0.5*log1p(2x/(1-x))
+    #     b) 0.5 <= x <= 1
+    #         return 0.5*log((x+1)/(1-x))
     # Special cases:
     #    if |x| > 1 throw DomainError
     isnan(x) && return x
@@ -267,21 +255,12 @@ function atanh(x::T) where T <: Union{Float32, Float64}
     if absx > 1
         atanh_domain_error(x)
     end
-    if absx < T(2)^-28
-        # in a)
-        return x
-    end
     if absx < T(0.5)
+        # in a)
+        t = log1p(T(2)*absx/(T(1)-absx))
+    else
         # in b)
-        t = absx+absx
-        t = T(0.5)*log1p(t+t*absx/(T(1)-absx))
-    elseif absx < T(1)
-        # in c)
-        t = T(0.5)*log1p((absx + absx)/(T(1)-absx))
-    elseif absx == T(1)
-        # in d)
-        return copysign(T(Inf), x)
+        t = log((T(1)+absx)/(T(1)-absx))
     end
-    return copysign(t, x)
+    return T(0.5)*copysign(t, x)
 end
-atanh(x::Real) = atanh(float(x))
