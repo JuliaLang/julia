@@ -2036,6 +2036,12 @@ end
         @test typeof(length(r1)) == typeof(checked_length(r1)) ==
               typeof(length(r2)) == typeof(checked_length(r2))
     end
+    SR = StepRange{Union{Int64,Int128},Int}
+    test_length(r, l) = length(r) === checked_length(r) === l
+    @test test_length(SR(Int64(1), 1, Int128(1)), Int128(1))
+    @test test_length(SR(Int64(1), 1, Int128(0)), Int128(0))
+    @test test_length(SR(Int64(1), 1, Int64(1)), Int64(1))
+    @test test_length(SR(Int64(1), 1, Int64(0)), Int64(0))
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin
@@ -2350,10 +2356,12 @@ end
 
 @test length(range(1, length=typemax(Int128))) === typemax(Int128)
 
-@testset "firstindex(::StepRange{T,T})" begin
+@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
     test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
     for T in Base.BitInteger_types, S in Base.BitInteger_types
         @test test_firstindex(StepRange{T,S}(1, 1, 1))
         @test test_firstindex(StepRange{T,S}(1, 1, 0))
     end
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
 end
