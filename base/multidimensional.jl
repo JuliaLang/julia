@@ -1546,6 +1546,9 @@ end
     end
 end
 
+isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
+isassigned(a::AbstractArray, i::Union{Integer, CartesianIndex}...) = isassigned(a, CartesianIndex(i))
+
 ## permutedims
 
 ## Permute array dims ##
