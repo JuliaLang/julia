@@ -129,7 +129,7 @@ macro view(ex)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
             if !(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
-                throw(TypeError("Not valid expression."))
+                error("invalid expression")
             end
             ex.args[2] = Expr(:call, view, ex.args[2].args...)
         end
