@@ -69,7 +69,7 @@ methods; for example, if the available MIME formats depend on the *value* of `x`
 julia> showable(MIME("text/plain"), rand(5))
 true
 
-julia> showable("img/png", rand(5))
+julia> showable("image/png", rand(5))
 false
 ```
 """
@@ -77,7 +77,7 @@ showable(::MIME{mime}, @nospecialize x) where {mime} = hasmethod(show, Tuple{IO,
 showable(m::AbstractString, @nospecialize x) = showable(MIME(m), x)
 
 """
-    show(io, mime, x)
+    show(io::IO, mime, x)
 
 The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
 given `mime` type to a given I/O stream `io` (usually a memory buffer), if possible. In order
@@ -94,18 +94,32 @@ your images to be displayed on any PNG-capable `AbstractDisplay` (such as IJulia
 to `import Base.show` in order to add new methods to the built-in Julia function
 `show`.
 
-The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
-output that calls `show` with 2 arguments. Therefore, this case should be handled by
-defining a 2-argument `show(io::IO, x::MyType)` method.
-
 Technically, the `MIME"mime"` macro defines a singleton type for the given `mime` string,
 which allows us to exploit Julia's dispatch mechanisms in determining how to display objects
 of any given type.
 
-The first argument to `show` can be an [`IOContext`](@ref) specifying output format properties.
-See [`IOContext`](@ref) for details.
+The default MIME type is `MIME"text/plain"`. There is a fallback definition for `text/plain`
+output that calls `show` with 2 arguments, so it is not always necessary to add a method
+for that case. If a type benefits from custom human-readable output though,
+`show(::IO, ::MIME"text/plain", ::T)` should be defined. For example, the `Day` type uses
+`1 day` as the output for the `text/plain` MIME type, and `Day(1)` as the output of 2-argument `show`.
+
+# Examples
+```jldoctest
+julia> struct Day
+           n::Int
+       end
+
+julia> Base.show(io::IO, ::MIME"text/plain", d::Day) = print(io, d.n, " day")
+
+julia> Day(1)
+1 day
+```
+
+Container types generally implement 3-argument `show` by calling `show(io, MIME"text/plain"(), x)`
+for elements `x`, with `:compact => true` set in an [`IOContext`](@ref) passed as the first argument.
 """
-show(stream, mime, x)
+show(stream::IO, mime, x)
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 
 """
@@ -139,7 +153,7 @@ the value of `x` would be entered in Julia.
 julia> A = [1 2; 3 4];
 
 julia> repr("text/plain", A)
-"2×2 Array{Int64,2}:\\n 1  2\\n 3  4"
+"2×2 Matrix{Int64}:\\n 1  2\\n 3  4"
 ```
 """
 repr(m::MIME, x; context=nothing) = istextmime(m) ? _textrepr(m, x, context) : _binrepr(m, x, context)
@@ -174,7 +188,7 @@ data except for a set of types known to be text data (possibly Unicode).
 julia> istextmime(MIME("text/plain"))
 true
 
-julia> istextmime(MIME("img/png"))
+julia> istextmime(MIME("image/png"))
 false
 ```
 """
@@ -237,14 +251,14 @@ objects are printed in the Julia REPL.)
 struct TextDisplay <: AbstractDisplay
     io::IO
 end
-display(d::TextDisplay, M::MIME"text/plain", @nospecialize x) = show(d.io, M, x)
+display(d::TextDisplay, M::MIME"text/plain", @nospecialize x) = (show(d.io, M, x); println(d.io))
 display(d::TextDisplay, @nospecialize x) = display(d, MIME"text/plain"(), x)
 
 # if you explicitly call display("text/foo", x), it should work on a TextDisplay:
 displayable(d::TextDisplay, M::MIME) = istextmime(M)
 function display(d::TextDisplay, M::MIME, @nospecialize x)
     displayable(d, M) || throw(MethodError(display, (d, M, x)))
-    show(d.io, M, x)
+    show(d.io, M, x); println(d.io)
 end
 
 import Base: close, flush
@@ -298,7 +312,7 @@ xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D,
     display(mime, x)
     display(d::AbstractDisplay, mime, x)
 
-AbstractDisplay `x` using the topmost applicable display in the display stack, typically using the
+Display `x` using the topmost applicable display in the display stack, typically using the
 richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
 a [`MethodError`](@ref) if `d` cannot display objects of this type.
@@ -317,7 +331,7 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 
 To customize how instances of a type are displayed, overload [`show`](@ref) rather than `display`,
-as explained in the manual section on [custom pretty-printing](@id man-custom-pretty-printing).
+as explained in the manual section on [custom pretty-printing](@ref man-custom-pretty-printing).
 """
 function display(@nospecialize x)
     for i = length(displays):-1:1
@@ -325,7 +339,7 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (display, show) ||
+                isa(e, MethodError) && (e.f === display || e.f === show) ||
                     rethrow()
             end
         end

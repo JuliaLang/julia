@@ -2,53 +2,57 @@
 
 # Method and method table pretty-printing
 
-function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[i]
-    if i == nargs && isva && !isvarargtype(t)
-        t = Vararg{t,length(sig.parameters)-nargs+1}
+const empty_sym = Symbol("")
+function strip_gensym(sym)
+    if sym === :var"#self#" || sym === :var"#unused#"
+        return empty_sym
+    end
+    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
+end
+
+function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
+    t = sig.parameters[unwrapva(min(i, end))]
+    if i == nargs && isva
+        va = sig.parameters[end]
+        if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
+            t = va
+        else
+            ntotal = length(sig.parameters)
+            isvarargtype(va) && (ntotal += va.N - 1)
+            t = Vararg{t,ntotal-nargs+1}
+        end
     end
     if isa(n,Expr)
         n = n.args[1]  # handle n::T in arg list
     end
-    s = string(n)
-    i = findfirst(isequal('#'), s)
-    if i !== nothing
-        s = s[1:i-1]
-    end
-    if t === Any && !isempty(s)
-        return s, ""
+    n = strip_gensym(n)
+    local s
+    if n === empty_sym
+        s = ""
+    else
+        s = sprint(show_sym, n)
+        t === Any && return s, ""
     end
     if isvarargtype(t)
-        v1, v2 = nothing, nothing
-        if isa(t, UnionAll)
-            v1 = t.var
-            t = t.body
-            if isa(t, UnionAll)
-                v2 = t.var
-                t = t.body
-            end
-        end
-        ut = unwrap_unionall(t)
-        tt, tn = ut.parameters[1], ut.parameters[2]
-        if isa(tn, TypeVar) && (tn === v1 || tn === v2)
-            if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
+        if !isdefined(t, :N)
+            if unwrapva(t) === Any
                 return string(s, "..."), ""
             else
-                return s, string_with_env(env, tt) * "..."
+                return s, string_with_env(env, unwrapva(t)) * "..."
             end
         end
-        return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
+        return s, string_with_env(env, "Vararg{", t.T, ", ", t.N, "}")
     end
     return s, string_with_env(env, t)
 end
 
 function method_argnames(m::Method)
-    argnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), m.slot_syms)
+    argnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
     isempty(argnames) && return argnames
     return argnames[1:m.nargs]
 end
 
-function arg_decl_parts(m::Method)
+function arg_decl_parts(m::Method, html=false)
     tv = Any[]
     sig = m.sig
     while isa(sig, UnionAll)
@@ -65,28 +69,31 @@ function arg_decl_parts(m::Method)
         end
         decls = Tuple{String,String}[argtype_decl(show_env, argnames[i], sig, i, m.nargs, m.isva)
                     for i = 1:m.nargs]
+        decls[1] = ("", sprint(show_signature_function, unwrapva(sig.parameters[1]), false, decls[1][1], html,
+                               context = show_env))
     else
         decls = Tuple{String,String}[("", "") for i = 1:length(sig.parameters::SimpleVector)]
     end
     return tv, decls, file, line
 end
 
-const empty_sym = Symbol("")
-
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
+    if m.sig === Tuple # OpaqueClosure
+        return Symbol[]
+    end
     mt = get_methodtable(m)
     if isdefined(mt, :kwsorter)
         kwtype = typeof(mt.kwsorter)
-        sig = rewrap_unionall(Tuple{kwtype, Any, unwrap_unionall(m.sig).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
-            slotnames = ccall(:jl_uncompress_argnames, Vector{Any}, (Any,), kwli.slot_syms)
+            slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
             # ensure the kwarg... is always printed last. The order of the arguments are not
             # necessarily the same as defined in the function
-            i = findfirst(x -> endswith(string(x), "..."), kws)
+            i = findfirst(x -> endswith(string(x)::String, "..."), kws)
             if i !== nothing
                 push!(kws, kws[i])
                 deleteat!(kws, i)
@@ -94,7 +101,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
             return kws
         end
     end
-    return Any[]
+    return Symbol[]
 end
 
 function show_method_params(io::IO, tv)
@@ -120,24 +127,37 @@ end
 # In case the line numbers in the source code have changed since the code was compiled,
 # allow packages to set a callback function that corrects them.
 # (Used by Revise and perhaps other packages.)
+# Any function `f` stored here must be consistent with the signature
+#    f(m::Method)::Tuple{Union{Symbol,String}, Union{Int32,Int64}}
 const methodloc_callback = Ref{Union{Function, Nothing}}(nothing)
+
+function fixup_stdlib_path(path::String)
+    # The file defining Base.Sys gets included after this file is included so make sure
+    # this function is valid even in this intermediary state
+    if isdefined(@__MODULE__, :Sys)
+        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
+        STDLIB = Sys.STDLIB::String
+        if BUILD_STDLIB_PATH != STDLIB
+            # BUILD_STDLIB_PATH gets defined in sysinfo.jl
+            npath = normpath(path)
+            npath′ = replace(npath, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+            return npath == npath′ ? path : npath′
+        end
+    end
+    return path
+end
 
 # This function does the method location updating
 function updated_methodloc(m::Method)::Tuple{String, Int32}
     file, line = m.file, m.line
     if methodloc_callback[] !== nothing
         try
-            file, line = invokelatest(methodloc_callback[], m)
+            file, line = invokelatest(methodloc_callback[], m)::Tuple{Union{Symbol,String}, Union{Int32,Int64}}
         catch
         end
     end
-    # The file defining Base.Sys gets included after this file is included so make sure
-    # this function is valid even in this intermediary state
-    if isdefined(@__MODULE__, :Sys) && Sys.BUILD_STDLIB_PATH != Sys.STDLIB
-        # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-        file = replace(string(file), normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
-    end
-    return string(file), line
+    file = fixup_stdlib_path(string(file))
+    return file, Int32(line)
 end
 
 functionloc(m::Core.MethodInstance) = functionloc(m.def)
@@ -177,39 +197,34 @@ function functionloc(@nospecialize(f))
     return functionloc(first(mt))
 end
 
+function sym_to_string(sym)
+    s = String(sym)
+    if endswith(s, "...")
+        return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
+    else
+        return sprint(show_sym, sym)
+    end
+end
+
 function show(io::IO, m::Method)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
     if sig === Tuple
         # Builtin
         print(io, m.name, "(...) in ", m.module)
         return
     end
-    if ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-                # TODO: more accurate test? (tn.name === "#" name)
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::", d1[2], ")")
-        end
-    else
-        print(io, "(", d1[1], "::", d1[2], ")")
-    end
-    print(io, "(")
-    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
-                 ", ", ", ")
+    print(io, decls[1][2], "(")
+    join(
+        io,
+        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
+        ", ",
+        ", ",
+    )
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; ")
-        join(io, kwargs, ", ", ", ")
+        join(io, map(sym_to_string, kwargs), ", ", ", ")
     end
     print(io, ")")
     show_method_params(io, tv)
@@ -218,6 +233,7 @@ function show(io::IO, m::Method)
         file, line = updated_methodloc(m)
         print(io, " at ", file, ":", line)
     end
+    nothing
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -226,24 +242,27 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     hasname = isdefined(mt.module, name) &&
               typeof(getfield(mt.module, name)) <: Function
     n = length(ms)
-    if mt.module === Core && n == 0 && mt.defs === nothing && mt.cache !== nothing
-        # try to detect Builtin
-        print(io, "# built-in function; no methods")
+    m = n==1 ? "method" : "methods"
+    print(io, "# $n $m")
+    sname = string(name)
+    namedisplay = namefmt(sname)
+    if hasname
+        what = (startswith(sname, '@') ?
+                    "macro"
+               : mt.module === Core && last(ms).sig === Tuple ?
+                    "builtin function"
+               : # else
+                    "generic function")
+        print(io, " for ", what, " ", namedisplay)
+    elseif '#' in sname
+        print(io, " for anonymous function ", namedisplay)
+    elseif mt === _TYPE_NAME.mt
+        print(io, " for type constructor")
     else
-        m = n==1 ? "method" : "methods"
-        print(io, "# $n $m")
-        sname = string(name)
-        namedisplay = namefmt(sname)
-        if hasname
-            what = startswith(sname, '@') ? "macro" : "generic function"
-            print(io, " for ", what, " ", namedisplay)
-        elseif '#' in sname
-            print(io, " for anonymous function ", namedisplay)
-        elseif mt === _TYPE_NAME.mt
-            print(io, " for type constructor")
-        end
-        print(io, ":")
+        print(io, " for callable object")
     end
+    n > 0 && print(io, ":")
+    nothing
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
@@ -257,15 +276,19 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     n = rest = 0
     local last
 
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
+
     for meth in ms
-        if max==-1 || n<max
+        if max == -1 || n < max
             n += 1
             println(io)
             print(io, "[$n] ")
             show(io, meth)
             file, line = updated_methodloc(meth)
-            push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+            if last_shown_line_infos !== nothing
+                push!(last_shown_line_infos, (string(file), line))
+            end
         else
             rest += 1
             last = meth
@@ -282,9 +305,11 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             end
         end
     end
+    nothing
 end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
+show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
 show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
@@ -338,37 +363,26 @@ function url(m::Method)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
-    tv, decls, file, line = arg_decl_parts(m)
+    tv, decls, file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
-    ft0 = sig.parameters[1]
-    ft = unwrap_unionall(ft0)
-    d1 = decls[1]
     if sig === Tuple
         # Builtin
         print(io, m.name, "(...) in ", m.module)
         return
     end
-    if ft <: Function && isa(ft, DataType) &&
-            isdefined(ft.name.module, ft.name.mt.name) &&
-            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
-        print(io, ft.name.mt.name)
-    elseif isa(ft, DataType) && ft.name === Type.body.name
-        f = ft.parameters[1]
-        if isa(f, DataType) && isempty(f.parameters)
-            print(io, f)
-        else
-            print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
-        end
-    else
-        print(io, "(", d1[1], "::<b>", d1[2], "</b>)")
-    end
-    print(io, "(")
-    join(io, String[isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
-                      for d in decls[2:end]], ", ", ", ")
+    print(io, decls[1][2], "(")
+    join(
+        io,
+        String[
+            isempty(d[2]) ? d[1] : string(d[1], "::<b>", d[2], "</b>") for d in decls[2:end]
+        ],
+        ", ",
+        ", ",
+    )
     kwargs = kwarg_decl(m)
     if !isempty(kwargs)
         print(io, "; <i>")
-        join(io, kwargs, ", ", ", ")
+        join(io, map(sym_to_string, kwargs), ", ", ", ")
         print(io, "</i>")
     end
     print(io, ")")
@@ -406,7 +420,8 @@ show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, Metho
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
+    last_shown_line_infos === nothing || empty!(last_shown_line_infos)
     first = true
     for (i, m) in enumerate(mt)
         first || println(io)
@@ -414,7 +429,9 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
         print(io, "[$(i)] ")
         show(io, m)
         file, line = updated_methodloc(m)
-        push!(LAST_SHOWN_LINE_INFOS, (string(file), line))
+        if last_shown_line_infos !== nothing
+            push!(last_shown_line_infos, (string(file), line))
+        end
     end
 end
 

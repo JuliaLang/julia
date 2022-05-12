@@ -61,8 +61,11 @@ function preserve_handle(x)
 end
 function unpreserve_handle(x)
     lock(preserve_handle_lock)
-    v = uvhandles[x]::Int
-    if v == 1
+    v = get(uvhandles, x, 0)::Int
+    if v == 0
+        unlock(preserve_handle_lock)
+        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+    elseif v == 1
         pop!(uvhandles, x)
     else
         uvhandles[x] = v - 1
@@ -74,7 +77,7 @@ end
 ## Libuv error handling ##
 
 struct IOError <: Exception
-    msg::AbstractString
+    msg::String
     code::Int32
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
@@ -107,40 +110,44 @@ end
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end
+function uv_shutdowncb_task end
 function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}))
-    global uv_jl_readcb        = @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid}))
-    global uv_jl_writecb_task  = @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint))
-    global uv_jl_return_spawn  = @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32))
-    global uv_jl_asynccb       = @cfunction(uv_asynccb, Cvoid, (Ptr{Cvoid},))
-    global uv_jl_timercb       = @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},))
-
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    opts = JLOptions()
+    if opts.color != 0
+        have_color = (opts.color == 1)
+        if !isa(stdout, TTY)
+            global stdout = IOContext(stdout, :color => have_color)
+        end
+        if !isa(stderr, TTY)
+            global stderr = IOContext(stderr, :color => have_color)
+        end
+    end
     nothing
 end
 
 """
-    stdin
+    stdin::IO
 
 Global variable referring to the standard input stream.
 """
 :stdin
 
 """
-    stdout
+    stdout::IO
 
 Global variable referring to the standard out stream.
 """
 :stdout
 
 """
-    stderr
+    stderr::IO
 
 Global variable referring to the standard error stream.
 """

@@ -9,6 +9,9 @@
 Construct an `UpperHessenberg` view of the matrix `A`.
 Entries of `A` below the first subdiagonal are ignored.
 
+!!! compat "Julia 1.3"
+    This type was added in Julia 1.3.
+
 Efficient algorithms are implemented for `H \\ b`, `det(H)`, and similar.
 
 See also the [`hessenberg`](@ref) function to factor any matrix into a similar
@@ -24,14 +27,14 @@ Iterating the decomposition produces the factors `F.Q` and `F.H`.
 # Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8; 9 10 11 12; 13 14 15 16]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
   1   2   3   4
   5   6   7   8
   9  10  11  12
  13  14  15  16
 
 julia> UpperHessenberg(A)
-4×4 UpperHessenberg{Int64,Array{Int64,2}}:
+4×4 UpperHessenberg{Int64, Matrix{Int64}}:
  1   2   3   4
  5   6   7   8
  ⋅  10  11  12
@@ -59,6 +62,8 @@ parent(H::UpperHessenberg) = H.data
 # similar behaves like UpperTriangular
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
+
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(AbstractMatrix{T}(H.data))
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
@@ -94,17 +99,95 @@ Base.copy(A::Transpose{<:Any,<:UpperHessenberg}) = tril!(transpose!(similar(A.pa
 rmul!(H::UpperHessenberg, x::Number) = (rmul!(H.data, x); H)
 lmul!(x::Number, H::UpperHessenberg) = (lmul!(x, H.data); H)
 
-# (future: we could also have specialized routines for UpperHessenberg * UpperTriangular)
-
 fillstored!(H::UpperHessenberg, x) = (fillband!(H.data, x, -1, size(H,2)-1); H)
 
 +(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data+B.data)
 -(A::UpperHessenberg, B::UpperHessenberg) = UpperHessenberg(A.data-B.data)
-# (future: we could also have specialized routines for UpperHessenberg ± UpperTriangular)
 
-# shift Hessenberg by λI
-+(H::UpperHessenberg, J::UniformScaling) = UpperHessenberg(H.data + J)
--(J::UniformScaling, H::UpperHessenberg) = UpperHessenberg(J - H.data)
+for T = (:UniformScaling, :Diagonal, :Bidiagonal, :Tridiagonal, :SymTridiagonal,
+         :UpperTriangular, :UnitUpperTriangular)
+    for op = (:+, :-)
+        @eval begin
+            $op(H::UpperHessenberg, x::$T) = UpperHessenberg($op(H.data, x))
+            $op(x::$T, H::UpperHessenberg) = UpperHessenberg($op(x, H.data))
+        end
+    end
+end
+
+for T = (:Number, :UniformScaling, :Diagonal)
+    @eval begin
+        *(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data * x)
+        *(x::$T, H::UpperHessenberg) = UpperHessenberg(x * H.data)
+        /(H::UpperHessenberg, x::$T) = UpperHessenberg(H.data / x)
+        \(x::$T, H::UpperHessenberg) = UpperHessenberg(x \ H.data)
+    end
+end
+
+function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
+    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
+    HH = copy_similar(H, T)
+    rmul!(HH, U)
+    UpperHessenberg(HH)
+end
+function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
+    HH = copy_similar(H, T)
+    lmul!(U, HH)
+    UpperHessenberg(HH)
+end
+
+function /(H::UpperHessenberg, U::UpperTriangular)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
+    HH = copy_similar(H, T)
+    rdiv!(HH, U)
+    UpperHessenberg(HH)
+end
+function /(H::UpperHessenberg, U::UnitUpperTriangular)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
+    HH = copy_similar(H, T)
+    rdiv!(HH, U)
+    UpperHessenberg(HH)
+end
+
+function \(U::UpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
+    HH = copy_similar(H, T)
+    ldiv!(U, HH)
+    UpperHessenberg(HH)
+end
+function \(U::UnitUpperTriangular, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
+    HH = copy_similar(H, T)
+    ldiv!(U, HH)
+    UpperHessenberg(HH)
+end
+
+function *(H::UpperHessenberg, B::Bidiagonal)
+    TS = promote_op(matprod, eltype(H), eltype(B))
+    A = A_mul_B_td!(zeros(TS, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+function *(B::Bidiagonal, H::UpperHessenberg)
+    TS = promote_op(matprod, eltype(B), eltype(H))
+    A = A_mul_B_td!(zeros(TS, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
+/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
+/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
+function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
+    A = _rdiv!(zeros(T, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
+\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
+\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
+function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
+    A = ldiv!(zeros(T, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
 # (in-place in x) by the RQ algorithm from:
@@ -388,26 +471,26 @@ Iterating the decomposition produces the factors `F.Q, F.H, F.μ`.
 # Examples
 ```jldoctest
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
 
 julia> F = hessenberg(A)
-Hessenberg{Float64,UpperHessenberg{Float64,Array{Float64,2}},Array{Float64,2},Array{Float64,1},Bool}
+Hessenberg{Float64, UpperHessenberg{Float64, Matrix{Float64}}, Matrix{Float64}, Vector{Float64}, Bool}
 Q factor:
-3×3 LinearAlgebra.HessenbergQ{Float64,Array{Float64,2},Array{Float64,1},false}:
+3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}:
  1.0   0.0        0.0
  0.0  -0.707107  -0.707107
  0.0  -0.707107   0.707107
 H factor:
-3×3 UpperHessenberg{Float64,Array{Float64,2}}:
+3×3 UpperHessenberg{Float64, Matrix{Float64}}:
   4.0      -11.3137       -1.41421
  -5.65685    5.0           2.0
    ⋅        -8.88178e-16   1.0
 
 julia> F.Q * F.H * F.Q'
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  4.0  9.0  7.0
  4.0  4.0  1.0
  4.0  3.0  2.0
@@ -419,7 +502,7 @@ true
 ```
 """
 hessenberg(A::AbstractMatrix{T}) where T =
-    hessenberg!(copy_oftype(A, eigtype(T)))
+    hessenberg!(copymutable_oftype(A, eigtype(T)))
 
 function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     summary(io, F)
@@ -457,6 +540,9 @@ function getproperty(F::Hessenberg, d::Symbol)
     return getfield(F, d)
 end
 
+size(Q::HessenbergQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::HessenbergQ) = size(Q, 1), size(Q, 2)
+
 Base.propertynames(F::Hessenberg, private::Bool=false) =
     (:Q, :H, :μ, (private ? (:τ, :factors, :uplo) : ())...)
 
@@ -485,28 +571,30 @@ function AbstractMatrix(F::Hessenberg)
     end
 end
 
+# adjoint(Q::HessenbergQ{<:Real})
+
 lmul!(Q::BlasHessenbergQ{T,false}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-rmul!(X::StridedMatrix{T}, Q::BlasHessenbergQ{T,false}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, Q::BlasHessenbergQ{T,false}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
 lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
-rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,false}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X))
 
 lmul!(Q::BlasHessenbergQ{T,true}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormtr!('L', Q.uplo, 'N', Q.factors, Q.τ, X)
-rmul!(X::StridedMatrix{T}, Q::BlasHessenbergQ{T,true}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, Q::BlasHessenbergQ{T,true}) where {T<:BlasFloat} =
     LAPACK.ormtr!('R', Q.uplo, 'N', Q.factors, Q.τ, X)
 lmul!(adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormtr!('L', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
-rmul!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}) where {T<:BlasFloat} =
+rmul!(X::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:BlasHessenbergQ{T,true}}) where {T<:BlasFloat} =
     (Q = adjQ.parent; LAPACK.ormtr!('R', Q.uplo, ifelse(T<:Real, 'T', 'C'), Q.factors, Q.τ, X))
 
 lmul!(Q::HessenbergQ{T}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T} = rmul!(X', Q')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
+rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, Q::HessenbergQ{T}) where {T} = lmul!(Q', X')'
 lmul!(adjQ::Adjoint{<:Any,<:HessenbergQ{T}}, X::Adjoint{T,<:StridedVecOrMat{T}}) where {T}  = rmul!(X', adjQ')'
-rmul!(X::Adjoint{T,<:StridedMatrix{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
+rmul!(X::Adjoint{T,<:StridedVecOrMat{T}}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T} = lmul!(adjQ', X')'
 
 # multiply x by the entries of M in the upper-k triangle, which contains
 # the entries of the upper-Hessenberg matrix H for k=-1
