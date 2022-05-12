@@ -1111,11 +1111,7 @@ function sortperm(v::AbstractVector;
             end
         end
     end
-    ax = axes(v, 1)
-    p = similar(Vector{eltype(ax)}, ax)
-    for (i,ind) in zip(eachindex(p), ax)
-        p[i] = ind
-    end
+    p = copymutable(eachindex(v))
     sort!(p, alg, Perm(ordr,v))
 end
 
