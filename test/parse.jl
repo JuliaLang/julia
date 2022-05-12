@@ -236,6 +236,13 @@ end
     @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
+@testset "issue #42616" begin
+    @test tryparse(Bool, "") === nothing
+    @test tryparse(Bool, " ") === nothing
+    @test_throws ArgumentError parse(Bool, "")
+    @test_throws ArgumentError parse(Bool, " ")
+end
+
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
     @test_throws ArgumentError tryparse(T, "0", base = base)
@@ -243,34 +250,6 @@ end
 
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
-
-# issue #16594
-@test Meta.parse("@x a + \nb") == Meta.parse("@x a +\nb")
-@test [1 +
-       1] == [2]
-@test [1 +1] == [1 1]
-
-@testset "issue #16594" begin
-    # note for the macro tests, order is important
-    # because the line number is included as part of the expression
-    # (i.e. both macros must start on the same line)
-    @test :(@test((1+1) == 2)) == :(@test 1 +
-                                          1 == 2)
-    @test :(@x 1 +1 -1) == :(@x(1, +1, -1))
-    @test :(@x 1 + 1 -1) == :(@x(1+1, -1))
-    @test :(@x 1 + 1 - 1) == :(@x(1 + 1 - 1))
-    @test :(@x(1 + 1 - 1)) == :(@x 1 +
-                                   1 -
-                                   1)
-    @test :(@x(1 + 1 + 1)) == :(@x 1 +
-                                   1 +
-                                   1)
-    @test :([x .+
-              y]) == :([x .+ y])
-end
-
-# line break in : expression disallowed
-@test_throws Meta.ParseError Meta.parse("[1 :\n2] == [1:2]")
 
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
@@ -309,14 +288,6 @@ end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
 end
 
-# added ⟂ to operator precedence (#24404)
-@test Meta.parse("a ⟂ b ⟂ c") == Expr(:comparison, :a, :⟂, :b, :⟂, :c)
-@test Meta.parse("a ⟂ b ∥ c") == Expr(:comparison, :a, :⟂, :b, :∥, :c)
-
-# only allow certain characters after interpolated vars (#25231)
-@test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
-@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
-
 @testset "parse and tryparse type inference" begin
     @inferred parse(Int, "12")
     @inferred parse(Float64, "12")
@@ -338,12 +309,6 @@ end
     @test_throws ArgumentError parse(Bool, "1000000000000000000000000000000000000000000000000000")
     @test_throws ArgumentError parse(Bool, "2")
     @test_throws ArgumentError parse(Bool, "02")
-end
-
-@testset "issue #30341" begin
-    @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
-    # Ensure dotting binary doesn't break dotting unary
-    @test Meta.parse(".~[1,2]") == Expr(:call, :.~, Expr(:vect, 1, 2))
 end
 
 @testset "inf and nan parsing" begin

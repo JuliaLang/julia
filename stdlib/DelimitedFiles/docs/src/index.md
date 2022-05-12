@@ -1,8 +1,6 @@
 # Delimited Files
 
-```@meta
-DocTestSetup = :(using DelimitedFiles)
-```
+Utilities for reading and writing delimited files, for example ".csv".
 
 ```@docs
 DelimitedFiles.readdlm(::Any, ::AbstractChar, ::Type, ::AbstractChar)
@@ -12,8 +10,4 @@ DelimitedFiles.readdlm(::Any, ::AbstractChar)
 DelimitedFiles.readdlm(::Any, ::Type)
 DelimitedFiles.readdlm(::Any)
 DelimitedFiles.writedlm
-```
-
-```@meta
-DocTestSetup = nothing
 ```

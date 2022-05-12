@@ -2,7 +2,7 @@
 
 using Serialization: serialize_cycle, deserialize_cycle, writetag,
                      serialize_typename, deserialize_typename,
-                     TYPENAME_TAG, reset_state, serialize_type
+                     TYPENAME_TAG, TASK_TAG, reset_state, serialize_type
 using Serialization.__deserialized_types__
 
 import Serialization: object_number, lookup_object_number, remember_object
@@ -123,7 +123,7 @@ end
 # d) is a bits type
 function syms_2b_sent(s::ClusterSerializer, identifier)
     lst = Symbol[]
-    check_syms = get(s.glbs_in_tnobj, identifier, [])
+    check_syms = get(s.glbs_in_tnobj, identifier, Symbol[])
     for sym in check_syms
         v = getfield(Main, sym)
 
@@ -158,10 +158,19 @@ end
 function deserialize_global_from_main(s::ClusterSerializer, sym)
     sym_isconst = deserialize(s)
     v = deserialize(s)
+    if isdefined(Main, sym) && (sym_isconst || isconst(Main, sym))
+        if isequal(getfield(Main, sym), v)
+            # same value; ok
+            return nothing
+        else
+            @warn "Cannot transfer global variable $sym; it already has a value."
+            return nothing
+        end
+    end
     if sym_isconst
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
-        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, sym, v)
+        setglobal!(Main, sym, v)
     end
     return nothing
 end
@@ -234,7 +243,7 @@ An exception is raised if a global constant is requested to be cleared.
 """
 function clear!(syms, pids=workers(); mod=Main)
     @sync for p in pids
-        @async remotecall_wait(clear_impl!, p, syms, mod)
+        @async_unwrap remotecall_wait(clear_impl!, p, syms, mod)
     end
 end
 clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)

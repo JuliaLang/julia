@@ -9,6 +9,9 @@ end
 module LineEditTest
     include("lineedit.jl")
 end
+module DocviewTest
+    include("docview.jl")
+end
 module TerminalMenusTest
     include("TerminalMenus/runtests.jl")
 end

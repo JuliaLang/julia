@@ -3,24 +3,68 @@
 ####################
 # LU Factorization #
 ####################
-struct LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
+"""
+    LU <: Factorization
+
+Matrix factorization type of the `LU` factorization of a square matrix `A`. This
+is the return type of [`lu`](@ref), the corresponding matrix factorization function.
+
+The individual components of the factorization `F::LU` can be accessed via [`getproperty`](@ref):
+
+| Component | Description                              |
+|:----------|:-----------------------------------------|
+| `F.L`     | `L` (unit lower triangular) part of `LU` |
+| `F.U`     | `U` (upper triangular) part of `LU`      |
+| `F.p`     | (right) permutation `Vector`             |
+| `F.P`     | (right) permutation `Matrix`             |
+
+Iterating the factorization produces the components `F.L`, `F.U`, and `F.p`.
+
+# Examples
+```jldoctest
+julia> A = [4 3; 6 3]
+2×2 Matrix{Int64}:
+ 4  3
+ 6  3
+
+julia> F = lu(A)
+LU{Float64, Matrix{Float64}, Vector{Int64}}
+L factor:
+2×2 Matrix{Float64}:
+ 1.0       0.0
+ 0.666667  1.0
+U factor:
+2×2 Matrix{Float64}:
+ 6.0  3.0
+ 0.0  1.0
+
+julia> F.L * F.U == A[F.p, :]
+true
+
+julia> l, u, p = lu(A); # destructuring via iteration
+
+julia> l == F.L && u == F.U && p == F.p
+true
+```
+"""
+struct LU{T,S<:AbstractMatrix{T},P<:AbstractVector{<:Integer}} <: Factorization{T}
     factors::S
-    ipiv::Vector{BlasInt}
+    ipiv::P
     info::BlasInt
 
-    function LU{T,S}(factors, ipiv, info) where {T,S<:AbstractMatrix{T}}
+    function LU{T,S,P}(factors, ipiv, info) where {T, S<:AbstractMatrix{T}, P<:AbstractVector{<:Integer}}
         require_one_based_indexing(factors)
-        new{T,S}(factors, ipiv, info)
+        new{T,S,P}(factors, ipiv, info)
     end
 end
-function LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T}
-    LU{T,typeof(factors)}(factors, ipiv, info)
-end
-function LU{T}(factors::AbstractMatrix, ipiv::AbstractVector{<:Integer}, info::Integer) where {T}
-    LU(convert(AbstractMatrix{T}, factors),
-       convert(Vector{BlasInt}, ipiv),
-       BlasInt(info))
-end
+LU(factors::AbstractMatrix{T}, ipiv::AbstractVector{<:Integer}, info::BlasInt) where {T} =
+    LU{T,typeof(factors),typeof(ipiv)}(factors, ipiv, info)
+LU{T}(factors::AbstractMatrix, ipiv::AbstractVector{<:Integer}, info::Integer) where {T} =
+    LU(convert(AbstractMatrix{T}, factors), ipiv, BlasInt(info))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(LU{T,S}(factors::AbstractMatrix{T}, ipiv::AbstractVector{<:Integer},
+                   info::BlasInt) where {T,S},
+           LU{T,S,typeof(ipiv)}(factors, ipiv, info))
 
 # iteration for destructuring into components
 Base.iterate(S::LU) = (S.L, Val(:U))
@@ -32,22 +76,27 @@ adjoint(F::LU) = Adjoint(F)
 transpose(F::LU) = Transpose(F)
 
 # StridedMatrix
-function lu!(A::StridedMatrix{T}, pivot::Union{Val{false}, Val{true}} = Val(true);
-             check::Bool = true) where T<:BlasFloat
-    if pivot === Val(false)
-        return generic_lufact!(A, pivot; check = check)
-    end
+lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
+function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A)
     check && checknonsingular(lpt[3])
-    return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
+    return LU{T,typeof(lpt[1]),typeof(lpt[2])}(lpt[1], lpt[2], lpt[3])
 end
-function lu!(A::HermOrSym, pivot::Union{Val{false}, Val{true}} = Val(true); check::Bool = true)
+function lu!(A::StridedMatrix{<:BlasFloat}, pivot::NoPivot; check::Bool = true)
+    return generic_lufact!(A, pivot; check = check)
+end
+
+function lu!(A::HermOrSym, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
     copytri!(A.data, A.uplo, isa(A, Hermitian))
     lu!(A.data, pivot; check = check)
 end
+# for backward compatibility
+# TODO: remove towards Julia v2
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{true}; check::Bool = true) lu!(A, RowMaximum(); check=check)
+@deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, NoPivot(); check=check)
 
 """
-    lu!(A, pivot=Val(true); check = true) -> LU
+    lu!(A, pivot = RowMaximum(); check = true) -> LU
 
 `lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
@@ -57,23 +106,23 @@ element type of `A`, e.g. for integer types.
 # Examples
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  4.0  3.0
  6.0  3.0
 
 julia> F = lu!(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64, Matrix{Float64}, Vector{Int64}}
 L factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0       0.0
  0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  6.0  3.0
  0.0  1.0
 
 julia> iA = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
@@ -83,21 +132,24 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::StridedMatrix, pivot::Union{Val{false}, Val{true}} = Val(true); check::Bool = true) =
+lu!(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) =
     generic_lufact!(A, pivot; check = check)
-function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
-                         check::Bool = true) where {T,Pivot}
+function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum();
+                         check::Bool = true) where {T}
+    # Extract values
     m, n = size(A)
     minmn = min(m,n)
+
+    # Initialize variables
     info = 0
     ipiv = Vector{BlasInt}(undef, minmn)
     @inbounds begin
         for k = 1:minmn
             # find index max
             kp = k
-            if Pivot
-                amax = abs(zero(T))
-                for i = k:m
+            if pivot === RowMaximum() && k < m
+                amax = abs(A[k, k])
+                for i = k+1:m
                     absi = abs(A[i,k])
                     if absi > amax
                         kp = i
@@ -131,15 +183,8 @@ function generic_lufact!(A::StridedMatrix{T}, ::Val{Pivot} = Val(true);
             end
         end
     end
-    check && checknonsingular(info)
-    return LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
-end
-
-# floating point types doesn't have to be promoted for LU, but should default to pivoting
-function lu(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
-            pivot::Union{Val{false}, Val{true}} = Val(true);
-            check::Bool = true) where {T<:AbstractFloat}
-    lu!(copy(A), pivot; check = check)
+    check && checknonsingular(info, pivot)
+    return LU{T,typeof(A),typeof(ipiv)}(A, ipiv, convert(BlasInt, info))
 end
 
 function lutype(T::Type)
@@ -163,7 +208,7 @@ end
 
 # for all other types we must promote to a type which is stable under division
 """
-    lu(A, pivot=Val(true); check = true) -> F::LU
+    lu(A, pivot = RowMaximum(); check = true) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -173,10 +218,10 @@ validity (via [`issuccess`](@ref)) lies with the user.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`. If
-pivoting is chosen (default) the element type should also support `abs` and
-`<`.
+pivoting is chosen (default) the element type should also support [`abs`](@ref) and
+[`<`](@ref). Pivoting can be turned off by passing `pivot = NoPivot()`.
 
-The individual components of the factorization `F` can be accessed via `getproperty`:
+The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
 | Component | Description                         |
 |:----------|:------------------------------------|
@@ -206,20 +251,20 @@ The relationship between `F` and `A` is
 # Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  6  3
 
 julia> F = lu(A)
-LU{Float64,Array{Float64,2}}
+LU{Float64, Matrix{Float64}, Vector{Int64}}
 L factor:
-2×2 Array{Float64,2}:
- 1.0  0.0
- 1.5  1.0
+2×2 Matrix{Float64}:
+ 1.0       0.0
+ 0.666667  1.0
 U factor:
-2×2 Array{Float64,2}:
- 4.0   3.0
- 0.0  -1.5
+2×2 Matrix{Float64}:
+ 6.0  3.0
+ 0.0  1.0
 
 julia> F.L * F.U == A[F.p, :]
 true
@@ -230,27 +275,16 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Union{Val{false}, Val{true}};
-            check::Bool = true) where T
-    S = lutype(T)
-    AA = similar(A, S)
-    copyto!(AA, A)
-    lu!(AA, pivot; check = check)
+function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T}
+    lu!(_lucopy(A, lutype(T)), pivot; check = check)
 end
-# We can't assume an ordered field so we first try without pivoting
-function lu(A::AbstractMatrix{T}; check::Bool = true) where T
-    S = lutype(T)
-    AA = similar(A, S)
-    copyto!(AA, A)
-    F = lu!(AA, Val(false); check = false)
-    if issuccess(F)
-        return F
-    else
-        AA = similar(A, S)
-        copyto!(AA, A)
-        return lu!(AA, Val(true); check = check)
-    end
-end
+# TODO: remove for Julia v2.0
+@deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
+@deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
+
+_lucopy(A::AbstractMatrix, T) = copy_similar(A, T)
+_lucopy(A::HermOrSym, T)      = copymutable_oftype(A, T)
+_lucopy(A::Tridiagonal, T)    = copymutable_oftype(A, T)
 
 lu(S::LU) = S
 function lu(x::Number; check::Bool=true)
@@ -261,13 +295,13 @@ end
 
 function LU{T}(F::LU) where T
     M = convert(AbstractMatrix{T}, F.factors)
-    LU{T,typeof(M)}(M, F.ipiv, F.info)
+    LU{T,typeof(M),typeof(F.ipiv)}(M, F.ipiv, F.info)
 end
-LU{T,S}(F::LU) where {T,S} = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
+LU{T,S,P}(F::LU) where {T,S,P} = LU{T,S,P}(convert(S, F.factors), convert(P, F.ipiv), F.info)
 Factorization{T}(F::LU{T}) where {T} = F
 Factorization{T}(F::LU) where {T} = LU{T}(F)
 
-copy(A::LU{T,S}) where {T,S} = LU{T,S}(copy(A.factors), copy(A.ipiv), A.info)
+copy(A::LU{T,S,P}) where {T,S,P} = LU{T,S,P}(copy(A.factors), copy(A.ipiv), A.info)
 
 size(A::LU)    = size(getfield(A, :factors))
 size(A::LU, i) = size(getfield(A, :factors), i)
@@ -283,15 +317,15 @@ end
 
 function getproperty(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     m, n = size(F)
-    if d == :L
+    if d === :L
         L = tril!(getfield(F, :factors)[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
-    elseif d == :U
+    elseif d === :U
         return triu!(getfield(F, :factors)[1:min(m,n), 1:n])
-    elseif d == :p
+    elseif d === :p
         return ipiv2perm(getfield(F, :ipiv), m)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, m, m)[:,invperm(F.p)]
     else
         getfield(F, d)
@@ -395,12 +429,28 @@ function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOr
     _apply_inverse_ipiv_rows!(A, B)
 end
 
-\(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-\(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-\(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
+(\)(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+(\)(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
+(\)(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
     LAPACK.getrs!('C', A.parent.factors, A.parent.ipiv, copy(B))
-\(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
+(\)(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, copy(B))
+
+function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
+    T = promote_type(eltype(A), eltype(F))
+    return adjoint(ldiv!(F.parent, copymutable_oftype(adjoint(A), T)))
+end
+# To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
+(/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
+(/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
+function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
+    T = promote_type(eltype(trA), eltype(F))
+    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
+end
+function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
+    T = promote_type(eltype(trA), eltype(F))
+    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
+end
 
 function det(F::LU{T}) where T
     n = checksquare(F)
@@ -441,24 +491,22 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
     ldiv!(A.factors, copy(A), Matrix{T}(I, size(A, 1), size(A, 1)))
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
-function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
-    if p != 1 && p != Inf
-        throw(ArgumentError("p must be either 1 or Inf"))
-    end
-    return inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, normA))
-end
-
 # Tridiagonal
 
 # See dgttrf.f
-function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true);
-             check::Bool = true) where {T,V}
+function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}
+    # Extract values
     n = size(A, 1)
+
+    # Initialize variables
     info = 0
     ipiv = Vector{BlasInt}(undef, n)
     dl = A.dl
     d = A.d
     du = A.du
+    if dl === du
+        throw(ArgumentError("off-diagonals of `A` must not alias"))
+    end
     du2 = fill!(similar(d, n-2), 0)::V
 
     @inbounds begin
@@ -467,7 +515,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
+            if pivot === NoPivot() || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -490,7 +538,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
         if n > 1
             i = n-1
-            if pivot === Val(false) || abs(d[i]) >= abs(dl[i])
+            if pivot === NoPivot() || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact
@@ -515,15 +563,15 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{Val{false}, Val{true}} = Val(true
         end
     end
     B = Tridiagonal{T,V}(dl, d, du, du2)
-    check && checknonsingular(info)
-    return LU{T,Tridiagonal{T,V}}(B, ipiv, convert(BlasInt, info))
+    check && checknonsingular(info, pivot)
+    return LU{T,Tridiagonal{T,V},typeof(ipiv)}(B, ipiv, convert(BlasInt, info))
 end
 
 factorize(A::Tridiagonal) = lu(A)
 
 function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
     m, n = size(F)
-    if d == :L
+    if d === :L
         dl = getfield(getfield(F, :factors), :dl)
         L = Array(Bidiagonal(fill!(similar(dl, n), one(T)), dl, d))
         for i = 2:n
@@ -532,15 +580,15 @@ function getproperty(F::LU{T,Tridiagonal{T,V}}, d::Symbol) where {T,V}
             L[i, 1:i - 1] = tmp
         end
         return L
-    elseif d == :U
+    elseif d === :U
         U = Array(Bidiagonal(getfield(getfield(F, :factors), :d), getfield(getfield(F, :factors), :du), d))
         for i = 1:n - 2
             U[i,i + 2] = getfield(getfield(F, :factors), :du2)[i]
         end
         return U
-    elseif d == :p
+    elseif d === :p
         return ipiv2perm(getfield(F, :ipiv), m)
-    elseif d == :P
+    elseif d === :P
         return Matrix{T}(I, m, m)[:,invperm(F.p)]
     end
     return getfield(F, d)
@@ -616,7 +664,7 @@ function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVec
 end
 
 # Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
-function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(adjA::Adjoint{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
     require_one_based_indexing(B)
     A = adjA.parent
     n = size(A,1)
@@ -652,7 +700,9 @@ function ldiv!(adjA::Adjoint{<:Any,LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat)
     return B
 end
 
-/(B::AbstractMatrix, A::LU) = copy(transpose(transpose(A) \ transpose(B)))
+rdiv!(B::AbstractMatrix, A::LU) = transpose(ldiv!(transpose(A), transpose(B)))
+rdiv!(B::AbstractMatrix, A::Transpose{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
+rdiv!(B::AbstractMatrix, A::Adjoint{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]

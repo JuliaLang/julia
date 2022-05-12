@@ -49,7 +49,8 @@ slow, we highly recommend reading through the [Performance Tips](@ref man-perfor
 else. Once you understand how Julia works, it's easy to write code that's nearly as fast as C.
 
 Julia features optional typing, multiple dispatch, and good performance, achieved using type inference
-and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation),
+and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation) (and
+[optional ahead-of-time compilation](https://github.com/JuliaLang/PackageCompiler.jl)),
 implemented using [LLVM](https://en.wikipedia.org/wiki/Low_Level_Virtual_Machine). It is multi-paradigm,
 combining features of imperative, functional, and object-oriented programming. Julia provides
 ease and expressiveness for high-level numerical computing, in the same way as languages such
@@ -61,7 +62,7 @@ and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
 
 The most significant departures of Julia from typical dynamic languages are:
 
-  * The core language imposes very little; Julia Base and the standard library is written in Julia itself, including
+  * The core language imposes very little; Julia Base and the standard library are written in Julia itself, including
     primitive operations like integer arithmetic
   * A rich language of types for constructing and describing objects, that can also optionally be
     used to make type declarations

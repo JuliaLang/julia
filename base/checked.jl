@@ -2,18 +2,26 @@
 
 # Support for checked integer arithmetic
 
+"""
+    Checked
+
+The Checked module provides arithmetic functions for the built-in signed and unsigned
+Integer types which throw an error when an overflow occurs. They are named like `checked_sub`,
+`checked_div`, etc. In addition, `add_with_overflow`, `sub_with_overflow`, `mul_with_overflow`
+return both the unchecked results and a boolean value denoting the presence of an overflow.
+"""
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
        checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
-       add_with_overflow, sub_with_overflow, mul_with_overflow
+       checked_length, add_with_overflow, sub_with_overflow, mul_with_overflow
 
 import Core.Intrinsics:
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import ..no_op_err, ..@_inline_meta, ..@_noinline_meta
+import ..no_op_err, ..@inline, ..@noinline, ..checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -86,7 +94,7 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_neg(x::T) where T<:Integer
     checked_sub(T(0), x)
 end
-throw_overflowerr_negation(x) = (@_noinline_meta;
+throw_overflowerr_negation(x) = (@noinline;
     throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
 if BrokenSignedInt != Union{}
 function checked_neg(x::BrokenSignedInt)
@@ -115,9 +123,10 @@ function checked_abs end
 
 function checked_abs(x::SignedInt)
     r = ifelse(x<0, -x, x)
-    r<0 && throw(OverflowError(string("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))))
-    r
- end
+    r<0 || return r
+    msg = LazyString("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))
+    throw(OverflowError(msg))
+end
 checked_abs(x::UnsignedInt) = x
 checked_abs(x::Bool) = x
 
@@ -150,8 +159,8 @@ end
 end
 
 
-throw_overflowerr_binaryop(op, x, y) = (@_noinline_meta;
-    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
+throw_overflowerr_binaryop(op, x, y) = (@noinline;
+    throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)
@@ -161,7 +170,7 @@ Calculates `x+y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_add(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = add_with_overflow(x, y)
     b && throw_overflowerr_binaryop(:+, x, y)
     z
@@ -218,7 +227,7 @@ Calculates `x-y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_sub(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = sub_with_overflow(x, y)
     b && throw_overflowerr_binaryop(:-, x, y)
     z
@@ -283,7 +292,7 @@ Calculates `x*y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_mul(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = mul_with_overflow(x, y)
     b && throw_overflowerr_binaryop(:*, x, y)
     z
@@ -348,5 +357,13 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
+
+"""
+    Base.checked_length(r)
+
+Calculates `length(r)`, but may check for overflow errors where applicable when
+the result doesn't fit into `Union{Integer(eltype(r)),Int}`.
+"""
+checked_length(r) = length(r) # for most things, length doesn't error
 
 end

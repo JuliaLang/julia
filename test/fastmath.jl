@@ -60,9 +60,6 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         @test @fastmath(cmp(two,two)) == cmp(two,two)
         @test @fastmath(cmp(two,three)) == cmp(two,three)
         @test @fastmath(cmp(three,two)) == cmp(three,two)
-        @test @fastmath(one/zero) == convert(T,Inf)
-        @test @fastmath(-one/zero) == -convert(T,Inf)
-        @test isnan(@fastmath(zero/zero)) # must not throw
 
         for x in (zero, two, convert(T, Inf), convert(T, NaN))
             @test @fastmath(isfinite(x))
@@ -234,4 +231,31 @@ end
 
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+end
+
+@testset "sincos fall-backs" begin
+    struct FloatWrapper
+        inner::Float64
+    end
+    Base.sin(outer::FloatWrapper) = sin(outer.inner)
+    Base.cos(outer::FloatWrapper) = cos(outer.inner)
+    for zilch in (FloatWrapper(0.0), 0, 0 + 0 * im)
+        @test (@fastmath sincos(zilch)) == (0, 1)
+    end
+end
+
+@testset "non-numeric fallbacks" begin
+    @test (@fastmath :(:sin)) == :(:sin)
+    @test (@fastmath "a" * "b") == "ab"
+    @test (@fastmath "a" ^ 2) == "aa"
+end
+
+
+@testset "exp overflow and underflow" begin
+    for T in (Float32,Float64)
+        for func in (@fastmath exp2,exp,exp10)
+            @test func(T(2000)) == T(Inf)
+            @test func(T(-2000)) == T(0)
+        end
+    end
 end
