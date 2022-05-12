@@ -334,3 +334,12 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     stderr = IOBuffer()
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
 end
+
+@testset "code_ircode" begin
+    @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
+    @test Base.code_ircode() do f
+        f()
+        f()
+        f()
+    end |> only |> first isa Compiler.IRCode
+end
