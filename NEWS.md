@@ -59,6 +59,7 @@ Library changes
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
+* `propertynames(::Type)` now returns an empty tuple. To obtain the internal field names which were previously returned, use `propertynames(T, true)`.
 
 Standard library changes
 ------------------------

@@ -231,6 +231,8 @@ mutable struct TLayout
     y::Int16
     z::Int32
 end
+@test propertynames(TLayout) === ()
+@test !isempty(propertynames(TLayout, true))
 tlayout = TLayout(5,7,11)
 @test fieldnames(TLayout) == (:x, :y, :z) == Base.propertynames(tlayout)
 @test hasfield(TLayout, :y)

@@ -1742,6 +1742,7 @@ See also: [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
+propertynames(T::Type, private::Bool=false) = private ? fieldnames(typeof(T)) : ()
 propertynames(x, private::Bool) = propertynames(x) # ignore private flag by default
 
 """
