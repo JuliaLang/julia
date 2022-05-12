@@ -3,8 +3,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-const JL_DUMMY = 0
-const JL_O_ACCMODE     = O_ACCMODE
 const JL_O_WRONLY      = O_WRONLY
 const JL_O_RDONLY      = O_RDONLY
 const JL_O_RDWR        = O_RDWR
