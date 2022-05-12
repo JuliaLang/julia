@@ -1584,7 +1584,7 @@ end
 end
 
 module IRUtils
-    include(normpath(@__DIR__, "./compiler/irutils.jl"))
+    include("compiler/irutils.jl")
 end
 
 @testset "strides for ReshapedArray" begin
@@ -1599,7 +1599,7 @@ end
         return true
     end
     # Type-based contiguous Check
-    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
+    a = vec(reinterpret(reshape, Int16, reshape(view(reinterpret(Int32, randn(10)), 2:11), 5, :)))
     f(a) = only(strides(a));
     @test IRUtils.fully_eliminated(f, Base.typesof(a)) && f(a) == 1
     # General contiguous check
@@ -1674,14 +1674,14 @@ end
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
     # Issue #44040
-    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta,tc))
-    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc,tc))
-    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta,tc,tb))
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
     # Ranges && CartesianIndices
-    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10,Base.OneTo(10),1.0:2.0,LinRange(1.0,2.0,2),1:2:10,CartesianIndices((1:2:10,1:2:10))))
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
-    @inline _has_offset_axes(A) = @inline any(x->Int(first(x))::Int != 1, axes(A))
+    @inline _has_offset_axes(A) = @inline any(x -> Int(first(x))::Int != 1, axes(A))
     @inline _has_offset_axes(As...) = @inline any(_has_offset_axes, As)
-    a, b = zeros(2,2,2), zeros(2,2)
-    @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a,a,b,b))
+    a, b = zeros(2, 2, 2), zeros(2, 2)
+    @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a, a, b, b))
 end

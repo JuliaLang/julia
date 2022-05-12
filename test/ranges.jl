@@ -2031,9 +2031,11 @@ end
 end
 
 @testset "length(StepRange()) type stability" begin
-    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0))) #bigints
-    typeof(length(StepRange(Int8(1),Int128(1),Int8(1)))) == typeof(length(StepRange(Int8(1),Int128(1),Int8(0)))) #smallints
-    typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
+    for SR in (StepRange{Int,Int128}, StepRange{Int8,Int128})
+        r1, r2 = SR(1, 1, 1), SR(1, 1, 0)
+        @test typeof(length(r1)) == typeof(checked_length(r1)) ==
+              typeof(length(r2)) == typeof(checked_length(r2))
+    end
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin
@@ -2350,10 +2352,8 @@ end
 
 @testset "firstindex(::StepRange{T,T})" begin
     test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
-    for T1 in (Int8,Int16,Int32,Int64,Int128), T2 in (Int8,Int16,Int32,Int64,Int128)
-        for T in (T1, unsigned(T1)), S in (T2, unsigned(T2))
-            @test test_firstindex(StepRange{T,S}(1,1,1))
-            @test test_firstindex(StepRange{T,S}(1,1,0))
-        end
+    for T in Base.BitInteger_types, S in Base.BitInteger_types
+        @test test_firstindex(StepRange{T,S}(1, 1, 1))
+        @test test_firstindex(StepRange{T,S}(1, 1, 0))
     end
 end
