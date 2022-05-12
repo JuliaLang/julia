@@ -360,6 +360,7 @@ macro capture_stdout(ex)
             redirect_stdout(f) do
                 $(esc(ex))
             end
+            seekstart(f)
             read(f, String)
         end
     end
