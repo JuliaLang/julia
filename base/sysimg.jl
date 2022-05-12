@@ -11,14 +11,13 @@ import Base.MainInclude: eval, include
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "Base.jl")))
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
-# set up depot & load paths to be able to find stdlib packages
-@eval Base creating_sysimg = true
-Base.init_depot_path()
-Base.init_load_path()
-
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
 let
+    # set up depot & load paths to be able to find stdlib packages
+    push!(empty!(LOAD_PATH), "@stdlib")
+    Base.append_default_depot_path!(DEPOT_PATH)
+
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [

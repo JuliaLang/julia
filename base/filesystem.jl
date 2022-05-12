@@ -91,7 +91,7 @@ uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 include("path.jl")
 include("stat.jl")
 include("file.jl")
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
+include("../file_constants.jl")
 
 ## Operations with File (fd) objects ##
 

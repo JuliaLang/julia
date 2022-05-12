@@ -2,7 +2,7 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
+include("../uv_constants.jl")
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
