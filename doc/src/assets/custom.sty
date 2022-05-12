@@ -40,6 +40,7 @@ contents={
 }}%
 
 % ---- Heading font style
-\DeclareFixedFont{\MainHeading}{T1}{phv}{b}{n}{1.5cm}
-\DeclareFixedFont{\SecondaryHeading}{T1}{phv}{b}{n}{0.8cm}
+\usepackage{anyfontsize}
+\newcommand{\MainHeading}{\fontspec{DejaVu Sans}\fontsize{40}{40}\selectfont\bfseries}
+\newcommand{\SecondaryHeading}{\fontspec{DejaVu Sans}\LARGE}
 %% cover page END -------------------------------------------------------------
