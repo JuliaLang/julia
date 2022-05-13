@@ -1567,7 +1567,7 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
     if (!jl_is_datatype(super))
         error = "can only subtype data types";
     else if (tt->super != NULL)
-        error = "";
+        error = "type already has a supertype";
     else if (tt->name == ((jl_datatype_t*)super)->name)
         error = "a type cannot subtype itself";
     else if (jl_is_tuple_type(super))
