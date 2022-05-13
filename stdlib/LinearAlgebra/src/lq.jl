@@ -120,7 +120,7 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::AbstractMatrix{T}) where {T}  = lq!(copy_oftype(A, lq_eltype(T)))
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copymutable_oftype(A, lq_eltype(T)))
 lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
 
 lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
@@ -197,7 +197,7 @@ function lmul!(A::LQ, B::StridedVecOrMat)
 end
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    _cut_B(lmul!(convert(Factorization{TAB}, A), copy_oftype(B, TAB)), 1:size(A,1))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copymutable_oftype(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q
@@ -205,7 +205,7 @@ end
 lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    lmul!(AbstractMatrix{TAB}(A), copy_oftype(B, TAB))
+    lmul!(AbstractMatrix{TAB}(A), copymutable_oftype(B, TAB))
 end
 
 ### QcB
@@ -218,7 +218,7 @@ function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        lmul!(adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
+        lmul!(adjoint(AbstractMatrix{TAB}(A)), copymutable_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         lmul!(adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
@@ -269,7 +269,7 @@ rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCo
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return rmul!(copy_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
+    return rmul!(copymutable_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
@@ -293,7 +293,7 @@ end
 function *(A::StridedVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 2) == size(Q.factors, 2)
-        C = copy_oftype(A, TR)
+        C = copymutable_oftype(A, TR)
     elseif size(A, 2) == size(Q.factors, 1)
         C = zeros(TR, size(A, 1), size(Q.factors, 2))
         copyto!(C, 1, A, 1, length(A))

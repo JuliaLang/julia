@@ -591,6 +591,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
         return;
     }
+    assert(codeinst != NULL); // handle by jl_serialize_generic, but this makes clang-sa happy
 
     int validate = 0;
     if (codeinst->max_world == ~(size_t)0)
@@ -618,8 +619,8 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
 
     write_uint8(s->s, TAG_CODE_INSTANCE);
     write_uint8(s->s, flags);
-    write_uint8(s->s, codeinst->ipo_purity_bits);
-    write_uint8(s->s, codeinst->purity_bits);
+    write_uint32(s->s, codeinst->ipo_purity_bits);
+    write_uint32(s->s, codeinst->purity_bits);
     jl_serialize_value(s, (jl_value_t*)codeinst->def);
     if (write_ret_type) {
         jl_serialize_value(s, codeinst->inferred);
@@ -1071,6 +1072,7 @@ static void serialize_htable_keys(jl_serializer_state *s, htable_t *ht, int nite
     write_int32(s->s, nitems);
     void **table = ht->table;
     size_t i, n = 0, sz = ht->size;
+    (void)n;
     for (i = 0; i < sz; i += 2) {
         if (table[i+1] != HT_NOTFOUND) {
             jl_serialize_value(s, (jl_value_t*)table[i]);
@@ -1830,8 +1832,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     int flags = read_uint8(s->s);
     int validate = (flags >> 0) & 3;
     int constret = (flags >> 2) & 1;
-    codeinst->ipo_purity_bits = read_uint8(s->s);
-    codeinst->purity_bits = read_uint8(s->s);
+    codeinst->ipo_purity_bits = read_uint32(s->s);
+    codeinst->purity_bits = read_uint32(s->s);
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
     codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
@@ -2008,6 +2010,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             jl_gc_wb(tn, tn->names);
             tn->wrapper = jl_deserialize_value(s, &tn->wrapper);
             jl_gc_wb(tn, tn->wrapper);
+            tn->Typeofwrapper = NULL;
             tn->mt = (jl_methtable_t*)jl_deserialize_value(s, (jl_value_t**)&tn->mt);
             jl_gc_wb(tn, tn->mt);
             ios_read(s->s, (char*)&tn->hash, sizeof(tn->hash));
@@ -2535,8 +2538,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
                 jl_module_t *mod = (jl_module_t*)v;
                 if (mod->parent == mod) // top level modules handled by loader
                     break;
-                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
-                jl_declare_constant(b); // this can throw
+                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1); // this can throw
+                jl_declare_constant(b); // this can also throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
                         jl_errorf("Invalid redefinition of constant %s.",

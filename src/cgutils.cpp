@@ -2,6 +2,49 @@
 
 // utility procedures used in code generation
 
+// Mark our stats as being from cgutils
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_cgutils"
+
+STATISTIC(EmittedPointerFromObjref, "Number of emitted pointer_from_objref calls");
+STATISTIC(EmittedPointerBitcast, "Number of emitted pointer bitcasts");
+STATISTIC(EmittedNthPtrAddr, "Number of emitted nth pointer address instructions");
+STATISTIC(EmittedTypeof, "Number of emitted typeof instructions");
+STATISTIC(EmittedErrors, "Number of emitted errors");
+STATISTIC(EmittedConditionalErrors, "Number of emitted conditional errors");
+STATISTIC(EmittedExceptions, "Number of emitted exceptions");
+STATISTIC(EmittedConditionalExceptions, "Number of emitted conditional exceptions");
+STATISTIC(EmittedNullchecks, "Number of emitted nullchecks");
+STATISTIC(EmittedGuards, "Number of emitted guards");
+STATISTIC(EmittedIsaUnions, "Number of emitted isa-union checks");
+STATISTIC(EmittedIsa, "Number of emitted isa checks");
+STATISTIC(EmittedTypechecks, "Number of emitted typechecks");
+STATISTIC(EmittedConcretechecks, "Number of emitted concrete checks");
+STATISTIC(EmittedBoundschecks, "Number of emitted boundschecks");
+STATISTIC(EmittedLockstates, "Number of emitted lockstate value calls");
+STATISTIC(EmittedMemcpys, "Number of emitted memcpy instructions");
+STATISTIC(SkippedMemcpys, "Number of skipped memcpy instructions");
+STATISTIC(EmittedGetfieldUnknowns, "Number of unknown getfield calls emitted");
+STATISTIC(EmittedGetfieldKnowns, "Number of known getfield calls emitted");
+STATISTIC(EmittedSetfield, "Number of setfield calls emitted");
+STATISTIC(EmittedUnionLoads, "Number of union loads emitted");
+STATISTIC(EmittedVarargsLength, "Number of varargs length calls emitted");
+STATISTIC(EmittedArraysize, "Number of arraysize calls emitted");
+STATISTIC(EmittedArraylen, "Number of array length calls emitted");
+STATISTIC(EmittedArrayptr, "Number of array data pointer loads emitted");
+STATISTIC(EmittedArrayflags, "Number of arrayflags calls emitted");
+STATISTIC(EmittedArrayNDims, "Number of array ndims calls emitted");
+STATISTIC(EmittedArrayElsize, "Number of array elsize calls emitted");
+STATISTIC(EmittedArrayOffset, "Number of array offset calls emitted");
+STATISTIC(EmittedArrayNdIndex, "Number of array nd index calls emitted");
+STATISTIC(EmittedBoxes, "Number of box operations emitted");
+STATISTIC(EmittedCPointerChecks, "Number of C pointer checks emitted");
+STATISTIC(EmittedAllocObjs, "Number of object allocations emitted");
+STATISTIC(EmittedWriteBarriers, "Number of write barriers emitted");
+STATISTIC(EmittedNewStructs, "Number of new structs emitted");
+STATISTIC(EmittedSignalFences, "Number of signal fences emitted");
+STATISTIC(EmittedDeferSignal, "Number of deferred signals emitted");
+
 static Value *track_pjlvalue(jl_codectx_t &ctx, Value *V)
 {
     assert(V->getType() == ctx.types().T_pjlvalue);
@@ -221,6 +264,7 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     Function *F = prepare_call(pointer_from_objref_func);
     CallInst *Call = ctx.builder.CreateCall(F, V);
     Call->setAttributes(F->getAttributes());
+    ++EmittedPointerFromObjref;
     return Call;
 }
 
@@ -310,7 +354,7 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
 {
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
-    if (!imaging_mode) {
+    if (!ctx.emission_context.imaging) {
         // TODO: this is an optimization, but is it useful or premature
         // (it'll block any attempt to cache these, but can be simply deleted)
         Module *M = jl_Module;
@@ -431,7 +475,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 {
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
-    if (!imaging_mode)
+    if (!ctx.emission_context.imaging)
         return literal_static_pointer_val(p, ctx.types().T_pjlvalue);
     Value *pgv = literal_pointer_val_slot(ctx, p);
     return tbaa_decorate(ctx.tbaa().tbaa_const, maybe_mark_load_dereferenceable(
@@ -445,7 +489,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
-    if (!imaging_mode)
+    if (!ctx.emission_context.imaging)
         return literal_static_pointer_val(p, ctx.types().T_pjlvalue);
     // bindings are prefixed with jl_bnd#
     Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
@@ -461,6 +505,7 @@ static Value *emit_bitcast(jl_codectx_t &ctx, Value *v, Type *jl_value)
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
         Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
+        ++EmittedPointerBitcast;
         return ctx.builder.CreateBitCast(v, jl_value_addr);
     }
     else {
@@ -474,25 +519,22 @@ static Value *maybe_bitcast(jl_codectx_t &ctx, Value *V, Type *to) {
     return V;
 }
 
-static Value *julia_binding_gv(jl_codectx_t &ctx, Value *bv)
+static Value *julia_binding_pvalue(jl_codectx_t &ctx, Value *bv)
 {
+    bv = emit_bitcast(ctx, bv, ctx.types().T_pprjlvalue);
     Value *offset = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_binding_t, value) / sizeof(size_t));
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, bv, offset);
 }
 
 static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
-    // emit a literal_pointer_val to the value field of a jl_binding_t
+    // emit a literal_pointer_val to a jl_binding_t
     // binding->value are prefixed with *
-    Value *bv;
-    if (imaging_mode)
-        bv = emit_bitcast(ctx,
-                tbaa_decorate(ctx.tbaa().tbaa_const,
-                              ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, julia_pgv(ctx, "*", b->name, b->owner, b), Align(sizeof(void*)))),
-                ctx.types().T_pprjlvalue);
+    if (ctx.emission_context.imaging)
+        return tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue,
+                    julia_pgv(ctx, "*", b->name, b->owner, b), Align(sizeof(void*))));
     else
-        bv = ConstantExpr::getBitCast(literal_static_pointer_val(b, ctx.types().T_pjlvalue), ctx.types().T_pprjlvalue);
-    return julia_binding_gv(ctx, bv);
+        return literal_static_pointer_val(b, ctx.types().T_pjlvalue);
 }
 
 // --- mapping between julia and llvm types ---
@@ -805,7 +847,7 @@ static bool is_uniontype_allunboxed(jl_value_t *typ)
     return for_each_uniontype_small([&](unsigned, jl_datatype_t*) {}, typ, counter);
 }
 
-static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p);
+static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull=false);
 
 static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 {
@@ -827,6 +869,7 @@ static unsigned get_box_tindex(jl_datatype_t *jt, jl_value_t *ut)
 
 static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, ssize_t n, bool gctracked = true)
 {
+    ++EmittedNthPtrAddr;
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_prjlvalue,
             emit_bitcast(ctx, maybe_decay_tracked(ctx, v), ctx.types().T_pprjlvalue),
@@ -835,6 +878,7 @@ static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, ssize_t n, bool gctr
 
 static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, Value *idx)
 {
+    ++EmittedNthPtrAddr;
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_prjlvalue,
             emit_bitcast(ctx, maybe_decay_tracked(ctx, v), ctx.types().T_pprjlvalue),
@@ -858,15 +902,9 @@ static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNo
  }
 
 static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v);
+static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull);
 
-// Returns ctx.types().T_prjlvalue
-static Value *emit_typeof(jl_codectx_t &ctx, Value *tt)
-{
-    assert(tt != NULL && !isa<AllocaInst>(tt) && "expected a conditionally boxed value");
-    return ctx.builder.CreateCall(prepare_call(jl_typeof_func), {tt});
-}
-
-static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
+static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull)
 {
     // given p, compute its type
     if (p.constant)
@@ -879,18 +917,18 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
                 return mark_julia_const(ctx, jl_typeof(tp));
             }
         }
-        return mark_julia_type(ctx, emit_typeof(ctx, p.V), true, jl_datatype_type);
+        return mark_julia_type(ctx, emit_typeof(ctx, p.V, maybenull), true, jl_datatype_type);
     }
     if (p.TIndex) {
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
-        Value *datatype_or_p = imaging_mode ? Constant::getNullValue(ctx.types().T_ppjlvalue) : Constant::getNullValue(ctx.types().T_prjlvalue);
+        Value *datatype_or_p = ctx.emission_context.imaging ? Constant::getNullValue(ctx.types().T_ppjlvalue) : Constant::getNullValue(ctx.types().T_prjlvalue);
         unsigned counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
                 Value *cmp = ctx.builder.CreateICmpEQ(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), idx));
                 Value *ptr;
-                if (imaging_mode) {
+                if (ctx.emission_context.imaging) {
                     ptr = literal_pointer_val_slot(ctx, (jl_value_t*)jt);
                 }
                 else {
@@ -901,7 +939,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             p.typ,
             counter);
         auto emit_unboxty = [&] () -> Value* {
-            if (imaging_mode)
+            if (ctx.emission_context.imaging)
                 return track_pjlvalue(
                     ctx, tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, datatype_or_p, Align(sizeof(void*)))));
             return datatype_or_p;
@@ -914,7 +952,7 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
             BasicBlock *mergeBB = BasicBlock::Create(ctx.builder.getContext(), "merge", ctx.f);
             ctx.builder.CreateCondBr(isnull, boxBB, unboxBB);
             ctx.builder.SetInsertPoint(boxBB);
-            auto boxTy = emit_typeof(ctx, p.Vboxed);
+            auto boxTy = emit_typeof(ctx, p.Vboxed, maybenull);
             ctx.builder.CreateBr(mergeBB);
             boxBB = ctx.builder.GetInsertBlock(); // could have changed
             ctx.builder.SetInsertPoint(unboxBB);
@@ -936,9 +974,9 @@ static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p)
 }
 
 // Returns ctx.types().T_prjlvalue
-static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p)
+static Value *emit_typeof_boxed(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull)
 {
-    return boxed(ctx, emit_typeof(ctx, p));
+    return boxed(ctx, emit_typeof(ctx, p, maybenull));
 }
 
 static Value *emit_datatype_types(jl_codectx_t &ctx, Value *dt)
@@ -1046,6 +1084,7 @@ static Value *emit_datatype_name(jl_codectx_t &ctx, Value *dt)
 
 static void just_emit_error(jl_codectx_t &ctx, Function *F, const std::string &txt)
 {
+    ++EmittedErrors;
     ctx.builder.CreateCall(F, stringConstPtr(ctx.emission_context, ctx.builder, txt));
 }
 
@@ -1065,6 +1104,7 @@ static void emit_error(jl_codectx_t &ctx, const std::string &txt)
 // DO NOT PASS IN A CONST CONDITION!
 static void error_unless(jl_codectx_t &ctx, Value *cond, const std::string &msg)
 {
+    ++EmittedConditionalErrors;
     BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
     BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
     ctx.builder.CreateCondBr(cond, passBB, failBB);
@@ -1078,6 +1118,7 @@ static void error_unless(jl_codectx_t &ctx, Value *cond, const std::string &msg)
 static void raise_exception(jl_codectx_t &ctx, Value *exc,
                             BasicBlock *contBB=nullptr)
 {
+    ++EmittedExceptions;
     ctx.builder.CreateCall(prepare_call(jlthrow_func), { mark_callee_rooted(ctx, exc) });
     ctx.builder.CreateUnreachable();
     if (!contBB) {
@@ -1092,6 +1133,7 @@ static void raise_exception(jl_codectx_t &ctx, Value *exc,
 // DO NOT PASS IN A CONST CONDITION!
 static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
 {
+    ++EmittedConditionalExceptions;
     BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(),"fail",ctx.f);
     BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(),"pass");
     ctx.builder.CreateCondBr(cond, passBB, failBB);
@@ -1101,6 +1143,7 @@ static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
 
 static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
+    ++EmittedNullchecks;
     return ctx.builder.CreateICmpNE(v, Constant::getNullValue(v->getType()));
 }
 
@@ -1125,6 +1168,7 @@ static Value *emit_guarded_test(jl_codectx_t &ctx, Value *ifnot, Value *defval, 
             return defval;
         return func();
     }
+    ++EmittedGuards;
     BasicBlock *currBB = ctx.builder.GetInsertBlock();
     BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "guard_pass", ctx.f);
     BasicBlock *exitBB = BasicBlock::Create(ctx.builder.getContext(), "guard_exit", ctx.f);
@@ -1172,6 +1216,24 @@ static Value *emit_nullcheck_guard2(jl_codectx_t &ctx, Value *nullcheck1,
                                  false, func);
     });
 }
+
+// Returns typeof(v), or null if v is a null pointer at run time and maybenull is true.
+// This is used when the value might have come from an undefined value (a PhiNode),
+// yet we try to read its type to compute a union index when moving the value (a PiNode).
+// Returns a ctx.types().T_prjlvalue typed Value
+static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull)
+{
+    ++EmittedTypeof;
+    assert(v != NULL && !isa<AllocaInst>(v) && "expected a conditionally boxed value");
+    Function *typeof = prepare_call(jl_typeof_func);
+    if (maybenull)
+        return emit_guarded_test(ctx, null_pointer_cmp(ctx, v), Constant::getNullValue(typeof->getReturnType()), [&] {
+            // e.g. emit_typeof(ctx, v)
+            return ctx.builder.CreateCall(typeof, {v});
+        });
+    return ctx.builder.CreateCall(typeof, {v});
+}
+
 
 static void emit_type_error(jl_codectx_t &ctx, const jl_cgval_t &x, Value *type, const std::string &msg)
 {
@@ -1223,6 +1285,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x,
 static void emit_isa_union(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type,
                            SmallVectorImpl<std::pair<std::pair<BasicBlock*,BasicBlock*>,Value*>> &bbs)
 {
+    ++EmittedIsaUnions;
     if (jl_is_uniontype(type)) {
         emit_isa_union(ctx, x, ((jl_uniontype_t*)type)->a, bbs);
         emit_isa_union(ctx, x, ((jl_uniontype_t*)type)->b, bbs);
@@ -1239,6 +1302,7 @@ static void emit_isa_union(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
 // Should agree with `_can_optimize_isa` above
 static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string *msg)
 {
+    ++EmittedIsa;
     // TODO: The subtype check below suffers from incorrectness issues due to broken
     // subtyping for kind types (see https://github.com/JuliaLang/julia/issues/27078). For
     // actual `isa` calls, this optimization should already have been performed upstream
@@ -1300,7 +1364,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "post_isa", ctx.f);
                 ctx.builder.CreateCondBr(isboxed, isaBB, postBB);
                 ctx.builder.SetInsertPoint(isaBB);
-                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed),
+                Value *istype_boxed = ctx.builder.CreateICmpEQ(emit_typeof(ctx, x.Vboxed, false),
                     track_pjlvalue(ctx, literal_pointer_val(ctx, intersected_type)));
                 ctx.builder.CreateBr(postBB);
                 isaBB = ctx.builder.GetInsertBlock(); // could have changed
@@ -1356,12 +1420,27 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
             ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0)), false);
 }
 
+// If this might have been sourced from a PhiNode object, it is possible our
+// Vboxed pointer itself is null (undef) at runtime even if we thought we should
+// know exactly the type of the bytes that should have been inside.
+//
+// n.b. It is also possible the value is a ghost of some sort, and we will
+// declare that the pointer is legal (for zero bytes) even though it might be undef.
+static Value *emit_isa_and_defined(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
+{
+    return emit_nullcheck_guard(ctx, val.ispointer() ? val.V : nullptr, [&] {
+        return emit_isa(ctx, val, typ, nullptr).first;
+    });
+}
+
+
 static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *type, const std::string &msg)
 {
     Value *istype;
     bool handled_msg;
     std::tie(istype, handled_msg) = emit_isa(ctx, x, type, &msg);
     if (!handled_msg) {
+        ++EmittedTypechecks;
         BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
         BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
         ctx.builder.CreateCondBr(istype, passBB, failBB);
@@ -1387,6 +1466,7 @@ static Value *emit_isconcrete(jl_codectx_t &ctx, Value *typ)
 
 static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const std::string &msg)
 {
+    ++EmittedConcretechecks;
     assert(typ->getType() == ctx.types().T_prjlvalue);
     emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg);
     error_unless(ctx, emit_isconcrete(ctx, typ), msg);
@@ -1412,6 +1492,7 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
     Value *im1 = ctx.builder.CreateSub(i, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
 #if CHECK_BOUNDS==1
     if (bounds_check_enabled(ctx, boundscheck)) {
+        ++EmittedBoundschecks;
         Value *ok = ctx.builder.CreateICmpULT(im1, len);
         BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
         BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
@@ -1502,6 +1583,7 @@ Value *extract_first_ptr(jl_codectx_t &ctx, Value *V)
 
 static void emit_lockstate_value(jl_codectx_t &ctx, Value *strct, bool newstate)
 {
+    ++EmittedLockstates;
     Value *v = mark_callee_rooted(ctx, strct);
     ctx.builder.CreateCall(prepare_call(newstate ? jllockvalue_func : jlunlockvalue_func), v);
 }
@@ -1978,16 +2060,18 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
     // If the types are small and simple, use load and store directly.
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
+#ifndef JL_LLVM_OPAQUE_POINTERS
+    // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
     if (sz <= 64) {
         // The size limit is arbitrary but since we mainly care about floating points and
         // machine size vectors this should be enough.
         const DataLayout &DL = jl_Module->getDataLayout();
         auto srcty = cast<PointerType>(src->getType());
         //TODO unsafe nonopaque pointer
-        auto srcel = srcty->getElementType();
+        auto srcel = srcty->getPointerElementType();
         auto dstty = cast<PointerType>(dst->getType());
         //TODO unsafe nonopaque pointer
-        auto dstel = dstty->getElementType();
+        auto dstel = dstty->getPointerElementType();
         if (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
             src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
             srcel = srcel->getArrayElementType();
@@ -2012,13 +2096,16 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         if (directel) {
             auto val = tbaa_decorate(tbaa_src, ctx.builder.CreateAlignedLoad(directel, src, Align(align), is_volatile));
             tbaa_decorate(tbaa_dst, ctx.builder.CreateAlignedStore(val, dst, Align(align), is_volatile));
+            ++SkippedMemcpys;
             return;
         }
     }
+#endif
     // the memcpy intrinsic does not allow to specify different alias tags
     // for the load part (x.tbaa) and the store part (ctx.tbaa().tbaa_stack).
     // since the tbaa lattice has to be a tree we have unfortunately
     // x.tbaa ∪ ctx.tbaa().tbaa_stack = tbaa_root if x.tbaa != ctx.tbaa().tbaa_stack
+    ++EmittedMemcpys;
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
 }
 
@@ -2029,6 +2116,7 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, Va
         emit_memcpy_llvm(ctx, dst, tbaa_dst, src, tbaa_src, const_sz->getZExtValue(), align, is_volatile);
         return;
     }
+    ++EmittedMemcpys;
     ctx.builder.CreateMemCpy(dst, MaybeAlign(align), src, MaybeAlign(0), sz, is_volatile, MDNode::getMostGenericTBAA(tbaa_dst, tbaa_src));
 }
 
@@ -2061,6 +2149,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
         Value *idx, jl_datatype_t *stt, jl_value_t *inbounds,
         enum jl_memory_order order)
 {
+    ++EmittedGetfieldUnknowns;
     size_t nfields = jl_datatype_nfields(stt);
     bool maybe_null = (unsigned)stt->name->n_uninitialized != 0;
     auto idx0 = [&]() {
@@ -2200,6 +2289,7 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
         jl_value_t *jfty, size_t fsz, size_t al, MDNode *tbaa, bool mutabl,
         unsigned union_max, MDNode *tbaa_ptindex)
 {
+    ++EmittedUnionLoads;
     Instruction *tindex0 = tbaa_decorate(tbaa_ptindex, ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), ptindex, Align(1)));
     tindex0->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
         ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
@@ -2386,6 +2476,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
 // emit length of vararg tuple
 static Value *emit_n_varargs(jl_codectx_t &ctx)
 {
+    ++EmittedVarargsLength;
     Value *valen = NULL;
     if (ctx.nvargs != -1) {
         valen = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), ctx.nvargs);
@@ -2475,6 +2566,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *
             tbaa = ctx.tbaa().tbaa_const;
         }
     }
+    ++EmittedArraysize;
     Value *t = boxed(ctx, tinfo);
     int o = offsetof(jl_array_t, nrows) / sizeof(void*) - 1;
     auto load = emit_nthptr_recast(ctx,
@@ -2511,6 +2603,7 @@ static Value *emit_arraylen_prim(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
             tbaa = ctx.tbaa().tbaa_const;
         }
     }
+    ++EmittedArraylen;
     Value *t = boxed(ctx, tinfo);
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
             emit_bitcast(ctx, decay_derived(ctx, t), ctx.types().T_pjlarray),
@@ -2530,6 +2623,7 @@ static Value *emit_arraylen(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 
 static Value *emit_arrayptr_internal(jl_codectx_t &ctx, const jl_cgval_t &tinfo, Value *t, unsigned AS, bool isboxed)
 {
+    ++EmittedArrayptr;
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
                                               emit_bitcast(ctx, t, ctx.types().T_pjlarray), 0);
     // Normally allocated array of 0 dimension always have a inline pointer.
@@ -2581,6 +2675,7 @@ static Value *emit_arraysize(jl_codectx_t &ctx, const jl_cgval_t &tinfo, jl_valu
 
 static Value *emit_arrayflags(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
+    ++EmittedArrayflags;
     Value *t = boxed(ctx, tinfo);
     int arrayflag_field = 2;
     Value *addr = ctx.builder.CreateStructGEP(
@@ -2592,6 +2687,7 @@ static Value *emit_arrayflags(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 
 static Value *emit_arrayndims(jl_codectx_t &ctx, const jl_cgval_t &ary)
 {
+    ++EmittedArrayNDims;
     Value *flags = emit_arrayflags(ctx, ary);
     cast<LoadInst>(flags)->setMetadata(LLVMContext::MD_invariant_load, MDNode::get(ctx.builder.getContext(), None));
     flags = ctx.builder.CreateLShr(flags, 2);
@@ -2601,6 +2697,7 @@ static Value *emit_arrayndims(jl_codectx_t &ctx, const jl_cgval_t &ary)
 
 static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 {
+    ++EmittedArrayElsize;
     Value *t = boxed(ctx, tinfo);
     int elsize_field = 3;
     Value *addr = ctx.builder.CreateStructGEP(ctx.types().T_jlarray,
@@ -2611,6 +2708,7 @@ static Value *emit_arrayelsize(jl_codectx_t &ctx, const jl_cgval_t &tinfo)
 
 static Value *emit_arrayoffset(jl_codectx_t &ctx, const jl_cgval_t &tinfo, int nd)
 {
+    ++EmittedArrayOffset;
     if (nd != -1 && nd != 1) // only Vector can have an offset
         return ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0);
     Value *t = boxed(ctx, tinfo);
@@ -2636,6 +2734,7 @@ static Value *emit_array_nd_index(
         jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_value_t *ex, ssize_t nd,
         const jl_cgval_t *argv, size_t nidxs, jl_value_t *inbounds)
 {
+    ++EmittedArrayNdIndex;
     Value *a = boxed(ctx, ainfo);
     Value *i = Constant::getNullValue(getSizeTy(ctx.builder.getContext()));
     Value *stride = ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1);
@@ -2931,42 +3030,16 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t 
     return tindex;
 }
 
-// Returns typeof(v), or null if v is a null pointer at run time.
-// This is used when the value might have come from an undefined variable,
-// yet we try to read its type to compute a union index when moving the value.
-static Value *emit_typeof_or_null(jl_codectx_t &ctx, Value *v)
-{
-    BasicBlock *nonnull = BasicBlock::Create(ctx.builder.getContext(), "nonnull", ctx.f);
-    BasicBlock *postBB = BasicBlock::Create(ctx.builder.getContext(), "postnull", ctx.f);
-    Value *isnull = ctx.builder.CreateICmpEQ(v, Constant::getNullValue(v->getType()));
-    ctx.builder.CreateCondBr(isnull, postBB, nonnull);
-    BasicBlock *entry = ctx.builder.GetInsertBlock();
-    ctx.builder.SetInsertPoint(nonnull);
-    Value *typof = emit_typeof(ctx, v);
-    ctx.builder.CreateBr(postBB);
-    nonnull = ctx.builder.GetInsertBlock(); // could have changed
-    ctx.builder.SetInsertPoint(postBB);
-    PHINode *ti = ctx.builder.CreatePHI(typof->getType(), 2);
-    ti->addIncoming(Constant::getNullValue(typof->getType()), entry);
-    ti->addIncoming(typof, nonnull);
-    return ti;
-}
-
 // get the runtime tindex value, assuming val is already converted to type typ if it has a TIndex
-static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
+static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ, bool maybenull=false)
 {
     if (val.typ == jl_bottom_type)
         return UndefValue::get(getInt8Ty(ctx.builder.getContext()));
     if (val.constant)
         return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
-
     if (val.TIndex)
         return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
-    Value *typof;
-    if (val.isboxed && !jl_is_concrete_type(val.typ) && !jl_is_type_type(val.typ))
-        typof = emit_typeof_or_null(ctx, val.V);
-    else
-        typof = emit_typeof_boxed(ctx, val);
+    Value *typof = emit_typeof_boxed(ctx, val, maybenull);
     return compute_box_tindex(ctx, typof, val.typ, typ);
 }
 
@@ -3090,6 +3163,33 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
+static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsigned ToAS)
+{
+    for (auto *User : Val->users()) {
+        if (isa<GetElementPtrInst>(User)) {
+            GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
+            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            recursively_adjust_ptr_type(Inst, FromAS, ToAS);
+        }
+        else if (isa<IntrinsicInst>(User)) {
+            IntrinsicInst *II = cast<IntrinsicInst>(User);
+            SmallVector<Type*, 3> ArgTys;
+            Intrinsic::getIntrinsicSignature(II->getCalledFunction(), ArgTys);
+            assert(ArgTys.size() <= II->arg_size());
+            for (size_t i = 0; i < ArgTys.size(); ++i)
+                ArgTys[i] = II->getArgOperand(i)->getType();
+            II->setCalledFunction(Intrinsic::getDeclaration(II->getModule(), II->getIntrinsicID(), ArgTys));
+        }
+#ifndef JL_LLVM_OPAQUE_POINTERS
+        else if (isa<BitCastInst>(User)) {
+            BitCastInst *Inst = cast<BitCastInst>(User);
+            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
+            recursively_adjust_ptr_type(Inst, FromAS, ToAS);
+        }
+#endif
+    }
+}
+
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
@@ -3123,8 +3223,27 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
         box = _boxed_special(ctx, vinfo, t);
         if (!box) {
-            box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
-            init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+            bool do_promote = vinfo.promotion_point;
+            if (do_promote) {
+                auto IP = ctx.builder.saveIP();
+                ctx.builder.SetInsertPoint(vinfo.promotion_point);
+                box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
+                Value *decayed = decay_derived(ctx, box);
+                AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
+#ifndef JL_LLVM_OPAQUE_POINTERS
+                decayed = maybe_bitcast(ctx, decayed, PointerType::get(originalAlloca->getType()->getPointerElementType(), AddressSpace::Derived));
+#endif
+                // Warning: Very illegal IR here temporarily
+                originalAlloca->mutateType(decayed->getType());
+                recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
+                originalAlloca->replaceAllUsesWith(decayed);
+                // end illegal IR
+                cast<Instruction>(vinfo.V)->eraseFromParent();
+                ctx.builder.restoreIP(IP);
+            } else {
+                box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
+                init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
+            }
         }
     }
     return box;
@@ -3148,14 +3267,17 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                 Value *src_ptr = data_pointer(ctx, src);
                 unsigned nb = jl_datatype_size(typ);
                 unsigned alignment = julia_alignment(typ);
-                Value *nbytes = ConstantInt::get(getSizeTy(ctx.builder.getContext()), nb);
-                if (skip) {
-                    // TODO: this Select is very bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
-                    //   select copy dest -> dest to simulate an undef value / conditional copy
-                    // src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
-                    nbytes = ctx.builder.CreateSelect(skip, Constant::getNullValue(getSizeTy(ctx.builder.getContext())), nbytes);
-                }
-                emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nbytes, alignment, isVolatile);
+                // TODO: this branch may be bad for performance, but is necessary to work around LLVM bugs with the undef option that we want to use:
+                //   select copy dest -> dest to simulate an undef value / conditional copy
+                // if (skip) src_ptr = ctx.builder.CreateSelect(skip, dest, src_ptr);
+                auto f = [&] {
+                    (void)emit_memcpy(ctx, dest, tbaa_dst, src_ptr, src.tbaa, nb, alignment, isVolatile);
+                    return nullptr;
+                };
+                if (skip)
+                    emit_guarded_test(ctx, skip, nullptr, f);
+                else
+                    f();
             }
         }
     }
@@ -3208,18 +3330,23 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
     }
     else {
         assert(src.isboxed && "expected boxed value for sizeof/alignment computation");
-        Value *datatype = emit_typeof_boxed(ctx, src);
-        Value *copy_bytes = emit_datatype_size(ctx, datatype);
-        if (skip) {
-            copy_bytes = ctx.builder.CreateSelect(skip, ConstantInt::get(copy_bytes->getType(), 0), copy_bytes);
-        }
-        emit_memcpy(ctx, dest, tbaa_dst, src, copy_bytes, /*TODO: min-align*/1, isVolatile);
+        auto f = [&] {
+            Value *datatype = emit_typeof_boxed(ctx, src);
+            Value *copy_bytes = emit_datatype_size(ctx, datatype);
+            emit_memcpy(ctx, dest, tbaa_dst, src, copy_bytes, /*TODO: min-align*/1, isVolatile);
+            return nullptr;
+        };
+        if (skip)
+            emit_guarded_test(ctx, skip, nullptr, f);
+        else
+            f();
     }
 }
 
 
 static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std::string &msg)
 {
+    ++EmittedCPointerChecks;
     Value *t = emit_typeof_boxed(ctx, x);
     emit_typecheck(ctx, mark_julia_type(ctx, t, true, jl_any_type), (jl_value_t*)jl_datatype_type, msg);
 
@@ -3242,6 +3369,7 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const std
 // returns a prjlvalue
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
+    ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
     Function *F = prepare_call(jl_alloc_obj_func);
     auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(getSizeTy(ctx.builder.getContext()), static_size), maybe_decay_untracked(ctx, jt)});
@@ -3267,6 +3395,7 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, Value *ptr)
 
 static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*> ptrs)
 {
+    ++EmittedWriteBarriers;
     // if there are no child objects we can skip emission
     if (ptrs.empty())
         return;
@@ -3276,6 +3405,14 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
         decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
     }
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
+}
+
+static void emit_write_barrier_binding(jl_codectx_t &ctx, Value *parent, Value *ptr)
+{
+    SmallVector<Value*, 8> decay_ptrs;
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, parent, ctx.types().T_prjlvalue)));
+    decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
+    ctx.builder.CreateCall(prepare_call(jl_write_barrier_binding_func), decay_ptrs);
 }
 
 static void find_perm_offsets(jl_datatype_t *typ, SmallVector<unsigned,4> &res, unsigned offset)
@@ -3318,6 +3455,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         bool needlock, bool issetfield, bool isreplacefield, bool isswapfield, bool ismodifyfield,
         const jl_cgval_t *modifyop, const std::string &fname)
 {
+    ++EmittedSetfield;
     assert(strct.ispointer());
     size_t byte_offset = jl_field_offset(sty, idx0);
     Value *addr = data_pointer(ctx, strct);
@@ -3340,7 +3478,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), getInt8PtrTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), fsz));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
-        BasicBlock *ModifyBB;
+        BasicBlock *ModifyBB = NULL;
         if (ismodifyfield) {
             ModifyBB = BasicBlock::Create(ctx.builder.getContext(), "modify_xchg", ctx.f);
             ctx.builder.CreateBr(ModifyBB);
@@ -3419,8 +3557,9 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     }
 }
 
-static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv)
+static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv, bool is_promotable)
 {
+    ++EmittedNewStructs;
     assert(jl_is_datatype(ty));
     assert(jl_is_concrete_type(ty));
     jl_datatype_t *sty = (jl_datatype_t*)ty;
@@ -3441,6 +3580,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 init_as_value = true;
             }
 
+            Instruction *promotion_point = nullptr;
+            ssize_t promotion_ssa = -1;
             Value *strct;
             if (type_is_ghost(lt)) {
                 strct = NULL;
@@ -3460,8 +3601,17 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             for (unsigned i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i); // n.b. ty argument must be concrete
                 jl_cgval_t fval_info = argv[i];
+
+                IRBuilderBase::InsertPoint savedIP;
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 fval_info = update_julia_type(ctx, fval_info, jtype);
+                // TODO: Use (post-)domination instead.
+                bool field_promotable = !init_as_value && fval_info.promotion_ssa != -1 &&
+                    fval_info.promotion_point && fval_info.promotion_point->getParent() == ctx.builder.GetInsertBlock();
+                if (field_promotable) {
+                    savedIP = ctx.builder.saveIP();
+                    ctx.builder.SetInsertPoint(fval_info.promotion_point);
+                }
                 if (type_is_ghost(lt))
                     continue;
                 Type *fty = julia_type_to_llvm(ctx, jtype);
@@ -3473,7 +3623,25 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (!init_as_value) {
                     // avoid unboxing the argument explicitly
                     // and use memcpy instead
-                    dest = ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, llvm_idx);
+                    Instruction *inst;
+#ifndef JL_LLVM_OPAQUE_POINTERS
+                    dest = inst = cast<Instruction>(ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, llvm_idx));
+#else
+                    dest = inst = cast<Instruction>(ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), strct, offs));
+#endif
+                    // Our promotion point needs to come before
+                    //  A) All of our arguments' promotion points
+                    //  B) Any instructions we insert at any of our arguments' promotion points
+                    // N.B.: Do not use Instruction::comesBefore here. LLVM invalidates its instruction numbering after
+                    // every insert, so querying it here makes code generation accidentally quadartic.
+                    if (field_promotable) {
+                        if (promotion_ssa == -1 || fval_info.promotion_ssa < promotion_ssa) {
+                            promotion_point = inst;
+                            promotion_ssa = fval_info.promotion_ssa;
+                        }
+                    } else if (!promotion_point) {
+                        promotion_point = inst;
+                    }
                 }
                 Value *fval = NULL;
                 if (jl_field_isptr(sty, i)) {
@@ -3484,6 +3652,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                 ->setOrdering(AtomicOrdering::Unordered);
                 }
                 else if (jl_is_uniontype(jtype)) {
+                    assert(!field_promotable);
                     // compute tindex from rhs
                     jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
                     if (rhs_union.typ == jl_bottom_type)
@@ -3536,7 +3705,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     }
                 }
                 else {
-                    fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa().tbaa_stack);
+                    if (field_promotable) {
+                        fval_info.V->replaceAllUsesWith(dest);
+                        cast<Instruction>(fval_info.V)->eraseFromParent();
+                    } else {
+                        fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa().tbaa_stack);
+                    }
                 }
                 if (init_as_value) {
                     assert(fval);
@@ -3548,6 +3722,9 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                         strct = ctx.builder.CreateInsertValue(strct, fval, makeArrayRef(llvm_idx));
                     else
                         assert(false);
+                }
+                if (field_promotable) {
+                    ctx.builder.restoreIP(savedIP);
                 }
             }
             for (size_t i = nargs; i < nf; i++) {
@@ -3568,8 +3745,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 return mark_julia_const(ctx, sty->instance);
             else if (init_as_value)
                 return mark_julia_type(ctx, strct, false, ty);
-            else
-                return mark_julia_slot(strct, ty, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
+            else {
+                jl_cgval_t ret = mark_julia_slot(strct, ty, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
+                if (is_promotable && promotion_point) {
+                    ret.promotion_point = promotion_point;
+                    ret.promotion_ssa = promotion_ssa;
+                }
+                return ret;
+            }
         }
         Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
                                      literal_pointer_val(ctx, (jl_value_t*)ty));
@@ -3611,11 +3794,13 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
 static void emit_signal_fence(jl_codectx_t &ctx)
 {
+    ++EmittedSignalFences;
     ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 }
 
 static Value *emit_defer_signal(jl_codectx_t &ctx)
 {
+    ++EmittedDeferSignal;
     Value *ptls = emit_bitcast(ctx, get_current_ptls(ctx),
                                         PointerType::get(ctx.types().T_sigatomic, 0));
     Constant *offset = ConstantInt::getSigned(getInt32Ty(ctx.builder.getContext()),
@@ -3636,3 +3821,7 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->generic_context == b->generic_context);
 }
 #endif
+
+// Reset us back to codegen debug type
+#undef DEBUG_TYPE
+#define DEBUG_TYPE "julia_irgen_codegen"

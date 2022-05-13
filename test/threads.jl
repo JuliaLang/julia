@@ -4,6 +4,8 @@ using Test
 
 using Base.Threads
 
+include("print_process_affinity.jl") # import `uv_thread_getaffinity`
+
 # simple sanity tests for locks under cooperative concurrent access
 let lk = ReentrantLock()
     c1 = Event()
@@ -77,6 +79,23 @@ let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no thr
     end
 end
 
+# Timing-sensitive tests can fail on CI due to occasional unexpected delays,
+# so this test is disabled.
+#=
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_latency.jl`
+    for test_nthreads in (1, 2)
+        new_env = copy(ENV)
+        new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",1")
+        run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+    end
+end
+=#
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_use.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+end
+
 function run_with_affinity(cpus)
     script = joinpath(@__DIR__, "print_process_affinity.jl")
     return readchomp(setcpuaffinity(`$(Base.julia_cmd()) $script`, cpus))
@@ -96,9 +115,10 @@ end
 const AFFINITY_SUPPORTED = (Sys.islinux() || Sys.iswindows()) && !running_under_rr()
 
 if AFFINITY_SUPPORTED
-    if Sys.CPU_THREADS > 1
-        @test run_with_affinity([2]) == "2"
-        @test run_with_affinity([1, 2]) == "1,2"
+    allowed_cpus = findall(uv_thread_getaffinity())
+    if length(allowed_cpus) ≥ 2
+        @test run_with_affinity(allowed_cpus[1:1]) == "$(allowed_cpus[1])"
+        @test run_with_affinity(allowed_cpus[1:2]) == "$(allowed_cpus[1]),$(allowed_cpus[2])"
     end
 end
 
@@ -113,18 +133,21 @@ function get_nthreads(options = ``; cpus = nothing)
 end
 
 @testset "nthreads determined based on CPU affinity" begin
-    if AFFINITY_SUPPORTED && Sys.CPU_THREADS ≥ 2
-        @test get_nthreads() ≥ 2
-        @test get_nthreads(cpus = [1]) == 1
-        @test get_nthreads(cpus = [2]) == 1
-        @test get_nthreads(cpus = [1, 2]) == 2
-        @test get_nthreads(`-t1`, cpus = [1]) == 1
-        @test get_nthreads(`-t1`, cpus = [2]) == 1
-        @test get_nthreads(`-t1`, cpus = [1, 2]) == 1
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        if length(allowed_cpus) ≥ 2
+            @test get_nthreads() ≥ 2
+            @test get_nthreads(cpus = allowed_cpus[1:1]) == 1
+            @test get_nthreads(cpus = allowed_cpus[2:2]) == 1
+            @test get_nthreads(cpus = allowed_cpus[1:2]) == 2
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[1:1]) == 1
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[2:2]) == 1
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[1:2]) == 1
 
-        if Sys.CPU_THREADS ≥ 3
-            @test get_nthreads(cpus = [1, 3]) == 2
-            @test get_nthreads(cpus = [2, 3]) == 2
+            if length(allowed_cpus) ≥ 3
+                @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
+                @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
+            end
         end
     end
 end
@@ -297,4 +320,10 @@ close(proc.in)
             @test !timeout
         end
     end
+end
+
+@testset "bad arguments to @threads" begin
+    @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
+    @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
+    @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
 end

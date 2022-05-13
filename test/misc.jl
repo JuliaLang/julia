@@ -334,26 +334,69 @@ function timev_macro_scope()
 end
 @test timev_macro_scope() == 1
 
-before = Base.cumulative_compile_time_ns_before();
+before_comp, before_recomp = Base.cumulative_compile_time_ns() # no need to turn timing on, @time will do that
 
 # exercise concurrent calls to `@time` for reentrant compilation time measurement.
-t1 = @async @time begin
-    sleep(2)
-    @eval module M ; f(x,y) = x+y ; end
-    @eval M.f(2,3)
-end
-t2 = @async begin
-    sleep(1)
-    @time 2 + 2
+@sync begin
+    t1 = @async @time begin
+        sleep(2)
+        @eval module M ; f(x,y) = x+y ; end
+        @eval M.f(2,3)
+    end
+    t2 = @async begin
+        sleep(1)
+        @time 2 + 2
+    end
 end
 
-after = Base.cumulative_compile_time_ns_after();
-@test after >= before;
-
-# wait for completion of these tasks before restoring stdout, to suppress their @time prints.
-wait(t1); wait(t2)
+after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
+@test after_comp >= before_comp;
 
 end # redirect_stdout
+
+macro capture_stdout(ex)
+    quote
+        mktemp() do fname, f
+            redirect_stdout(f) do
+                $(esc(ex))
+            end
+            seekstart(f)
+            read(f, String)
+        end
+    end
+end
+
+# compilation reports in @time
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @time $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @time $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @time $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
 
 # interactive utilities
 
@@ -399,15 +442,8 @@ let s = Set(1:100)
     @test summarysize([s]) > summarysize(s)
 end
 
-# issue #13021
-let ex = try
-    Main.x13021 = 0
-    nothing
-catch ex
-    ex
-end
-    @test isa(ex, ErrorException) && ex.msg == "cannot assign variables in other modules"
-end
+# issue #44780
+@test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -439,10 +475,10 @@ V8 = [
     ([0xe1,0x88,0xb4],[0x1234])
     ([0xea,0xaf,0x8d],[0xabcd])
     ([0xed,0x9f,0xbf],[0xd7ff])
-    ([0xed,0xa0,0x80],[0xd800]) # invalid code point – high surrogate
-    ([0xed,0xaf,0xbf],[0xdbff]) # invalid code point – high surrogate
-    ([0xed,0xb0,0x80],[0xdc00]) # invalid code point – low surrogate
-    ([0xed,0xbf,0xbf],[0xdfff]) # invalid code point – low surrogate
+    ([0xed,0xa0,0x80],[0xd800]) # invalid code point – high surrogate
+    ([0xed,0xaf,0xbf],[0xdbff]) # invalid code point – high surrogate
+    ([0xed,0xb0,0x80],[0xdc00]) # invalid code point – low surrogate
+    ([0xed,0xbf,0xbf],[0xdfff]) # invalid code point – low surrogate
     ([0xee,0x80,0x80],[0xe000])
     ([0xef,0xbf,0xbf],[0xffff])
     # 4-byte
@@ -592,7 +628,7 @@ end
 
 let optstring = repr("text/plain", Base.JLOptions())
     @test startswith(optstring, "JLOptions(\n")
-    @test !occursin("Ptr", optstring)
+    @test !occursin("Ptr{UInt8}", optstring)
     @test endswith(optstring, "\n)")
     @test occursin(" = \"", optstring)
 end
@@ -600,7 +636,7 @@ let optstring = repr(Base.JLOptions())
     @test startswith(optstring, "JLOptions(")
     @test endswith(optstring, ")")
     @test !occursin("\n", optstring)
-    @test !occursin("Ptr", optstring)
+    @test !occursin("Ptr{UInt8}", optstring)
     @test occursin(" = \"", optstring)
 end
 
@@ -1027,10 +1063,11 @@ end
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
-       for v in names(mod)
-           @test isdefined(mod, v)
-       end
-   end
+        mod === Main && continue # Main exports everything
+        for v in names(mod)
+            @test isdefined(mod, v)
+        end
+    end
 end
 
 @testset "ordering UUIDs" begin
@@ -1079,7 +1116,7 @@ end
                 GC.enable_logging(false)
             end
         end
-        @test occursin("GC: pause", read(open(tmppath), String))
+        @test occursin("GC: pause", read(tmppath, String))
     end
 end
 

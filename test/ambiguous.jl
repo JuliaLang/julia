@@ -172,20 +172,11 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
     let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds)))
-        @test isempty(ambig)
-        expect = []
         good = true
-        while !isempty(ambig)
-            sigs = pop!(ambig)
-            i = findfirst(==(sigs), expect)
-            if i === nothing
-                println(stderr, "push!(expect, (", sigs[1], ", ", sigs[2], "))")
-                good = false
-                continue
-            end
-            deleteat!(expect, i)
+        for (sig1, sig2) in ambig
+            @test sig1 === sig2 # print this ambiguity
+            good = false
         end
-        @test isempty(expect)
         @test good
     end
 

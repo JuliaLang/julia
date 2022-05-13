@@ -19,7 +19,7 @@ extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
@@ -51,11 +51,14 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
     else if (jl_is_returnnode(expr)) {
-        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
-        if (val != jl_returnnode_value(expr)) {
-            JL_GC_PUSH1(&val);
-            expr = jl_new_struct(jl_returnnode_type, val);
-            JL_GC_POP();
+        jl_value_t *retval = jl_returnnode_value(expr);
+        if (retval) {
+            jl_value_t *val = resolve_globals(retval, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != retval) {
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct(jl_returnnode_type, val);
+                JL_GC_POP();
+            }
         }
         return expr;
     }
@@ -102,7 +105,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -495,7 +498,7 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
-        jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
+        jl_value_t *ln_name = (jl_is_int32(inl) && jl_unbox_int32(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
         rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
@@ -767,7 +770,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
-    jl_atomic_store_relaxed(&m->invokes, NULL);
+    jl_atomic_store_relaxed(&m->invokes, jl_nothing);
     m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
@@ -782,7 +785,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
@@ -796,7 +799,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
         assert(jl_is_symbol(name));
         m->name = (jl_sym_t*)name;
     }
-    m->nargs = jl_unbox_long(nargs) + 1;
+    m->nargs = nargs + 1;
     assert(jl_is_linenode(functionloc));
     jl_value_t *file = jl_linenode_file(functionloc);
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;

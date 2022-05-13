@@ -251,6 +251,10 @@ true
 istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
+function Threads.threadpool(t::Task)
+    tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), t)
+    return tpid == 0 ? :default : :interactive
+end
 
 task_result(t::Task) = t.result
 
@@ -467,10 +471,24 @@ Values can be interpolated into `@async` via `\$`, which copies the value direct
 constructed underlying closure. This allows you to insert the _value_ of a variable,
 isolating the asynchronous code from changes to the variable's value in the current task.
 
+!!! warning
+    It is strongly encouraged to favor `Threads.@spawn` over `@async` always **even when no
+    parallelism is required** especially in publicly distributed libraries.  This is
+    because a use of `@async` disables the migration of the *parent* task across worker
+    threads in the current implementation of Julia.  Thus, seemingly innocent use of
+    `@async` in a library function can have a large impact on the performance of very
+    different parts of user applications.
+
 !!! compat "Julia 1.4"
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
+    do_async_macro(expr)
+end
+
+# generate the code for @async, possibly wrapping the task in something before
+# pushing it to the wait queue.
+function do_async_macro(expr; wrap=identity)
     letargs = Base._lift_one_interp!(expr)
 
     thunk = esc(:(()->($expr)))
@@ -479,12 +497,41 @@ macro async(expr)
         let $(letargs...)
             local task = Task($thunk)
             if $(Expr(:islocal, var))
-                put!($var, task)
+                put!($var, $(wrap(:task)))
             end
             schedule(task)
             task
         end
     end
+end
+
+# task wrapper that doesn't create exceptions wrapped in TaskFailedException
+struct UnwrapTaskFailedException
+    task::Task
+end
+
+# common code for wait&fetch for UnwrapTaskFailedException
+function unwrap_task_failed(f::Function, t::UnwrapTaskFailedException)
+    try
+        f(t.task)
+    catch ex
+        if ex isa TaskFailedException
+            throw(ex.task.exception)
+        else
+            rethrow()
+        end
+    end
+end
+
+# the unwrapping for above task wrapper (gets triggered in sync_end())
+wait(t::UnwrapTaskFailedException) = unwrap_task_failed(wait, t)
+
+# same for fetching the tasks, for convenience
+fetch(t::UnwrapTaskFailedException) = unwrap_task_failed(fetch, t)
+
+# macro for running async code that doesn't throw wrapped exceptions
+macro async_unwrap(expr)
+    do_async_macro(expr, wrap=task->:(Base.UnwrapTaskFailedException($task)))
 end
 
 """
@@ -613,14 +660,14 @@ end
 
 ## scheduler and work queue
 
-struct InvasiveLinkedListSynchronized{T}
-    queue::InvasiveLinkedList{T}
+struct IntrusiveLinkedListSynchronized{T}
+    queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
-    InvasiveLinkedListSynchronized{T}() where {T} = new(InvasiveLinkedList{T}(), Threads.SpinLock())
+    IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
-isempty(W::InvasiveLinkedListSynchronized) = isempty(W.queue)
-length(W::InvasiveLinkedListSynchronized) = length(W.queue)
-function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
+length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
+function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         push!(W.queue, t)
@@ -629,7 +676,7 @@ function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         pushfirst!(W.queue, t)
@@ -638,7 +685,7 @@ function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pop!(W::InvasiveLinkedListSynchronized)
+function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return pop!(W.queue)
@@ -646,7 +693,7 @@ function pop!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function popfirst!(W::InvasiveLinkedListSynchronized)
+function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return popfirst!(W.queue)
@@ -654,7 +701,7 @@ function popfirst!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         list_deletefirst!(W.queue, t)
@@ -664,28 +711,36 @@ function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     return W
 end
 
-const StickyWorkqueue = InvasiveLinkedListSynchronized{Task}
-global const Workqueues = [StickyWorkqueue()]
-global const Workqueue = Workqueues[1] # default work queue is thread 1
-function __preinit_threads__()
-    if length(Workqueues) < Threads.nthreads()
-        resize!(Workqueues, Threads.nthreads())
-        for i = 2:length(Workqueues)
-            Workqueues[i] = StickyWorkqueue()
-        end
+const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
+global Workqueues::Vector{StickyWorkqueue} = [StickyWorkqueue()]
+const Workqueues_lock = Threads.SpinLock()
+const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
+
+function workqueue_for(tid::Int)
+    qs = Workqueues
+    if length(qs) >= tid && isassigned(qs, tid)
+        return @inbounds qs[tid]
     end
-    nothing
+    # slow path to allocate it
+    l = Workqueues_lock
+    @lock l begin
+        qs = Workqueues
+        if length(qs) < tid
+            nt = Threads.nthreads()
+            @assert tid <= nt
+            global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
+        end
+        if !isassigned(qs, tid)
+            @inbounds qs[tid] = StickyWorkqueue()
+        end
+        return @inbounds qs[tid]
+    end
 end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    tid = Threads.threadid(t)
-    # Note there are three reasons a Task might be put into a sticky queue
-    # even if t.sticky == false:
-    # 1. The Task's stack is currently being used by the scheduler for a certain thread.
-    # 2. There is only 1 thread.
-    # 3. The multiq is full (can be fixed by making it growable).
     if t.sticky || Threads.nthreads() == 1
+        tid = Threads.threadid(t)
         if tid == 0
             # Issue #41324
             # t.sticky && tid == 0 is a task that needs to be co-scheduled with
@@ -696,18 +751,10 @@ function enq_work(t::Task)
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
-        push!(Workqueues[tid], t)
+        push!(workqueue_for(tid), t)
     else
-        if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
-            # if multiq is full, give to a random thread (TODO fix)
-            if tid == 0
-                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
-            end
-            push!(Workqueues[tid], t)
-        else
-            tid = 0
-        end
+        Partr.multiq_insert(t, t.priority)
+        tid = 0
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
@@ -848,12 +895,12 @@ end
 
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
-    W = Workqueues[Threads.threadid()]
+    W = workqueue_for(Threads.threadid())
     if ct !== othertask && othertask._state === task_state_runnable
         # we failed to yield to othertask
         # return it to the head of a queue to be retried later
         tid = Threads.threadid(othertask)
-        Wother = tid == 0 ? W : Workqueues[tid]
+        Wother = tid == 0 ? W : workqueue_for(tid)
         pushfirst!(Wother, othertask)
     end
     # if the current task was queued,
@@ -864,24 +911,28 @@ function ensure_rescheduled(othertask::Task)
 end
 
 function trypoptask(W::StickyWorkqueue)
-    isempty(W) && return
-    t = popfirst!(W)
-    if t._state !== task_state_runnable
-        # assume this somehow got queued twice,
-        # probably broken now, but try discarding this switch and keep going
-        # can't throw here, because it's probably not the fault of the caller to wait
-        # and don't want to use print() here, because that may try to incur a task switch
-        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
-        return
+    while !isempty(W)
+        t = popfirst!(W)
+        if t._state !== task_state_runnable
+            # assume this somehow got queued twice,
+            # probably broken now, but try discarding this switch and keep going
+            # can't throw here, because it's probably not the fault of the caller to wait
+            # and don't want to use print() here, because that may try to incur a task switch
+            ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+            continue
+        end
+        return t
     end
-    return t
+    return Partr.multiq_deletemin()
 end
+
+checktaskempty = Partr.multiq_check_empty
 
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any), trypoptask, W)
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
     set_next_task(task)
     nothing
@@ -889,7 +940,7 @@ end
 
 function wait()
     GC.safepoint()
-    W = Workqueues[Threads.threadid()]
+    W = workqueue_for(Threads.threadid())
     poptask(W)
     result = try_yieldto(ensure_rescheduled)
     process_events()

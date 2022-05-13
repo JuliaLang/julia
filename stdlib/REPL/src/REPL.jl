@@ -59,7 +59,8 @@ import ..LineEdit:
     terminal,
     MIState,
     PromptState,
-    TextInterface
+    TextInterface,
+    mode_idx
 
 include("REPLCompletions.jl")
 using .REPLCompletions
@@ -150,8 +151,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 end
                 value = Core.eval(Main, ast)
                 backend.in_eval = false
-                # note: use jl_set_global to make sure value isn't passed through `expand`
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -287,7 +287,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             Base.sigatomic_end()
             if iserr
                 val = Base.scrub_repl_backtrace(val)
-                Base.istrivialerror(val) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, val)
+                Base.istrivialerror(val) || setglobal!(Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -304,13 +304,13 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
             end
             break
-        catch
+        catch ex
             if iserr
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
-                    ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, excs)
+                    setglobal!(Main, :err, excs)
                     Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
@@ -527,6 +527,7 @@ end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Vector{String}
+    file_path::String
     history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
@@ -537,7 +538,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(String[], "", nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 invalid_history_message(path::String) = """
@@ -549,6 +550,12 @@ Invalid character: """
 munged_history_message(path::String) = """
 Invalid history file ($path) format:
 An editor may have converted tabs to spaces at line """
+
+function hist_open_file(hp::REPLHistoryProvider)
+    f = open(hp.file_path, read=true, write=true, create=true)
+    hp.history_file = f
+    seekend(f)
+end
 
 function hist_from_file(hp::REPLHistoryProvider, path::String)
     getline(lines, i) = i > length(lines) ? "" : lines[i]
@@ -595,14 +602,6 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
     return hp
 end
 
-function mode_idx(hist::REPLHistoryProvider, mode::TextInterface)
-    c = :julia
-    for (k,v) in hist.mode_mapping
-        isequal(v, mode) && (c = k)
-    end
-    return c
-end
-
 function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
@@ -618,7 +617,14 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     $(replace(str, r"^"ms => "\t"))
     """
     # TODO: write-lock history file
-    seekend(hist.history_file)
+    try
+        seekend(hist.history_file)
+    catch err
+        (err isa SystemError) || rethrow()
+        # File handle might get stale after a while, especially under network file systems
+        # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
+        hist_open_file(hist)
+    end
     print(hist.history_file, entry)
     flush(hist.history_file)
     nothing
@@ -733,7 +739,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):1:max_idx)
     for idx in idxs
-        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
+        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || get(hist.mode_mapping, hist.modes[idx], nothing) !== LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m === :ok
                 if idx == max_idx
@@ -994,11 +1000,10 @@ function setup_interface(
         try
             hist_path = find_hist_file()
             mkpath(dirname(hist_path))
-            f = open(hist_path, read=true, write=true, create=true)
-            hp.history_file = f
-            seekend(f)
+            hp.file_path = hist_path
+            hist_open_file(hp)
             finalizer(replc) do replc
-                close(f)
+                close(hp.history_file)
             end
             hist_from_file(hp, hist_path)
         catch

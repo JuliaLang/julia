@@ -99,7 +99,9 @@ docs-revise:
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@$(JULIAHOME)/contrib/check-whitespace.sh
+	@# Append the directory containing the julia we just built to the end of `PATH`,
+	@# to give us the best chance of being able to run this check.
+	@PATH=$(PATH):$(dirname $(JULIA_EXECUTABLE)) $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -472,7 +474,7 @@ endif
 
 	# Include all git-tracked filenames
 	git ls-files >> light-source-dist.tmp
-	
+
 	# Include documentation filenames
 	find doc/_build/html >> light-source-dist.tmp
 

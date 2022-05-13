@@ -280,6 +280,53 @@ julia> z
 kw"global"
 
 """
+    for outer
+
+Reuse an existing local variable for iteration in a `for` loop.
+
+See the [manual section on variable scoping](@ref scope-of-variables) for more information.
+
+See also [`for`](@ref).
+
+
+# Examples
+```jldoctest
+julia> function f()
+           i = 0
+           for i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+0
+```
+
+```jldoctest
+julia> function f()
+           i = 0
+           for outer i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+3
+```
+
+```jldoctest
+julia> i = 0 # global variable
+       for outer i = 1:3
+       end
+ERROR: syntax: no outer local variable declaration exists for "for outer"
+[...]
+```
+"""
+kw"outer"
+
+"""
     ' '
 
 A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
@@ -430,22 +477,98 @@ kw"."
 """
     let
 
-`let` statements create a new hard scope block and introduce new variable bindings
-each time they run. Whereas assignments might reassign a new value to an existing value location,
-`let` always creates a new location.
-This difference is only detectable in the case of variables that outlive their scope via
-closures. The `let` syntax accepts a comma-separated series of assignments and variable
-names:
+`let` blocks create a new hard scope and optionally introduce new local bindings.
+
+Just like the [other scope constructs](@ref man-scope-table), `let` blocks define
+the block of code where newly introduced local variables are accessible.
+Additionally, the syntax has a special meaning for comma-separated assignments
+and variable names that may optionally appear on the same line as the `let`:
 
 ```julia
 let var1 = value1, var2, var3 = value3
     code
 end
 ```
-The assignments are evaluated in order, with each right-hand side evaluated in the scope
-before the new variable on the left-hand side has been introduced. Therefore it makes
-sense to write something like `let x = x`, since the two `x` variables are distinct and
-have separate storage.
+
+The variables introduced on this line are local to the `let` block and the assignments are
+evaluated in order, with each right-hand side evaluated in the scope
+without considering the name on the left-hand side. Therefore it makes
+sense to write something like `let x = x`, since the two `x` variables are distinct with
+the left-hand side locally shadowing the `x` from the outer scope. This can even
+be a useful idiom as new local variables are freshly created each time local scopes
+are entered, but this is only observable in the case of variables that outlive their
+scope via closures.
+
+By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
+not introduce scope or have the special assignment syntax.
+
+### Examples
+
+In the function below, there is a single `x` that is iteratively updated three times by the `map`.
+The closures returned all reference that one `x` at its final value:
+
+```jldoctest
+julia> function test_outer_x()
+           x = 0
+           map(1:3) do _
+               x += 1
+               return ()->x
+           end
+       end
+test_outer_x (generic function with 1 method)
+
+julia> [f() for f in test_outer_x()]
+3-element Vector{Int64}:
+ 3
+ 3
+ 3
+```
+
+If, however, we add a `let` block that introduces a _new_ local variable we will end up
+with three distinct variables being captured (one at each iteration) even though we
+chose to use (shadow) the same name.
+
+```jldoctest
+julia> function test_let_x()
+           x = 0
+           map(1:3) do _
+               x += 1
+               let x = x
+                   return ()->x
+               end
+           end
+       end
+test_let_x (generic function with 1 method)
+
+julia> [f() for f in test_let_x()]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+All scope constructs that introduce new local variables behave this way
+when repeatedly run; the distinctive feature of `let` is its ability
+to succinctly declare new `local`s that may shadow outer variables of the same
+name. For example, directly using the argument of the `do` function similarly
+captures three distinct variables:
+
+```jldoctest
+julia> function test_do_x()
+           map(1:3) do x
+               return ()->x
+           end
+       end
+test_do_x (generic function with 1 method)
+
+julia> [f() for f in test_do_x()]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+
 """
 kw"let"
 
@@ -757,6 +880,10 @@ kw"?", kw"?:"
 
 `for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
+
+The iteration variable is always a new variable, even if a variable of the same name
+exists in the enclosing scope.
+Use [`outer`](@ref) to reuse an existing local variable for iteration.
 
 # Examples
 ```jldoctest
@@ -1094,7 +1221,7 @@ first argument:
   with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
 - as a 2-element tuple, containing a string of module IR and a string representing the name
   of the entry-point function to call;
-- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
+- as a 2-element tuple, but with the module provided as an `Vector{UInt8}` with bitcode.
 
 Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
@@ -1894,9 +2021,8 @@ julia> eval(:x)
 `Symbol`s can also be constructed from strings or other values by calling the
 constructor `Symbol(x...)`.
 
-`Symbol`s are immutable and should be compared using `===`.
-The implementation re-uses the same object for all `Symbol`s with the same name,
-so comparison tends to be efficient (it can just compare pointers).
+`Symbol`s are immutable and their implementation re-uses the same object for all `Symbol`s
+with the same name.
 
 Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
 iteration over characters.
@@ -2523,14 +2649,14 @@ union [`Union{}`](@ref) is the bottom type of Julia.
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 :: IntOrString
-1
+julia> 1 isa IntOrString
+true
 
-julia> "Hello!" :: IntOrString
-"Hello!"
+julia> "Hello!" isa IntOrString
+true
 
-julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
+julia> 1.0 isa IntOrString
+false
 ```
 """
 Union
@@ -2731,6 +2857,9 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
+!!! compat "Julia 1.8"
+    `setproperty!` on modules requires at least Julia 1.8.
+
 See also [`setfield!`](@ref Core.setfield!),
 [`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
@@ -2751,9 +2880,14 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
+The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
 max, c, :sequentially_consistent))`, where the first argument must be a
 `getfield` expression and is modified atomically.
+
+Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
+`f` of the object `x` by default.  In particular, unlike the default behavior of
+[`setproperty!`](@ref Base.setproperty!), the `convert` function is not called
+automatically.
 
 See also [`modifyfield!`](@ref Core.modifyfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2921,6 +3055,7 @@ unused and delete the entire benchmark code).
 
 # Examples
 
+```julia
 function loop()
     for i = 1:1000
         # The complier must guarantee that there are 1000 program points (in the correct
@@ -2929,6 +3064,7 @@ function loop()
         donotdelete(i)
     end
 end
+```
 """
 Base.donotdelete
 

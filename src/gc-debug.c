@@ -467,10 +467,9 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
         return;
     if (*env == 'r') {
         env++;
-        srand((unsigned)uv_hrtime());
         for (int i = 0;i < 3;i++) {
             while (num->random[i] == 0) {
-                num->random[i] = rand();
+                num->random[i] = jl_rand();
             }
         }
     }
@@ -983,13 +982,13 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t pause)
 {
     if (sweep_full > 0)
-        jl_safe_printf("%ld Major collection: estimate freed = %ld
-                       live = %ldm new interval = %ldm time = %ldms\n",
+        jl_safe_printf("TS: %" PRIu64 " Major collection: estimate freed = %" PRIu64
+                       " live = %" PRIu64 "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
                        end - start, freed, live/1024/1024,
                        interval/1024/1024, pause/1000000 );
     else
-        jl_safe_printf("%ld Minor collection: estimate freed = %ld live = %ldm
-                       new interval = %ldm time = %ldms\n",
+        jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64 " live = %" PRIu64
+                       "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
                        end - start, freed, live/1024/1024,
                        interval/1024/1024, pause/1000000 );
 }

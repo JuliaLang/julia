@@ -599,7 +599,8 @@ end
 
 function is_v1_format_manifest(raw_manifest::Dict)
     if haskey(raw_manifest, "manifest_format")
-        if raw_manifest["manifest_format"] isa Dict && haskey(raw_manifest["manifest_format"], "uuid")
+        mf = raw_manifest["manifest_format"]
+        if mf isa Dict && haskey(mf, "uuid")
             # the off-chance where an old format manifest has a dep called "manifest_format"
             return true
         end
@@ -615,7 +616,7 @@ function get_deps(raw_manifest::Dict)
         return raw_manifest
     else
         # if the manifest has no deps, there won't be a `deps` field
-        return get(Dict{String, Any}, raw_manifest, "deps")
+        return get(Dict{String, Any}, raw_manifest, "deps")::Dict{String, Any}
     end
 end
 
@@ -788,7 +789,7 @@ end
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(path::String, depmods::Vector{Any})
+function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
     if isa(sv, Exception)
         return sv
@@ -804,6 +805,11 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             register_root_module(M)
         end
     end
+
+    # Register this cache path now - If Requires.jl is loaded, Revise may end
+    # up looking at the cache path during the init callback.
+    get!(PkgOrigin, pkgorigins, pkg).cachepath = path
+
     inits = sv[2]::Vector{Any}
     if !isempty(inits)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
@@ -858,7 +864,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
     return nothing
 end
 
-function _require_from_serialized(path::String)
+function _require_from_serialized(pkg::PkgId, path::String)
     # loads a precompile cache file, ignoring stale_cachfile tests
     # load all of the dependent modules first
     local depmodnames
@@ -879,7 +885,7 @@ function _require_from_serialized(path::String)
         depmods[i] = dep::Module
     end
     # then load the file
-    return _include_from_serialized(path, depmods)
+    return _include_from_serialized(pkg, path, depmods)
 end
 
 # use an Int counter so that nested @time_imports calls all remain open
@@ -889,13 +895,20 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
-    t_before = time_ns()
+    timing_imports = TIMING_IMPORTS[] > 0
+    try
+    if timing_imports
+        t_before = time_ns()
+        cumulative_compile_timing(true)
+        t_comp_before = cumulative_compile_time_ns()
+    end
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(sourcepath, path_to_try)
         if staledeps === true
             continue
         end
+        staledeps = staledeps::Vector{Any}
         try
             touch(path_to_try) # update timestamp of precompilation file
         catch # file might be read-only and then we fail to update timestamp, which is fine
@@ -916,21 +929,33 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if staledeps === true
             continue
         end
-        restored = _include_from_serialized(path_to_try, staledeps)
+        restored = _include_from_serialized(pkg, path_to_try, staledeps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
-            if TIMING_IMPORTS[] > 0
+            if timing_imports
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
+                comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 tree_prefix = depth == 0 ? "" : "  "^(depth-1)*"┌ "
                 print(lpad(elapsed, 9), " ms  ")
                 printstyled(tree_prefix, color = :light_black)
-                println(pkg.name)
+                print(pkg.name)
+                if comp_time > 0
+                    printstyled(" ", Ryu.writefixed(Float64(100 * comp_time / (elapsed * 1e6)), 2), "% compilation time", color = Base.info_color())
+                end
+                if recomp_time > 0
+                    perc = Float64(100 * recomp_time / comp_time)
+                    printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+                end
+                println()
             end
             return restored
         end
     end
     return !isempty(paths)
+    finally
+        timing_imports && cumulative_compile_timing(false)
+    end
 end
 
 # to synchronize multiple tasks trying to import/using something
@@ -1084,10 +1109,7 @@ require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 function _require_prelocked(uuidkey::PkgId)
     just_loaded_pkg = false
     if !root_module_exists(uuidkey)
-        cachefile = _require(uuidkey)
-        if cachefile !== nothing
-            get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
-        end
+        _require(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
         just_loaded_pkg = true
@@ -1158,7 +1180,7 @@ function set_pkgorigin_version_path(pkg, path)
             d = parsed_toml(project_file)
             v = get(d, "version", nothing)
             if v !== nothing
-                pkgorigin.version = VersionNumber(v)
+                pkgorigin.version = VersionNumber(v::AbstractString)
             end
         end
     end
@@ -1224,11 +1246,11 @@ function _require(pkg::PkgId)
                     end
                     # fall-through to loading the file locally
                 else
-                    m = _require_from_serialized(cachefile)
+                    m = _require_from_serialized(pkg, cachefile)
                     if isa(m, Exception)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     else
-                        return cachefile
+                        return
                     end
                 end
             end
@@ -1307,8 +1329,11 @@ include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
 
 function source_path(default::Union{AbstractString,Nothing}="")
     s = current_task().storage
-    if s !== nothing && haskey(s::IdDict{Any,Any}, :SOURCE_PATH)
-        return s[:SOURCE_PATH]::Union{Nothing,String}
+    if s !== nothing
+        s = s::IdDict{Any,Any}
+        if haskey(s, :SOURCE_PATH)
+            return s[:SOURCE_PATH]::Union{Nothing,String}
+        end
     end
     return default
 end
@@ -1552,7 +1577,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    rm(joinpath(cachepath, cachefiles[idx]))
+                    rm(joinpath(cachepath, cachefiles[idx]); force=true)
                 end
             end
 
@@ -1895,7 +1920,7 @@ function get_preferences_hash(uuid::Union{UUID, Nothing}, prefs_list::Vector{Str
     for name in prefs_list
         prefs_value = get(prefs, name, nothing)
         if prefs_value !== nothing
-            h = hash(prefs_value, h)
+            h = hash(prefs_value, h)::UInt
         end
     end
     # We always return a `UInt64` so that our serialization format is stable
@@ -2014,8 +2039,6 @@ get_compiletime_preferences(::Nothing) = String[]
                 @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
                 return true
             end
-
-            get!(PkgOrigin, pkgorigins, id).cachepath = cachefile
         end
 
         return depmods # fresh cachefile

@@ -152,7 +152,7 @@ function _getenv_include_thread_unsafe()
     return b
 end
 const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
-function include_thread_unsafe()
+function include_thread_unsafe_tests()
     if Threads.nthreads() > 1
         if _env_include_thread_unsafe
             return true
@@ -260,8 +260,7 @@ remotecall_fetch(f25847, id_other, f)
 
 finalize(f)
 yield() # flush gc msgs
-@test false == remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid)
-
+@test poll_while(() -> remotecall_fetch(chk_rrid->(yield(); haskey(Distributed.PGRP.refs, chk_rrid)), id_other, rrid))
 
 # Distributed GC tests for RemoteChannels
 function test_remoteref_dgc(id)
@@ -288,12 +287,12 @@ let wid1 = workers()[1],
     fstore = RemoteChannel(wid2)
 
     put!(fstore, rr)
-    if include_thread_unsafe()
+    if include_thread_unsafe_tests()
         @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
     end
     finalize(rr) # finalize locally
     yield() # flush gc msgs
-    if include_thread_unsafe()
+    if include_thread_unsafe_tests()
         @test remotecall_fetch(k -> haskey(Distributed.PGRP.refs, k), wid1, rrid) == true
     end
     remotecall_fetch(r -> (finalize(take!(r)); yield(); nothing), wid2, fstore) # finalize remotely
@@ -666,7 +665,8 @@ pmap(_->myid(), 1:nworkers())  # priming run
 wp = WorkerPool(workers())
 @test nworkers() == length(unique(pmap(_->myid(), wp, 1:100)))
 @test nworkers() == length(unique(remotecall_fetch(wp->pmap(_->myid(), wp, 1:100), id_other, wp)))
-
+wp = WorkerPool(2:3)
+@test sort(unique(pmap(_->myid(), wp, 1:100))) == [2,3]
 
 # CachingPool tests
 wp = CachingPool(workers())
@@ -1616,7 +1616,11 @@ cluster_cookie("")
 for close_stdin in (true, false), stderr_to_stdout in (true, false)
     local npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
     @test remotecall_fetch(myid, npids[1]) == npids[1]
-    @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
+    if close_stdin
+        @test remotecall_fetch(()->stdin === devnull && !isreadable(stdin), npids[1])
+    else
+        @test remotecall_fetch(()->stdin !== devnull && isopen(stdin) && isreadable(stdin), npids[1])
+    end
     @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
     rmprocs(npids)
 end
@@ -1748,6 +1752,9 @@ let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
     env = Dict(
         "JULIA_DEPOT_PATH" => join(depots, pathsep),
         "JULIA_LOAD_PATH" => join(load_path, pathsep),
+        # Explicitly propagate `TMPDIR`, in the event that we're running on a
+        # CI system where `TMPDIR` is special.
+        "TMPDIR" => dirname(tmp),
     )
     setupcode = """
     using Distributed, Test
@@ -1830,6 +1837,7 @@ let julia = `$(Base.julia_cmd()) --startup-file=no`; mktempdir() do tmp
     env = Dict(
         "JULIA_LOAD_PATH" => LOAD_PATH[1],
         "JULIA_DEPOT_PATH" => DEPOT_PATH[1],
+        "TMPDIR" => ENV["TMPDIR"],
     )
     addprocs(1; env = env, exeflags = `--project=\$(project)`)
     env["JULIA_PROJECT"] = project

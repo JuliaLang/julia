@@ -23,11 +23,11 @@ A linear indexing style uses one integer index to describe the position in the a
 (even if it's a multidimensional array) and column-major
 ordering is used to efficiently access the elements. This means that
 requesting [`eachindex`](@ref) from an array that is `IndexLinear` will return
-a simple one-dimensional range, even if it is multidimensional.
+a simple one-dimensional range, even if it is multidimensional.
 
 A custom array that reports its `IndexStyle` as `IndexLinear` only needs
 to implement indexing (and indexed assignment) with a single `Int` index;
-all other indexing expressions — including multidimensional accesses — will
+all other indexing expressions — including multidimensional accesses — will
 be recomputed to the linear index.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[1, 3]`, this would be
 recomputed to the equivalent linear index and call `A[5]` since `2*1 + 3 = 5`.
@@ -50,13 +50,13 @@ a range of [`CartesianIndices`](@ref).
 
 A `N`-dimensional custom array that reports its `IndexStyle` as `IndexCartesian` needs
 to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
-all other indexing expressions — including linear indexing — will
+all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
 matrix with cartesian indexing, and we referenced `A[5]`, this would be
 recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
 
 It is significantly more expensive to compute Cartesian indices from a linear index than it is
-to go the other way.  The former operation requires division — a very costly operation — whereas
+to go the other way.  The former operation requires division — a very costly operation — whereas
 the latter only uses multiplication and addition and is essentially free. This asymmetry means it
 is far more costly to use linear indexing with an `IndexCartesian` array than it is to use
 Cartesian indexing with an `IndexLinear` array.

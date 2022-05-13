@@ -168,21 +168,19 @@ end
 function Matrix{T}(A::Bidiagonal) where T
     n = size(A, 1)
     B = zeros(T, n, n)
-    if n == 0
-        return B
-    end
-    for i = 1:n - 1
+    n == 0 && return B
+    @inbounds for i = 1:n - 1
         B[i,i] = A.dv[i]
         if A.uplo == 'U'
-            B[i, i + 1] = A.ev[i]
+            B[i,i+1] = A.ev[i]
         else
-            B[i + 1, i] = A.ev[i]
+            B[i+1,i] = A.ev[i]
         end
     end
     B[n,n] = A.dv[n]
     return B
 end
-Matrix(A::Bidiagonal{T}) where {T} = Matrix{T}(A)
+Matrix(A::Bidiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(A)
 Array(A::Bidiagonal) = Matrix(A)
 promote_rule(::Type{Matrix{T}}, ::Type{<:Bidiagonal{S}}) where {T,S} =
     @isdefined(T) && @isdefined(S) ? Matrix{promote_type(T,S)} : Matrix

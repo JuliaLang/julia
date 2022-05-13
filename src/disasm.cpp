@@ -60,6 +60,7 @@
 // for outputting disassembly
 #include <llvm/ADT/Triple.h>
 #include <llvm/AsmParser/Parser.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/BinaryFormat/COFF.h>
 #include <llvm/BinaryFormat/MachO.h>
 #include <llvm/DebugInfo/DIContext.h>
@@ -107,6 +108,8 @@
 #include <llvm/CodeGen/TargetPassConfig.h>
 #include <llvm/Support/CodeGen.h>
 #include <llvm/IR/LegacyPassManager.h>
+
+#include <llvm-c/Disassembler.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -493,11 +496,20 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
     raw_string_ostream stream(code);
 
     {
-        Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
+        //RAII will release the struct itself
+        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
+        //RAII will release the module
+        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
+        //If TSM is not passed in, then the context MUST be locked externally.
+        //RAII will release the lock
+        Optional<orc::ThreadSafeContext::Lock> lock;
+        if (TSM) {
+            lock.emplace(TSM->getContext().getLock());
+        }
+        Function *llvmf = cast<Function>(unwrap(dump->F));
         if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
             jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
-        JL_LOCK(&jl_codegen_lock); // Might GC
         LineNumberAnnotatedWriter AAW{"; ", false, debuginfo};
         if (!llvmf->getParent()) {
             // print the function declaration as-is
@@ -505,7 +517,8 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
             delete llvmf;
         }
         else {
-            Module *m = llvmf->getParent();
+            assert(TSM && TSM->getModuleUnlocked() == llvmf->getParent() && "Passed module was not the same as function parent!");
+            auto m = TSM->getModuleUnlocked();
             if (strip_ir_metadata) {
                 std::string llvmfn(llvmf->getName());
                 jl_strip_llvm_addrspaces(m);
@@ -519,9 +532,7 @@ jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_
             else {
                 llvmf->print(stream, &AAW);
             }
-            delete m;
         }
-        JL_UNLOCK(&jl_codegen_lock); // Might GC
     }
 
     return jl_pchar_to_string(stream.str().data(), stream.str().size());
@@ -900,7 +911,11 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCCodeEmitter> CE;
     std::unique_ptr<MCAsmBackend> MAB;
     if (ShowEncoding) {
+#if JL_LLVM_VERSION >= 150000
+        CE.reset(TheTarget->createMCCodeEmitter(*MCII, Ctx));
+#else
         CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
+#endif
         MAB.reset(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
 
@@ -1193,22 +1208,26 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
     { // scope block
-        Function *f = (Function*)F;
+        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(F));
+        auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
-        assert(!f->isDeclaration());
-        std::unique_ptr<Module> m(f->getParent());
-        for (auto &f2 : m->functions()) {
-            if (f != &f2 && !f->isDeclaration())
-                f2.deleteBody();
-        }
-        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(&jl_ExecutionEngine->getTargetMachine());
+        TSM->withModuleDo([&](Module &m) {
+            Function *f = cast<Function>(unwrap(dump->F));
+            assert(!f->isDeclaration());
+            for (auto &f2 : m.functions()) {
+                if (f != &f2 && !f->isDeclaration())
+                    f2.deleteBody();
+            }
+        });
+        auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
+        LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
         legacy::PassManager PM;
-        addTargetPasses(&PM, TM);
+        addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (raw_mc) {
             raw_svector_ostream obj_OS(ObjBufferSV);
             if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false, nullptr))
                 return jl_an_empty_string;
-            PM.run(*m);
+            TSM->withModuleDo([&](Module &m) { PM.run(m); });
         }
         else {
             MCContext *Context = addPassesToGenerateCode(TM, PM);
@@ -1230,8 +1249,13 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
-            if (binary) // enable MCAsmStreamer::AddEncodingComment printing
+            if (binary) { // enable MCAsmStreamer::AddEncodingComment printing
+#if JL_LLVM_VERSION >= 150000
+                MCE.reset(TM->getTarget().createMCCodeEmitter(MII, *Context));
+#else
                 MCE.reset(TM->getTarget().createMCCodeEmitter(MII, MRI, *Context));
+#endif
+            }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
                 *Context, std::move(FOut), true,
@@ -1247,7 +1271,7 @@ jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_vari
                 return jl_an_empty_string;
             PM.add(Printer.release());
             PM.add(createFreeMachineFunctionPass());
-            PM.run(*m);
+            TSM->withModuleDo([&](Module &m){ PM.run(m); });
         }
     }
     return jl_pchar_to_string(ObjBufferSV.data(), ObjBufferSV.size());

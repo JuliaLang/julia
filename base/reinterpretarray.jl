@@ -707,7 +707,7 @@ function CyclePadding(T::DataType)
 end
 
 using .Iterators: Stateful
-@pure function array_subpadding(S, T)
+@assume_effects :total function array_subpadding(S, T)
     checked_size = 0
     lcm_size = lcm(sizeof(S), sizeof(T))
     s, t = Stateful{<:Any, Any}(CyclePadding(S)),

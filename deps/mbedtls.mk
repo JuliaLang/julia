@@ -71,12 +71,12 @@ $(eval $(call staged-install, \
 
 
 clean-mbedtls:
-	-rm $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
+	-rm -f $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
 		$(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
+	rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
 		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 

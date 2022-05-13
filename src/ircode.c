@@ -755,6 +755,11 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         jl_encode_value_(&s, jl_get_nth_field((jl_value_t*)code, i), copy);
     }
 
+    // For opaque closure, also save the slottypes. We technically only need the first slot type,
+    // but this is simpler for now. We may want to refactor where this gets stored in the future.
+    if (m->is_for_opaque_closure)
+        jl_encode_value_(&s, code->slottypes, 1);
+
     if (m->generator)
         // can't optimize generated functions
         jl_encode_value_(&s, (jl_value_t*)jl_compress_argnames(code->slotnames), 1);
@@ -834,6 +839,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         jl_value_t **fld = (jl_value_t**)((char*)jl_data_ptr(code) + jl_field_offset(jl_code_info_type, i));
         *fld = jl_decode_value(&s);
     }
+    if (m->is_for_opaque_closure)
+        code->slottypes = jl_decode_value(&s);
 
     jl_value_t *slotnames = jl_decode_value(&s);
     if (!jl_is_string(slotnames))

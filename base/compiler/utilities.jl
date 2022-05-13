@@ -52,7 +52,7 @@ function istopfunction(@nospecialize(f), name::Symbol)
     tn = typeof(f).name
     if tn.mt.name === name
         top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getfield(top, name)
+        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
     end
     return false
 end
@@ -64,6 +64,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -208,23 +209,6 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-# This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
-            end
-        end
-    end
-    return nothing
-end
-
 #########
 # types #
 #########
@@ -359,12 +343,12 @@ inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
     ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
     cov = JLOptions().code_coverage
-    if cov == 1
+    if cov == 1 # user
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false
         return true
-    elseif cov == 2
+    elseif cov == 2 # all
         return true
     end
     return false

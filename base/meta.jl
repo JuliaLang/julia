@@ -74,8 +74,7 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+isexpr
 
 """
     replace_sourceloc!(location, expr)

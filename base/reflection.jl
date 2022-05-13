@@ -212,10 +212,7 @@ julia> hasfield(Foo, :x)
 false
 ```
 """
-function hasfield(T::Type, name::Symbol)
-    @_pure_meta
-    return fieldindex(T, name, false) > 0
-end
+hasfield(T::Type, name::Symbol) = fieldindex(T, name, false) > 0
 
 """
     nameof(t::DataType) -> Symbol
@@ -360,7 +357,7 @@ Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`.
 """
 function datatype_alignment(dt::DataType)
-    @_pure_meta
+    @_total_may_throw_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return Int(alignment)
@@ -377,7 +374,7 @@ LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
 
 # amount of total space taken by T when stored in a container
 function aligned_sizeof(@nospecialize T::Type)
-    @_pure_meta
+    @_total_may_throw_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
         return LLT_ALIGN(sz, al)
@@ -400,7 +397,7 @@ with no intervening padding bytes.
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
-    @_pure_meta
+    @_total_may_throw_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
@@ -413,7 +410,7 @@ Return the number of fields known to this datatype's layout.
 Can be called on any `isconcretetype`.
 """
 function datatype_nfields(dt::DataType)
-    @_pure_meta
+    @_total_may_throw_meta
     dt.layout == C_NULL && throw(UndefRefError())
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
@@ -425,7 +422,7 @@ Return whether instances of this type can contain references to gc-managed memor
 Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
-    @_pure_meta
+    @_total_may_throw_meta
     dt.layout == C_NULL && throw(UndefRefError())
     npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
     return npointers == 0
@@ -441,7 +438,7 @@ Can be called on any `isconcretetype`.
 See also [`fieldoffset`](@ref).
 """
 function datatype_fielddesc_type(dt::DataType)
-    @_pure_meta
+    @_total_may_throw_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return (flags >> 1) & 3
@@ -511,8 +508,7 @@ true
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-ismutable(@nospecialize(x)) = (@_pure_meta; typeof(x).name.flags & 0x2 == 0x2)
-
+ismutable(@nospecialize(x)) = (@_total_meta; typeof(x).name.flags & 0x2 == 0x2)
 
 """
     ismutabletype(T) -> Bool
@@ -524,11 +520,11 @@ Determine whether type `T` was declared as a mutable type
     This function requires at least Julia 1.7.
 """
 function ismutabletype(@nospecialize t)
+    @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     return isa(t, DataType) && t.name.flags & 0x2 == 0x2
 end
-
 
 """
     isstructtype(T) -> Bool
@@ -537,7 +533,7 @@ Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
 """
 function isstructtype(@nospecialize t)
-    @_pure_meta
+    @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
@@ -552,7 +548,7 @@ Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive` keyword).
 """
 function isprimitivetype(@nospecialize t)
-    @_pure_meta
+    @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
@@ -583,14 +579,14 @@ julia> isbitstype(Complex)
 false
 ```
 """
-isbitstype(@nospecialize t) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
+isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x8) == 0x8)
 
 """
     isbits(x)
 
 Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
-isbits(@nospecialize x) = (@_pure_meta; typeof(x).flags & 0x8 == 0x8)
+isbits(@nospecialize x) = (@_total_meta; typeof(x).flags & 0x8 == 0x8)
 
 """
     isdispatchtuple(T)
@@ -599,7 +595,7 @@ Determine whether type `T` is a tuple "leaf type",
 meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 """
-isdispatchtuple(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x4) == 0x4)
+isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x4) == 0x4)
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
@@ -642,7 +638,7 @@ julia> isconcretetype(Union{Int,String})
 false
 ```
 """
-isconcretetype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && (t.flags & 0x2) == 0x2)
+isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x2) == 0x2)
 
 """
     isabstracttype(T)
@@ -660,7 +656,7 @@ false
 ```
 """
 function isabstracttype(@nospecialize(t))
-    @_pure_meta
+    @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
@@ -672,17 +668,17 @@ end
 Determine whether type `T` has exactly one possible instance; for example, a
 struct type with no fields.
 """
-issingletontype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && isdefined(t, :instance))
+issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined(t, :instance))
 
 """
-    typeintersect(T, S)
+    typeintersect(T::Type, S::Type)
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(@nospecialize(a), @nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any, Any), a, b))
+typeintersect(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_intersection, Any, (Any, Any), a::Type, b::Type))
 
-morespecific(@nospecialize(a), @nospecialize(b)) = ccall(:jl_type_morespecific, Cint, (Any, Any), a, b) != 0
+morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_morespecific, Cint, (Any, Any), a::Type, b::Type) != 0)
 
 """
     fieldoffset(type, i)
@@ -710,7 +706,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000060, :ctime, Float64)
 ```
 """
-fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, idx::Integer) = (@_total_may_throw_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -756,6 +752,7 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
+    @_total_may_throw_meta
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
@@ -767,7 +764,10 @@ function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
     return fieldindex(t, name, err)
 end
 
-argument_datatype(@nospecialize t) = ccall(:jl_argument_datatype, Any, (Any,), t)
+function argument_datatype(@nospecialize t)
+    @_total_meta
+    return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
+end
 
 """
     fieldcount(t::Type)
@@ -776,13 +776,13 @@ Get the number of fields that an instance of the given type would have.
 An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
+    @_total_may_throw_meta
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
         if t === nothing
             throw(ArgumentError("type does not have a definite number of fields"))
         end
-        t = t::DataType
-    elseif t == Union{}
+    elseif t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
@@ -828,7 +828,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = ntupleany(i -> fieldtype(T, i), fieldcount(T))
+fieldtypes(T::Type) = (@_total_may_throw_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
 
 # return all instances, for types that can be enumerated
 
@@ -1276,26 +1276,31 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(closure::Core.OpaqueClosure);
-        optimize=true,
-        debuginfo::Symbol=:default,
-        interp = Core.Compiler.NativeInterpreter(closure.world))
+function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
+    debuginfo::Symbol=:default, __...)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    m = closure.source
+    m = oc.source
     if isa(m, Method)
         code = _uncompressed_ir(m, m.source)
         debuginfo === :none && remove_linenums!(code)
-        return Any[(code => code.rettype)]
+        # intersect the declared return type and the inferred return type (if available)
+        rt = typeintersect(code.rettype, typeof(oc).parameters[2])
+        return Any[code => rt]
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
 end
 
-function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), interp=Core.Compiler.NativeInterpreter())
+function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
+                      world = get_world_counter(),
+                      interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    if isa(f, Core.OpaqueClosure)
+        _, rt = only(code_typed_opaque_closure(f))
+        return Any[rt]
+    end
     types = to_tuple_type(types)
     rt = []
-    world = get_world_counter()
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
@@ -1303,6 +1308,35 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f)), inte
         push!(rt, something(ty, Any))
     end
     return rt
+end
+
+function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
+                       world = get_world_counter(),
+                       interp = Core.Compiler.NativeInterpreter(world))
+    ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
+    types = to_tuple_type(types)
+    if isa(f, Core.Builtin)
+        args = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
+        return Core.Compiler.builtin_effects(f, args, rt)
+    else
+        effects = Core.Compiler.EFFECTS_TOTAL
+        matches = _methods(f, types, -1, world)::Vector
+        if isempty(matches)
+            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
+            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
+            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
+            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
+        end
+        for match in matches
+            match = match::Core.MethodMatch
+            frame = Core.Compiler.typeinf_frame(interp,
+                match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+            frame === nothing && return Core.Compiler.Effects()
+            effects = Core.Compiler.tristate_merge(effects, frame.ipo_effects)
+        end
+        return effects
+    end
 end
 
 """
@@ -1545,7 +1579,7 @@ Alternatively, in isolation `m1` and `m2` might be ordered, but if a third
 method cannot be sorted with them, they may cause an ambiguity together.
 
 For parametric types, the `ambiguous_bottom` keyword argument controls whether
-`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
 it is considered ambiguous, when `false` it is not.
 
 # Examples
@@ -1735,11 +1769,20 @@ When an argument's type annotation is omitted, it's specified as `Any` argument,
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
-    arg2typs = map(args) do x
-        isexpr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
+    newargs, newargtypes = Any[], Any[]
+    for i = 1:length(args)
+        x = args[i]
+        if isexpr(x, :(::))
+            a = x.args[1]
+            t = x.args[2]
+        else
+            a = x
+            t = GlobalRef(Core, :Any)
+        end
+        push!(newargs, a)
+        push!(newargtypes, t)
     end
-    args, argtypes = first.(arg2typs), last.(arg2typs)
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
+    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(newargtypes...)}, $(newargs...); $(kwargs...))))
 end
 
 """

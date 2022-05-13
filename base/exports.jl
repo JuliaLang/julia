@@ -807,6 +807,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    Splat,
 
 # I/O and events
     close,
@@ -881,6 +882,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
