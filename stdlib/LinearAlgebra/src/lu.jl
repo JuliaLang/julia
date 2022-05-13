@@ -228,15 +228,20 @@ validity (via [`issuccess`](@ref)) lies with the user.
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`.
 
-In general, LU factorization involves a permutation of the rows of the matrix (corresponding to the `F.p` output described below), known as "pivoting" (because it corresponds to choosing which row contains the "pivot", the diagonal entry of `F.U`).  One of the following pivoting strategies can be selected via the optional `pivot` argument:
-argument:
+In general, LU factorization involves a permutation of the rows of the matrix
+(corresponding to the `F.p` output described below), known as "pivoting" (because it
+corresponds to choosing which row contains the "pivot", the diagonal entry of `F.U`).
+One of the following pivoting strategies can be selected via the optional `pivot` argument:
 
 * `RowMaximum()` (default): the standard pivoting strategy; the pivot corresponds
   to the element of maximum absolute value among the remaining, to be factorized rows.
   This pivoting strategy requires the element type to also support [`abs`](@ref) and
-  [`<`](@ref).   (This is generally the only numerically stable option for floating-point matrices.)
+  [`<`](@ref). (This is generally the only numerically stable option for floating-point
+  matrices.)
 * `RowNonZero()`: the pivot corresponds to the first non-zero element among the remaining,
-  to be factorized rows.  (This corresponds to the typical choice in hand calculations, and is also useful for more general algebraic number types that support [`iszero`](@ref) but not `abs` or `<`.)
+  to be factorized rows.  (This corresponds to the typical choice in hand calculations, and
+  is also useful for more general algebraic number types that support [`iszero`](@ref) but
+  not `abs` or `<`.)
 * `NoPivot()`: pivoting turned off (may fail if a zero entry is encountered).
 
 The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
