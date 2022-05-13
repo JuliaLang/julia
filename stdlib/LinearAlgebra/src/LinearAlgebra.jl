@@ -48,6 +48,7 @@ export
     LU,
     LDLt,
     NoPivot,
+    RowNonZero,
     QR,
     QRPivoted,
     LQ,
@@ -173,6 +174,7 @@ struct QRIteration <: Algorithm end
 
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
+struct RowNonZero <: PivotingStrategy end
 struct RowMaximum <: PivotingStrategy end
 struct ColumnNorm <: PivotingStrategy end
 
