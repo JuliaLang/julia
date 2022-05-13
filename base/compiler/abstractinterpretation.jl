@@ -2058,7 +2058,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         t = Const(t.instance)
     end
     if !isempty(sv.pclimitations)
-        if t isa Const || t === Union{}
+        if t isa Const || t === Bottom
             empty!(sv.pclimitations)
         else
             t = LimitedAccuracy(t, sv.pclimitations)
@@ -2288,7 +2288,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
         for frame.currpc in frame.currpc:bbend
             stmt = frame.src.code[frame.currpc]
-            push!(frame.was_reached, frame.currpc)
             # If we're at the end of the basic block ...
             if frame.currpc == bbend
                 # Handle control flow
@@ -2303,6 +2302,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     condx = stmt.cond
                     condt = abstract_eval_value(interp, condx, currstate, frame)
                     if condt === Bottom
+                        ssavaluetypes[frame.currpc] = Bottom
                         empty!(frame.pclimitations)
                         @goto find_next_bb
                     end
@@ -2414,7 +2414,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             # Process non control-flow statements
             (; changes, type) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
-            if type === Union{}
+            if type === Bottom
+                ssavaluetypes[frame.currpc] = Bottom
                 @goto find_next_bb
             end
             if changes !== nothing

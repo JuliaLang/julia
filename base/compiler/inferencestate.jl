@@ -94,7 +94,6 @@ mutable struct InferenceState
     currbb::Int
     currpc::Int
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
-    was_reached::BitSet
     handler_at::Vector{Int} # current exception handler info
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
@@ -141,7 +140,6 @@ mutable struct InferenceState
 
         currbb = currpc = 1
         ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        was_reached = BitSet()
         handler_at = compute_trycatch(code, BitSet())
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
@@ -192,7 +190,7 @@ mutable struct InferenceState
 
         frame = new(
             linfo, world, mod, sptypes, slottypes, src, cfg,
-            currbb, currpc, ip, was_reached, handler_at, ssavalue_uses, bb_vartables, stmt_edges, stmt_info,
+            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
             params, restrict_abstract_call_sites, cached,
@@ -234,7 +232,7 @@ function any_inbounds(code::Vector{Any})
     return false
 end
 
-was_reached((; was_reached)::InferenceState, pc::Int) = pc in was_reached
+was_reached(sv::InferenceState, pc::Int) = sv.src.ssavaluetypes[pc] !== NOT_FOUND
 
 function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:

@@ -568,15 +568,6 @@ function widen_all_consts!(src::CodeInfo)
     return src
 end
 
-function widen_ssavaluetypes!(sv::InferenceState)
-    ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
-    for j = 1:length(ssavaluetypes)
-        t = ssavaluetypes[j]
-        ssavaluetypes[j] = t === NOT_FOUND ? Bottom : widenconditional(t)
-    end
-    return nothing
-end
-
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -590,7 +581,9 @@ function record_slot_assign!(sv::InferenceState)
         if was_reached(sv, i) && isexpr(expr, :(=))
             lhs = expr.args[1]
             if isa(lhs, SlotNumber)
-                vt = widenconst(ssavaluetypes[i])
+                typ = ssavaluetypes[i]
+                @assert typ !== NOT_FOUND "active slot in unreached region"
+                vt = widenconst(typ)
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
@@ -630,6 +623,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             typ = widenconditional(ignorelimited(vt.typ))
         else
             typ = sv.src.ssavaluetypes[pc]
+            @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
         if !(sv.slottypes[id] ⊑ typ)
@@ -673,10 +667,16 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
     return nothing
 end
 
+function widen_ssavaluetypes!(ssavaluetypes::Vector{Any})
+    for j = 1:length(ssavaluetypes)
+        t = ssavaluetypes[j]
+        ssavaluetypes[j] = t === NOT_FOUND ? Bottom : widenconditional(t)
+    end
+    return ssavaluetypes
+end
+
 # annotate types of all symbols in AST
 function type_annotate!(sv::InferenceState, run_optimizer::Bool)
-    widen_ssavaluetypes!(sv)
-
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)
@@ -725,8 +725,8 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
             # introduce temporary TypedSlot for the later optimization passes
             # and also mark used-undef slots
             body[i] = annotate_slot_load!(undefs, oldidx, sv, expr)
-        else # unreached statement  (see issue #7836)
-            if isa(expr, Expr) && is_meta_expr_head(expr.head)
+        else # unreached statement (see issue #7836)
+            if is_meta_expr(expr)
                 # keep any lexically scoped expressions
             elseif run_optimizer
                 deleteat!(body, i)
@@ -755,7 +755,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     end
 
     src.code = body
-    src.ssavaluetypes = ssavaluetypes
+    src.ssavaluetypes = widen_ssavaluetypes!(ssavaluetypes)
 
     nothing
 end
