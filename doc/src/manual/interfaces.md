@@ -745,9 +745,9 @@ in one or two dimensional outputs, but produce an `Array` for any other dimensio
 
 | Methods to implement              | Default definition           | Brief description                                                                     |
 |:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
-| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true` also return fieldnames intended to be kept as private |
-| `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty`.  |
-| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!`. Should return `v`.|
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return fieldnames intended to be kept as private |
+| `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty(x, :s)`.  |
+| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!(x, :s, v)`. Should return `v`.|
 
 Sometimes, it is desirable to change how the end-user interacts with the fields of an object.
 Instead of granting direct access to type fields, an extra layer of abstraction between
@@ -759,9 +759,9 @@ For example, take this representation of a point in a plane in [polar coordinate
 
 ```jldoctest polartype
 julia> mutable struct Point
-    r::Float64
-    ϕ::Float64
-end
+           r::Float64
+           ϕ::Float64
+       end
 
 julia> p = Point(7.0, pi/4)
 Point(7.0, 0.7853981633974483)
@@ -771,7 +771,7 @@ As described in the table above dot access `p.r` is the same as `getproperty(p, 
 
 ```jldoctest polartype
 julia> propertynames(p)
-(:x, :y)
+(:r, :ϕ)
 
 julia> getproperty(p, :r), getproperty(p, :ϕ)
 (7.0, 0.7853981633974483)
@@ -791,35 +791,35 @@ defined to add new functionality:
 julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
 
 julia> function Base.getproperty(p::Point, s::Symbol)
-    if s == :x
-        return getfield(p, :r) * cos(getfield(p, :ϕ))
-    elseif s == :y
-        return getfield(p, :r) * sin(getfield(p, :ϕ))
-    else
-        # This allows accessing fields with p.r and p.ϕ
-        return getfield(p, s)
-    end
-end
+           if s == :x
+               return getfield(p, :r) * cos(getfield(p, :ϕ))
+           elseif s == :y
+               return getfield(p, :r) * sin(getfield(p, :ϕ))
+           else
+               # This allows accessing fields with p.r and p.ϕ
+               return getfield(p, s)
+           end
+       end
 
 julia> function Base.setproperty!(p::Point, s::Symbol, f)
-    if s == :x
-        y = p.y
-        setfield!(p, :r, sqrt(f^2 + y^2))
-        setfield!(p, :ϕ, atan(y, f))
-        return f
-    elseif s == :y
-        x = p.x
-        setfield!(p, :r, sqrt(x^2 + f^2))
-        setfield!(p, :ϕ, atan(f, x))
-        return f
-    else
-        # This allow modifying fields with p.r and p.ϕ
-        return setfield!(p, s, f)
-    end
-end
+           if s == :x
+               y = p.y
+               setfield!(p, :r, sqrt(f^2 + y^2))
+               setfield!(p, :ϕ, atan(y, f))
+               return f
+           elseif s == :y
+               x = p.x
+               setfield!(p, :r, sqrt(x^2 + f^2))
+               setfield!(p, :ϕ, atan(f, x))
+               return f
+           else
+               # This allow modifying fields with p.r and p.ϕ
+               return setfield!(p, s, f)
+           end
+       end
 ```
 
-It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax
+It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
 since the dot syntax would make the functions recursive which can lead to type inference issues. We can now
 try out the new functionality:
 
