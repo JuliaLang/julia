@@ -444,6 +444,11 @@ findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
         string::AbstractString;
         overlap::Bool = false,
     )
+    findall(
+        pattern::Vector{UInt8}
+        string::Vector{UInt8};
+        overlap::Bool = false,
+    )
 
 Return a `Vector{UnitRange{Int}}` of all the matches for `pattern` in `string`.
 Each element of the returned vector is a range of indices where the
@@ -467,12 +472,31 @@ julia> findall("a", "banana")
  2:2
  4:4
  6:6
+
+julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
+2-element Vector{UnitRange{Int64}}:
+ 1:2
+ 4:5
 ```
 
 !!! compat "Julia 1.3"
      This method requires at least Julia 1.3.
 """
 function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
+    found = UnitRange{Int}[]
+    i, e = firstindex(s), lastindex(s)
+    while true
+        r = findnext(t, s, i)
+        isnothing(r) && break
+        push!(found, r)
+        j = overlap || isempty(r) ? first(r) : last(r)
+        j > e && break
+        @inbounds i = nextind(s, j)
+    end
+    return found
+end
+
+function findall(t::T, s::T; overlap::Bool=false) where {T <: Vector{UInt8}}
     found = UnitRange{Int}[]
     i, e = firstindex(s), lastindex(s)
     while true
