@@ -99,7 +99,6 @@ mutable struct InferenceState
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{VarTable}
-    pc_vartable::VarTable
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
 
@@ -152,17 +151,17 @@ mutable struct InferenceState
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
-        pc_vartable = VarTable(undef, nslots)
+        bb_vartable1 = VarTable(undef, nslots)
         bb_vartable_proto = VarTable(undef, nslots)
         argtypes = result.argtypes
         nargtypes = length(argtypes)
         for i in 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
-            pc_vartable[i] = VarState(argtyp, i > nargtypes)
+            bb_vartable1[i] = VarState(argtyp, i > nargtypes)
             bb_vartable_proto[i] = VarState(Bottom, i > nargtypes)
             slottypes[i] = argtyp
         end
-        bb_vartables = VarTable[i == 1 ? copy(pc_vartable) : copy(bb_vartable_proto)
+        bb_vartables = VarTable[i == 1 ? bb_vartable1 : copy(bb_vartable_proto)
             for i = 1:length(cfg.blocks)]
 
         pclimitations = IdSet{InferenceState}()
@@ -193,7 +192,7 @@ mutable struct InferenceState
 
         frame = new(
             linfo, world, mod, sptypes, slottypes, src, cfg,
-            currbb, currpc, ip, was_reached, handler_at, ssavalue_uses, bb_vartables, pc_vartable, stmt_edges, stmt_info,
+            currbb, currpc, ip, was_reached, handler_at, ssavalue_uses, bb_vartables, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
             params, restrict_abstract_call_sites, cached,

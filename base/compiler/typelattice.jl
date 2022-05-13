@@ -376,27 +376,6 @@ widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional
 ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
-function stupdate!(state::Nothing, changes::StateUpdate)
-    newst = copy(changes.state)
-    changeid = slot_id(changes.var)
-    newst[changeid] = changes.vtype
-    # remove any Conditional for this slot from the vtable
-    # (unless this change is came from the conditional)
-    if !changes.conditional
-        for i = 1:length(newst)
-            newtype = newst[i]
-            if isa(newtype, VarState)
-                newtypetyp = ignorelimited(newtype.typ)
-                if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                    newtypetyp = widenwrappedconditional(newtype.typ)
-                    newst[i] = VarState(newtypetyp, newtype.undef)
-                end
-            end
-        end
-    end
-    return newst
-end
-
 function stupdate!(state::VarTable, changes::StateUpdate)
     newstate = nothing
     changeid = slot_id(changes.var)
@@ -436,8 +415,6 @@ function stupdate!(state::VarTable, changes::VarTable)
     end
     return newstate
 end
-
-stupdate!(::Nothing, changes::VarTable) = copy(changes)
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     changeid = slot_id(change.var)
@@ -499,4 +476,3 @@ function stoverwrite1!(state::VarTable, change::StateUpdate)
     state[changeid] = newtype
     return state
 end
-stoverwrite1!(state::VarTable, ::Nothing) = state
