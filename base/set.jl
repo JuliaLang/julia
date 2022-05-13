@@ -195,8 +195,8 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
  3
  4
 ```
-This functionality can also be used to extract the *indices* of the unique elements
-in an array:
+This functionality can also be used to extract the *indices* of the first
+occurrence of unique elements in an array:
 ```jldoctest
 julia> a = [3.1, 4.2, 5.3, 3.1, 3.1, 3.1, 4.2, 1.7];
 
