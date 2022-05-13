@@ -514,6 +514,8 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
+    # clear any postoutput hooks that were saved in the sysimage
+    empty!(Base.postoutput_hooks)
     try
         exec_options(JLOptions())
     catch
