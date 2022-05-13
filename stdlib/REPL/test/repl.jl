@@ -1506,11 +1506,10 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     repl.interface = REPL.setup_interface(repl)
     s = LineEdit.init_state(repl.t, repl.interface)
-    LineEdit.edit_insert(s, "1234")
-    @show buffercontents(LineEdit.buffer(s))
-    input_f = function(filename, line)
-        write(filename, "123456\n")
+    LineEdit.edit_insert(s, "1234αβ")
+    input_f = function(filename, line, column)
+        write(filename, "1234αβ56γ\n")
     end
     LineEdit.edit_input(s, input_f)
-    @test buffercontents(LineEdit.buffer(s)) == "123456"
+    @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end
