@@ -328,7 +328,7 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
         end
         code_typed(foo; optimize=true)
 
-        code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef, Core.Compiler.NewSSAValue); optimize=true)
+        code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
     end |> string
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
     stderr = IOBuffer()
@@ -336,21 +336,19 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
 end
 
 let
-    function test_useref(stmt, v)
+    function test_useref(stmt, v, op)
         if isa(stmt, Expr)
-            @test any(arg -> arg === v, stmt.args)
+            @test stmt.args[op] === v
         elseif isa(stmt, GotoIfNot)
             @test stmt.cond === v
         elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
             @test stmt.val === v
         elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
             @test stmt === v
-        elseif isa(stmt, UpsilonNode)
-            @test stmt.val === v
         elseif isa(stmt, PiNode)
             @test stmt.val === v && stmt.typ === typeof(stmt)
         elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
-            @test any(arg -> arg === v, stmt.values)
+            @test stmt.values[op] === v
         end
     end
 
@@ -364,7 +362,7 @@ let
             v1 = Core.Compiler.getindex(ur)
             # set to dummy expression and then back to itself to test `_useref_setindex!`
             v2 = Core.Compiler.setindex!(ur, ex)
-            test_useref(v2, ex)
+            test_useref(v2, ex, op)
             Core.Compiler.setindex!(ur, v1)
             @test Core.Compiler.getindex(ur) === v1
             it = Core.Compiler.iterate(urs, op)

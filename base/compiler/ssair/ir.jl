@@ -890,6 +890,27 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::Int)
     return compact
 end
 
+__set_check_ssa_counts(onoff::Bool) = __check_ssa_counts__[] = onoff
+const __check_ssa_counts__ = fill(false)
+
+function _oracle_check(compact::IncrementalCompact)
+    observed_used_ssas = Core.Compiler.find_ssavalue_uses1(compact)
+    for i = 1:length(observed_used_ssas)
+        if observed_used_ssas[i] != compact.used_ssas[i]
+            return observed_used_ssas
+        end
+    end
+    return nothing
+end
+
+function oracle_check(compact::IncrementalCompact)
+    maybe_oracle_used_ssas = _oracle_check(compact)
+    if maybe_oracle_used_ssas !== nothing
+        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas)
+        error("Oracle check failed, inspect Main.compact and Main.oracle_used_ssas")
+    end
+end
+
 getindex(view::TypesView, idx::SSAValue) = getindex(view, idx.id)
 function getindex(view::TypesView, idx::Int)
     if isa(view.ir, IncrementalCompact) && idx < view.ir.result_idx
@@ -979,11 +1000,15 @@ function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Ve
     urs = userefs(stmt)
     for op in urs
         val = op[]
-        isa(val, OldSSAValue) || isa(val, NewSSAValue) && push!(late_fixup, result_idx)
+        if isa(val, OldSSAValue) || isa(val, NewSSAValue)
+            push!(late_fixup, result_idx)
+        end
         if isa(val, Union{SSAValue, NewSSAValue})
             val = renumber_ssa2(val, ssanums, used_ssas, new_new_used_ssas, do_rename_ssa)
         end
-        isa(val, OldSSAValue) || isa(val, NewSSAValue) && push!(late_fixup, result_idx)
+        if isa(val, OldSSAValue) || isa(val, NewSSAValue)
+            push!(late_fixup, result_idx)
+        end
         op[] = val
     end
     return urs[]
@@ -1520,6 +1545,9 @@ end
 function complete(compact::IncrementalCompact)
     result_bbs = resize!(compact.result_bbs, compact.active_result_bb-1)
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
+    if __check_ssa_counts__[]
+        oracle_check(compact)
+    end
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
