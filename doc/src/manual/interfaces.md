@@ -740,3 +740,103 @@ yields another `SparseVecStyle`, that its combination with a 2-dimensional array
 yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
+
+## [Instance Properties](@id man-instance-properties)
+
+| Methods to implement              | Default definition           | Brief description                                                                     |
+|:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return fieldnames intended to be kept as private |
+| `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty(x, :s)`.  |
+| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!(x, :s, v)`. Should return `v`.|
+
+Sometimes, it is desirable to change how the end-user interacts with the fields of an object.
+Instead of granting direct access to type fields, an extra layer of abstraction between
+the user and the code can be provided by overloading `object.field`. Properties are what the
+user *sees of* the object, fields what the object *actually is*.
+
+By default, properties and fields are the same. However, this behavior can be changed.
+For example, take this representation of a point in a plane in [polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system):
+
+```jldoctest polartype
+julia> mutable struct Point
+           r::Float64
+           ϕ::Float64
+       end
+
+julia> p = Point(7.0, pi/4)
+Point(7.0, 0.7853981633974483)
+```
+
+As described in the table above dot access `p.r` is the same as `getproperty(p, :r)` which is by default the same as `getfield(p, :r)`:
+
+```jldoctest polartype
+julia> propertynames(p)
+(:r, :ϕ)
+
+julia> getproperty(p, :r), getproperty(p, :ϕ)
+(7.0, 0.7853981633974483)
+
+julia> p.r, p.ϕ
+(7.0, 0.7853981633974483)
+
+julia> getfield(p, :r), getproperty(p, :ϕ)
+(7.0, 0.7853981633974483)
+```
+
+However, we may want users to be unaware that `Point` stores the coordinates as `r` and `ϕ` (fields),
+and instead interact with `x` and `y` (properties). The methods in the first column can be
+defined to add new functionality:
+
+```jldoctest polartype
+julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
+
+julia> function Base.getproperty(p::Point, s::Symbol)
+           if s == :x
+               return getfield(p, :r) * cos(getfield(p, :ϕ))
+           elseif s == :y
+               return getfield(p, :r) * sin(getfield(p, :ϕ))
+           else
+               # This allows accessing fields with p.r and p.ϕ
+               return getfield(p, s)
+           end
+       end
+
+julia> function Base.setproperty!(p::Point, s::Symbol, f)
+           if s == :x
+               y = p.y
+               setfield!(p, :r, sqrt(f^2 + y^2))
+               setfield!(p, :ϕ, atan(y, f))
+               return f
+           elseif s == :y
+               x = p.x
+               setfield!(p, :r, sqrt(x^2 + f^2))
+               setfield!(p, :ϕ, atan(f, x))
+               return f
+           else
+               # This allow modifying fields with p.r and p.ϕ
+               return setfield!(p, s, f)
+           end
+       end
+```
+
+It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
+since the dot syntax would make the functions recursive which can lead to type inference issues. We can now
+try out the new functionality:
+
+```jldoctest polartype
+julia> propertynames(p)
+(:x, :y)
+
+julia> p.x
+4.949747468305833
+
+julia> p.y = 4.0
+4.0
+
+julia> p.r
+6.363961030678928
+```
+
+Finally, it is worth noting that adding instance properties like this is quite
+rarely done in Julia and should in general only be done if there is a good
+reason for doing so.
