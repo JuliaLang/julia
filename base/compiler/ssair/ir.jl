@@ -1805,7 +1805,14 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
     for stmts in (ir.stmts, ir.new_nodes.stmts)
         for i in 1:length(stmts)
             st = stmts[i]
-            inst = ssamap(on_ssavalue, st[:inst])
+            inst = st[:inst]
+            if inst isa SSAValue
+                # `userefs` currently does not iterate over an `SSAValue`. Manually handling
+                # this until PR #44794 lands.
+                inst = on_ssavalue(inst)
+            else
+                inst = ssamap(on_ssavalue, inst)
+            end
             if inst isa PhiNode
                 edges = inst.edges::Vector{Int32}
                 for i in 1:length(edges)
