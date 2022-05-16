@@ -1336,7 +1336,7 @@ end
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
-                elseif y == T(3) # unfortunately x^-2 is less accurate for performance reasons.
+                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
                 else
                     @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
