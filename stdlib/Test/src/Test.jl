@@ -972,7 +972,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
         # pass failfast state into child testsets
         parent_ts = get_testset()
         if parent_ts isa DefaultTestSet
-            failfast = something(parent_ts.failfast, false)
+            failfast = parent_ts.failfast
         else
             failfast = false
         end
