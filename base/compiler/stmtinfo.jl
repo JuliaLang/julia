@@ -10,6 +10,7 @@ and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
+    effects::Effects
     info::Any
 end
 
@@ -81,7 +82,7 @@ effect-free, including being no-throw (typically because the value was computed
 by calling an `@pure` function).
 """
 struct MethodResultPure
-    info::Union{MethodMatchInfo,UnionSplitInfo,Bool}
+    info::Any
 end
 let instance = MethodResultPure(false)
     global MethodResultPure
