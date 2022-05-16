@@ -511,7 +511,7 @@ function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        mod = get_active_module()
+        mod = active_module()
         if is_exported_from_stdlib(mt.name, mt.module) || mt.module === mod
             show_sym(io, mt.name)
         else
