@@ -639,7 +639,7 @@ end
     for out-of-bounds indices. The user is responsible for checking it manually.
     Only use `@inbounds` when it is certain from the information locally available
     that all accesses are in bounds. In particular, using `1:length(A)` instead of 
-    `eachindex` in a function like the one above is _not_ safely inbounds because
+    `eachindex(A)` in a function like the one above is _not_ safely inbounds because
     the first index of `A` may not be `1` for all user defined types that subtype
     `AbstractArray`.
 """
