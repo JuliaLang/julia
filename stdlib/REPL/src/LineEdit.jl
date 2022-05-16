@@ -2431,11 +2431,8 @@ AnyDict(
     "\eu" => (s::MIState,o...)->edit_upper_case(s),
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
-<<<<<<< HEAD
     "\ee" => (s::MIState,o...) -> edit_input(s),
-=======
     "\emm" => (s::MIState, o...) -> activate_module(s)
->>>>>>> 88db0e9418 (use a keybinding to activate modules and delete Base.activate_module)
 )
 
 const history_keymap = AnyDict(
