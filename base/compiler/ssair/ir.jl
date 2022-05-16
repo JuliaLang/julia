@@ -1684,6 +1684,7 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
     ssachangemap = Vector{Int}(undef, length(ir.stmts) + length(ir.new_nodes.stmts))
     let iold = 1, inew = 1
         for pos in statement_positions
+            @assert 1 <= pos <= length(ir.stmts)
             while iold < pos
                 ssachangemap[iold] = inew
                 iold += 1
@@ -1705,7 +1706,6 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
 
     target_blocks = BitSet()
     for ipos in statement_positions
-        @assert 1 <= ipos <= length(ir.stmts)
         ibb = block_for_inst(ir.cfg, ipos)
         if ibb in target_blocks
             poss = block_to_positions[ibb]
