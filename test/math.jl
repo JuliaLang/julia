@@ -1334,9 +1334,9 @@ end
             x=rand(T)*100; y=rand(T)*200-100
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                if y == T(-2) # unforunately x^-2 is less accurate for performance reasons.
+                if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
-                elseif y == T(3) # unforunately x^-2 is less accurate for performance reasons.
+                elseif y == T(3) # unfortunately x^-2 is less accurate for performance reasons.
                     @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
                 else
                     @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
@@ -1344,7 +1344,7 @@ end
             end
         end
         for _ in 1:2^14
-            # test subnromal(x), y in -1.2, 1.8 since anything larger just overflows.
+            # test subnormal(x), y in -1.2, 1.8 since anything larger just overflows.
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
