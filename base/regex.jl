@@ -446,7 +446,7 @@ findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
     )
     findall(
         pattern::Vector{UInt8}
-        string::Vector{UInt8};
+        A::Vector{UInt8};
         overlap::Bool = false,
     )
 
