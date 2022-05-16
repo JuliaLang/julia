@@ -327,6 +327,11 @@ julia> using LinearAlgebra
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
 
 ````
+
+!!! warning "precompilation"
+    When used inside a package, one should always use the two-argument version; the
+    one-argument version could produce unstable results depending on the current
+    environment stack and thus break the package precompilation.
 """
 identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
