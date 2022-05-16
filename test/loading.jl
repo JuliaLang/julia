@@ -157,14 +157,14 @@ end
             This = "$this_uuid"
             """)
 
-            @test Base.env_project_file(dir, "Root").uuid == root_uuid
-            @test Base.env_project_file(project_file, "Root").uuid == root_uuid
+            @test Base.env_project_file(joinpath(dir, "Root")).uuid == root_uuid
+            @test Base.env_project_file(joinpath(project_file, "Root")).uuid == root_uuid
 
-            @test Base.env_project_file(dir, "This").uuid == this_uuid
-            @test Base.env_project_file(project_file, "This").uuid == this_uuid
+            @test Base.env_project_file(joinpath(dir, "This")).uuid == this_uuid
+            @test Base.env_project_file(joinpath(project_file, "This")).uuid == this_uuid
 
-            @test Base.env_project_file(dir, "That").uuid == nothing
-            @test Base.env_project_file(project_file, "That").uuid == nothing
+            @test Base.env_project_file(joinpath(dir, "That")).uuid == nothing
+            @test Base.env_project_file(joinpath(project_file, "That")).uuid == nothing
 
             # look up various packages by name
             root = Base.identify_package("Root")
