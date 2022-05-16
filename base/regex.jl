@@ -496,7 +496,10 @@ function findall(t::Union{AbstractString,AbstractPattern}, s::AbstractString; ov
     return found
 end
 
-function findall(t::T, s::T; overlap::Bool=false) where {T <: Vector{UInt8}}
+function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+                 s::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+                 ;
+                 overlap::Bool=false)
     found = UnitRange{Int}[]
     i, e = firstindex(s), lastindex(s)
     while true
