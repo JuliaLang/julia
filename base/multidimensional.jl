@@ -416,6 +416,9 @@ module IteratorsMD
     # current column is consumed. The implementation is written recursively to achieve this.
     # `iterate` returns `Union{Nothing, Tuple}`, we explicitly pass a `valid` flag to eliminate
     # the type instability inside the core `__inc` logic, and this gives better runtime performance.
+    # The third argument ndim is used to preserve the original dimension information to help
+    # elliminate unnecessary boundary checks and thus enable vectorization -- this makes low
+    # dimensional case, especially 1d and 2d, much happier.
     __inc(::Tuple{}, ::Tuple{}, ::Val) = false, ()
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt}, ::Val{N}) where {N}
         rng = indices[1]
