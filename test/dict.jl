@@ -159,6 +159,14 @@ end
     d = Dict(i==1 ? (1=>2) : (2.0=>3.0) for i=1:2)
     @test isa(d, Dict{Real,Real})
     @test d == Dict{Real,Real}(2.0=>3.0, 1=>2)
+
+    # issue #39117
+    @test Dict(t[1]=>t[2] for t in zip((1,"2"), (2,"2"))) == Dict{Any,Any}(1=>2, "2"=>"2")
+end
+
+@testset "empty tuple ctor" begin
+    h = Dict(())
+    @test length(h) == 0
 end
 
 @testset "type of Dict constructed from varargs of Pairs" begin
@@ -358,6 +366,26 @@ end
     str = String(take!(io))
     @test str == "Dict{$(Int), String}()"
     close(io)
+end
+
+
+struct RainBowString
+    s::String
+end
+
+function Base.show(io::IO, rbs::RainBowString)
+    for s in rbs.s
+        _, color = rand(Base.text_colors)
+        print(io, color, s, "\e[0m")
+    end
+end
+
+@testset "Display with colors" begin
+    d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
+    str = sprint(io -> show(io, MIME("text/plain"), d); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    lines = split(str, '\n')
+    @test all(endswith('…'), lines[2:end])
+    @test all(x -> length(x) > 100, lines[2:end])
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
@@ -681,6 +709,7 @@ import Base.ImmutableDict
     d4 = ImmutableDict(d3, k2 => v1)
     dnan = ImmutableDict{String, Float64}(k2, NaN)
     dnum = ImmutableDict(dnan, k2 => 1)
+    f(x) = x^2
 
     @test isempty(collect(d))
     @test !isempty(collect(d1))
@@ -726,6 +755,18 @@ import Base.ImmutableDict
     @test get(d4, "key1", :default) === v2
     @test get(d4, "foo", :default) === :default
     @test get(d, k1, :default) === :default
+    @test get(d1, "key1") do
+        f(2)
+    end === v1
+    @test get(d4, "key1") do
+        f(4)
+    end === v2
+    @test get(d4, "foo") do
+        f(6)
+    end === 36
+    @test get(d, k1) do
+        f(8)
+    end === 64
     @test d1["key1"] === v1
     @test d4["key1"] === v2
     @test empty(d3) === d
@@ -1054,6 +1095,26 @@ end
     check_merge([Dict(3=>4), Dict(:a=>5)], Dict(:a => 5, 3 => 4))
 end
 
+@testset "AbstractDict mergewith!" begin
+# we use IdDict to test the mergewith! implementation for AbstractDict
+    d1 = IdDict(1 => 1, 2 => 2)
+    d2 = IdDict(2 => 3, 3 => 4)
+    d3 = IdDict{Int, Float64}(1 => 5, 3 => 6)
+    d = copy(d1)
+    @inferred mergewith!(-, d, d2)
+    @test d == IdDict(1 => 1, 2 => -1, 3 => 4)
+    d = copy(d1)
+    @inferred mergewith!(-, d, d3)
+    @test d == IdDict(1 => -4, 2 => 2, 3 => 6)
+    d = copy(d1)
+    @inferred mergewith!(+, d, d2, d3)
+    @test d == IdDict(1 => 6, 2 => 5, 3 => 10)
+    @inferred mergewith(+, d1, d2, d3)
+    d = mergewith(+, d1, d2, d3)
+    @test d isa Dict{Int, Float64}
+    @test d == Dict(1 => 6, 2 => 5, 3 => 10)
+end
+
 @testset "misc error/io" begin
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test_throws ErrorException 'a' in d
@@ -1143,6 +1204,8 @@ end
             @test s === copy!(s, Base.ImmutableDict(a[])) == Dict(a[])
         end
     end
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "map!(f, values(dict))" begin
@@ -1161,6 +1224,7 @@ end
         map!(v->v-1, values(testdict))
         @test testdict[:a] == 0
         @test testdict[:b] == 1
+        @test sizehint!(testdict, 1) === testdict
     end
     @testset "Dict" begin
         testdict = Dict(:a=>1, :b=>2)
@@ -1172,33 +1236,33 @@ end
 
 # WeakKeyDict soundness (#38727)
 mutable struct ComparesWithGC38727
-	i::Int
+    i::Int
 end
 const armed = Ref{Bool}(true)
 @noinline fwdab38727(a, b) = invoke(Base.isequal, Tuple{Any, WeakRef}, a, b)
 function Base.isequal(a::ComparesWithGC38727, b::WeakRef)
-	# This GC.gc() here simulates a GC during compilation in the original issue
-	armed[] && GC.gc()
-        armed[] = false
-        fwdab38727(a, b)
+    # This GC.gc() here simulates a GC during compilation in the original issue
+    armed[] && GC.gc()
+    armed[] = false
+    fwdab38727(a, b)
 end
 Base.isequal(a::WeakRef, b::ComparesWithGC38727) = isequal(b, a)
 Base.:(==)(a::ComparesWithGC38727, b::ComparesWithGC38727) = a.i == b.i
 Base.hash(a::ComparesWithGC38727, u::UInt) = Base.hash(a.i, u)
 function make_cwgc38727(wkd, i)
-	f = ComparesWithGC38727(i)
-	function fin(f)
-		f.i = -1
-	end
-	finalizer(fin, f)
-	f
+    f = ComparesWithGC38727(i)
+    function fin(f)
+        f.i = -1
+    end
+    finalizer(fin, f)
+    f
 end
 @noinline mk38727(wkd) = wkd[make_cwgc38727(wkd, 1)] = nothing
 function bar()
-	wkd = WeakKeyDict{Any, Nothing}()
-	mk38727(wkd)
-	armed[] = true
-	z = getkey(wkd, ComparesWithGC38727(1), missing)
+    wkd = WeakKeyDict{Any, Nothing}()
+    mk38727(wkd)
+    armed[] = true
+    z = getkey(wkd, ComparesWithGC38727(1), missing)
 end
 # Run this twice, in case compilation the first time around
 # masks something.
@@ -1207,4 +1271,11 @@ let c = bar()
 end
 let c = bar()
     @test c === missing || c == ComparesWithGC38727(1)
+end
+
+@testset "shrinking" begin
+    d = Dict(i => i for i = 1:1000)
+    filter!(x -> x.first < 10, d)
+    sizehint!(d, 10)
+    @test length(d.slots) < 100
 end

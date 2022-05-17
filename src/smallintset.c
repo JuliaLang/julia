@@ -130,14 +130,16 @@ static int smallintset_insert_(jl_array_t *a, uint_t hv, size_t val1)
     return 0;
 }
 
-static void smallintset_rehash(jl_array_t **cache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np);
+static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np);
 
-void jl_smallintset_insert(jl_array_t **cache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data)
+void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data)
 {
-    if (val + 1 >  jl_max_int(*cache))
-        smallintset_rehash(cache, parent, hash, data, jl_array_len(*cache), val + 1);
+    jl_array_t *a = jl_atomic_load_relaxed(pcache);
+    if (val + 1 >  jl_max_int(a))
+        smallintset_rehash(pcache, parent, hash, data, jl_array_len(a), val + 1);
     while (1) {
-        if (smallintset_insert_(*cache, hash(val, data), val + 1))
+        a = jl_atomic_load_relaxed(pcache);
+        if (smallintset_insert_(a, hash(val, data), val + 1))
             return;
 
         /* table full */
@@ -145,20 +147,21 @@ void jl_smallintset_insert(jl_array_t **cache, jl_value_t *parent, smallintset_h
         /* it's important to grow the table really fast; otherwise we waste */
         /* lots of time rehashing all the keys over and over. */
         size_t newsz;
-        size_t sz = jl_array_len(*cache);
+        a = jl_atomic_load_relaxed(pcache);
+        size_t sz = jl_array_len(a);
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
         else if (sz >= (1 << 19) || (sz <= (1 << 8)))
             newsz = sz << 1;
         else
             newsz = sz << 2;
-        smallintset_rehash(cache, parent, hash, data, newsz, 0);
+        smallintset_rehash(pcache, parent, hash, data, newsz, 0);
     }
 }
 
-static void smallintset_rehash(jl_array_t **cache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np)
+static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np)
 {
-    jl_array_t *a = *cache;
+    jl_array_t *a = jl_atomic_load_relaxed(pcache);
     size_t sz = jl_array_len(a);
     size_t i;
     for (i = 0; i < sz; i += 1) {
@@ -179,7 +182,7 @@ static void smallintset_rehash(jl_array_t **cache, jl_value_t *parent, smallints
         }
         JL_GC_POP();
         if (i == sz) {
-            *cache = newa;
+            jl_atomic_store_release(pcache, newa);
             jl_gc_wb(parent, newa);
             return;
         }

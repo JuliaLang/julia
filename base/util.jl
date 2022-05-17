@@ -18,6 +18,7 @@ const text_colors = Dict{Union{Symbol,Int},String}(
     :light_blue    => "\033[94m",
     :light_magenta => "\033[95m",
     :light_cyan    => "\033[96m",
+    :light_white   => "\033[97m",
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
@@ -67,7 +68,9 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...;
+        bold::Bool = false, underline::Bool = false, blink::Bool = false,
+        reverse::Bool = false, hidden::Bool = false)
     buf = IOBuffer()
     iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
@@ -77,12 +80,25 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
             print(io, str)
         else
             bold && color === :bold && (color = :nothing)
+            underline && color === :underline && (color = :nothing)
+            blink && color === :blink && (color = :nothing)
+            reverse && color === :reverse && (color = :nothing)
+            hidden && color === :hidden && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "")
-            disable_ansi = (bold ? disable_text_style[:bold] : "") *
+                               (bold ? text_colors[:bold] : "") *
+                               (underline ? text_colors[:underline] : "") *
+                               (blink ? text_colors[:blink] : "") *
+                               (reverse ? text_colors[:reverse] : "") *
+                               (hidden ? text_colors[:hidden] : "")
+
+            disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
+                           (reverse ? disable_text_style[:reverse] : "") *
+                           (blink ? disable_text_style[:blink] : "") *
+                           (underline ? disable_text_style[:underline] : "") *
+                           (bold ? disable_text_style[:bold] : "") *
                                get(disable_text_style, color, text_colors[:default])
             first = true
-            for line in split(str, '\n')
+            for line in eachsplit(str, '\n')
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
@@ -94,21 +110,30 @@ function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}
 end
 
 """
-    printstyled([io], xs...; bold::Bool=false, color::Union{Symbol,Int}=:normal)
+    printstyled([io], xs...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Symbol,Int}=:normal)
 
 Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
-`color` may take any of the values $(Base.available_text_colors_docstring)
+Keyword `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
-If the keyword `bold` is given as `true`, the result will be printed in bold.
+
+Keywords `bold=true`, `underline=true`, `blink=true` are self-explanatory.
+Keyword `reverse=true` prints with foreground and background colors exchanged,
+and `hidden=true` should be invisibe in the terminal but can still be copied.
+These properties can be used in any combination.
+
+See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
+
+!!! compat "Julia 1.7"
+    Keywords except `color` and `bold` were added in Julia 1.7.
 """
-printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold)
-printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(stdout, msg...; bold=bold, color=color)
+@constprop :none printstyled(io::IO, msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
+@constprop :none printstyled(msg...; bold::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()))
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -124,7 +149,7 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 !!! compat "Julia 1.5"
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -154,13 +179,14 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   elseif opts.check_bounds == 2
                       "no" # off
                   else
-                      "" # "default"
+                      "" # default = "auto"
                   end
         isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
+    opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
     if opts.code_coverage != 0
         # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
@@ -170,6 +196,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                 push!(addflags, "--code-coverage=user")
             elseif opts.code_coverage == 2
                 push!(addflags, "--code-coverage=all")
+            elseif opts.code_coverage == 3
+                push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
@@ -178,6 +206,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
         push!(addflags, "--track-allocation=all")
+    elseif opts.malloc_log == 3
+        push!(addflags, "--track-allocation=@$(unsafe_string(opts.tracked_path))")
     end
     if opts.color == 1
         push!(addflags, "--color=yes")
@@ -186,6 +216,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
     end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
+    end
+    if opts.use_sysimage_native_code == 0
+        push!(addflags, "--sysimage-native-code=no")
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
@@ -265,6 +298,16 @@ is encountered or EOF (^D) character is entered on a blank line. If a `default` 
 then the user can enter just a newline character to select the `default`.
 
 See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+
+# Example
+
+```julia-repl
+julia> your_name = Base.prompt("Enter your name");
+Enter your name: Logan
+
+julia> your_name
+"Logan"
+```
 """
 function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
@@ -515,54 +558,6 @@ function _kwdef!(blk, params_args, call_args)
     blk
 end
 
-"""
-    @invoke f(arg::T, ...; kwargs...)
-
-Provides a convenient way to call [`invoke`](@ref);
-`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
-When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
-`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
-"""
-macro invoke(ex)
-    f, args, kwargs = destructure_callex(ex)
-    arg2typs = map(args) do x
-        is_expr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
-    end
-    args, argtypes = first.(arg2typs), last.(arg2typs)
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
-end
-
-"""
-    @invokelatest f(args...; kwargs...)
-
-Provides a convenient way to call [`Base.invokelatest`](@ref).
-`@invokelatest f(args...; kwargs...)` will simply be expanded into
-`Base.invokelatest(f, args...; kwargs...)`.
-"""
-macro invokelatest(ex)
-    f, args, kwargs = destructure_callex(ex)
-    return esc(:($(GlobalRef(Base, :invokelatest))($(f), $(args...); $(kwargs...))))
-end
-
-function destructure_callex(ex)
-    is_expr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
-
-    f = first(ex.args)
-    args = []
-    kwargs = []
-    for x in ex.args[2:end]
-        if is_expr(x, :parameters)
-            append!(kwargs, x.args)
-        elseif is_expr(x, :kw)
-            push!(kwargs, x)
-        else
-            push!(args, x)
-        end
-    end
-
-    return f, args, kwargs
-end
-
 # testing
 
 """
@@ -578,7 +573,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
@@ -590,13 +585,18 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
+    ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
+    delete!(ENV2, "JULIA_LOAD_PATH")
+    delete!(ENV2, "JULIA_PROJECT")
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
         buf = PipeBuffer()
+        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
         Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

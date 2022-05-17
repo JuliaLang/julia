@@ -1,0 +1,613 @@
+{
+    "spdxVersion": "SPDX-2.2",
+    "dataLicense": "CC0-1.0",
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "name": "julia-spdx",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-dfcfa3b6-fcb6-4ad1-99e0-deb7bec44bee",
+    "creationInfo": {
+        "creators": [
+            "Organization: julialang.org ()",
+            "Person: Simon Avery ()"
+        ],
+        "created": "2022-02-16T11:46:38Z"
+    },
+    "documentDescribes": [
+        "SPDXRef-JuliaMain"
+    ],
+    "packages": [
+        {
+            "name": "Julia",
+            "SPDXID": "SPDXRef-JuliaMain",
+            "versionInfo": "1.8.0-DEV",
+            "packageFileName": "./",
+            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.8.0-DEV",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "Julia is a high-level, high-performance dynamic language for technical computing.",
+            "comment": "In addition to the source code described by this package, Julia pulls in code from many other respositories, which are also described in this document. See relationships for details."
+        },
+        {
+            "name": "Pkg.jl",
+            "SPDXID": "SPDXRef-JuliaPkg",
+            "downloadLocation": "git+https://github.com/JuliaLang/Pkg.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Pkg.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2017-2021: Stefan Karpinski, Kristoffer Carlsson, Fredrik Ekre, David Varela, Ian Butterworth, and contributors: https://github.com/JuliaLang/Pkg.jl/graphs/contributors",
+            "summary": "Julia's package manager, shipped with Julia v1.0 and above"
+        },
+        {
+            "name": "Statistics.jl",
+            "SPDXID": "SPDXRef-JuliaStatistics",
+            "downloadLocation": "git+https://github.com/JuliaLang/Statistics.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Statistics.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2012-2016: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, Dahua Lin, Simon Byrne, Andreas Noack, Douglas Bates, John Myles White, Simon Kornblith, and other contributors.",
+            "summary": "Development repository for the Statistics standard library (stdlib) that ships with Julia."
+        },
+        {
+            "name": "libCURL.jl",
+            "SPDXID": "SPDXRef-JuliaCurl",
+            "downloadLocation": "git+https://github.com/JuliaWeb/LibCURL.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/libCURL.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2013: JuliaWeb contributors",
+            "summary": "Julia wrapper for libCURL"
+        },
+        {
+            "name": "Downloads.jl",
+            "SPDXID": "SPDXRef-JuliaDownloads",
+            "downloadLocation": "git+https://github.com/JuliaLang/Downloads.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Downloads.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "The Downloads package provides a single function, download, which provides cross-platform, multi-protocol, in-process download functionality implemented with libcurl."
+        },
+        {
+            "name": "ArgTools.jl",
+            "SPDXID": "SPDXRef-JuliaArgTools",
+            "downloadLocation": "git+https://github.com/JuliaIO/ArgTools.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/ArgTools.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "ArgTools provides tools for creating consistent, flexible APIs that work with various kinds of function arguments."
+        },
+        {
+            "name": "Tar.jl",
+            "SPDXID": "SPDXRef-JuliaTar",
+            "downloadLocation": "git+https://github.com/JuliaIO/Tar.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Tar.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2019 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "The Tar package can list, extract and create POSIX TAR archives (tarballs) as specified in POSIX 1003.1-2001."
+        },
+        {
+            "name": "NetworkOptions.jl",
+            "SPDXID": "SPDXRef-JuliaNetworkOptions",
+            "downloadLocation": "git+https://github.com/JuliaLang/NetworkOptions.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/NetworkOptions.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2020 Stefan Karpinski <stefan@karpinski.org> and contributors",
+            "summary": "The NetworkOptions package acts as a mediator between ways of configuring network transport mechanisms (SSL/TLS, SSH, proxies, etc.) and Julia packages that provide access to transport mechanisms."
+        },
+        {
+            "name": "SuiteSparse.jl",
+            "SPDXID": "SPDXRef-JuliaSuiteSparse",
+            "downloadLocation": "git+https://github.com/JuliaSparse/SuiteSparse.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SuiteSparse.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "SuiteSparse.jl provides Julia wrappers for the SuiteSparse library, and provides Julia's sparse linear algebra capabilities - specifically the solvers."
+        },
+        {
+            "name": "SparseArrays.jl",
+            "SPDXID": "SPDXRef-JuliaSparseArrays",
+            "downloadLocation": "git+https://github.com/JuliaSparse/SparseArrays.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SparseArrays.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "summary": "SparseArrays.jl provides Julia's sparse linear algebra capabilities."
+        },
+        {
+            "name": "SHA.jl",
+            "SPDXID": "SPDXRef-JuliaSHA",
+            "downloadLocation": "git+https://github.com/JuliaCrypto/SHA.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/SHA.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2014: Elliot Saba",
+            "summary": "A performant, 100% native-julia SHA1, SHA2, and SHA3 implementation"
+        },
+        {
+            "name": "dSFMT",
+            "SPDXID": "SPDXRef-dSFMT",
+            "downloadLocation": "git+https://github.com/MersenneTwister-Lab/dSFMT.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/MersenneTwister-Lab/dSFMT",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2007, 2008, 2009 Mutsuo Saito, Makoto Matsumoto and Hiroshima University. Copyright (c) 2011, 2002 Mutsuo Saito, Makoto Matsumoto, Hiroshima University and The University of Tokyo.",
+            "summary": "Double precision SIMD-oriented Fast Mersenne Twister"
+        },
+        {
+            "name": "OpenLibm",
+            "SPDXID": "SPDXRef-OpenLibm",
+            "downloadLocation": "git+https://github.com/JuliaMath/openlibm.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/openlibm.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT AND BSD-2-Clause-FreeBSD AND ISC",
+            "copyrightText": "Copyright (c) 2011-14 The Julia Project.  Copyright (c) 2008 Stephen L. Moshier steve@moshier.net  Copyright 1992-2011 The FreeBSD Project. All rights reserved.  Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.",
+            "summary": "High quality system independent, portable, open source libm implementation"
+        },
+        {
+            "name": "GMP",
+            "SPDXID": "SPDXRef-GMP",
+            "downloadLocation": "https://gmplib.org/download/gmp/",
+            "filesAnalyzed": false,
+            "homepage": "https://gmplib.org/",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "LGPL-3.0-or-later",
+            "licenseDeclared": "LGPL-3.0-or-later OR GPL-2.0-or-later",
+            "copyrightText": "Copyright 1991, 1996, 1999, 2000, 2007 Free Software Foundation, Inc.",
+            "summary": "GNU MP is a portable library written in C for arbitrary precision arithmetic on integers, rational numbers, and floating-point numbers."
+        },
+        {
+            "name": "libgit2",
+            "SPDXID": "SPDXRef-libgit2",
+            "downloadLocation": "git+https://github.com/libgit2/libgit2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://libgit2.org",
+            "sourceInfo": "The version in use can be found in the file deps/libgit2.version",
+            "licenseConcluded": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
+            "licenseDeclared": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
+            "copyrightText": "libgit2 is Copyright (C) the libgit2 contributors, unless otherwise stated. See the AUTHORS file for details.",
+            "summary": "A cross-platform, linkable library implementation of Git that you can use in your application."
+        },
+        {
+            "name": "curl",
+            "SPDXID": "SPDXRef-curl",
+            "downloadLocation": "git+https://github.com/curl/curl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://curl.se",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "curl",
+            "licenseDeclared": "curl",
+            "copyrightText": "Copyright (c) 1996 - 2021, Daniel Stenberg, daniel@haxx.se, and many contributors, see the THANKS file.",
+            "summary": "A command line tool and library for transferring data with URL syntax, supporting DICT, FILE, FTP, FTPS, GOPHER, GOPHERS, HTTP, HTTPS, IMAP, IMAPS, LDAP, LDAPS, MQTT, POP3, POP3S, RTMP, RTMPS, RTSP, SCP, SFTP, SMB, SMBS, SMTP, SMTPS, TELNET and TFTP. libcurl offers a myriad of powerful features"
+        },
+        {
+            "name": "libssh2",
+            "SPDXID": "SPDXRef-libssh2",
+            "downloadLocation": "git+https://github.com/libssh2/libssh2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.libssh2.org",
+            "sourceInfo": "The version in use can be found in the file deps/libssh2.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2004-2007 Sara Golemon <sarag@libssh2.org>\nCopyright (c) 2005,2006 Mikhail Gusarov <dottedmag@dottedmag.net>\nCopyright (c) 2006-2007 The Written Word, Inc.\nCopyright (c) 2007 Eli Fant <elifantu@mail.ru>\nCopyright (c) 2009-2021 Daniel Stenberg\nCopyright (C) 2008, 2009 Simon Josefsson\nCopyright (c) 2000 Markus Friedl\nCopyright (c) 2015 Microsoft Corp.\nAll rights reserved.",
+            "summary": "libssh2 is a library implementing the SSH2 protocol, available under the revised BSD license."
+        },
+        {
+            "name": "mbedtls",
+            "SPDXID": "SPDXRef-mbedtls",
+            "downloadLocation": "git+https://github.com/ARMmbed/mbedtls.git",
+            "filesAnalyzed": false,
+            "homepage": "https://tls.mbed.org",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "Apache-2.0",
+            "licenseDeclared": "Apache-2.0",
+            "copyrightText": "NOASSERTION",
+            "summary": "An open source, portable, easy to use, readable and flexible SSL library."
+        },
+        {
+            "name": "mpfr",
+            "SPDXID": "SPDXRef-mpfr",
+            "downloadLocation": "https://www.mpfr.org/",
+            "filesAnalyzed": false,
+            "homepage": "https://www.mpfr.org/",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "LGPL-3.0-or-later",
+            "licenseDeclared": "LGPL-3.0-or-later",
+            "copyrightText": "Copyright 2000-2020 Free Software Foundation, Inc.",
+            "summary": "The MPFR library is a C library for multiple-precision floating-point computations with correct rounding."
+        },
+        {
+            "name": "OpenBLAS",
+            "SPDXID": "SPDXRef-OpenBLAS",
+            "downloadLocation": "git+https://github.com/xianyi/OpenBLAS.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.openblas.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/openblas.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2011-2014, The OpenBLAS Project",
+            "summary": "OpenBLAS is an optimized BLAS library based on GotoBLAS2 1.13 BSD version."
+        },
+        {
+            "name": "LAPACK",
+            "SPDXID": "SPDXRef-LAPACK",
+            "downloadLocation": "https://www.netlib.org/lapack/",
+            "filesAnalyzed": false,
+            "homepage": "https://netlib.org/",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 1992-2013 The University of Tennessee and The University of Tennessee Research Foundation.  All rights reserved.\nCopyright (c) 2000-2013 The University of California Berkeley. All rights reserved.\nCopyright (c) 2006-2013 The University of Colorado Denver.  All rights reserved.",
+            "summary": "LAPACK is written in Fortran 90 and provides routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems."
+        },
+        {
+            "name": "PCRE",
+            "SPDXID": "SPDXRef-PCRE",
+            "downloadLocation": "git+https://github.com/PhilipHazel/pcre2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.pcre.org",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 1997-2021 University of Cambridge All rights reserved.\nCopyright(c) 2009-2021 Zoltan Herczeg\n",
+            "summary": "PCRE2 is a library of functions to support regular expressions whose syntax and semantics are as close as possible to those of the Perl 5 language."
+        },
+        {
+            "name": "LibSuiteSparse",
+            "SPDXID": "SPDXRef-LibSuiteSparse",
+            "packageFileName": "./",
+            "downloadLocation": "git+https://github.com/DrTimothyAldenDavis/SuiteSparse.git",
+            "filesAnalyzed": false,
+            "homepage": "https://people.engr.tamu.edu/davis/suitesparse.html",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "GPL-2.0-or-later",
+            "licenseDeclared": "LGPL-2.0-or-later AND GPL-2.0-or-later AND BSD-3 AND Apache-2.0 ",
+            "licenseComments": "SuiteSparse consists of many modules, each of which is licensed separately.",
+            "copyrightText": "AMD, Copyright (c), 1996-2015, Timothy A. Davis,\nBTF, Copyright (C) 2004-2013, University of Florida\nCAMD, Copyright (c) by Timothy A. Davis, Yanqing Chen, Patrick R. Amestoy, and Iain S. Duff.  All Rights Reserved.\nCCOLAMD: Copyright (C) 2005-2016, Univ. of Florida.  Authors: Timothy A. Davis, Sivasankaran Rajamanickam, and Stefan Larimore.  Closely based on COLAMD by Davis, Stefan Larimore, in collaboration with Esmond Ng, and John Gilbert.\nCHOLMOD/Check Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Cholesky module, Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Core Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis.\nCHOLMOD/Demo Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Include/* files.  Copyright (C) 2005-2006, either Univ. of Florida or T. Davis, depending on the file\nCHOLMOD/MATLAB Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/MatrixOps Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCHOLMOD/Modify Module.  Copyright (C) 2005-2006, Timothy A. Davis and William W. Hager.\nCHOLMOD/Partition Module.  Copyright (C) 2005-2006, Univ. of Florida.  Author: Timothy A. Davis\nCHOLMOD/Supernodal Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Tcov Module.  Copyright (C) 2005-2006, Timothy A. Davis\nCHOLMOD/Valgrind Module.  Copyright (C) 2005-2006, Timothy A. Davis.\nCOLAMD, Copyright 1998-2016, Timothy A. Davis.\nCSparse, Copyright (c) 2006, Timothy A. Davis.\nCXSparse: Copyright (c) 2006, Timothy A. Davis.\nGPUQREngine, Copyright (c) 2013, Timothy A. Davis, Sencer Nuri Yeralan, and Sanjay Ranka.\nKLU, Copyright (C) 2004-2013, University of Florida by Timothy A. Davis and Ekanathan Palamadai.\nLDL, Copyright (c) 2005-2013 by Timothy A. Davis.\nThe MATLAB_Tools collection of packages is Copyright (c), Timothy A. Davis, All Rights Reserved, with the exception of the spqr_rank package, which is Copyright (c), Timothy A. Davis and Les Foster, All Rights Reserved\nMATLAB_Tools, SSMULT, Copyright (c) 2007-2011, Timothy A. Davis,\nMongoose Graph Partitioning Library  Copyright (C) 2017-2018, Scott P. Kolodziej, Nuri S. Yeralan, Timothy A. Davis, William W. Hager\nRBio toolbox.  Copyright (C) 2006-2009, Timothy A. Davis\nSLIP_LU: (c) 2019-2020, Chris Lourenco, Jinhao Chen, Erick Moreno-Centeno, Timothy A. Davis, Texas A&M University. \nSPQR, Copyright 2008-2016 by Timothy A. Davis.\nSuiteSparse_GPURuntime Copyright (c) 2013-2016, Timothy A. Davis, Sencer Nuri Yeralan, and Sanjay Ranka.\nUMFPACK, Copyright 1995-2009 by Timothy A. Davis.",
+            "summary": "The official SuiteSparse library: a suite of sparse matrix algorithms authored or co-authored by Tim Davis, Texas A&M University"
+        },
+        {
+            "name": "LibBlasTrampoline",
+            "SPDXID": "SPDXRef-LibBlasTrampoline",
+            "downloadLocation": "git+https://github.com/JuliaLinearAlgebra/libblastrampoline.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/JuliaLinearAlgebra",
+            "sourceInfo": "The version in use can be found in the file deps/blastrampoline.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2021: Elliot Saba, Viral B. Shah, Julia Computing.",
+            "summary": "Using PLT trampolines to provide a BLAS and LAPACK demuxing library."
+        },
+        {
+            "name": "NGHTTP2",
+            "SPDXID": "SPDXRef-NGHTTP2",
+            "downloadLocation": "git+https://github.com/nghttp2/nghttp2.git",
+            "filesAnalyzed": false,
+            "homepage": "https://nghttp2.org",
+            "sourceInfo": "The version in use can be found in the file deps/Version.make",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2012, 2014, 2015, 2016 Tatsuhiro Tsujikawa\nCopyright (c) 2012, 2014, 2015, 2016 nghttp2 contributors",
+            "summary": "nghttp2 is an implementation of HTTP/2 and its header compression algorithm HPACK in C."
+        },
+        {
+            "name": "libunwind",
+            "SPDXID": "SPDXRef-libunwind",
+            "downloadLocation": "git+https://github.com/libunwind/libunwind.git",
+            "filesAnalyzed": false,
+            "homepage": "http://www.nongnu.org/libunwind/",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2002 Hewlett-Packard Co.",
+            "summary": "The primary goal of this project is to define a portable and efficient C programming interface (API) to determine the call-chain of a program."
+        },
+        {
+            "name": "libuv",
+            "SPDXID": "SPDXRef-libuv",
+            "supplier": "Organization: julialang.org ()",
+            "originator": "Organization: libuv.org ()",
+            "downloadLocation": "git+https://github.com/JuliaLang/libuv.git",
+            "filesAnalyzed": false,
+            "homepage": "https://libuv.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/libuv.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2015-present libuv project contributors",
+            "summary": "libuv is a multi-platform support library with a focus on asynchronous I/O. It was primarily developed for use by Node.js, but it's also used by Luvit, Julia, pyuv, and others.",
+            "comment": "The Julia project has forked libuv and maintains their own repository of the code"
+        },
+        {
+            "name": "llvm",
+            "SPDXID": "SPDXRef-llvm",
+            "supplier": "Organization: julialang.org ()",
+            "originator": "Organization: llvm.org ()",
+            "downloadLocation": "git+https://github.com/JuliaLang/llvm-project.git",
+            "filesAnalyzed": false,
+            "homepage": "https://llvm.org",
+            "sourceInfo": "The version in use can be found in the file deps/llvm.version",
+            "licenseConcluded": "Apache-2.0 WITH LLVM-exception",
+            "licenseDeclared": "Apache-2.0 WITH LLVM-exception",
+            "copyrightText": "The LLVM project does not collect copyright assignments, which means that the copyright for the code in the project is held by the respective contributors",
+            "summary": "The LLVM Project is a collection of modular and reusable compiler and toolchain technologies.",
+            "comment": "The Julia project has forked llvm and maintains their own repository of the code"
+        },
+        {
+            "name": "utf8proc",
+            "SPDXID": "SPDXRef-utf8proc",
+            "downloadLocation": "git+https://github.com/JuliaLang/utf8proc.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/JuliaStrings/utf8proc",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/utf8proc.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright © 2014-2019 by Steven G. Johnson, Jiahao Chen, Tony Kelman, Jonas Fonseca, and other contributors listed in the git history.",
+            "summary": "utf8proc is a small, clean C library that provides Unicode normalization, case-folding, and other operations for data in the UTF-8 encoding."
+        },
+        {
+            "name": "7-Zip",
+            "SPDXID": "SPDXRef-7zip",
+            "downloadLocation": "https://sourceforge.net/projects/p7zip/files/p7zip",
+            "filesAnalyzed": false,
+            "homepage": "https://www.7-zip.org",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "LGPL-3.0-or-later",
+            "licenseDeclared": "LGPL-3.0-or-later AND BSD-3",
+            "copyrightText": "Copyright (C) 1999-2021 Igor Pavlov",
+            "summary": "7-Zip is a file archiver with a high compression ratio."
+        },
+        {
+            "name": "zlib",
+            "SPDXID": "SPDXRef-zlib",
+            "downloadLocation": "git+https://github.com/madler/zlib.git",
+            "filesAnalyzed": false,
+            "homepage": "https://zlib.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/zlib.version",
+            "licenseConcluded": "Zlib",
+            "licenseDeclared": "Zlib",
+            "copyrightText": "Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler",
+            "summary": "A massively spiffy yet delicately unobtrusive compression library."
+        },
+        {
+            "name": "patchelf",
+            "SPDXID": "SPDXRef-patchelf",
+            "downloadLocation": "git+https://github.com/NixOS/patchelf.git",
+            "filesAnalyzed": false,
+            "homepage": "https://nixos.org/patchelf.html",
+            "sourceInfo": "The version in use can be found in the file deps/Versions.make",
+            "licenseConcluded": "GPL-3.0-or-later",
+            "licenseDeclared": "GPL-3.0-or-later",
+            "copyrightText": "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
+            "summary": "A small utility to modify the dynamic linker and RPATH of ELF executables.",
+            "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+        },
+        {
+            "name": "objconv",
+            "SPDXID": "SPDXRef-objconv",
+            "downloadLocation": "https://www.agner.org/optimize/objconv.zip",
+            "filesAnalyzed": false,
+            "homepage": "https://www.agner.org/optimize/#objconv",
+            "licenseConcluded": "GPL-3.0-or-later",
+            "licenseDeclared": "GPL-3.0-or-later",
+            "copyrightText": "By Agner Fog © 2018",
+            "summary": "A utility for cross-platform development of function libraries, for converting and modifying object files and for dumping and disassembling object and executable files for all x86 and x86-64 platforms.",
+            "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+        },
+        {
+            "name": "libwhich",
+            "SPDXID": "SPDXRef-libwhich",
+            "downloadLocation": "git+https://github.com/vtjnash/libwhich.git",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/libwhich.version",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/vtjnash/libwhich",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2017 Jameson Nash",
+            "summary": "Like `which`, for dynamic libraries",
+            "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+        }
+    ],
+    "relationships": [
+        {
+            "spdxElementId": "SPDXRef-DOCUMENT",
+            "relationshipType": "DESCRIBES",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaPkg",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaStatistics",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaCurl",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaDownloads",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaArgTools",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaTar",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaNetworkOptions",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaSuiteSparse",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaSHA",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-dSFMT",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-OpenLibm",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-GMP",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libgit2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-curl",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libssh2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-mbedtls",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-mpfr",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-OpenBLAS",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LAPACK",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-PCRE",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibSuiteSparse",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibBlasTrampoline",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-NGHTTP2",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libunwind",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libuv",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-llvm",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-utf8proc",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-7zip",
+            "relationshipType": "RUNTIME_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-zlib",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-patchelf",
+            "relationshipType": "BUILD_TOOL_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-objconv",
+            "relationshipType": "BUILD_TOOL_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-libwhich",
+            "relationshipType": "BUILD_TOOL_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        }
+    ],
+    "hasExtractedLicensingInfos": [
+        {
+            "licenseId": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
+            "extractedText": "Note that the only valid version of the GPL as far as this project is concerned is _this_ particular version of the license (ie v2, not v2.2 or v3.x or whatever), unless explicitly otherwise stated.\n----------------------------------------------------------------------\nIn addition to the permissions in the GNU General Public License, the authors give you unlimited permission to link the compiled version of this library into combinations with other programs, and to distribute those combinations without any restriction coming from the use of this file.  (The General Public License restrictions do apply in other respects; for example, they cover modification of the file, and distribution when not linked into a combined executable.)\n----------------------------------------------------------------------\nGNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n\nCopyright (C) 1989, 1991 Free Software Foundation, Inc.\n59 Temple Place, Suite 330, Boston, MA  02111-1307  USA\nEveryone is permitted to copy and distribute verbatim copies\nof this license document, but changing it is not allowed.\n... [more text]",
+            "name": "GPL-2.0-only-with-libgit2-exception"
+        }
+    ]
+}

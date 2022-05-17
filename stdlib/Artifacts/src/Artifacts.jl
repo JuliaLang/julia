@@ -73,7 +73,7 @@ a `~/.julia/artifacts/Override.toml` file with the following contents:
 This file defines four overrides; two which override specific artifacts identified
 through their content hashes, two which override artifacts based on their bound names
 within a particular package's UUID.  In both cases, there are two different targets of
-the override: overriding to an on-disk location through an absolutet path, and
+the override: overriding to an on-disk location through an absolute path, and
 overriding to another artifact by its content-hash.
 """
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)
@@ -272,17 +272,17 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict{Symbol, String}()
+    tags = Dict{String, String}()
     for (k, v) in entry
         if v isa String
-            tags[Symbol(k)] = v
+            tags[k] = v
         end
     end
     # Removing some known entries that shouldn't be passed through `tags`
-    delete!(tags, :os)
-    delete!(tags, :arch)
-    delete!(tags, Symbol("git-tree-sha1"))
-    return Platform(entry["arch"], entry["os"]; tags...)
+    delete!(tags, "os")
+    delete!(tags, "arch")
+    delete!(tags, "git-tree-sha1")
+    return Platform(entry["arch"], entry["os"], tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -418,7 +418,7 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 """
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
-                       pkg_uuid::Union{Base.UUID,Nothing}=nothing)
+                       pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
     meta = artifact_meta(name, artifacts_toml; platform=platform)
     if meta === nothing
         return nothing
@@ -541,7 +541,9 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
         if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
-            nameof(lazyartifacts) === :Pkg && Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            if nameof(lazyartifacts) in (:Pkg, :Artifacts)
+                Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            end
             return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
@@ -549,7 +551,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     error("Artifact $(repr(name)) was not installed correctly. Try `using Pkg; Pkg.instantiate()` to re-install all missing resources.")
 end
 
-"""
+raw"""
     split_artifact_slash(name::String)
 
 Splits an artifact indexing string by path deliminters, isolates the first path element,
@@ -557,7 +559,7 @@ returning that and the `joinpath()` of the remaining arguments.  This normalizes
 separators to the native path separator for the current platform.  Examples:
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using Artifacts: split_artifact_slash)
 julia> split_artifact_slash("Foo")
 ("Foo", "")
 
@@ -659,9 +661,13 @@ macro artifact_str(name, platform=nothing)
     Base.include_dependency(artifacts_toml)
 
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
-    lazyartifacts = isdefined(__module__, :LazyArtifacts) ? GlobalRef(__module__, :LazyArtifacts) : nothing
-    if lazyartifacts === nothing && isdefined(__module__, :Pkg)
-        lazyartifacts = GlobalRef(__module__, :Pkg) # deprecated
+    # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
+    lazyartifacts = nothing
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+        if isdefined(__module__, module_name)
+            lazyartifacts = GlobalRef(__module__, module_name)
+            break
+        end
     end
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
@@ -711,5 +717,10 @@ split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
     artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+
+# Precompilation to reduce latency
+precompile(load_artifacts_toml, (String,))
+precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
+precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 
 end # module Artifacts

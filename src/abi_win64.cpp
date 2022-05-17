@@ -47,7 +47,7 @@ struct ABI_Win64Layout : AbiLayout {
 int nargs;
 ABI_Win64Layout() : nargs(0) { }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     size_t size = jl_datatype_size(dt);
     if (win64_reg_size(size) || is_native_simd_type(dt))
@@ -56,22 +56,23 @@ bool use_sret(jl_datatype_t *dt) override
     return true;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     nargs++;
     size_t size = jl_datatype_size(dt);
     if (win64_reg_size(size))
         return false;
-    if (nargs <= 4)
-        ab.addAttribute(Attribute::ByVal);
+    if (nargs <= 4) {
+        ab.addByValAttr(Ty);
+    }
     return true;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     size_t size = jl_datatype_size(dt);
     if (size > 0 && win64_reg_size(size) && !jl_is_primitivetype(dt))
-        return Type::getIntNTy(jl_LLVMContext, jl_datatype_nbits(dt));
+        return Type::getIntNTy(ctx, jl_datatype_nbits(dt));
     return NULL;
 }
 

@@ -81,6 +81,14 @@ import Base.<
 @test isequal(minmax(TO23094(2), TO23094(1))[1], TO23094(1))
 @test isequal(minmax(TO23094(2), TO23094(1))[2], TO23094(2))
 
+let m = Module()
+    @eval m begin
+        struct Foo end
+        foo(xs) = isequal(xs[1], Foo())
+    end
+    @test !(@inferred m.foo(Any[42]))
+end
+
 @test isless('a','b')
 
 @testset "isgreater" begin
@@ -160,12 +168,23 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
+
+    # test keyword ags in composition
+    function kwf(a;b,c); a + b + c; end
+    @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
+
 end
 
 @testset "function negation" begin
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
     @test filter(!islowercase, str) == replace(str, r"[a-z]" => "")
+    @test !!isnan === isnan
+    @test repr(!isnan) == "!isnan"
+    @test repr((-) ∘ sin) == "(-) ∘ sin"
+    @test repr(cos ∘ (sin ∘ tan)) == "cos ∘ (sin ∘ tan)"
+    @test repr(!(cos ∘ !sin)) == "!(cos ∘ !sin)"
+    @test repr(cos ∘ sin ∘ tan) == "cos ∘ sin ∘ tan" == repr((cos ∘ sin) ∘ tan)
 end
 
 # issue #19891
@@ -275,5 +294,18 @@ end
     @test ∋(0)(-2:2)
 end
 
-a = rand(3, 3)
-@test transpose(a) === a'ᵀ
+@test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+
+@testset "Returns" begin
+    @test @inferred(Returns(1)()   ) === 1
+    @test @inferred(Returns(1)(23) ) === 1
+    @test @inferred(Returns("a")(2,3)) == "a"
+    @test @inferred(Returns(1)(x=1, y=2)) === 1
+    @test @inferred(Returns(Int)()) === Int
+    @test @inferred(Returns(Returns(1))()) === Returns(1)
+    f = @inferred Returns(Int)
+    @inferred f(1,2)
+    val = [1,2,3]
+    @test Returns(val)(1) === val
+    @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
+end

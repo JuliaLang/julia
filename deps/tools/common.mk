@@ -4,14 +4,12 @@
 # it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
 # apparently not on FreeBSD). Ref PR #22352
 
-CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
+CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
-ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
-endif
 else
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN)"
 endif
@@ -23,6 +21,10 @@ CMAKE_CXX_ARG := $(CXX_ARG)
 CMAKE_COMMON := -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_PREFIX_PATH=$(build_prefix)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir) -DCMAKE_INSTALL_BINDIR=$(build_bindir)
 CMAKE_COMMON += -DLIB_INSTALL_DIR=$(build_shlibdir)
+ifeq ($(OS), Darwin)
+CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
+endif
+
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
@@ -154,7 +156,7 @@ endif
 
 reinstall-$(strip $1):
 	+$$(MAKE) uninstall-$(strip $1)
-	-rm $$(build_staging)/$2.tgz
+	-rm -f $$(build_staging)/$2.tgz
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
@@ -162,7 +164,7 @@ $$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && tar -czf $$@.tmp .
+	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -czf $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
@@ -170,7 +172,6 @@ UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
-	mkdir -p $$(build_prefix)
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
@@ -178,8 +179,8 @@ endef
 
 define staged-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fdv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz --exclude './$$$$')
-	-rm $$(build_prefix)/manifest/$(strip $1)
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz | grep -v '/$$$$')
+	-rm -f $$(build_prefix)/manifest/$(strip $1)
 endef
 
 
@@ -215,9 +216,9 @@ uninstall-$1:
 ifeq ($$(BUILD_OS), WINNT)
 	-cmd //C rmdir $$(call mingw_to_dos,$3/$1,cd $3 &&)
 else
-	-rm -r $3/$1
+	rm -rf $3/$1
 endif
-	-rm $$(build_prefix)/manifest/$1
+	-rm -f $$(build_prefix)/manifest/$1
 endef
 
 
@@ -232,6 +233,6 @@ endif
 
 ## phony targets ##
 
-.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall \
+.PHONY: default get extract configure compile fastcheck check install uninstall reinstall cleanall distcleanall version-check \
 	get-* extract-* configure-* compile-* fastcheck-* check-* install-* uninstall-* reinstall-* clean-* distclean-* \
 	update-llvm

@@ -220,6 +220,12 @@ end
     end
 end
 
+@testset "Trace" begin
+    code = "import LibGit2; LibGit2.trace_set(LibGit2.Consts.TRACE_DEBUG); exit(LibGit2.trace_set(0))"
+    p = run(`$(Base.julia_cmd()) --startup-file=no -e $code`, wait=false); wait(p)
+    @test success(p)
+end
+
 # See #21872 and #21636
 LibGit2.version() >= v"0.26.0" && Sys.isunix() && @testset "Default config with symlink" begin
     with_libgit2_temp_home() do tmphome
@@ -600,6 +606,23 @@ end
         github_regex_test("ssh://git@github.com/$user/$repo", user, repo)
         @test !occursin(LibGit2.GITHUB_REGEX, "git@notgithub.com/$user/$repo.git")
     end
+
+    @testset "UserPasswordCredential/url constructor" begin
+        user_pass_cred = LibGit2.UserPasswordCredential("user", "*******")
+        url = "https://github.com"
+        expected_cred = LibGit2.GitCredential("https", "github.com", nothing, "user", "*******")
+
+        cred = LibGit2.GitCredential(user_pass_cred, url)
+        @test cred == expected_cred
+
+        # Shredding the UserPasswordCredential shouldn't result in information being lost
+        # inside of a GitCredential.
+        Base.shred!(user_pass_cred)
+        @test cred == expected_cred
+
+        Base.shred!(cred)
+        Base.shred!(expected_cred)
+    end
 end
 
 mktempdir() do dir
@@ -617,7 +640,7 @@ mktempdir() do dir
     commit_oid1 = LibGit2.GitHash()
     commit_oid2 = LibGit2.GitHash()
     commit_oid3 = LibGit2.GitHash()
-    master_branch = "master"
+    default_branch = LibGit2.getconfig("init.defaultBranch", "master")
     test_branch = "test_branch"
     test_branch2 = "test_branch_two"
     tag1 = "tag1"
@@ -941,19 +964,19 @@ mktempdir() do dir
                     # various branch properties
                     @test LibGit2.isbranch(brref)
                     @test !LibGit2.isremote(brref)
-                    @test LibGit2.name(brref) == "refs/heads/master"
-                    @test LibGit2.shortname(brref) == master_branch
+                    @test LibGit2.name(brref) == "refs/heads/$(default_branch)"
+                    @test LibGit2.shortname(brref) == default_branch
                     @test LibGit2.ishead(brref)
                     @test LibGit2.upstream(brref) === nothing
 
                     # showing the GitReference to this branch
                     show_strs = split(sprint(show, brref), "\n")
                     @test show_strs[1] == "GitReference:"
-                    @test show_strs[2] == "Branch with name refs/heads/master"
+                    @test show_strs[2] == "Branch with name refs/heads/$(default_branch)"
                     @test show_strs[3] == "Branch is HEAD."
                     @test repo.ptr == LibGit2.repository(brref).ptr
-                    @test brnch == master_branch
-                    @test LibGit2.headname(repo) == master_branch
+                    @test brnch == default_branch
+                    @test LibGit2.headname(repo) == default_branch
 
                     # create a branch *without* setting its tip as HEAD
                     LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
@@ -974,7 +997,7 @@ mktempdir() do dir
                     end
                 end
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test master_branch in branches
+                @test default_branch in branches
                 @test test_branch in branches
             end
         end
@@ -1033,7 +1056,7 @@ mktempdir() do dir
                 @test tag2 in tags
 
                 refs = LibGit2.ref_list(repo)
-                @test refs == ["refs/heads/master", "refs/heads/test_branch", "refs/tags/tag1", "refs/tags/tag2"]
+                @test refs == ["refs/heads/$(default_branch)", "refs/heads/test_branch", "refs/tags/tag1", "refs/tags/tag2"]
                 # test deleting a tag
                 LibGit2.tag_delete(repo, tag1)
                 tags = LibGit2.tag_list(repo)
@@ -1317,7 +1340,7 @@ mktempdir() do dir
             add_and_commit_file(repo, "file1", "111\n")
             # switch back, add a commit, try to merge
             # from branch/merge_a
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, default_branch)
 
             # test for showing a Reference to a non-HEAD branch
             brref = LibGit2.GitReference(repo, "refs/heads/branch/merge_a")
@@ -1330,7 +1353,7 @@ mktempdir() do dir
 
             add_and_commit_file(repo, "file2", "222\n")
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
-            head_ann = LibGit2.GitAnnotated(repo, "master")
+            head_ann = LibGit2.GitAnnotated(repo, default_branch)
 
             # (fail to) merge them because we can't fastforward
             @test_logs (:warn,"Cannot perform fast-forward merge") !LibGit2.merge!(repo, [upst_ann], true)
@@ -1343,7 +1366,7 @@ mktempdir() do dir
             mv(joinpath(LibGit2.path(repo),"file1"),joinpath(LibGit2.path(repo),"mvfile1"))
             LibGit2.add!(repo, "mvfile1")
             LibGit2.commit(repo, "move file1")
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, default_branch)
             upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
             rename_flag = Cint(0)
             rename_flag = LibGit2.toggle(rename_flag, Cint(0)) # turns on the find renames opt
@@ -1421,14 +1444,14 @@ mktempdir() do dir
             # the rebase should fail.
             @test_throws LibGit2.GitError LibGit2.rebase!(repo)
             # Try rebasing on master instead
-            newhead = LibGit2.rebase!(repo, master_branch)
+            newhead = LibGit2.rebase!(repo, default_branch)
             @test newhead == head_oid
 
             # Switch to the master branch
-            LibGit2.branch!(repo, master_branch)
+            LibGit2.branch!(repo, default_branch)
 
             fetch_heads = LibGit2.fetchheads(repo)
-            @test fetch_heads[1].name == "refs/heads/master"
+            @test fetch_heads[1].name == "refs/heads/$(default_branch)"
             @test fetch_heads[1].ismerge == true # we just merged master
             @test fetch_heads[2].name == "refs/heads/test_branch"
             @test fetch_heads[2].ismerge == false
@@ -1456,7 +1479,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
+            @test readlines(joinpath(test_repo, test_file)) == readlines(joinpath(cache_repo, test_file))
         end
 
         @testset "tags & branches" begin
@@ -1468,7 +1491,7 @@ mktempdir() do dir
 
                 # all tag in place
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
-                @test master_branch in branches
+                @test default_branch in branches
                 @test test_branch in branches
 
                 # issue #16337
@@ -1666,7 +1689,7 @@ mktempdir() do dir
             # add yet another file
             add_and_commit_file(repo, "file4", "444\n")
             # rebase with onto
-            newhead = LibGit2.rebase!(repo, "branch/a", "master")
+            newhead = LibGit2.rebase!(repo, "branch/a", default_branch)
 
             newerhead = LibGit2.head_oid(repo)
             @test newerhead == newhead
@@ -1676,7 +1699,7 @@ mktempdir() do dir
             pre_abort_head = add_and_commit_file(repo, "file6", "666\n")
             # Rebase type
             head_ann = LibGit2.GitAnnotated(repo, "branch/a")
-            upst_ann = LibGit2.GitAnnotated(repo, "master")
+            upst_ann = LibGit2.GitAnnotated(repo, default_branch)
             rb = LibGit2.GitRebase(repo, head_ann, upst_ann)
             @test_throws BoundsError rb[3]
             @test_throws BoundsError rb[0]
@@ -1701,7 +1724,7 @@ mktempdir() do dir
 
             a_head = LibGit2.head_oid(repo)
             add_and_commit_file(repo, "merge_file1", "111\n")
-            LibGit2.branch!(repo, "master")
+            LibGit2.branch!(repo, default_branch)
             a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
             # merge returns true if successful
             @test_logs (:info,"Review and commit merged changes") LibGit2.merge!(repo, [a_head_ann])
@@ -1734,7 +1757,7 @@ mktempdir() do dir
             close(repo_file)
             # and checkout HEAD once more
             LibGit2.checkout_head(repo, options=LibGit2.CheckoutOptions(checkout_strategy=LibGit2.Consts.CHECKOUT_FORCE))
-            @test LibGit2.headname(repo) == master_branch
+            @test LibGit2.headname(repo) == default_branch
             @test !LibGit2.isdirty(repo)
         end
     end
@@ -2133,6 +2156,50 @@ mktempdir() do dir
                 end
             end
         end
+
+        @testset "approve/reject with UserPasswordCredential" begin
+            # In order to use the "store" credential helper `git` needs to be installed and
+            # on the path.
+            if GIT_INSTALLED
+                config_path = joinpath(dir, config_file)
+                isfile(config_path) && rm(config_path)
+
+                credential_path = joinpath(dir, ".git-credentials")
+                isfile(credential_path) && rm(credential_path)
+
+                LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
+                    query = LibGit2.GitCredential("https", "mygithost")
+                    filled = LibGit2.GitCredential("https", "mygithost", nothing, "alice", "1234")
+                    user_pass_cred = LibGit2.UserPasswordCredential("alice", "1234")
+                    url = "https://mygithost"
+
+                    # Requires `git` to be installed and available on the path.
+                    LibGit2.set!(cfg, "credential.helper", "store --file \"$credential_path\"")
+                    helper = only(LibGit2.credential_helpers(cfg, query))
+
+                    @test !isfile(credential_path)
+
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == query
+                    end
+
+                    LibGit2.approve(cfg, user_pass_cred, url)
+                    @test isfile(credential_path)
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == filled
+                    end
+
+                    LibGit2.reject(cfg, user_pass_cred, url)
+                    Base.shred!(LibGit2.fill!(helper, deepcopy(query))) do result
+                        @test result == query
+                    end
+
+                    Base.shred!(query)
+                    Base.shred!(filled)
+                    Base.shred!(user_pass_cred)
+                end
+            end
+        end
     end
 
     # The following tests require that we can fake a TTY so that we can provide passwords
@@ -2406,35 +2473,17 @@ mktempdir() do dir
         end
 
         @testset "SSH known host checking" begin
-            key_hashes(sha1::String, sha256::String) = LibGit2.KeyHashes(
-                Tuple(hex2bytes(sha1)),
-                Tuple(hex2bytes(sha256)),
-            )
-            # randomly generated hashes matching no hosts
-            random_key_hashes = key_hashes(
-                "a9971372d02a67bdfea82e2b4808b4cf478b49c0",
-                "45aac5c20d5c7f8b998fee12fa9b75086c0d3ed6e33063f7ce940409ff4efbbc"
-            )
-            # hashes of the unique github.com fingerprint
-            github_key_hashes = key_hashes(
-                "bf6b6825d2977c511a475bbefb88aad54a92ac73",
-                "9d385b83a9175292561a5ec4d4818e0aca51a264f17420112ef88ac3a139498f"
-            )
-            # hashes of the middle github.com fingerprint
-            gitlab_key_hashes = key_hashes(
-                "4db6b9ab0209fcde106cbf0fc4560ad063a962ad",
-                "1db5b783ccd48cd4a4b056ea4e25163d683606ad71f3174652b9625c5cd29d4c"
-            )
+            CHECK_MATCH    = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_MATCH
+            CHECK_MISMATCH = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_MISMATCH
+            CHECK_NOTFOUND = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
+            CHECK_FAILURE  = LibGit2.Consts.LIBSSH2_KNOWNHOST_CHECK_FAILURE
 
-            # various key hash collections
-            partial_hashes(keys::LibGit2.KeyHashes) = [ keys,
-                LibGit2.KeyHashes(keys.sha1, nothing),
-                LibGit2.KeyHashes(nothing, keys.sha256),
-            ]
-            bad_hashes = LibGit2.KeyHashes(nothing, nothing)
-            random_hashes = partial_hashes(random_key_hashes)
-            github_hashes = partial_hashes(github_key_hashes)
-            gitlab_hashes = partial_hashes(gitlab_key_hashes)
+            # randomly generated hashes matching no hosts
+            random_key = collect(reinterpret(Cchar, codeunits("\0\0\0\assh-rsa\0\0\0\x01#\0\0\0\x81\0¿\x95\xbe9\xfc9g\n:\xcf&\x06YA\xb5`\x97\xc13A\xbf;T+C\xc9Ut J>\xc5ҍ\xc4_S\x8a \xc1S\xeb\x15FH\xd2a\x04.D\xeeb\xac\x8f\xdb\xcc\xef\xc4l G\x9bR\xafp\x17s<=\x12\xab\x04ڳif\\A\x9ba0\xde%\xdei\x04\xc3\r\xb3\x81w\x88\xec\xc0f\x15A;AÝ\xc0r\xa1\u5fe\xd3\xf6)8\x8e\xa3\xcbc\xee\xdd\$\x04\x0f\xc1\xb4\x1f\xcc\xecK\xe0\x99")))
+            # hashes of the unique github.com fingerprint
+            github_key = collect(reinterpret(Cchar, codeunits("\0\0\0\assh-rsa\0\0\0\x01#\0\0\x01\x01\0\xab`;\x85\x11\xa6vy\xbd\xb5@\xdb;\xd2\x03K\0J\xe96\xd0k\xe3\xd7`\xf0\x8f˪\xdbN\xb4\xedóǑ\xc7\n\xae\x9at\xc9Xi\xe4wD!«\xea\x92\xe5T0_8\xb5\xfdAK2\b\xe5t\xc37\xe3 \x93e\x18F,vRɋ1\xe1n}\xa6R;\xd2\0t*dD\xd8?\xcd^\x172\xd06sǷ\x81\x15UH{U\xf0\xc4IO8)\xec\xe6\x0f\x94%Z\x95˚\xf57\xd7\xfc\x8c\x7f\xe4\x9e\xf3\x18GN\xf2\x92\t\x92\x05\"e\xb0\xa0n\xa6mJ\x16\x7f\xd9\xf3\xa4\x8a\x1aJ0~\xc1\xea\xaaQI\xa9i\xa6\xac]V\xa5\xefb~Q}\x81\xfbdO[t\\OG\x8e\xcd\b*\x94\x92\xf7D\xaa\xd3&\xf7l\x8cM\xc9\x10\vƫyF\x1d&W\xcbo\x06\xde\xc9.kd\xa6V/\xf0\xe3 \x84\xea\x06\xce\x0e\xa9\xd3ZX;\xfb\0\xbaӌ\x9d\x19p<T\x98\x92\xe5\xaaxܕ\xe2PQ@i")))
+            # hashes of the middle github.com fingerprint
+            gitlab_key = collect(reinterpret(Cchar, codeunits("\0\0\0\vssh-ed25519\0\0\0 \a\xee\br\x95N:\xae\xc6\xfbz\bέtn\x12.\x9dA\xb6\x7f\xe79\xe1\xc7\x13\x95\x0e\xcd\x17_")))
 
             # various known hosts files
             no_file = tempname()
@@ -2451,50 +2500,41 @@ mktempdir() do dir
                 end
             end
 
-            @testset "bad hash errors" begin
-                hash = bad_hashes
-                for host in ["github.com", "gitlab.com", "unknown.host"],
-                    files in [[no_file], [empty_file], [known_hosts]]
-                    check = LibGit2.ssh_knownhost_check(files, host, hash)
-                    @test check == LibGit2.Consts.SSH_HOST_BAD_HASH
-                end
-            end
-
-            @testset "unknown hosts" begin
+            @testset "unknown host" begin
                 host = "unknown.host"
-                for hash in [github_hashes; gitlab_hashes; random_hashes],
+                for key in [github_key, gitlab_key, random_key],
                     files in [[no_file], [empty_file], [known_hosts]]
-                    check = LibGit2.ssh_knownhost_check(files, host, hash)
-                    @test check == LibGit2.Consts.SSH_HOST_UNKNOWN
+                    check = LibGit2.ssh_knownhost_check(files, host, key)
+                    @test check == CHECK_NOTFOUND
                 end
             end
 
             @testset "known hosts" begin
-                for (host, hashes) in [
-                        "github.com" => github_hashes,
-                        "gitlab.com" => gitlab_hashes,
-                    ], hash in hashes
+                for (host, key) in [
+                        "github.com" => github_key,
+                        "gitlab.com" => gitlab_key,
+                    ]
                     for files in [[no_file], [empty_file]]
-                        check = LibGit2.ssh_knownhost_check(files, host, hash)
-                        @test check == LibGit2.Consts.SSH_HOST_UNKNOWN
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_NOTFOUND
                     end
                     for files in [
                             [known_hosts],
-                            [empty_file; known_hosts],
-                            [known_hosts; empty_file],
-                            [known_hosts; wrong_hosts],
+                            [empty_file, known_hosts],
+                            [known_hosts, empty_file],
+                            [known_hosts, wrong_hosts],
                         ]
-                        check = LibGit2.ssh_knownhost_check(files, host, hash)
-                        @test check == LibGit2.Consts.SSH_HOST_KNOWN
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_MATCH
                     end
                     for files in [
                             [wrong_hosts],
-                            [empty_file; wrong_hosts],
-                            [wrong_hosts; empty_file],
-                            [wrong_hosts; known_hosts],
+                            [empty_file, wrong_hosts],
+                            [wrong_hosts, empty_file],
+                            [wrong_hosts, known_hosts],
                         ]
-                        check = LibGit2.ssh_knownhost_check(files, host, hash)
-                        @test check == LibGit2.Consts.SSH_HOST_MISMATCH
+                        check = LibGit2.ssh_knownhost_check(files, host, key)
+                        @test check == CHECK_MISMATCH
                     end
                 end
             end

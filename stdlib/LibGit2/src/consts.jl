@@ -330,11 +330,11 @@ const LIBSSH2_KNOWNHOST_TYPE_CUSTOM = 3
 const LIBSSH2_KNOWNHOST_KEYENC_RAW    = 1 << 16
 const LIBSSH2_KNOWNHOST_KEYENC_BASE64 = 2 << 16
 
-# internal constants for SSH host verification outcomes
-const SSH_HOST_KNOWN    = 0
-const SSH_HOST_UNKNOWN  = 1
-const SSH_HOST_MISMATCH = 2
-const SSH_HOST_BAD_HASH = 3
+# libssh2 host check return values
+const LIBSSH2_KNOWNHOST_CHECK_MATCH    = 0
+const LIBSSH2_KNOWNHOST_CHECK_MISMATCH = 1
+const LIBSSH2_KNOWNHOST_CHECK_NOTFOUND = 2
+const LIBSSH2_KNOWNHOST_CHECK_FAILURE  = 3
 
 @enum(GIT_SUBMODULE_IGNORE, SUBMODULE_IGNORE_UNSPECIFIED  = -1, # use the submodule's configuration
                             SUBMODULE_IGNORE_NONE         = 1,  # any change or untracked == dirty
@@ -441,7 +441,6 @@ These are used to select which global option to set or get and are used in `git_
                SET_TEMPLATE_PATH        = 11,
                SET_SSL_CERT_LOCATIONS   = 12)
 
-
 """
 Option flags for `GitProxy`.
 
@@ -452,5 +451,16 @@ Option flags for `GitProxy`.
 @enum(GIT_PROXY, PROXY_NONE,
                  PROXY_AUTO,
                  PROXY_SPECIFIED)
+
+# Available tracing levels.
+@enum GIT_TRACE_LEVEL begin
+    TRACE_NONE
+    TRACE_FATAL
+    TRACE_ERROR
+    TRACE_WARN
+    TRACE_INFO
+    TRACE_DEBUG
+    TRACE_TRACE
+end
 
 end
