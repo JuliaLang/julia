@@ -568,6 +568,14 @@ function widen_all_consts!(src::CodeInfo)
     return src
 end
 
+function widen_ssavaluetypes!(ssavaluetypes::Vector{Any})
+    for j = 1:length(ssavaluetypes)
+        t = ssavaluetypes[j]
+        ssavaluetypes[j] = t === NOT_FOUND ? Bottom : widenconditional(t)
+    end
+    return ssavaluetypes
+end
+
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -667,14 +675,6 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
     return nothing
 end
 
-function widen_ssavaluetypes!(ssavaluetypes::Vector{Any})
-    for j = 1:length(ssavaluetypes)
-        t = ssavaluetypes[j]
-        ssavaluetypes[j] = t === NOT_FOUND ? Bottom : widenconditional(t)
-    end
-    return ssavaluetypes
-end
-
 # annotate types of all symbols in AST
 function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # compute the required type for each slot
@@ -688,7 +688,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # and compute which variables may be used undef
     stmt_info = sv.stmt_info
     src = sv.src
-    body = copy_exprargs(src.code::Vector{Any})
+    body = copy(src.code::Vector{Any})
     nexpr = length(body)
     codelocs = src.codelocs
     ssavaluetypes = copy(src.ssavaluetypes)
