@@ -491,7 +491,7 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-active_module(repl::LineEditREPL) = repl.mistate.active_module
+active_module(repl::LineEditREPL) = repl.mistate === nothing ? Main : repl.mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
 
