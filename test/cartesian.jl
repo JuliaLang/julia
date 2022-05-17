@@ -295,9 +295,7 @@ end
     # check iteration behavior on boundary
     R = CartesianIndex(1, 1):CartesianIndex(2, 3):CartesianIndex(4, 5)
     @test R.indices == (1:2:3, 1:3:4)
-    i = CartesianIndex(4, 1)
-    i_next = CartesianIndex(1, 4)
-    @test !(i in R) && iterate(R, i) == (i_next, i_next)
+    @test last(R) == CartesianIndex(3, 4) && iterate(R, last(R)) == nothing
 
     for R in [
         CartesianIndices((1:-1:-1, 1:2:5)),
@@ -398,15 +396,15 @@ end
         @test iterate(I, i) === nothing
 
         I = CartesianIndices((1:2:typemax(Int), ))
-        i = CartesianIndex(typemax(Int)-1)
-        @test iterate(I, i) === nothing
-
-        I = CartesianIndices((1:(typemax(Int)-1),))
         i = CartesianIndex(typemax(Int))
         @test iterate(I, i) === nothing
 
-        I = CartesianIndices((1:2:typemax(Int)-1, ))
+        I = CartesianIndices((1:(typemax(Int)-1),))
         i = CartesianIndex(typemax(Int)-1)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices((1:2:typemax(Int)-1, ))
+        i = CartesianIndex(typemax(Int)-2)
         @test iterate(I, i) === nothing
 
         I = CartesianIndices((1:typemax(Int), 1:typemax(Int)))
@@ -414,7 +412,7 @@ end
         @test iterate(I, i) === nothing
 
         I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
-        i = CartesianIndex(typemax(Int)-1, typemax(Int)-1)
+        i = last(I)
         @test iterate(I, i) === nothing
 
         I = CartesianIndices((1:typemax(Int), 1:typemax(Int)))
@@ -422,7 +420,7 @@ end
         @test iterate(I, i) === (CartesianIndex(1, 2), CartesianIndex(1,2))
 
         I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
-        i = CartesianIndex(typemax(Int)-1, 1)
+        i = CartesianIndex(typemax(Int), 1)
         @test iterate(I, i) === (CartesianIndex(1, 3), CartesianIndex(1, 3))
 
         I = CartesianIndices((typemin(Int):(typemin(Int)+3),))
@@ -496,9 +494,7 @@ end
 
     # test invalid state
     I = CartesianIndices((2:4, 3:5))
-    @test iterate(I, CartesianIndex(typemax(Int), 3))[1] == CartesianIndex(2,4)
-    @test iterate(I, CartesianIndex(typemax(Int), 4))[1] == CartesianIndex(2,5)
-    @test iterate(I, CartesianIndex(typemax(Int), 5))    === nothing
+    @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
 
     @test iterate(I, CartesianIndex(3, typemax(Int)))[1] == CartesianIndex(4,typemax(Int))
     @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
