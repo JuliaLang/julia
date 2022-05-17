@@ -3,7 +3,7 @@
 using Base.Meta
 using Core.IR
 const Compiler = Core.Compiler
-using .Compiler: CFG, BasicBlock
+using .Compiler: CFG, BasicBlock, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -333,4 +333,67 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
     stderr = IOBuffer()
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+end
+
+let
+    function test_useref(stmt, v, op)
+        if isa(stmt, Expr)
+            @test stmt.args[op] === v
+        elseif isa(stmt, GotoIfNot)
+            @test stmt.cond === v
+        elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
+            @test stmt.val === v
+        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
+            @test stmt === v
+        elseif isa(stmt, PiNode)
+            @test stmt.val === v && stmt.typ === typeof(stmt)
+        elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
+            @test stmt.values[op] === v
+        end
+    end
+
+    function _test_userefs(@nospecialize stmt)
+        ex = Expr(:call, :+, Core.SSAValue(3), 1)
+        urs = Core.Compiler.userefs(stmt)::Core.Compiler.UseRefIterator
+        it = Core.Compiler.iterate(urs)
+        while it !== nothing
+            ur = getfield(it, 1)::Core.Compiler.UseRef
+            op = getfield(it, 2)::Int
+            v1 = Core.Compiler.getindex(ur)
+            # set to dummy expression and then back to itself to test `_useref_setindex!`
+            v2 = Core.Compiler.setindex!(ur, ex)
+            test_useref(v2, ex, op)
+            Core.Compiler.setindex!(ur, v1)
+            @test Core.Compiler.getindex(ur) === v1
+            it = Core.Compiler.iterate(urs, op)
+        end
+    end
+
+    function test_userefs(body)
+        for stmt in body
+            _test_userefs(stmt)
+        end
+    end
+
+    # this isn't valid code, we just care about looking at a variety of IR nodes
+    body = Any[
+        Expr(:enter, 11),
+        Expr(:call, :+, SSAValue(3), 1),
+        Expr(:throw_undef_if_not, :expected, false),
+        Expr(:leave, 1),
+        Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
+        UpsilonNode(),
+        UpsilonNode(SSAValue(2)),
+        PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]),
+        PhiCNode(Any[SSAValue(6)]),
+        PhiNode(Int32[8], Any[SSAValue(7)]),
+        PiNode(SSAValue(6), GotoNode),
+        GotoIfNot(SSAValue(3), 10),
+        GotoNode(5),
+        SSAValue(7),
+        NewSSAValue(9),
+        ReturnNode(SSAValue(11)),
+    ]
+
+    test_userefs(body)
 end

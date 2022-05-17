@@ -228,6 +228,27 @@ end
 # SSAValues/Slots #
 ###################
 
+function ssamap(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            op[] = f(val)
+        end
+    end
+    return urs[]
+end
+
+function foreachssa(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            f(val)
+        end
+    end
+end
+
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
@@ -332,6 +353,38 @@ end
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
     isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
+
+######################
+# IncrementalCompact #
+######################
+
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact)
+    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
+    nvals = length(compact.used_ssas)
+    nbody1 = length(body1)
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    function increment_uses(ssa::SSAValue)
+        uses[ssa.id] += 1
+    end
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreachssa(increment_uses, e)
+    end
+    return uses
+end
 
 ###########
 # options #

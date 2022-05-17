@@ -1151,15 +1151,6 @@ function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact
     end
 end
 
-function count_uses(@nospecialize(stmt), uses::Vector{Int})
-    for ur in userefs(stmt)
-        use = ur[]
-        if isa(use, SSAValue)
-            uses[use.id] += 1
-        end
-    end
-end
-
 function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::Int)
     worklist = Int[]
     push!(worklist, phi)
