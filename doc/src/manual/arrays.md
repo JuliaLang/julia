@@ -872,10 +872,14 @@ slower than multiplication. While some arrays — like [`Array`](@ref) itself �
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
-introspect which is which). As such, when iterating over an entire array, it's
-much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
-Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
+introspect which is which). 
+
+!!! warnings
+
+    When iterating over an entire array, it's
+    much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
+    Not only will the former be much faster in cases where `A` is `IndexCartesian`,
+    but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
 
 #### Omitted and extra indices
 
@@ -967,8 +971,10 @@ i = CartesianIndex(2, 2)
 i = CartesianIndex(3, 2)
 ```
 
-In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
-iterate over any array type.
+!!! note
+
+    In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
+    iterate over any array type.
 
 ## Array traits
 
