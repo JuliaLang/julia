@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-import Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
 using Printf: @sprintf
 
 using Base.Iterators

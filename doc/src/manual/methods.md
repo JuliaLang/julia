@@ -40,6 +40,11 @@ for structuring and organizing programs.
     an explicit method argument. When the current `this` object is the receiver of a method call,
     it can be omitted altogether, writing just `meth(arg1,arg2)`, with `this` implied as the receiving
     object.
+!!! note
+    All the examples in this chapter assume that you are defining methods for a function in the *same*
+    module. If you want to add methods to a function in *another* module, you have to `import` it or
+    use the name qualified with module names. See the section on [namespace management](@ref
+    namespace-management).
 
 ## Defining Methods
 
@@ -541,38 +546,19 @@ Here are a few common design patterns that come up sometimes when using dispatch
 ### Extracting the type parameter from a super-type
 
 
-Here is the correct code template for returning the element-type `T`
-of any arbitrary subtype of `AbstractArray`:
+Here is a correct code template for returning the element-type `T`
+of any arbitrary subtype of `AbstractArray` that has well-defined
+element type:
 
 ```julia
 abstract type AbstractArray{T, N} end
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
-using so-called triangular dispatch.  Note that if `T` is a `UnionAll`
-type, as e.g. `eltype(Array{T} where T <: Integer)`, then `Any` is
-returned (as does the version of `eltype` in `Base`).
 
-Another way, which used to be the only correct way before the advent of
-triangular dispatch in Julia v0.6, is:
-
-```julia
-abstract type AbstractArray{T, N} end
-eltype(::Type{AbstractArray}) = Any
-eltype(::Type{AbstractArray{T}}) where {T} = T
-eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
-eltype(::Type{A}) where {A<:AbstractArray} = eltype(supertype(A))
-```
-
-Another possibility is the following, which could be useful to adapt
-to cases where the parameter `T` would need to be matched more
-narrowly:
-```julia
-eltype(::Type{AbstractArray{T, N} where {T<:S, N<:M}}) where {M, S} = Any
-eltype(::Type{AbstractArray{T, N} where {T<:S}}) where {N, S} = Any
-eltype(::Type{AbstractArray{T, N} where {N<:M}}) where {M, T} = T
-eltype(::Type{AbstractArray{T, N}}) where {T, N} = T
-eltype(::Type{A}) where {A <: AbstractArray} = eltype(supertype(A))
-```
+using so-called triangular dispatch.  Note that `UnionAll` types, for
+example `eltype(AbstractArray{T} where T <: Integer)`, do not match the
+above method. The implementation of `eltype` in `Base` adds a fallback
+method to `Any` for such cases.
 
 
 One common mistake is to try and get the element-type by using introspection:
@@ -591,6 +577,25 @@ Here we have created a type `BitVector` which has no parameters,
 but where the element-type is still fully specified, with `T` equal to `Bool`!
 
 
+Another mistake is to try to walk up the type hierarchy using
+`supertype`:
+```julia
+eltype_wrong(::Type{AbstractArray{T}}) where {T} = T
+eltype_wrong(::Type{AbstractArray{T, N}}) where {T, N} = T
+eltype_wrong(::Type{A}) where {A<:AbstractArray} = eltype_wrong(supertype(A))
+```
+
+While this works for declared types, it fails for types without
+supertypes:
+
+```julia-repl
+julia> eltype_wrong(Union{AbstractArray{Int}, AbstractArray{Float64}})
+ERROR: MethodError: no method matching supertype(::Type{Union{AbstractArray{Float64,N} where N, AbstractArray{Int64,N} where N}})
+Closest candidates are:
+  supertype(::DataType) at operators.jl:43
+  supertype(::UnionAll) at operators.jl:48
+```
+
 ### Building a similar type with a different type parameter
 
 When building generic code, there is often a need for constructing a similar
@@ -600,7 +605,6 @@ For instance, you might have some sort of abstract array with an arbitrary eleme
 and want to write your computation on it with a specific element type.
 We must implement a method for each `AbstractArray{T}` subtype that describes how to compute this type transform.
 There is no general transform of one subtype into another subtype with a different parameter.
-(Quick review: do you see why this is?)
 
 The subtypes of `AbstractArray` typically implement two methods to
 achieve this:
@@ -675,7 +679,7 @@ other functions such as `map` can dispatch on this information to pick
 the best algorithm (see [Abstract Array Interface](@ref man-interface-array)).
 This means that each subtype does not need to implement a custom version of `map`,
 since the generic definitions + trait classes will enable the system to select the fastest version.
-Here a toy implementation of `map` illustrating the trait-based dispatch:
+Here is a toy implementation of `map` illustrating the trait-based dispatch:
 
 ```julia
 map(f, a::AbstractArray, b::AbstractArray) = map(Base.IndexStyle(a, b), f, a, b)
@@ -1099,5 +1103,56 @@ padding, so it keeps the dispatch hierarchy well organized and with
 reduced likelihood of ambiguities. Moreover, it extends the "public"
 `myfilter` interface: a user who wants to control the padding
 explicitly can call the `NoPad` variant directly.
+
+## Defining methods in local scope
+
+You can define methods within a [local scope](@ref scope-of-variables), for example
+
+```jldoctest
+julia> function f(x)
+           g(y::Int) = y + x
+           g(y) = y - x
+           g
+       end
+f (generic function with 1 method)
+
+julia> h = f(3);
+
+julia> h(4)
+7
+
+julia> h(4.0)
+1.0
+```
+
+However, you should *not* define local methods conditionally or subject to control flow, as in
+
+```julia
+function f2(inc)
+    if inc
+        g(x) = x + 1
+    else
+        g(x) = x - 1
+    end
+end
+
+function f3()
+    function g end
+    return g
+    g() = 0
+end
+```
+as it is not clear what function will end up getting defined. In the future, it might be an error to define local methods in this manner.
+
+For cases like this use anonymous functions instead:
+
+```julia
+function f2(inc)
+    g = if inc
+        x -> x + 1
+    else
+        x -> x - 1
+    end
+end
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

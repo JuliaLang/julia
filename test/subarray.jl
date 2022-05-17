@@ -134,8 +134,8 @@ end
 function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
-    trailing2 = ntuple(x->1, max(ndims(A)-2, 0))
-    trailing3 = ntuple(x->1, max(ndims(A)-3, 0))
+    trailing2 = ntuple(Returns(1), max(ndims(A)-2, 0))
+    trailing3 = ntuple(Returns(1), max(ndims(A)-3, 0))
     @test_throws BoundsError A[1, 0, trailing2...]
     @test_throws BoundsError A[1, end+1, trailing2...]
     @test_throws BoundsError A[1, 1, 0, trailing3...]
@@ -214,10 +214,10 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
-        runsubarraytests(SB, i1, i2, i3, ntuple(x->1, max(ndims(SB)-3, 0))...)
+        runsubarraytests(SB, i1, i2, i3, ntuple(Returns(1), max(ndims(SB)-3, 0))...)
     end
     for i2 in indexN, i1 in indexN
-        runsubarraytests(SB, i1, i2, ntuple(x->1, max(ndims(SB)-2, 0))...)
+        runsubarraytests(SB, i1, i2, ntuple(Returns(1), max(ndims(SB)-2, 0))...)
     end
     for i1 in indexNNN
         runsubarraytests(SB, i1)
@@ -697,4 +697,56 @@ import InteractiveUtils
     @test M isa StridedArray
     @test M*v == copy(M)*v
     @test (InteractiveUtils.@which M*v) == (InteractiveUtils.@which copy(M)*v)
+end
+
+
+isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
+using .Main.InfiniteArrays, Base64
+
+@testset "PR #37741: non-Int sizes" begin
+    r = BigInt(1):BigInt(100_000_000)^100
+    v = SubArray(r, (r,))
+    @test size(v) == (last(r),)
+
+    v = SubArray(OneToInf(), (OneToInf(),))
+    @test size(v) == (Infinity(),)
+    @test stringmime("text/plain", v; context=(:limit => true)) == "$(Infinity())-element view(::$(OneToInf{Int}), 1:1:$(Infinity())) with eltype $Int with indices 1:1:$(Infinity()):\n  1\n  2\n  3\n  4\n  5\n  6\n  7\n  8\n  9\n 10\n  ⋮"
+end
+
+@testset "PR #39809: copy on 0-dimensional SubArray" begin
+    v = [[1]]
+    s = @view v[1]
+    @test copy(s) == fill([1])
+end
+
+@testset "issue 40314: views of CartesianIndices" begin
+    c = CartesianIndices((1:2, 1:4))
+    @test (@view c[c]) === c
+    for inds in Any[(1:1, 1:2), (1:1:1, 1:2)]
+        c2 = @view c[inds...]
+        @test c2 isa CartesianIndices{2}
+        for i2 in inds[2], i1 in inds[1]
+            @test c2[i1, i2] == c[i1, i2]
+        end
+    end
+    for inds in Any[(Colon(), 1:2), (Colon(), 1:1:2)]
+        c2 = @view c[inds...]
+        @test c2 isa CartesianIndices{2}
+        for i2 in inds[2], i1 in axes(c, 1)
+            @test c2[i1, i2] == c[i1, i2]
+        end
+    end
+end
+
+@testset "issue #41221: view(::Vector, :, 1)" begin
+    v = randn(3)
+    @test view(v,:,1) == v
+    @test parent(view(v,:,1)) === v
+    @test parent(view(v,2:3,1,1)) === v
+    @test_throws BoundsError view(v,:,2)
+    @test_throws BoundsError view(v,:,1,2)
+
+    m = randn(4,5).+im
+    @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
+    @test parent(view(m, 1:2, 3, 1, 1)) === m
 end

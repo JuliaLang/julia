@@ -6,7 +6,6 @@ using Base: rtoldefault
 using Test
 using LinearAlgebra
 using LinearAlgebra: AbstractTriangular
-using SparseArrays
 using Random
 
 _rand(::Type{T}) where {T <: AbstractFloat} = T(randn())

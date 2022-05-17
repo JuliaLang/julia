@@ -64,6 +64,13 @@
     @test typeof(escape_string("test", "t")) == String
     @test escape_string("test", "t") == "\\tes\\t"
 
+    @test escape_string("\\cdot") == "\\\\cdot"
+    @test escape_string("\\cdot"; keep = '\\') == "\\cdot"
+    @test escape_string("\\cdot", '\\'; keep = '\\') == "\\\\cdot"
+    @test escape_string("\\cdot\n"; keep = "\\\n") == "\\cdot\n"
+    @test escape_string("\\cdot\n", '\n'; keep = "\\\n") == "\\cdot\\\n"
+    @test escape_string("\\cdot\n", "\\\n"; keep = "\\\n") == "\\\\cdot\\\n"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
@@ -180,6 +187,38 @@ join(myio, "", "", 1)
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"N"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"m"))
 end
+
+@testset "sprint with context" begin
+    function f(io::IO)
+        println(io, "compact => ", get(io, :compact, false))
+        println(io, "limit   => ", get(io, :limit,   false))
+    end
+
+    str = sprint(f)
+    @test str == """
+        compact => false
+        limit   => false
+        """
+
+    str = sprint(f, context = :compact => true)
+    @test str == """
+        compact => true
+        limit   => false
+        """
+
+    str = sprint(f, context = (:compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+
+    str = sprint(f, context = IOContext(stdout, :compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+end
+
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops
     @test Base.indentation("      \t") == (8, true)
@@ -269,4 +308,12 @@ for i = 1:10
     buf = IOBuffer()
     print(buf, join(s22021, "\n"))
     @test isvalid(String, take!(buf))
+end
+
+@testset "string()" begin
+    # test the Float sizehints
+    @test string(2.f0) == "2.0"
+    @test string(2.f0, 2.0) == "2.02.0"
+    # test empty args
+    @test string() == ""
 end

@@ -38,7 +38,7 @@ const Parser = Internals.Parser
 Parse file `f` and return the resulting table (dictionary). Throw a
 [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.tryparsefile`](@ref)
+See also [`TOML.tryparsefile`](@ref).
 """
 parsefile(f::AbstractString) =
     Internals.parse(Parser(readstring(f); filepath=abspath(f)))
@@ -52,7 +52,7 @@ parsefile(p::Parser, f::AbstractString) =
 Parse file `f` and return the resulting table (dictionary). Return a
 [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.parsefile`](@ref)
+See also [`TOML.parsefile`](@ref).
 """
 tryparsefile(f::AbstractString) =
     Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
@@ -66,7 +66,7 @@ tryparsefile(p::Parser, f::AbstractString) =
 Parse the string  or stream `x`, and return the resulting table (dictionary).
 Throw a [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.tryparse`](@ref)
+See also [`TOML.tryparse`](@ref).
 """
 parse(str::AbstractString) =
     Internals.parse(Parser(String(str)))
@@ -82,7 +82,7 @@ parse(p::Parser, io::IO) = parse(p, read(io, String))
 Parse the string or stream `x`, and return the resulting table (dictionary).
 Return a [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.parse`](@ref)
+See also [`TOML.parse`](@ref).
 """
 tryparse(str::AbstractString) =
     Internals.tryparse(Parser(String(str)))
@@ -110,7 +110,7 @@ const ParserError = Internals.ParserError
 Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
 sort tables according to the function given by the keyword argument `by`.
 
-The following data types are supported: `AbstractDict`, `Integer`, `AbstractFloat`, `Bool`,
+The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
 need to be convertible to `Float64` and `Int64` respectively. For other data types,
 pass the function `to_toml` that takes the data types and returns a value of a

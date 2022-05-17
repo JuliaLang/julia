@@ -65,7 +65,7 @@ recursive application of [`subtypes`](@ref) may be used to inspect the full type
 ## DataType layout
 
 The internal representation of a `DataType` is critically important when interfacing with C code
-and several functions are available to inspect these details. [`isbits(T::DataType)`](@ref) returns
+and several functions are available to inspect these details. [`isbitstype(T::DataType)`](@ref) returns
 true if `T` is stored with C-compatible alignment. [`fieldoffset(T::DataType, i::Integer)`](@ref)
 returns the (byte) offset for field *i* relative to the start of the type.
 
@@ -122,11 +122,12 @@ calls and expand argument types automatically:
 
 ```julia-repl
 julia> @code_llvm +(1,1)
-
-define i64 @"julia_+_130862"(i64, i64) {
+;  @ int.jl:87 within `+`
+; Function Attrs: sspstrong uwtable
+define i64 @"julia_+_476"(i64 signext %0, i64 signext %1) #0 {
 top:
-    %2 = add i64 %1, %0
-    ret i64 %2
+  %2 = add i64 %1, %0
+  ret i64 %2
 }
 ```
 
@@ -138,7 +139,7 @@ For more informations see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@cod
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 debug information printed.
 
-```
+```julia-repl
 julia> @code_typed debuginfo=:source +(1,1)
 CodeInfo(
     @ int.jl:53 within `+'
@@ -147,7 +148,6 @@ CodeInfo(
 ) => Int64
 ```
 
-Possible values for `debuginfo` are: `:none`, `:source`, and`:default`.
+Possible values for `debuginfo` are: `:none`, `:source`, and `:default`.
 Per default debug information is not printed, but that can be changed
 by setting `Base.IRShow.default_debuginfo[] = :source`.
-

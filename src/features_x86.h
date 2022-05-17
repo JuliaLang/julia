@@ -33,7 +33,7 @@ JL_FEATURE_DEF(bmi, 32 * 2 + 3, 0)
 // JL_FEATURE_DEF(hle, 32 * 2 + 4, 0) // Not used and gone in LLVM 5.0
 JL_FEATURE_DEF(avx2, 32 * 2 + 5, 0)
 JL_FEATURE_DEF(bmi2, 32 * 2 + 8, 0)
-// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Priviledged instruction
+// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Privileged instruction
 JL_FEATURE_DEF(rtm, 32 * 2 + 11, 0)
 // JL_FEATURE_DEF(mpx, 32 * 2 + 14, 0) // Deprecated in LLVM 10.0
 JL_FEATURE_DEF(avx512f, 32 * 2 + 16, 0)
@@ -108,6 +108,7 @@ JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
 JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 
 // EAX=7,ECX=1: EAX
+JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
 JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 
 // EAX=0x14,ECX=0: EBX

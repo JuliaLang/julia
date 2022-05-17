@@ -25,10 +25,16 @@ Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 
 Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
 
-Base.print(io::IO, x::Enum) = print(io, Symbol(x))
+function _symbol(x::Enum)
+    names = namemap(typeof(x))
+    x = Integer(x)
+    get(() -> Symbol("<invalid #$x>"), names, x)::Symbol
+end
+
+Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 
 function Base.show(io::IO, x::Enum)
-    sym = Symbol(x)
+    sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
         from = get(io, :module, Main)
         def = typeof(x).name.module
@@ -119,6 +125,13 @@ To list all the instances of an enum use `instances`, e.g.
 julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
+
+It is possible to construct a symbol from an enum instance:
+
+```jldoctest fruitenum
+julia> Symbol(apple)
+:apple
+```
 """
 macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)
@@ -138,8 +151,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
-    lo = hi = 0
-    i = zero(basetype)
+    lo = hi = i = zero(basetype)
     hasexpr = false
 
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
@@ -180,7 +192,6 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         if length(values) == 1
             lo = hi = i
         else
-            lo = min(lo, i)
             hi = max(hi, i)
         end
         i += oneunit(i)
