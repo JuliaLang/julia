@@ -1614,7 +1614,7 @@ end
     NewBlocksInfo
 
 Information on basic blocks newly allocated in `allocate_new_blocks!`.  See
-`allocate_new_blocks!` for explanation on the properties.
+[`allocate_new_blocks!`](@ref) for explanation on the properties.
 """
 struct NewBlocksInfo
     target_blocks::BitSet
