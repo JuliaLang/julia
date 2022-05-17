@@ -67,6 +67,10 @@ end
             @test all(iszero, B)
         end
     end
+    let A = [reshape(1:6, 3, 2);;]
+        copyto!(A, CartesianIndices((2:3,2)), A, CartesianIndices((2,2)))
+        @test A[2:3,:] == [1 4;2 5]
+    end
 end
 
 @testset "shallow and deep copying" begin

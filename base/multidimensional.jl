@@ -1082,7 +1082,7 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
     if @generated
         quote
             @nloops $N i (n->CRsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src,n->Rsrc.indices[n][i_n])
+                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src′,n->Rsrc.indices[n][i_n])
             end
         end
     else
