@@ -1384,7 +1384,7 @@ function activate_module(s::MIState)
         mod = Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
         REPL.activate(mod)
         Base.load_InteractiveUtils(mod)
-        refresh_line(s)
+        edit_clear(s)
     catch
         beep(s)
     end
