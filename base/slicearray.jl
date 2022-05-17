@@ -243,3 +243,28 @@ end
 end
 
 parent(s::Slices) = s.parent
+
+function showarg(io::IO, s::ColumnSlices, toplevel)
+    print(io, "eachcol(")
+    Base.showarg(io, parent(s), false)
+    print(io, ')')
+    toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
+    return nothing
+end
+function showarg(io::IO, s::RowSlices, toplevel)
+    print(io, "eachrow(")
+    Base.showarg(io, parent(s), false)
+    print(io, ')')
+    toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
+    return nothing
+end
+function showarg(io::IO, s::Slices, toplevel)
+    drop = ndims(s) + ndims(eltype(s)) > ndims(parent(s))
+    dims_vec = filter(c -> c isa Integer, [findfirst(==(d), s.slicemap) for d in 1:ndims(parent(s))])
+    dims = length(dims_vec) == 1 ? only(dims_vec) : Tuple(dims_vec)
+    print(io, "eachslice(")
+    Base.showarg(io, parent(s), false)
+    print(io, ", dims = ", dims, drop ? ", drop = false)" : ")")
+    toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
+    return nothing
+end
