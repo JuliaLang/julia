@@ -13,7 +13,9 @@ typedef struct {
     const char **cmds;
     const char *image_file;
     const char *cpu_target;
-    int32_t nthreads;
+    int8_t nthreadpools;
+    int16_t nthreads;
+    const int16_t *nthreads_per_pool;
     int32_t nprocs;
     const char *machine_file;
     const char *project;
@@ -24,6 +26,7 @@ typedef struct {
     int8_t compile_enabled;
     int8_t code_coverage;
     int8_t malloc_log;
+    const char *tracked_path;
     int8_t opt_level;
     int8_t opt_level_min;
     int8_t debug_level;

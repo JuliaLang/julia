@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
-sizehint!(s::AbstractSet, n) = nothing
+sizehint!(s::AbstractSet, n) = s
 
-copy!(dst::AbstractSet, src::AbstractSet) = union!(empty!(dst), src)
+function copy!(dst::AbstractSet, src::AbstractSet)
+    dst === src && return dst
+    union!(empty!(dst), src)
+end
 
 ## set operations (union, intersection, symmetric difference)
 
@@ -146,6 +149,14 @@ Set{Float64} with 1 element:
 ```
 """
 function intersect(s::AbstractSet, itr, itrs...)
+    # heuristics to try to `intersect` with the shortest Set on the left
+    if length(s)>50 && haslength(itr) && all(haslength, itrs)
+        min_length, min_idx = findmin(length, itrs)
+        if length(itr) > min_length
+            new_itrs = setindex(itrs, itr, min_idx)
+            return intersect(s, itrs[min_idx], new_itrs...)
+        end
+    end
     T = promote_eltype(s, itr, itrs...)
     if T == promote_eltype(s, itr)
         out = intersect(s, itr)
@@ -156,7 +167,13 @@ function intersect(s::AbstractSet, itr, itrs...)
     return intersect!(out, itrs...)
 end
 intersect(s) = union(s)
-intersect(s::AbstractSet, itr) = mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
+function intersect(s::AbstractSet, itr)
+    if haslength(itr) && hasfastin(itr) && length(s) < length(itr)
+        return mapfilter(in(itr), push!, s, emptymutable(s, promote_eltype(s, itr)))
+    else
+        return mapfilter(in(s), push!, itr, emptymutable(s, promote_eltype(s, itr)))
+    end
+end
 
 const ∩ = intersect
 
@@ -417,7 +434,7 @@ issetequal(a::AbstractSet, b) = issetequal(a, Set(b))
 function issetequal(a, b::AbstractSet)
     if haslength(a)
         # check b for too many unique elements
-        length(a) < length(b) && return false
+        length(a) < length(b) && return false
     end
     return issetequal(Set(a), b)
 end

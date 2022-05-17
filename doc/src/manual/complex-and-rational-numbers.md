@@ -36,7 +36,7 @@ julia> (-1 + 2im)^2
 -3 - 4im
 
 julia> (-1 + 2im)^2.5
-2.7296244647840084 - 6.960664459571898im
+2.729624464784009 - 6.9606644595719im
 
 julia> (-1 + 2im)^(1 + 1im)
 -0.27910381075826657 + 0.08708053414102428im
@@ -254,7 +254,7 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the case `a == 0` and `b == 0`:
+of `a` and `b`, with the exception of the two cases `b == 0` and `a == 0 && b < 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;

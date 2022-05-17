@@ -23,7 +23,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svd(A)
-SVD{Float64, Float64, Matrix{Float64}}
+SVD{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 U factor:
 4×4 Matrix{Float64}:
  0.0  1.0  0.0   0.0
@@ -56,21 +56,24 @@ julia> u == F.U && s == F.S && v == F.V
 true
 ```
 """
-struct SVD{T,Tr,M<:AbstractArray{T}} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray{T},C<:AbstractVector{Tr}} <: Factorization{T}
     U::M
-    S::Vector{Tr}
+    S::C
     Vt::M
-    function SVD{T,Tr,M}(U, S, Vt) where {T,Tr,M<:AbstractArray{T}}
+    function SVD{T,Tr,M,C}(U, S, Vt) where {T,Tr,M<:AbstractArray{T},C<:AbstractVector{Tr}}
         require_one_based_indexing(U, S, Vt)
-        new{T,Tr,M}(U, S, Vt)
+        new{T,Tr,M,C}(U, S, Vt)
     end
 end
-SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
-function SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) where {T,Tr}
+SVD(U::AbstractArray{T}, S::AbstractVector{Tr}, Vt::AbstractArray{T}) where {T,Tr} =
+    SVD{T,Tr,typeof(U),typeof(S)}(U, S, Vt)
+SVD{T}(U::AbstractArray, S::AbstractVector{Tr}, Vt::AbstractArray) where {T,Tr} =
     SVD(convert(AbstractArray{T}, U),
-        convert(Vector{Tr}, S),
+        convert(AbstractVector{Tr}, S),
         convert(AbstractArray{T}, Vt))
-end
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(SVD{T,Tr,M}(U::AbstractArray{T}, S::AbstractVector{Tr}, Vt::AbstractArray{T}) where {T,Tr,M},
+           SVD{T,Tr,M,typeof(S)}(U, S, Vt))
 
 SVD{T}(F::SVD) where {T} = SVD(
     convert(AbstractMatrix{T}, F.U),
@@ -140,10 +143,10 @@ The singular values in `S` are sorted in descending order.
 
 Iterating the decomposition produces the components `U`, `S`, and `V`.
 
-If `full = false` (default), a "thin" SVD is returned. For a ``M
-\\times N`` matrix `A`, in the full factorization `U` is `M \\times M`
-and `V` is `N \\times N`, while in the thin factorization `U` is `M
-\\times K` and `V` is `N \\times K`, where `K = \\min(M,N)` is the
+If `full = false` (default), a "thin" SVD is returned. For an ``M
+\\times N`` matrix `A`, in the full factorization `U` is ``M \\times M``
+and `V` is ``N \\times N``, while in the thin factorization `U` is ``M
+\\times K`` and `V` is ``N \\times K``, where ``K = \\min(M,N)`` is the
 number of singular values.
 
 If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
@@ -173,10 +176,10 @@ true
 ```
 """
 function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
-    svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+    svd!(copymutable_oftype(A, eigtype(T)), full = full, alg = alg)
 end
 function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
-    A = svd!(copy_oftype(A, eigtype(T)), full = full, alg = alg)
+    A = svd!(copymutable_oftype(A, eigtype(T)), full = full, alg = alg)
     return SVD{T}(A)
 end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
@@ -237,7 +240,7 @@ julia> svdvals(A)
  0.0
 ```
 """
-svdvals(A::AbstractMatrix{T}) where {T} = svdvals!(copy_oftype(A, eigtype(T)))
+svdvals(A::AbstractMatrix{T}) where {T} = svdvals!(copymutable_oftype(A, eigtype(T)))
 svdvals(A::AbstractVector{T}) where {T} = [convert(eigtype(T), norm(A))]
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 svdvals(A::AbstractVector{<:BlasFloat}) = [norm(A)]
@@ -267,7 +270,7 @@ function adjoint(F::SVD)
     return SVD(F.Vt', F.S, F.U')
 end
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::SVD{<:Any,<:Any,<:AbstractArray,<:AbstractVector})
     summary(io, F); println(io)
     println(io, "U factor:")
     show(io, mime, F.U)
@@ -319,7 +322,7 @@ julia> B = [0. 1.; 1. 0.]
  1.0  0.0
 
 julia> F = svd(A, B)
-GeneralizedSVD{Float64, Matrix{Float64}}
+GeneralizedSVD{Float64, Matrix{Float64}, Float64, Vector{Float64}}
 U factor:
 2×2 Matrix{Float64}:
  1.0  0.0
@@ -333,13 +336,13 @@ Q factor:
  1.0  0.0
  0.0  1.0
 D1 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
- 0.707107   ⋅
-  ⋅        0.707107
+2×2 Matrix{Float64}:
+ 0.707107  0.0
+ 0.0       0.707107
 D2 factor:
-2×2 SparseArrays.SparseMatrixCSC{Float64, Int64} with 2 stored entries:
- 0.707107   ⋅
-  ⋅        0.707107
+2×2 Matrix{Float64}:
+ 0.707107  0.0
+ 0.0       0.707107
 R0 factor:
 2×2 Matrix{Float64}:
  1.41421   0.0
@@ -352,28 +355,30 @@ julia> F.U*F.D1*F.R0*F.Q'
 
 julia> F.V*F.D2*F.R0*F.Q'
 2×2 Matrix{Float64}:
- 0.0  1.0
- 1.0  0.0
+ -0.0  1.0
+  1.0  0.0
 ```
 """
-struct GeneralizedSVD{T,S} <: Factorization{T}
+struct GeneralizedSVD{T,S<:AbstractMatrix,Tr,C<:AbstractVector{Tr}} <: Factorization{T}
     U::S
     V::S
     Q::S
-    a::Vector
-    b::Vector
+    a::C
+    b::C
     k::Int
     l::Int
     R::S
-    function GeneralizedSVD{T,S}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
-                                 a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where {T,S}
-        new(U, V, Q, a, b, k, l, R)
+    function GeneralizedSVD{T,S,Tr,C}(U, V, Q, a, b, k, l, R) where {T,S<:AbstractMatrix{T},Tr,C<:AbstractVector{Tr}}
+        new{T,S,Tr,C}(U, V, Q, a, b, k, l, R)
     end
 end
-function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
-                        a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where T
-    GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
-end
+GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+              a::AbstractVector{Tr}, b::AbstractVector{Tr}, k::Int, l::Int,
+              R::AbstractMatrix{T}) where {T, Tr} =
+    GeneralizedSVD{T,typeof(U),Tr,typeof(a)}(U, V, Q, a, b, k, l, R)
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(GeneralizedSVD{T,S}(U, V, Q, a, b, k, l, R) where {T, S},
+           GeneralizedSVD{T,S,real(T),typeof(a)}(U, V, Q, a, b, k, l, R))
 
 # iteration for destructuring into components
 Base.iterate(S::GeneralizedSVD) = (S.U, Val(:V))
@@ -454,7 +459,7 @@ true
 """
 function svd(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    return svd!(copy_oftype(A, S), copy_oftype(B, S))
+    return svd!(copymutable_oftype(A, S), copymutable_oftype(B, S))
 end
 # This method can be heavily optimized but it is probably not critical
 # and might introduce bugs or inconsistencies relative to the 1x1 matrix
@@ -564,7 +569,7 @@ julia> svdvals(A, B)
 """
 function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
+    return svdvals!(copymutable_oftype(A, S), copymutable_oftype(B, S))
 end
 svdvals(x::Number, y::Number) = abs(x/y)
 

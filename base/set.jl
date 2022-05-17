@@ -64,6 +64,16 @@ end
 isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
+
+# This avoids hashing and probing twice and it works the same as
+# in!(x, s::Set) = in(x, s) ? true : (push!(s, x); false)
+function in!(x, s::Set)
+    idx, sh = ht_keyindex2_shorthash!(s.dict, x)
+    idx > 0 && return true
+    _setindex!(s.dict, nothing, x, -idx, sh)
+    return false
+end
+
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
@@ -115,7 +125,7 @@ as determined by [`isequal`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref).
+See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -137,10 +147,7 @@ function unique(itr)
         out = Vector{T}()
         seen = Set{T}()
         for x in itr
-            if !in(x, seen)
-                push!(seen, x)
-                push!(out, x)
-            end
+            !in!(x, seen) && push!(out, x)
         end
         return out
     end
@@ -164,16 +171,10 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
             R = promote_typejoin(S, T)
             seenR = convert(Set{R}, seen)
             outR = convert(Vector{R}, out)
-            if !in(x, seenR)
-                push!(seenR, x)
-                push!(outR, x)
-            end
+            !in!(x, seenR) && push!(outR, x)
             return _unique_from(itr, outR, seenR, i)
         end
-        if !in(x, seen)
-            push!(seen, x)
-            push!(out, x)
-        end
+        !in!(x, seen) && push!(out, x)
     end
     return out
 end
@@ -194,16 +195,34 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
  3
  4
 ```
+This functionality can also be used to extract the *indices* of the first
+occurrences of unique elements in an array:
+```jldoctest
+julia> a = [3.1, 4.2, 5.3, 3.1, 3.1, 3.1, 4.2, 1.7];
+
+julia> i = unique(i -> a[i], eachindex(a))
+4-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 8
+
+julia> a[i]
+4-element Vector{Float64}:
+ 3.1
+ 4.2
+ 5.3
+ 1.7
+
+julia> a[i] == unique(a)
+true
+```
 """
 function unique(f, C; seen::Union{Nothing,Set}=nothing)
     out = Vector{eltype(C)}()
     if seen !== nothing
         for x in C
-            y = f(x)
-            if y ∉ seen
-                push!(out, x)
-                push!(seen, y)
-            end
+            !in!(f(x), seen) && push!(out, x)
         end
         return out
     end
@@ -383,41 +402,45 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
-See also: [`unique`](@ref), [`issorted`](@ref).
+See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1; 2; 3]
-3-element Vector{Int64}:
- 1
- 2
- 3
-
-julia> allunique(a)
+julia> allunique([1, 2, 3])
 true
 
-julia> allunique([a, a])
+julia> allunique([1, 2, 1, 2])
+false
+
+julia> allunique(Real[1, 1.0, 2])
+false
+
+julia> allunique([NaN, 2.0, NaN, 4.0])
 false
 ```
 """
 function allunique(C)
-    seen = Dict{eltype(C), Nothing}()
+    if haslength(C)
+        length(C) < 2 && return true
+        length(C) < 32 && return _indexed_allunique(collect(C))
+    end
+    return _hashed_allunique(C)
+end
+
+function _hashed_allunique(C)
+    seen = Set{eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
             v, s = x
-            idx = ht_keyindex2!(seen, v)
-            idx > 0 && return false
-            _setindex!(seen, nothing, v, -idx)
+            in!(v, seen) && return false
             x = iterate(C, s)
         end
         sizehint!(seen, length(C))
     end
     while x !== nothing
         v, s = x
-        idx = ht_keyindex2!(seen, v)
-        idx > 0 && return false
-        _setindex!(seen, nothing, v, -idx)
+        in!(v, seen) && return false
         x = iterate(C, s)
     end
     return true
@@ -426,6 +449,66 @@ end
 allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
+
+allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+
+function _indexed_allunique(A)
+    length(A) < 2 && return true
+    iter = eachindex(A)
+    I = iterate(iter)
+    while I !== nothing
+        i, s = I
+        a = A[i]
+        for j in Iterators.rest(iter, s)
+            isequal(a, @inbounds A[j]) && return false
+        end
+        I = iterate(iter, s)
+    end
+    return true
+end
+
+function allunique(t::Tuple)
+    length(t) < 32 || return _hashed_allunique(t)
+    a = afoldl(true, tail(t)...) do b, x
+        b & !isequal(first(t), x)
+    end
+    return a && allunique(tail(t))
+end
+allunique(t::Tuple{}) = true
+
+"""
+    allequal(itr) -> Bool
+
+Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
+
+See also: [`unique`](@ref), [`allunique`](@ref).
+
+!!! compat "Julia 1.8"
+    The `allequal` function requires at least Julia 1.8.
+
+# Examples
+```jldoctest
+julia> allequal([])
+true
+
+julia> allequal([1])
+true
+
+julia> allequal([1, 1])
+true
+
+julia> allequal([1, 2])
+false
+
+julia> allequal(Dict(:a => 1, :b => 1))
+false
+```
+"""
+allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+
+allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
+
+allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

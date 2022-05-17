@@ -54,15 +54,14 @@ function gcd(a::T, b::T) where T<:BitInteger
     signbit(r) && __throw_gcd_overflow(a, b)
     return r
 end
-@noinline __throw_gcd_overflow(a, b) = throw(OverflowError("gcd($a, $b) overflows"))
+@noinline __throw_gcd_overflow(a, b) =
+    throw(OverflowError(LazyString("gcd(", a, ", ", b, ") overflows")))
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-# Unfortunately, we need to manually annotate this as `@pure` to work around #41694. Since
-# this is used in the Rational constructor, constant prop is something we do care about here.
-# This does call generic functions, so it might not be completely sound, but since `_gcd` is
-# restricted to BitIntegers, it is probably fine in practice.
-@pure function _gcd(a::T, b::T) where T<:BitInteger
+# Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
+# Since this is used in the Rational constructor, constant folding is something we do care about here.
+@assume_effects :terminates_locally function _gcd(a::T, b::T) where T<:BitInteger
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
@@ -321,7 +320,6 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{-1}) = inv(x)
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{-2}) = (i=inv(x); i*i)
-@inline literal_pow(::typeof(^), x::HWNumber, ::Val{-3}) = (i=inv(x); i*i*i)
 
 # don't use the inv(x) transformation here since float^p is slightly more accurate
 @inline literal_pow(::typeof(^), x::AbstractFloat, ::Val{p}) where {p} = x^p
@@ -462,9 +460,16 @@ function nextpow(a::Real, x::Real)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x <= 1 && return one(a)
     n = ceil(Integer,log(a, x))
+    # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    # guard against roundoff error, e.g., with a=5 and x=125
-    p >= x ? p : a^n
+    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    p >= x && return p
+    wp = a^n
+    wp > p || throw(OverflowError("result is beyond the range of type of the base"))
+    wp >= x && return wp
+    wwp = a^(n+1)
+    wwp > wp || throw(OverflowError("result is beyond the range of type of the base"))
+    return wwp
 end
 
 """
@@ -490,14 +495,24 @@ julia> prevpow(4, 16)
 16
 ```
 """
-function prevpow(a::Real, x::Real)
+function prevpow(a::T, x::Real) where T <: Real
     x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
     # See comment in nextpos() for a == special case.
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
-    p = a^(n+1)
-    p <= x ? p : a^n
+    # round-off error of log can go either direction, so need some checks
+    p = a^n
+    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    if a isa Integer
+        wp, overflow = mul_with_overflow(a, p)
+        wp <= x && !overflow && return wp
+    else
+        wp = a^(n+1)
+        wp <= x && return wp
+    end
+    p <= x && return p
+    return a^(n-1)
 end
 
 ## ndigits (number of digits) in base 10 ##
@@ -1047,7 +1062,7 @@ function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0
-        n = -n + k -1
+        n = -n + k - one(T)
         if isodd(k)
             sgn = -sgn
         end
@@ -1058,15 +1073,15 @@ function binomial(n::T, k::T) where T<:Integer
     if k > (n>>1)
         k = (n - k)
     end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
+    x = nn = n - k + one(T)
+    nn += one(T)
+    rr = T(2)
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
         x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
-        rr += 1
-        nn += 1
+        rr += one(T)
+        nn += one(T)
     end
-    convert(T, copysign(x, sgn))
+    copysign(x, sgn)
 end

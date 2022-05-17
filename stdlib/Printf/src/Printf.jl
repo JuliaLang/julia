@@ -863,7 +863,7 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 ```
 
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
-See also [`@sprintf`](@ref).
+See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
 
 # Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
@@ -880,8 +880,8 @@ julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
 
-!!! compat "Julia 1.7"
-    Starting in Julia 1.7, `%s` (string) and `%c` (character) widths are computed
+!!! compat "Julia 1.8"
+    Starting in Julia 1.8, `%s` (string) and `%c` (character) widths are computed
     using [`textwidth`](@ref), which e.g. ignores zero-width characters
     (such as combining characters for diacritical marks) and treats certain
     "wide" characters (e.g. emoji) as width `2`.

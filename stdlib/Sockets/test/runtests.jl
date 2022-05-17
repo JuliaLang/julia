@@ -16,7 +16,7 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
@@ -587,6 +587,18 @@ end
             close(s)
         end
         close(srv)
+    end
+end
+
+@testset "TCPSocket RawFD constructor" begin
+    if Sys.islinux()
+        let fd = ccall(:socket, Int32, (Int32, Int32, Int32),
+                       2, # AF_INET
+                       1, # SOCK_STREAM
+                       0)
+            s = Sockets.TCPSocket(RawFD(fd))
+            close(s)
+        end
     end
 end
 

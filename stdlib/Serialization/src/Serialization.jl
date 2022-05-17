@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 16 # do not make changes without bumping the version #!
+const ser_version = 19 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -419,6 +419,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
     serialize(s, meth.constprop)
+    serialize(s, meth.purity)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -480,7 +481,7 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     if (g.mod === __deserialized_types__ ) ||
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
-        v = getfield(g.mod, g.name)
+        v = getglobal(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
             # handle references to types in Main by sending the whole type.
@@ -513,6 +514,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, t.max_methods)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -539,7 +541,7 @@ function should_send_whole_type(s, t::DataType)
         isanonfunction = mod === Main && # only Main
             t.super === Function && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-            (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
+            (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
         #TODO: iskw = startswith(tn.name, "#kw#") && ???
         #TODO: iskw && return send-as-kwftype
@@ -984,7 +986,7 @@ function deserialize_module(s::AbstractSerializer)
         end
         m = Base.root_module(mkey[1])
         for i = 2:length(mkey)
-            m = getfield(m, mkey[i])::Module
+            m = getglobal(m, mkey[i])::Module
         end
     else
         name = String(deserialize(s)::Symbol)
@@ -992,7 +994,7 @@ function deserialize_module(s::AbstractSerializer)
         m = Base.root_module(pkg)
         mname = deserialize(s)
         while mname !== ()
-            m = getfield(m, mname)::Module
+            m = getglobal(m, mname)::Module
             mname = deserialize(s)
         end
     end
@@ -1026,11 +1028,15 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
     constprop = 0x00
+    purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 14
             constprop = deserialize(s)::UInt8
+        end
+        if format_version(s) >= 17
+            purity = deserialize(s)::UInt8
         end
         template = deserialize(s)
     else
@@ -1051,6 +1057,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
         meth.constprop = constprop
+        meth.purity = purity
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1105,7 +1112,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::Union{Int32, Int}), Int32(deserialize(s)::Union{Int32, Int}))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})
@@ -1181,6 +1188,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.pure = deserialize(s)
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 17
+        ci.purity = deserialize(s)::UInt8
     end
     return ci
 end
@@ -1273,10 +1283,11 @@ function deserialize_typename(s::AbstractSerializer, number)
     else
         # reuse the same name for the type, if possible, for nicer debugging
         tn_name = isdefined(__deserialized_types__, name) ? gensym() : name
-        tn = ccall(:jl_new_typename_in, Ref{Core.TypeName}, (Any, Any, Cint, Cint),
+        tn = ccall(:jl_new_typename_in, Any, (Any, Any, Cint, Cint),
                    tn_name, __deserialized_types__, false, false)
         makenew = true
     end
+    tn = tn::Core.TypeName
     remember_object(s, tn, number)
     deserialize_cycle(s, tn)
 
@@ -1289,21 +1300,26 @@ function deserialize_typename(s::AbstractSerializer, number)
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
+    maxm = format_version(s) >= 18 ? deserialize(s)::UInt8 : UInt8(0)
 
     if makenew
-        Core.setfield!(tn, :names, names)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
         ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
                     tn, tn.module, super, parameters, names, types, attrs,
                     abstr, mutabl, ninitialized)
-        tn.wrapper = ndt.name.wrapper
+        @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
-        if has_instance && !isdefined(ty, :instance)
-            # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
-            Core.setfield!(ty, :instance, ccall(:jl_new_struct, Any, (Any, Any...), ty))
+        tn.max_methods = maxm
+        if has_instance
+            ty = ty::DataType
+            if !isdefined(ty, :instance)
+                singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
+                # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
+                ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)
+            end
         end
     end
 
@@ -1313,15 +1329,16 @@ function deserialize_typename(s::AbstractSerializer, number)
         defs = deserialize(s)
         maxa = deserialize(s)::Int
         if makenew
-            tn.mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
+            mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
             if !isempty(parameters)
-                tn.mt.offs = 0
+                mt.offs = 0
             end
-            tn.mt.name = mtname
-            tn.mt.max_args = maxa
+            mt.name = mtname
+            mt.max_args = maxa
+            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
             for def in defs
                 if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), tn.mt, def, C_NULL)
+                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
                 end
             end
         end
@@ -1333,9 +1350,10 @@ function deserialize_typename(s::AbstractSerializer, number)
             end
         end
     elseif makenew
-        tn.mt = Symbol.name.mt
+        mt = Symbol.name.mt
+        ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
     end
-    return tn::Core.TypeName
+    return tn
 end
 
 function deserialize_datatype(s::AbstractSerializer, full::Bool)
@@ -1346,7 +1364,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     else
         name = deserialize(s)::Symbol
         mod = deserialize(s)::Module
-        ty = getfield(mod,name)
+        ty = getglobal(mod, name)
     end
     if isa(ty,DataType) && isempty(ty.parameters)
         t = ty
@@ -1521,5 +1539,33 @@ function deserialize(s::AbstractSerializer, ::Type{Base.StackTraces.StackFrame})
     pointer = read(s.io, UInt64)
     return Base.StackTraces.StackFrame(func, file, line, nothing, from_c, inlined, pointer)
 end
+
+function serialize(s::AbstractSerializer, lock::Base.AbstractLock)
+    # assert_havelock(lock)
+    serialize_cycle_header(s, lock)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.AbstractLock
+    lock = T()
+    deserialize_cycle(s, lock)
+    return lock
+end
+
+function serialize(s::AbstractSerializer, cond::Base.GenericCondition)
+    serialize_cycle_header(s, cond) && return
+    serialize(s, cond.lock)
+    nothing
+end
+
+function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCondition
+    lock = deserialize(s)
+    cond = T(lock)
+    deserialize_cycle(s, cond)
+    return cond
+end
+
+serialize(s::AbstractSerializer, l::LazyString) =
+    invoke(serialize, Tuple{AbstractSerializer,Any}, s, Base._LazyString((), string(l)))
 
 end

@@ -171,10 +171,14 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 3:4
 ```
 """
-function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
+function view(A::AbstractArray{<:Any,N}, I::Vararg{Any,M}) where {N,M}
     @inline
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
+    if length(J) > ndims(A) && J[N+1:end] isa Tuple{Vararg{Int}}
+        # view([1,2,3], :, 1) does not need to reshape
+        return unsafe_view(A, J[1:N]...)
+    end
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end
 

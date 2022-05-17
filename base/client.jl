@@ -124,14 +124,14 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
-                istrivialerror(lasterr) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+                istrivialerror(lasterr) || setglobal!(Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -142,7 +142,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                         @error "Evaluation succeeded, but an error occurred while displaying the value" typeof(value)
                         rethrow()
                     end
-                    println()
                 end
             end
             break
@@ -152,7 +151,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = scrub_repl_backtrace(current_exceptions())
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+            setglobal!(Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -206,9 +205,6 @@ function incomplete_tag(ex::Expr)
     occursin("character", msg) && return :char
     return :other
 end
-
-# call include() on a file, ignoring if not found
-include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
 
 function exec_options(opts)
     if !isempty(ARGS)
@@ -301,7 +297,11 @@ function exec_options(opts)
             exit_on_sigint(true)
         end
         try
-            include(Main, PROGRAM_FILE)
+            if PROGRAM_FILE == "-"
+                include_string(Main, read(stdin, String), "stdin")
+            else
+                include(Main, PROGRAM_FILE)
+            end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             if !is_interactive::Bool
@@ -320,17 +320,33 @@ function exec_options(opts)
     nothing
 end
 
-function load_julia_startup()
+function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
-    #   If it is not found, then continue on to the relative path based on Sys.BINDIR
-    BINDIR = Sys.BINDIR::String
-    SYSCONFDIR = Base.SYSCONFDIR::String
-    if !isempty(SYSCONFDIR) && isfile(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-        include(Main, abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-    else
-        include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
+    # If it is not found, then continue on to the relative path based on Sys.BINDIR
+    BINDIR = Sys.BINDIR
+    SYSCONFDIR = Base.SYSCONFDIR
+    if !isempty(SYSCONFDIR)
+        p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
+        isfile(p1) && return p1
     end
-    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
+    p2 = abspath(BINDIR, "..", "etc", "julia", "startup.jl")
+    isfile(p2) && return p2
+    return nothing
+end
+
+function _local_julia_startup_file()
+    if !isempty(DEPOT_PATH)
+        path = abspath(DEPOT_PATH[1], "config", "startup.jl")
+        isfile(path) && return path
+    end
+    return nothing
+end
+
+function load_julia_startup()
+    global_file = _global_julia_startup_file()
+    (global_file !== nothing) && include(Main, global_file)
+    local_file = _local_julia_startup_file()
+    (local_file !== nothing) && include(Main, local_file)
     return nothing
 end
 
@@ -498,10 +514,8 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-        # clear old invalid pointers
-        PCRE.__init__()
-    end
+    # clear any postoutput hooks that were saved in the sysimage
+    empty!(Base.postoutput_hooks)
     try
         exec_options(JLOptions())
     catch

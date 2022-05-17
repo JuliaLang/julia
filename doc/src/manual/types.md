@@ -430,6 +430,9 @@ julia> bar.baz = 1//2
 1//2
 ```
 
+An extra interface between the fields and the user can be provided through [Instance Properties](@ref man-instance-properties).
+This grants more control on what can be accessed and modified using the `bar.baz` notation.
+
 In order to support mutation, such objects are generally allocated on the heap, and have
 stable memory addresses.
 A mutable object is like a little container that might hold different values over time,
@@ -458,6 +461,30 @@ To recap, two essential properties define immutability in Julia:
     * Mutable values, on the other hand are heap-allocated and passed to
       functions as pointers to heap-allocated values except in cases where the compiler
       is sure that there's no way to tell that this is not what is happening.
+
+In cases where one or more fields of an otherwise mutable struct is known to be immutable,
+one can declare these fields as such using `const` as shown below. This enables some,
+but not all of the optimizations of immutable structs, and can be used to enforce invariants
+on the particular fields marked as `const`.
+
+!!! compat "Julia 1.8"
+    `const` annotating fields of mutable structs requires at least Julia 1.8.
+
+```jldoctest baztype
+julia> mutable struct Baz
+           a::Int
+           const b::Float64
+       end
+
+julia> baz = Baz(1, 1.5);
+
+julia> baz.a = 2
+2
+
+julia> baz.b = 2.0
+ERROR: setfield!: const field .b of type Baz cannot be changed
+[...]
+```
 
 ## [Declared Types](@id man-declared-types)
 

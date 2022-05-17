@@ -19,6 +19,8 @@ function _any(@nospecialize(f), a)
     end
     return false
 end
+any(@nospecialize(f), itr) = _any(f, itr)
+any(itr) = _any(identity, itr)
 
 function _all(@nospecialize(f), a)
     for x in a
@@ -26,6 +28,8 @@ function _all(@nospecialize(f), a)
     end
     return true
 end
+all(@nospecialize(f), itr) = _all(f, itr)
+all(itr) = _all(identity, itr)
 
 function contains_is(itr, @nospecialize(x))
     for y in itr
@@ -48,7 +52,7 @@ function istopfunction(@nospecialize(f), name::Symbol)
     tn = typeof(f).name
     if tn.mt.name === name
         top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getfield(top, name)
+        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
     end
     return false
 end
@@ -60,6 +64,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -100,9 +105,8 @@ end
 # MethodInstance/CodeInfo #
 ###########################
 
-function invoke_api(li::CodeInstance)
-    return ccall(:jl_invoke_api, Cint, (Any,), li)
-end
+invoke_api(li::CodeInstance) = ccall(:jl_invoke_api, Cint, (Any,), li)
+use_const_api(li::CodeInstance) = invoke_api(li) == 2
 
 function get_staged(mi::MethodInstance)
     may_invoke_generator(mi) || return nothing
@@ -205,63 +209,9 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-# This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
-            end
-        end
-    end
-    return nothing
-end
-
 #########
 # types #
 #########
-
-argextype(@nospecialize(x), state) = argextype(x, state.src, state.sptypes, state.slottypes)
-
-const EMPTY_SLOTTYPES = Any[]
-
-function argextype(@nospecialize(x), src, sptypes::Vector{Any}, slottypes::Vector{Any} = EMPTY_SLOTTYPES)
-    if isa(x, Expr)
-        if x.head === :static_parameter
-            return sptypes[x.args[1]::Int]
-        elseif x.head === :boundscheck
-            return Bool
-        elseif x.head === :copyast
-            return argextype(x.args[1], src, sptypes, slottypes)
-        end
-        @assert false "argextype only works on argument-position values"
-    elseif isa(x, SlotNumber)
-        return slottypes[(x::SlotNumber).id]
-    elseif isa(x, TypedSlot)
-        return (x::TypedSlot).typ
-    elseif isa(x, SSAValue)
-        return abstract_eval_ssavalue(x::SSAValue, src)
-    elseif isa(x, Argument)
-        return isa(src, IncrementalCompact) ? src.ir.argtypes[x.n] :
-            isa(src, IRCode) ? src.argtypes[x.n] :
-            slottypes[x.n]
-    elseif isa(x, QuoteNode)
-        return Const((x::QuoteNode).value)
-    elseif isa(x, GlobalRef)
-        return abstract_eval_global(x.mod, (x::GlobalRef).name)
-    elseif isa(x, PhiNode)
-        return Any
-    elseif isa(x, PiNode)
-        return x.typ
-    else
-        return Const(x)
-    end
-end
 
 function singleton_type(@nospecialize(ft))
     if isa(ft, Const)
@@ -277,6 +227,27 @@ end
 ###################
 # SSAValues/Slots #
 ###################
+
+function ssamap(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            op[] = f(val)
+        end
+    end
+    return urs[]
+end
+
+function foreachssa(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            f(val)
+        end
+    end
+end
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
@@ -383,6 +354,38 @@ end
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
     isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
 
+######################
+# IncrementalCompact #
+######################
+
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact)
+    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
+    nvals = length(compact.used_ssas)
+    nbody1 = length(body1)
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    function increment_uses(ssa::SSAValue)
+        uses[ssa.id] += 1
+    end
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreachssa(increment_uses, e)
+    end
+    return uses
+end
+
 ###########
 # options #
 ###########
@@ -393,12 +396,12 @@ inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
     ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
     cov = JLOptions().code_coverage
-    if cov == 1
+    if cov == 1 # user
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false
         return true
-    elseif cov == 2
+    elseif cov == 2 # all
         return true
     end
     return false

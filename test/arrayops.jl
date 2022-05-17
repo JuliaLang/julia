@@ -6,8 +6,6 @@ using .Main.OffsetArrays
 
 isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
 
-using SparseArrays
-
 using Random, LinearAlgebra
 using Dates
 
@@ -1201,9 +1199,6 @@ end
     m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
-
-    # issue #21123
-    @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
 end
 
 @testset "single multidimensional index" begin
@@ -1521,6 +1516,11 @@ end
     @test_throws BoundsError deleteat!([], [2])
     @test deleteat!([], []) == []
     @test deleteat!([], Bool[]) == []
+    let a = Vector{Any}(undef, 2)
+        a[1] = 1
+        @test isassigned(deleteat!(copy(a), [2]), 1)
+        @test !isassigned(deleteat!(copy(a), [1]), 1)
+    end
 end
 
 @testset "comprehensions" begin
@@ -1954,13 +1954,6 @@ end
     @test isless(CartesianIndex((2,1)), CartesianIndex((1,2)))
     @test !isless(CartesianIndex((1,2)), CartesianIndex((2,1)))
 
-    a = spzeros(2,3)
-    @test CartesianIndices(size(a)) == eachindex(a)
-    a[CartesianIndex{2}(2,3)] = 5
-    @test a[2,3] == 5
-    b = view(a, 1:2, 2:3)
-    b[CartesianIndex{2}(1,1)] = 7
-    @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
     @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
     @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
@@ -2013,16 +2006,6 @@ end
     y = iterate(itr, y[2])
     @test y === nothing
     @test r[val] == 3
-    r = sparse(2:3:8)
-    itr = eachindex(r)
-    y = iterate(itr)
-    @test y !== nothing
-    y = iterate(itr, y[2])
-    y = iterate(itr, y[2])
-    @test y !== nothing
-    val, state = y
-    @test r[val] == 8
-    @test iterate(itr, state) == nothing
 end
 
 R = CartesianIndices((1,3))
@@ -2122,6 +2105,16 @@ end
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
+@testset "empty copyto!" begin
+    @test isempty(copyto!(Int[], ()))
+    @test isempty(copyto!(Int[], Int[]))
+    @test copyto!([1,2], ()) == [1,2]
+
+    @test isempty(copyto!(Int[], 1, ()))
+    @test isempty(copyto!(Int[], 1, Int[]))
+    @test copyto!([1,2], 1, ()) == [1,2]
+end
+
 module RetTypeDecl
     using Test
     import Base: +, *, broadcast, convert
@@ -2171,19 +2164,67 @@ end
 end
 
 # row/column/slice iterator tests
-using Base: eachrow, eachcol
 @testset "row/column/slice iterators" begin
+    # check type aliases
+    @test RowSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test eachrow(ones(3)) isa RowSlices
+    @test eachrow(ones(3,3)) isa RowSlices
+    @test ColumnSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test eachcol(ones(3)) isa ColumnSlices
+    @test eachcol(ones(3,3)) isa ColumnSlices
+
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
-    @test collect(eachrow(M)) == collect(eachslice(M, dims = 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    @test collect(eachcol(M)) == collect(eachslice(M, dims = 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
     @test_throws DimensionMismatch eachslice(M, dims = 4)
 
-    # Higher-dimensional case
-    M = reshape([(1:16)...], 2, 2, 2, 2)
+    SR = @inferred eachrow(M)
+    @test SR[2] isa eltype(SR)
+    SR[2] = [14,15,16]
+    @test SR[2] == M[2,:] == [14,15,16]
+    @test parent(SR) === M
+
+    SC = @inferred eachcol(M)
+    @test SC[3] isa eltype(SC)
+    SC[3] = [23,26,29]
+    @test SC[3] == M[:,3] == [23,26,29]
+    @test parent(SC) === M
+
+    # Higher-dimensional cases
+    M = reshape(collect(1:16), (2,2,2,2))
     @test_throws MethodError collect(eachrow(M))
     @test_throws MethodError collect(eachcol(M))
-    @test collect(eachslice(M, dims = 1))[1][:, :, 1] == [1 5; 3 7]
+
+    S1 = eachslice(M, dims = 1)
+    @test S1 isa AbstractSlices{<:AbstractArray{Int, 3}, 1}
+    @test size(S1) == (2,)
+    @test S1[1] == M[1,:,:,:]
+
+    S1K = eachslice(M, dims = 1, drop=false)
+    @test S1K isa AbstractSlices{<:AbstractArray{Int, 3}, 4}
+    @test size(S1K) == (2,1,1,1)
+    @test S1K[1,1,1,1] == M[1,:,:,:]
+
+    S23 = eachslice(M, dims = (2,3))
+    @test S23 isa AbstractSlices{<:AbstractArray{Int, 2}, 2}
+    @test size(S23) == (2,2)
+    @test S23[2,1] == M[:,2,1,:]
+
+    S23K = eachslice(M, dims = (2,3), drop=false)
+    @test S23K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
+    @test size(S23K) == (1,2,2,1)
+    @test S23K[1,2,1,1] == M[:,2,1,:]
+
+    S32 = eachslice(M, dims = (3,2))
+    @test S32 isa AbstractSlices{<:AbstractArray{Int, 2}, 2}
+    @test size(S32) == (2,2)
+    @test S32[2,1] == M[:,1,2,:]
+
+    S32K = eachslice(M, dims = (3,2), drop=false)
+    @test S32K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
+    @test size(S32K) == (1,2,2,1)
+    @test S32K[1,2,1,1] == M[:,2,1,:]
 end
 
 ###
@@ -2335,10 +2376,12 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
     f40() = Float64[A A]
     f41() = [A B]
     f42() = Int[A B]
+    f43() = Int[A...]
+    f44() = Float64[A..., B...]
 
     for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
               f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
-              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
+              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43, f44]
         @test isconcretetype(Base.return_types(f, ())[1])
     end
 end

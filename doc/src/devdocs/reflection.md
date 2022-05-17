@@ -151,4 +151,3 @@ CodeInfo(
 Possible values for `debuginfo` are: `:none`, `:source`, and `:default`.
 Per default debug information is not printed, but that can be changed
 by setting `Base.IRShow.default_debuginfo[] = :source`.
-

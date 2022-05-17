@@ -33,6 +33,9 @@ JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_err
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
+// During incremental compilation, the following gets set
+JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
+
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     jl_module_t *base_module = jl_base_relative_to(m);
@@ -138,11 +141,16 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
     JL_UNLOCK(&jl_modules_mutex);
 
+    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
+
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
     if (jl_is__toplevel__mod(parent_module)) {
         newm->parent = newm;
         jl_register_root_module(newm);
+        if (jl_options.incremental) {
+            jl_precompile_toplevel_module = newm;
+        }
     }
     else {
         newm->parent = parent_module;
@@ -261,6 +269,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
+    jl_precompile_toplevel_module = old_toplevel_module;
+
     JL_GC_POP();
     return (jl_value_t*)newm;
 }
@@ -273,7 +283,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
     if (jl_is_module(args[1])) {
-        JL_TYPECHK(getfield, symbol, args[2]);
+        JL_TYPECHK(getglobal, symbol, args[2]);
         args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
     }
     else {
@@ -285,6 +295,33 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     }
     JL_GC_POP();
     return args[0];
+}
+
+void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
+    // create uninitialized mutable binding for "global x" decl sometimes or probably
+    size_t i, l = jl_array_len(ex->args);
+    for (i = 0; i < l; i++) {
+        jl_value_t *arg = jl_exprarg(ex, i);
+        jl_module_t *gm;
+        jl_sym_t *gs;
+        if (jl_is_globalref(arg)) {
+            gm = jl_globalref_mod(arg);
+            gs = jl_globalref_name(arg);
+        }
+        else {
+            assert(jl_is_symbol(arg));
+            gm = m;
+            gs = (jl_sym_t*)arg;
+        }
+        if (!jl_binding_resolved_p(gm, gs)) {
+            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+            if (set_type) {
+                jl_value_t *old_ty = NULL;
+                // maybe set the type too, perhaps
+                jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            }
+        }
+    }
 }
 
 // module referenced by (top ...) from within m
@@ -346,14 +383,15 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
                 jl_binding_t *b = jl_get_binding(mod, name);
-                if (b && b->value && b->constp)
-                    called = b->value;
+                if (b && b->constp) {
+                    called = jl_atomic_load_relaxed(&b->value);
+                }
             }
         }
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
-        if (called) {
+        if (called != NULL) {
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_intrinsics = 1;
             }
@@ -554,8 +592,9 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
-        if ((!b->constp && b->owner != m) || (b->value && b->value != (jl_value_t*)import)) {
-            jl_errorf("importing %s into %s conflicts with an existing identifier",
+        jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
+        if ((!b->constp && b->owner != m) || (bv && bv != (jl_value_t*)import)) {
+            jl_errorf("importing %s into %s conflicts with an existing global",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
     }
@@ -564,7 +603,8 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
         b->imported = 1;
     }
     if (!b->constp) {
-        b->value = (jl_value_t*)import;
+        // TODO: constp is not threadsafe
+        jl_atomic_store_release(&b->value, (jl_value_t*)import);
         b->constp = 1;
         jl_gc_wb(m, (jl_value_t*)import);
     }
@@ -787,23 +827,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == jl_global_sym) {
-        // create uninitialized mutable binding for "global x" decl
-        size_t i, l = jl_array_len(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_value_t *arg = jl_exprarg(ex, i);
-            jl_module_t *gm;
-            jl_sym_t *gs;
-            if (jl_is_globalref(arg)) {
-                gm = jl_globalref_mod(arg);
-                gs = jl_globalref_name(arg);
-            }
-            else {
-                assert(jl_is_symbol(arg));
-                gm = m;
-                gs = (jl_sym_t*)arg;
-            }
-            jl_get_binding_wr(gm, gs, 0);
-        }
+        jl_eval_global_expr(m, ex, 0);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -994,7 +1018,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 0, (jl_value_t*)jl_all_sym), 0);
+                              filename, 1, 0, (jl_value_t*)jl_all_sym), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
         jl_errorf("jl_parse_all() must generate a top level expression");
     }
