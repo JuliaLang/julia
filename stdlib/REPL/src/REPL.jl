@@ -927,13 +927,9 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
     function ()
         mod = active_module(repl)
-        if prompt == JULIA_PROMPT
-            mod == Main ? prompt : string(mod, "> ")
-        else
-            prefix = mod == Main ? "" : string('(', mod, ") ")
-            pr = prompt isa String ? prompt : prompt()
-            prefix * pr
-        end
+        prefix = mod == Main ? "" : string('(', mod, ") ")
+        pr = prompt isa String ? prompt : prompt()
+        prefix * pr
     end
 end
 

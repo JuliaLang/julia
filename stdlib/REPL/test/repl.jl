@@ -1114,7 +1114,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
     repl.mistate.active_module = Base # simulate activate_module(Base)
     write(stdin_write, "(456, Base.Fix2)\n")
-    @test occursin("Base> ", split(readline(stdout_read), "Base.Fix2")[2])
+    @test occursin("(Base) julia> ", split(readline(stdout_read), "Base.Fix2")[2])
     # ".Base" prefix not shown here
     @test occursin("(456, Fix2)", readline(stdout_read))
     readline(stdout_read)
