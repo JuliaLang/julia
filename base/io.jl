@@ -506,7 +506,7 @@ line.
 
 # Examples
 ```jldoctest
-julia> write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
@@ -554,7 +554,7 @@ arguments and saving the resulting lines as a vector of strings.  See also
 
 # Examples
 ```jldoctest
-julia> write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readlines("my_file.txt")
 2-element Vector{String}:
