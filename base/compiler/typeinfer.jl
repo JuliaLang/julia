@@ -924,9 +924,10 @@ end
         method::Method,
         atype,
         sparams::SimpleVector,
+        run_optimizer::Bool,
     ) -> (ir::Union{IRCode,Nothing}, returntype::Type)
 
-Infer a `method` and return an optimized `IRCode` with inferred `returntype` on success.
+Infer a `method` and return an `IRCode` with inferred `returntype` on success.
 """
 function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     frame = typeinf_frame(interp, method, atype, sparams, false)
