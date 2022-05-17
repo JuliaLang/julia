@@ -1,111 +1,146 @@
-Julia v1.2 Release Notes
+Julia v1.9 Release Notes
 ========================
 
 New language features
 ---------------------
 
-  * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
-    constructors ([#30577]).
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
+* Slurping in assignments is now also allowed in non-final position. This is
+  handled via `Base.split_rest`. ([#42902])
 
-  * Objects created by calling `skipmissing` on an array can now be indexed using indices
-    from the parent at non-missing positions. This allows functions such as
-    `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
-    objects, returning the index of matching non-missing elements in the parent ([#31008]).
+Language changes
+----------------
+
+* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
+  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
+  `getfield`. ([#44137])
+* A few basic operators have been generalized to more naturally support vector space structures:
+  `+(x) = x`, unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
+  binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
+  left- and right-division fall back to multiplication with the inverse from left and right,
+  respectively, as stated in the docstring. ([#44564])
+
+Compiler/Runtime improvements
+-----------------------------
+
+
+Command-line option changes
+---------------------------
+
+* In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
+  process affinity which is set typically in HPC and cloud environments ([#42340]).
+* `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
+* The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
+  number of interactive threads to create (`auto` currently means 1) ([#42302]).
 
 Multi-threading changes
 -----------------------
 
-  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
-    With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
+* `Threads.@spawn` now accepts an optional first argument: `:default` or `:interactive`.
+  An interactive task desires low latency and implicitly agrees to be short duration or to
+  yield frequently. Interactive tasks will run on interactive threads, if any are specified
+  when Julia is started ([#42302]).
 
-Language changes
-----------------
-* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
-* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
-
-Command-line option changes
----------------------------
+Build system changes
+--------------------
 
 
 New library functions
 ---------------------
 
-* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
-* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
-* One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
-  similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+* `Iterators.flatmap` was added ([#44792]).
+* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
+  inspecting which function `f` was originally wrapped. ([#42717])
+
+Library changes
+---------------
+
+* A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
+  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
+  now be called on a dictionary or set shared by arbitrary tasks provided that there are no
+  tasks mutating the dictionary or set ([#44534]).
+* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
+* `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
+  a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 
 Standard library changes
 ------------------------
 
-* The `extrema` function now accepts a function argument in the same manner as `minimum` and
-  `maximum` ([#30323]).
-* `hasmethod` can now check for matching keyword argument names ([#30712]).
-* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
-* `retry` supports arbitrary callable objects ([#30382]).
-* `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
-* A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
-* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
-* `mktempdir` now accepts a `prefix` keyword argument to customize the file name ([#31230], [#22922])
+#### Package Manager
 
 #### LinearAlgebra
 
-* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
-* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
-* Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
-* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
-  structure and type. ([#29777])
-* `diagm(v)` is now a shorthand for `diagm(0 => v)`. ([#31125]).
+* The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector,
+  which were equivalent to `a * pinv(b)`, have been removed due to the
+  risk of confusion with elementwise division ([#44358]).
+* We are now wholly reliant on libblastrampoline (LBT) for calling
+  BLAS and LAPACK. OpenBLAS is shipped by default, but building the
+  system image with other BLAS/LAPACK libraries is not
+  supported. Instead, it is recommended that the LBT mechanism be used
+  for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `lu` now supports a new pivoting strategy `RowNonZero()` that chooses
+   the first non-zero pivot element, for use with new arithmetic types and for pedagogy ([#44571]).
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
+
+#### Markdown
+
+#### Printf
+
+#### Random
+
+* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
+
+#### REPL
+
+* `Meta-e` now opens the current input in an editor. The content (if modified) will be
+  executed upon existing the editor.
 
 #### SparseArrays
 
-* performance improvements for sparse matrix-matrix multiplication ([#30372]).
-* Sparse vector outer products are more performant and maintain sparsity in products of the
-  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
-  views. ([#24980])
-
 #### Dates
 
-* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+#### Downloads
 
-#### Miscellaneous
+#### Statistics
 
-* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
-  to uppercase for display, iteration, and copying ([#30593]).
+#### Sockets
 
-External dependencies
----------------------
+#### Tar
 
-* libgit2 has been updated to v0.27.7 ([#30584]).
-* OpenBLAS has been updated to v0.3.5 ([#30583]).
-* MbedTLS has been updated to v2.16.0 ([#30618]).
-* libunwind has been updated to v1.3.1 ([#30724]).
+#### Distributed
+
+* The package environment (active project, `LOAD_PATH`, `DEPOT_PATH`) are now propagated
+  when adding *local* workers (e.g. with `addprocs(N::Int)` or through the `--procs=N`
+  command line flag) ([#43270]).
+* `addprocs` for local workers now accept the `env` keyword argument for passing
+  environment variables to the workers processes. This was already supported for
+  remote workers ([#43270]).
+
+#### UUIDs
+
+#### Unicode
+
+* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
+
+#### Mmap
+
+#### DelimitedFiles
+
 
 Deprecated or removed
 ---------------------
 
+* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
+
+External dependencies
+---------------------
+
+
+Tooling Improvements
+---------------------
 
 <!--- generated by NEWS-update.jl: -->
-[#21598]: https://github.com/JuliaLang/julia/issues/21598
-[#24980]: https://github.com/JuliaLang/julia/issues/24980
-[#28850]: https://github.com/JuliaLang/julia/issues/28850
-[#29777]: https://github.com/JuliaLang/julia/issues/29777
-[#29790]: https://github.com/JuliaLang/julia/issues/29790
-[#29998]: https://github.com/JuliaLang/julia/issues/29998
-[#30061]: https://github.com/JuliaLang/julia/issues/30061
-[#30200]: https://github.com/JuliaLang/julia/issues/30200
-[#30298]: https://github.com/JuliaLang/julia/issues/30298
-[#30323]: https://github.com/JuliaLang/julia/issues/30323
-[#30349]: https://github.com/JuliaLang/julia/issues/30349
-[#30372]: https://github.com/JuliaLang/julia/issues/30372
-[#30382]: https://github.com/JuliaLang/julia/issues/30382
-[#30577]: https://github.com/JuliaLang/julia/issues/30577
-[#30583]: https://github.com/JuliaLang/julia/issues/30583
-[#30584]: https://github.com/JuliaLang/julia/issues/30584
-[#30593]: https://github.com/JuliaLang/julia/issues/30593
-[#30618]: https://github.com/JuliaLang/julia/issues/30618
-[#30670]: https://github.com/JuliaLang/julia/issues/30670
-[#30712]: https://github.com/JuliaLang/julia/issues/30712
-[#30724]: https://github.com/JuliaLang/julia/issues/30724
-[#30915]: https://github.com/JuliaLang/julia/issues/30915
-[#30919]: https://github.com/JuliaLang/julia/issues/30919

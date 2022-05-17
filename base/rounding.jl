@@ -37,9 +37,13 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- [`RoundFromZero`](@ref) ([`BigFloat`](@ref) only)
+- [`RoundFromZero`](@ref)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
+
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9. Prior versions support
+    `RoundFromZero` for `BigFloat`s only.
 """
 struct RoundingMode{T} end
 
@@ -76,7 +80,10 @@ const RoundDown = RoundingMode{:Down}()
     RoundFromZero
 
 Rounds away from zero.
-This rounding mode may only be used with `T == BigFloat` inputs to [`round`](@ref).
+
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9. Prior versions support
+    `RoundFromZero` for `BigFloat`s only.
 
 # Examples
 ```jldoctest
@@ -84,7 +91,7 @@ julia> BigFloat("1.0000000000000001", 5, RoundFromZero)
 1.06
 ```
 """
-const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
+const RoundFromZero = RoundingMode{:FromZero}()
 
 """
     RoundNearestTiesAway
@@ -131,6 +138,12 @@ functions may give incorrect or invalid values when using rounding modes other t
 default [`RoundNearest`](@ref).
 
 Note that this is currently only supported for `T == BigFloat`.
+
+!!! warning
+
+    This function is not thread-safe. It will affect code running on all threads, but
+    its behavior is undefined if called concurrently with computations that use the
+    setting.
 """
 setrounding(T::Type, mode)
 
@@ -145,8 +158,8 @@ See [`RoundingMode`](@ref) for available modes.
 """
 :rounding
 
-setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:fesetround, Int32, (Int32,), i)
-rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:fegetround, Int32, ())
+setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:jl_set_fenv_rounding, Int32, (Int32,), i)
+rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:jl_get_fenv_rounding, Int32, ())
 
 rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
 
@@ -191,19 +204,19 @@ end
 # Assumes conversion is performed by rounding to nearest value.
 
 # To avoid ambiguous dispatch with methods in mpfr.jl:
-(::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)
+(::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)::T
 
-_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)
+_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)::T
 function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Down}) where T<:AbstractFloat
-    y = convert(T,x)
+    y = convert(T,x)::T
     y > x ? prevfloat(y) : y
 end
 function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Up}) where T<:AbstractFloat
-    y = convert(T,x)
+    y = convert(T,x)::T
     y < x ? nextfloat(y) : y
 end
 function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T<:AbstractFloat
-    y = convert(T,x)
+    y = convert(T,x)::T
     if x > 0.0
         y > x ? prevfloat(y) : y
     else
@@ -221,6 +234,10 @@ not required) to convert subnormal inputs or outputs to zero. Returns `true` unl
 
 `set_zero_subnormals(true)` can speed up some computations on some hardware. However, it can
 break identities such as `(x-y==0) == (x==y)`.
+
+!!! warning
+
+    This function only affects the current thread.
 """
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
@@ -229,6 +246,10 @@ set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes
 
 Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
+
+!!! warning
+
+    This function only affects the current thread.
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 

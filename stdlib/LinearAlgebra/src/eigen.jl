@@ -1,6 +1,52 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Eigendecomposition
+"""
+    Eigen <: Factorization
+
+Matrix factorization type of the eigenvalue/spectral decomposition of a square
+matrix `A`. This is the return type of [`eigen`](@ref), the corresponding matrix
+factorization function.
+
+If `F::Eigen` is the factorization object, the eigenvalues can be obtained via
+`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+# Examples
+```jldoctest
+julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
+values:
+3-element Vector{Float64}:
+  1.0
+  3.0
+ 18.0
+vectors:
+3×3 Matrix{Float64}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+
+julia> F.values
+3-element Vector{Float64}:
+  1.0
+  3.0
+ 18.0
+
+julia> F.vectors
+3×3 Matrix{Float64}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+
+julia> vals, vecs = F; # destructuring via iteration
+
+julia> vals == F.values && vecs == F.vectors
+true
+```
+"""
 struct Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
@@ -11,6 +57,58 @@ Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) where {T,V} =
     Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
+"""
+    GeneralizedEigen <: Factorization
+
+Matrix factorization type of the generalized eigenvalue/spectral decomposition of
+`A` and `B`. This is the return type of [`eigen`](@ref), the corresponding
+matrix factorization function, when called with two matrix arguments.
+
+If `F::GeneralizedEigen` is the factorization object, the eigenvalues can be obtained via
+`F.values` and the eigenvectors as the columns of the matrix `F.vectors`.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+
+Iterating the decomposition produces the components `F.values` and `F.vectors`.
+
+# Examples
+```jldoctest
+julia> A = [1 0; 0 -1]
+2×2 Matrix{Int64}:
+ 1   0
+ 0  -1
+
+julia> B = [0 1; 1 0]
+2×2 Matrix{Int64}:
+ 0  1
+ 1  0
+
+julia> F = eigen(A, B)
+GeneralizedEigen{ComplexF64, ComplexF64, Matrix{ComplexF64}, Vector{ComplexF64}}
+values:
+2-element Vector{ComplexF64}:
+ 0.0 - 1.0im
+ 0.0 + 1.0im
+vectors:
+2×2 Matrix{ComplexF64}:
+  0.0+1.0im   0.0-1.0im
+ -1.0+0.0im  -1.0-0.0im
+
+julia> F.values
+2-element Vector{ComplexF64}:
+ 0.0 - 1.0im
+ 0.0 + 1.0im
+
+julia> F.vectors
+2×2 Matrix{ComplexF64}:
+  0.0+1.0im   0.0-1.0im
+ -1.0+0.0im  -1.0-0.0im
+
+julia> vals, vecs = F; # destructuring via iteration
+
+julia> vals == F.values && vecs == F.vectors
+true
+```
+"""
 struct GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
@@ -42,7 +140,8 @@ end
 sorteig!(λ::AbstractVector, sortby::Union{Function,Nothing}=eigsortby) = sortby === nothing ? λ : sort!(λ, by=sortby)
 
 """
-    eigen!(A, [B]; permute, scale, sortby)
+    eigen!(A; permute, scale, sortby)
+    eigen!(A, B; sortby)
 
 Same as [`eigen`](@ref), but saves space by overwriting the input `A` (and
 `B`), instead of creating a copy.
@@ -81,7 +180,7 @@ end
 """
     eigen(A; permute::Bool=true, scale::Bool=true, sortby) -> Eigen
 
-Computes the eigenvalue decomposition of `A`, returning an `Eigen` factorization object `F`
+Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
 matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
@@ -97,32 +196,32 @@ make rows and columns more equal in norm. The default is `true` for both options
 By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
 A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
 `sortby=nothing` to leave the eigenvalues in an arbitrary order.   Some special matrix types
-(e.g. `Diagonal` or `SymTridiagonal`) may implement their own sorting convention and not
+(e.g. [`Diagonal`](@ref) or [`SymTridiagonal`](@ref)) may implement their own sorting convention and not
 accept a `sortby` keyword.
 
 # Examples
 ```jldoctest
 julia> F = eigen([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}
-eigenvalues:
-3-element Array{Float64,1}:
+Eigen{Float64, Float64, Matrix{Float64}, Vector{Float64}}
+values:
+3-element Vector{Float64}:
   1.0
   3.0
  18.0
-eigenvectors:
-3×3 Array{Float64,2}:
+vectors:
+3×3 Matrix{Float64}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0
 
 julia> F.values
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   1.0
   3.0
  18.0
 
 julia> F.vectors
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0
@@ -133,10 +232,18 @@ julia> vals == F.values && vecs == F.vectors
 true
 ```
 """
-function eigen(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
-    AA = copy_oftype(A, eigtype(T))
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
+    AA = copymutable_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
+end
+function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
+    AA = copymutable_oftype(A, eigtype(T))
+    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
+    A = eigen!(AA; permute, scale, sortby)
+    values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
+    vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
+    return Eigen(values, vectors)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
@@ -150,7 +257,7 @@ for [`eigen`](@ref).
 # Examples
 ```jldoctest
 julia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-3×3 Array{Float64,2}:
+3×3 Matrix{Float64}:
  1.0  0.0  0.0
  0.0  1.0  0.0
  0.0  0.0  1.0
@@ -175,17 +282,17 @@ The `permute`, `scale`, and `sortby` keywords are the same as for [`eigen`](@ref
 # Examples
 ```jldoctest
 julia> A = [1. 2.; 3. 4.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  2.0
  3.0  4.0
 
 julia> eigvals!(A)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  -0.3722813232690143
   5.372281323269014
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -0.372281  -1.0
   0.0        5.37228
 ```
@@ -210,23 +317,23 @@ Return the eigenvalues of `A`.
 
 For general non-symmetric matrices it is possible to specify how the matrix is balanced
 before the eigenvalue calculation. The `permute`, `scale`, and `sortby` keywords are
-the same as for [`eigen!`](@ref).
+the same as for [`eigen`](@ref).
 
 # Examples
 ```jldoctest
 julia> diag_matrix = [1 0; 0 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  0
  0  4
 
 julia> eigvals(diag_matrix)
-2-element Array{Float64,1}:
+2-element Vector{Float64}:
  1.0
  4.0
 ```
 """
-eigvals(A::StridedMatrix{T}; kws...) where T =
-    eigvals!(copy_oftype(A, eigtype(T)); kws...)
+eigvals(A::AbstractMatrix{T}; kws...) where T =
+    eigvals!(copymutable_oftype(A, eigtype(T)); kws...)
 
 """
 For a scalar input, `eigvals` will return a scalar.
@@ -253,7 +360,7 @@ be sorted.
 # Examples
 ```jldoctest
 julia> A = [0 im; -im 0]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+1im
  0-1im  0+0im
 
@@ -261,7 +368,7 @@ julia> eigmax(A)
 1.0
 
 julia> A = [0 im; -1 0]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
   0+0im  0+1im
  -1+0im  0+0im
 
@@ -272,7 +379,7 @@ Stacktrace:
 [...]
 ```
 """
-function eigmax(A::Union{Number, StridedMatrix}; permute::Bool=true, scale::Bool=true)
+function eigmax(A::Union{Number, AbstractMatrix}; permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
     if eltype(v)<:Complex
         throw(DomainError(A, "`A` cannot have complex eigenvalues."))
@@ -294,7 +401,7 @@ be sorted.
 # Examples
 ```jldoctest
 julia> A = [0 im; -im 0]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+1im
  0-1im  0+0im
 
@@ -302,7 +409,7 @@ julia> eigmin(A)
 -1.0
 
 julia> A = [0 im; -1 0]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
   0+0im  0+1im
  -1+0im  0+0im
 
@@ -356,39 +463,40 @@ function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function
 end
 
 """
-    eigen(A, B) -> GeneralizedEigen
+    eigen(A, B; sortby) -> GeneralizedEigen
 
-Computes the generalized eigenvalue decomposition of `A` and `B`, returning a
-`GeneralizedEigen` factorization object `F` which contains the generalized eigenvalues in
+Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
+[`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
-Any keyword arguments passed to `eigen` are passed through to the lower-level
-[`eigen!`](@ref) function.
+By default, the eigenvalues and vectors are sorted lexicographically by `(real(λ),imag(λ))`.
+A different comparison function `by(λ)` can be passed to `sortby`, or you can pass
+`sortby=nothing` to leave the eigenvalues in an arbitrary order.
 
 # Examples
 ```jldoctest
 julia> A = [1 0; 0 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   0
  0  -1
 
 julia> B = [0 1; 1 0]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  1
  1  0
 
 julia> F = eigen(A, B);
 
 julia> F.values
-2-element Array{Complex{Float64},1}:
+2-element Vector{ComplexF64}:
  0.0 - 1.0im
  0.0 + 1.0im
 
 julia> F.vectors
-2×2 Array{Complex{Float64},2}:
+2×2 Matrix{ComplexF64}:
   0.0+1.0im   0.0-1.0im
  -1.0+0.0im  -1.0-0.0im
 
@@ -400,7 +508,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    eigen!(copy_oftype(A, S), copy_oftype(B, S); kws...)
+    eigen!(copymutable_oftype(A, S), copymutable_oftype(B, S); kws...)
 end
 
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
@@ -418,27 +526,27 @@ instead of creating copies.
 # Examples
 ```jldoctest
 julia> A = [1. 0.; 0. -1.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0   0.0
  0.0  -1.0
 
 julia> B = [0. 1.; 1. 0.]
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  1.0
  1.0  0.0
 
 julia> eigvals!(A, B)
-2-element Array{Complex{Float64},1}:
+2-element Vector{ComplexF64}:
  0.0 - 1.0im
  0.0 + 1.0im
 
 julia> A
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  -0.0  -1.0
   1.0  -0.0
 
 julia> B
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.0  0.0
  0.0  1.0
 ```
@@ -457,29 +565,29 @@ end
 """
     eigvals(A, B) -> values
 
-Computes the generalized eigenvalues of `A` and `B`.
+Compute the generalized eigenvalues of `A` and `B`.
 
 # Examples
 ```jldoctest
 julia> A = [1 0; 0 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   0
  0  -1
 
 julia> B = [0 1; 1 0]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  1
  1  0
 
 julia> eigvals(A,B)
-2-element Array{Complex{Float64},1}:
+2-element Vector{ComplexF64}:
  0.0 - 1.0im
  0.0 + 1.0im
 ```
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    return eigvals!(copy_oftype(A, S), copy_oftype(B, S); kws...)
+    return eigvals!(copymutable_oftype(A, S), copymutable_oftype(B, S); kws...)
 end
 
 """
@@ -491,17 +599,17 @@ be obtained from the slice `M[:, k]`.)
 # Examples
 ```jldoctest
 julia> A = [1 0; 0 -1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   0
  0  -1
 
 julia> B = [0 1; 1 0]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  0  1
  1  0
 
 julia> eigvecs(A, B)
-2×2 Array{Complex{Float64},2}:
+2×2 Matrix{ComplexF64}:
   0.0+1.0im   0.0-1.0im
  -1.0+0.0im  -1.0-0.0im
 ```
@@ -510,10 +618,20 @@ eigvecs(A::AbstractMatrix, B::AbstractMatrix; kws...) = eigvecs(eigen(A, B; kws.
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{Eigen,GeneralizedEigen})
     summary(io, F); println(io)
-    println(io, "eigenvalues:")
+    println(io, "values:")
     show(io, mime, F.values)
-    println(io, "\neigenvectors:")
+    println(io, "\nvectors:")
     show(io, mime, F.vectors)
+end
+
+function Base.hash(F::Eigen, h::UInt)
+    return hash(F.values, hash(F.vectors, hash(Eigen, h)))
+end
+function Base.:(==)(A::Eigen, B::Eigen)
+    return A.values == B.values && A.vectors == B.vectors
+end
+function Base.isequal(A::Eigen, B::Eigen)
+    return isequal(A.values, B.values) && isequal(A.vectors, B.vectors)
 end
 
 # Conversion methods

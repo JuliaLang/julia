@@ -53,33 +53,33 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a&&b`      | `(&& a b)`                |
 | `x += 1`    | `(+= x 1)`                |
 | `a ? 1 : 2` | `(if a 1 2)`              |
-| `a:b`       | `(: a b)`                 |
-| `a:b:c`     | `(: a b c)`               |
 | `a,b`       | `(tuple a b)`             |
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
 | `a.b`       | `(. a (quote b))`         |
-| `a.(b)`     | `(. a b)`                 |
+| `a.(b)`     | `(. a (tuple b))`         |
 
 ### Bracketed forms
 
-| Input                    | AST                                  |
-|:------------------------ |:------------------------------------ |
-| `a[i]`                   | `(ref a i)`                          |
-| `t[i;j]`                 | `(typed_vcat t i j)`                 |
-| `t[i j]`                 | `(typed_hcat t i j)`                 |
-| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
-| `a{b}`                   | `(curly a b)`                        |
-| `a{b;c}`                 | `(curly a (parameters c) b)`         |
-| `[x]`                    | `(vect x)`                           |
-| `[x,y]`                  | `(vect x y)`                         |
-| `[x;y]`                  | `(vcat x y)`                         |
-| `[x y]`                  | `(hcat x y)`                         |
-| `[x y; z t]`             | `(vcat (row x y) (row z t))`         |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`  |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`  |
-| `(a, b, c)`              | `(tuple a b c)`                      |
-| `(a; b; c)`              | `(block a (block b c))`              |
+| Input                    | AST                                               |
+|:------------------------ |:------------------------------------------------- |
+| `a[i]`                   | `(ref a i)`                                       |
+| `t[i;j]`                 | `(typed_vcat t i j)`                              |
+| `t[i j]`                 | `(typed_hcat t i j)`                              |
+| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))`              |
+| `t[a b;;; c d]`          | `(typed_ncat t 3 (row a b) (row c d))`            |
+| `a{b}`                   | `(curly a b)`                                     |
+| `a{b;c}`                 | `(curly a (parameters c) b)`                      |
+| `[x]`                    | `(vect x)`                                        |
+| `[x,y]`                  | `(vect x y)`                                      |
+| `[x;y]`                  | `(vcat x y)`                                      |
+| `[x y]`                  | `(hcat x y)`                                      |
+| `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
+| `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
+| `[x for y in z, a in b]` | `(comprehension (generator x (= y z) (= a b)))`   |
+| `T[x for y in z]`        | `(typed_comprehension T (generator x (= y z)))`   |
+| `(a, b, c)`              | `(tuple a b c)`                                   |
+| `(a; b; c)`              | `(block a b c)`                                   |
 
 ### Macros
 
@@ -128,11 +128,11 @@ instead of `:import`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                                     |
-|:----------------------- |:------------------------------------------------------- |
-| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
+| Input                   | AST                                                      |
+|:----------------------- |:-------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str nothing "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str nothing "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str nothing "1111....")`                |
 
 ### Block forms
 
@@ -155,7 +155,7 @@ parses as:
 ```
 (if a (block (line 2) b)
     (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 5 e))))
+            (block (line 6 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -236,7 +236,7 @@ to interpolate code from the caller.
 ## Lowered form
 
 Lowered form (IR) is more important to the compiler, since it is used for type inference,
-optimizations like inlining, and and code generation. It is also less obvious to the human,
+optimizations like inlining, and code generation. It is also less obvious to the human,
 since it results from a significant rearrangement of the input syntax.
 
 In addition to `Symbol`s and some number types, the following data
@@ -247,25 +247,40 @@ types exist in lowered form:
     Has a node type indicated by the `head` field, and an `args` field which is a `Vector{Any}` of
     subexpressions.
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
-    limited number of `Expr`s, mostly for calls, conditional branches (`gotoifnot`), and returns.
+    limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
   * `Slot`
 
     Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
     with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
     the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `MethodInstance` object.
+    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
 
+  * `Argument`
+
+    The same as `SlotNumber`, but appears only post-optimization. Indicates that the
+    referenced slot is an argument of the enclosing function.
+
   * `CodeInfo`
 
-    Wraps the IR of a method. Its `code` field is an array of expressions to execute.
+    Wraps the IR of a group of statements. Its `code` field is an array of expressions to execute.
 
   * `GotoNode`
 
     Unconditional branch. The argument is the branch target, represented as an index in
     the code array to jump to.
+
+  * `GotoIfNot`
+
+    Conditional branch. If the `cond` field evaluates to false, goes to the index identified
+    by the `dest` field.
+
+  * `ReturnNode`
+
+    Returns its argument (the `val` field) as the value of the enclosing function.
+    If the `val` field is undefined, then this represents an unreachable statement.
 
   * `QuoteNode`
 
@@ -305,10 +320,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Reference a static parameter by index.
 
-  * `gotoifnot`
-
-    Conditional branch. If `args[1]` is false, goes to the index identified in `args[2]`.
-
   * `=`
 
     Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
@@ -330,9 +341,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]`
 
-        A function name, or `false` if unknown. If a symbol, then the expression first
-        behaves like the 1-argument form above. This argument is ignored from then on. When
-        this is `false`, it means a method is being added strictly by type, `(::T)(x) = x`.
+        A function name, or `nothing` if unknown or unneeded. If a symbol, then the expression
+        first behaves like the 1-argument form above. This argument is ignored from then on.
+        It can be `nothing` when methods are added strictly by type, `(::T)(x) = x`,
+        or when a method is being added to an existing function, `MyModule.f(x) = x`.
 
       * `args[2]`
 
@@ -356,20 +368,20 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[2]`
 
-        A `call` expression that creates `SimpleVector` specifying its parameters
+        A `call` expression that creates a `SimpleVector` specifying its parameters
 
       * `args[3]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldnames
+        A `call` expression that creates a `SimpleVector` specifying its fieldnames
 
       * `args[4]`
 
-        A `Symbol` or `GlobalRef` specifying the supertype (e.g., `:Integer` or
-        `GlobalRef(Core, :Any)`)
+        A `Symbol`, `GlobalRef`, or `Expr` specifying the supertype (e.g., `:Integer`,
+        `GlobalRef(Core, :Any)`, or `:(Core.apply_type(AbstractArray, T, N))`)
 
       * `args[5]`
 
-        A `call` expression that creates `SimpleVector` specifying its fieldtypes
+        A `call` expression that creates a `SimpleVector` specifying its fieldtypes
 
       * `args[6]`
 
@@ -384,13 +396,17 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `abstract_type`
 
     A 3-argument expression that defines a new abstract type. The
-    arguments are the same as the first three arguments of
+    arguments are the same as arguments 1, 2, and 4 of
     `struct_type` expressions.
 
   * `primitive_type`
 
     A 4-argument expression that defines a new primitive type. Arguments 1, 2, and 4
     are the same as `struct_type`. Argument 3 is the number of bits.
+
+    !!! compat "Julia 1.5"
+        `struct_type`, `abstract_type`, and `primitive_type` were removed in Julia 1.5
+        and replaced by calls to new builtins.
 
   * `global`
 
@@ -409,11 +425,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `splatnew`
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
-    `Base.splat(new)` if `new` were a first-class function, hence the name.
-
-  * `return`
-
-    Returns its argument as the value of the enclosing function.
+    `Base.Splat(new)` if `new` were a first-class function, hence the name.
 
   * `isdefined`
 
@@ -423,6 +435,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `the_exception`
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
+
+  * `undefcheck`
+
+    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
 
   * `enter`
 
@@ -469,8 +485,72 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `:inline` and `:noinline`: Inlining hints.
 
+  * `foreigncall`
 
-### Method
+    Statically-computed container for `ccall` information. The fields are:
+
+      * `args[1]` : name
+
+        The expression that'll be parsed for the foreign function.
+
+      * `args[2]::Type` : RT
+
+        The (literal) return type, computed statically when the containing method was defined.
+
+      * `args[3]::SimpleVector` (of Types) : AT
+
+        The (literal) vector of argument types, computed statically when the containing method was defined.
+
+      * `args[4]::Int` : nreq
+
+        The number of required arguments for a varargs function definition.
+
+      * `args[5]::QuoteNode{Symbol}` : calling convention
+
+        The calling convention for the call.
+
+      * `args[6:5+length(args[3])]` : arguments
+
+        The values for all the arguments (with types of each given in args[3]).
+
+      * `args[6+length(args[3])+1:end]` : gc-roots
+
+        The additional objects that may need to be gc-rooted for the duration of the call.
+        See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
+
+  * `new_opaque_closure`
+
+    Constructs a new opaque closure. The fields are:
+
+      * `args[1]` : signature
+
+        The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
+
+      * `args[2]` : isva
+
+        Indicates whether the closure accepts varargs.
+
+      * `args[3]` : lb
+
+        Lower bound on the output type. (Defaults to `Union{}`)
+
+      * `args[4]` : ub
+
+        Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[5]` : method
+
+        The actual method as an `opaque_closure_method` expression.
+
+      * `args[6:end]` : captures
+
+        The values captured by the opaque closure.
+
+    !!! compat "Julia 1.7"
+        Opaque closures were added in Julia 1.7
+
+
+### [Method](@id ast-lowered-method)
 
 A unique'd container describing the shared metadata for a single method.
 
@@ -490,7 +570,11 @@ A unique'd container describing the shared metadata for a single method.
 
   * `source`
 
-    The original source code (usually compressed).
+    The original source code (if available, usually compressed).
+
+  * `generator`
+
+    A callable object which can be executed to get specialized source for a specific method signature.
 
   * `roots`
 
@@ -501,14 +585,15 @@ A unique'd container describing the shared metadata for a single method.
 
     Descriptive bit-fields for the source code of this Method.
 
-  * `min_world` / `max_world`
+  * `primary_world`
 
-    The range of world ages for which this method is visible to dispatch.
+    The world age that "owns" this Method.
 
 
 ### MethodInstance
 
-A unique'd container describing a single callable signature for a Method. See especially [Proper maintenance and care of multi-threading locks](@ref)
+A unique'd container describing a single callable signature for a Method.
+See especially [Proper maintenance and care of multi-threading locks](@ref Proper-maintenance-and-care-of-multi-threading-locks)
 for important details on how to modify these fields safely.
 
   * `specTypes`
@@ -528,16 +613,38 @@ for important details on how to modify these fields safely.
     runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
     indexable.
 
-  * `rettype`
+  * `uninferred`
+
+    The uncompressed source code for a toplevel thunk. Additionally, for a generated function,
+    this is one of many places that the source code might be found.
+
+  * `backedges`
+
+    We store the reverse-list of cache dependencies for efficient tracking of incremental reanalysis/recompilation work that may be needed after a new method definitions.
+    This works by keeping a list of the other `MethodInstance` that have been inferred or optimized to contain a possible call to this `MethodInstance`.
+    Those optimization results might be stored somewhere in the `cache`, or it might have been the result of something we didn't want to cache, such as constant propagation.
+    Thus we merge all of those backedges to various cache entries here (there's almost always only the one applicable cache entry with a sentinel value for max_world anyways).
+
+  * `cache`
+
+    Cache of `CodeInstance` objects that share this template instantiation.
+
+### CodeInstance
+
+  * `def`
+
+    The `MethodInstance` that this cache entry is derived from.
+
+
+  * `rettype`/`rettype_const`
 
     The inferred return type for the `specFunctionObject` field, which (in most cases) is
     also the computed return type for the function in general.
 
   * `inferred`
 
-    May contain a cache of the inferred source for this function, or other information about
-    the inference result such as a constant return value may be put here (if `jlcall_api ==
-    2`), or it could be set to `nothing` to just indicate `rettype` is inferred.
+    May contain a cache of the inferred source for this function,
+    or it could be set to `nothing` to just indicate `rettype` is inferred.
 
   * `ftpr`
 
@@ -549,18 +656,20 @@ for important details on how to modify these fields safely.
 
       * 0 - Not compiled yet
       * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
-      * 2 - Constant (value stored in `inferred`)
+      * 2 - Constant (value stored in `rettype_const`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
 
   * `min_world` / `max_world`
 
     The range of world ages for which this method instance is valid to be called.
+    If max_world is the special token value `-1`, the value is not yet known.
+    It may continue to be used until we encounter a backedge that requires us to reconsider.
 
 
 ### CodeInfo
 
-A temporary container for holding lowered source code.
+A (usually temporary) container for holding lowered source code.
 
   * `code`
 
@@ -568,11 +677,7 @@ A temporary container for holding lowered source code.
 
   * `slotnames`
 
-    An array of symbols giving the name of each slot (argument or local variable).
-
-  * `slottypes`
-
-    An array of types for the slots.
+    An array of symbols giving names for each slot (argument or local variable).
 
   * `slotflags`
 
@@ -588,7 +693,19 @@ A temporary container for holding lowered source code.
     Either an array or an `Int`.
 
     If an `Int`, it gives the number of compiler-inserted temporary locations in the
-    function. If an array, specifies a type for each location.
+    function (the length of `code` array). If an array, specifies a type for each location.
+
+  * `ssaflags`
+
+    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
+
+    * 0x01 << 0 = statement is marked as `@inbounds`
+    * 0x01 << 1 = statement is marked as `@inline`
+    * 0x01 << 2 = statement is marked as `@noinline`
+    * 0x01 << 3 = statement is within a block that leads to `throw` call
+    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
+    * 0x01 << 5-6 = <unused>
+    * 0x01 << 7 = <reserved> has out-of-band info
 
   * `linetable`
 
@@ -599,6 +716,34 @@ A temporary container for holding lowered source code.
     An array of integer indices into the `linetable`, giving the location associated
     with each statement.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `rettype`
+
+    The inferred return type of the lowered form (IR). Default value is `Any`.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
+  * `parent`
+
+    The `MethodInstance` that "owns" this object (if applicable).
+
+  * `edges`
+
+    Forward edges to method instances that must be invalidated.
+
+  * `min_world`/`max_world`
+
+    The range of world ages for which this code was valid at the time when it had been inferred.
+
+
 Boolean properties:
 
   * `inferred`
@@ -607,14 +752,34 @@ Boolean properties:
 
   * `inlineable`
 
-    Whether this should be inlined.
+    Whether this should be eligible for inlining.
 
   * `propagate_inbounds`
 
-    Whether this should should propagate `@inbounds` when inlined for the purpose of eliding
+    Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
 
   * `pure`
 
     Whether this is known to be a pure function of its arguments, without respect to the
     state of the method caches or other mutable global state.
+
+
+`UInt8` settings:
+
+  * `constprop`
+
+    * 0 = use heuristic
+    * 1 = aggressive
+    * 2 = none
+
+  * `purity`
+    Constructed from 5 bit flags:
+
+    * 0x01 << 0 = this method is guaranteed to return or terminate consistently (`:consistent`)
+    * 0x01 << 1 = this method is free from externally semantically visible side effects (`:effect_free`)
+    * 0x01 << 2 = this method is guaranteed to not throw an exception (`:nothrow`)
+    * 0x01 << 3 = this method is guaranteed to terminate (`:terminates_globally`)
+    * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
+
+    See the documentation of `Base.@assume_effects` for more details.

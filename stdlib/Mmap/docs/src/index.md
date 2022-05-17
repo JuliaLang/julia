@@ -1,15 +1,9 @@
 # Memory-mapped I/O
 
-```@meta
-DocTestSetup = :(using Mmap)
-```
+Low level module for mmap (memory mapping of files).
 
 ```@docs
 Mmap.Anonymous
 Mmap.mmap
 Mmap.sync!
-```
-
-```@meta
-DocTestSetup = nothing
 ```

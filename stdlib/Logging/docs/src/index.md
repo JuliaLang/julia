@@ -1,4 +1,4 @@
-# Logging
+# [Logging](@id man-logging)
 
 The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
 computation as a log of events.  Events are created by inserting a logging
@@ -38,7 +38,7 @@ v = ones(100)
 # output
 ┌ Info: Some variables
 │   A =
-│    4×4 Array{Int64,2}:
+│    4×4 Matrix{Int64}:
 │     1  1  1  1
 │     1  1  1  1
 │     1  1  1  1
@@ -58,17 +58,23 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  - Use `Debug` for verbose information that could be useful when debugging an
-    application or module. These events are disabled by default.
-  - Use `Info` to inform the user about the normal operation of the program.
-  - Use `Warn` when a potential problem is detected.
-  - Use `Error` to report errors where the code has enough context to recover
-    and continue.  (When the code doesn't have enough context, an exception or
-    early return is more appropriate.)
+  Each is distinct in purpose:
+  - [`Logging.Debug`](@ref) (log level -1000) is information intended for the developer of
+    the program. These events are disabled by default.
+  - [`Logging.Info`](@ref) (log level 0) is for general information to the user.
+    Think of it as an alternative to using `println` directly.
+  - [`Logging.Warn`](@ref) (log level 1000) means something is wrong and action is likely
+    required but that for now the program is still working.
+  - [`Logging.Error`](@ref) (log level 2000) means something is wrong and it is unlikely to
+    be recovered, at least by this part of the code.
+    Often this log-level is unneeded as throwing an exception can convey
+    all the required information.
+
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
-  Other types will be displayed using `show(io,mime,obj)` according to the
-  display capabilities of the installed logger.
+  Other types will be displayed using `print(io, obj)` or `string(obj)` for
+  text-based output and possibly `show(io,mime,obj)` for other multimedia
+  displays used in the installed logger.
 * Optional *key--value pairs* allow arbitrary data to be attached to each event.
   Some keys have conventional meaning that can affect the way an event is
   interpreted (see [`@logmsg`](@ref)).
@@ -176,8 +182,8 @@ pattern match against the log event stream.
 
 Message filtering can be influenced through the `JULIA_DEBUG` environment
 variable, and serves as an easy way to enable debug logging for a file or
-module. For example, loading julia with `JULIA_DEBUG=loading` will activate
-`@debug` log messages in `loading.jl`:
+module. Loading julia with `JULIA_DEBUG=loading` will activate
+`@debug` log messages in `loading.jl`. For example, in Linux shells:
 
 ```
 $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
@@ -189,11 +195,37 @@ $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
 ...
 ```
 
+On windows, the same can be achieved in `CMD` via first running `set JULIA_DEBUG="loading"` and in `Powershell` via
+`$env:JULIA_DEBUG="loading"`.
+
 Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
 enable all debug logging, use the special value `all`.
 
-## Writing log events to a file
+To turn debug logging on from the REPL, set `ENV["JULIA_DEBUG"]` to the
+name of the module of interest. Functions defined in the REPL belong to
+module `Main`; logging for them can be enabled like this:
+```julia-repl
+julia> foo() = @debug "foo"
+foo (generic function with 1 method)
+
+julia> foo()
+
+julia> ENV["JULIA_DEBUG"] = Main
+Main
+
+julia> foo()
+┌ Debug: foo
+└ @ Main REPL[1]:1
+
+```
+
+Use a comma separator to enable debug for multiple
+modules: `JULIA_DEBUG=loading,Main`.
+
+## Examples
+
+### Example: Writing log events to a file
 
 Sometimes it can be useful to write log events to a file. Here is an example
 of how to use a task-local and global logger to write information to a text
@@ -230,6 +262,25 @@ julia> @info("a global log message")
 julia> close(io)
 ```
 
+### Example: Enable debug-level messages
+
+Here is an example of creating a [`ConsoleLogger`](@ref) that lets through any messages
+with log level higher than, or equal, to [`Logging.Debug`](@ref).
+
+```julia-repl
+julia> using Logging
+
+# Create a ConsoleLogger that prints any log messages with level >= Debug to stderr
+julia> debuglogger = ConsoleLogger(stderr, Logging.Debug)
+
+# Enable debuglogger for a task
+julia> with_logger(debuglogger) do
+           @debug "a context specific log message"
+       end
+
+# Set the global logger
+julia> global_logger(debuglogger)
+```
 
 ## Reference
 
@@ -243,6 +294,10 @@ Logging.Logging
 ```@docs
 Logging.@logmsg
 Logging.LogLevel
+Logging.Debug
+Logging.Info
+Logging.Warn
+Logging.Error
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)
@@ -285,4 +340,3 @@ Logging.NullLogger
 Logging.ConsoleLogger
 Logging.SimpleLogger
 ```
-

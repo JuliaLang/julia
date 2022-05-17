@@ -2,7 +2,9 @@
 
 @testset "basic properties" begin
 
+    @test typemax(Char) == reinterpret(Char, typemax(UInt32))
     @test typemin(Char) == Char(0)
+    @test typemax(Char) == reinterpret(Char, 0xffffffff)
     @test ndims(Char) == 0
     @test getindex('a', 1) == 'a'
     @test_throws BoundsError getindex('a', 2)
@@ -19,7 +21,7 @@
 
     @test widen('a') === 'a'
     # just check this works
-    @test_throws Base.CodePointError Base.code_point_err(UInt32(1))
+    @test_throws Base.CodePointError Base.throw_code_point_err(UInt32(1))
 end
 
 @testset "ASCII conversion to/from Integer" begin
@@ -99,6 +101,7 @@ end
     #getindex(c::Char) = c
     for x in testarrays
         @test getindex(x) == x
+        @test getindex(x, CartesianIndex()) == x
     end
 
     #first(c::Char) = c
@@ -185,6 +188,7 @@ end
 
 @testset "sprint, repr" begin
     @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
+    @test sprint(show, "text/plain", '$', context=:compact => true) == "'\$'"
     @test repr('$') == "'\$'"
 end
 
@@ -246,6 +250,7 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
 
 @testset "abstractchar" begin
     @test AbstractChar('x') === AbstractChar(UInt32('x')) === 'x'
+    @test convert(AbstractChar, 2.0) == Char(2)
 
     @test isascii(ASCIIChar('x'))
     @test ASCIIChar('x') < 'y'
@@ -253,6 +258,9 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test ASCIIChar('x')^3 == "xxx"
     @test repr(ASCIIChar('x')) == "'x'"
     @test string(ASCIIChar('x')) == "x"
+    @test length(ASCIIChar('x')) == 1
+    @test !isempty(ASCIIChar('x'))
+    @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
 end
@@ -289,4 +297,38 @@ end
 
 @testset "broadcasting of Char" begin
     @test identity.('a') == 'a'
+    @test 'a' .* ['b', 'c'] == ["ab", "ac"]
+end
+
+@testset "code point format of U+ syntax (PR 33291)" begin
+    @test repr("text/plain", '\n') == "'\\n': ASCII/Unicode U+000A (category Cc: Other, control)"
+    @test repr("text/plain", '/') == "'/': ASCII/Unicode U+002F (category Po: Punctuation, other)"
+    @test repr("text/plain", '\u10e') == "'Ď': Unicode U+010E (category Lu: Letter, uppercase)"
+    @test repr("text/plain", '\u3a2c') == "'㨬': Unicode U+3A2C (category Lo: Letter, other)"
+    @test repr("text/plain", '\U001f428') == "'🐨': Unicode U+1F428 (category So: Symbol, other)"
+    @test repr("text/plain", '\U010f321') == "'\\U10f321': Unicode U+10F321 (category Co: Other, private use)"
+end
+
+@testset "malformed chars" begin
+    u1 = UInt32(0xc0) << 24
+    u2 = UInt32(0xc1) << 24
+    u3 = UInt32(0x0704) << 21
+    u4 = UInt32(0x0f08) << 20
+
+    overlong_uints = [u1, u2, u3, u4]
+    overlong_chars = reinterpret.(Char, overlong_uints)
+    @test all(Base.is_overlong_enc, overlong_uints)
+    @test all(Base.isoverlong, overlong_chars)
+    @test all(Base.ismalformed, overlong_chars)
+    @test repr("text/plain", overlong_chars[1]) ==
+        "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
+end
+
+@testset "More fallback tests" begin
+    @test length(ASCIIChar('x')) == 1
+    @test firstindex(ASCIIChar('x')) == 1
+    @test !isempty(ASCIIChar('x'))
+    @test hash(ASCIIChar('x'), UInt(10)) == hash('x', UInt(10))
+    @test Base.IteratorSize(Char) == Base.HasShape{0}()
+    @test convert(ASCIIChar, 1) == Char(1)
 end

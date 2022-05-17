@@ -1,32 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export LAPACKException,
-       ARPACKException,
        SingularException,
        PosDefException,
-       RankDeficientException
+       RankDeficientException,
+       ZeroPivotException
 
 struct LAPACKException <: Exception
     info::BlasInt
-end
-
-struct ARPACKException <: Exception
-    info::BlasInt
-end
-
-function Base.showerror(io::IO, ex::ARPACKException)
-    print(io, "ARPACKException: ")
-    if ex.info == -8
-        print(io, "error return from calculation of a real Schur form.")
-    elseif ex.info == -9
-        print(io, "error return from calculation of eigenvectors.")
-    elseif ex.info == -14
-        print(io, string("did not find any eigenvalues to sufficient accuracy. ",
-            "Try with a different starting vector or more Lanczos vectors ",
-            "by increasing the value of ncv."))
-    else
-        print(io, "unspecified ARPACK error: $(ex.info)")
-    end
 end
 
 """
@@ -62,4 +43,20 @@ end
 
 struct RankDeficientException <: Exception
     info::BlasInt
+end
+
+"""
+    ZeroPivotException <: Exception
+
+Exception thrown when a matrix factorization/solve encounters a zero in a pivot (diagonal)
+position and cannot proceed.  This may *not* mean that the matrix is singular:
+it may be fruitful to switch to a diffent factorization such as pivoted LU
+that can re-order variables to eliminate spurious zero pivots.
+The `info` field indicates the location of (one of) the zero pivot(s).
+"""
+struct ZeroPivotException <: Exception
+    info::BlasInt
+end
+function Base.showerror(io::IO, ex::ZeroPivotException)
+    print(io, "ZeroPivotException: factorization encountered one or more zero pivots. Consider switching to a pivoted LU factorization.")
 end
