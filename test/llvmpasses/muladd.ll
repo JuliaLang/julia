@@ -1,4 +1,6 @@
-; RUN: opt -load libjulia-internal%shlibext -CombineMulAdd -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -CombineMulAdd -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='CombineMulAdd' -S %s | FileCheck %s
+
 
 define double @fast_muladd1(double %a, double %b, double %c) {
 top:

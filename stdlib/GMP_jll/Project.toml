@@ -1,10 +1,10 @@
 name = "GMP_jll"
 uuid = "781609d7-10c4-51f6-84f2-b8444358ff6d"
-version = "6.2.1+0"
+version = "6.2.1+1"
 
 [deps]
-Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [compat]
 julia = "1.6"

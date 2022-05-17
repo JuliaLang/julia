@@ -230,6 +230,9 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     push_update_reference::Ptr{Cvoid}  = C_NULL
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
+    @static if LibGit2.VERSION >= v"1.2.0"
+        remote_ready::Ptr{Cvoid}       = C_NULL
+    end
     payload::Any                       = nothing
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
@@ -248,7 +251,7 @@ distinct payload. Each callback, when called, will receive `Dict` which will hol
 callback's custom payload which can be accessed using the callback name.
 
 # Examples
-```julia
+```julia-repl
 julia> c = LibGit2.Callbacks(:credentials => (LibGit2.credentials_cb(), LibGit2.CredentialPayload()));
 
 julia> LibGit2.clone(url, callbacks=c);

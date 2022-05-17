@@ -356,20 +356,24 @@ joinpath
 """
     normpath(path::AbstractString) -> String
 
-Normalize a path, removing "." and ".." entries.
+Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
+for the system.
 
 # Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
+
+julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
+true
 ```
 """
 function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re)
-    filter!(x->!isempty(x) && x!=".", parts)
+    parts = split(path, path_separator_re; keepempty=false)
+    filter!(!=("."), parts)
     while true
         clean = true
         for j = 1:length(parts)-1
@@ -512,6 +516,8 @@ end
     expanduser(path::AbstractString) -> AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+
+See also: [`contractuser`](@ref).
 """
 expanduser(path::AbstractString)
 
@@ -519,6 +525,8 @@ expanduser(path::AbstractString)
     contractuser(path::AbstractString) -> AbstractString
 
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+
+See also: [`expanduser`](@ref).
 """
 contractuser(path::AbstractString)
 

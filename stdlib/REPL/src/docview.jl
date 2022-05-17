@@ -283,7 +283,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))
-            for (f, t) in zip(fieldnames(T), T.types)
+            for (f, t) in zip(fieldnames(T), fieldtypes(T))
                 println(io, rpad(f, pad), " :: ", t)
             end
             println(io, "```")
@@ -402,10 +402,18 @@ function symbol_latex(s::String)
 
     return get(symbols_latex, s, "")
 end
-function repl_latex(io::IO, s::String)
-    # decompose NFC-normalized identifier to match tab-completion input
-    s = normalize(s, :NFD)
-    latex = symbol_latex(s)
+function repl_latex(io::IO, s0::String)
+    # This has rampant `Core.Box` problems (#15276). Use the tricks of
+    # https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+    # We're changing some of the values so the `let` trick isn't applicable.
+    s::String = s0
+    latex::String = symbol_latex(s)
+    if isempty(latex)
+        # Decompose NFC-normalized identifier to match tab-completion
+        # input if the first search came up empty.
+        s = normalize(s, :NFD)
+        latex = symbol_latex(s)
+    end
     if !isempty(latex)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
@@ -416,7 +424,7 @@ function repl_latex(io::IO, s::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        state = '\0'
+        state::Char = '\0'
         with_output_color(:cyan, io) do io
             for c in s
                 cstr = string(c)
@@ -712,7 +720,19 @@ accessible(mod::Module) =
            map(names, moduleusings(mod))...;
            collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
-doc_completions(name) = fuzzysort(name, accessible(Main))
+function doc_completions(name)
+    res = fuzzysort(name, accessible(Main))
+
+    # to insert an entry like `raw""` for `"@raw_str"` in `res`
+    ms = match.(r"^@(.*?)_str$", res)
+    idxs = findall(!isnothing, ms)
+
+    # avoid messing up the order while inserting
+    for i in reverse(idxs)
+        insert!(res, i, "$(only(ms[i].captures))\"\"")
+    end
+    res
+end
 doc_completions(name::Symbol) = doc_completions(string(name))
 
 
@@ -792,6 +812,11 @@ stripmd(x::Markdown.Table) =
 Search available docstrings for entries containing `pattern`.
 
 When `pattern` is a string, case is ignored. Results are printed to `io`.
+
+`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
+```
+help?> "pattern"
+```
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))

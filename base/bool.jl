@@ -115,7 +115,7 @@ Bitwise nor (not or) of `x` and `y`. Implements
 returning [`missing`](@ref) if one of the arguments is `missing`.
 
 The infix operation `a ⊽ b` is a synonym for `nor(a,b)`, and
-`⊽` can be typed by tab-completing `\\nor` or `\\veebar` in the Julia REPL.
+`⊽` can be typed by tab-completing `\\nor` or `\\barvee` in the Julia REPL.
 
 # Examples
 ```jldoctest

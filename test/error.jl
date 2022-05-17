@@ -6,11 +6,11 @@
     @test maximum(ExponentialBackOff(n=10, max_delay=0.06)) == 0.06
     ratio(x) = x[2:end]./x[1:end-1]
     @test all(x->x ≈ 10.0, ratio(collect(ExponentialBackOff(n=10, max_delay=Inf, factor=10, jitter=0.0))))
-    Test.guardseed(12345) do
-        x = ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))
-        xm = sum(x) / length(x)
-        @test abs(xm - 1.0) < 0.01
-    end
+    Libc.srand(12345)
+    x = ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))
+    xm = sum(x) / length(x)
+    @test abs(xm - 1.0) < 0.01
+    Libc.srand()
 end
 @testset "retrying after errors" begin
     function foo_error(c, n)
@@ -80,4 +80,19 @@ end
 
     # non-Functions
     @test retry(Float64)(1) === 1.0
+end
+
+@testset "SystemError initialization" begin
+    e = SystemError("fail")
+    @test e.extrainfo === nothing
+end
+
+@testset "MethodError for methods without line numbers" begin
+    try
+        eval(Expr(:function, :(f44319()), 0))
+        f44319(1)
+    catch e
+        s = sprint(showerror, e)
+        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\nClosest candidates are:\n  f44319() at none:0"
+    end
 end

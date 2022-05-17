@@ -12,6 +12,8 @@ import ..Terminals: raw!, width, height, cmove, getX,
 import Base: ensureroom, show, AnyDict, position
 using Base: something
 
+using InteractiveUtils: InteractiveUtils
+
 abstract type TextInterface end                # see interface immediately below
 abstract type ModeState end                    # see interface below
 abstract type HistoryProvider end
@@ -105,6 +107,11 @@ mutable struct PromptState <: ModeState
     # this option is to speed up output
     refresh_wait::Union{Timer,Nothing}
 end
+
+struct Modifiers
+    shift::Bool
+end
+Modifiers() = Modifiers(false)
 
 options(s::PromptState) =
     if isdefined(s.p, :repl) && isdefined(s.p.repl, :options)
@@ -321,7 +328,7 @@ function show_completions(s::PromptState, completions::Vector{String})
         for col = 0:num_cols
             idx = row + col*entries_per_col
             if idx <= length(completions)
-                cmove_col(terminal(s), (colmax+2)*col)
+                cmove_col(terminal(s), (colmax+2)*col+1)
                 print(terminal(s), completions[idx])
             end
         end
@@ -1290,6 +1297,49 @@ _edit_indent(buf::IOBuffer, b::Int, num::Int) =
     num >= 0 ? edit_splice!(buf, b => b, ' '^num, rigid_mark=false) :
                edit_splice!(buf, b => (b - num))
 
+function mode_idx(hist::HistoryProvider, mode::TextInterface)
+    c = :julia
+    for (k,v) in hist.mode_mapping
+        isequal(v, mode) && (c = k)
+    end
+    return c
+end
+
+function guess_current_mode_name(s)
+    try
+        mode_idx(s.current_mode.hist, s.current_mode)
+    catch
+        nothing
+    end
+end
+
+# edit current input in editor
+function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, line))
+    mode_name = guess_current_mode_name(s)
+    filename = tempname()
+    if mode_name == :julia
+        filename *= ".jl"
+    elseif mode_name == :shell
+        filename *= ".sh"
+    end
+    buf = buffer(s)
+    pos = position(buf)
+    str = String(take!(buf))
+    line = 1 + count(==(_newline), view(str, 1:pos))
+    write(filename, str)
+    f(filename, line)
+    str_mod = readchomp(filename)
+    rm(filename)
+    if str != str_mod # something was changed, run the input
+        write(buf, str_mod)
+        commit_line(s)
+        :done
+    else # no change, the edit session probably unsuccessful
+        write(buf, str)
+        seek(buf, pos) # restore state from before edit
+        refresh_line(s)
+    end
+end
 
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
@@ -1641,7 +1691,7 @@ end
 throw_eager_redirection_cycle(key::Union{Char, String}) =
     error("Eager redirection cycle detected for key ", repr(key))
 throw_could_not_find_redirected_value(key::Union{Char, String}) =
-    error("Could not find redirected value ", repl(key))
+    error("Could not find redirected value ", repr(key))
 
 function keymap_unify(keymaps)
     ret = Dict{Char,Any}()
@@ -1907,6 +1957,10 @@ mode(s::PromptState) = s.p          # ::Prompt
 mode(s::SearchState) = @assert false
 mode(s::PrefixSearchState) = s.histprompt.parent_prompt   # ::Prompt
 
+setmodifiers!(s::MIState, m::Modifiers) = setmodifiers!(mode(s), m)
+setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
+setmodifiers!(c) = nothing
+
 # Search Mode completions
 function complete_line(s::SearchState, repeats)
     completions, partial, should_complete = complete_line(s.histprompt.complete, s)
@@ -1962,7 +2016,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     parent = mode(s)
 
     transition(s, p) do
-        pss = state(s, p)
+        local pss = state(s, p)
         pss.parent = parent
         pss.histprompt.parent_prompt = parent
         pss.prefix = String(buf.data[1:position(buf)])
@@ -2174,6 +2228,11 @@ function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jum
     return refresh_line(s)
 end
 
+function shift_tab_completion(s::MIState)
+    setmodifiers!(s, Modifiers(true))
+    return complete_line(s)
+end
+
 # return true iff the content of the buffer is modified
 # return false when only the position changed
 function edit_insert_tab(buf::IOBuffer, jump_spaces::Bool=false, delete_trailing::Bool=jump_spaces)
@@ -2209,6 +2268,8 @@ const default_keymap =
 AnyDict(
     # Tab
     '\t' => (s::MIState,o...)->edit_tab(s, true),
+    # Shift-tab
+    "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
     '\r' => (s::MIState,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
@@ -2321,6 +2382,7 @@ AnyDict(
     "\eu" => (s::MIState,o...)->edit_upper_case(s),
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
+    "\ee" => (s::MIState,o...) -> edit_input(s),
 )
 
 const history_keymap = AnyDict(

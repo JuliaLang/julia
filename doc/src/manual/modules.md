@@ -78,21 +78,17 @@ module-local.
 ### Export lists
 
 Names (referring to functions, types, global variables, and constants) can be added to the
-*export list* of a module with `export`. Typically, they are at or near the top of the module definition
+*export list* of a module with `export`: these are the symbols that are imported when `using` the module. Typically, they are at or near the top of the module definition
 so that readers of the source code can find them easily, as in
 
-```julia
-module NiceStuff
+```jldoctest module_manual
+julia> module NiceStuff
+       export nice, DOG
+       struct Dog end      # singleton type, not exported
+       const DOG = Dog()   # named instance, exported
+       nice(x) = "nice $x" # function, exported
+       end;
 
-export nice, DOG
-
-struct Dog end      # singleton type, not exported
-
-const DOG = Dog()   # named instance, exported
-
-nice(x) = "nice $x" # function, exported
-
-end
 ```
 
 but this is just a style suggestion — a module can have multiple `export` statements in arbitrary
@@ -122,10 +118,13 @@ definition in the current module, the system will search for it among variables 
 and use it if it is found there. This means that all uses of that global within the current
 module will resolve to the definition of that variable in `ModuleName`.
 
+To load a module from a package, the statement `using ModuleName` can be used.
+To load a module from a locally defined module, a dot needs to be added before the module name like `using .ModuleName`.
+
 To continue with our example,
 
-```julia
-using NiceStuff
+```jldoctest module_manual
+julia> using .NiceStuff
 ```
 
 would load the above code, making `NiceStuff` (the module name), `DOG` and `nice` available. `Dog` is not on the export list, but it can be accessed if the name is qualified with the module path (which here is just the module name) as `NiceStuff.Dog`.
@@ -134,62 +133,77 @@ Importantly, **`using ModuleName` is the only form for which export lists matter
 
 In contrast,
 
-```julia
-import NiceStuff
+```jldoctest module_manual
+julia> import .NiceStuff
 ```
 
 brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
-As we will see in the next section `import NiceStuff` is equivalent to `using NiceStuff: NiceStuff`.
+As we will see in the next section `import .NiceStuff` is equivalent to `using .NiceStuff: NiceStuff`.
 
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
-```julia
-using LinearAlgebra, Statistics
+```jldoctest module_manual
+julia> using LinearAlgebra, Statistics
 ```
 
 ### `using` and `import` with specific identifiers, and adding methods
 
 When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of names, the module is loaded, but *only those specific names are brought into the namespace* by the statement. For example,
 
-```julia
-using NiceStuff: nice, DOG
+```jldoctest module_manual
+julia> using .NiceStuff: nice, DOG
 ```
 
 will import the names `nice` and `DOG`.
 
 Importantly, the module name `NiceStuff` will *not* be in the namespace. If you want to make it accessible, you have to list it explicitly, as
-```julia
-using NiceStuff: nice, DOG, NiceStuff
+```jldoctest module_manual
+julia> using .NiceStuff: nice, DOG, NiceStuff
 ```
 
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
 *without a module path*.
 That is to say, the following example will give an error:
 
-```julia
-using NiceStuff: nice
-struct Cat end
-nice(::Cat) = "nice 😸"
+```jldoctest module_manual
+julia> using .NiceStuff: nice
+
+julia> struct Cat end
+
+julia> nice(::Cat) = "nice 😸"
+ERROR: error in method definition: function NiceStuff.nice must be explicitly imported to be extended
+Stacktrace:
+ [1] top-level scope
+   @ none:0
+ [2] top-level scope
+   @ none:1
+
 ```
 
 This error prevents accidentally adding methods to functions in other modules that you only intended to use.
 
 There are two ways to deal with this. You can always qualify function names with a module path:
-```julia
-using NiceStuff
-struct Cat end
-NiceStuff.nice(::Cat) = "nice 😸"
+```jldoctest module_manual
+julia> using .NiceStuff
+
+julia> struct Cat end
+
+julia> NiceStuff.nice(::Cat) = "nice 😸"
+
 ```
 
 Alternatively, you can `import` the specific function name:
-```julia
-import NiceStuff: nice
-struct Cat end
-nice(::Cat) = "nice 😸"
+```jldoctest module_manual
+julia> import .NiceStuff: nice
+
+julia> struct Cat end
+
+julia> nice(::Cat) = "nice 😸"
+nice (generic function with 2 methods)
 ```
 
 Which one you choose is a matter of style. The first form makes it clear that you are adding a
-method to a function in another module (remember, that the imports and the method defintion may be
+method to a function in another module (remember, that the imports and the method definition may be
 in separate files), while the second one is shorter, which is especially convenient if you are
 defining multiple methods.
 
@@ -205,7 +219,7 @@ For example, `Base` exports the function name `read`, but the CSV.jl package als
 If we are going to invoke CSV reading many times, it would be convenient to drop the `CSV.` qualifier.
 But then it is ambiguous whether we are referring to `Base.read` or `CSV.read`:
 
-```julia
+```julia-repl
 julia> read;
 
 julia> import CSV: read
@@ -214,7 +228,7 @@ WARNING: ignoring conflicting import of CSV.read into Main
 
 Renaming provides a solution:
 
-```julia
+```julia-repl
 julia> import CSV: read as rd
 ```
 
@@ -233,9 +247,11 @@ on all of the exported names in `CSV`.
 When multiple `using` or `import` statements of any of the forms above are used, their effect is combined in the order they appear.
 For example,
 
-```julia
-using NiceStuff         # exported names and the module name
-import NiceStuff: nice  # allows adding methods to unqualified functions
+```jldoctest module_manual
+julia> using .NiceStuff         # exported names and the module name
+
+julia> import .NiceStuff: nice  # allows adding methods to unqualified functions
+
 ```
 
 would bring all the exported names of `NiceStuff` and the module name itself into scope, and also
@@ -245,23 +261,27 @@ allow adding methods to `nice` without prefixing it with a module name.
 
 Consider the situation where two (or more) packages export the same name, as in
 
-```julia
-module A
-export f
-f() = 1
-end
-
-module B
-export f
-f() = 2
-end
+```jldoctest module_manual
+julia> module A
+       export f
+       f() = 1
+       end
+A
+julia> module B
+       export f
+       f() = 2
+       end
+B
 ```
 
-The statement `using A, B` works, but when you try to call `f`, you get a warning
+The statement `using .A, .B` works, but when you try to call `f`, you get a warning
 
-```julia
+```jldoctest module_manual
+julia> using .A, .B
+
+julia> f
 WARNING: both B and A export "f"; uses of it in module Main must be qualified
-ERROR: LoadError: UndefVarError: f not defined
+ERROR: UndefVarError: f not defined
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:
@@ -270,9 +290,11 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
 
 2. Use the `as` keyword above to rename one or both identifiers, eg
 
-   ```julia
-   using A: f as f
-   using B: f as g
+   ```jldoctest module_manual
+   julia> using .A: f as f
+
+   julia> using .B: f as g
+
    ```
 
    would make `B.f` available as `g`. Here, we are assuming that you did not use `using A` before,
@@ -303,7 +325,7 @@ include(p) = Base.include(Mod, p)
 end
 ```
 
-If even `Core` is not wanted, a module that imports nothing at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
+If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
 
 ### Standard modules
 
@@ -329,31 +351,28 @@ It is recommended that submodules refer to other modules within the enclosing pa
 
 Consider the following example, where the submodule `SubA` defines a function, which is then extended in its “sibling” module:
 
-```julia
-module ParentModule
+```jldoctest module_manual
+julia> module ParentModule
+       module SubA
+       export add_D  # exported interface
+       const D = 3
+       add_D(x) = x + D
+       end
+       using .SubA  # brings `add_D` into the namespace
+       export add_D # export it from ParentModule too
+       module SubB
+       import ..SubA: add_D # relative path for a “sibling” module
+       struct Infinity end
+       add_D(x::Infinity) = x
+       end
+       end;
 
-module SubA
-export add_D  # exported interface
-const D = 3
-add_D(x) = x + D
-end
-
-using .SubA  # brings `add_D` into the namespace
-
-export add_D # export it from ParentModule too
-
-module SubB
-import ..SubA: add_D # relative path for a “sibling” module
-struct Infinity end
-add_D(x::Infinity) = x
-end
-
-end
 ```
 
 You may see code in packages, which, in a similar situation, uses
-```julia
-import ParentModule.SubA: add_D
+```jldoctest module_manual
+julia> import .ParentModule.SubA: add_D
+
 ```
 However, this operates through [code loading](@ref code-loading), and thus only works if `ParentModule` is in a package. It is better to use relative paths.
 
@@ -394,7 +413,7 @@ end
 end
 ```
 
-### Module initialization and precompilation
+## Module initialization and precompilation
 
 Large modules can take several seconds to load because executing all of the statements in a module
 often involves compiling a large amount of code.
@@ -402,7 +421,7 @@ Julia creates precompiled caches of the module to reduce this time.
 
 The incremental precompiled module file are created and used automatically when using `import`
 or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call [`Base.compilecache(modulename)`](@ref). The resulting
+it is imported. Alternatively, you can manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref). The resulting
 cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)

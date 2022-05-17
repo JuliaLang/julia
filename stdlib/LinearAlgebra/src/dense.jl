@@ -13,7 +13,7 @@ const NRM2_CUTOFF = 32
 # This constant should ideally be determined by the actual CPU cache size
 const ISONE_CUTOFF = 2^21 # 2M
 
-function isone(A::StridedMatrix)
+function isone(A::AbstractMatrix)
     m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
     if sizeof(A) < ISONE_CUTOFF
@@ -23,7 +23,7 @@ function isone(A::StridedMatrix)
     end
 end
 
-@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+@inline function _isone_triacheck(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in i:m
         if i == j
             isone(A[i,i]) || return false
@@ -35,7 +35,7 @@ end
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+@inline function _isone_cachefriendly(A::AbstractMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
             isone(A[i,i]) || return false
@@ -257,6 +257,8 @@ Vector `kv.second` will be placed on the `kv.first` diagonal.
 By default the matrix is square and its size is inferred
 from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
 can be specified by passing `m,n` as the first arguments.
+For repeated diagonal indices `kv.first` the values in the corresponding
+vectors `kv.second` will be added.
 
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
@@ -276,6 +278,13 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  1  0  0
  4  0  2  0
  0  5  0  3
+ 0  0  0  0
+
+julia> diagm(1 => [1,2,3], 1 => [1,2,3])
+4×4 Matrix{Int64}:
+ 0  2  0  0
+ 0  0  4  0
+ 0  0  0  6
  0  0  0  0
 ```
 """
@@ -491,7 +500,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
-        retmat = copy_oftype(A, TT)
+        retmat = copymutable_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end
@@ -565,7 +574,10 @@ exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
 """
     cis(A::AbstractMatrix)
 
-Compute ``\\exp(i A)`` for a square matrix ``A``.
+More efficient method for `exp(im*A)` of square matrix `A`
+(especially if `A` is `Hermitian` or real-`Symmetric`).
+
+See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref).
 
 !!! compat "Julia 1.7"
     Support for using `cis` with matrices was added in Julia 1.7.
@@ -576,8 +588,8 @@ julia> cis([π 0; 0 π]) ≈ -I
 true
 ```
 """
-Base.cis(A::AbstractMatrix) = exp(im * A)  # fallback
-Base.cis(A::AbstractMatrix{<:Base.HWNumber}) = exp_maybe_inplace(float.(im .* A))
+cis(A::AbstractMatrix) = exp(im * A)  # fallback
+cis(A::AbstractMatrix{<:Base.HWNumber}) = exp_maybe_inplace(float.(im .* A))
 
 exp_maybe_inplace(A::StridedMatrix{<:Union{ComplexF32, ComplexF64}}) = exp!(A)
 exp_maybe_inplace(A) = exp(A)
@@ -638,22 +650,24 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         P = A2
         U = mul!(C[4]*P, true, C[2]*I, true, true) #U = C[2]*I + C[4]*P
         V = mul!(C[3]*P, true, C[1]*I, true, true) #V = C[1]*I + C[3]*P
-        for k in 2:(div(size(C, 1), 2) - 1)
-            k2 = 2 * k
+        for k in 2:(div(length(C), 2) - 1)
             P *= A2
-            mul!(U, C[k2 + 2], P, true, true) # U += C[k2+2]*P
-            mul!(V, C[k2 + 1], P, true, true) # V += C[k2+1]*P
+            mul!(U, C[2k + 2], P, true, true) # U += C[2k+2]*P
+            mul!(V, C[2k + 1], P, true, true) # V += C[2k+1]*P
         end
 
         U = A * U
-        X = V + U
+
         # Padé approximant:  (V-U)\(V+U)
-        LAPACK.gesv!(V-U, X)
+        tmp1, tmp2 = A, A2 # Reuse already allocated arrays
+        tmp1 .= V .- U
+        tmp2 .= V .+ U
+        X = LAPACK.gesv!(tmp1, tmp2)[1]
     else
         s  = log2(nA/5.4)               # power of 2 later reversed by squaring
         if s > 0
             si = ceil(Int,s)
-            A /= convert(T,2^si)
+            A ./= convert(T,2^si)
         end
         CC = T[64764752532480000.,32382376266240000.,7771770303897600.,
                 1187353796428800.,  129060195264000.,  10559470521600.,
@@ -663,32 +677,35 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         A2 = A * A
         A4 = A2 * A2
         A6 = A2 * A4
-        Ut = mul!(CC[4]*A2, true,CC[2]*I, true, true); # Ut = CC[4]*A2+CC[2]*I
+        tmp1, tmp2 = similar(A6), similar(A6)
+
         # Allocation economical version of:
-        #U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
-        #          CC[8].*A6 .+ CC[6].*A4 .+ Ut)
-        U = mul!(CC[8].*A6 .+ CC[6].*A4 .+ Ut,
-                 A6,
-                 CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2,
-                 true, true)
-        U = A*U
+        # U  = A * (A6 * (CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2) .+
+        #           CC[8].*A6 .+ CC[6].*A4 .+ CC[4]*A2+CC[2]*I)
+        tmp1 .= CC[14].*A6 .+ CC[12].*A4 .+ CC[10].*A2
+        tmp2 .= CC[8].*A6 .+ CC[6].*A4 .+ CC[4].*A2
+        mul!(tmp2, true,CC[2]*I, true, true) # tmp2 .+= CC[2]*I
+        U = mul!(tmp2, A6, tmp1, true, true)
+        U, tmp1 = mul!(tmp1, A, U), A # U = A * U0
 
-        # Allocation economical version of: Vt = CC[3]*A2 (recycle Ut)
-        Vt = mul!(Ut, CC[3], A2, true, false)
-        mul!(Vt, true, CC[1]*I, true, true); # Vt += CC[1]*I
         # Allocation economical version of:
-        #V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
-        #           CC[7].*A6 .+ CC[5].*A4 .+ Vt
-        V = mul!(CC[7].*A6 .+ CC[5].*A4 .+ Vt,
-                 A6,
-                 CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2,
-                 true, true)
+        # V  = A6 * (CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2) .+
+        #           CC[7].*A6 .+ CC[5].*A4 .+ CC[3]*A2 .+ CC[1]*I
+        tmp1 .= CC[13].*A6 .+ CC[11].*A4 .+ CC[9].*A2
+        tmp2 .= CC[7].*A6 .+ CC[5].*A4 .+ CC[3].*A2
+        mul!(tmp2, true, CC[1]*I, true, true) # tmp2 .+= CC[1]*I
+        V = mul!(tmp2, A6, tmp1, true, true)
 
-        X = V + U
-        LAPACK.gesv!(V-U, X)
+        tmp1 .= V .+ U
+        tmp2 .= V .- U # tmp2 aleady contained V but this seems more readable
+        X = LAPACK.gesv!(tmp2, tmp1)[1] # X now contains r_13 in Higham 2008
 
-        if s > 0            # squaring to reverse dividing by power of 2
-            for t=1:si; X *= X end
+        if s > 0
+            # Repeated squaring to compute X = r_13^(2^si)
+            for t=1:si
+                mul!(tmp2, X, X)
+                X, tmp2 = tmp2, X
+            end
         end
     end
 
@@ -794,7 +811,7 @@ that is the unique matrix ``X`` with eigenvalues having positive real part such 
 
 If `A` is real-symmetric or Hermitian, its eigendecomposition ([`eigen`](@ref)) is
 used to compute the square root.   For such matrices, eigenvalues λ that
-appear to be slightly negative due to roundoff errors are treated as if they were zero
+appear to be slightly negative due to roundoff errors are treated as if they were zero.
 More precisely, matrices with all eigenvalues `≥ -rtol*(max |λ|)` are treated as semidefinite
 (yielding a Hermitian square root), with negative eigenvalues taken to be zero.
 `rtol` is a keyword argument to `sqrt` (in the Hermitian/real-symmetric case only) that
@@ -831,6 +848,8 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
+sqrt(::StridedMatrix)
+
 function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     if ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
@@ -1373,6 +1392,7 @@ function factorize(A::StridedMatrix{T}) where T
 end
 factorize(A::Adjoint)   =   adjoint(factorize(parent(A)))
 factorize(A::Transpose) = transpose(factorize(parent(A)))
+factorize(a::Number)    = a # same as how factorize behaves on Diagonal types
 
 ## Moore-Penrose pseudoinverse
 
@@ -1429,12 +1449,13 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return similar(A, Tout, (n, m))
     end
     if isdiag(A)
-        ind = diagind(A)
-        dA = view(A, ind)
+        indA = diagind(A)
+        dA = view(A, indA)
         maxabsA = maximum(abs, dA)
         tol = max(rtol * maxabsA, atol)
         B = fill!(similar(A, Tout, (n, m)), 0)
-        B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        indB = diagind(B)
+        B[indB] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
     SVD         = svd(A)
@@ -1457,7 +1478,7 @@ end
     nullspace(M, rtol::Real) = nullspace(M; rtol=rtol) # to be deprecated in Julia 2.0
 
 Computes a basis for the nullspace of `M` by including the singular
-vectors of `M` whose singular values have magnitudes greater than `max(atol, rtol*σ₁)`,
+vectors of `M` whose singular values have magnitudes smaller than `max(atol, rtol*σ₁)`,
 where `σ₁` is `M`'s largest singular value.
 
 By default, the relative tolerance `rtol` is `n*ϵ`, where `n`

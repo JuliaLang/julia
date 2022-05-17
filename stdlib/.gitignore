@@ -15,5 +15,9 @@
 /NetworkOptions
 /SuiteSparse-*
 /SuiteSparse
+/SparseArrays-*
+/SparseArrays
+/SHA-*
+/SHA
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml

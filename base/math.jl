@@ -18,7 +18,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
 import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2, muladd, rem,
-             exp10, expm1, log1p
+             exp10, expm1, log1p, @constprop, @assume_effects
 
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
@@ -30,16 +30,35 @@ using Core.Intrinsics: sqrt_llvm
 using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
-    throw(DomainError(x, string("$f will only return a complex result if called with a ",
-                                "complex argument. Try $f(Complex(x)).")))
+    throw(DomainError(x,
+        LazyString(f," will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
 @noinline function throw_exp_domainerror(x)
-    throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
-                                "complex argument.\nReplace x^y with (x+0im)^y, ",
-                                "Complex(x)^y, or similar.")))
+    throw(DomainError(x, LazyString(
+        "Exponentiation yielding a complex result requires a ",
+        "complex argument.\nReplace x^y with (x+0im)^y, ",
+        "Complex(x)^y, or similar.")))
 end
 
 # non-type specific math functions
+
+@inline function two_mul(x::Float64, y::Float64)
+    if Core.Intrinsics.have_fma(Float64)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    return Base.twomul(x,y)
+end
+
+@inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
+    if Core.Intrinsics.have_fma(T)
+        xy = x*y
+        return xy, fma(x, y, -xy)
+    end
+    xy = widen(x)*y
+    Txy = T(xy)
+    return Txy, T(xy-Txy)
+end
 
 """
     clamp(x, lo, hi)
@@ -48,6 +67,9 @@ Return `x` if `lo <= x <= hi`. If `x > hi`, return `hi`. If `x < lo`, return `lo
 are promoted to a common type.
 
 See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` as the first argument requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -97,6 +119,9 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
+
+!!! compat "Julia 1.3"
+    `missing` entries in `array` require at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -272,8 +297,7 @@ end
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
         pi = p[i]
-        prod = hi*x
-        err = fma(hi, x, -prod)
+        prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
     end
@@ -418,7 +442,7 @@ asinh(x::Number)
 
 Compute sine of `x`, where `x` is in radians.
 
-See also [`sind`], [`sinpi`], [`sincos`], [`cis`].
+See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 sin(x::Number)
 
@@ -427,7 +451,7 @@ sin(x::Number)
 
 Compute cosine of `x`, where `x` is in radians.
 
-See also [`cosd`], [`cospi`], [`sincos`], [`cis`].
+See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 cos(x::Number)
 
@@ -472,7 +496,7 @@ atanh(x::Number)
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
-See also [`log1p`], [`log2`], [`log10`].
+See also [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -609,12 +633,14 @@ Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 This code is an implementation of the algorithm described in:
 An Improved Algorithm for `hypot(a,b)`
 by Carlos F. Borges
-The article is available online at ArXiv at the link
+The article is available online at arXiv at the link
   https://arxiv.org/abs/1904.09481
 
     hypot(x...)
 
 Compute the hypotenuse ``\\sqrt{\\sum |x_i|^2}`` avoiding overflow and underflow.
+
+See also `norm` in the [`LinearAlgebra`](@ref man-linalg) standard library.
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -637,10 +663,16 @@ julia> hypot(-5.7)
 
 julia> hypot(3, 4im, 12.0)
 13.0
+
+julia> using LinearAlgebra
+
+julia> norm([a, a, a, a]) == hypot(a, a, a, a)
+true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...))...)
+hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
@@ -652,7 +684,7 @@ function _hypot(x, y)
 
     # Return Inf if either or both inputs is Inf (Compliance with IEEE754)
     if isinf(ax) || isinf(ay)
-        return oftype(axu, Inf)
+        return typeof(axu)(Inf)
     end
 
     # Order the operands
@@ -680,7 +712,7 @@ function _hypot(x, y)
     end
     h = sqrt(muladd(ax, ax, ay*ay))
     # This branch is correctly rounded but requires a native hardware fma.
-    if Base.Math.FMA_NATIVE
+    if Core.Intrinsics.have_fma(typeof(h))
         hsquared = h*h
         axsquared = ax*ax
         h -= (fma(-ay, ay, hsquared-axsquared) + fma(h, h,-hsquared) - fma(ax, ax, -axsquared))/(2*h)
@@ -696,13 +728,26 @@ function _hypot(x, y)
     end
     return h*scale*oneunit(axu)
 end
-_hypot(x::Float16, y::Float16) = Float16(_hypot(Float32(x), Float32(y)))
+@inline function _hypot(x::Float32, y::Float32)
+    if isinf(x) || isinf(y)
+        return Inf32
+    end
+    _x, _y = Float64(x), Float64(y)
+    return Float32(sqrt(muladd(_x, _x, _y*_y)))
+end
+@inline function _hypot(x::Float16, y::Float16)
+    if isinf(x) || isinf(y)
+        return Inf16
+    end
+    _x, _y = Float32(x), Float32(y)
+    return Float16(sqrt(muladd(_x, _x, _y*_y)))
+end
 _hypot(x::ComplexF16, y::ComplexF16) = Float16(_hypot(ComplexF32(x), ComplexF32(y)))
 
-function _hypot(x...)
+function _hypot(x::NTuple{N,<:Number}) where {N}
     maxabs = maximum(abs, x)
     if isnan(maxabs) && any(isinf, x)
-        return oftype(maxabs, Inf)
+        return typeof(maxabs)(Inf)
     elseif (iszero(maxabs) || isinf(maxabs))
         return maxabs
     else
@@ -740,7 +785,7 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
-    k = Int(xs >> significand_bits(T))
+    k = (xs >> significand_bits(T)) % Int
     if k == 0 # x is subnormal
         xs == 0 && return x # +-0
         m = leading_zeros(xs) - exponent_bits(T)
@@ -773,7 +818,8 @@ function ldexp(x::T, e::Integer) where T<:IEEEFloat
             return flipsign(T(0.0), x)
         end
         k += significand_bits(T)
-        z = T(2.0)^-significand_bits(T)
+        # z = T(2.0) ^ (-significand_bits(T))
+        z = reinterpret(T, rem(exponent_bias(T)-significand_bits(T), uinttype(T)) << significand_bits(T))
         xu = (xu & ~exponent_mask(T)) | (rem(k, uinttype(T)) << significand_bits(T))
         return z*reinterpret(T, xu)
     end
@@ -797,12 +843,27 @@ julia> exponent(16.0)
 """
 function exponent(x::T) where T<:IEEEFloat
     @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
-    @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
+    @noinline throw2(x) = throw(DomainError(x, "Cannot be ±0.0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && throw1(x)
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
         xs == 0 && throw2(x)
+        m = leading_zeros(xs) - exponent_bits(T)
+        k = 1 - m
+    end
+    return k - exponent_bias(T)
+end
+
+# Like exponent, but assumes the nothrow precondition. For
+# internal use only. Could be written as
+# @assume_effects :nothrow exponent()
+# but currently this form is easier on the compiler.
+function _exponent_finite_nonzero(x::T) where T<:IEEEFloat
+    # @precond :nothrow !isnan(x) && !isinf(x) && !iszero(x)
+    xs = reinterpret(Unsigned, x) & ~sign_mask(T)
+    k = rem(xs >> significand_bits(T), Int)
+    if k == 0 # x is subnormal
         m = leading_zeros(xs) - exponent_bits(T)
         k = 1 - m
     end
@@ -874,11 +935,39 @@ function frexp(x::T) where T<:IEEEFloat
     return reinterpret(T, xu), k
 end
 
-rem(x::Float64, y::Float64, ::RoundingMode{:Nearest}) =
-    ccall((:remainder, libm),Float64,(Float64,Float64),x,y)
-rem(x::Float32, y::Float32, ::RoundingMode{:Nearest}) =
-    ccall((:remainderf, libm),Float32,(Float32,Float32),x,y)
-rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x), Float32(y), r))
+# NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
+# functions, which are under the following license:
+#
+# Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+#
+# Developed at SunSoft, a Sun Microsystems, Inc. business.
+# Permission to use, copy, modify, and distribute this
+# software is freely granted, provided that this notice
+# is preserved.
+function rem(x::T, p::T, ::RoundingMode{:Nearest}) where T<:IEEEFloat
+    (iszero(p) || !isfinite(x) || isnan(p)) && return T(NaN)
+    x == p && return copysign(zero(T), x)
+    oldx = x
+    x = abs(rem(x, 2p))  # 2p may overflow but that's okay
+    p = abs(p)
+    if p < 2 * floatmin(T)  # Check whether dividing p by 2 will underflow
+        if 2x > p
+            x -= p
+            if 2x >= p
+                x -= p
+            end
+        end
+    else
+        p_half = p / 2
+        if x > p_half
+            x -= p
+            if x >= p_half
+                x -= p
+            end
+        end
+    end
+    return flipsign(x, oldx)
+end
 
 
 """
@@ -898,49 +987,94 @@ julia> modf(-3.5)
 """
 modf(x) = isinf(x) ? (flipsign(zero(x), x), x) : (rem(x, one(x)), trunc(x))
 
-function modf(x::Float32)
-    temp = Ref{Float32}()
-    f = ccall((:modff, libm), Float32, (Float32, Ptr{Float32}), x, temp)
-    f, temp[]
+function modf(x::T) where T<:IEEEFloat
+    isinf(x) && return (copysign(zero(T), x), x)
+    ix = trunc(x)
+    rx = copysign(x - ix, x)
+    return (rx, ix)
 end
 
-function modf(x::Float64)
-    temp = Ref{Float64}()
-    f = ccall((:modf, libm), Float64, (Float64, Ptr{Float64}), x, temp)
-    f, temp[]
-end
-
-@inline function ^(x::Float64, y::Float64)
-    z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
+@constprop :aggressive function ^(x::Float64, y::Float64)
+    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
+    xu = reinterpret(UInt64, x)
+    x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x === 1.0 && return 1.0
+    x==0 && return abs(y)*Inf*(!(y>0))
+    !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -= UInt64(52) << 52 # mess with the exponent
     end
-    z
+    return pow_body(xu, y)
 end
-@inline function ^(x::Float32, y::Float32)
-    z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    if isnan(z) & !isnan(x+y)
-        throw_exp_domainerror(x)
-    end
-    z
-end
-@inline ^(x::Float16, y::Float16) = Float16(Float32(x)^Float32(y))  # TODO: optimize
 
-@inline function ^(x::Float64, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, Float64(y))
+@inline function pow_body(xu::UInt64, y::Float64)
+    logxhi,logxlo = Base.Math._log_ext(xu)
+    xyhi, xylo = two_mul(logxhi,y)
+    xylo = muladd(logxlo, y, xylo)
+    hi = xyhi+xylo
+    return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
-@inline function ^(x::Float32, y::Integer)
-    y == -1 && return inv(x)
-    y == 0 && return one(x)
-    y == 1 && return x
-    y == 2 && return x*x
-    y == 3 && return x*x*x
-    ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, Float32(y))
+
+@constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
+    yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
+    y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps(T)) && return x^(typemax(Int64)-1)
+    x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    return pow_body(x, y)
+end
+
+@inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
+    x == 1 && return one(T)
+    !isfinite(x) && return x*(y>0 || isnan(x))
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
+    return T(exp2(log2(abs(widen(x))) * y))
+end
+
+# compensated power by squaring
+@constprop :aggressive @inline function ^(x::Float64, n::Integer)
+    n == 0 && return one(x)
+    return pow_body(x, n)
+end
+
+@assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
+    y = 1.0
+    xnlo = ynlo = 0.0
+    n == 3 && return x*x*x # keep compatibility with literal_pow
+    if n < 0
+        rx = inv(x)
+        n==-2 && return rx*rx #keep compatability with literal_pow
+        isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
+        x = rx
+        n = -n
+    end
+    while n > 1
+        if n&1 > 0
+            err = muladd(y, xnlo, x*ynlo)
+            y, ynlo = two_mul(x,y)
+            ynlo += err
+        end
+        err = x*2*xnlo
+        x, xnlo = two_mul(x, x)
+        xnlo += err
+        n >>>= 1
+    end
+    !isfinite(x) && return x*y
+    return muladd(x, y, muladd(y, xnlo, x*ynlo))
+end
+
+function ^(x::Float32, n::Integer)
+    n == -2 && return (i=inv(x); i*i)
+    n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
+    Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)
 @inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
@@ -1228,6 +1362,12 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
         return ($f)(xf)
     end
     @eval $(f)(::Missing) = missing
+end
+
+for f in (:atan, :hypot, :log)
+    @eval $(f)(::Missing, ::Missing) = missing
+    @eval $(f)(::Number, ::Missing) = missing
+    @eval $(f)(::Missing, ::Number) = missing
 end
 
 exp2(x::AbstractFloat) = 2^x

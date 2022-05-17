@@ -1,5 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef JL_PROCESSOR_H
+#define JL_PROCESSOR_H
+
 #include "support/dtypes.h"
 
 #include "julia.h"
@@ -14,9 +17,9 @@ extern "C" {
 /**
  * Related sysimg exported symbols
  *
- * In the following text function refer to an abstract identity.
- * It corresponds to a `Function` that we emit in the codegen and there might be multiple copy
- * of it in the system image. Only one of those copy will be used in a given session.
+ * In the following text, function refers to an abstract entity.
+ * It corresponds to a `Function` that we emit in the codegen, and there might be multiple copies
+ * of it in the system image. Only one of those copies will be used in a given session.
  * Function pointers refer to a real piece of code in the system image.
  * Each function might have multiple function pointers in the system image
  * and each function pointer will correspond to only one function.
@@ -34,28 +37,28 @@ extern "C" {
  *     The default function pointer is used if the function is cloned.
  *     The first element is the size of the array, which should **NOT** be used as the number
  *     of julia functions in the sysimg.
- *     Each entry in this array uniquely identifies a function which we are interested in
+ *     Each entry in this array uniquely identifies a function we are interested in
  *     (the function may have multiple function pointers corresponding to different versions).
- *     In other sysimg info, all information of functions are stored as function index which are
- *     `uint32_t` index in this array.
+ *     In other sysimg info, all references to functions are stored as their `uint32_t` index
+ *     in this array.
  *
  * # Target data and dispatch slots (Only needed by runtime during loading)
  * `jl_dispatch_target_ids`: [static data] serialize target data.
  *     This contains the number of targets which is needed to decode `jl_dispatch_fvars_idxs`
- *     in additional to the name and feature set of each target.
+ *     in addition to the name and feature set of each target.
  * `jl_dispatch_reloc_slots`: [static data] location and index of relocation slots.
  *     Stored as pairs of function indices and `int32_t` offsets from `jl_sysimg_gvars_base`.
  *     The first element is an `uint32_t` giving the number of relocations.
  *     This is needed for functions whose address is used in a way that requires dispatch.
  *     We currently only support one type of relocation (i.e. absolute pointer) which is enough
- *     for all use in functions as well as global GOT slot (for "PLT" callback).
+ *     for all use in functions as well as GOT slot (for "PLT" callback).
  *     Note that not all functions being cloned are assigned a slot.
  *     This array is sorted by the function indices.
  *     There can be more than one slot per-function,
  *     i.e. there can be duplicated function indices.
  *
  * # Target functions
- * `jl_dispatch_fvars_idxs`: [static data] Target specific functions indices.
+ * `jl_dispatch_fvars_idxs`: [static data] Target-specific function indices.
  *     For each target, this includes a tagged `uint32_t` length, an optional `uint32_t` index
  *     of the base target followed by an array of tagged function indices.
  *     The base target index is required to be smaller than the index of the current target
@@ -74,25 +77,25 @@ extern "C" {
  *     the base one since this is the only way we currently represent relocations.)
  *     A tagged length implicitly tags all the indices and the indices will not have the tag bit
  *     set. The lengths in this variable is needed to decode `jl_dispatch_fvars_offsets`.
- * `jl_dispatch_fvars_offsets`: [static data] Target specific function pointer offsets.
- *     This contains all the cloned functions that we are interested and it needs to be decoded
+ * `jl_dispatch_fvars_offsets`: [static data] Target-specific function pointer offsets.
+ *     This contains all the cloned functions that we are interested in and it needs to be decoded
  *     and used along with `jl_dispatch_fvars_idxs`.
  *     For the default target, there's no entries in this variable, if there's any relocations
  *     needed for the default target, the function pointers are taken from the global offset
  *     arrays directly.
  *     For a `clone_all` target (i.e. with the length in `jl_dispatch_fvars_idxs` tagged), this
- *     variable contains an offset array the same length as the global one. Only the indices
- *     appeared in `jl_dispatch_fvars_idxs` needs relocation and the dispatch code should return
+ *     variable contains an offset array of the same length as the global one. Only the indices
+ *     appearing in `jl_dispatch_fvars_idxs` need relocation and the dispatch code should return
  *     this array as the original/base function offsets.
  *     For other targets, this variable contains an offset array with the length defined in
- *     `jl_dispatch_fvars_idxs`. Tagged indices needs relocations.
+ *     `jl_dispatch_fvars_idxs`. Tagged indices need relocations.
  */
 
 enum {
     JL_TARGET_VEC_CALL = 1 << 0,
     // Clone all functions
     JL_TARGET_CLONE_ALL = 1 << 1,
-    // Clone when there's scalar math operations that can benefit from target specific
+    // Clone when there's scalar math operations that can benefit from target-specific
     // optimizations. This includes `muladd`, `fma`, `fast`/`contract` flags.
     JL_TARGET_CLONE_MATH = 1 << 2,
     // Clone when the function has a loop
@@ -107,6 +110,8 @@ enum {
     JL_TARGET_OPTSIZE = 1 << 6,
     // Only optimize for size for this target
     JL_TARGET_MINSIZE = 1 << 7,
+    // Clone when the function queries CPU features
+    JL_TARGET_CLONE_CPU = 1 << 8,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
@@ -177,7 +182,7 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #include <string>
 #include <vector>
 
-extern bool jl_processor_print_help;
+extern JL_DLLEXPORT bool jl_processor_print_help;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.
@@ -185,14 +190,14 @@ extern bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags);
+extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags);
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
  *
  * This will return a generic CPU name and a full feature string.
  */
-const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void);
+extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void);
 
 struct jl_target_spec_t {
     // LLVM target name
@@ -209,8 +214,9 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
+extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
 std::string jl_get_cpu_features_llvm(void);
-std::string jl_format_filename(llvm::StringRef output_pattern);
+#endif
+
 #endif

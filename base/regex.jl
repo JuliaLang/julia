@@ -11,6 +11,9 @@ const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 An abstract type representing any sort of pattern matching expression
 (typically a regular expression). `AbstractPattern` objects can be used to
 match strings with [`match`](@ref).
+
+!!! compat "Julia 1.6"
+    This type is available in Julia 1.6 and later.
 """
 abstract type AbstractPattern end
 
@@ -266,7 +269,7 @@ function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::SubString; offset::Integer=0)
+function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -298,7 +301,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::SubString, r::Regex)
+function startswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -330,10 +333,24 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::SubString, r::Regex)
+function endswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
+
+function chopprefix(s::AbstractString, prefix::Regex)
+    m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
+    m === nothing && return SubString(s)
+    return SubString(s, ncodeunits(m.match) + 1)
+end
+
+function chopsuffix(s::AbstractString, suffix::Regex)
+    m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
+    m === nothing && return SubString(s)
+    isempty(m.match) && return SubString(s)
+    return SubString(s, firstindex(s), prevind(s, m.offset))
+end
+
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
@@ -528,6 +545,7 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+# Examples
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
 s"Hello \\g<name>, it's \\1"
@@ -537,9 +555,7 @@ s"Hello \\g<name>, it's \\1"
 
 julia> typeof(subst)
 SubstitutionString{String}
-
 ```
-
 """
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
@@ -564,6 +580,7 @@ Construct a substitution string, used for regular expression substitutions.  Wit
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
 
+# Examples
 ```jldoctest
 julia> msg = "#Hello# from Julia";
 

@@ -18,6 +18,7 @@ export
     AbstractMatrix,
     AbstractRange,
     AbstractSet,
+    AbstractSlices,
     AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
@@ -41,6 +42,7 @@ export
     ComplexF32,
     ComplexF16,
     ComposedFunction,
+    ColumnSlices,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -57,6 +59,7 @@ export
     IOStream,
     LinRange,
     Irrational,
+    LazyString,
     Matrix,
     MergeSort,
     Missing,
@@ -79,8 +82,10 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    RowSlices,
     Set,
     Some,
+    Slices,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -121,6 +126,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
@@ -385,6 +391,7 @@ export
     eachindex,
     eachrow,
     eachslice,
+    extrema!,
     extrema,
     fill!,
     fill,
@@ -495,6 +502,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,
@@ -573,11 +581,14 @@ export
     bytes2hex,
     chomp,
     chop,
+    chopprefix,
+    chopsuffix,
     codepoint,
     codeunit,
     codeunits,
     digits,
     digits!,
+    eachsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -800,9 +811,11 @@ export
     atreplinit,
     exit,
     ntuple,
+    Splat,
 
 # I/O and events
     close,
+    closewrite,
     countlines,
     eachline,
     readeach,
@@ -873,6 +886,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
@@ -891,6 +905,7 @@ export
     chown,
     cp,
     ctime,
+    diskstat,
     download,
     filemode,
     filesize,
@@ -939,6 +954,7 @@ export
     run,
     setenv,
     addenv,
+    setcpuaffinity,
     success,
     withenv,
 
@@ -979,6 +995,7 @@ export
     @v_str,    # version number
     @raw_str,  # raw string with no interpolation/unescaping
     @NamedTuple,
+    @lazy_str, # lazy string
 
     # documentation
     @text_str,
@@ -990,6 +1007,7 @@ export
 
     # profiling
     @time,
+    @showtime,
     @timed,
     @timev,
     @elapsed,

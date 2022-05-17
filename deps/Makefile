@@ -39,8 +39,9 @@ unexport CONFIG_SITE
 
 DEP_LIBS :=
 
-# Always use libblastrampoline
+ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
+endif
 
 ifeq ($(USE_SYSTEM_CSL), 0)
 DEP_LIBS += csl
@@ -158,8 +159,10 @@ DEP_LIBS += lapack
 endif
 endif
 
+ifeq ($(USE_SYSTEM_LIBWHICH), 0)
 ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
+endif
 endif
 
 # list all targets
@@ -211,6 +214,7 @@ include $(SRCDIR)/blastrampoline.mk
 include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
+include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
@@ -221,7 +225,6 @@ include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
-include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/p7zip.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

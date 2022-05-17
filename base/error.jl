@@ -20,6 +20,8 @@
     throw(e)
 
 Throw an object as an exception.
+
+See also: [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
@@ -38,7 +40,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 Raise an `ErrorException` with the given message.
 """
 function error(s::Vararg{Any,N}) where {N}
-    @_noinline_meta
+    @noinline
     throw(ErrorException(Main.Base.string(s...)))
 end
 
@@ -105,7 +107,7 @@ end
 Get a backtrace object for the current program point.
 """
 function backtrace()
-    @_noinline_meta
+    @noinline
     # skip frame for backtrace(). Note that for this to work properly,
     # backtrace() itself must not be interpreted nor inlined.
     skip = 1
@@ -124,11 +126,11 @@ function catch_backtrace()
 end
 
 struct ExceptionStack <: AbstractArray{Any,1}
-    stack
+    stack::Array{Any,1}
 end
 
 """
-    current_exceptions(task=current_task(); [inclue_bt=true])
+    current_exceptions(task::Task=current_task(); [backtrace::Bool=true])
 
 Get the stack of exceptions currently being handled. For nested catch blocks
 there may be more than one current exception in which case the most recently
@@ -142,10 +144,10 @@ arbitrary task. This is useful for inspecting tasks which have failed due to
 uncaught exceptions.
 
 !!! compat "Julia 1.7"
-    This function went by the experiemental name `catch_stack()` in Julia
+    This function went by the experimental name `catch_stack()` in Julia
     1.1–1.6, and had a plain Vector-of-tuples as a return type.
 """
-function current_exceptions(task=current_task(); backtrace=true)
+function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
     formatted = Any[]
     stride = backtrace ? 3 : 1
@@ -159,7 +161,7 @@ end
 
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
-    @_noinline_meta
+    @noinline
     throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
 end
 
@@ -259,7 +261,7 @@ function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, eb
     state[1] < 1 && return nothing
     next_n = state[1]-1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
+    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (Libc.rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
 length(ebo::ExponentialBackOff) = ebo.n

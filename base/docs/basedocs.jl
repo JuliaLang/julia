@@ -23,6 +23,9 @@ as well as many great tutorials and learning resources:
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?cos`, or `?@time`, and press enter.
 Type `;` to enter shell mode, `]` to enter package mode.
+
+To exit the interactive session, type `CTRL-D` (press the
+control key together with the `d` key), or type `exit()`.
 """
 kw"help", kw"Julia", kw"julia", kw""
 
@@ -127,7 +130,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -179,8 +182,8 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.eval), since the generated
-code instead simply becomes part of the surrounding program.
+Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
@@ -277,6 +280,53 @@ julia> z
 kw"global"
 
 """
+    for outer
+
+Reuse an existing local variable for iteration in a `for` loop.
+
+See the [manual section on variable scoping](@ref scope-of-variables) for more information.
+
+See also [`for`](@ref).
+
+
+# Examples
+```jldoctest
+julia> function f()
+           i = 0
+           for i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+0
+```
+
+```jldoctest
+julia> function f()
+           i = 0
+           for outer i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+3
+```
+
+```jldoctest
+julia> i = 0 # global variable
+       for outer i = 1:3
+       end
+ERROR: syntax: no outer local variable declaration exists for "for outer"
+[...]
+```
+"""
+kw"outer"
+
+"""
     ' '
 
 A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
@@ -362,7 +412,7 @@ julia> push!(a, 2, 3)
 Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
-ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
@@ -427,22 +477,98 @@ kw"."
 """
     let
 
-`let` statements create a new hard scope block and introduce new variable bindings
-each time they run. Whereas assignments might reassign a new value to an existing value location,
-`let` always creates a new location.
-This difference is only detectable in the case of variables that outlive their scope via
-closures. The `let` syntax accepts a comma-separated series of assignments and variable
-names:
+`let` blocks create a new hard scope and optionally introduce new local bindings.
+
+Just like the [other scope constructs](@ref man-scope-table), `let` blocks define
+the block of code where newly introduced local variables are accessible.
+Additionally, the syntax has a special meaning for comma-separated assignments
+and variable names that may optionally appear on the same line as the `let`:
 
 ```julia
 let var1 = value1, var2, var3 = value3
     code
 end
 ```
-The assignments are evaluated in order, with each right-hand side evaluated in the scope
-before the new variable on the left-hand side has been introduced. Therefore it makes
-sense to write something like `let x = x`, since the two `x` variables are distinct and
-have separate storage.
+
+The variables introduced on this line are local to the `let` block and the assignments are
+evaluated in order, with each right-hand side evaluated in the scope
+without considering the name on the left-hand side. Therefore it makes
+sense to write something like `let x = x`, since the two `x` variables are distinct with
+the left-hand side locally shadowing the `x` from the outer scope. This can even
+be a useful idiom as new local variables are freshly created each time local scopes
+are entered, but this is only observable in the case of variables that outlive their
+scope via closures.
+
+By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
+not introduce scope or have the special assignment syntax.
+
+### Examples
+
+In the function below, there is a single `x` that is iteratively updated three times by the `map`.
+The closures returned all reference that one `x` at its final value:
+
+```jldoctest
+julia> function test_outer_x()
+           x = 0
+           map(1:3) do _
+               x += 1
+               return ()->x
+           end
+       end
+test_outer_x (generic function with 1 method)
+
+julia> [f() for f in test_outer_x()]
+3-element Vector{Int64}:
+ 3
+ 3
+ 3
+```
+
+If, however, we add a `let` block that introduces a _new_ local variable we will end up
+with three distinct variables being captured (one at each iteration) even though we
+chose to use (shadow) the same name.
+
+```jldoctest
+julia> function test_let_x()
+           x = 0
+           map(1:3) do _
+               x += 1
+               let x = x
+                   return ()->x
+               end
+           end
+       end
+test_let_x (generic function with 1 method)
+
+julia> [f() for f in test_let_x()]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+All scope constructs that introduce new local variables behave this way
+when repeatedly run; the distinctive feature of `let` is its ability
+to succinctly declare new `local`s that may shadow outer variables of the same
+name. For example, directly using the argument of the `do` function similarly
+captures three distinct variables:
+
+```jldoctest
+julia> function test_do_x()
+           map(1:3) do x
+               return ()->x
+           end
+       end
+test_do_x (generic function with 1 method)
+
+julia> [f() for f in test_do_x()]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+
 """
 kw"let"
 
@@ -755,6 +881,10 @@ kw"?", kw"?:"
 `for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
 
+The iteration variable is always a new variable, even if a variable of the same name
+exists in the enclosing scope.
+Use [`outer`](@ref) to reuse an existing local variable for iteration.
+
 # Examples
 ```jldoctest
 julia> for i in [1, 4, 0]
@@ -974,12 +1104,22 @@ kw"..."
     ;
 
 `;` has a similar role in Julia as in many C-like languages, and is used to delimit the
-end of the previous statement. `;` is not necessary after new lines, but can be used to
+end of the previous statement.
+
+`;` is not necessary at the end of a line, but can be used to
 separate statements on a single line or to join statements into a single expression.
-`;` is also used to suppress output printing in the REPL and similar interfaces.
+
+Adding `;` at the end of a line in the REPL will suppress printing the result of that expression.
+
+In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
+
+While constructing arrays, if the arguments inside the square brackets are separated by `;`
+then their contents are vertically concatenated together.
+
+In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
 # Examples
-```julia
+```jldoctest
 julia> function foo()
            x = "Hello, "; x *= "World!"
            return x
@@ -993,6 +1133,19 @@ julia> foo();
 
 julia> bar()
 "Hello, Mars!"
+
+julia> function plot(x, y; style="solid", width=1, color="black")
+           ###
+       end
+
+julia> [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+shell> echo hello
+hello
 ```
 """
 kw";"
@@ -1068,7 +1221,7 @@ first argument:
   with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
 - as a 2-element tuple, containing a string of module IR and a string representing the name
   of the entry-point function to call;
-- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
+- as a 2-element tuple, but with the module provided as an `Vector{UInt8}` with bitcode.
 
 Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
@@ -1162,10 +1315,10 @@ fields of the type to be set after construction. See the manual section on
 kw"mutable struct"
 
 """
-    new
+    new, or new{A,B,...}
 
-Special function available to inner constructors which created a new object
-of the type.
+Special function available to inner constructors which creates a new object
+of the type. The form new{A,B,...} explicitly specifies values of parameters for parametric types.
 See the manual section on [Inner Constructor Methods](@ref man-inner-constructor-methods)
 for more information.
 """
@@ -1507,8 +1660,9 @@ DomainError
 """
     Task(func)
 
-Create a `Task` (i.e. coroutine) to execute the given function `func` (which must be
-callable with no arguments). The task exits when this function returns.
+Create a `Task` (i.e. coroutine) to execute the given function `func` (which
+must be callable with no arguments). The task exits when this function returns.
+The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
 # Examples
 ```jldoctest
@@ -1867,9 +2021,8 @@ julia> eval(:x)
 `Symbol`s can also be constructed from strings or other values by calling the
 constructor `Symbol(x...)`.
 
-`Symbol`s are immutable and should be compared using `===`.
-The implementation re-uses the same object for all `Symbol`s with the same name,
-so comparison tends to be efficient (it can just compare pointers).
+`Symbol`s are immutable and their implementation re-uses the same object for all `Symbol`s
+with the same name.
 
 Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
 iteration over characters.
@@ -1980,24 +2133,23 @@ setfield!
 
 These atomically perform the operations to simultaneously get and set a field:
 
-    y = getfield!(value, name)
+    y = getfield(value, name)
     setfield!(value, name, x)
     return y
-```
 """
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol])
-    modifyfield!(value, i::Int, op, x, [order::Symbol])
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
 These atomically perform the operations to get and set a field after applying
 the function `op`.
 
-    y = getfield!(value, name)
+    y = getfield(value, name)
     z = op(y, x)
     setfield!(value, name, z)
-    return y, z
+    return y => z
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
@@ -2006,18 +2158,19 @@ modifyfield!
 
 """
     replacefield!(value, name::Symbol, expected, desired,
-        [success_order::Symbol, [fail_order::Symbol=success_order]) =>
-        (old, Bool)
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+    replacefield!(value, i::Int, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
 These atomically perform the operations to get and conditionally set a field to
 a given value.
 
-    y = getfield!(value, name, fail_order)
+    y = getfield(value, name, fail_order)
     ok = y === expected
     if ok
         setfield!(value, name, desired, success_order)
     end
-    return y, ok
+    return (; old = y, success = ok)
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
@@ -2496,14 +2649,14 @@ union [`Union{}`](@ref) is the bottom type of Julia.
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 :: IntOrString
-1
+julia> 1 isa IntOrString
+true
 
-julia> "Hello!" :: IntOrString
-"Hello!"
+julia> "Hello!" isa IntOrString
+true
 
-julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
+julia> 1.0 isa IntOrString
+false
 ```
 """
 Union
@@ -2704,6 +2857,9 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
 
+!!! compat "Julia 1.8"
+    `setproperty!` on modules requires at least Julia 1.8.
+
 See also [`setfield!`](@ref Core.setfield!),
 [`propertynames`](@ref Base.propertynames) and
 [`getproperty`](@ref Base.getproperty).
@@ -2724,9 +2880,14 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
+The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
 max, c, :sequentially_consistent))`, where the first argument must be a
 `getfield` expression and is modified atomically.
+
+Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
+`f` of the object `x` by default.  In particular, unlike the default behavior of
+[`setproperty!`](@ref Base.setproperty!), the `convert` function is not called
+automatically.
 
 See also [`modifyfield!`](@ref Core.modifyfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2786,6 +2947,13 @@ StridedVecOrMat
     Module
 
 A `Module` is a separate global variable workspace. See [`module`](@ref) and the [manual section about modules](@ref modules) for details.
+
+    Module(name::Symbol=:anonymous, std_imports=true, default_names=true)
+
+Return a module with the specified name. A `baremodule` corresponds to `Module(:ModuleName, false)`
+
+An empty module containing no names at all can be created with `Module(:ModuleName, false, false)`.
+This module will not import `Base` or `Core` and does not contain a reference to itself.
 """
 Module
 
@@ -2862,5 +3030,42 @@ julia> \"""
 See also [`"`](@ref \")
 """
 kw"\"\"\""
+
+"""
+    donotdelete(args...)
+
+This function prevents dead-code elimination (DCE) of itself and any arguments
+passed to it, but is otherwise the lightest barrier possible. In particular,
+it is not a GC safepoint, does model an observable heap effect, does not expand
+to any code itself and may be re-ordered with respect to other side effects
+(though the total number of executions may not change).
+
+A useful model for this function is that it hashes all memory `reachable` from
+args and escapes this information through some observable side-channel that does
+not otherwise impact program behavior. Of course that's just a model. The
+function does nothing and returns `nothing`.
+
+This is intended for use in benchmarks that want to guarantee that `args` are
+actually computed. (Otherwise DCE may see that the result of the benchmark is
+unused and delete the entire benchmark code).
+
+**Note**: `donotdelete` does not affect constant folding. For example, in
+          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+          the code is semantically equivalent to `donotdelete(2).`
+
+# Examples
+
+```julia
+function loop()
+    for i = 1:1000
+        # The complier must guarantee that there are 1000 program points (in the correct
+        # order) at which the value of `i` is in a register, but has otherwise
+        # total control over the program.
+        donotdelete(i)
+    end
+end
+```
+"""
+Base.donotdelete
 
 end

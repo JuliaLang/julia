@@ -42,7 +42,7 @@ function replace_ref_begin_end_!(ex, withex)
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S)),:($lastindex($S,$n))))
+                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))))
                     used_S |= used
                     ex.args[j] = exj
                     if isa(exj,Expr) && exj.head === :...
@@ -128,7 +128,9 @@ macro view(ex)
         if Meta.isexpr(ex, :ref)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
-            @assert Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref)
+            if !(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
+                error("invalid expression")
+            end
             ex.args[2] = Expr(:call, view, ex.args[2].args...)
         end
         Expr(:&&, true, esc(ex))
@@ -213,6 +215,8 @@ Convert every array-slicing operation in the given expression
 to return a view. Scalar indices, non-array types, and
 explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
+
+Similarly, `@views` converts string slices into [`SubString`](@ref) views.
 
 !!! note
     The `@views` macro only affects `array[...]` expressions

@@ -703,7 +703,7 @@ end
 indexoffset(i) = first(i)-1
 indexoffset(::Colon) = 0
 
-@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,UnitRange{Int}})
+@propagate_inbounds function setindex!(B::BitArray, X::AbstractArray, J0::Union{Colon,AbstractUnitRange{Int}})
     _setindex!(IndexStyle(B), B, X, to_indices(B, (J0,))[1])
 end
 
@@ -947,6 +947,7 @@ function _deleteat!(B::BitVector, i::Int)
 end
 
 function deleteat!(B::BitVector, i::Integer)
+    i isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
     i = Int(i)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
@@ -954,7 +955,7 @@ function deleteat!(B::BitVector, i::Integer)
     return _deleteat!(B, i)
 end
 
-function deleteat!(B::BitVector, r::UnitRange{Int})
+function deleteat!(B::BitVector, r::AbstractUnitRange{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
@@ -987,25 +988,27 @@ function deleteat!(B::BitVector, inds)
 
     (p, s) = y
     checkbounds(B, p)
+    p isa Bool && throw(ArgumentError("invalid index $p of type Bool"))
     q = p+1
     new_l -= 1
     y = iterate(inds, s)
     while y !== nothing
         (i, s) = y
         if !(q <= i <= n)
+            i isa Bool && throw(ArgumentError("invalid index $i of type Bool"))
             i < q && throw(ArgumentError("indices must be unique and sorted"))
             throw(BoundsError(B, i))
         end
         new_l -= 1
         if i > q
-            copy_chunks!(Bc, p, Bc, Int(q), Int(i-q))
+            copy_chunks!(Bc, Int(p), Bc, Int(q), Int(i-q))
             p += i-q
         end
         q = i+1
         y = iterate(inds, s)
     end
 
-    q <= n && copy_chunks!(Bc, p, Bc, Int(q), Int(n-q+1))
+    q <= n && copy_chunks!(Bc, Int(p), Bc, Int(q), Int(n-q+1))
 
     delta_k = num_bit_chunks(new_l) - length(Bc)
     delta_k < 0 && _deleteend!(Bc, -delta_k)
@@ -1019,7 +1022,55 @@ function deleteat!(B::BitVector, inds)
     return B
 end
 
+function deleteat!(B::BitVector, inds::AbstractVector{Bool})
+    length(inds) == length(B) || throw(BoundsError(B, inds))
+
+    n = new_l = length(B)
+    y = findfirst(inds)
+    y === nothing && return B
+
+    Bc = B.chunks
+
+    p = y
+    s = y + 1
+    checkbounds(B, p)
+    q = p + 1
+    new_l -= 1
+    y = findnext(inds, s)
+    while y !== nothing
+        i = y
+        s = y + 1
+        new_l -= 1
+        if i > q
+            copy_chunks!(Bc, Int(p), Bc, Int(q), Int(i-q))
+            p += i - q
+        end
+        q = i + 1
+        y = findnext(inds, s)
+    end
+
+    q <= n && copy_chunks!(Bc, Int(p), Bc, Int(q), Int(n - q + 1))
+
+    delta_k = num_bit_chunks(new_l) - length(Bc)
+    delta_k < 0 && _deleteend!(Bc, -delta_k)
+
+    B.len = new_l
+
+    if new_l > 0
+        Bc[end] &= _msk_end(new_l)
+    end
+
+    return B
+end
+
+keepat!(B::BitVector, inds) = _keepat!(B, inds)
+keepat!(B::BitVector, inds::AbstractVector{Bool}) = _keepat!(B, inds)
+
 function splice!(B::BitVector, i::Integer)
+    # TODO: after deprecation remove the four lines below
+    #       as v = B[i] is enough to do both bounds checking
+    #       and Bool check then just pass Int(i) to _deleteat!
+    i isa Bool && depwarn("passing Bool as an index is deprecated", :splice!)
     i = Int(i)
     n = length(B)
     1 <= i <= n || throw(BoundsError(B, i))
@@ -1031,9 +1082,11 @@ end
 
 const _default_bit_splice = BitVector()
 
-function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
-    _splice_int!(B, isa(r, UnitRange{Int}) ? r : Int(r), ins)
+function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins::AbstractArray = _default_bit_splice)
+    r isa Bool && depwarn("passing Bool as an index is deprecated", :splice!)
+    _splice_int!(B, isa(r, AbstractUnitRange{Int}) ? r : Int(r), ins)
 end
+
 function _splice_int!(B::BitVector, r, ins)
     n = length(B)
     i_f, i_l = first(r), last(r)
@@ -1073,7 +1126,7 @@ function _splice_int!(B::BitVector, r, ins)
     return v
 end
 
-function splice!(B::BitVector, r::Union{UnitRange{Int}, Integer}, ins)
+function splice!(B::BitVector, r::Union{AbstractUnitRange{Int}, Integer}, ins)
     Bins = BitVector(undef, length(ins))
     i = 1
     for x in ins
@@ -1759,7 +1812,7 @@ function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
         length(B[j]) == height ||
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: $j-th argument has length $(length(B[j])), should have $height"))
     end
     M = BitMatrix(undef, height, length(B))
     for j = 1:length(B)
@@ -1792,7 +1845,7 @@ function hcat(A::Union{BitMatrix,BitVector}...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
         size(Aj, 1) == nrows ||
-            throw(DimensionMismatch("row lengths must match"))
+            throw(DimensionMismatch("row lengths must match: $j-th element has first dim $(size(Aj, 1)), should have $nrows"))
     end
 
     B = BitMatrix(undef, nrows, ncols)
@@ -1818,7 +1871,7 @@ function vcat(A::BitMatrix...)
     ncols = size(A[1], 2)
     for j = 2:nargs
         size(A[j], 2) == ncols ||
-            throw(DimensionMismatch("column lengths must match"))
+        throw(DimensionMismatch("column lengths must match: $j-th element has second dim $(size(A[j], 2)), should have $ncols"))
     end
     B = BitMatrix(undef, nrows, ncols)
     Bc = B.chunks
@@ -1860,3 +1913,10 @@ function read!(s::IO, B::BitArray)
 end
 
 sizeof(B::BitArray) = sizeof(B.chunks)
+
+function _split_rest(a::Union{Vector, BitVector}, n::Int)
+    _check_length_split_rest(length(a), n)
+    last_n = a[end-n+1:end]
+    resize!(a, length(a) - n)
+    return a, last_n
+end
