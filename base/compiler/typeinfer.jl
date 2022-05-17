@@ -928,13 +928,17 @@ end
 
 Infer a `method` and return an optimized `IRCode` with inferred `returntype` on success.
 """
-function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
+function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     frame = typeinf_frame(interp, method, atype, sparams, false)
     frame === nothing && return nothing, Any
     (; result) = frame
     opt_params = OptimizationParams(interp)
     opt = OptimizationState(frame, opt_params, interp)
-    ir = run_passes(opt.src, opt, result)
+    if run_optimizer
+        ir = run_passes(opt.src, opt, result)
+    else
+        ir = run_minimal_passes(opt.src, opt, result)
+    end
     rt = widenconst(ignorelimited(result.result))
     return ir, rt
 end

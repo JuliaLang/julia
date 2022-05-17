@@ -337,9 +337,14 @@ end
 
 @testset "code_ircode" begin
     @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
-    @test Base.code_ircode() do f
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize = false))) isa
+          Compiler.IRCode
+
+    function demo(f)
         f()
         f()
         f()
-    end |> only |> first isa Compiler.IRCode
+    end
+    @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize = false))) isa Compiler.IRCode
 end

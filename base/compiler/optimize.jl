@@ -535,6 +535,26 @@ function ipo_escape_cache(mi_cache::MICache) where MICache
 end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
+"""
+    run_minimal_passes(
+        ci::CodeInfo,
+        sv::OptimizationState,
+        caller::InferenceResult,
+    ) -> ir::IRCode
+
+Transform a `CodeInfo` to an `IRCode`.  Like [`run_passes`](@ref) but it does not run the
+majority of optimization passes.
+"""
+function run_minimal_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
+    @timeit "convert"   ir = convert_to_ircode(ci, sv)
+    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
+    @timeit "compact"   ir = compact!(ir)
+    if JLOptions().debug_level == 2
+        @timeit "verify" (verify_ir(ir); verify_linetable(ir.linetable))
+    end
+    return ir
+end
+
 function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
     @timeit "convert"   ir = convert_to_ircode(ci, sv)
     @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)

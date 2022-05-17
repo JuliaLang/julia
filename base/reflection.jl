@@ -1326,6 +1326,7 @@ function code_ircode(
     @nospecialize(types = default_tt(f));
     world = get_world_counter(),
     interp = Core.Compiler.NativeInterpreter(world),
+    optimize::Bool = true,
 )
     if isa(f, Core.OpaqueClosure)
         error("OpaqueClosure not supported")
@@ -1337,7 +1338,7 @@ function code_ircode(
     else
         tt = Tuple{ft,types...}
     end
-    return code_ircode_by_type(tt; world, interp)
+    return code_ircode_by_type(tt; world, interp, optimize)
 end
 
 """
@@ -1350,6 +1351,7 @@ function code_ircode_by_type(
     @nospecialize(tt::Type);
     world = get_world_counter(),
     interp = Core.Compiler.NativeInterpreter(world),
+    optimize::Bool = true,
 )
     ccall(:jl_is_in_pure_context, Bool, ()) &&
         error("code reflection cannot be used from generated functions")
@@ -1359,8 +1361,13 @@ function code_ircode_by_type(
     for match in matches
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, tt, match.sparams)
-        (code, ty) =
-            Core.Compiler.typeinf_ircode(interp, meth, match.spec_types, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_ircode(
+            interp,
+            meth,
+            match.spec_types,
+            match.sparams,
+            optimize,
+        )
         if code === nothing
             push!(asts, meth => Any)
         else
