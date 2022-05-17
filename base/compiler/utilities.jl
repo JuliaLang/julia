@@ -52,6 +52,19 @@ function _cumsum!(ys)
     return ys
 end
 
+function isincreasing(xs; by = identity)
+    y = iterate(xs)
+    y === nothing && return true
+    x1, state = y
+    while true
+        y = iterate(xs, state)
+        y === nothing && return true
+        x2, state = y
+        isless(by(x1), by(x2)) || return false
+        x1 = x2
+    end
+end
+
 ###########
 # scoping #
 ###########

@@ -374,13 +374,26 @@ end
 ### CFG manipulation tools
 ###
 
-function new_singleton_blocks(info)
-    ibbs = Int[]
-    Compiler.foreach_allocated_new_block(info) do ibb
-        push!(ibbs, ibb)
+function allocate_branches!(ir::Compiler.IRCode, positions_nbranches)
+    blocks = Core.Compiler.allocate_goto_sequence!(
+        ir,
+        [p => 2n for (p, n) in positions_nbranches],
+    )
+    for sp in Core.Compiler.split_positions(blocks)
+        for (n, block) in enumerate(Compiler.inserted_blocks(sp))
+            if isodd(n)
+                ibb1 = block.newbb
+                ibb3 = ibb1 + 2
+                b1 = ir.cfg.blocks[ibb1]
+                ir.stmts.inst[last(b1.stmts)] = GotoIfNot(false, ibb3)
+                Core.Compiler.cfg_insert_edge!(ir.cfg, ibb1, ibb3)
+            end
+        end
     end
-    return ibbs
+    return blocks
 end
+
+inserted_block_ranges(info) = [sp.prebb:sp.postbb for sp in Compiler.split_positions(info)]
 
 """
     inlineinfo(ir::IRCode, line::Integer)
@@ -394,211 +407,157 @@ inlineinfo(ir, line) =
     end
 
 """
-    check_linetable(ir, ir0, info, statement_positions)
+    check_linetable(ir, ir0, info)
 
 Test `ir.linetable` invariances of `allocate_new_blocks!` where the arguments are used as in
 
 ```julia
 ir = copy(ir0)
-info = Compiler.allocate_new_blocks!(ir, statement_positions)
+info = Compiler.allocate_new_blocks!(ir, ...)
 ```
 
 or some equivalent code.
 """
-function check_linetable(ir, ir0, info, statement_positions)
-    @testset "goto nodes reflect original statement lines" begin
-        previndex = Ref(0)
-        Compiler.foreach_allocated_new_block(info) do ibb1
-            i = previndex[] += 1
-            origpos = statement_positions[i]
-            @testset "statement_positions[$i] = $origpos" begin
-                ibb0 = ibb1 - 1
-                ibb2 = ibb1 + 1
-                b0 = ir.cfg.blocks[ibb0]
-                b1 = ir.cfg.blocks[ibb1]  # newly added BB
-                b2 = ir.cfg.blocks[ibb2]
-                goto0 = ir.stmts[last(b0.stmts)]
-                goto1 = ir.stmts[last(b1.stmts)]
-                moved = ir.stmts[first(b2.stmts)]
-                @test goto0[:line] == goto1[:line] == moved[:line]
+function check_linetable(ir, ir0, info)
+    (; positions_nblocks) = info
+    function splabel((; index))
+        origpos, _ = positions_nblocks[index]
+        "Statement $origpos (= first(positions_nblocks[$index]))"
+    end
+    iblabel((; nth)) = "$nth-th inserted block at this split point"
+    @testset "Goto nodes reflect original statement lines" begin
+        @testset "$(splabel(sp))" for sp in Compiler.split_positions(info)
+            origpos, _ = positions_nblocks[sp.index]
+            moved = ir.stmts[first(ir.cfg.blocks[sp.postbb].stmts)]
 
+            @testset "Moved statement has the same inline info stack" begin
                 orig = ir0.stmts[origpos][:line]
                 @test inlineinfo(ir, moved[:line]) == inlineinfo(ir0, orig)
+            end
+
+            @testset "Pre-split block" begin
+                goto = ir.stmts[last(ir.cfg.blocks[sp.prebb].stmts)]
+                @test goto[:line] == moved[:line]
+            end
+
+            @testset "$(iblabel(ib))" for ib in Compiler.inserted_blocks(sp)
+                goto = ir.stmts[last(ir.cfg.blocks[ib.newbb].stmts)]
+                @test goto[:line] == moved[:line]
             end
         end
     end
 end
 
-@testset "Add one block to a single-block IR" begin
+@testset "Split a block in two" begin
     ir0 = singleblock_ircode(3)
     ir = copy(ir0)
-    statement_positions = [2]
-    info = Compiler.allocate_gotoifnot_sequence!(ir, statement_positions)
+    info = Compiler.allocate_goto_sequence!(ir, [2 => 0])
     verify_ircode(ir)
-    @test new_singleton_blocks(info) == [2]
+    @test inserted_block_ranges(info) == [1:2]
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2, 3]),
-            BasicBlock(Compiler.StmtRange(3, 3), [1], [3]),
-            BasicBlock(Compiler.StmtRange(4, 5), [1, 2], Int64[]),
+            BasicBlock(Compiler.StmtRange(1, 2), Int[], [2]),
+            BasicBlock(Compiler.StmtRange(3, 4), [1], Int[]),
         ],
-        [3, 4],
+        [3],
     )
-    (b0, b1, b2) = ir.cfg.blocks
-    @test ir.stmts.inst[last(b0.stmts)] == GotoIfNot(false, 3)
-    @test ir.stmts.inst[last(b1.stmts)] == GotoNode(3)
-    check_linetable(ir, ir0, info, statement_positions)
+    b1, _ = ir.cfg.blocks
+    @test ir.stmts[last(b1.stmts)][:inst] == GotoNode(2)
+    check_linetable(ir, ir0, info)
 end
 
-@testset "Add two blocks to a single-block IR" begin
+@testset "Add one branch (two new blocks) to a single-block IR" begin
     ir0 = singleblock_ircode(3)
     ir = copy(ir0)
-    statement_positions = [1, 2, 3]
-    info = Compiler.allocate_gotoifnot_sequence!(ir, statement_positions)
+    info = allocate_branches!(ir, [2 => 1])
     verify_ircode(ir)
-    @test new_singleton_blocks(info) == 2:2:6
+    @test inserted_block_ranges(info) == [1:4]
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 1), Int64[], [2, 3]),
-            BasicBlock(Compiler.StmtRange(2, 2), [1], [3]),
-            BasicBlock(Compiler.StmtRange(3, 4), [1, 2], [4, 5]),
-            BasicBlock(Compiler.StmtRange(5, 5), [3], [5]),
-            BasicBlock(Compiler.StmtRange(6, 7), [3, 4], [6, 7]),
-            BasicBlock(Compiler.StmtRange(8, 8), [5], [7]),
-            BasicBlock(Compiler.StmtRange(9, 9), [5, 6], Int64[]),
+            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2])
+            BasicBlock(Compiler.StmtRange(3, 3), [1], [3, 4])
+            BasicBlock(Compiler.StmtRange(4, 4), [2], [4])
+            BasicBlock(Compiler.StmtRange(5, 6), [3, 2], Int64[])
         ],
-        [2, 3, 5, 6, 8, 9],
+        [3, 4, 5],
     )
-    @test [ir.stmts.inst[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == [
-        GotoIfNot(false, 3),
-        GotoNode(3),
-        GotoIfNot(false, 5),
-        GotoNode(5),
-        GotoIfNot(false, 7),
-        GotoNode(7),
-    ]
-    check_linetable(ir, ir0, info, statement_positions)
+    (b1, b2, b3, _) = ir.cfg.blocks
+    @test ir.stmts.inst[last(b1.stmts)] == GotoNode(2)
+    @test ir.stmts.inst[last(b2.stmts)] == GotoIfNot(false, 4)
+    @test ir.stmts.inst[last(b3.stmts)] == GotoNode(4)
+    check_linetable(ir, ir0, info)
 end
 
-@testset "Add two blocks to a three-block IR" begin
+@testset "Insert two more blocks to a two-block IR" begin
     ir0 = singleblock_ircode(3)
-    @testset "Add one block to a single-block IR" begin
-        info = Compiler.allocate_gotoifnot_sequence!(ir0, [2])
+    @testset "Split a block in two" begin
+        info = Compiler.allocate_goto_sequence!(ir0, [2 => 0])
         verify_ircode(ir0)
-        @test length(ir0.stmts) == 5
-        @test new_singleton_blocks(info) == [2]
+        @test inserted_block_ranges(info) == [1:2]
     end
 
     ir = copy(ir0)
-    statement_positions = [2, 3]
-    info = Compiler.allocate_gotoifnot_sequence!(ir, statement_positions)
-    @test length(ir.stmts) == 9
-    @test new_singleton_blocks(info) == [2, 5]
+    info = Compiler.allocate_goto_sequence!(ir, [2 => 1, 4 => 1])
+    @test length(ir.stmts) == 8
+    @test inserted_block_ranges(info) == [1:3, 4:6]
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2, 3]),
-            BasicBlock(Compiler.StmtRange(3, 3), [1], [3]),
-            BasicBlock(Compiler.StmtRange(4, 4), [1, 2], [4, 7]),
-            BasicBlock(Compiler.StmtRange(5, 5), [3], [5, 6]),
-            BasicBlock(Compiler.StmtRange(6, 6), [4], [6]),
-            BasicBlock(Compiler.StmtRange(7, 7), [4, 5], [7]),
-            BasicBlock(Compiler.StmtRange(8, 9), [3, 6], Int64[]),
-        ],
-        [3, 4, 5, 6, 7, 8],
-    )
-    @test [ir.stmts.inst[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == [
-        GotoIfNot(false, 3),
-        GotoNode(3),
-        GotoIfNot(false, 7),
-        GotoIfNot(false, 6),
-        GotoNode(6),
-        GotoNode(7),
-    ]
-    check_linetable(ir, ir0, info, statement_positions)
-end
-
-@testset "Add blocks to the same locations" begin
-    ir0 = singleblock_ircode(3)
-    ir = copy(ir0)
-    statement_positions = [2, 2, 3, 3]
-    info = Compiler.allocate_gotoifnot_sequence!(ir, statement_positions)
-    verify_ircode(ir)
-    @test length(ir.stmts) == 11
-    @test new_singleton_blocks(info) == 2:2:8
-    @test ir.cfg == CFG(
-        [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2, 3])
+            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2])
             BasicBlock(Compiler.StmtRange(3, 3), [1], [3])
-            BasicBlock(Compiler.StmtRange(4, 4), [1, 2], [4, 5])
-            BasicBlock(Compiler.StmtRange(5, 5), [3], [5])
-            BasicBlock(Compiler.StmtRange(6, 7), [3, 4], [6, 7])
-            BasicBlock(Compiler.StmtRange(8, 8), [5], [7])
-            BasicBlock(Compiler.StmtRange(9, 9), [5, 6], [8, 9])
-            BasicBlock(Compiler.StmtRange(10, 10), [7], [9])
-            BasicBlock(Compiler.StmtRange(11, 11), [7, 8], Int64[])
+            BasicBlock(Compiler.StmtRange(4, 4), [2], [4])
+            BasicBlock(Compiler.StmtRange(5, 6), [3], [5])
+            BasicBlock(Compiler.StmtRange(7, 7), [4], [6])
+            BasicBlock(Compiler.StmtRange(8, 8), [5], Int64[])
         ],
-        [3, 4, 5, 6, 8, 9, 10, 11],
+        [3, 4, 5, 7, 8],
     )
-    @test [ir.stmts.inst[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == [
-        GotoIfNot(false, 3),
-        GotoNode(3),
-        GotoIfNot(false, 5),
-        GotoNode(5),
-        GotoIfNot(false, 7),
-        GotoNode(7),
-        GotoIfNot(false, 9),
-        GotoNode(9),
-    ]
-    check_linetable(ir, ir0, info, statement_positions)  # FIXME
+    @test [ir.stmts.inst[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == GotoNode.(2:6)
+    check_linetable(ir, ir0, info)
 end
 
-@testset "Add a block to pre-compact IR (attach before)" begin
+@testset "Split a block of a pre-compact IR (attach before)" begin
     ir0 = singleblock_ircode(3)
     st = Expr(:call, :new_instruction)
     Compiler.insert_node!(ir0, 2, Compiler.NewInstruction(st, Any))
 
     ir = copy(ir0)
-    statement_positions = [2]
-    info = Compiler.allocate_gotoifnot_sequence!(ir, statement_positions)
-    @test new_singleton_blocks(info) == [2]
+    info = allocate_branches!(ir, [2 => 0])
+    @test inserted_block_ranges(info) == [1:2]
     verify_ircode(ir)
-    check_linetable(ir, ir0, info, statement_positions)
+    check_linetable(ir, ir0, info)
 
     ir = Core.Compiler.compact!(ir)
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 3), Int64[], [2, 3]),
-            BasicBlock(Compiler.StmtRange(4, 4), [1], [3]),
-            BasicBlock(Compiler.StmtRange(5, 6), [1, 2], Int64[]),
+            BasicBlock(Compiler.StmtRange(1, 3), Int64[], [2])
+            BasicBlock(Compiler.StmtRange(4, 5), [1], Int64[])
         ],
-        [4, 5],
+        [4],
     )
     @test ir.stmts[2][:inst] == st
 end
 
-@testset "Add a block to pre-compact IR (attach after)" begin
+@testset "Split a block of a pre-compact IR (attach after)" begin
     ir0 = singleblock_ircode(3)
     st = Expr(:call, :new_instruction)
     Compiler.insert_node!(ir0, 2, Compiler.NewInstruction(st, Any), true)
 
     ir = copy(ir0)
-    statement_positions = [2]
-    info = Compiler.allocate_gotoifnot_sequence!(ir, statement_positions)
-    @test new_singleton_blocks(info) == [2]
+    info = allocate_branches!(ir, [2 => 0])
+    @test inserted_block_ranges(info) == [1:2]
     verify_ircode(ir)
-    check_linetable(ir, ir0, info, statement_positions)
+    check_linetable(ir, ir0, info)
 
     ir = Core.Compiler.compact!(ir)
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2, 3]),
-            BasicBlock(Compiler.StmtRange(3, 3), [1], [3]),
-            BasicBlock(Compiler.StmtRange(4, 6), [1, 2], Int64[]),
+            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2])
+            BasicBlock(Compiler.StmtRange(3, 5), [1], Int64[])
         ],
-        [3, 4],
+        [3],
     )
-    @test ir.stmts[5][:inst] == st
+    @test ir.stmts[4][:inst] == st
 end
