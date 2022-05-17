@@ -903,3 +903,21 @@ end
         @test contains(err_str, "maybe you meant `import/using .Bar`")
     end
 end
+
+for (expr, errmsg) in
+    [
+        (:(struct Foo <: 1 end),       "can only subtype data types"),
+        (:(struct Foo <: Float64 end), "can only subtype abstract types"),
+        (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
+        (:(struct Foo <: Tuple{Float64} end), "cannot subtype a tuple type"),
+        (:(struct Foo <: NamedTuple{(:a,), Tuple{Int64}} end), "cannot subtype a named tuple type"),
+        (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
+        (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
+        (:(struct Foo <: typeof(Core.apply_type) end), "cannot add subtypes to Core.Builtin"),
+    ]
+    err = try @eval $expr
+    catch e
+        e
+    end
+    @test contains(sprint(showerror, err), errmsg)
+end

@@ -1259,3 +1259,23 @@ end
 @test fully_eliminated() do
     return maybe_error_int(1)
 end
+
+# Test that effect modeling for return_type doesn't incorrectly pick
+# up the effects of the function being analyzed
+function f_throws()
+    error()
+end
+
+@noinline function return_type_unused(x)
+    Core.Compiler.return_type(f_throws, Tuple{})
+    return x+1
+end
+
+@test fully_eliminated(Tuple{Int}) do x
+    return_type_unused(x)
+    return nothing
+end
+
+# Test that inlining doesn't accidentally delete a bad return_type call
+f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
+@test_throws MethodError f_bad_return_type()

@@ -15,7 +15,7 @@ Language changes
   for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
   `getfield`. ([#44137])
 * A few basic operators have been generalized to more naturally support vector space structures:
-  `+(x) = x`, unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
+  unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
   binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
   left- and right-division fall back to multiplication with the inverse from left and right,
   respectively, as stated in the docstring. ([#44564])
@@ -64,6 +64,8 @@ Library changes
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
+* `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
+  a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 
 Standard library changes
 ------------------------
@@ -80,6 +82,8 @@ Standard library changes
   system image with other BLAS/LAPACK libraries is not
   supported. Instead, it is recommended that the LBT mechanism be used
   for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `lu` now supports a new pivoting strategy `RowNonZero()` that chooses
+   the first non-zero pivot element, for use with new arithmetic types and for pedagogy ([#44571]).
 * `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
 
 #### Markdown

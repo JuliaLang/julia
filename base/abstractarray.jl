@@ -101,12 +101,24 @@ end
 
 Return `true` if the indices of `A` start with something other than 1 along any axis.
 If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+
+See also [`require_one_based_indexing`](@ref).
 """
 has_offset_axes(A) = _tuple_any(x->Int(first(x))::Int != 1, axes(A))
 has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
 has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
 has_offset_axes(::Colon) = false
 
+"""
+    require_one_based_indexing(A::AbstractArray)
+    require_one_based_indexing(A,B...)
+
+Throw an `ArgumentError` if the indices of any argument start with something other than `1` along any axis.
+See also [`has_offset_axes`](@ref).
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
+"""
 require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
 
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
