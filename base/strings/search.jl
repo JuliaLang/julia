@@ -179,7 +179,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
         if i === nothing return 0 end
         ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
-        matched = all(splat(==), zip(SubString(s, ii), a))
+        matched = all(Splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
         i = ii
     end
@@ -435,7 +435,7 @@ function _rsearchindex(s::AbstractString,
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
-        matched = all(splat(==), zip(a, (x[2] for x in b)))
+        matched = all(Splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
             return nextind(s, popfirst!(b)[1])::Int

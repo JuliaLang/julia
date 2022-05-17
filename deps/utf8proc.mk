@@ -29,7 +29,7 @@ $(eval $(call staged-install, \
 	UTF8PROC_INSTALL,,,))
 
 clean-utf8proc:
-	-rm $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
 
 get-utf8proc: $(UTF8PROC_SRC_FILE)

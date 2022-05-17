@@ -50,8 +50,8 @@ Bidiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 
-_lucopy(A::Bidiagonal, T)     = copy_oftype(Tridiagonal(A), T)
-_lucopy(A::Diagonal, T)       = copy_oftype(Tridiagonal(A), T)
+_lucopy(A::Bidiagonal, T)     = copymutable_oftype(Tridiagonal(A), T)
+_lucopy(A::Diagonal, T)       = copymutable_oftype(Tridiagonal(A), T)
 function _lucopy(A::SymTridiagonal, T)
     du = copy_similar(_evview(A), T)
     dl = copy.(transpose.(du))
@@ -292,16 +292,65 @@ function (-)(A::UniformScaling, B::Diagonal{<:Number})
     Diagonal(A.λ .- B.diag)
 end
 
-rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    rmul!(full!(A), adjB)
-*(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    *(copyto!(similar(parent(A)), A), adjB)
-*(A::BiTriSym, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}) =
-    rmul!(copyto!(Array{promote_type(eltype(A), eltype(adjB))}(undef, size(A)...), A), adjB)
-*(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::Diagonal) =
-    lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
-*(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::BiTriSym) =
-    lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
+lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
+lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
+lmul!(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = lmul!(Q, full!(B))
+lmul!(Q::Adjoint{<:Any,<:QRPackedQ}, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
+
+function _qlmul(Q::AbstractQ, B)
+    TQB = promote_type(eltype(Q), eltype(B))
+    if size(Q.factors, 1) == size(B, 1)
+        Bnew = Matrix{TQB}(B)
+    elseif size(Q.factors, 2) == size(B, 1)
+        Bnew = [Matrix{TQB}(B); zeros(TQB, size(Q.factors, 1) - size(B,1), size(B, 2))]
+    else
+        throw(DimensionMismatch("first dimension of matrix must have size either $(size(Q.factors, 1)) or $(size(Q.factors, 2))"))
+    end
+    lmul!(convert(AbstractMatrix{TQB}, Q), Bnew)
+end
+function _qlmul(adjQ::Adjoint{<:Any,<:AbstractQ}, B)
+    TQB = promote_type(eltype(adjQ), eltype(B))
+    lmul!(adjoint(convert(AbstractMatrix{TQB}, parent(adjQ))), Matrix{TQB}(B))
+end
+
+*(Q::AbstractQ, B::AbstractTriangular) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = _qlmul(Q, B)
+*(Q::AbstractQ, B::BiTriSym) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::BiTriSym) = _qlmul(Q, B)
+*(Q::AbstractQ, B::Diagonal) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::Diagonal) = _qlmul(Q, B)
+
+rmul!(A::AbstractTriangular, Q::AbstractQ) = rmul!(full!(A), Q)
+rmul!(A::AbstractTriangular, Q::Adjoint{<:Any,<:AbstractQ}) = rmul!(full!(A), Q)
+
+function _qrmul(A, Q::AbstractQ)
+    TAQ = promote_type(eltype(A), eltype(Q))
+    return rmul!(Matrix{TAQ}(A), convert(AbstractMatrix{TAQ}, Q))
+end
+function _qrmul(A, adjQ::Adjoint{<:Any,<:AbstractQ})
+    Q = adjQ.parent
+    TAQ = promote_type(eltype(A), eltype(Q))
+    if size(A,2) == size(Q.factors, 1)
+        Anew = Matrix{TAQ}(A)
+    elseif size(A,2) == size(Q.factors,2)
+        Anew = [Matrix{TAQ}(A) zeros(TAQ, size(A, 1), size(Q.factors, 1) - size(Q.factors, 2))]
+    else
+        throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(Q))"))
+    end
+    return rmul!(Anew, adjoint(convert(AbstractMatrix{TAQ}, Q)))
+end
+
+*(A::AbstractTriangular, Q::AbstractQ) = _qrmul(A, Q)
+*(A::AbstractTriangular, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
+*(A::BiTriSym, Q::AbstractQ) = _qrmul(A, Q)
+*(A::BiTriSym, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
+*(A::Diagonal, Q::AbstractQ) = _qrmul(A, Q)
+*(A::Diagonal, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
+
+*(Q::AbstractQ, B::AbstractQ) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = _qrmul(Q, B)
+*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = _qrmul(Q, B)
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
@@ -365,14 +414,14 @@ const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpo
 
 promote_to_array_type(::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 
-Base._cat(dims, xs::_DenseConcatGroup...) = Base.cat_t(promote_eltype(xs...), xs...; dims=dims)
+Base._cat(dims, xs::_DenseConcatGroup...) = Base._cat_t(dims, promote_eltype(xs...), xs...)
 vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
 vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
 hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
 hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.cat_t(T, xs...; dims=dims)
+Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base._cat_t(dims, T, xs...)
 vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
 hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)

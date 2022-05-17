@@ -111,8 +111,8 @@
 #    module::Module
 #    method::Symbol
 #    file::Symbol
-#    line::Int
-#    inlined_at::Int
+#    line::Int32
+#    inlined_at::Int32
 #end
 
 #struct GotoNode
@@ -193,6 +193,8 @@ export
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
     nfields, throw, tuple, ===, isdefined, eval,
+    # access to globals
+    getglobal, setglobal!,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
@@ -201,7 +203,7 @@ export
     # constants
     nothing, Main
 
-const getproperty = getfield
+const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
 
 abstract type Number end
@@ -222,7 +224,7 @@ primitive type Char <: AbstractChar 32 end
 primitive type Int8    <: Signed   8 end
 #primitive type UInt8   <: Unsigned 8 end
 primitive type Int16   <: Signed   16 end
-primitive type UInt16  <: Unsigned 16 end
+#primitive type UInt16  <: Unsigned 16 end
 #primitive type Int32   <: Signed   32 end
 #primitive type UInt32  <: Unsigned 32 end
 #primitive type Int64   <: Signed   64 end
@@ -408,7 +410,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
     GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
@@ -421,10 +423,10 @@ eval(Core, quote
     function CodeInstance(
         mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
         @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-        ipo_effects::UInt8, effects::UInt8, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+        ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
         relocatability::UInt8)
         return ccall(:jl_new_codeinst, Ref{CodeInstance},
-            (Any, Any, Any, Any, Int32, UInt, UInt, UInt8, UInt8, Any, UInt8),
+            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
             mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
             ipo_effects, effects, argescapes,
             relocatability)

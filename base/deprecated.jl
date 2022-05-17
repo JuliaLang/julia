@@ -120,8 +120,13 @@ function depwarn(msg, funcsym; force::Bool=false)
         _module=begin
             bt = backtrace()
             frame, caller = firstcaller(bt, funcsym)
-            # TODO: Is it reasonable to attribute callers without linfo to Core?
-            caller.linfo isa Core.MethodInstance ? caller.linfo.def.module : Core
+            linfo = caller.linfo
+            if linfo isa Core.MethodInstance
+                def = linfo.def
+                def isa Module ? def : def.module
+            else
+                Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
+            end
         end,
         _file=String(caller.file),
         _line=caller.line,
@@ -260,11 +265,11 @@ getindex(match::Core.MethodMatch, field::Int) =
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_pure_meta
+    @_total_may_throw_meta
     Tuple{S, T.parameters...}
 end
 function parameter_upper_bound(t::UnionAll, idx)
-    @_pure_meta
+    @_total_may_throw_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
@@ -298,8 +303,14 @@ end
 
 # BEGIN 1.8 deprecations
 
-@deprecate var"@_inline_meta"   var"@inline"   false
-@deprecate var"@_noinline_meta" var"@noinline" false
+const var"@_inline_meta" = var"@inline"
+const var"@_noinline_meta" = var"@noinline"
 @deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
 
 # END 1.8 deprecations
+
+# BEGIN 1.9 deprecations
+
+@deprecate splat(x) Splat(x) false
+
+# END 1.9 deprecations

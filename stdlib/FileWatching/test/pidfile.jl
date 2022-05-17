@@ -20,6 +20,10 @@ Base.Filesystem.mtime(io::MemoryFile) = io.mtime
 # open mask without interference from parent's state
 # and create a test environment temp directory
 umask(new_mask) = ccall((@static iswindows() ? :_umask : :umask), Cint, (Cint,), new_mask)
+
+# TODO: Use targeted @test_log tests instead of suppressing all logs to hide the expected warnings
+Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
+
 @testset "Pidfile.jl" begin
 old_umask = umask(0o002)
 try
@@ -356,3 +360,5 @@ end; end # cd(tempdir)
 finally
     umask(old_umask)
 end; end # testset
+
+end # with_logger

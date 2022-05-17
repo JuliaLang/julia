@@ -78,7 +78,7 @@ module-local.
 ### Export lists
 
 Names (referring to functions, types, global variables, and constants) can be added to the
-*export list* of a module with `export`. Typically, they are at or near the top of the module definition
+*export list* of a module with `export`: these are the symbols that are imported when `using` the module. Typically, they are at or near the top of the module definition
 so that readers of the source code can find them easily, as in
 
 ```jldoctest module_manual
@@ -421,7 +421,7 @@ Julia creates precompiled caches of the module to reduce this time.
 
 The incremental precompiled module file are created and used automatically when using `import`
 or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call [`Base.compilecache(modulename)`](@ref). The resulting
+it is imported. Alternatively, you can manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref). The resulting
 cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
 recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)

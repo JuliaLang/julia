@@ -442,7 +442,7 @@ asinh(x::Number)
 
 Compute sine of `x`, where `x` is in radians.
 
-See also [`sind`], [`sinpi`], [`sincos`], [`cis`].
+See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 sin(x::Number)
 
@@ -451,7 +451,7 @@ sin(x::Number)
 
 Compute cosine of `x`, where `x` is in radians.
 
-See also [`cosd`], [`cospi`], [`sincos`], [`cis`].
+See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 cos(x::Number)
 
@@ -496,7 +496,7 @@ atanh(x::Number)
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
-See also [`log1p`], [`log2`], [`log10`].
+See also [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -633,7 +633,7 @@ Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 This code is an implementation of the algorithm described in:
 An Improved Algorithm for `hypot(a,b)`
 by Carlos F. Borges
-The article is available online at ArXiv at the link
+The article is available online at arXiv at the link
   https://arxiv.org/abs/1904.09481
 
     hypot(x...)
@@ -999,17 +999,25 @@ end
 @constprop :aggressive function ^(x::Float64, y::Float64)
     yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
+    xu = reinterpret(UInt64, x)
     x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
-    x == 1 && return 1.0
-    return pow_body(x, y)
+    x === 1.0 && return 1.0
+    x==0 && return abs(y)*Inf*(!(y>0))
+    !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -= UInt64(52) << 52 # mess with the exponent
+    end
+    return pow_body(xu, y)
 end
 
-@inline function pow_body(x::Float64, y::Float64)
-    !isfinite(x) && return x*(y>0 || isnan(x))
-    x==0 && return abs(y)*Inf*(!(y>0))
-    logxhi,logxlo = Base.Math._log_ext(x)
-    xyhi = logxhi*y
-    xylo = logxlo*y
+@inline function pow_body(xu::UInt64, y::Float64)
+    logxhi,logxlo = Base.Math._log_ext(xu)
+    xyhi, xylo = two_mul(logxhi,y)
+    xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
     return Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
@@ -1017,6 +1025,8 @@ end
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
     yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
     y == yint && return x^yint
+    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
+    y >= 2*inv(eps(T)) && return x^(typemax(Int64)-1)
     x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     return pow_body(x, y)
 end
@@ -1037,6 +1047,7 @@ end
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
     xnlo = ynlo = 0.0
+    n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
         n==-2 && return rx*rx #keep compatability with literal_pow
@@ -1044,7 +1055,6 @@ end
         x = rx
         n = -n
     end
-    n == 3 && return x*x*x # keep compatibility with literal_pow
     while n > 1
         if n&1 > 0
             err = muladd(y, xnlo, x*ynlo)
@@ -1061,8 +1071,9 @@ end
 end
 
 function ^(x::Float32, n::Integer)
-    n < 0 && return inv(x)^(-n)
+    n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
     Float32(Base.power_by_squaring(Float64(x),n))
 end
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ y)

@@ -164,8 +164,7 @@ end
 Permute vector `v` in-place, according to permutation `p`. No checking is done
 to verify that `p` is a permutation.
 
-To return a new permutation, use `v[p]`. Note that this is generally faster than
-`permute!(v,p)` for large vectors.
+To return a new permutation, use `v[p]`. Note that this is faster than `permute!(v, p)`.
 
 See also [`invpermute!`](@ref).
 
@@ -185,7 +184,7 @@ julia> A
  1
 ```
 """
-permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
+permute!(v, p::AbstractVector) = (v .= v[p])
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
@@ -232,7 +231,7 @@ julia> A
  1
 ```
 """
-invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
+invpermute!(v, p::AbstractVector) = (v[p] = v; v)
 
 """
     invperm(v)

@@ -36,11 +36,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libnghttp2.$$(SHLIB_EXT) $$(build_shlibdir)/libnghttp2.$$(SHLIB_EXT)))
 
 clean-nghttp2:
-	-rm $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-compiled
+	-rm -f $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/nghttp2-$(NGHTTP2_VER) clean
 
 distclean-nghttp2:
-	-rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \
 		$(SRCCACHE)/nghttp2-$(NGHTTP2_VER) \
 		$(BUILDDIR)/nghttp2-$(NGHTTP2_VER)
 

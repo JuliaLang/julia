@@ -172,7 +172,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 }
 
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc)
 {
     JL_LOCK(&m->lock);
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
@@ -183,19 +183,22 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
             if (b->owner == NULL) {
                 b->owner = m;
             }
-            else if (error) {
+            else if (alloc) {
                 JL_UNLOCK(&m->lock);
-                jl_errorf("cannot assign a value to variable %s.%s from module %s",
+                jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
                           jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
             }
         }
     }
-    else {
+    else if (alloc) {
         b = new_binding(var);
         b->owner = m;
         *bp = b;
         JL_GC_PROMISE_ROOTED(b);
         jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
+    }
+    else {
+        b = NULL;
     }
 
     JL_UNLOCK(&m->lock);
@@ -207,15 +210,10 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
 // NOTE: Must hold m->lock while calling these.
 #ifdef __clang_gcanalyzer__
 jl_binding_t *_jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
-jl_binding_t **_jl_get_module_binding_bp(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 #else
 static inline jl_binding_t *_jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT
 {
     return (jl_binding_t*)ptrhash_get(&m->bindings, var);
-}
-static inline jl_binding_t **_jl_get_module_binding_bp(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT
-{
-    return (jl_binding_t**)ptrhash_bp(&m->bindings, var);
 }
 #endif
 
@@ -234,8 +232,9 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
     JL_LOCK(&m->lock);
-    jl_binding_t **bp = _jl_get_module_binding_bp(m, var);
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     jl_binding_t *b = *bp;
+    JL_GC_PROMISE_ROOTED(b);
 
     if (b != HT_NOTFOUND) {
         if (b->owner != m) {
@@ -261,6 +260,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         b = new_binding(var);
         b->owner = m;
         *bp = b;
+        JL_GC_PROMISE_ROOTED(b);
         jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
     }
 
@@ -310,14 +310,14 @@ static jl_binding_t *using_resolve_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl
                 !tempb->deprecated && !b->deprecated &&
                 !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                 if (warn) {
+                    // mark this binding resolved (by creating it or setting the owner), to avoid repeating the warning
+                    (void)jl_get_binding_wr(m, var, 1);
                     JL_UNLOCK(&m->lock);
                     jl_printf(JL_STDERR,
                               "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
                               jl_symbol_name(owner->name),
                               jl_symbol_name(imp->name), jl_symbol_name(var),
                               jl_symbol_name(m->name));
-                    // mark this binding resolved, to avoid repeating the warning
-                    (void)jl_get_binding_wr(m, var, 0);
                     JL_LOCK(&m->lock);
                 }
                 return NULL;
@@ -352,7 +352,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
             // do a full import to prevent the result of this lookup
             // from changing, for example if this var is assigned to
             // later.
-            module_import_(m, b->owner, var, var, 0);
+            module_import_(m, b->owner, b->name, var, 0);
             return b;
         }
         return NULL;
@@ -388,6 +388,11 @@ JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
         return jl_nothing;
     jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
     return ty ? ty : jl_nothing;
+}
+
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr_or_error(jl_module_t *m, jl_sym_t *var)
+{
+    return jl_get_binding_wr(m, var, 1);
 }
 
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -665,14 +670,6 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
     return b->value;
 }
 
-JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
-{
-    JL_TYPECHK(jl_set_global, module, (jl_value_t*)m);
-    JL_TYPECHK(jl_set_global, symbol, (jl_value_t*)var);
-    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
-    jl_checked_assignment(bp, val);
-}
-
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
@@ -686,7 +683,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
                 return;
             }
         }
-	jl_value_t *old_ty = NULL;
+        jl_value_t *old_ty = NULL;
         jl_atomic_cmpswap_relaxed(&bp->ty, &old_ty, (jl_value_t*)jl_any_type);
     }
     jl_errorf("invalid redefinition of constant %s",
@@ -807,9 +804,14 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type) && !jl_isa(rhs, old_ty)) {
-        jl_errorf("cannot assign an incompatible value to the global %s.",
-                  jl_symbol_name(b->name));
+    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
+        if (old_ty != (jl_value_t*)jl_any_type && jl_typeof(rhs) != old_ty) {
+            JL_GC_PUSH1(&rhs);
+            if (!jl_isa(rhs, old_ty))
+                jl_errorf("cannot assign an incompatible value to the global %s.",
+                          jl_symbol_name(b->name));
+            JL_GC_POP();
+        }
     }
     if (b->constp) {
         jl_value_t *old = NULL;

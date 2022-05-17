@@ -146,7 +146,7 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 macro stat_call(sym, arg1type, arg)
     return quote
-        stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
+        stat_buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
             uv_error(string("stat(", repr($(esc(arg))), ")"), r)
@@ -353,12 +353,17 @@ Return `true` if `path` is a regular file, `false` otherwise.
 julia> isfile(homedir())
 false
 
-julia> f = open("test_file.txt", "w");
+julia> filename = "test_file.txt";
 
-julia> isfile(f)
+julia> write(filename, "Hello world!");
+
+julia> isfile(filename)
 true
 
-julia> close(f); rm("test_file.txt")
+julia> rm(filename);
+
+julia> isfile(filename)
+false
 ```
 
 See also [`isdir`](@ref) and [`ispath`](@ref).

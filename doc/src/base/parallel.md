@@ -56,6 +56,7 @@ Base.ReentrantLock
 ## Channels
 
 ```@docs
+Base.AbstractChannel
 Base.Channel
 Base.Channel(::Function)
 Base.put!(::Channel, ::Any)

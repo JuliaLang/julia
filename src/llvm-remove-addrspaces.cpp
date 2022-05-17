@@ -51,7 +51,7 @@ public:
             else {
                 //Remove once opaque pointer transition is complete
                 DstTy = PointerType::get(
-                        remapType(Ty->getElementType()),
+                        remapType(Ty->getPointerElementType()),
                         ASRemapper(Ty->getAddressSpace()));
             }
         }
@@ -113,10 +113,9 @@ public:
     }
 
 private:
-    static DenseMap<Type *, Type *> MappedTypes;
+    DenseMap<Type *, Type *> MappedTypes;
 };
 
-DenseMap<Type *, Type *> AddrspaceRemoveTypeRemapper::MappedTypes;
 
 class AddrspaceRemoveValueMaterializer : public ValueMaterializer {
     ValueToValueMapTy &VM;
@@ -162,7 +161,7 @@ public:
                     auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
                     //Remove once opaque pointer transition is complete
                     if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getElementType());
+                        Type *SrcTy = remapType(ptrty->getPointerElementType());
                         DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
                     }
                 }

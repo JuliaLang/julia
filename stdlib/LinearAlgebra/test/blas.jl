@@ -562,7 +562,7 @@ end
 
 @testset "strided interface blas" begin
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
-    # Level 1
+    # Level 1
         x = WrappedArray(elty[1, 2, 3, 4])
         y = WrappedArray(elty[5, 6, 7, 8])
         BLAS.blascopy!(2, x, 1, y, 2)
@@ -622,7 +622,7 @@ end
         x = WrappedArray(elty[1, 2, 3, 4])
         y = WrappedArray(elty[5, 6, 7, 8])
         @test BLAS.dot(2, x, 1, y, 2) == elty(19)
-    # Level 2
+    # Level 2
         A = WrappedArray(elty[1 2; 3 4])
         x = WrappedArray(elty[1, 2])
         y = WrappedArray(elty[3, 4])
