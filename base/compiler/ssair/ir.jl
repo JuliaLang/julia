@@ -1703,10 +1703,20 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
     # `block_to_positions[ibb]` is a list of positions appropriate for splitting the basic
     # blocks.
     block_to_positions = Vector{Vector{Int}}(undef, length(ir.cfg.blocks))
-
     target_blocks = BitSet()
+
+    # Two maps are used for relabeling BBs:
+    # * `bbchangemap` maps each old BB index to the index of the BB that includes the *last*
+    #   statement in the old BB.
+    # * `gotolabelchangemap` maps each old BB index to the index of the BB that includes
+    #   *first* statement in the old BB; i.e., it is used for fixing the labels in the
+    #   goto-like nodes.
+    bbchangemap = ones(Int, length(ir.cfg.blocks))
+    gotolabelchangemap = ones(Int, length(ir.cfg.blocks) + 1)  # "+ 1" simplifies the code
+
     for ipos in statement_positions
         ibb = block_for_inst(ir.cfg, ipos)
+
         if ibb in target_blocks
             poss = block_to_positions[ibb]
         else
@@ -1714,17 +1724,12 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
             poss = block_to_positions[ibb] = Int[]
         end
         push!(poss, ipos)
-    end
 
-    bbchangemap = _cumsum!(
-        Int[
-            if ibb in target_blocks
-                1 + 2 * length(block_to_positions[ibb])
-            else
-                1
-            end for ibb in 1:length(ir.cfg.blocks)
-        ],
-    )
+        bbchangemap[ibb] += 2
+        gotolabelchangemap[ibb+1] += 2
+    end
+    _cumsum!(bbchangemap)
+    _cumsum!(gotolabelchangemap)
     newblocks = 2 * length(statement_positions)
 
     # Insert `newblocks` new blocks:
@@ -1787,17 +1792,6 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
         @assert !isempty(bb.stmts)
     end
     cfg_reindex!(ir.cfg)
-
-    # Like `bbchangemap` but maps to the first added BB (not the last)
-    gotolabelchangemap = _cumsum!(
-        Int[
-            if ibb in target_blocks
-                1 + 2 * length(block_to_positions[ibb])
-            else
-                1
-            end for ibb in 0:length(ir.cfg.blocks)-1
-        ],
-    )
 
     on_ssavalue(v) = SSAValue(ssachangemap[v.id])
     on_phi_label(l) = bbchangemap[l]
