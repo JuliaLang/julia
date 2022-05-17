@@ -1823,7 +1823,7 @@ function allocate_new_blocks!(ir::IRCode, statement_positions)
             elseif inst isa GotoIfNot
                 inst = GotoIfNot(inst.cond, on_goto_label(inst.dest))
             elseif isexpr(inst, :enter)
-                inst.args[1] = on_goto_label(inst.args[1])
+                inst.args[1] = on_goto_label(inst.args[1]::Int)
             end
             st[:inst] = inst
         end
