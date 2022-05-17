@@ -401,14 +401,14 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(iter::CartesianIndices, state)
-        valid, I = __inc(state.I, iter.indices)
+        valid, I = __inc(state.I, iter.indices, Val(ndims(iter)))
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # increment & carry
     @inline function inc(state, indices)
-        _, I = __inc(state, indices)
+        _, I = __inc(state, indices, Val(length(state)))
         return CartesianIndex(I...)
     end
 
@@ -416,20 +416,23 @@ module IteratorsMD
     # current column is consumed. The implementation is written recursively to achieve this.
     # `iterate` returns `Union{Nothing, Tuple}`, we explicitly pass a `valid` flag to eliminate
     # the type instability inside the core `__inc` logic, and this gives better runtime performance.
-    __inc(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
+    __inc(::Tuple{}, ::Tuple{}, ::Val) = false, ()
+    @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt}, ::Val{N}) where {N}
         rng = indices[1]
         I = state[1] + step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != last(rng)
+        if N == 1
+            valid = state[1] != last(rng)
+        else
+            valid = __is_valid_range(I, rng)
+        end
         return valid, (I, )
     end
-    @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
+    @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}}, ndim::Val)
         rng = indices[1]
-        I = state[1] + step(rng)
-        if __is_valid_range(I, rng) && state[1] != last(rng)
-            return true, (I, tail(state)...)
+        if state[1] != last(rng)
+            return true, (state[1] + step(rng), tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(indices))
+        valid, I = __inc(tail(state), tail(indices), ndim)
         return valid, (first(rng), I...)
     end
 
@@ -516,32 +519,35 @@ module IteratorsMD
         iterfirst, iterfirst
     end
     @inline function iterate(r::Reverse{<:CartesianIndices}, state)
-        valid, I = __dec(state.I, r.itr.indices)
+        valid, I = __dec(state.I, r.itr.indices, Val(ndims(r.itr)))
         valid || return nothing
         return CartesianIndex(I...), CartesianIndex(I...)
     end
 
     # decrement & carry
     @inline function dec(state, indices)
-        _, I = __dec(state, indices)
+        _, I = __dec(state, indices, Val(length(state)))
         return CartesianIndex(I...)
     end
 
     # decrement post check to avoid integer overflow
-    @inline __dec(::Tuple{}, ::Tuple{}) = false, ()
-    @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
+    @inline __dec(::Tuple{}, ::Tuple{}, ::Val) = false, ()
+    @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt}, ::Val{N}) where {N}
         rng = indices[1]
         I = state[1] - step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != first(rng)
+        if N == 1
+            valid = state[1] != first(rng)
+        else
+            valid = __is_valid_range(I, rng)
+        end
         return valid, (I,)
     end
-    @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
+    @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}}, ndim::Val)
         rng = indices[1]
-        I = state[1] - step(rng)
-        if __is_valid_range(I, rng) && state[1] != first(rng)
-            return true, (I, tail(state)...)
+        if state[1] != first(rng)
+            return true, (state[1] - step(rng), tail(state)...)
         end
-        valid, I = __dec(tail(state), tail(indices))
+        valid, I = __dec(tail(state), tail(indices), ndim)
         return valid, (last(rng), I...)
     end
 
