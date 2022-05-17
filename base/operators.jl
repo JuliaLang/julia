@@ -512,10 +512,10 @@ julia> identity("Well, what did you expect?")
 """
 identity(@nospecialize x) = x
 
-+(x) = x
++(x::Number) = x
 -(x) = Int8(-1)*x
 -(x, y) = x + (-y)
-*(x) = x
+*(x::Number) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
 xor(x::Integer) = x

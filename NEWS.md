@@ -15,7 +15,7 @@ Language changes
   for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
   `getfield`. ([#44137])
 * A few basic operators have been generalized to more naturally support vector space structures:
-  `+(x) = x`, unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
+  unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
   binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
   left- and right-division fall back to multiplication with the inverse from left and right,
   respectively, as stated in the docstring. ([#44564])
