@@ -747,7 +747,6 @@ the name).
 
 ```@docs
 Base.atreplinit
-Base.activate_module
 ```
 
 ### TerminalMenus
