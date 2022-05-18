@@ -398,7 +398,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         m = linfo.def
         if isa(m, Method)
             if m.module != Core
-                ccall(:jl_log_inferred, Cvoid, (MethodInstance,), linfo)
+                ccall(:jl_log_inferred, Cvoid, (Any,), linfo)
             end
         end
     end
