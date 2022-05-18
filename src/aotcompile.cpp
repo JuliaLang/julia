@@ -217,7 +217,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
-        *src_out = (jl_code_info_t*)codeinst->inferred;
+        *src_out = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_t *def = codeinst->def->def.method;
         if ((jl_value_t*)*src_out == jl_nothing)
             *src_out = NULL;
@@ -232,8 +232,8 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
             *src_out = jl_type_infer(mi, world, 0);
             if (*src_out) {
                 codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
-                if ((*src_out)->inferred && !codeinst->inferred)
-                    codeinst->inferred = jl_nothing;
+                if ((*src_out)->inferred && !jl_atomic_load_relaxed(&codeinst->inferred))
+                    jl_atomic_store_relaxed(&codeinst->inferred, jl_nothing);
             }
         }
     }
@@ -1010,7 +1010,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         jl_value_t *ci = jl_rettype_inferred(mi, world, world);
         if (ci != jl_nothing) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            src = (jl_code_info_t*)codeinst->inferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
             if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
                 src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
             jlrettype = codeinst->rettype;
