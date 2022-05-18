@@ -494,9 +494,9 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
 
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
-    @test isassigned(B, j) == true
+    @test isassigned(B, j)
     if T == T24Linear
-        @test isassigned(B, length(B) + 1) == false
+        @test !isassigned(B, length(B) + 1)
     end
 
     # reshape(a::AbstractArray, dims::Dims)
@@ -733,6 +733,10 @@ function test_cat(::Type{TestAbstractArray})
     cat3v(As) = cat(As...; dims=Val(3))
     @test @inferred(cat3v(As)) == zeros(2, 2, 2)
     @test @inferred(cat(As...; dims=Val((1,2)))) == zeros(4, 4)
+
+    r = rand(Float32, 56, 56, 64, 1);
+    f(r) = cat(r, r, dims=(3,))
+    @inferred f(r);
 end
 
 function test_ind2sub(::Type{TestAbstractArray})

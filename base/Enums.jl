@@ -151,8 +151,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
-    lo = hi = 0
-    i = zero(basetype)
+    lo = hi = i = zero(basetype)
     hasexpr = false
 
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
@@ -193,7 +192,6 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         if length(values) == 1
             lo = hi = i
         else
-            lo = min(lo, i)
             hi = max(hi, i)
         end
         i += oneunit(i)

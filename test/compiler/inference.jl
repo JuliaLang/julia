@@ -7,6 +7,8 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+include("irutils.jl")
+
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
@@ -2840,7 +2842,7 @@ j30385(T, y) = k30385(f30385(T, y))
 @test @inferred(j30385(:dummy, 1)) == "dummy"
 
 @test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
-@test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
+@test Base.return_types(Base.Splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
 
 # test that return_type_tfunc isn't affected by max_methods differently than return_type
 _rttf_test(::Int8) = 0
@@ -4092,6 +4094,11 @@ end
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
 
+# https://github.com/JuliaLang/julia/issues/44965
+let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
+    @test Core.Compiler.issimplertype(t, t)
+end
+
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
 increase_x44763!(n) = (global x44763; x44763 += n)
@@ -4100,3 +4107,29 @@ invoke44763(x) = Base.@invoke increase_x44763!(x)
     invoke44763(42)
 end |> only === Int
 @test x44763 == 0
+
+# backedge insertion for Any-typed, effect-free frame
+const CONST_DICT = let d = Dict()
+    for c in 'A':'z'
+        push!(d, c => Int(c))
+    end
+    d
+end
+Base.@assume_effects :total_may_throw getcharid(c) = CONST_DICT[c]
+@noinline callf(f, args...) = f(args...)
+function entry_to_be_invalidated(c)
+    return callf(getcharid, c)
+end
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> Core.Compiler.is_concrete_eval_eligible
+@test fully_eliminated(; retval=97) do
+    entry_to_be_invalidated('a')
+end
+getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> !Core.Compiler.is_concrete_eval_eligible
+@test !fully_eliminated() do
+    entry_to_be_invalidated('a')
+end

@@ -2,6 +2,8 @@
 
 using Random
 
+is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
+
 @testset "gcd/lcm" begin
     # All Integer data types take different code paths -- test all
     # TODO: Test gcd and lcm for BigInt.
@@ -146,6 +148,11 @@ using Random
     @test gcd(0xf, 20) == 5
     @test gcd(UInt32(6), Int8(-50)) == 2
     @test gcd(typemax(UInt), -16) == 1
+
+    @testset "effects" begin
+        @test is_effect_free(gcd, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
+    end
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -204,6 +211,14 @@ end
     @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
     @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
     @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
+
+    # test error path
+    struct MyOtherRational <: Real
+        val::Rational{Int}
+    end
+    @test_throws MethodError gcd(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError lcm(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
 
 @testset "invmod" begin

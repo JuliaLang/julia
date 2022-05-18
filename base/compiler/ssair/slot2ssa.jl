@@ -72,9 +72,6 @@ function make_ssa!(ci::CodeInfo, code::Vector{Any}, idx, slot, @nospecialize(typ
 end
 
 function new_to_regular(@nospecialize(stmt), new_offset::Int)
-    if isa(stmt, NewSSAValue)
-        return SSAValue(stmt.id + new_offset)
-    end
     urs = userefs(stmt)
     for op in urs
         val = op[]

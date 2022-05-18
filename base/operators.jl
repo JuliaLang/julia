@@ -513,6 +513,8 @@ julia> identity("Well, what did you expect?")
 identity(@nospecialize x) = x
 
 +(x::Number) = x
+-(x) = Int8(-1)*x
+-(x, y) = x + (-y)
 *(x::Number) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
@@ -613,7 +615,9 @@ julia> inv(A) * x
  -7.0
 ```
 """
-\(x,y) = adjoint(adjoint(y)/adjoint(x))
+\(x, y) = inv(x) * y
+
+/(x, y) = x * inv(y)
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -928,12 +932,7 @@ struct Returns{V} <: Function
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
-function show(io::IO, obj::Returns)
-    show(io, typeof(obj))
-    print(io, "(")
-    show(io, obj.value)
-    print(io, ")")
-end
+
 # function composition
 
 """
@@ -1022,16 +1021,29 @@ end
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.outer)
+    c.outer isa ComposedFunction ? show(io, c.outer) : _showcomposed(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.inner)
+    _showcomposed(io, c.inner)
 end
+
+#shows !f instead of (!) ∘ f when ! is the outermost function
+function show(io::IO, c::ComposedFunction{typeof(!)})
+    print(io, '!')
+    _showcomposed(io, c.inner)
+end
+
+_showcomposed(io::IO, x) = show(io, x)
+#display operators like + and - inside parens
+_showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); show(io, f); print(io, ')')) : show(io, f)
+#nesting for chained composition
+_showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
+#no nesting when ! is the outer function in a composition chain
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
 
 """
     !f::Function
 
-Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`.
+Predicate function negation: when the argument of `!` is a function, it returns a composed function which computes the boolean negation of `f`.
 
 See also [`∘`](@ref).
 
@@ -1046,8 +1058,12 @@ julia> filter(isletter, str)
 julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
+
+!!! compat "Julia 1.9"
+    Starting with Julia 1.9, `!f` returns a [`ComposedFunction`](@ref) instead of an anonymous function.
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (!) ∘ f
+!(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
     Fix1(f, x)
@@ -1173,27 +1189,39 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    splat(f)
+    Splat(f)
 
-Defined as
+Equivalent to
 ```julia
-    splat(f) = args->f(args...)
+    my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
 its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument.
+passes a tuple as that single argument. Additionally has pretty printing.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.splat(+), zip(1:3,4:6))
+julia> map(Base.Splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
+
+julia> my_add = Base.Splat(+)
+Splat(+)
+
+julia> my_add((1,2,3))
+6
 ```
 """
-splat(f) = args->f(args...)
+struct Splat{F} <: Function
+    f::F
+    Splat(f) = new{Core.Typeof(f)}(f)
+end
+(s::Splat)(args) = s.f(args...)
+print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
 

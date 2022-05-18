@@ -470,9 +470,6 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
-(define (complex-return? e) (and (return? e)
-                                 (let ((x (cadr e)))
-                                   (not (simple-atom? x)))))
 
 (define (tuple-call? e)
   (and (length> e 1)

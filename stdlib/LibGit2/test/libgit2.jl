@@ -220,6 +220,12 @@ end
     end
 end
 
+@testset "Trace" begin
+    code = "import LibGit2; LibGit2.trace_set(LibGit2.Consts.TRACE_DEBUG); exit(LibGit2.trace_set(0))"
+    p = run(`$(Base.julia_cmd()) --startup-file=no -e $code`, wait=false); wait(p)
+    @test success(p)
+end
+
 # See #21872 and #21636
 LibGit2.version() >= v"0.26.0" && Sys.isunix() && @testset "Default config with symlink" begin
     with_libgit2_temp_home() do tmphome
@@ -1473,7 +1479,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
+            @test readlines(joinpath(test_repo, test_file)) == readlines(joinpath(cache_repo, test_file))
         end
 
         @testset "tags & branches" begin

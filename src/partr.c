@@ -50,7 +50,7 @@ uint64_t io_wakeup_leave;
 uv_mutex_t *sleep_locks;
 uv_cond_t *wake_signals;
 
-JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 {
     // Try to acquire the lock on this task.
     int16_t was = jl_atomic_load_relaxed(&task->tid);
@@ -61,10 +61,17 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
     return 0;
 }
 
+JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
+{
+    if (tpid < 0 || tpid >= jl_n_threadpools)
+        return 0;
+    task->threadpoolid = tpid;
+    return 1;
+}
+
 // GC functions used
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
                                          jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
-
 
 // parallel task runtime
 // ---

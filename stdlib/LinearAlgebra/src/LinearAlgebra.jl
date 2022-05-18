@@ -18,7 +18,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     vec, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    splat
+    Splat
 using Base.Broadcast: Broadcasted, broadcasted
 using OpenBLAS_jll
 using libblastrampoline_jll
@@ -48,6 +48,7 @@ export
     LU,
     LDLt,
     NoPivot,
+    RowNonZero,
     QR,
     QRPivoted,
     LQ,
@@ -173,6 +174,7 @@ struct QRIteration <: Algorithm end
 
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
+struct RowNonZero <: PivotingStrategy end
 struct RowMaximum <: PivotingStrategy end
 struct ColumnNorm <: PivotingStrategy end
 

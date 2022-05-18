@@ -117,7 +117,7 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
-        return reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&data->M);
+        return wrap(&data->M);
     else
         return NULL;
 }
@@ -264,7 +264,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         ctx = jl_ExecutionEngine->acquireContext();
         backing = jl_create_llvm_module("text", ctx, imaging);
     }
-    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
+    orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
     auto ctxt = clone.getContext();
     jl_codegen_params_t params(ctxt);
     params.params = cgparams;
@@ -291,7 +291,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(wrap(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -460,11 +460,11 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine> TM(
-        jl_ExecutionEngine->getTargetMachine().getTarget().createTargetMachine(
+        jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_ExecutionEngine->getTargetMachine().getTargetCPU(),
-            jl_ExecutionEngine->getTargetMachine().getTargetFeatureString(),
-            jl_ExecutionEngine->getTargetMachine().Options,
+            jl_ExecutionEngine->getTargetCPU(),
+            jl_ExecutionEngine->getTargetFeatureString(),
+            jl_ExecutionEngine->getTargetOptions(),
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
             Reloc::PIC_,
 #else
@@ -481,7 +481,7 @@ void jl_dump_native_impl(void *native_code,
             ));
 
     legacy::PassManager PM;
-    addTargetPasses(&PM, TM.get());
+    addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -502,7 +502,7 @@ void jl_dump_native_impl(void *native_code,
         PM.add(createBitcodeWriterPass(unopt_bc_OS));
     if (bc_fname || obj_fname || asm_fname) {
         addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
+        addMachinePasses(&PM, jl_options.opt_level);
     }
     if (bc_fname)
         PM.add(createBitcodeWriterPass(bc_OS));
@@ -595,14 +595,14 @@ void jl_dump_native_impl(void *native_code,
     delete data;
 }
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
 {
-    PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
-    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
@@ -857,9 +857,9 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, &jl_ExecutionEngine->getTargetMachine());
+        addTargetPasses(&Adapter, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
         addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
-        addMachinePasses(&Adapter, &jl_ExecutionEngine->getTargetMachine(), OptLevel);
+        addMachinePasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
@@ -993,33 +993,39 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
     static legacy::PassManager *PM;
     if (!PM) {
         PM = new legacy::PassManager();
-        addTargetPasses(PM, &jl_ExecutionEngine->getTargetMachine());
+        addTargetPasses(PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
         addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, &jl_ExecutionEngine->getTargetMachine(), jl_options.opt_level);
+        addMachinePasses(PM, jl_options.opt_level);
     }
 
     // get the source code for this function
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH2(&src, &jlrettype);
-    jl_value_t *ci = jl_rettype_inferred(mi, world, world);
-    if (ci != jl_nothing) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)codeinst->inferred;
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
-        jlrettype = codeinst->rettype;
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
-        if (src)
-            jlrettype = src->rettype;
-        else if (jl_is_method(mi->def.method)) {
-            src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
-            if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+        src = (jl_code_info_t*)mi->def.method->source;
+        if (src && !jl_is_code_info(src))
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    } else {
+        jl_value_t *ci = jl_rettype_inferred(mi, world, world);
+        if (ci != jl_nothing) {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+            src = (jl_code_info_t*)codeinst->inferred;
+            if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+            jlrettype = codeinst->rettype;
         }
-        // TODO: use mi->uninferred
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            src = jl_type_infer(mi, world, 0);
+            if (src)
+                jlrettype = src->rettype;
+            else if (jl_is_method(mi->def.method)) {
+                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            }
+            // TODO: use mi->uninferred
+        }
     }
 
     // emit this function into a new llvm module
@@ -1061,7 +1067,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
         if (F)
-            return new jl_llvmf_dump_t{std::move(m), F};
+            return new jl_llvmf_dump_t{wrap(new orc::ThreadSafeModule(std::move(m))), wrap(F)};
     }
 
     const char *mname = name_from_method_instance(mi);

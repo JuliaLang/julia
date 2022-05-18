@@ -1104,4 +1104,55 @@ reduced likelihood of ambiguities. Moreover, it extends the "public"
 `myfilter` interface: a user who wants to control the padding
 explicitly can call the `NoPad` variant directly.
 
+## Defining methods in local scope
+
+You can define methods within a [local scope](@ref scope-of-variables), for example
+
+```jldoctest
+julia> function f(x)
+           g(y::Int) = y + x
+           g(y) = y - x
+           g
+       end
+f (generic function with 1 method)
+
+julia> h = f(3);
+
+julia> h(4)
+7
+
+julia> h(4.0)
+1.0
+```
+
+However, you should *not* define local methods conditionally or subject to control flow, as in
+
+```julia
+function f2(inc)
+    if inc
+        g(x) = x + 1
+    else
+        g(x) = x - 1
+    end
+end
+
+function f3()
+    function g end
+    return g
+    g() = 0
+end
+```
+as it is not clear what function will end up getting defined. In the future, it might be an error to define local methods in this manner.
+
+For cases like this use anonymous functions instead:
+
+```julia
+function f2(inc)
+    g = if inc
+        x -> x + 1
+    else
+        x -> x - 1
+    end
+end
+
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

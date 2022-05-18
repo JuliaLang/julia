@@ -8,7 +8,7 @@ may trip up Julia users accustomed to MATLAB:
 
   * Julia arrays are indexed with square brackets, `A[i,j]`.
   * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B`
-    will modify `A` as well.
+    will modify `A` as well. To avoid this, use `A = copy(B)`.
   * Julia values are not copied when passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * Julia does not automatically grow arrays in an assignment statement. Whereas in MATLAB `a(4) = 3.2`

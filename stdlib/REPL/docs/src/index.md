@@ -32,7 +32,7 @@ julia> string(1 + 2)
 "3"
 ```
 
-There are a number useful features unique to interactive work. In addition to showing the result,
+There are a number of useful features unique to interactive work. In addition to showing the result,
 the REPL also binds the result to the variable `ans`. A trailing semicolon on the line can be
 used as a flag to suppress showing the result.
 
@@ -270,9 +270,10 @@ to do so), or pressing Esc and then the key.
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | indent the current line on the right                                                                       |
-| `meta-.`            | insert last word from previous history entry                                                               |
+| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
+| `meta-.`            | Insert last word from previous history entry                                                               |
+| `meta-e`            | Edit the current input in an editor                                                                        |
 
 ### Customizing keybindings
 
@@ -727,6 +728,13 @@ Base.atreplinit
 ```
 
 ### TerminalMenus
+
+### Menus
+
+```@docs
+REPL.TerminalMenus.RadioMenu
+REPL.TerminalMenus.MultiSelectMenu
+```
 
 #### Configuration
 
