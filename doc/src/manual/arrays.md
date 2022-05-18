@@ -331,7 +331,7 @@ These syntaxes are shorthands for function calls that themselves are convenience
 | `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
 | `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
-### Typed array literals (@id man-array-typed-literal)
+### [Typed array literals](@id man-array-typed-literal)
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
