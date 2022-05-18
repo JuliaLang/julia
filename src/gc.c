@@ -3058,6 +3058,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t gc_start_t = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     JL_PROBE_GC_MARK_BEGIN();
+    uint64_t start_mark_time = jl_hrtime();
 
     // 1. fix GC bits of objects in the remset.
     for (int t_i = 0; t_i < jl_n_threads; t_i++)
@@ -3074,7 +3075,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 
     // 3. walk roots
-    uint64_t start_mark_time = jl_hrtime();
     mark_roots(gc_cache, &sp);
     if (gc_cblist_root_scanner) {
         export_gc_state(ptls, &sp);
@@ -3088,6 +3088,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
     gc_time_mark_pause(gc_start_t, scanned_bytes, perm_scanned_bytes);
+    uint64_t end_mark_time = jl_hrtime();
+    uint64_t mark_time = end_mark_time - start_mark_time;
+    gc_num.mark_time = mark_time;
+    gc_num.total_mark_time += mark_time;
     int64_t actual_allocd = gc_num.since_sweep;
     // marking is over
 
@@ -3125,10 +3129,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_loop(ptls, sp);
     mark_reset_age = 0;
     gc_settime_postmark_end();
-    uint64_t end_mark_time = jl_hrtime();
-    uint64_t mark_time = end_mark_time - start_mark_time;
-    gc_num.mark_time = mark_time;
-    gc_num.total_mark_time += mark_time;
 
     // Flush everything in mark cache
     gc_sync_all_caches_nolock(ptls);
@@ -3197,6 +3197,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (sweep_full)
         gc_sweep_perm_alloc();
     JL_PROBE_GC_SWEEP_END();
+
+    uint64_t gc_end_t = jl_hrtime();
+    uint64_t pause = gc_end_t - gc_start_t;
+    uint64_t sweep_time = gc_end_t - start_sweep_time;
+    gc_num.total_sweep_time += sweep_time;
+    gc_num.sweep_time = sweep_time;
+
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -3229,11 +3236,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 #endif
 
-    uint64_t gc_end_t = jl_hrtime();
-    uint64_t pause = gc_end_t - gc_start_t;
-    uint64_t sweep_time = gc_end_t - start_sweep_time;
-    gc_num.total_sweep_time += sweep_time;
-    gc_num.sweep_time = sweep_time;
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
