@@ -868,3 +868,16 @@ end
         check_kw_hashes(String([cs...]) for cs in Iterators.product(['a':'z' for _ in 1:len]...))
     end
 end
+
+
+@testset "UTF-8 BOM" begin
+    @test Tokenize.Tokens.kind.(collect(tokenize("\ufeff[1\ufeff2]"))) == [
+        Tokens.WHITESPACE,
+        Tokens.LSQUARE,
+        Tokens.INTEGER,
+        Tokens.WHITESPACE,
+        Tokens.INTEGER,
+        Tokens.RSQUARE,
+        Tokens.ENDMARKER
+    ]
+end
