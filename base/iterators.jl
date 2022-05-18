@@ -146,7 +146,9 @@ end
 An iterator that yields `(i, x)` where `i` is a counter starting at 1,
 and `x` is the `i`th value from the given iterator. It's useful when
 you need not only the values `x` over which you are iterating, but
-also the number of iterations so far. Note that `i` may not be valid
+also the number of iterations so far.
+
+Note that `i` may not be valid
 for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
 has indices that do not start at 1. See the `pairs(IndexLinear(),
 iter)` method if you want to ensure that `i` is an index.
