@@ -308,6 +308,10 @@ if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
+
+See also [`pairs`](@ref)`(A)` to iterate over indices and values together,
+and [`axes`](@ref)`(A, 2)` for valid indices along one dimension.
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4];
