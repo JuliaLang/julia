@@ -2249,6 +2249,19 @@ end
     end
 end
 
+@inline function update_bbstate!(frame::InferenceState, bb::Int, vartable::VarTable)
+    bbtable = frame.bb_vartables[bb]
+    if bb in frame.analyzed_bbs
+        newstate = stupdate!(bbtable, vartable)
+    else
+        # if a basic block hasn't been analyzed yet,
+        # we can update its state a bit more aggressively
+        newstate = stoverwrite!(bbtable, vartable)
+        push!(frame.analyzed_bbs, bb)
+    end
+    return newstate
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
@@ -2261,19 +2274,6 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
-    update_bbstate! = let analyzed_bbs = BitSet(), states = frame.bb_vartables
-        @inline function (bb::Int, vartable::VarTable)
-            if bb in analyzed_bbs
-                newstate = stupdate!(states[bb], vartable)
-            else
-                # if a basic block hasn't been analyzed yet,
-                # we can update its state a bit more aggressively
-                newstate = stoverwrite!(states[bb], vartable)
-                push!(analyzed_bbs, bb)
-            end
-            return newstate
-        end
-    end
 
     currbb = frame.currbb
     if currbb != 1
@@ -2348,13 +2348,13 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                                 else
                                     false_vartable = currstate
                                 end
-                                newstate = update_bbstate!(falsebb, false_vartable)
+                                newstate = update_bbstate!(frame, falsebb, false_vartable)
                                 then_change = conditional_change(currstate, condt.vtype, condt.var)
                                 if then_change !== nothing
                                     stoverwrite1!(currstate, then_change)
                                 end
                             else
-                                newstate = update_bbstate!(falsebb, currstate)
+                                newstate = update_bbstate!(frame, falsebb, currstate)
                             end
                             if newstate !== nothing
                                 handle_control_backedge!(frame, currpc, stmt.dest)
@@ -2398,13 +2398,13 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             end
                         end
                     end
-                    ssavaluetypes[currpc] = Any
+                    ssavaluetypes[frame.currpc] = Any
                     @goto find_next_bb
                 elseif isexpr(stmt, :enter)
                     # Propagate entry info to exception handler
                     l = stmt.args[1]::Int
                     catchbb = block_for_inst(frame.cfg, l)
-                    newstate = update_bbstate!(catchbb, currstate)
+                    newstate = update_bbstate!(frame, catchbb, currstate)
                     if newstate !== nothing
                         push!(W, catchbb)
                     end
@@ -2455,7 +2455,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
         # Case 2: Directly branch to a different BB
         begin @label branch
-            newstate = update_bbstate!(nextbb, currstate)
+            newstate = update_bbstate!(frame, nextbb, currstate)
             if newstate !== nothing
                 push!(W, nextbb)
             end
