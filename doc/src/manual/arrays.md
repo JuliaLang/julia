@@ -876,10 +876,10 @@ introspect which is which).
 
 !!! warnings
 
-    When iterating over an entire array, it's
-    much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
-    Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-    but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
+    When iterating over an entire array, it is
+    better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
+    Not only will the former be faster in cases where `A` is `IndexCartesian`,
+    but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
 
 #### Omitted and extra indices
 
