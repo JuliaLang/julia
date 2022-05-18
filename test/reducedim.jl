@@ -281,14 +281,25 @@ end
                               ((1,2), fill(1,1,1), fill(CartesianIndex(1,1),1,1))]
         rval′, rind′ = findmin(length, A, dims=tup)
         @test (rval, rind) == (rval′, rind′)
-        @test typeof(rval′) <: Array{Int}
+        @test typeof(rval′) == Matrix{Int}
     end
     for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
                               ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
                               ((1,2), fill(4,1,1), fill(CartesianIndex(2,2),1,1))]
         rval′, rind′ = findmax(length, A, dims=tup)
         @test (rval, rind) == (rval′, rind′)
-        @test typeof(rval) <: Array{Int}
+        @test typeof(rval) == Matrix{Int}
+    end
+    B = [1.5 1.0; 5.5 6.0]
+    for (tup, rval, rind) in [((1,), [3//2 1//1], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
+                              ((2,), reshape([1//1, 11//2], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 1)], 2, 1)),
+                              ((1,2), fill(1//1,1,1), fill(CartesianIndex(1,2),1,1))]
+        rval′, rind′ = findmin(Rational, B, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Rational{Int}}
+        rval′, rind′ = findmin(Rational ∘ abs ∘ complex, B, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Rational{Int}}
     end
 end
 
