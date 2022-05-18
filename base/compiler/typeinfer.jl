@@ -206,9 +206,11 @@ const __measure_typeinf__ = fill(false)
 # Wrapper around _typeinf that optionally records the exclusive time for each invocation.
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
+        ccall(:jl_typeinf_begin, Cvoid, ())
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
         Timings.exit_current_timer(frame)
+        ccall(:jl_typeinf_end, Cvoid, ())
         return v
     else
         return _typeinf(interp, frame)
@@ -923,60 +925,52 @@ end
 # compute an inferred frame
 function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
-    ccall(:jl_typeinf_begin, Cvoid, ())
     result = InferenceResult(mi)
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
-    ccall(:jl_typeinf_end, Cvoid, ())
     return frame
 end
 
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     method = mi.def::Method
-    for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this code already exists in the cache
-            inf = @atomic depends code.inferred
-            if use_const_api(code)
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                rettype_const = code.rettype_const
-                tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
-                nargs = Int(method.nargs)
-                tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
-                tree.slotflags = fill(IR_FLAG_NULL, nargs)
-                tree.ssavaluetypes = 1
-                tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
-                tree.inferred = true
-                tree.ssaflags = UInt8[0]
-                tree.pure = true
-                tree.inlineable = true
-                tree.parent = mi
-                tree.rettype = Core.Typeof(rettype_const)
-                tree.min_world = code.min_world
-                tree.max_world = code.max_world
-                return tree
-            elseif isa(inf, CodeInfo)
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                if !(inf.min_world == code.min_world &&
-                     inf.max_world == code.max_world &&
-                     inf.rettype === code.rettype)
-                    inf = copy(inf)
-                    inf.min_world = code.min_world
-                    inf.max_world = code.max_world
-                    inf.rettype = code.rettype
-                end
-                return inf
-            elseif isa(inf, Vector{UInt8})
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                inf = _uncompressed_ir(code, inf)
-                return inf
+    code = get(code_cache(interp), mi, nothing)
+    if code isa CodeInstance
+        # see if this code already exists in the cache
+        inf = @atomic depends code.inferred
+        if use_const_api(code)
+            tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+            rettype_const = code.rettype_const
+            tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
+            nargs = Int(method.nargs)
+            tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
+            tree.slotflags = fill(IR_FLAG_NULL, nargs)
+            tree.ssavaluetypes = 1
+            tree.codelocs = Int32[1]
+            tree.linetable = [LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+            tree.inferred = true
+            tree.ssaflags = UInt8[0]
+            tree.pure = true
+            tree.inlineable = true
+            tree.parent = mi
+            tree.rettype = Core.Typeof(rettype_const)
+            tree.min_world = code.min_world
+            tree.max_world = code.max_world
+            return tree
+        elseif isa(inf, CodeInfo)
+            if !(inf.min_world == code.min_world &&
+                    inf.max_world == code.max_world &&
+                    inf.rettype === code.rettype)
+                inf = copy(inf)
+                inf.min_world = code.min_world
+                inf.max_world = code.max_world
+                inf.rettype = code.rettype
             end
+            return inf
+        elseif isa(inf, Vector{UInt8})
+            inf = _uncompressed_ir(code, inf)
+            return inf
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
@@ -986,7 +980,6 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     frame = InferenceState(InferenceResult(mi), #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
-    ccall(:jl_typeinf_end, Cvoid, ())
     frame.src.inferred || return nothing
     return frame.src
 end
@@ -997,18 +990,13 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
         return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
     mi = specialize_method(method, atype, sparams)::MethodInstance
-    for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this rettype already exists in the cache
-            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-            return code.rettype
-        end
+    code = get(code_cache(interp), mi, nothing)
+    if code isa CodeInstance
+        # see if this rettype already exists in the cache
+        return code.rettype
     end
     result = InferenceResult(mi)
     typeinf(interp, result, :global)
-    ccall(:jl_typeinf_end, Cvoid, ())
     result.result isa InferenceState && return nothing
     return widenconst(ignorelimited(result.result))
 end
@@ -1021,17 +1009,13 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
         src = typeinf_ext(interp, linfo)
     else
         src = linfo.uninferred::CodeInfo
+        # toplevel lambda - infer directly
         if !src.inferred
-            # toplevel lambda - infer directly
-            ccall(:jl_typeinf_begin, Cvoid, ())
-            if !src.inferred
-                result = InferenceResult(linfo)
-                frame = InferenceState(result, src, #=cache=#:global, interp)
-                typeinf(interp, frame)
-                @assert frame.inferred # TODO: deal with this better
-                src = frame.src
-            end
-            ccall(:jl_typeinf_end, Cvoid, ())
+            result = InferenceResult(linfo)
+            frame = InferenceState(result, src, #=cache=#:global, interp)
+            typeinf(interp, frame)
+            @assert frame.inferred # TODO: deal with this better
+            src = frame.src
         end
     end
     return src
