@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tracking of newly-inferred MethodInstances during precompilation
-const track_newly_inferred = RefValue{Bool}(false)
 const newly_inferred = MethodInstance[]
 
 const depends = :monotonic
@@ -396,10 +395,10 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     if !already_inferred
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
-        if track_newly_inferred[]
-            m = linfo.def
-            if isa(m, Method)
-                m.module != Core && push!(newly_inferred, linfo)
+        m = linfo.def
+        if isa(m, Method)
+            if m.module != Core
+                ccall(:jl_log_inferred, Cvoid, (MethodInstance,), linfo)
             end
         end
     end

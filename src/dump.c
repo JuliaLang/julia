@@ -96,7 +96,9 @@ static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
 static htable_t external_mis;
 // Inference tracks newly-inferred MethodInstances during precompilation
 // and registers them by calling jl_set_newly_inferred
+static jl_mutex_t newly_inferred_mutex;
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
+static _Atomic(int) track_newly_inferred;
 
 // New roots to add to Methods. These can't be added until after
 // recaching is complete, so we have to hold on to them separately
@@ -2613,8 +2615,25 @@ JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 // This gets called as the final step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
+    JL_LOCK_NOGC(&newly_inferred_mutex);
     assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
     newly_inferred = (jl_array_t*) _newly_inferred;
+    jl_atomic_store_relaxed(&track_newly_inferred, 1);
+    JL_UNLOCK_NOGC(&newly_inferred_mutex);
+}
+JL_DLLEXPORT void jl_untrack_newly_inferred(void) {
+    jl_atomic_store_release(&track_newly_inferred, 0);
+}
+JL_DLLEXPORT void jl_log_inferred(jl_value_t *inferred) {
+    if (jl_atomic_load_acquire(&track_newly_inferred)) {
+        JL_LOCK(&newly_inferred_mutex);
+        if (jl_atomic_load_relaxed(&track_newly_inferred)) {
+            size_t end = jl_array_len(newly_inferred);
+            jl_array_grow_end(newly_inferred, 1);
+            jl_arrayset(newly_inferred, inferred, end);
+        }
+        JL_UNLOCK(&newly_inferred_mutex);
+    }
 }
 
 // Serialize the modules in `worklist` to file `fname`
@@ -2648,6 +2667,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     arraylist_new(&reinit_list, 0);
     htable_new(&edges_map, 0);
     htable_new(&backref_table, 5000);
+    assert(!jl_atomic_load_acquire(&track_newly_inferred) && "Should not be tracking codeinstances during precompilation dump!");
     htable_new(&external_mis, newly_inferred ? jl_array_len(newly_inferred) : 0);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
     backref_table_numel = 1;
