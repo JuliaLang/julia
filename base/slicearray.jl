@@ -86,7 +86,7 @@ the ordering of the dimensions will match those in `dims`. If `drop = false`, th
 `Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
-For matrices, the case `dims = 1` is [`eachrow`](@ref), and `dims = 2` is [`eachcol`](@ref). 
+For matrices, the case `dims = 1` is [`eachrow`](@ref), and `dims = 2` is [`eachcol`](@ref).
 
 [`stack`](@ref)`(slices; dims)` is the inverse of `eachslice(A; dims::Integer, drop=true)`.
 See also [`mapslices`](@ref) and [`selectdim`](@ref).
@@ -272,14 +272,14 @@ parent(s::Slices) = s.parent
 
 function showarg(io::IO, s::ColumnSlices, toplevel)
     print(io, "eachcol(")
-    Base.showarg(io, parent(s), false)
+    showarg(io, parent(s), false)
     print(io, ')')
     toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
     return nothing
 end
 function showarg(io::IO, s::RowSlices, toplevel)
     print(io, "eachrow(")
-    Base.showarg(io, parent(s), false)
+    showarg(io, parent(s), false)
     print(io, ')')
     toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
     return nothing
@@ -289,7 +289,7 @@ function showarg(io::IO, s::Slices, toplevel)
     dims_vec = filter(c -> c isa Integer, [findfirst(==(d), s.slicemap) for d in 1:ndims(parent(s))])
     dims = length(dims_vec) == 1 ? only(dims_vec) : Tuple(dims_vec)
     print(io, "eachslice(")
-    Base.showarg(io, parent(s), false)
+    showarg(io, parent(s), false)
     print(io, ", dims = ", dims, drop ? ", drop = false)" : ")")
     toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
     return nothing
