@@ -2275,34 +2275,36 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
         end
     end
 
-    if frame.currbb != 1
-        frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
+    currbb = frame.currbb
+    if currbb != 1
+        currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
     end
 
     states = frame.bb_vartables
-    currstate = copy(states[frame.currbb])
-    while frame.currbb <= nbbs
-        delete!(W, frame.currbb)
-        frame.currpc = first(bbs[frame.currbb].stmts)
-        bbend = last(bbs[frame.currbb].stmts)
+    currstate = copy(states[currbb])
+    while currbb <= nbbs
+        delete!(W, currbb)
+        bbstart = first(bbs[currbb].stmts)
+        bbend = last(bbs[currbb].stmts)
 
-        for frame.currpc in frame.currpc:bbend
-            stmt = frame.src.code[frame.currpc]
+        for currpc in bbstart:bbend
+            frame.currpc = currpc
+            stmt = frame.src.code[currpc]
             # If we're at the end of the basic block ...
-            if frame.currpc == bbend
+            if currpc == bbend
                 # Handle control flow
                 if isa(stmt, GotoNode)
-                    succs = bbs[frame.currbb].succs
+                    succs = bbs[currbb].succs
                     @assert length(succs) == 1
                     nextbb = succs[1]
-                    ssavaluetypes[frame.currpc] = Any
-                    handle_control_backedge!(frame, frame.currpc, stmt.label)
+                    ssavaluetypes[currpc] = Any
+                    handle_control_backedge!(frame, currpc, stmt.label)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
                     condt = abstract_eval_value(interp, condx, currstate, frame)
                     if condt === Bottom
-                        ssavaluetypes[frame.currpc] = Bottom
+                        ssavaluetypes[currpc] = Bottom
                         empty!(frame.pclimitations)
                         @goto find_next_bb
                     end
@@ -2319,22 +2321,22 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         condval isa Bool || union!(frame.limitations, frame.pclimitations)
                         empty!(frame.pclimitations)
                     end
-                    ssavaluetypes[frame.currpc] = Any
+                    ssavaluetypes[currpc] = Any
                     if condval === true
                         @goto fallthrough
                     else
-                        succs = bbs[frame.currbb].succs
+                        succs = bbs[currbb].succs
                         if length(succs) == 1
-                            @assert condval === false || (stmt.dest === frame.currpc + 1)
+                            @assert condval === false || (stmt.dest === currpc + 1)
                             nextbb = succs[1]
                             @goto branch
                         end
                         @assert length(succs) == 2
-                        truebb = frame.currbb + 1
+                        truebb = currbb + 1
                         falsebb = succs[1] == truebb ? succs[2] : succs[1]
                         if condval === false
                             nextbb = falsebb
-                            handle_control_backedge!(frame, frame.currpc, stmt.dest)
+                            handle_control_backedge!(frame, currpc, stmt.dest)
                             @goto branch
                         else
                             # We continue with the true branch, but process the false
@@ -2355,7 +2357,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                                 newstate = update_bbstate!(falsebb, currstate)
                             end
                             if newstate !== nothing
-                                handle_control_backedge!(frame, frame.currpc, stmt.dest)
+                                handle_control_backedge!(frame, currpc, stmt.dest)
                                 push!(W, falsebb)
                             end
                             @goto fallthrough
@@ -2396,7 +2398,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             end
                         end
                     end
-                    ssavaluetypes[frame.currpc] = Any
+                    ssavaluetypes[currpc] = Any
                     @goto find_next_bb
                 elseif isexpr(stmt, :enter)
                     # Propagate entry info to exception handler
@@ -2406,7 +2408,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if newstate !== nothing
                         push!(W, catchbb)
                     end
-                    ssavaluetypes[frame.currpc] = Any
+                    ssavaluetypes[currpc] = Any
                     @goto fallthrough
                 end
                 # Fall through terminator - treat as regular stmt
@@ -2415,12 +2417,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             (; changes, type) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
             if type === Bottom
-                ssavaluetypes[frame.currpc] = Bottom
+                ssavaluetypes[currpc] = Bottom
                 @goto find_next_bb
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
-                let cur_hand = frame.handler_at[frame.currpc], l, enter
+                let cur_hand = frame.handler_at[currpc], l, enter
                     while cur_hand != 0
                         enter = frame.src.code[cur_hand]::Expr
                         l = enter.args[1]::Int
@@ -2436,19 +2438,19 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 end
             end
             if type === nothing
-                ssavaluetypes[frame.currpc] = Any
+                ssavaluetypes[currpc] = Any
                 continue
             end
-            if !isempty(frame.ssavalue_uses[frame.currpc])
-                record_ssa_assign!(frame.currpc, type, frame)
+            if !isempty(frame.ssavalue_uses[currpc])
+                record_ssa_assign!(currpc, type, frame)
             else
-                ssavaluetypes[frame.currpc] = type
+                ssavaluetypes[currpc] = type
             end
-        end # for frame.currpc in frame.currpc:bbend
+        end # for currpc in bbstart:bbend
 
         # Case 1: Fallthrough termination
         begin @label fallthrough
-            nextbb = frame.currbb + 1
+            nextbb = currbb + 1
         end
 
         # Case 2: Directly branch to a different BB
@@ -2461,14 +2463,13 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
         # Case 3: Control flow ended along the current path (converged, return or throw)
         begin @label find_next_bb
-            frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
-            frame.currbb == -1 && break # the working set is empty
-            frame.currbb > nbbs && break
+            currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
+            currbb == -1 && break # the working set is empty
+            currbb > nbbs && break
 
-            frame.currpc = first(bbs[frame.currbb].stmts)
-            stoverwrite!(currstate, states[frame.currbb])
+            stoverwrite!(currstate, states[currbb])
         end
-    end # while frame.currbb <= nbbs
+    end # while currbb <= nbbs
 
     frame.dont_work_on_me = false
     nothing
