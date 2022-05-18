@@ -930,8 +930,12 @@ end
 Infer a `method` and return an `IRCode` with inferred `returntype` on success.
 """
 function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
+    ccall(:jl_typeinf_begin, Cvoid, ())
     frame = typeinf_frame(interp, method, atype, sparams, false)
-    frame === nothing && return nothing, Any
+    if frame === nothing
+        ccall(:jl_typeinf_end, Cvoid, ())
+        return nothing, Any
+    end
     (; result) = frame
     opt_params = OptimizationParams(interp)
     opt = OptimizationState(frame, opt_params, interp)
@@ -941,6 +945,7 @@ function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospeciali
         ir = run_minimal_passes(opt.src, opt, result)
     end
     rt = widenconst(ignorelimited(result.result))
+    ccall(:jl_typeinf_end, Cvoid, ())
     return ir, rt
 end
 
