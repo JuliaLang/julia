@@ -38,7 +38,6 @@ let
         :Unicode,
 
         # 1-depth packages
-        :DelimitedFiles,
         :LinearAlgebra,
         :Markdown,
         :Printf,
