@@ -177,7 +177,7 @@ t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
 
 # Docstrings to parametric methods after definition using where syntax (#32960):
 tw(x::T) where T = nothing
@@ -357,7 +357,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -655,7 +655,7 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found.
 
@@ -704,7 +704,7 @@ Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
+    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}} where T)
 end
 
 # PR #12593
@@ -1457,7 +1457,7 @@ function (f::MyFunc)(x)
     return f
 end
 
-@test docstrings_equal(@doc(MyFunc(2)),
+@test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
 """)
@@ -1513,3 +1513,40 @@ struct S41727
 end
 @test S41727(1) isa S41727
 @test string(@repl S41727.x) == "x is 4\n"
+
+module FunctorCalls
+
+struct A{T, U}
+    x
+end
+
+"A()"
+A() = nothing
+
+"A{Int, Int}()"
+A{Int, Int}() = nothing
+
+"A{S, T}(::S, ::T) where {S, T}"
+(A{S, T}(::S, ::T) where {S, T}) = nothing
+
+"(::A)()"
+(::A)() = nothing
+
+"(::A{S, T})(::S, ::T) where {S, T}"
+((a::A{S, T})(b::S, c::T) where {S, T}) = nothing
+
+"(::A{T, T})() where T"
+(::A{T, T})() where T = nothing
+
+#"A(x)"
+#eval(:($A() = nothing))
+
+end
+
+debug = true
+@test docstrings_equal(@doc(FunctorCalls.A()), doc"A()"; debug)
+@test docstrings_equal(@doc(FunctorCalls.A{Int, Int}()), doc"A{Int, Int}()"; debug)
+@test docstrings_equal(@doc(FunctorCalls.A{S, T}(::S, ::T) where T where S), doc"A{S, T}(::S, ::T) where {S, T}"; debug)
+@test docstrings_equal(@doc((::FunctorCalls.A)()), doc"(::A)()"; debug)
+@test docstrings_equal(@doc((::FunctorCalls.A{S, T})(::S, ::T) where {S, T}), doc"(::A{S, T})(::S, ::T) where {S, T}"; debug)
+@test docstrings_equal(@doc((a::(FunctorCalls.A::UnionAll){T::TypeVar, T::TypeVar})() where T), Docs.catdoc(doc"(::A)()", doc"(::A{T, T})() where T"); debug)

@@ -88,38 +88,44 @@ function initmeta(m::Module)
     nothing
 end
 
-function signature!(tv::Vector{Any}, expr::Expr)
-    is_macrocall = isexpr(expr, :macrocall)
-    if is_macrocall || isexpr(expr, :call)
-        sig = :(Union{Tuple{}})
-        first_arg = is_macrocall ? 3 : 2 # skip function arguments
-        for arg in expr.args[first_arg:end]
-            isexpr(arg, :parameters) && continue
-            if isexpr(arg, :kw) # optional arg
-                push!(sig.args, :(Tuple{$((sig.args[end]::Expr).args[2:end]...)}))
-            end
-            push!((sig.args[end]::Expr).args, argtype(arg))
+function callsignature(args::Vector{Any})
+    sig = :(Union{Tuple{}})
+    for arg in args
+        isexpr(arg, :parameters) && continue
+        if isexpr(arg, :kw) # optional arg
+            push!(sig.args, :(Tuple{$((sig.args[end]::Expr).args[2:end]...)}))
         end
-        if isexpr(expr.args[1], :curly) && isempty(tv)
-            append!(tv, mapany(tvar, (expr.args[1]::Expr).args[2:end]))
+        push!((sig.args[end]::Expr).args, argtype(arg))
+    end
+    sig
+end
+
+function signature(expr::Expr)
+    typevars = Expr[]
+    while isexpr(expr, :where)
+        append!(typevars, tvar.(expr.args[2:end]))
+        expr = expr.args[1]
+    end
+    if isexpr(expr, :macrocall)
+        callsignature(expr.args[3:end])
+    elseif isexpr(expr, :call)
+        sig = callsignature(expr.args[2:end])
+        if expr.args[1] isa Expr && expr.args[1].head !== :.
+            sig = (expr.args[1]::Expr).head === :(::) ?
+                :(Base.Docs.Functor{<:$((expr.args[1]::Expr).args[end]), <:$sig}) :
+                :(Base.Docs.ParametricConstructor{$(expr.args[1]), <:$sig})
         end
-        for i = length(tv):-1:1
-            push!(sig.args, :(Tuple{$((tv[i]::Expr).args[1])}))
-        end
-        for i = length(tv):-1:1
-            sig = Expr(:where, sig, tv[i])
-        end
-        return sig
-    elseif isexpr(expr, :where)
-        append!(tv, mapany(tvar, expr.args[2:end]))
-        return signature!(tv, expr.args[1])
+        isempty(typevars) ? sig : Expr(:where, sig, typevars...)
+    elseif isexpr(expr, :quote) && isexpr(expr.args[1], :macrocall)
+        :(Union{})
     else
-        return signature!(tv, expr.args[1])
+        signature(expr.args[1])
     end
 end
-signature!(tv::Vector{Any}, @nospecialize(other)) = :(Union{})
-signature(expr::Expr) = signature!([], expr)
-signature(@nospecialize other) = signature!([], other)
+signature(@nospecialize other) = :(Union{})
+
+struct ParametricConstructor{S, T} end
+struct Functor{S, T} end
 
 function argtype(expr::Expr)
     isexpr(expr, :(::))  && return expr.args[end]
@@ -297,9 +303,8 @@ function astname(x::Expr, ismacro::Bool)
     head = x.head
     if head === :.
         ismacro ? macroname(x) : x
-    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
-    elseif (head === :function || head === :(=)) && isexpr(x.args[1], :call) && isexpr((x.args[1]::Expr).args[1], :(::))
-        return astname(((x.args[1]::Expr).args[1]::Expr).args[end], ismacro)
+    elseif head === :call && isexpr(x.args[1], :(::))
+        return astname((x.args[1]::Expr).args[end], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
         astname(x.args[n], ismacro)
