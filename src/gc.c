@@ -595,7 +595,7 @@ static size_t max_collect_interval = 1250000000UL;
 // Eventually we can expose this to the user/ci.
 memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
-typedef memsize_t uint32_t;
+typedef uint32_t memsize_t;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t max_collect_interval =  500000000UL;
 // Work really hard to stay within 2GB
