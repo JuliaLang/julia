@@ -537,10 +537,10 @@ end
     @test inserted_block_ranges(info) == [1:4]
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2])
+            BasicBlock(Compiler.StmtRange(1, 2), Int[], [2])
             BasicBlock(Compiler.StmtRange(3, 3), [1], [3, 4])
             BasicBlock(Compiler.StmtRange(4, 4), [2], [4])
-            BasicBlock(Compiler.StmtRange(5, 6), [3, 2], Int64[])
+            BasicBlock(Compiler.StmtRange(5, 6), [3, 2], Int[])
         ],
         [3, 4, 5],
     )
@@ -566,12 +566,12 @@ end
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2])
+            BasicBlock(Compiler.StmtRange(1, 2), Int[], [2])
             BasicBlock(Compiler.StmtRange(3, 3), [1], [3])
             BasicBlock(Compiler.StmtRange(4, 4), [2], [4])
             BasicBlock(Compiler.StmtRange(5, 6), [3], [5])
             BasicBlock(Compiler.StmtRange(7, 7), [4], [6])
-            BasicBlock(Compiler.StmtRange(8, 8), [5], Int64[])
+            BasicBlock(Compiler.StmtRange(8, 8), [5], Int[])
         ],
         [3, 4, 5, 7, 8],
     )
@@ -594,8 +594,8 @@ end
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 3), Int64[], [2])
-            BasicBlock(Compiler.StmtRange(4, 5), [1], Int64[])
+            BasicBlock(Compiler.StmtRange(1, 3), Int[], [2])
+            BasicBlock(Compiler.StmtRange(4, 5), [1], Int[])
         ],
         [4],
     )
@@ -617,8 +617,8 @@ end
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int64[], [2])
-            BasicBlock(Compiler.StmtRange(3, 5), [1], Int64[])
+            BasicBlock(Compiler.StmtRange(1, 2), Int[], [2])
+            BasicBlock(Compiler.StmtRange(3, 5), [1], Int[])
         ],
         [3],
     )
