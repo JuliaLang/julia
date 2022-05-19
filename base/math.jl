@@ -477,7 +477,7 @@ asinh(x::Number)
 
 # functions that return NaN on non-NaN argument for domain error
 """
-    sin(x::Number)
+    sin(x)
 
 Compute sine of `x`, where `x` is in radians.
 
@@ -485,17 +485,9 @@ See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asi
 
 # Examples
 ```jldoctest
-julia> round.(sin.(range(0, 2pi, length=9)), digits=3)
-9-element Vector{Float64}:
-  0.0
-  0.707
-  1.0
-  0.707
-  0.0
- -0.707
- -1.0
- -0.707
- -0.0
+julia> round.(sin.(range(0, 2pi, length=9)'), digits=3)
+1×9 Matrix{Float64}:
+ 0.0  0.707  1.0  0.707  0.0  -0.707  -1.0  -0.707  -0.0
 
 julia> sind(45)
 0.7071067811865476
