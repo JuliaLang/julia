@@ -314,7 +314,12 @@ end
 function getindex(V::FastContiguousSubArray, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ i]
+    out = similar(V, axes(i))
+    li = length(i)
+    if li > 0
+        copyto!(out, firstindex(out), V.parent, V.offset1 + first(i), li)
+    end
+    return out
 end
 
 # For vector views with linear indexing, we disambiguate to favor the stride/offset
@@ -334,7 +339,13 @@ end
 function getindex(V::FastContiguousSubArray{<:Any, 1}, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ i]
+    v = @view V.parent[V.offset1 .+ UnitRange(i)]
+    out = similar(V, axes(i))
+    li = length(i)
+    if li > 0
+        copyto!(out, firstindex(out), V.parent, V.offset1 + first(i), li)
+    end
+    return out
 end
 @inline getindex(V::FastContiguousSubArray, i::Colon) = getindex(V, to_indices(V, (:,))...)
 
@@ -360,7 +371,10 @@ end
 function setindex!(V::FastContiguousSubArray, x, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ i] = x
+    li = length(i)
+    if li > 0
+        copyto!(V.parent, V.offset1 + first(i), x, firstindex(x), li)
+    end
     V
 end
 
@@ -385,7 +399,10 @@ end
 function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ i] = x
+    li = length(i)
+    if li > 0
+        copyto!(V.parent, V.offset1 + first(i), x, firstindex(x), li)
+    end
     V
 end
 @inline setindex!(V::FastSubArray, x, i::Colon) = setindex!(V, x, to_indices(V, (i,))...)

@@ -482,6 +482,10 @@ end
                 c1 = @view a1[inds1]
                 @test c1[axes(c1,1)] == c1[:] == a1[inds1]
 
+                inds12 = Base.IdentityUnitRange(Base.OneTo(4))
+                c1 = @view a1[inds12]
+                @test c1[axes(c1,1)] == c1[:] == a1[inds12]
+
                 inds2 = 3:2:5
                 d1 = @view a1[inds2]
                 @test d1[axes(d1,1)] == d1[:] == a1[inds2]
@@ -505,6 +509,10 @@ end
                 c2 = @view a2[inds1]
                 @test c2[axes(c2,1)] == c2[:] == a2[inds1]
 
+                inds12 = Base.IdentityUnitRange(Base.OneTo(4))
+                c2 = @view a2[inds12]
+                @test c2[axes(c2,1)] == c2[:] == a2[inds12]
+
                 inds2 = 2:2:4
                 d2 = @view a2[inds2];
                 @test d2[axes(d2,1)] == d2[:] == a2[inds2]
@@ -512,43 +520,51 @@ end
         end
     end
     @testset "setindex!" begin
-        a1 = rand(10);
-        a12 = copy(a1);
-        b1 = @view a1[:]; # 1D FastContiguousSubArray
-        c1 = @view a1[eachindex(a1)]; # 1D FastContiguousSubArray
-        d1 = @view a1[begin:1:end]; # 1D FastSubArray
+        @testset "1D" begin
+            a1 = rand(10);
+            a12 = copy(a1);
+            b1 = @view a1[:]; # 1D FastContiguousSubArray
+            c1 = @view a1[eachindex(a1)]; # 1D FastContiguousSubArray
+            d1 = @view a1[begin:1:end]; # 1D FastSubArray
 
-        ax1 = eachindex(a1);
-        @test (b1[ax1] = a12; b1) == (c1[ax1] = a12; c1) == (d1[ax1] = a12; d1) == (a1[ax1] = a12; a1)
-        @test (b1[:] = a12; b1) == (c1[:] = a12; c1) == (d1[:] = a12; d1) == (a1[:] = a12; a1)
+            ax1 = eachindex(a1);
+            @test (b1[ax1] = a12; b1) == (c1[ax1] = a12; c1) == (d1[ax1] = a12; d1) == (a1[ax1] = a12; a1)
+            @test (b1[:] = a12; b1) == (c1[:] = a12; c1) == (d1[:] = a12; d1) == (a1[:] = a12; a1)
 
-        # some arbitary indices
-        ind1 = 2:4
-        c1 = a12[ind1]
-        @test (c1[axes(c1,1)] = a12[ind1]; c1) == (c1[:] = a12[ind1]; c1) == a12[ind1]
+            # some arbitary indices
+            ind1 = 2:4
+            c1 = a12[ind1]
+            @test (c1[axes(c1,1)] = a12[ind1]; c1) == (c1[:] = a12[ind1]; c1) == a12[ind1]
 
-        ind2 = 2:2:8
-        d1 = a12[ind2]
-        @test (d1[axes(d1,1)] = a12[ind2]; d1) == (d1[:] = a12[ind2]; d1) == a12[ind2]
+            ind2 = 2:2:8
+            d1 = a12[ind2]
+            @test (d1[axes(d1,1)] = a12[ind2]; d1) == (d1[:] = a12[ind2]; d1) == a12[ind2]
+        end
 
-        a2 = rand(10, 10);
-        a22 = copy(a2);
-        a2v = vec(a22);
-        b2 = @view a2[:, :]; # 2D FastContiguousSubArray
-        c2 = @view a2[eachindex(a2)]; # 1D FastContiguousSubArray
-        d2 = @view a2[begin:1:end]; # 1D FastSubArray
+        @testset "2D" begin
+            a2 = rand(10, 10);
+            a22 = copy(a2);
+            a2v = vec(a22);
+            b2 = @view a2[:, :]; # 2D FastContiguousSubArray
+            c2 = @view a2[eachindex(a2)]; # 1D FastContiguousSubArray
+            d2 = @view a2[begin:1:end]; # 1D FastSubArray
 
-        @test (b2[eachindex(b2)] = a2v; vec(b2)) == (c2[eachindex(c2)] = a2v; c2) == a2v
-        @test (d2[eachindex(d2)] = a2v; d2) == a2v
+            @test (b2[eachindex(b2)] = a2v; vec(b2)) == (c2[eachindex(c2)] = a2v; c2) == a2v
+            @test (d2[eachindex(d2)] = a2v; d2) == a2v
 
-        # some arbitary indices
-        inds1 = 3:9
-        c2 = @view a2[inds1]
-        @test (c2[eachindex(c2)] = @view(a22[inds1]); c2) == @view(a22[inds1])
+            # some arbitary indices
+            inds1 = 3:9
+            c2 = @view a2[inds1]
+            @test (c2[eachindex(c2)] = @view(a22[inds1]); c2) == @view(a22[inds1])
 
-        inds2 = 3:3:9
-        d2 = @view a2[inds2]
-        @test (d2[eachindex(d2)] = @view(a22[inds2]); d2) == @view(a22[inds2])
+            inds1 = Base.IdentityUnitRange(Base.OneTo(4))
+            c2 = @view a2[inds1]
+            @test (c2[eachindex(c2)] = @view(a22[inds1]); c2) == @view(a22[inds1])
+
+            inds2 = 3:3:9
+            d2 = @view a2[inds2]
+            @test (d2[eachindex(d2)] = @view(a22[inds2]); d2) == @view(a22[inds2])
+        end
     end
 end
 
