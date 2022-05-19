@@ -300,3 +300,6 @@ function showarg(io::IO, s::Slices, toplevel)
     toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
     return nothing
 end
+
+# This hides the SubArray type in compact printing, e.g. (0, eachcol(Float32[1 2; 3 4]), 5)
+typeinfo_prefix(io::IO, @nospecialize s::Slices) = ("", true)
