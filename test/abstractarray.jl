@@ -1544,7 +1544,7 @@ using Base: typed_hvncat
     @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
     @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
 
-    @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9]
+    @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
 end
 
 @testset "keepat!" begin
