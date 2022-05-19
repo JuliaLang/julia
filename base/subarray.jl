@@ -309,6 +309,14 @@ function getindex(V::FastContiguousSubArray, i::Int)
     @inbounds r = V.parent[V.offset1 + i]
     r
 end
+# parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
+# so we may just forward the indexing to the parent
+function getindex(V::FastContiguousSubArray, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ i]
+end
+
 # For vector views with linear indexing, we disambiguate to favor the stride/offset
 # computation as that'll generally be faster than (or just as fast as) re-indexing into a range.
 function getindex(V::FastSubArray{<:Any, 1}, i::Int)
@@ -323,6 +331,12 @@ function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
     @inbounds r = V.parent[V.offset1 + i]
     r
 end
+function getindex(V::FastContiguousSubArray{<:Any, 1}, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ i]
+end
+@inline getindex(V::FastContiguousSubArray, i::Colon) = getindex(V, to_indices(V, (:,))...)
 
 # Indexed assignment follows the same pattern as `getindex` above
 function setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
@@ -343,10 +357,23 @@ function setindex!(V::FastContiguousSubArray, x, i::Int)
     @inbounds V.parent[V.offset1 + i] = x
     V
 end
+function setindex!(V::FastContiguousSubArray, x, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ i] = x
+    V
+end
+
 function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
     @inbounds V.parent[V.offset1 + V.stride1*i] = x
+    V
+end
+function setindex!(V::FastSubArray{<:Any, 1}, x, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ V.stride1 .* i] = x
     V
 end
 function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
@@ -355,6 +382,13 @@ function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
     @inbounds V.parent[V.offset1 + i] = x
     V
 end
+function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ i] = x
+    V
+end
+@inline setindex!(V::FastSubArray, x, i::Colon) = setindex!(V, x, to_indices(V, (i,))...)
 
 function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @inline
