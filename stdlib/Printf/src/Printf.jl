@@ -79,16 +79,18 @@ char(::Type{Val{c}}) where {c} = c
 
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(ArgumentError("empty format string"))
+    isempty(f) && throw(ArgumentError("Format string must be non-empty"))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
     b = 0x00
+
+    # skip ahead to first format specifier
     while pos <= len
         b = bytes[pos]
         pos += 1
         if b == UInt8('%')
-            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            pos > len && throw(ArgumentError("Format string is invalid - first format specifier incomplete at end of string: '$f'"))
             if bytes[pos] == UInt8('%')
                 # escaped '%'
                 b = bytes[pos]
@@ -120,7 +122,7 @@ function Format(f::AbstractString)
             else
                 break
             end
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            pos > len && throw(ArgumentError("Format string is invalid - last format specifier is incomplete: '$f'"))
             b = bytes[pos]
             pos += 1
         end
@@ -139,7 +141,7 @@ function Format(f::AbstractString)
         precision = 0
         parsedprecdigits = false
         if b == UInt8('.')
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            pos > len && throw(ArgumentError("Format string is invalid - precision specifier is missing precision: '$f'"))
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
@@ -158,16 +160,16 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == prev
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                pos > len && throw(ArgumentError("Format string is invalid - unterminated length modifier at end of string: '$f'"))
                 b = bytes[pos]
                 pos += 1
             end
-        elseif b in b"Ljqtz"
+        elseif b in b"Ljqtz" # what is q? Possibly quad?
             b = bytes[pos]
             pos += 1
         end
         # parse type
-        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
+        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("Format string is invalid - '$(Char(b))' is not a valid type specifier: '$f'"))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
             zero = false
@@ -184,7 +186,7 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == UInt8('%')
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                pos > len && throw(ArgumentError("Format string is invalid - last format specifier is incomplete at end of string: '$f'"))
                 if bytes[pos] == UInt8('%')
                     # escaped '%'
                     b = bytes[pos]
@@ -409,11 +411,13 @@ const __BIG_FLOAT_MAX__ = 8192
                 if len > siz
                     maxout = max(__BIG_FLOAT_MAX__,
                                  ceil(Int, precision(x) * log(2) / log(10)) + 25)
+                    # TODO: `error` is kind of generic, is there a more appropriate one to throw?
                     len > maxout &&
                         error("Over $maxout bytes $len needed to output BigFloat $x")
                     resize!(buf, len + 1)
                     len = _snprintf(pointer(buf, pos), len + 1, str, x)
                 end
+                # TODO: when will this actually be thrown? What more informative error would be appropriate?
                 len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
                 return pos + len
             end
@@ -805,7 +809,7 @@ plength(::Spec{PositionCounter}, x) = 0
 end
 
 @noinline argmismatch(a, b) =
-    throw(ArgumentError("mismatch between # of format specifiers and provided args: $a != $b"))
+    throw(ArgumentError("Number of format specifiers and number of provided args differ: $a != $b"))
 
 """
     Printf.format(f::Printf.Format, args...) => String
@@ -892,7 +896,8 @@ macro printf(io_or_fmt, args...)
         return esc(:($Printf.format(stdout, $fmt, $(args...))))
     else
         io = io_or_fmt
-        isempty(args) && throw(ArgumentError("must provide required format string"))
+        isempty(args) && throw(ArgumentError("No arguments provided to `@printf` - use like `@printf [io] <format string> <args...>."))
+        args[1] isa String || throw(ArgumentError("First argument after `IO` has to be a format string."))
         fmt = Format(args[1])
         return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
     end
