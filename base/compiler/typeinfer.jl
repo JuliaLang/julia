@@ -510,9 +510,9 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
-        type_annotate!(me, doopt)
+        recompute_cfg = type_annotate!(me, doopt)
         if doopt && may_optimize(interp)
-            me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
+            me.result.src = OptimizationState(me, OptimizationParams(interp), interp, recompute_cfg)
         else
             me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
         end
@@ -717,8 +717,8 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # dead code elimination for unreachable regions
     i = 1
     oldidx = 0
-    changemap = fill(0, nexpr)
-    while i <= nexpr
+    changemap = nothing
+    while i <= length(body)
         oldidx += 1
         expr = body[i]
         if was_reached(sv, oldidx)
@@ -734,7 +734,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
                 deleteat!(codelocs, i)
                 deleteat!(stmt_info, i)
                 deleteat!(ssaflags, i)
-                nexpr -= 1
+                if changemap === nothing
+                    changemap = fill(0, nexpr)
+                end
                 changemap[oldidx] = -1
                 continue
             else
@@ -743,7 +745,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         end
         i += 1
     end
-    if run_optimizer
+    if changemap !== nothing
         renumber_ir_elements!(body, changemap)
     end
 
@@ -757,7 +759,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     src.code = body
     src.ssavaluetypes = widen_ssavaluetypes!(ssavaluetypes)
 
-    nothing
+    return changemap !== nothing
 end
 
 # at the end, all items in b's cycle
