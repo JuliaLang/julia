@@ -1643,11 +1643,7 @@ For example, given an `ir` containing:
 The predecessors of `#bb′` are equivalent to the predecessors of `#bb`.  The successors of
 `#new_bb_2` are equivalent to the successors of `#bb`.
 
-The returned object `info` can be passed to `foreach_allocated_new_block` for
-iterating over allocated basic blocks.  An indexable object `info.ssachangemap`
-can be used for mapping old SSA values to the new locations.
-
-Properties of `info::NewBlocksInfo`:
+The returned object `info::NewBlocksInfo` has the following properties:
 
 * `positions_nblocks`: The second argument.
 * `block_to_range`: A mapping from an old basic block index to the indices of
@@ -1926,7 +1922,8 @@ end
 
 Iterate over old basic blocks that are split.
 
-Each element of the iterable returned from `split_blocks` has the following properties:
+Each element `sb::SplitBlock` of the iterable returned from `split_blocks` has the following
+properties:
 
 * `blocks::NewBlocksInfo`
 * `oldbb::Int`: Old index of a BB that is split.
@@ -1945,7 +1942,8 @@ function split_blocks end
 
 Iterate over the statement positions at which the old basic blocks are split.
 
-Each element of the iterable returned from `split_positions` has the following properties:
+Each element `sp::SplitPosition` of the iterable returned from `split_positions` has the
+following properties:
 
 * `blocks::NewBlocksInfo`
 * `index`: `blocks.positions_nblocks[index]` is the pair `position => nblocks` that
@@ -1966,7 +1964,8 @@ function split_positions end
 
 Iterate over the newly added basic blocks.
 
-Each element of the iterable returned from `inserted_blocks` has the following properties:
+Each element `ib::InsertedBlock` of the iterable returned from `inserted_blocks` has the
+following properties:
 
 * `blocks::NewBlocksInfo`
 * `index`: `blocks.positions_nblocks[index]` is the pair `position => nblocks` that
@@ -2055,7 +2054,7 @@ For example, given an `ir` containing:
         %1 = instruction_1
         %2 = instruction_2
 
-`allocate_new_blocks!(ir, [2])` produces
+`allocate_new_blocks!(ir, [2 => 1])` produces
 
     #bb′
         %1 = instruction_1
