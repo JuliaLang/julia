@@ -1313,11 +1313,11 @@ internals.
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
-```julia
+```jldoctest
 julia> Base.code_ircode(+, (Float64, Float64))
 1-element Vector{Any}:
-383 1 ─ %1 = Base.add_float(_2, _3)::Float64      │
-    └──      return %1                            │
+ 383 1 ─ %1 = Base.add_float(_2, _3)::Float64
+    └──      return %1
      => Float64
 ```
 """
