@@ -86,31 +86,7 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
-#define DEBUG_TYPE "julia_irgen_codegen"
-
 using namespace llvm;
-
-STATISTIC(EmittedAllocas, "Number of allocas emitted");
-STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
-STATISTIC(ModulesCreated, "Number of LLVM Modules created");
-STATISTIC(EmittedBoxCompares, "Number of box compares emitted");
-STATISTIC(EmittedBitsUnionCompares, "Number of bitsunion compares emitted");
-STATISTIC(EmittedBitsCompares, "Number of bits compares emitted");
-STATISTIC(EmittedEgals, "Number of egals emitted");
-STATISTIC(EmittedOpfields, "Number of opfields emitted");
-STATISTIC(EmittedBuiltinCalls, "Number of builtin calls emitted");
-STATISTIC(EmittedJLCalls, "Number of jlcalls emitted");
-STATISTIC(EmittedSpecfunCalls, "Number of specialized calls emitted");
-STATISTIC(EmittedInvokes, "Number of invokes emitted");
-STATISTIC(EmittedCalls, "Number of calls emitted");
-STATISTIC(EmittedUndefVarErrors, "Number of undef var errors emitted");
-STATISTIC(EmittedOpaqueClosureFunctions, "Number of opaque closures emitted");
-STATISTIC(EmittedToJLInvokes, "Number of tojlinvoke calls emitted");
-STATISTIC(EmittedCFuncInvalidates, "Number of C function invalidates emitted");
-STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");
-STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
-STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
-STATISTIC(EmittedFunctions, "Number of functions emitted");
 
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
@@ -185,6 +161,31 @@ typedef Instruction TerminatorInst;
 #include "codegen_shared.h"
 #include "processor.h"
 #include "julia_assert.h"
+
+#undef DEBUG_TYPE //LLVM occasionally likes to set DEBUG_TYPE in a header...
+#define DEBUG_TYPE "julia_irgen_codegen"
+
+STATISTIC(EmittedAllocas, "Number of allocas emitted");
+STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
+STATISTIC(ModulesCreated, "Number of LLVM Modules created");
+STATISTIC(EmittedBoxCompares, "Number of box compares emitted");
+STATISTIC(EmittedBitsUnionCompares, "Number of bitsunion compares emitted");
+STATISTIC(EmittedBitsCompares, "Number of bits compares emitted");
+STATISTIC(EmittedEgals, "Number of egals emitted");
+STATISTIC(EmittedOpfields, "Number of opfields emitted");
+STATISTIC(EmittedBuiltinCalls, "Number of builtin calls emitted");
+STATISTIC(EmittedJLCalls, "Number of jlcalls emitted");
+STATISTIC(EmittedSpecfunCalls, "Number of specialized calls emitted");
+STATISTIC(EmittedInvokes, "Number of invokes emitted");
+STATISTIC(EmittedCalls, "Number of calls emitted");
+STATISTIC(EmittedUndefVarErrors, "Number of undef var errors emitted");
+STATISTIC(EmittedOpaqueClosureFunctions, "Number of opaque closures emitted");
+STATISTIC(EmittedToJLInvokes, "Number of tojlinvoke calls emitted");
+STATISTIC(EmittedCFuncInvalidates, "Number of C function invalidates emitted");
+STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");
+STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
+STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
+STATISTIC(EmittedFunctions, "Number of functions emitted");
 
 extern "C" JL_DLLEXPORT
 void jl_dump_emitted_mi_name_impl(void *s)

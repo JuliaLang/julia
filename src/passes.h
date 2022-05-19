@@ -59,12 +59,14 @@ struct LowerSIMDLoop : PassInfoMixin<LowerSIMDLoop> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
-struct FinalLowerGCPass : PassInfoMixin<LateLowerGC> {
+struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
 };
 
 struct MultiVersioning : PassInfoMixin<MultiVersioning> {
+    bool external_use;
+    MultiVersioning(bool external_use = false) : external_use(external_use) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
     static bool isRequired() { return true; }
 };
