@@ -206,6 +206,9 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        let enum_hash = hash($(esc(typename)))
+            Base.hash(x::$(esc(typename)), h::UInt) = hash(enum_hash, hash(Integer(x), h))
+        end
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts
         end
