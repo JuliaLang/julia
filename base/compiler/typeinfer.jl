@@ -623,11 +623,9 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
         pc = find_dominating_assignment(id, idx, sv)
         if pc === nothing
             block = block_for_inst(sv.cfg, idx)
-            state = sv.bb_vartables[block]
+            state = sv.bb_vartables[block]::VarTable
             vt = state[id]
-            if vt.undef
-                undefs[id] = true
-            end
+            undefs[id] |= vt.undef
             typ = widenconditional(ignorelimited(vt.typ))
         else
             typ = sv.src.ssavaluetypes[pc]
