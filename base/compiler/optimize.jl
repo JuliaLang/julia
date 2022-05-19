@@ -534,38 +534,30 @@ function ipo_escape_cache(mi_cache::MICache) where MICache
 end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
-"""
-    run_minimal_passes(
-        ci::CodeInfo,
-        sv::OptimizationState,
-        caller::InferenceResult,
-    ) -> ir::IRCode
-
-Transform a `CodeInfo` to an `IRCode`.  Like [`run_passes`](@ref) but it does not run the
-majority of optimization passes.
-"""
-function run_minimal_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
-    @timeit "convert"   ir = convert_to_ircode(ci, sv)
-    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
-    @timeit "compact"   ir = compact!(ir)
-    if JLOptions().debug_level == 2
-        @timeit "verify" (verify_ir(ir); verify_linetable(ir.linetable))
+macro pass(name, expr)
+    optimize_level = esc(:optimize_level)
+    stage = esc(:__stage__)
+    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    quote
+        $macrocall
+        $optimize_level < ($stage += 1) && return $(esc(:ir))
     end
-    return ir
 end
 
-function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
-    @timeit "convert"   ir = convert_to_ircode(ci, sv)
-    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
+function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult, optimize_level::Int = typemax(Int))
+    __stage__ = 1
+    @pass "convert"   ir = convert_to_ircode(ci, sv)
+    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @pass "compact 1" ir = compact!(ir)
+    @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
-    @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = sroa_pass!(ir)
-    @timeit "ADCE"      ir = adce_pass!(ir)
-    @timeit "type lift" ir = type_lift_pass!(ir)
-    @timeit "compact 3" ir = compact!(ir)
+    @pass "compact 2" ir = compact!(ir)
+    @pass "SROA"      ir = sroa_pass!(ir)
+    @pass "ADCE"      ir = adce_pass!(ir)
+    @pass "type lift" ir = type_lift_pass!(ir)
+    @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
