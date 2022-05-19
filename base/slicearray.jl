@@ -270,18 +270,24 @@ end
 
 parent(s::Slices) = s.parent
 
+function _element_size(s::Slices)
+    long = map((n,l) -> l === (:) ? n : nothing, size(s.parent), s.slicemap)
+    filter(!isnothing, long)
+end
+
+# These control summary printing, like `3-element eachcol(adjoint(::Matrix{Int64})) of ...`
 function showarg(io::IO, s::ColumnSlices, toplevel)
     print(io, "eachcol(")
     showarg(io, parent(s), false)
     print(io, ')')
-    toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
+    toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
     return nothing
 end
 function showarg(io::IO, s::RowSlices, toplevel)
     print(io, "eachrow(")
     showarg(io, parent(s), false)
     print(io, ')')
-    toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
+    toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
     return nothing
 end
 function showarg(io::IO, s::Slices, toplevel)
@@ -291,6 +297,6 @@ function showarg(io::IO, s::Slices, toplevel)
     print(io, "eachslice(")
     showarg(io, parent(s), false)
     print(io, ", dims = ", dims, drop ? ", drop = false)" : ")")
-    toplevel && !isempty(s) && print(io, " of ", dims2string(size(first(s))), " slices with eltype ", eltype(eltype(s)))
+    toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
     return nothing
 end
