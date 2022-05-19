@@ -894,15 +894,13 @@ macro printf(io_or_fmt, args...)
     if io_or_fmt isa String
         fmt = Format(io_or_fmt)
         return esc(:($Printf.format(stdout, $fmt, $(args...))))
-    elseif io_or_fmt isa IO
+    else
         io = io_or_fmt
         isempty(args) && throw(ArgumentError("No format string provided to `@printf` - use like `@printf [io] <format string> [<args...>]."))
         fmt_str = first(args)
-        fmt_str isa String || throw(ArgumentError("First argument after `IO` has to be a format string"))
+        fmt_str isa String || throw(ArgumentError("First argument after io has to be a format string"))
         fmt = Format(fmt_str)
         return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
-    else
-        throw(ArgumentError("First argument to `@printf` has to be either an `<: IO` to print to or a format `String`."))
     end
 end
 
