@@ -2406,7 +2406,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
             for i ∈ offset .+ (2:dims[d])
                 for dd ∈ 1:N
                     dd == d && continue
-                    if size(as[startelementi], dd) != size(as[i], dd)
+                    if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
                         throw(ArgumentError("incompatible shape in element $i"))
                     end
                 end
