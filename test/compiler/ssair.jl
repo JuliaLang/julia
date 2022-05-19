@@ -511,6 +511,23 @@ function check_linetable(ir, ir0, info)
     end
 end
 
+#=
+Input:
+
+    #1
+        %1 = $inst1     _
+        %2 = $inst2      `-- split before %2
+        return %2
+
+Output:
+
+    #1
+        %1 = $inst1
+        goto #2
+    #2
+        %3 = $inst2
+        return %3
+=#
 @testset "Split a block in two" begin
     ir0 = singleblock_ircode(3)
     ir = copy(ir0)
@@ -529,6 +546,27 @@ end
     check_linetable(ir, ir0, info)
 end
 
+#=
+Input:
+
+    #1
+        %1 = $inst1    _
+        %2 = $inst2     `-- split before %2 and insert two blocks
+        return %2
+
+Output:
+
+    #1
+        %1 = $inst1
+        goto #2
+    #2
+        goto #4 if not false
+    #3
+        goto #4
+    #4
+        %5 = $inst2
+        return %5
+=#
 @testset "Add one branch (two new blocks) to a single-block IR" begin
     ir0 = singleblock_ircode(3)
     ir = copy(ir0)
@@ -551,6 +589,36 @@ end
     check_linetable(ir, ir0, info)
 end
 
+#=
+Input:
+
+    #1                 _
+        %1 = $inst1     `-- split before %1 and insert one block
+        goto #2
+    #2
+        %3 = $inst2    _
+        return %3       `-- split before %4 (`return %3`) and insert one block
+
+Output:
+
+    #1
+        goto #2
+    #2
+        goto #3
+    #3
+        %1 = $inst1
+        goto #4
+    #4
+        %5 = $inst2
+        goto #5
+    #5
+        goto #6
+    #6
+        return %5
+
+This transformation is testing inserting multiple basic blocks at once.  It also tests that
+inserting at boundary locations work.
+=#
 @testset "Insert two more blocks to a two-block IR" begin
     ir0 = singleblock_ircode(3)
     @testset "Split a block in two" begin
@@ -560,25 +628,44 @@ end
     end
 
     ir = copy(ir0)
-    info = Compiler.allocate_goto_sequence!(ir, [2 => 1, 4 => 1])
+    info = Compiler.allocate_goto_sequence!(ir, [1 => 1, 4 => 1])
     @test length(ir.stmts) == 8
     @test inserted_block_ranges(info) == [1:3, 4:6]
     verify_ircode(ir)
     @test ir.cfg == CFG(
         [
-            BasicBlock(Compiler.StmtRange(1, 2), Int[], [2])
-            BasicBlock(Compiler.StmtRange(3, 3), [1], [3])
-            BasicBlock(Compiler.StmtRange(4, 4), [2], [4])
+            BasicBlock(Compiler.StmtRange(1, 1), Int[], [2])
+            BasicBlock(Compiler.StmtRange(2, 2), [1], [3])
+            BasicBlock(Compiler.StmtRange(3, 4), [2], [4])
             BasicBlock(Compiler.StmtRange(5, 6), [3], [5])
             BasicBlock(Compiler.StmtRange(7, 7), [4], [6])
             BasicBlock(Compiler.StmtRange(8, 8), [5], Int[])
         ],
-        [3, 4, 5, 7, 8],
+        [2, 3, 5, 7, 8],
     )
     @test [ir.stmts.inst[last(b.stmts)] for b in ir.cfg.blocks[1:end-1]] == GotoNode.(2:6)
     check_linetable(ir, ir0, info)
 end
 
+#=
+Input:
+
+    #1
+        %1 = $inst1
+        %3 = new_instruction()   _
+        %2 = $inst2               `-- split before %2
+        return %2
+
+Output:
+
+    #1
+        %1 = $inst1
+        %2 = new_instruction()     # in the pre-split-point BB
+        goto #2
+    #2
+        %4 = $inst2
+        return %4
+=#
 @testset "Split a block of a pre-compact IR (attach before)" begin
     ir0 = singleblock_ircode(3)
     st = Expr(:call, :new_instruction)
@@ -602,6 +689,25 @@ end
     @test ir.stmts[2][:inst] == st
 end
 
+#=
+Input:
+
+    #1
+        %1 = $inst1              _
+        %2 = $inst2               `-- split before %2
+        %3 = new_instruction()
+        return %2
+
+Output:
+
+    #1
+        %1 = $inst1
+        goto #2
+    #2
+        %3 = $inst2
+        %4 = new_instruction()     # in the post-split-point BB
+        return %3
+=#
 @testset "Split a block of a pre-compact IR (attach after)" begin
     ir0 = singleblock_ircode(3)
     st = Expr(:call, :new_instruction)
