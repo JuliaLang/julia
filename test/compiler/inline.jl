@@ -275,15 +275,28 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
-@testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> (@inline; x))).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline function f(x) x end)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) @inline; x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) x end)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x @inline; x end).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x x end).source)
+using Core.Compiler: is_inlineable, set_inlineable!
+
+@testset "check jl_ir_inlining_cost for inline macro" begin
+    @test is_inlineable(only(methods(@inline x -> x)).source)
+    @test is_inlineable(only(methods(x -> (@inline; x))).source)
+    @test !is_inlineable(only(methods(x -> x)).source)
+    @test is_inlineable(only(methods(@inline function f(x) x end)).source)
+    @test is_inlineable(only(methods(function f(x) @inline; x end)).source)
+    @test !is_inlineable(only(methods(function f(x) x end)).source)
+    @test is_inlineable(only(methods() do x @inline; x end).source)
+    @test !is_inlineable(only(methods() do x x end).source)
+end
+
+@testset "basic set_inlineable! functionality" begin
+    ci = code_typed1() do
+        x -> x
+    end
+    set_inlineable!(ci, true)
+    @test is_inlineable(ci)
+    set_inlineable!(ci, false)
+    @test !is_inlineable(ci)
+    @test_throws MethodError set_inlineable!(ci, 5)
 end
 
 const _a_global_array = [1]
@@ -1484,12 +1497,12 @@ end
 @testset "propagate :meta annotations to keyword sorter methods" begin
     # @inline, @noinline, @constprop
     let @inline f(::Any; x::Int=1) = 2x
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test is_inlineable(only(methods(f)).source)
+        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
     end
     let @noinline f(::Any; x::Int=1) = 2x
-        @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
-        @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test !is_inlineable(only(methods(f)).source)
+        @test !is_inlineable(only(methods(Core.kwfunc(f))).source)
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
@@ -1515,9 +1528,9 @@ end
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
+        @test is_inlineable(only(methods(f)).source)
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
         @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
         @test only(methods(f)).nospecialize == -1
         @test only(methods(Core.kwfunc(f))).nospecialize == -1
