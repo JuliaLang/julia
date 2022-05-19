@@ -85,6 +85,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // rr-detach
                         0, // strip-metadata
                         0, // strip-ir
+                        0, // heap-size-hint
     };
     jl_options_initialized = 1;
 }
@@ -177,6 +178,9 @@ static const char opts[]  =
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
     "                            --bug-report=help.\n\n"
+
+    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher that value.\n"
+    "                            The memory hint might be specified in megabytes(500M) or gigabytes(1G)\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -242,6 +246,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_rr_detach,
            opt_strip_metadata,
            opt_strip_ir,
+           opt_heap_size_hint,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -297,6 +302,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "rr-detach",       no_argument,       0, opt_rr_detach },
         { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { "strip-ir",        no_argument,       0, opt_strip_ir },
+        { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { 0, 0, 0, 0 }
     };
 
@@ -755,6 +761,42 @@ restart_switch:
             break;
         case opt_strip_ir:
             jl_options.strip_ir = 1;
+            break;
+        case opt_heap_size_hint:
+            if (optarg != NULL) {
+                size_t endof = strlen(optarg);
+                long double value = 0.0;
+                if (sscanf(optarg, "%Lf", &value) == 1 && value > 1e-7) {
+                    char unit = optarg[endof - 1];
+                    uint64_t multiplier = 1ull;
+                    switch (unit) {
+                        case 'k':
+                        case 'K':
+                            multiplier <<= 10;
+                            break;
+                        case 'm':
+                        case 'M':
+                            multiplier <<= 20;
+                            break;
+                        case 'g':
+                        case 'G':
+                            multiplier <<= 30;
+                            break;
+                        case 't':
+                        case 'T':
+                            multiplier <<= 40;
+                            break;
+                        default:
+                            break;
+                    }
+                    jl_options.heap_size_hint = (uint64_t)(value * multiplier);
+
+                    jl_gc_set_max_memory(jl_options.heap_size_hint);
+                }
+            }
+            if (jl_options.heap_size_hint == 0)
+                jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
+
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
