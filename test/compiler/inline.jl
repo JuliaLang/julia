@@ -1136,14 +1136,14 @@ ambig_effect_test(a, b::Int) = 1
 ambig_effect_test(a, b) = 1
 global ambig_unknown_type_global=1
 @noinline function conditionally_call_ambig(b::Bool, a)
-	if b
-		ambig_effect_test(a, ambig_unknown_type_global)
-	end
-	return 0
+    if b
+        ambig_effect_test(a, ambig_unknown_type_global)
+    end
+    return 0
 end
 function call_call_ambig(b::Bool)
-	conditionally_call_ambig(b, 1)
-	return 1
+    conditionally_call_ambig(b, 1)
+    return 1
 end
 @test !fully_eliminated(call_call_ambig, Tuple{Bool})
 
@@ -1246,3 +1246,36 @@ end
 @test !fully_eliminated() do
     getglobal(@__MODULE__, :my_defined_var, :foo)
 end
+
+# Test for deletion of value-dependent control flow that is apparent
+# at inference time, but hard to delete later.
+function maybe_error_int(x::Int)
+    if x > 2
+        Base.donotdelete(Base.inferencebarrier(x))
+        error()
+    end
+    return 1
+end
+@test fully_eliminated() do
+    return maybe_error_int(1)
+end
+
+# Test that effect modeling for return_type doesn't incorrectly pick
+# up the effects of the function being analyzed
+function f_throws()
+    error()
+end
+
+@noinline function return_type_unused(x)
+    Core.Compiler.return_type(f_throws, Tuple{})
+    return x+1
+end
+
+@test fully_eliminated(Tuple{Int}) do x
+    return_type_unused(x)
+    return nothing
+end
+
+# Test that inlining doesn't accidentally delete a bad return_type call
+f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
+@test_throws MethodError f_bad_return_type()

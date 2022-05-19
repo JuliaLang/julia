@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 18 # do not make changes without bumping the version #!
+const ser_version = 19 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1112,7 +1112,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::Union{Int32, Int}), Int32(deserialize(s)::Union{Int32, Int}))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})

@@ -315,11 +315,11 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     def = item.mi.def::Method
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = Int(compact.result[idx][:line])
+    inlined_at = compact.result[idx][:line]
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
     coverage_by_path = JLOptions().code_coverage == 3
-    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
+    push!(linetable, LineInfoNode(def.module, def.name, def.file, def.line, inlined_at))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
@@ -951,9 +951,9 @@ end
 rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
 
 function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
-    if isa(typ, Const) && isa(typ.val, SimpleVector)
-        length(typ.val) > params.MAX_TUPLE_SPLAT && return false
-        for p in typ.val
+    if isa(typ, Const) && (v = typ.val; isa(v, SimpleVector))
+        length(v) > params.MAX_TUPLE_SPLAT && return false
+        for p in v
             is_inlineable_constant(p) || return false
         end
         return true
@@ -1217,9 +1217,6 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         ir[SSAValue(idx)][:inst] = lateres.val
         check_effect_free!(ir, idx, lateres.val, rt)
         return nothing
-    elseif is_return_type(sig.f)
-        check_effect_free!(ir, idx, stmt, rt)
-        return nothing
     end
 
     return stmt, sig
@@ -1382,9 +1379,7 @@ function inline_const_if_inlineable!(inst::Instruction)
 end
 
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
-    # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Pair{Int, Any}[]
-    et = state.et
 
     for idx in 1:length(ir.stmts)
         simpleres = process_simple!(ir, idx, state, todo)
@@ -1589,6 +1584,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
             end
         end
     end
+    isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
         op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck)

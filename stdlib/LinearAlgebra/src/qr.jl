@@ -159,7 +159,7 @@ function Base.hash(F::QRCompactWY, h::UInt)
     return hash(F.factors, foldr(hash, _triuppers_qr(F.T); init=hash(QRCompactWY, h)))
 end
 function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
-    return A.factors == B.factors && all(splat(==), zip(_triuppers_qr.((A.T, B.T))...))
+    return A.factors == B.factors && all(Splat(==), zip(_triuppers_qr.((A.T, B.T))...))
 end
 function Base.isequal(A::QRCompactWY, B::QRCompactWY)
     return isequal(A.factors, B.factors) && all(zip(_triuppers_qr.((A.T, B.T))...)) do (a, b)

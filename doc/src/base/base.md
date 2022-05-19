@@ -27,8 +27,6 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.require
-Base.compilecache
 Base.__precompile__
 Base.include
 Base.MainInclude.include
@@ -59,7 +57,7 @@ However, you can create variables with names:
 Finally:
 `where` is parsed as an infix operator for writing parametric method and type definitions;
 `in` and `isa` are parsed as infix operators;
-and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop or `generator` expression.
+and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop.
 Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
 
 ```@docs
@@ -85,6 +83,7 @@ finally
 quote
 local
 global
+outer
 const
 struct
 mutable struct
@@ -256,7 +255,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.splat
+Base.Splat
 Base.Fix1
 Base.Fix2
 ```
@@ -332,6 +331,7 @@ Base.@elapsed
 Base.@allocated
 Base.EnvDict
 Base.ENV
+Base.Sys.STDLIB
 Base.Sys.isunix
 Base.Sys.isapple
 Base.Sys.islinux
@@ -344,6 +344,10 @@ Base.Sys.iswindows
 Base.Sys.windows_version
 Base.Sys.free_memory
 Base.Sys.total_memory
+Base.Sys.uptime
+Base.Sys.isjsvm
+Base.Sys.loadavg
+Base.Sys.isexecutable
 Base.@static
 ```
 
@@ -385,6 +389,7 @@ Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ProcessFailedException
+Base.TaskFailedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
@@ -426,6 +431,15 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+```
+
+## Code loading
+
+```@docs
+Base.identify_package
+Base.locate_package
+Base.require
+Base.compilecache
 ```
 
 ## Internals

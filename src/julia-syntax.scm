@@ -543,7 +543,7 @@
         ,(method-def-expr-
           name positional-sparams pargl-all
           `(block
-            ,@(without-generated prologue)
+            ,@(keep-first linenum? (without-generated prologue))
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
@@ -562,7 +562,10 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
-            ,@(filter linenum? prologue)
+            ,@(let ((lnns (filter linenum? prologue)))
+                (if (pair? lnns)
+                    (list (car lnns))
+                    '()))
             ;; nospecialize meta for just positional args
             ,@(map (lambda (m)
                      `(meta ,(cadr m) ,@(filter (lambda (v) (not (memq v keynames)))
@@ -3342,6 +3345,11 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
+           ;; calls to functions with keyword args go through `kwfunc` first
+           (if (and (length= e 3) (equal? (cadr e) '(core kwfunc)))
+               (let ((vi2 (get tab (caddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                      (cdr e))))
         ((decl)

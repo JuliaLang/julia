@@ -11,6 +11,9 @@ const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 An abstract type representing any sort of pattern matching expression
 (typically a regular expression). `AbstractPattern` objects can be used to
 match strings with [`match`](@ref).
+
+!!! compat "Julia 1.6"
+    This type is available in Julia 1.6 and later.
 """
 abstract type AbstractPattern end
 
@@ -266,7 +269,7 @@ function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::SubString; offset::Integer=0)
+function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -298,7 +301,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::SubString, r::Regex)
+function startswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -330,7 +333,7 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::SubString, r::Regex)
+function endswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end

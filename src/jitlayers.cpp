@@ -226,7 +226,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     orc::ThreadSafeContext ctx;
-    auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
+    auto into = unwrap(llvmmod);
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
     if (into == NULL) {
@@ -240,7 +240,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     if (pparams == NULL)
         pparams = &params;
     assert(pparams->tsctx.getContext() == into->getContext().getContext());
-    const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
+    const char *name = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
     bool success = true;
     if (!sysimg) {
         if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
@@ -509,7 +509,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
                     StringRef val = attr.getValueAsString();
                     if (val != "") {
                         size_t ol = (size_t)val[0] - '0';
-                        if (ol >= 0 && ol < optlevel)
+                        if (ol < optlevel)
                             optlevel = ol;
                     }
                 }
@@ -864,6 +864,9 @@ namespace {
 } // namespace
 
 namespace {
+
+    typedef legacy::PassManager PassManager;
+
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
         return orc::JITTargetMachineBuilder(TM.getTargetTriple())
         .setCPU(TM.getTargetCPU().str())
@@ -899,7 +902,7 @@ namespace {
             swap(*this, other);
             return *this;
         }
-        std::unique_ptr<legacy::PassManager> operator()() {
+        std::unique_ptr<PassManager> operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
             addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
             addOptimizationPasses(PM.get(), optlevel);
@@ -967,7 +970,7 @@ namespace {
         }
     private:
         int optlevel;
-        JuliaOJIT::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
+        JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>> PMs;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {

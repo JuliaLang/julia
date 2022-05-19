@@ -587,6 +587,7 @@ Number of ones in the binary representation of abs(x).
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
+divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
 
 cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
 cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))

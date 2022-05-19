@@ -782,7 +782,7 @@ function fieldcount(@nospecialize t)
         if t === nothing
             throw(ArgumentError("type does not have a definite number of fields"))
         end
-    elseif t == Union{}
+    elseif t === Union{}
         throw(ArgumentError("The empty type does not have a well-defined number of fields since it does not have instances."))
     end
     if !(t isa DataType)
@@ -1769,11 +1769,20 @@ When an argument's type annotation is omitted, it's specified as `Any` argument,
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
-    arg2typs = map(args) do x
-        isexpr(x, :(::)) ? (x.args...,) : (x, GlobalRef(Core, :Any))
+    newargs, newargtypes = Any[], Any[]
+    for i = 1:length(args)
+        x = args[i]
+        if isexpr(x, :(::))
+            a = x.args[1]
+            t = x.args[2]
+        else
+            a = x
+            t = GlobalRef(Core, :Any)
+        end
+        push!(newargs, a)
+        push!(newargtypes, t)
     end
-    args, argtypes = first.(arg2typs), last.(arg2typs)
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(argtypes...)}, $(args...); $(kwargs...))))
+    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(newargtypes...)}, $(newargs...); $(kwargs...))))
 end
 
 """

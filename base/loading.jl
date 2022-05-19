@@ -302,25 +302,44 @@ function find_package(arg)
     return locate_package(pkg)
 end
 
-## package identity: given a package name and a context, try to return its identity ##
-identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
+"""
+    Base.identify_package(name::String)::Union{PkgId, Nothing}
+    Base.identify_package(where::Union{Module,PkgId}, name::String)::Union{PkgId, Nothing}
 
-# identify_package computes the PkgId for `name` from the context of `where`
-# or return `nothing` if no mapping exists for it
+Identify the package by its name from the current environment stack, returning
+its `PkgId`, or `nothing` if it cannot be found.
+
+If only the `name` argument is provided, it searches each environment in the
+stack and its named direct dependencies.
+
+There `where` argument provides the context from where to search for the
+package: in this case it first checks if the name matches the context itself,
+otherwise it searches all recursive dependencies (from the resolved manifest of
+each environment) until it locates the context `where`, and from there
+identifies the depdencency with with the corresponding name.
+
+```julia-repl
+julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> using LinearAlgebra
+
+julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
+
+````
+"""
+identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
     where.name === name && return where
     where.uuid === nothing && return identify_package(name) # ignore `where`
     for env in load_path()
-        uuid = manifest_deps_get(env, where, name)
-        uuid === nothing && continue # not found--keep looking
-        uuid.uuid === nothing || return uuid # found in explicit environment--use it
+        pkgid = manifest_deps_get(env, where, name)
+        pkgid === nothing && continue # not found--keep looking
+        pkgid.uuid === nothing || return pkgid # found in explicit environment--use it
         return nothing # found in implicit environment--return "not found"
     end
     return nothing
 end
-
-# identify_package computes the PkgId for `name` from toplevel context
-# by looking through the Project.toml files and directories
 function identify_package(name::String)::Union{Nothing,PkgId}
     for env in load_path()
         uuid = project_deps_get(env, name)
@@ -329,7 +348,20 @@ function identify_package(name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
-## package location: given a package identity, find file to load ##
+"""
+    Base.locate_package(pkg::PkgId)::Union{String, Nothing}
+
+The path to the entry-point file for the package corresponding to the identifier
+`pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
+
+```julia-repl
+julia> pkg = Base.identify_package("Pkg")
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> Base.locate_package(pkg)
+"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
+```
+"""
 function locate_package(pkg::PkgId)::Union{Nothing,String}
     if pkg.uuid === nothing
         for env in load_path()
@@ -789,7 +821,7 @@ end
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(path::String, depmods::Vector{Any})
+function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any})
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
     if isa(sv, Exception)
         return sv
@@ -805,6 +837,11 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
             register_root_module(M)
         end
     end
+
+    # Register this cache path now - If Requires.jl is loaded, Revise may end
+    # up looking at the cache path during the init callback.
+    get!(PkgOrigin, pkgorigins, pkg).cachepath = path
+
     inits = sv[2]::Vector{Any}
     if !isempty(inits)
         unlock(require_lock) # temporarily _unlock_ during these callbacks
@@ -859,7 +896,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::U
     return nothing
 end
 
-function _require_from_serialized(path::String)
+function _require_from_serialized(pkg::PkgId, path::String)
     # loads a precompile cache file, ignoring stale_cachfile tests
     # load all of the dependent modules first
     local depmodnames
@@ -880,7 +917,7 @@ function _require_from_serialized(path::String)
         depmods[i] = dep::Module
     end
     # then load the file
-    return _include_from_serialized(path, depmods)
+    return _include_from_serialized(pkg, path, depmods)
 end
 
 # use an Int counter so that nested @time_imports calls all remain open
@@ -924,7 +961,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if staledeps === true
             continue
         end
-        restored = _include_from_serialized(path_to_try, staledeps)
+        restored = _include_from_serialized(pkg, path_to_try, staledeps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
@@ -1104,10 +1141,7 @@ require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 function _require_prelocked(uuidkey::PkgId)
     just_loaded_pkg = false
     if !root_module_exists(uuidkey)
-        cachefile = _require(uuidkey)
-        if cachefile !== nothing
-            get!(PkgOrigin, pkgorigins, uuidkey).cachepath = cachefile
-        end
+        _require(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
         just_loaded_pkg = true
@@ -1244,11 +1278,11 @@ function _require(pkg::PkgId)
                     end
                     # fall-through to loading the file locally
                 else
-                    m = _require_from_serialized(cachefile)
+                    m = _require_from_serialized(pkg, cachefile)
                     if isa(m, Exception)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     else
-                        return cachefile
+                        return
                     end
                 end
             end
@@ -1575,7 +1609,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    rm(joinpath(cachepath, cachefiles[idx]))
+                    rm(joinpath(cachepath, cachefiles[idx]); force=true)
                 end
             end
 
@@ -2037,8 +2071,6 @@ get_compiletime_preferences(::Nothing) = String[]
                 @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
                 return true
             end
-
-            get!(PkgOrigin, pkgorigins, id).cachepath = cachefile
         end
 
         return depmods # fresh cachefile

@@ -460,9 +460,16 @@ function nextpow(a::Real, x::Real)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     x <= 1 && return one(a)
     n = ceil(Integer,log(a, x))
+    # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    # guard against roundoff error, e.g., with a=5 and x=125
-    p >= x ? p : a^n
+    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    p >= x && return p
+    wp = a^n
+    wp > p || throw(OverflowError("result is beyond the range of type of the base"))
+    wp >= x && return wp
+    wwp = a^(n+1)
+    wwp > wp || throw(OverflowError("result is beyond the range of type of the base"))
+    return wwp
 end
 
 """
@@ -494,13 +501,18 @@ function prevpow(a::T, x::Real) where T <: Real
     a == 2 && isa(x, Integer) && return _prevpow2(x)
     a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
     n = floor(Integer,log(a, x))
+    # round-off error of log can go either direction, so need some checks
     p = a^n
+    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
     if a isa Integer
         wp, overflow = mul_with_overflow(a, p)
-        return (wp <= x && !overflow) ? wp : p
+        wp <= x && !overflow && return wp
+    else
+        wp = a^(n+1)
+        wp <= x && return wp
     end
-    wp = p*a
-    return wp <= x ? wp : p
+    p <= x && return p
+    return a^(n-1)
 end
 
 ## ndigits (number of digits) in base 10 ##

@@ -2031,6 +2031,11 @@ end
     @test typeof(step(r)) === Int8
 end
 
+@testset "length(StepRange()) type stability" begin
+    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0)))
+    typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
+end
+
 @testset "LinRange eltype for element types that wrap integers" begin
     struct RealWrapper{T <: Real} <: Real
         x :: T

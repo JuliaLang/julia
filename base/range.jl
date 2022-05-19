@@ -687,11 +687,6 @@ step_hp(r::AbstractRange) = step(r)
 
 axes(r::AbstractRange) = (oneto(length(r)),)
 
-# Needed to fold the `firstindex` call in SimdLoop.simd_index
-firstindex(::UnitRange) = 1
-firstindex(::StepRange) = 1
-firstindex(::LinRange) = 1
-
 # n.b. checked_length for these is defined iff checked_add and checked_sub are
 # defined between the relevant types
 function checked_length(r::OrdinalRange{T}) where T
@@ -767,13 +762,13 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         # therefore still be valid (if the result is representable at all)
         # n.b. !(s isa T)
         if s isa Unsigned || -1 <= s <= 1 || s == -s
-            a = div(diff, s)
+            a = div(diff, s) % T
         elseif s < 0
-            a = div(unsigned(-diff), -s) % typeof(diff)
+            a = div(unsigned(-diff), -s) % T
         else
-            a = div(unsigned(diff), s) % typeof(diff)
+            a = div(unsigned(diff), s) % T
         end
-        return Integer(a) + oneunit(a)
+        return a + oneunit(T)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
@@ -791,7 +786,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         else
             a = div(checked_sub(start, stop), -s)
         end
-        return checked_add(a, oneunit(a))
+        return checked_add(convert(T, a), oneunit(T))
     end
 end
 

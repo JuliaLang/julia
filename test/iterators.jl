@@ -102,6 +102,7 @@ end
 @test length(zip(cycle(1:3), 1:7, cycle(1:3))) == 7
 @test length(zip(1:3,product(1:7,cycle(1:3)))) == 3
 @test length(zip(1:3,product(1:7,cycle(1:3)),8)) == 1
+@test_throws ArgumentError length(zip()) # length of zip of empty tuple
 
 # map
 # ----
@@ -188,6 +189,13 @@ end
 @test length(drop(1:3,typemax(Int))) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
+@test Base.IteratorSize(Iterators.drop(Iterators.filter(i -> i>0, 1:10), 2)) == Base.SizeUnknown()
+
+let x = Iterators.drop(Iterators.Stateful("abc"), 2)
+    @test !Base.isdone(x, nothing)
+    iterate(x)
+    @test Base.isdone(x, nothing)
+end
 
 # double take
 # and take/drop canonicalization
@@ -236,6 +244,8 @@ let i = 0
         i += 1
         i <= 10 || break
     end
+    @test Base.isdone(cycle(0:3)) === Base.isdone(0:3) === missing
+    @test !Base.isdone(cycle(0:3), 1)
 end
 
 # repeated
@@ -430,6 +440,10 @@ end
 @test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape{2}()
 @test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape{1}()
 @test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape{2}()
+@test Base.IteratorSize(product((1,2,3,4), (5, 6, 7, 8)))    == Base.HasShape{2}()  # product of ::HasLength and ::HasLength
+@test Base.IteratorSize(product(1:2, 3:5, 5:6))              == Base.HasShape{3}()  # product of 3 iterators
+@test Base.IteratorSize(product([1 2; 3 4], 1:4))            == Base.HasShape{3}()  # product of ::HasShape{2} with ::HasShape{1}
+@test Base.IteratorSize(product([1 2; 3 4], (1,2)))          == Base.HasShape{3}()  # product of ::HasShape{2} with ::HasLength
 
 # IteratorEltype trait business
 let f1 = Iterators.filter(i->i>0, 1:10)
@@ -447,11 +461,15 @@ end
 @test Base.IteratorEltype(product(take(1:2, 1), take(1:2, 1))) == Base.HasEltype()
 @test Base.IteratorEltype(product(take(1:2, 2)))               == Base.HasEltype()
 @test Base.IteratorEltype(product([1 2; 3 4]))                 == Base.HasEltype()
+@test Base.IteratorEltype(product())                           == Base.HasEltype()
 
 @test collect(product(1:2,3:4)) == [(1,3) (1,4); (2,3) (2,4)]
 @test isempty(collect(product(1:0,1:2)))
 @test length(product(1:2,1:10,4:6)) == 60
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
+
+@test Base.iterate(product()) == ((), true)
+@test Base.iterate(product(), 1) == nothing
 
 # intersection
 @test intersect(product(1:3, 4:6), product(2:4, 3:5)) == Iterators.ProductIterator((2:3, 4:5))
@@ -471,6 +489,12 @@ end
 @test collect(flatten(())) == Union{}[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
+
+@testset "IteratorSize trait for flatten" begin
+    @test Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1)) == Base.SizeUnknown()
+    @test Base.IteratorSize(Base.Flatten((1,2))) == Base.HasLength()
+    @test Base.IteratorSize(Base.Flatten(1:2:4)) == Base.HasLength()
+end
 
 @test Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
 # see #29112, #29464, #29548
@@ -505,7 +529,7 @@ let v = collect(partition([1,2,3,4,5], 1))
 end
 
 let v1 = collect(partition([1,2,3,4,5], 2)),
-    v2 = collect(partition(flatten([[1,2],[3,4],5]), 2)) # collecting partition with SizeUnkown
+    v2 = collect(partition(flatten([[1,2],[3,4],5]), 2)) # collecting partition with SizeUnknown
     @test v1[1] == v2[1] == [1,2]
     @test v1[2] == v2[2] == [3,4]
     @test v1[3] == v2[3] == [5]
@@ -584,7 +608,7 @@ end
             @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
             @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
         end
-        @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), iter))
+        @test all(Base.Splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
 end
 @testset "empty/invalid partitions" begin
@@ -746,6 +770,7 @@ end
         @test popfirst!(a) == 'a'
         @test collect(Iterators.take(a, 3)) == ['b','c','d']
         @test collect(a) == ['e', 'f']
+        @test_throws EOFError popfirst!(a) # trying to pop from an empty stateful iterator.
     end
     let a = @inferred(Iterators.Stateful([1, 1, 1, 2, 3, 4]))
         for x in a; x == 1 || break; end
@@ -860,6 +885,8 @@ end
     @test_throws ArgumentError only([])
     @test_throws ArgumentError only([3, 2])
 
+    @test only(fill(42)) === 42 # zero dimensional array containing a single value.
+
     @test @inferred(only((3,))) === 3
     @test_throws ArgumentError only(())
     @test_throws ArgumentError only((3, 2))
@@ -911,6 +938,23 @@ end
     @test cumsum(x^2 for x in 1:3) == [1, 5, 14]
     @test cumprod(x + 1 for x in 1:3) == [2, 6, 24]
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
+end
+
+
+@testset "Iterators.tail_if_any" begin
+    @test Iterators.tail_if_any(()) == ()
+    @test Iterators.tail_if_any((1, 2)) == (2,)
+    @test Iterators.tail_if_any((1,)) == ()
+end
+
+@testset "IteratorSize trait for zip" begin
+    @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
+    @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
+    @test Base.IteratorSize(zip( 1:5, repeated(0) )) == Base.HasLength()    # for zip of ::HasShape and ::IsInfinite
+    @test Base.IteratorSize(zip(repeated(0), (1,2,3))) == Base.HasLength()  # for zip of ::IsInfinite and ::HasLength
+    @test Base.IteratorSize(zip(repeated(0), 1:5 )) == Base.HasLength()     # for zip of ::IsInfinite and ::HasShape
+    @test Base.IteratorSize(zip((1,2,3), 1:5) ) == Base.HasLength()         # for zip of ::HasLength and ::HasShape
+    @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
 end
 
 @testset "proper patition for non-1-indexed vector" begin

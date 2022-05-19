@@ -70,6 +70,7 @@ end
     @test unsigned(Bool) === typeof(unsigned(true))
 end
 @testset "bswap" begin
+    @test bswap(true) == true
     @test bswap(Int8(3)) == 3
     @test bswap(UInt8(3)) === 0x3
     @test bswap(Int16(3)) == 256*3
@@ -123,7 +124,7 @@ end
 @test mod(123, UInt8) === 0x7b
 
 primitive type MyBitsType <: Signed 8 end
-@test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
+@test_throws ErrorException ~reinterpret(MyBitsType, 0x7b)
 @test signed(MyBitsType) === MyBitsType
 
 UItypes = Base.BitUnsigned_types

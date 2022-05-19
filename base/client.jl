@@ -207,10 +207,6 @@ function incomplete_tag(ex::Expr)
 end
 
 function exec_options(opts)
-    if !isempty(ARGS)
-        idxs = findall(x -> x == "--", ARGS)
-        length(idxs) > 0 && deleteat!(ARGS, idxs[1])
-    end
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
@@ -514,6 +510,8 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
+    # clear any postoutput hooks that were saved in the sysimage
+    empty!(Base.postoutput_hooks)
     try
         exec_options(JLOptions())
     catch
