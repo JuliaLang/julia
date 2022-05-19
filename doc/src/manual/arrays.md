@@ -121,7 +121,7 @@ julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
  1.0
  2.3
  0.8
- 
+
 julia> Float32[1, 2.3, 4//5] # Specify element type manually
 3-element Vector{Float32}:
  1.0
