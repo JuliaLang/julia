@@ -1563,16 +1563,25 @@ JL_CALLABLE(jl_f__primitivetype)
 
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
-        tt->super != NULL ||
-        tt->name == ((jl_datatype_t*)super)->name ||
-        jl_is_tuple_type(super) ||
-        jl_is_namedtuple_type(super) ||
-        jl_subtype(super, (jl_value_t*)jl_type_type) ||
-        jl_subtype(super, (jl_value_t*)jl_builtin_type)) {
-        jl_errorf("invalid subtyping in definition of %s",
-                  jl_symbol_name(tt->name->name));
-    }
+    const char *error = NULL;
+    if (!jl_is_datatype(super))
+        error = "can only subtype data types";
+    else if (tt->super != NULL)
+        error = "type already has a supertype";
+    else if (tt->name == ((jl_datatype_t*)super)->name)
+        error = "a type cannot subtype itself";
+    else if (jl_is_tuple_type(super))
+        error = "cannot subtype a tuple type";
+    else if (jl_is_namedtuple_type(super))
+        error = "cannot subtype a named tuple type";
+    else if (jl_subtype(super, (jl_value_t*)jl_type_type))
+        error = "cannot add subtypes to Type";
+    else if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
+        error = "cannot add subtypes to Core.Builtin";
+    else if (!jl_is_abstracttype(super))
+        error = "can only subtype abstract types";
+    if (error)
+         jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
 }

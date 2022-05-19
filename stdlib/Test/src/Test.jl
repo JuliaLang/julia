@@ -1425,7 +1425,10 @@ function testset_forloop(args, testloop, source)
         # they can be handled properly by `finally` lowering.
         if !first_iteration
             pop_testset()
+            finish_errored = true
             push!(arr, finish(ts))
+            finish_errored = false
+
             # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
             copy!(RNG, tmprng)
 
@@ -1447,6 +1450,7 @@ function testset_forloop(args, testloop, source)
         local arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local finish_errored = false
         local RNG = default_rng()
         local oldrng = copy(RNG)
         local oldseed = Random.GLOBAL_SEED
@@ -1458,7 +1462,7 @@ function testset_forloop(args, testloop, source)
             end
         finally
             # Handle `return` in test body
-            if !first_iteration
+            if !first_iteration && !finish_errored
                 pop_testset()
                 push!(arr, finish(ts))
             end

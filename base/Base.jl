@@ -181,6 +181,7 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+include("slicearray.jl")
 
 # SIMD loops
 sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop

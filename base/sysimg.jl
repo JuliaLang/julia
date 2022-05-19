@@ -38,7 +38,6 @@ let
         :Unicode,
 
         # 1-depth packages
-        :DelimitedFiles,
         :LinearAlgebra,
         :Markdown,
         :Printf,
@@ -114,12 +113,12 @@ let
     tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg
 
     println("Sysimage built. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
-    print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
-    print("Stdlibs: ──── "); Base.time_print(tot_time_stdlib * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib / tot_time) * 100); println("%")
+    print("Base ──────── "); Base.time_print(tot_time_base    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base    / tot_time) * 100); println("%")
+    print("Stdlibs ───── "); Base.time_print(tot_time_stdlib  * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib  / tot_time) * 100); println("%")
     if isfile("userimg.jl")
-    print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
+    print("Userimg ───── "); Base.time_print(tot_time_userimg * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg / tot_time) * 100); println("%")
     end
+    print("Total ─────── "); Base.time_print(tot_time         * 10^9); println();
 
     empty!(LOAD_PATH)
     empty!(DEPOT_PATH)

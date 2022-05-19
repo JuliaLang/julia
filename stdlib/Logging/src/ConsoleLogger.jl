@@ -73,7 +73,7 @@ function default_metafmt(level::LogLevel, _module, group, id, file, line)
     _module !== nothing && (suffix *= string(_module)::String)
     if file !== nothing
         _module !== nothing && (suffix *= " ")
-        suffix *= Base.contractuser(file)::String
+        suffix *= contractuser(file)::String
         if line !== nothing
             suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
         end

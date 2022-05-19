@@ -1499,3 +1499,17 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
     end
 end
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    repl.interface = REPL.setup_interface(repl)
+    s = LineEdit.init_state(repl.t, repl.interface)
+    LineEdit.edit_insert(s, "1234αβ")
+    input_f = function(filename, line, column)
+        write(filename, "1234αβ56γ\n")
+    end
+    LineEdit.edit_input(s, input_f)
+    @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
+end

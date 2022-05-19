@@ -746,7 +746,7 @@ end
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
-function _extrema(v::AbstractArray, lo::Integer, hi::Integer, o::Ordering)
+function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     mn = mx = v[lo]
     @inbounds for i in (lo+1):hi
         vi = v[i]
@@ -1111,11 +1111,7 @@ function sortperm(v::AbstractVector;
             end
         end
     end
-    ax = axes(v, 1)
-    p = similar(Vector{eltype(ax)}, ax)
-    for (i,ind) in zip(eachindex(p), ax)
-        p[i] = ind
-    end
+    p = copymutable(eachindex(v))
     sort!(p, alg, Perm(ordr,v))
 end
 

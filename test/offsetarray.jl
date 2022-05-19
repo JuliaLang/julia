@@ -3,7 +3,6 @@
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 import .Main.OffsetArrays: IdOffsetRange
-using DelimitedFiles
 using Random
 using LinearAlgebra
 using Statistics
@@ -493,11 +492,6 @@ B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
         @test sum(v) ≈ sum(parent(v))
     end
 end
-
-io = IOBuffer()
-writedlm(io, A)
-seek(io, 0)
-@test readdlm(io, eltype(A)) == parent(A)
 
 amin, amax = extrema(parent(A))
 @test clamp.(A, (amax+amin)/2, amax).parent == clamp.(parent(A), (amax+amin)/2, amax)
