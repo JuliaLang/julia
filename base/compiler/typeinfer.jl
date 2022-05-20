@@ -485,7 +485,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     limited_ret = me.bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
-        gt = me.src.ssavaluetypes::Vector{Any}
+        gt = me.ssavaluetypes
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
             if gtj isa LimitedAccuracy && me.parent !== nothing
@@ -582,7 +582,7 @@ function record_slot_assign!(sv::InferenceState)
     # to compute a lower bound on the storage required
     body = sv.src.code::Vector{Any}
     slottypes = sv.slottypes::Vector{Any}
-    ssavaluetypes = sv.src.ssavaluetypes::Vector{Any}
+    ssavaluetypes = sv.ssavaluetypes
     for i = 1:length(body)
         expr = body[i]
         # find all reachable assignments to locals
@@ -628,7 +628,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             undefs[id] |= vt.undef
             typ = widenconditional(ignorelimited(vt.typ))
         else
-            typ = sv.src.ssavaluetypes[pc]
+            typ = sv.ssavaluetypes[pc]
             @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
@@ -689,7 +689,7 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     body = copy(src.code::Vector{Any})
     nexpr = length(body)
     codelocs = src.codelocs
-    ssavaluetypes = copy(src.ssavaluetypes)
+    ssavaluetypes = copy(sv.ssavaluetypes)
     ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)

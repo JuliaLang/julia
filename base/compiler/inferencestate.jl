@@ -98,6 +98,7 @@ mutable struct InferenceState
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
+    ssavaluetypes::Vector{Any}
     stmt_edges::Vector{Union{Nothing,Vector{Any}}}
     stmt_info::Vector{Any}
 
@@ -158,6 +159,7 @@ mutable struct InferenceState
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
         end
+        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
 
         pclimitations = IdSet{InferenceState}()
         limitations = IdSet{InferenceState}()
@@ -187,14 +189,13 @@ mutable struct InferenceState
 
         frame = new(
             linfo, world, mod, sptypes, slottypes, src, cfg,
-            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, stmt_edges, stmt_info,
+            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
             params, restrict_abstract_call_sites, cached,
             interp)
 
         # some more setups
-        src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         params.unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)
@@ -229,7 +230,7 @@ function any_inbounds(code::Vector{Any})
     return false
 end
 
-was_reached(sv::InferenceState, pc::Int) = sv.src.ssavaluetypes[pc] !== NOT_FOUND
+was_reached(sv::InferenceState, pc::Int) = sv.ssavaluetypes[pc] !== NOT_FOUND
 
 function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # The goal initially is to record the frame like this for the state at exit:
@@ -428,7 +429,7 @@ end
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
 function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceState)
-    ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
+    ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
     if old === NOT_FOUND || !(new ⊑ old)
         # typically, we expect that old ⊑ new (that output information only

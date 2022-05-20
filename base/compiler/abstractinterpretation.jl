@@ -1555,7 +1555,8 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     match === nothing && return CallMeta(Any, Effects(), false)
     update_valid_age!(sv, valid_worlds)
     method = match.method
-    (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    ti = tienv[1]; env = tienv[2]::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
     effects = result.edge_effects
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
@@ -1738,7 +1739,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
         body_call = abstract_call_opaque_closure(interp, ft, ArgInfo(arginfo.fargs, newargtypes), sv)
         # Analyze implicit type asserts on argument and return type
         ftt = ft.typ
-        (at, rt) = unwrap_unionall(ftt).parameters
+        (at, rt) = (unwrap_unionall(ftt)::DataType).parameters
         if isa(rt, TypeVar)
             rt = rewrap_unionall(rt.lb, ftt)
         else
@@ -2039,7 +2040,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
             end
-        elseif isa(sym, Expr) && sym.head === :static_parameter
+        elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
                 spty = sv.sptypes[n]
@@ -2103,9 +2104,10 @@ function handle_global_assignment!(interp::AbstractInterpreter, frame::Inference
         nothrow=nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
 end
 
-abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.src)
-function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
-    typ = (src.ssavaluetypes::Vector{Any})[s.id]
+abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
+abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
+function abstract_eval_ssavalue(s::SSAValue, ssavaluetypes::Vector{Any})
+    typ = ssavaluetypes[s.id]
     if typ === NOT_FOUND
         return Bottom
     end
@@ -2277,7 +2279,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     isva = isa(def, Method) && def.isva
     nargs = length(frame.result.argtypes) - isva
     slottypes = frame.slottypes
-    ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
+    ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
 
@@ -2398,7 +2400,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
                         frame.bestguess = bestguess
                         for (caller, caller_pc) in frame.cycle_backedges
-                            if !((caller.src.ssavaluetypes::Vector{Any})[caller_pc] === Any)
+                            if !(caller.ssavaluetypes[caller_pc] === Any)
                                 # no reason to revisit if that call-site doesn't affect the final result
                                 push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
                             end
