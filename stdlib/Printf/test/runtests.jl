@@ -783,9 +783,9 @@ end
 end
 
 @testset "length modifiers" begin
-    @test_throws Printf.InvalidFormatStringError Printf.@sprintf("%h", 1)
-    @test_throws Printf.InvalidFormatStringError Printf.@sprintf("%hh", 1)
-    @test_throws Printf.InvalidFormatStringError Printf.@sprintf("%z", 1)
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%h")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%hh")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%z")
 end
 
 end # @testset "Printf"
