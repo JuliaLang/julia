@@ -541,12 +541,12 @@ macro pass(name, expr)
     macrocall.args[2] = __source__  # `@timeit` may want to use it
     quote
         $macrocall
-        $optimize_level < ($stage += 1) && return $(esc(:ir))
+        $optimize_level < ($stage += 1) && $(esc(:(@goto __done__)))
     end
 end
 
 function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult, optimize_level::Int = typemax(Int))
-    __stage__ = 1
+    __stage__ = 1  # used by @pass
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
@@ -561,6 +561,7 @@ function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
+    @label __done__  # used by @pass
     return ir
 end
 
