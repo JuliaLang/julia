@@ -80,20 +80,16 @@ char(::Type{Val{c}}) where {c} = c
 struct InvalidFormatStringError <: Exception
     message::String
     format::String
-    position::Int
+    start_color::Int
+    end_color::Int
 end
 
-function showerror(io::IO, err::InvalidFormatStringError)
+function Base.showerror(io::IO, err::InvalidFormatStringError)
     io_has_color = get(io, :color, false)
 
-    println(io, err.message, ':')
-    print(io, "\t'", @view err.format[begin:prevind(err.format, err.position)])
-    # err.position may be greater than the last character
-    invalid_text = if checkbounds(Bool, err.position, err.format)
-        format_str[pos]
-    else
-        ""
-    end
+    println(io, "InvalidFormatStringError: ", err.message)
+    print(io, "\t\"", @view(err.format[begin:prevind(err.format, err.start_color)]))
+    invalid_text = @view err.format[err.start_color:err.end_color]
 
     if io_has_color
         printstyled(io, invalid_text, color=:red)
@@ -101,9 +97,11 @@ function showerror(io::IO, err::InvalidFormatStringError)
         print(io, invalid_text)
     end
 
-    println(io, @view err.format[min(end+1, pos):end], '\'')
+    # +1 is okay, since all format characters are single bytes
+    println(io, @view(err.format[err.end_color+1:end]), "\"")
 
-    arrow = '\t' * ('-'^pos) * "^\n"
+    arrow_error = '-'^(length(invalid_text)-1)
+    arrow = "\t" * ' '^err.start_color * arrow_error * "^\n"
     if io_has_color
         printstyled(io, arrow, color=:red)
     else
@@ -113,18 +111,20 @@ end
 
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1))
+    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
     b = 0x00
+    local last_percent_pos
 
     # skip ahead to first format specifier
     while pos <= len
         b = bytes[pos]
         pos += 1
         if b == UInt8('%')
-            pos > len && throw(InvalidFormatStringError("First format specifier incomplete at end of string", f, pos))
+            last_percent_pos = pos-1
+            pos > len && throw(InvalidFormatStringError("Format specifier incomplete", f, last_percent_pos, last_percent_pos))
             if bytes[pos] == UInt8('%')
                 # escaped '%'
                 b = bytes[pos]
@@ -156,7 +156,7 @@ function Format(f::AbstractString)
             else
                 break
             end
-            pos > len && throw(InvalidFormatStringError("Last format specifier is incomplete", f, pos))
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
         end
@@ -175,7 +175,7 @@ function Format(f::AbstractString)
         precision = 0
         parsedprecdigits = false
         if b == UInt8('.')
-            pos > len && throw(InvalidFormatStringError("Precision specifier is missing precision", f, pos))
+            pos > len && throw(InvalidFormatStringError("Precision specifier is missing precision", f, last_percent_pos, pos-1))
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
@@ -194,7 +194,7 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == prev
-                pos > len && throw(InvalidFormatStringError("Unterminated length modifier at end of string", f, pos))
+                pos > len && throw(InvalidFormatStringError("Unterminated length modifier", f, last_percent_pos, pos-1))
                 b = bytes[pos]
                 pos += 1
             end
@@ -203,7 +203,7 @@ function Format(f::AbstractString)
             pos += 1
         end
         # parse type
-        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, pos))
+        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
             zero = false
@@ -220,7 +220,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == UInt8('%')
-                pos > len && throw(InvalidFormatStringError("Last format specifier is incomplete at end of string", f, pos))
+                last_percent_pos = pos-1
+                pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, last_percent_pos))
                 if bytes[pos] == UInt8('%')
                     # escaped '%'
                     b = bytes[pos]
