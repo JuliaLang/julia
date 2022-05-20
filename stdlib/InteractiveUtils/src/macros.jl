@@ -507,6 +507,40 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             return expand_ref_begin_end!(ex0, __module__) do ex
                 gen_call(fcn, Any[getindex, ex.args...], where_params, kws; use_signature_tuple)
             end
+        elseif ex0.head === :ncat || ex0.head === :typed_ncat
+            if ex0.head === :ncat
+                f = Base.hvncat
+                args = ex0.args
+            else
+                f = Base.typed_hvncat
+                args = ex0.args[2:end]
+            end
+            xs = []
+            function extract_elements(x)
+                if isa(x, Expr)
+                    if x.head === :nrow
+                        extract_elements.(x.args[2:end])
+                    elseif x.head === :row
+                        extract_elements.(x.args)
+                    else
+                        push!(xs, x)
+                    end
+                else
+                    push!(xs, x)
+                end
+            end
+            if any(a->isa(a,Expr) && (a.head === :nrow || a.head === :row), args)
+                extract_elements.(args[2:end])
+                return Expr(:call, fcn, f,
+                            Expr(:call, typesof,
+                                (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
+                                Expr(:tuple, 2, 1, 2), # placeholder
+                                true, #placeholder
+                                map(esc, xs)...), kws...)
+            else
+                extract_elements.(args[2:end])
+                return Expr(:call, error, "hello 2 $(args), $xs")
+            end
         else
             for (head, f) in Any[:hcat => Base.hcat,
                                  :(.) => Base.getproperty,
