@@ -515,6 +515,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 f = Base.typed_hvncat
                 args = ex0.args[2:end]
             end
+            d = args[1]
+            args = args[2:end]
             xs = []
             function extract_elements(x)
                 if isa(x, Expr)
@@ -529,8 +531,37 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     push!(xs, x)
                 end
             end
+            function get_shape(a, is_row_first, d)
+                is_row(x) = x.head === :row || x.head === :nrow
+                function get_next(x)
+                    if !is_row(x) ||
+                        x.head === :nrow && d > x.args[1] + 1 ||
+                        x.head === :row && d > 1
+                        return [x]
+                    elseif x.head === :nrow
+                        return x.args[2:end]
+                    else
+                        return x.args
+                    end
+                end
+                if d == 0 || d == 1 && !is_row_first
+                    return length(a)
+                elseif d == 3 && is_row_first
+                    return get_shape(a, is_row_first, d - 1)
+                else
+                    ashape = map(x -> get_shape(get_next(x), is_row_first, d - 1), a)
+                    if isa(ashape[1], Expr)
+                        counts = ashape .|> first
+                        prev_counts = ashape .|> last
+                        return [sum(counts), counts, map(x -> vcat(x...), prev_counts)]
+                    else
+                        return [sum(ashape), ashape]
+                    end
+                end
+            end
             if any(a->isa(a,Expr) && (a.head === :nrow || a.head === :row), args)
-                extract_elements.(args[2:end])
+                extract_elements.(args)
+                get_shape(args, true, d)
                 return Expr(:call, fcn, f,
                             Expr(:call, typesof,
                                 (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
@@ -538,7 +569,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                                 true, #placeholder
                                 map(esc, xs)...), kws...)
             else
-                extract_elements.(args[2:end])
+                extract_elements.(args)
                 return Expr(:call, error, "hello 2 $(args), $xs")
             end
         else
