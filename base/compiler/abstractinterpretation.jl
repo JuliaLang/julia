@@ -2256,7 +2256,8 @@ end
     if bbtable === nothing
         # if a basic block hasn't been analyzed yet,
         # we can update its state a bit more aggressively
-        return frame.bb_vartables[bb] = copy(vartable)
+        frame.bb_vartables[bb] = copy(vartable)
+        return true
     else
         return stupdate!(bbtable, vartable)
     end
@@ -2356,15 +2357,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                                 else
                                     false_vartable = currstate
                                 end
-                                newstate = update_bbstate!(frame, falsebb, false_vartable)
+                                changed = update_bbstate!(frame, falsebb, false_vartable)
                                 then_change = conditional_change(currstate, condt.vtype, condt.var)
                                 if then_change !== nothing
                                     stoverwrite1!(currstate, then_change)
                                 end
                             else
-                                newstate = update_bbstate!(frame, falsebb, currstate)
+                                changed = update_bbstate!(frame, falsebb, currstate)
                             end
-                            if newstate !== nothing
+                            if changed
                                 handle_control_backedge!(frame, currpc, stmt.dest)
                                 push!(W, falsebb)
                             end
@@ -2412,8 +2413,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     # Propagate entry info to exception handler
                     l = stmt.args[1]::Int
                     catchbb = block_for_inst(frame.cfg, l)
-                    newstate = update_bbstate!(frame, catchbb, currstate)
-                    if newstate !== nothing
+                    if update_bbstate!(frame, catchbb, currstate)
                         push!(W, catchbb)
                     end
                     ssavaluetypes[currpc] = Any
@@ -2463,8 +2463,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
         # Case 2: Directly branch to a different BB
         begin @label branch
-            newstate = update_bbstate!(frame, nextbb, currstate)
-            if newstate !== nothing
+            if update_bbstate!(frame, nextbb, currstate)
                 push!(W, nextbb)
             end
         end

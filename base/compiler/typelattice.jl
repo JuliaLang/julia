@@ -377,7 +377,7 @@ ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
 function stupdate!(state::VarTable, changes::StateUpdate)
-    newstate = nothing
+    changed = false
     changeid = slot_id(changes.var)
     for i = 1:length(state)
         if i == changeid
@@ -396,24 +396,24 @@ function stupdate!(state::VarTable, changes::StateUpdate)
             end
         end
         if schanged(newtype, oldtype)
-            newstate = state
             state[i] = smerge(oldtype, newtype)
+            changed = true
         end
     end
-    return newstate
+    return changed
 end
 
 function stupdate!(state::VarTable, changes::VarTable)
-    newstate = nothing
+    changed = false
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
         if schanged(newtype, oldtype)
-            newstate = state
             state[i] = smerge(oldtype, newtype)
+            changed = true
         end
     end
-    return newstate
+    return changed
 end
 
 function stupdate1!(state::VarTable, change::StateUpdate)
