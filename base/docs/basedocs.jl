@@ -2034,9 +2034,12 @@ Binary format is 1 sign, 11 exponent, 52 fraction bits.
 See [`bitstring`](@ref), [`signbit`](@ref), [`exponent`](@ref), [`frexp`](@ref),
 and [`significand`](@ref) to access various bits.
 
-This is the default for floating point literals, `3.141 isa Float64`.
+This is the default for floating point literals, `1.0 isa Float64`,
+and for many operations such as `1/2, 2pi, log(2), range(0,90,length=4)`.
+Unlike integers, this default does not change with `Sys.WORD_SIZE`.
+
 The exponent for scientific notation can be entered as `e` or `E`, 
-thus `2e3 === 2E3 === 2.0 * 10^3`. This is strongly preferred over 
+thus `2e3 === 2.0E3 === 2.0 * 10^3`. This is strongly preferred over 
 `10^n` because integers overflow, thus `10^19 < 0`.
 
 See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
@@ -2050,7 +2053,9 @@ Float64
 Binary format is 1 sign, 8 exponent, 23 fraction bits.
 
 The exponent for scientific notation should be entered as lower-case `f`, 
-thus `2f3 === 2f0 * 10^3 === Float32(2_000)`.
+thus `2f3 === 2.0f0 * 10^3 === Float32(2_000)`.
+For arrays literals and comprehensions, the element type can be specified before
+the square brackets: `Float32[1,4,9] == Float32[i^2 for i in 1:3]`.
 
 See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float16`](@ref), [`exponent`](@ref), [`frexp`](@ref).
 """
@@ -2066,8 +2071,8 @@ Float16
 
 for bit in (8, 16, 32, 64, 128)
     type = Symbol(:Int, bit)
-    default = eval(type) == Int ? "\n \n This is the default used for most integer literals (on $bit systems), \
-    and has an alias `Int === $type`" : ""
+    default = Sys.WORD_SIZE == bit ? "\n \n This is the default used for most integer literals \
+    (on systems with `Sys.WORD_SIZE == $bit`) and has an alias `Int === $type`" : ""
     
     unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
     
