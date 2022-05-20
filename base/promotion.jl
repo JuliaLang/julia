@@ -454,9 +454,6 @@ false
 
 julia> big(10)^19 == 1e19
 true
-
-julia> "julia"^2  # since * concatenates strings
-"juliajulia"
 ```
 """
 ^(x::Number, y::Number) = ^(promote(x,y)...)
