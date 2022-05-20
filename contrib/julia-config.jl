@@ -77,7 +77,7 @@ end
 
 function cflags(doframework)
     flags = IOBuffer()
-    print(flags, "-std=gnu99")
+    print(flags, "-std=gnu11")
     if doframework
         include = shell_escape(frameworkDir())
         print(flags, " -F", include)

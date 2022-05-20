@@ -9,6 +9,9 @@
 Construct an `UpperHessenberg` view of the matrix `A`.
 Entries of `A` below the first subdiagonal are ignored.
 
+!!! compat "Julia 1.3"
+    This type was added in Julia 1.3.
+
 Efficient algorithms are implemented for `H \\ b`, `det(H)`, and similar.
 
 See also the [`hessenberg`](@ref) function to factor any matrix into a similar
@@ -122,69 +125,68 @@ end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
     T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     rmul!(HH, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
     T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     lmul!(U, HH)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     rdiv!(HH, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     rdiv!(HH, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
     T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     ldiv!(U, HH)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
     T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = similar(H.data, T, size(H))
-    copyto!(HH, H)
+    HH = copy_similar(H, T)
     ldiv!(U, HH)
     UpperHessenberg(HH)
 end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
     TS = promote_op(matprod, eltype(H), eltype(B))
-    if B.uplo == 'U'
-        A_mul_B_td!(UpperHessenberg(zeros(TS, size(H)...)), H, B)
-    else
-        A_mul_B_td!(zeros(TS, size(H)...), H, B)
-    end
+    A = A_mul_B_td!(zeros(TS, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
     TS = promote_op(matprod, eltype(B), eltype(H))
-    if B.uplo == 'U'
-        A_mul_B_td!(UpperHessenberg(zeros(TS, size(B)...)), B, H)
-    else
-        A_mul_B_td!(zeros(TS, size(B)...), B, H)
-    end
+    A = A_mul_B_td!(zeros(TS, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-function /(H::UpperHessenberg, B::Bidiagonal)
-    A = Base.@invoke /(H::AbstractMatrix, B::Bidiagonal)
-    B.uplo == 'U' ? UpperHessenberg(A) : A
+/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
+/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
+function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+    T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
+    A = _rdiv!(zeros(T, size(H)), H, B)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
+end
+
+\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
+\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
+function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+    T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
+    A = ldiv!(zeros(T, size(H)), B, H)
+    return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 # Solving (H+µI)x = b: we can do this in O(m²) time and O(m) memory
@@ -500,7 +502,7 @@ true
 ```
 """
 hessenberg(A::AbstractMatrix{T}) where T =
-    hessenberg!(copy_oftype(A, eigtype(T)))
+    hessenberg!(copymutable_oftype(A, eigtype(T)))
 
 function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     summary(io, F)
@@ -537,6 +539,9 @@ function getproperty(F::Hessenberg, d::Symbol)
     d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
+
+size(Q::HessenbergQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::HessenbergQ) = size(Q, 1), size(Q, 2)
 
 Base.propertynames(F::Hessenberg, private::Bool=false) =
     (:Q, :H, :μ, (private ? (:τ, :factors, :uplo) : ())...)

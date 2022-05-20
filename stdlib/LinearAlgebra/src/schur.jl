@@ -22,7 +22,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64, Matrix{Float64}}
+Schur{Float64, Matrix{Float64}, Vector{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -47,13 +47,19 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
+struct Schur{Ty,S<:AbstractMatrix,C<:AbstractVector} <: Factorization{Ty}
     T::S
     Z::S
-    values::Vector
-    Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
+    values::C
+    Schur{Ty,S,C}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty},
+                  values::AbstractVector) where {Ty,S,C} = new(T, Z, values)
 end
-Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::AbstractVector) where {Ty} =
+    Schur{Ty, typeof(T), typeof(values)}(T, Z, values)
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty},
+                       values::AbstractVector) where {Ty,S},
+           Schur{Ty,S,typeof(values)}(T, Z, values))
 
 # iteration for destructuring into components
 Base.iterate(S::Schur) = (S.T, Val(:Z))
@@ -74,7 +80,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur!(A)
-Schur{Float64, Matrix{Float64}}
+Schur{Float64, Matrix{Float64}, Vector{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -97,7 +103,7 @@ julia> A
 schur!(A::StridedMatrix{<:BlasFloat}) = Schur(LinearAlgebra.LAPACK.gees!('V', A)...)
 
 """
-    schur(A::StridedMatrix) -> F::Schur
+    schur(A) -> F::Schur
 
 Computes the Schur factorization of the matrix `A`. The (quasi) triangular Schur factor can
 be obtained from the `Schur` object `F` with either `F.Schur` or `F.T` and the
@@ -121,7 +127,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64, Matrix{Float64}}
+Schur{Float64, Matrix{Float64}, Vector{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -146,25 +152,20 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-schur(A::StridedMatrix{<:BlasFloat}) = schur!(copy(A))
-schur(A::StridedMatrix{T}) where T = schur!(copy_oftype(A, eigtype(T)))
-
-schur(A::AbstractMatrix{T}) where {T} = schur!(copy_to_array(A, eigtype(T)))
+schur(A::AbstractMatrix{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
 end
 function schur(A::Union{UnitUpperTriangular{T},UpperTriangular{T}}) where {T}
     t = eigtype(T)
-    Z = Matrix{t}(undef, size(A)...)
-    copyto!(Z, A)
+    Z = copy_similar(A, t)
     return Schur(Z, Matrix{t}(I, size(A)), convert(Vector{t}, diag(A)))
 end
 function schur(A::Union{UnitLowerTriangular{T},LowerTriangular{T}}) where {T}
     t = eigtype(T)
     # double flip the matrix A
-    Z = Matrix{t}(undef, size(A)...)
-    copyto!(Z, A)
+    Z = copy_similar(A, t)
     reverse!(reshape(Z, :))
     # construct "reverse" identity
     n = size(A, 1)
@@ -303,22 +304,29 @@ with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
+struct GeneralizedSchur{Ty,M<:AbstractMatrix,A<:AbstractVector,B<:AbstractVector{Ty}} <: Factorization{Ty}
     S::M
     T::M
-    α::Vector
-    β::Vector{Ty}
+    α::A
+    β::B
     Q::M
     Z::M
-    function GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
-                                    beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M}
-        new(S, T, alpha, beta, Q, Z)
+    function GeneralizedSchur{Ty,M,A,B}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty},
+                                        alpha::AbstractVector, beta::AbstractVector{Ty},
+                                        Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M,A,B}
+        new{Ty,M,A,B}(S, T, alpha, beta, Q, Z)
     end
 end
-function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
-                          beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where Ty
-    GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
+function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty},
+                          alpha::AbstractVector, beta::AbstractVector{Ty},
+                          Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where Ty
+    GeneralizedSchur{Ty, typeof(S), typeof(alpha), typeof(beta)}(S, T, alpha, beta, Q, Z)
 end
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty},
+                                 alpha::AbstractVector, beta::AbstractVector{Ty},
+                                 Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M},
+           GeneralizedSchur{Ty,M,typeof(alpha),typeof(beta)}(S, T, alpha, beta, Q, Z))
 
 # iteration for destructuring into components
 Base.iterate(S::GeneralizedSchur) = (S.S, Val(:T))
@@ -338,7 +346,7 @@ schur!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
     GeneralizedSchur(LinearAlgebra.LAPACK.gges!('V', 'V', A, B)...)
 
 """
-    schur(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur
+    schur(A, B) -> F::GeneralizedSchur
 
 Computes the Generalized Schur (or QZ) factorization of the matrices `A` and `B`. The
 (quasi) triangular Schur factors can be obtained from the `Schur` object `F` with `F.S`
@@ -350,14 +358,9 @@ generalized eigenvalues of `A` and `B` can be obtained with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-schur(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schur!(copy(A),copy(B))
-function schur(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
-    S = promote_type(eigtype(TA), TB)
-    return schur!(copy_oftype(A, S), copy_oftype(B, S))
-end
 function schur(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return schur!(copy_oftype(A, S), copy_oftype(B, S))
+    return schur!(copy_similar(A, S), copy_similar(B, S))
 end
 
 """

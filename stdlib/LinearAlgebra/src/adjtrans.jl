@@ -164,8 +164,9 @@ const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
 # for internal use below
-wrapperop(A::Adjoint) = adjoint
-wrapperop(A::Transpose) = transpose
+wrapperop(_) = identity
+wrapperop(::Adjoint) = adjoint
+wrapperop(::Transpose) = transpose
 
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
@@ -317,6 +318,8 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 
 ## left-division \
 \(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
+\(u::AdjointAbsVec, y::Number) = adjoint(conj(y) / u.parent)
+\(u::TransposeAbsVec, y::Number) = transpose(y / u.parent)
 
 
 ## right-division /

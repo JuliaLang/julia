@@ -25,7 +25,7 @@ Random.seed!(1234323)
             ainv = inv(a)
             @test cond(a, 1)   == opnorm(a, 1)  *opnorm(ainv, 1)
             @test cond(a, Inf) == opnorm(a, Inf)*opnorm(ainv, Inf)
-            @test cond(a[:, 1:5]) == (\)(extrema(svdvals(a[:, 1:5]))...)
+            @test cond(a[:, 1:5]) == (/)(reverse(extrema(svdvals(a[:, 1:5])))...)
             @test_throws ArgumentError cond(a,3)
         end
     end
@@ -1108,12 +1108,12 @@ end
 end
 
 function test_rdiv_pinv_consistency(a, b)
-    @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+    @test a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
+    @test typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
 end
 function test_ldiv_pinv_consistency(a, b)
-    @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+    @test (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
+    @test typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
 end
 function test_div_pinv_consistency(a, b)
     test_rdiv_pinv_consistency(a, b)

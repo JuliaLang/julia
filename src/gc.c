@@ -355,6 +355,9 @@ static void jl_gc_push_arraylist(jl_task_t *ct, arraylist_t *list)
 // function returns.
 static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
 {
+    // Avoid marking `ct` as non-migratable via an `@async` task (as noted in the docstring
+    // of `finalizer`) in a finalizer:
+    uint8_t sticky = ct->sticky;
     // empty out the first two entries for the GC frame
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
@@ -369,6 +372,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     run_finalizer(ct, items[len-2], items[len-1]);
     // matches the jl_gc_push_arraylist above
     JL_GC_POP();
+    ct->sticky = sticky;
 }
 
 static void run_finalizers(jl_task_t *ct)
@@ -552,20 +556,21 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     arraylist_free(&copied_list);
 }
 
+// explicitly scheduled objects for the sweepfunc callback
 static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 {
     size_t p = 0;
     for (size_t i = 0; i < objs->len; i++) {
-        jl_value_t *v = (jl_value_t *)(objs->items[i]);
-        jl_datatype_t *t = (jl_datatype_t *)(jl_typeof(v));
+        jl_value_t *v = (jl_value_t*)(objs->items[i]);
+        jl_datatype_t *t = (jl_datatype_t*)(jl_typeof(v));
         const jl_datatype_layout_t *layout = t->layout;
         jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
-        if (!gc_ptr_tag(v, 1)) {
+
+        int bits = jl_astaggedvalue(v)->bits.gc;
+        if (!gc_marked(bits))
             desc->sweepfunc(v);
-        }
-        else {
+        else
             objs->items[p++] = v;
-        }
     }
     objs->len = p;
 }
@@ -581,12 +586,22 @@ static void gc_sweep_foreign_objs(void)
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
 
+// max_total_memory is a suggestion.  We try very hard to stay
+// under this limit, but we will go above it rather than halting.
 #ifdef _P64
+typedef uint64_t memsize_t;
 #define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
+// Eventually we can expose this to the user/ci.
+memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
+typedef uint32_t memsize_t;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t max_collect_interval =  500000000UL;
+// Work really hard to stay within 2GB
+// Alternative is to risk running out of address space
+// on 32 bit architectures.
+memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
 #endif
 
 // global variables for GC stats
@@ -653,9 +668,8 @@ static int prev_sweep_full = 1;
 // Full collection heuristics
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
-static int64_t last_full_live = 0;  // live_bytes after last full collection
 static int64_t last_live_bytes = 0; // live_bytes at last collection
-static int64_t grown_heap_age = 0;  // # of collects since live_bytes grew and remained
+static int64_t t_start = 0; // Time GC starts;
 #ifdef __GLIBC__
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
@@ -944,7 +958,7 @@ static void sweep_weak_refs(void)
 // big value list
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
+static inline jl_value_t *jl_gc_big_alloc_inner(jl_ptls_t ptls, size_t sz)
 {
     maybe_collect(ptls);
     size_t offs = offsetof(bigval_t, header);
@@ -970,6 +984,22 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
     v->age = 0;
     gc_big_object_link(v, &ptls->heap.big_objects);
     return jl_valueof(&v->header);
+}
+
+// Instrumented version of jl_gc_big_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
+{
+    jl_value_t *val = jl_gc_big_alloc_inner(ptls, sz);
+
+    maybe_record_alloc_to_profile(val, sz, jl_gc_unknown_type_tag);
+    return val;
+}
+
+// This wrapper exists only to prevent `jl_gc_big_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_big_alloc_inner`
+// into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t sz) {
+    return jl_gc_big_alloc_inner(ptls, sz);
 }
 
 // Sweep list rooted at *pv, removing and freeing any unmarked objects.
@@ -1118,6 +1148,7 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
         else
             free(d);
         gc_num.freed += jl_array_nbytes(a);
+        gc_num.freecall++;
     }
 }
 
@@ -1197,7 +1228,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
 }
 
 // Size includes the tag and the tag is not cleared!!
-JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
+static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset,
                                           int osize)
 {
     // Use the pool offset instead of the pool address as the argument
@@ -1251,6 +1282,23 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     }
     p->newpages = next;
     return jl_valueof(v);
+}
+
+// Instrumented version of jl_gc_pool_alloc_inner, called into by LLVM-generated code.
+JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
+                                          int osize)
+{
+    jl_value_t *val = jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
+
+    maybe_record_alloc_to_profile(val, osize, jl_gc_unknown_type_tag);
+    return val;
+}
+
+// This wrapper exists only to prevent `jl_gc_pool_alloc_inner` from being inlined into
+// its callers. We provide an external-facing interface for callers, and inline `jl_gc_pool_alloc_inner`
+// into this. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
+jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset, int osize) {
+    return jl_gc_pool_alloc_inner(ptls, pool_offset, osize);
 }
 
 int jl_gc_classify_pools(size_t sz, int *osize)
@@ -1609,7 +1657,7 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_N
     }
 }
 
-void gc_queue_binding(jl_binding_t *bnd)
+JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
@@ -2787,7 +2835,6 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
 }
 
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp);
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 
 // mark the initial root set
@@ -2795,9 +2842,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
-
-    // tasks
-    jl_gc_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)
@@ -3106,44 +3150,31 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     int nptr = 0;
     for (int i = 0;i < jl_n_threads;i++)
         nptr += jl_all_tls_states[i]->heap.remset_nptr;
-    int large_frontier = nptr*sizeof(void*) >= default_collect_interval; // many pointers in the intergen frontier => "quick" mark is not quick
-    // trigger a full collection if the number of live bytes doubles since the last full
-    // collection and then remains at least that high for a while.
-    if (grown_heap_age == 0) {
-        if (live_bytes > 2 * last_full_live)
-            grown_heap_age = 1;
-    }
-    else if (live_bytes >= last_live_bytes) {
-        grown_heap_age++;
-    }
+
+    // many pointers in the intergen frontier => "quick" mark is not quick
+    int large_frontier = nptr*sizeof(void*) >= default_collect_interval;
     int sweep_full = 0;
     int recollect = 0;
-    if ((large_frontier ||
-         ((not_freed_enough || promoted_bytes >= gc_num.interval) &&
-          (promoted_bytes >= default_collect_interval || prev_sweep_full)) ||
-         grown_heap_age > 1) && gc_num.pause > 1) {
-        sweep_full = 1;
-    }
+
     // update heuristics only if this GC was automatically triggered
     if (collection == JL_GC_AUTO) {
-        if (sweep_full) {
-            if (large_frontier)
-                gc_num.interval = last_long_collect_interval;
-            if (not_freed_enough || large_frontier) {
-                if (gc_num.interval <= 2*(max_collect_interval/5)) {
-                    gc_num.interval = 5 * (gc_num.interval / 2);
-                }
-            }
-            last_long_collect_interval = gc_num.interval;
+        if (not_freed_enough) {
+            gc_num.interval = gc_num.interval * 2;
         }
-        else {
-            // reset interval to default, or at least half of live_bytes
-            int64_t half = live_bytes/2;
-            if (default_collect_interval < half && half <= max_collect_interval)
-                gc_num.interval = half;
-            else
-                gc_num.interval = default_collect_interval;
+        if (large_frontier) {
+            sweep_full = 1;
         }
+        if (gc_num.interval > max_collect_interval) {
+            sweep_full = 1;
+            gc_num.interval = max_collect_interval;
+        }
+    }
+
+    // If the live data outgrows the suggested max_total_memory
+    // we keep going with minimum intervals and full gcs until
+    // we either free some space or get an OOM error.
+    if (live_bytes > max_total_memory) {
+        sweep_full = 1;
     }
     if (gc_sweep_always_full) {
         sweep_full = 1;
@@ -3205,22 +3236,51 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     uint64_t gc_end_t = jl_hrtime();
     uint64_t pause = gc_end_t - t0;
+
+    _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
+
     gc_final_pause_end(t0, gc_end_t);
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
+    uint64_t max_memory = last_live_bytes + gc_num.allocd;
+    if (max_memory > gc_num.max_memory) {
+        gc_num.max_memory = max_memory;
+    }
+
     gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
-    if (prev_sweep_full) {
-        last_full_live = live_bytes;
-        grown_heap_age = 0;
+
+    if (collection == JL_GC_AUTO) {
+      // If the current interval is larger than half the live data decrease the interval
+      int64_t half = live_bytes/2;
+      if (gc_num.interval > half) gc_num.interval = half;
+      // But never go below default
+      if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
+
+    // We need this for 32 bit but will be useful to set limits on 64 bit
+    if (gc_num.interval + live_bytes > max_total_memory) {
+        if (live_bytes < max_total_memory) {
+            gc_num.interval = max_total_memory - live_bytes;
+        } else {
+            // We can't stay under our goal so let's go back to
+            // the minimum interval and hope things get better
+            gc_num.interval = default_collect_interval;
+       }
+    }
+
+    gc_time_summary(sweep_full, t_start, gc_end_t, gc_num.freed, live_bytes, gc_num.interval, pause);
+
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
     gc_num.total_time += pause;
     gc_num.since_sweep = 0;
     gc_num.freed = 0;
+    if (pause > gc_num.max_pause) {
+        gc_num.max_pause = pause;
+    }
     reset_thread_gc_counts();
 
     return recollect;
@@ -3370,6 +3430,8 @@ void jl_gc_init(void)
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
+    gc_num.max_pause = 0;
+    gc_num.max_memory = 0;
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
@@ -3383,6 +3445,14 @@ void jl_gc_init(void)
 #endif
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
+    t_start = jl_hrtime();
+}
+
+void jl_gc_set_max_memory(uint64_t max_mem) {
+    if (max_mem > 0
+        && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
+        max_total_memory = max_mem;
+    }
 }
 
 // callback for passing OOM errors from gmp
@@ -3537,6 +3607,8 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+    // jl_gc_managed_malloc is currently always used for allocating array buffers.
+    maybe_record_alloc_to_profile((jl_value_t*)b, sz, (jl_datatype_t*)jl_buff_tag);
     return b;
 }
 
@@ -3578,7 +3650,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     SetLastError(last_error);
 #endif
     errno = last_errno;
-
+    maybe_record_alloc_to_profile((jl_value_t*)b, sz, jl_gc_unknown_type_tag);
     return b;
 }
 

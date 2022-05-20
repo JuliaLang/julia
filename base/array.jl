@@ -120,7 +120,7 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
-import Core: arraysize, arrayset, arrayref, const_arrayref
+using Core: arraysize, arrayset, const_arrayref
 
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
@@ -142,9 +142,7 @@ julia> a = Base.vect(UInt8(1), 2.5, 1//2)
 """
 function vect(X...)
     T = promote_typeof(X...)
-    #T[ X[i] for i=1:length(X) ]
-    # TODO: this is currently much faster. should figure out why. not clear.
-    return copyto!(Vector{T}(undef, length(X)), X)
+    return T[X...]
 end
 
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
@@ -154,7 +152,7 @@ size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::D
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(T::Type) = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -193,17 +191,17 @@ end
 
 
 """
-    Base.bitsunionsize(U::Union)
+    Base.bitsunionsize(U::Union) -> Int
 
 For a `Union` of [`isbitstype`](@ref) types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`.
 
 # Examples
 ```jldoctest
 julia> Base.bitsunionsize(Union{Float64, UInt8})
-0x0000000000000008
+8
 
 julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
-0x0000000000000010
+16
 ```
 """
 function bitsunionsize(u::Union)
@@ -212,8 +210,7 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
+elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -402,16 +399,19 @@ julia> getindex(Int8, 1, 2, 3)
 """
 function getindex(::Type{T}, vals...) where T
     a = Vector{T}(undef, length(vals))
-    @inbounds for i = 1:length(vals)
-        a[i] = vals[i]
+    if vals isa NTuple
+        @inbounds for i in 1:length(vals)
+            a[i] = vals[i]
+        end
+    else
+        # use afoldl to avoid type instability inside loop
+        afoldl(1, vals...) do i, v
+            @inbounds a[i] = v
+            return i + 1
+        end
     end
     return a
 end
-
-getindex(::Type{T}) where {T} = (@inline; Vector{T}())
-getindex(::Type{T}, x) where {T} = (@inline; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
-getindex(::Type{T}, x, y) where {T} = (@inline; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(::Type{T}, x, y, z) where {T} = (@inline; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, @nospecialize vals...)
     a = Vector{Any}(undef, length(vals))
@@ -449,7 +449,7 @@ the `value` that was passed; this means that if the `value` is itself modified,
 all elements of the `fill`ed array will reflect that modification because they're
 _still_ that very `value`. This is of no concern with `fill(1.0, (5,5))` as the
 `value` `1.0` is immutable and cannot itself be modified, but can be unexpected
-with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
+with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
 places _the very same_ empty array in all three locations of the returned vector:
 
 ```jldoctest
@@ -842,8 +842,8 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
-        if el isa T || typeof(el) === T
-            @inbounds dest[i] = el::T
+        if el isa T
+            @inbounds dest[i] = el
             i += 1
         else
             new = setindex_widen_up_to(dest, el, i)
@@ -879,8 +879,8 @@ function grow_to!(dest, itr, st)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        if el isa T || typeof(el) === T
-            push!(dest, el::T)
+        if el isa T
+            push!(dest, el)
         else
             new = push_widen(dest, el)
             return grow_to!(new, itr, st)
@@ -916,10 +916,6 @@ julia> getindex(A, "a")
 ```
 """
 function getindex end
-
-# This is more complicated than it needs to be in order to get Win64 through bootstrap
-@eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
@@ -1241,7 +1237,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n)
+    sizehint!(s, n) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
 
@@ -1531,6 +1527,23 @@ deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,)
 
 struct Nowhere; end
 push!(::Nowhere, _) = nothing
+_growend!(::Nowhere, _) = nothing
+
+@inline function _push_deleted!(dltd, a::Vector, ind)
+    if @inbounds isassigned(a, ind)
+        push!(dltd, @inbounds a[ind])
+    else
+        _growend!(dltd, 1)
+    end
+end
+
+@inline function _copy_item!(a::Vector, p, q)
+    if @inbounds isassigned(a, q)
+        @inbounds a[p] = a[q]
+    else
+        _unsetindex!(a, p)
+    end
+end
 
 function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
@@ -1538,7 +1551,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     y === nothing && return a
     (p, s) = y
     checkbounds(a, p)
-    push!(dltd, @inbounds a[p])
+    _push_deleted!(dltd, a, p)
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1552,14 +1565,14 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             end
         end
         while q < i
-            @inbounds a[p] = a[q]
+            _copy_item!(a, p, q)
             p += 1; q += 1
         end
-        push!(dltd, @inbounds a[i])
+        _push_deleted!(dltd, a, i)
         q = i+1
     end
     while q <= n
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += 1; q += 1
     end
     _deleteend!(a, n-p+1)
@@ -1572,7 +1585,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += !i
     end
     _deleteend!(a, n-p+1)
@@ -2592,6 +2605,7 @@ end
 
 """
     keepat!(a::Vector, inds)
+    keepat!(a::BitVector, inds)
 
 Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
@@ -2616,6 +2630,7 @@ keepat!(a::Vector, inds) = _keepat!(a, inds)
 
 """
     keepat!(a::Vector, m::AbstractVector{Bool})
+    keepat!(a::BitVector, m::AbstractVector{Bool})
 
 The in-place version of logical indexing `a = a[m]`. That is, `keepat!(a, m)` on
 vectors of equal length `a` and `m` will remove all elements from `a` for which

@@ -85,6 +85,10 @@ controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
 
+!!! warning "Warning"
+    The output of this function may contain sensitive information. Before sharing the output,
+    please review the output and remove any data that should not be shared publicly.
+
 See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -118,13 +122,13 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+        for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
     end
 
     if verbose
@@ -137,11 +141,20 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
 
-    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
-                (verbose ?
-                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
-                 [])]
+    function is_nonverbose_env(k::String)
+        return occursin(r"^JULIA_|^DYLD_|^LD_", k)
+    end
+    function is_verbose_env(k::String)
+        return occursin(r"PATH|FLAG|^TERM$|HOME", k) && !is_nonverbose_env(k)
+    end
+    env_strs = String[
+        String["  $(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
+        (verbose ?
+         String["  $(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
+         String[]);
+    ]
     if !isempty(env_strs)
         println(io, "Environment:")
         for str in env_strs

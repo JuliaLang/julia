@@ -8,7 +8,7 @@ may trip up Julia users accustomed to MATLAB:
 
   * Julia arrays are indexed with square brackets, `A[i,j]`.
   * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B`
-    will modify `A` as well.
+    will modify `A` as well. To avoid this, use `A = copy(B)`.
   * Julia values are not copied when passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * Julia does not automatically grow arrays in an assignment statement. Whereas in MATLAB `a(4) = 3.2`
@@ -97,6 +97,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, varargs are specified using the splat operator `...`, which always follows the name
     of a specific variable, unlike R, for which `...` can occur in isolation.
   * In Julia, modulus is `mod(a, b)`, not `a %% b`. `%` in Julia is the remainder operator.
+  * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * In Julia, not all data structures support logical indexing. Furthermore, logical indexing in Julia
     is supported only with vectors of length equal to the object being indexed. For example:
 
@@ -122,7 +123,6 @@ For users coming to Julia from R, these are some noteworthy differences:
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
   * Julia's `->` creates an anonymous function.
-  * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
     In R, this same notation would perform an element-wise (Hadamard) product. To get the element-wise

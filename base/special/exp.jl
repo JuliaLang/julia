@@ -275,17 +275,18 @@ end
     r = muladd(N_float, LogBU(base, T), x)
     r = muladd(N_float, LogBL(base, T), r)
     small_part = expb_kernel(base, r)
-    if !(abs(x) <= SUBNORM_EXP(base, T))
-        x > MAX_EXP(base, T) && return Inf32
-        x < MIN_EXP(base, T) && return 0.0f0
-        if N <= Int32(-24)
-            twopk = reinterpret(T, (N+Int32(151)) << Int32(23))
-            return (twopk*small_part)*(2f0^(-24))
-        end
-        N == 128 && return small_part * T(2.0) * T(2.0)^127
+    power = (N+Int32(127))
+    x > MAX_EXP(base, T) && return Inf32
+    x < MIN_EXP(base, T) && return 0.0f0
+    if x <= -SUBNORM_EXP(base, T)
+        power += Int32(24)
+        small_part *= Float32(0x1p-24)
     end
-    twopk = reinterpret(T, (N+Int32(127)) << Int32(23))
-    return twopk*small_part
+    if N == 128
+        power -= Int32(1)
+        small_part *= 2f0
+    end
+    return small_part * reinterpret(T, power << Int32(23))
 end
 
 @inline function exp_impl_fast(x::Float32, base)

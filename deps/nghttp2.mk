@@ -8,6 +8,7 @@ $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/source-extracted: $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
+	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/config.sub
 	touch -c $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/configure # old target
 	echo 1 > $@
 
@@ -36,11 +37,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libnghttp2.$$(SHLIB_EXT) $$(build_shlibdir)/libnghttp2.$$(SHLIB_EXT)))
 
 clean-nghttp2:
-	-rm $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-compiled
+	-rm -f $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/nghttp2-$(NGHTTP2_VER) clean
 
 distclean-nghttp2:
-	-rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \
+	rm -rf $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2 \
 		$(SRCCACHE)/nghttp2-$(NGHTTP2_VER) \
 		$(BUILDDIR)/nghttp2-$(NGHTTP2_VER)
 

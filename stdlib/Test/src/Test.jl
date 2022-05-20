@@ -22,6 +22,7 @@ export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
+export TestLogger, LogRecord
 
 using Random
 using Random: AbstractRNG, default_rng
@@ -87,16 +88,13 @@ struct Pass <: Result
     value
     source::Union{Nothing,LineNumberNode}
     message_only::Bool
-    function Pass(test_type::Symbol, orig_expr, data, thrown, source=nothing, message_only=false)
+    function Pass(test_type::Symbol, orig_expr, data, thrown, source::Union{Nothing,LineNumberNode}=nothing, message_only::Bool=false)
         return new(test_type, orig_expr, data, thrown, source, message_only)
     end
 end
 
 function Base.show(io::IO, t::Pass)
     printstyled(io, "Test Passed"; bold = true, color=:green)
-    if !(t.orig_expr === nothing)
-        print(io, "\n  Expression: ", t.orig_expr)
-    end
     if t.test_type === :test_throws
         # The correct type of exception was thrown
         if t.message_only
@@ -104,10 +102,6 @@ function Base.show(io::IO, t::Pass)
         else
             print(io, "\n      Thrown: ", typeof(t.value))
         end
-    elseif t.test_type === :test && t.data !== nothing
-        # The test was an expression, so display the term-by-term
-        # evaluated version as well
-        print(io, "\n   Evaluated: ", t.data)
     end
 end
 
@@ -175,7 +169,7 @@ struct Error <: Result
     backtrace::String
     source::LineNumberNode
 
-    function Error(test_type, orig_expr, value, bt, source)
+    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
             bt = scrub_exc_stack(bt)
         end
@@ -389,12 +383,9 @@ If executed outside a `@testset`, throw an exception instead of returning `Fail`
 ```jldoctest
 julia> @test true
 Test Passed
-  Expression: true
 
 julia> @test [1, 2] + [2, 1] == [3, 3]
 Test Passed
-  Expression: [1, 2] + [2, 1] == [3, 3]
-   Evaluated: [3, 3] == [3, 3]
 ```
 
 The `@test f(args...) key=val...` form is equivalent to writing
@@ -404,8 +395,6 @@ is a call using infix syntax such as approximate comparisons:
 ```jldoctest
 julia> @test π ≈ 3.14 atol=0.01
 Test Passed
-  Expression: ≈(π, 3.14, atol = 0.01)
-   Evaluated: ≈(π, 3.14; atol = 0.01)
 ```
 
 This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
@@ -434,8 +423,6 @@ Test Broken
 
 julia> @test 2 + 2 ≈ 5 atol=1 broken=false
 Test Passed
-  Expression: ≈(2 + 2, 5, atol = 1)
-   Evaluated: ≈(4, 5; atol = 1)
 
 julia> @test 2 + 2 == 5 skip=true
 Test Broken
@@ -443,8 +430,6 @@ Test Broken
 
 julia> @test 2 + 2 == 4 skip=false
 Test Passed
-  Expression: 2 + 2 == 4
-   Evaluated: 4 == 4
 ```
 
 !!! compat "Julia 1.7"
@@ -667,7 +652,7 @@ function do_test(result::ExecutionResult, orig_expr)
         @assert isa(result, Threw)
         testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
     end
-    isa(testres, Pass) || ccall(:jl_breakpoint, Cvoid, (Any,), result)
+    isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
 end
 
@@ -699,17 +684,14 @@ Note that `@test_throws` does not support a trailing keyword form.
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
 Test Passed
-  Expression: ([1, 2, 3])[4]
       Thrown: BoundsError
 
 julia> @test_throws DimensionMismatch [1, 2, 3] + [1, 2]
 Test Passed
-  Expression: [1, 2, 3] + [1, 2]
       Thrown: DimensionMismatch
 
 julia> @test_throws "Try sqrt(Complex" sqrt(-1)
 Test Passed
-  Expression: sqrt(-1)
      Message: "DomainError with -1.0:\\nsqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x))."
 ```
 
@@ -1335,6 +1317,9 @@ macro testset(args...)
     end
 end
 
+trigger_test_failure_break(@nospecialize(err)) =
+    ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
+
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
 """
@@ -1378,6 +1363,7 @@ function testset_beginend_call(args, tests, source)
             err isa InterruptException && rethrow()
             # something in the test block threw an error. Count that as an
             # error in this test set
+            trigger_test_failure_break(err)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         finally
             copy!(RNG, oldrng)
@@ -1439,7 +1425,10 @@ function testset_forloop(args, testloop, source)
         # they can be handled properly by `finally` lowering.
         if !first_iteration
             pop_testset()
+            finish_errored = true
             push!(arr, finish(ts))
+            finish_errored = false
+
             # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
             copy!(RNG, tmprng)
 
@@ -1453,6 +1442,7 @@ function testset_forloop(args, testloop, source)
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
             # error in this test set
+            trigger_test_failure_break(err)
             record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
         end
     end
@@ -1460,6 +1450,7 @@ function testset_forloop(args, testloop, source)
         local arr = Vector{Any}()
         local first_iteration = true
         local ts
+        local finish_errored = false
         local RNG = default_rng()
         local oldrng = copy(RNG)
         local oldseed = Random.GLOBAL_SEED
@@ -1471,7 +1462,7 @@ function testset_forloop(args, testloop, source)
             end
         finally
             # Handle `return` in test body
-            if !first_iteration
+            if !first_iteration && !finish_errored
                 pop_testset()
                 push!(arr, finish(ts))
             end
@@ -1678,7 +1669,9 @@ function is_in_mods(m::Module, recursive::Bool, mods)
 end
 
 """
-    detect_ambiguities(mod1, mod2...; recursive=false, ambiguous_bottom=false)
+    detect_ambiguities(mod1, mod2...; recursive=false,
+                                      ambiguous_bottom=false,
+                                      allowed_undefineds=nothing)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
@@ -1687,10 +1680,17 @@ Use `recursive=true` to test in all submodules.
 `ambiguous_bottom` controls whether ambiguities triggered only by
 `Union{}` type parameters are included; in most cases you probably
 want to set this to `false`. See [`Base.isambiguous`](@ref).
+
+See [`Test.detect_unbound_args`](@ref) for an explanation of
+`allowed_undefineds`.
+
+!!! compat "Julia 1.8"
+    `allowed_undefineds` requires at least Julia 1.8.
 """
 function detect_ambiguities(mods::Module...;
                             recursive::Bool = false,
-                            ambiguous_bottom::Bool = false)
+                            ambiguous_bottom::Bool = false,
+                            allowed_undefineds = nothing)
     @nospecialize
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
@@ -1703,11 +1703,12 @@ function detect_ambiguities(mods::Module...;
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
+            m.sig == Tuple && continue # ignore Builtins
             is_in_mods(m.module, recursive, mods) || continue
-            ambig = Int32[0]
-            ms = Base._methods_by_ftype(m.sig, nothing, -1, typemax(UInt), true, UInt[typemin(UInt)], UInt[typemax(UInt)], ambig)
-            ambig[1] == 0 && continue
-            isa(ms, Bool) && continue
+            world = Base.get_world_counter()
+            ambig = Ref{Int32}(0)
+            ms = Base._methods_by_ftype(m.sig, nothing, -1, world, true, Ref(typemin(UInt)), Ref(typemax(UInt)), ambig)::Vector
+            ambig[] == 0 && continue
             for match2 in ms
                 match2 = match2::Core.MethodMatch
                 m2 = match2.method
@@ -1720,12 +1721,17 @@ function detect_ambiguities(mods::Module...;
         end
     end
     work = Base.loaded_modules_array()
+    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
-                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
+                if is_in_mods(mod, recursive, mods)
+                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
+                        println("Skipping ", mod, '.', n)  # typically stale exports
+                    end
+                end
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))
@@ -1742,25 +1748,42 @@ function detect_ambiguities(mods::Module...;
 end
 
 """
-    detect_unbound_args(mod1, mod2...; recursive=false)
+    detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
 Returns a vector of `Method`s which may have unbound type parameters.
 Use `recursive=true` to test in all submodules.
+
+By default, any undefined symbols trigger a warning. This warning can
+be suppressed by supplying a collection of `GlobalRef`s for which
+the warning can be skipped. For example, setting
+
+```
+allow_undefineds = Set([GlobalRef(Base, :active_repl),
+                        GlobalRef(Base, :active_repl_backend)])
+```
+
+would suppress warnings about `Base.active_repl` and
+`Base.active_repl_backend`.
+
+!!! compat "Julia 1.8"
+    `allowed_undefineds` requires at least Julia 1.8.
 """
 function detect_unbound_args(mods...;
-                             recursive::Bool = false)
+                             recursive::Bool = false,
+                             allowed_undefineds=nothing)
     @nospecialize mods
     ambs = Set{Method}()
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
-            has_unbound_vars(m.sig) || continue
             is_in_mods(m.module, recursive, mods) || continue
+            has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType
             if Base.isvatuple(tuple_sig)
                 params = tuple_sig.parameters[1:(end - 1)]
                 tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
-                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, UInt), tuple_sig, typemax(UInt))
+                world = Base.get_world_counter()
+                mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tuple_sig, nothing, world)
                 if mf !== nothing && mf !== m && mf.sig <: tuple_sig
                     continue
                 end
@@ -1769,12 +1792,17 @@ function detect_unbound_args(mods...;
         end
     end
     work = Base.loaded_modules_array()
+    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
     while !isempty(work)
         mod = pop!(work)
         for n in names(mod, all = true)
             Base.isdeprecated(mod, n) && continue
             if !isdefined(mod, n)
-                is_in_mods(mod, recursive, mods) && println("Skipping ", mod, '.', n)  # typically stale exports
+                if is_in_mods(mod, recursive, mods)
+                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
+                        println("Skipping ", mod, '.', n)  # typically stale exports
+                    end
+                end
                 continue
             end
             f = Base.unwrap_unionall(getfield(mod, n))

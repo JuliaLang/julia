@@ -5,6 +5,10 @@ module TestDiagonal
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 n=12 #Size of matrix problem to test
 Random.seed!(1)
 
@@ -344,8 +348,12 @@ Random.seed!(1)
 
     @testset "Eigensystem" begin
         eigD = eigen(D)
-        @test Diagonal(eigD.values) ≈ D
+        @test Diagonal(eigD.values) == D
         @test eigD.vectors == Matrix(I, size(D))
+        eigsortD = eigen(D, sortby=LinearAlgebra.eigsortby)
+        @test eigsortD.values !== D.diag
+        @test eigsortD.values == sort(D.diag, by=LinearAlgebra.eigsortby)
+        @test Matrix(eigsortD) == D
     end
 
     @testset "ldiv" begin
@@ -411,6 +419,22 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "svd/eigen with Diagonal{Furlong}" begin
+        Du = Furlong.(D)
+        @test Du isa Diagonal{<:Furlong{1}}
+        F = svd(Du)
+        U, s, V = F
+        @test map(x -> x.val, Matrix(F)) ≈ map(x -> x.val, Du)
+        @test svdvals(Du) == s
+        @test U isa AbstractMatrix{<:Furlong{0}}
+        @test V isa AbstractMatrix{<:Furlong{0}}
+        @test s isa AbstractVector{<:Furlong{1}}
+        E = eigen(Du)
+        vals, vecs = E
+        @test Matrix(E) == Du
+        @test vals isa AbstractVector{<:Furlong{1}}
+        @test vecs isa AbstractMatrix{<:Furlong{0}}
+    end
 end
 
 @testset "rdiv! (#40887)" begin
@@ -439,6 +463,13 @@ end
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
     @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+end
+
+@testset "eigvals should return a copy of the diagonal" begin
+    D = Diagonal([1, 2, 3])
+    lam = eigvals(D)
+    D[3,3] = 4 # should not affect lam
+    @test lam == [1, 2, 3]
 end
 
 @testset "eigmin (#27847)" begin
@@ -760,8 +791,8 @@ end
         U = UpperTriangular(randn(elty, K, K))
         L = LowerTriangular(randn(elty, K, K))
         D = Diagonal(randn(elty, K))
-        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
-        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
+        @test (U / D)::UpperTriangular{elty} ≈ UpperTriangular(Matrix(U) / Matrix(D)) rtol=2eps(real(elty))
+        @test (L / D)::LowerTriangular{elty} ≈ LowerTriangular(Matrix(L) / Matrix(D)) rtol=2eps(real(elty))
         @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
         @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
@@ -775,8 +806,8 @@ end
         D0 = Diagonal(zeros(elty, K))
         @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
         @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
-        @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
-        @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
+        @test (S / D)::Tridiagonal{elty} ≈ Tridiagonal(Matrix(S) / Matrix(D)) rtol=2eps(real(elty))
+        @test (T / D)::Tridiagonal{elty} ≈ Tridiagonal(Matrix(T) / Matrix(D)) rtol=2eps(real(elty))
         @test_throws SingularException D0 \ S
         @test_throws SingularException D0 \ T
         @test_throws SingularException S / D0
@@ -808,6 +839,10 @@ end
             @test DS isa Tridiagonal
             DM = D \ Mm
             for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+            DS = M / D
+            @test DS isa Tridiagonal
+            DM = Mm / D
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
         end
     end
     # eltype promotion case
@@ -816,8 +851,8 @@ end
     D = Diagonal(rand(1:20, K))
     @test (D \ S)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(S))
     @test (D \ T)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(T))
-    @test (S / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(S) / Matrix(D))
-    @test (T / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(T) / Matrix(D))
+    @test (S / D)::Tridiagonal{Float64} ≈ Tridiagonal(Matrix(S) / Matrix(D)) rtol=2eps()
+    @test (T / D)::Tridiagonal{Float64} ≈ Tridiagonal(Matrix(T) / Matrix(D)) rtol=2eps()
 end
 
 @testset "eigenvalue sorting" begin
@@ -925,7 +960,7 @@ end
 @testset "divisions functionality" for elty in (Int, Float64, ComplexF64)
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
-    @test \(x, B) == /(B, x)
+    @test \(x, B) ≈ /(B, x) rtol=2eps()
 end
 
 @testset "promotion" begin

@@ -123,7 +123,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test read(`$exename -v`, String) == read(`$exename --version`, String)
 
     # --help
-    let header = "julia [switches] -- [programfile] [args...]"
+    let header = "\n    julia [switches] -- [programfile] [args...]"
         @test startswith(read(`$exename -h`, String), header)
         @test startswith(read(`$exename --help`, String), header)
     end
@@ -218,7 +218,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -t, --threads
     code = "print(Threads.nthreads())"
-    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
@@ -326,6 +326,35 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
         @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in specific file
+        tfile = realpath(inputfile)
+        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            --code-coverage=$covfile --code-coverage=@$tfile`) == "(3, $(repr(tfile)))"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in directory
+        tdir = dirname(realpath(inputfile))
+        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in a different directory
+        tdir = mktempdir() # a dir that contains no code
+        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
+        @test isfile(covfile)
+        got = read(covfile, String)
+        @test isempty(got)
+        rm(covfile)
     end
 
     # --track-allocation
@@ -344,11 +373,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         rm(memfile)
         @test popfirst!(got) == "        0 g(x) = x + 123456"
         @test popfirst!(got) == "        - function f(x)"
-        if Sys.WORD_SIZE == 64
-            @test popfirst!(got) == "       48     []"
-        else
-            @test popfirst!(got) == "       32     []"
-        end
+        @test popfirst!(got) == "        -     []"
         if Sys.WORD_SIZE == 64
             # P64 pools with 64 bit tags
             @test popfirst!(got) == "       16     Base.invokelatest(g, 0)"
@@ -485,7 +510,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test parse(Int,readchomp(`$exename --math-mode=ieee -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
         @test parse(Int,readchomp(`$exename --math-mode=fast -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
+            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
     # --worker takes default / custom as argument (default/custom arguments
@@ -506,10 +531,20 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_DEPOT_PATH" => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
+            @test readchomp(`$exename -- $testfile foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
                 output
             @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+                output
+
+            output = "[\"foo\", \"--\", \"-bar\", \"--baz\"]"
+            @test readchomp(`$exename $testfile foo -- -bar --baz`) == output
+            @test readchomp(`$exename -- $testfile foo -- -bar --baz`) == output
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' foo -- -bar --baz`) ==
+                output
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -- -bar --baz`) ==
+                output
+            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' foo -- -bar --baz`) ==
                 output
 
             output = "String[]\nString[]"
@@ -517,8 +552,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test readchomp(`$exename --startup-file=yes $testfile`) == output
 
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
-                "[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
@@ -766,3 +799,22 @@ end
 
 # issue #39259, shadowing `ARGS`
 @test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
+
+@testset "- as program file reads from stdin" begin
+    for args in (`- foo bar`, `-- - foo bar`)
+        cmd = `$(Base.julia_cmd()) --startup-file=no $(args)`
+        io = IOBuffer()
+        open(cmd, io; write=true) do proc
+            write(proc, """
+                println(PROGRAM_FILE)
+                println(@__FILE__)
+                foreach(println, ARGS)
+            """)
+        end
+        lines = collect(eachline(seekstart(io)))
+        @test lines[1] == "-"
+        @test lines[2] == "stdin"
+        @test lines[3] == "foo"
+        @test lines[4] == "bar"
+    end
+end

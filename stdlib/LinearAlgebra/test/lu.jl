@@ -296,7 +296,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}}
+LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -402,20 +402,37 @@ end
     end
 end
 
-@testset "lu(A) has a fallback for abstract matrices (#40831)" begin
-    # check that lu works for some structured arrays
-    A0 = rand(5, 5)
-    @test lu(Diagonal(A0)) isa LU
-    @test Matrix(lu(Diagonal(A0))) ≈ Diagonal(A0)
-    @test lu(Bidiagonal(A0, :U)) isa LU
-    @test Matrix(lu(Bidiagonal(A0, :U))) ≈ Bidiagonal(A0, :U)
+@testset "lu on *diagonal matrices" begin
+    dl = rand(3)
+    d = rand(4)
+    Bl = Bidiagonal(d, dl, :L)
+    Bu = Bidiagonal(d, dl, :U)
+    Tri = Tridiagonal(dl, d, dl)
+    Sym = SymTridiagonal(d, dl)
+    D = Diagonal(d)
+    b = ones(4)
+    B = rand(4,4)
+    for A in (Bl, Bu, Tri, Sym, D), pivot in (NoPivot(), RowMaximum())
+        @test A\b ≈ lu(A, pivot)\b
+        @test B/A ≈ B/lu(A, pivot)
+        @test B/A ≈ B/Matrix(A)
+        @test Matrix(lu(A, pivot)) ≈ A
+        @test @inferred(lu(A)) isa LU
+        if A isa Union{Bidiagonal, Diagonal, Tridiagonal, SymTridiagonal}
+            @test lu(A) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+            @test lu(A, pivot) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+            @test lu(A, pivot; check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+        end
+    end
+end
 
-    # lu(A) copies A and then invokes lu!, make sure that the most efficient
-    # implementation of lu! continues to be used
-    A1 = Tridiagonal(rand(2), rand(3), rand(2))
-    @test lu(A1) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
-    @test lu(A1, RowMaximum()) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
-    @test lu(A1, RowMaximum(); check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+@testset "can push to vector after 3-arg ldiv! (#43507)" begin
+    u = rand(3)
+    A = rand(3,3)
+    b = rand(3)
+    ldiv!(u,lu(A),b)
+    push!(b,4.0)
+    @test length(b) == 4
 end
 
 end # module TestLU

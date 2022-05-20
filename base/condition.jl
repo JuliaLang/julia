@@ -61,12 +61,12 @@ Abstract implementation of a condition object
 for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
-    waitq::InvasiveLinkedList{Task}
+    waitq::IntrusiveLinkedList{Task}
     lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(InvasiveLinkedList{Task}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(InvasiveLinkedList{Task}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(InvasiveLinkedList{Task}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
 end
 
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
@@ -91,7 +91,7 @@ function _wait2(c::GenericCondition, waiter::Task)
         # XXX: Ideally we would be able to unset this
         ct.sticky = true
         tid = Threads.threadid()
-        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
     return
 end

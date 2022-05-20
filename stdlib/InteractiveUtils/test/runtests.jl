@@ -314,7 +314,7 @@ end
 
 # manually generate a broken function, which will break codegen
 # and make sure Julia doesn't crash
-@eval @noinline f_broken_code() = 0
+@eval @noinline @Base.constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
@@ -641,7 +641,7 @@ end
                 buf = read(fname)
                 rm(fname)
 
-                @test occursin("ms  Foo3242\n", String(buf))
+                @test occursin("ms  Foo3242", String(buf))
 
             finally
                 filter!((≠)(dir), LOAD_PATH)
@@ -669,4 +669,16 @@ let # `default_tt` should work with any function with one method
     @test (code_native(devnull, function (a::Int)
         sin(a)
     end); true)
+end
+
+@testset "code_llvm on opaque_closure" begin
+    let ci = code_typed(+, (Int, Int))[1][1]
+        ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+        oc = Core.OpaqueClosure(ir)
+        @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
+        let io = IOBuffer()
+            code_llvm(io, oc, Tuple{})
+            @test occursin(InteractiveUtils.OC_MISMATCH_WARNING, String(take!(io)))
+        end
+    end
 end

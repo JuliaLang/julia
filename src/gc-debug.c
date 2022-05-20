@@ -467,10 +467,9 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
         return;
     if (*env == 'r') {
         env++;
-        srand((unsigned)uv_hrtime());
         for (int i = 0;i < 3;i++) {
             while (num->random[i] == 0) {
-                num->random[i] = rand();
+                num->random[i] = jl_rand();
             }
         }
     }
@@ -977,6 +976,22 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
                    sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
+
+void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
+                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t pause)
+{
+    if (sweep_full > 0)
+        jl_safe_printf("TS: %" PRIu64 " Major collection: estimate freed = %" PRIu64
+                       " live = %" PRIu64 "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
+                       end - start, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000 );
+    else
+        jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64 " live = %" PRIu64
+                       "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
+                       end - start, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000 );
+}
 #endif
 
 void jl_gc_debug_init(void)
@@ -1378,6 +1393,23 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
         }
     }
     jl_set_safe_restore(old_buf);
+}
+
+static int gc_logging_enabled = 0;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
+    gc_logging_enabled = enable;
+}
+
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+    if (!gc_logging_enabled) {
+        return;
+    }
+    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/1e6,
+        full ? "full" : "incr",
+        recollect ? "recollect" : ""
+    );
 }
 
 #ifdef __cplusplus
