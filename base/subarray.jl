@@ -339,7 +339,6 @@ end
 function getindex(V::FastContiguousSubArray{<:Any, 1}, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    v = @view V.parent[V.offset1 .+ UnitRange(i)]
     out = similar(V, axes(i))
     li = length(i)
     if li > 0

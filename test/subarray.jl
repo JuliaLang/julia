@@ -536,6 +536,10 @@ end
             c1 = a12[ind1]
             @test (c1[axes(c1,1)] = a12[ind1]; c1) == (c1[:] = a12[ind1]; c1) == a12[ind1]
 
+            inds1 = Base.IdentityUnitRange(Base.OneTo(4))
+            c1 = @view a1[inds1]
+            @test (c1[eachindex(c1)] = @view(a12[inds1]); c1) == @view(a12[inds1])
+
             ind2 = 2:2:8
             d1 = a12[ind2]
             @test (d1[axes(d1,1)] = a12[ind2]; d1) == (d1[:] = a12[ind2]; d1) == a12[ind2]
