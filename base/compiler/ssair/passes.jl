@@ -998,7 +998,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             else
                 phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get(lazydomtree))
             end
-            allblocks = sort(vcat(phiblocks, ldu.def_bbs))
+            allblocks = sort!(vcat(phiblocks, ldu.def_bbs); alg=QuickSort)
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for i = 1:length(du.uses)
