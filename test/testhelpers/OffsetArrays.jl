@@ -5,7 +5,7 @@
 # This test file is designed to exercise support for generic indexing,
 # even though offset arrays aren't implemented in Base.
 
-# OffsetArrays v1.11.1
+# OffsetArrays v1.11.2
 # No compat patch and docstrings
 module OffsetArrays
 
@@ -82,11 +82,6 @@ end
 # Conversions to an AbstractUnitRange{Int} (and to an OrdinalRange{Int,Int} on Julia v"1.6") are necessary
 # to evaluate CartesianIndices for BigInt ranges, as their axes are also BigInt ranges
 Base.AbstractUnitRange{T}(r::IdOffsetRange) where {T<:Integer} = IdOffsetRange{T}(r)
-
-# A version upper bound on this may be set after https://github.com/JuliaLang/julia/pull/40038 is merged
-if v"1.6" <= VERSION
-    Base.OrdinalRange{T,T}(r::IdOffsetRange) where {T<:Integer} = IdOffsetRange{T}(r)
-end
 
 # TODO: uncomment these when Julia is ready
 # # Conversion preserves both the values and the indices, throwing an InexactError if this
@@ -294,11 +289,7 @@ end
 @inline _addoffset(r::AbstractUnitRange, of) = UnitRange(first(r) + of, last(r) + of)
 @inline _addoffset(r::AbstractRange, of) = range(first(r) + of, stop = last(r) + of, step = step(r))
 
-if VERSION <= v"1.7.0-DEV.1039"
-    _contiguousindexingtype(r::AbstractUnitRange{<:Integer}) = UnitRange{Int}(r)
-else
-    _contiguousindexingtype(r::AbstractUnitRange{<:Integer}) = r
-end
+_contiguousindexingtype(r::AbstractUnitRange{<:Integer}) = r
 
 _of_eltype(::Type{T}, M::AbstractArray{T}) where {T} = M
 _of_eltype(T, M::AbstractArray) = map(T, M)
@@ -332,18 +323,8 @@ struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     end
 end
 
-"""
-    OffsetVector(v, index)
-
-Type alias and convenience constructor for one-dimensional [`OffsetArray`](@ref)s.
-"""
 const OffsetVector{T,AA<:AbstractVector{T}} = OffsetArray{T,1,AA}
 
-"""
-    OffsetMatrix(A, index1, index2)
-
-Type alias and convenience constructor for two-dimensional [`OffsetArray`](@ref)s.
-"""
 const OffsetMatrix{T,AA<:AbstractMatrix{T}} = OffsetArray{T,2,AA}
 
 # checks if the offset may be added to the range without overflowing
@@ -810,33 +791,6 @@ function Base.replace_in_print_matrix(A::OffsetArray{<:Any,1}, i::Integer, j::In
     Base.replace_in_print_matrix(parent(A), ip, j, s)
 end
 
-"""
-    no_offset_view(A)
-
-Return an `AbstractArray` that shares structure and underlying data with the argument,
-but uses 1-based indexing. May just return the argument when applicable.
-Not exported.
-
-The default implementation uses `OffsetArrays`, but other types should use something more
-specific to remove a level of indirection when applicable.
-
-```jldoctest; setup=:(using OffsetArrays)
-julia> A = [1 3 5; 2 4 6];
-
-julia> O = OffsetArray(A, 0:1, -1:1)
-2×3 OffsetArray(::$(Matrix{Int}), 0:1, -1:1) with eltype $Int with indices 0:1×-1:1:
- 1  3  5
- 2  4  6
-
-julia> OffsetArrays.no_offset_view(O)[1,1] = -9
--9
-
-julia> A
-2×3 $(Matrix{Int}):
- -9  3  5
-  2  4  6
-```
-"""
 no_offset_view(A::OffsetArray) = no_offset_view(parent(A))
 no_offset_view(a::Array) = a
 no_offset_view(i::Number) = i
@@ -853,167 +807,26 @@ _no_offset_view(::Any, A::AbstractUnitRange) = UnitRange(A)
 # These two helpers are deliberately not exported; their meaning can be very different in
 # other scenarios and will be very likely to cause name conflicts if exported.
 #####
-"""
-    center(A, [r::RoundingMode=RoundDown])::Dims
-
-Return the center coordinate of given array `A`. If `size(A, k)` is even,
-a rounding procedure will be applied with mode `r`.
-
-!!! compat "OffsetArrays 1.9"
-    This method requires at least OffsetArrays 1.9.
-
-# Examples
-
-```jldoctest; setup=:(using OffsetArrays)
-julia> A = reshape(collect(1:9), 3, 3)
-3×3 $(Matrix{Int}):
- 1  4  7
- 2  5  8
- 3  6  9
-
-julia> c = OffsetArrays.center(A)
-(2, 2)
-
-julia> A[c...]
-5
-
-julia> Ao = OffsetArray(A, -2, -2); # axes (-1:1, -1:1)
-
-julia> c = OffsetArrays.center(Ao)
-(0, 0)
-
-julia> Ao[c...]
-5
-```
-
-To shift the center coordinate of the given array to `(0, 0, ...)`, you
-can use [`centered`](@ref OffsetArrays.centered).
-"""
 function center(A::AbstractArray, r::RoundingMode=RoundDown)
     map(axes(A)) do inds
         round(Int, (length(inds)-1)/2, r) + first(inds)
     end
 end
 
-"""
-    centered(A, cp=center(A)) -> Ao
-
-Shift the center coordinate/point `cp` of array `A` to `(0, 0, ..., 0)`. Internally, this is
-equivalent to `OffsetArray(A, .-cp)`.
-
-!!! compat "OffsetArrays 1.9"
-    This method requires at least OffsetArrays 1.9.
-
-# Examples
-
-```jldoctest; setup=:(using OffsetArrays)
-julia> A = reshape(collect(1:9), 3, 3)
-3×3 $(Matrix{Int}):
- 1  4  7
- 2  5  8
- 3  6  9
-
-julia> Ao = OffsetArrays.centered(A); # axes (-1:1, -1:1)
-
-julia> Ao[0, 0]
-5
-
-julia> Ao = OffsetArray(A, OffsetArrays.Origin(0)); # axes (0:2, 0:2)
-
-julia> Aoo = OffsetArrays.centered(Ao); # axes (-1:1, -1:1)
-
-julia> Aoo[0, 0]
-5
-```
-
-Users are allowed to pass `cp` to change how "center point" is interpreted, but the meaning of the
-output array should be reinterpreted as well. For instance, if `cp = map(last, axes(A))` then this
-function no longer shifts the center point but instead the bottom-right point to `(0, 0, ..., 0)`.
-A commonly usage of `cp` is to change the rounding behavior when the array is of even size at some
-dimension:
-
-```jldoctest; setup=:(using OffsetArrays)
-julia> A = reshape(collect(1:4), 2, 2) # Ideally the center should be (1.5, 1.5) but OffsetArrays only support integer offsets
-2×2 $(Matrix{Int}):
- 1  3
- 2  4
-
-julia> OffsetArrays.centered(A, OffsetArrays.center(A, RoundUp)) # set (2, 2) as the center point
-2×2 OffsetArray(::$(Matrix{Int}), -1:0, -1:0) with eltype $(Int) with indices -1:0×-1:0:
- 1  3
- 2  4
-
-julia> OffsetArrays.centered(A, OffsetArrays.center(A, RoundDown)) # set (1, 1) as the center point
-2×2 OffsetArray(::$(Matrix{Int}), 0:1, 0:1) with eltype $(Int) with indices 0:1×0:1:
- 1  3
- 2  4
-```
-
-See also [`center`](@ref OffsetArrays.center).
-"""
 centered(A::AbstractArray, cp::Dims=center(A)) = OffsetArray(A, .-cp)
 
 centered(A::AbstractArray, i::CartesianIndex) = centered(A, Tuple(i))
 
-####
-# work around for segfault in searchsorted*
-#  https://github.com/JuliaLang/julia/issues/33977
-####
-
-function _safe_searchsorted(v::OffsetArray, x, ilo::T, ihi::T, o::Base.Ordering) where T<:Integer
-    u = T(1)
-    lo = ilo - u
-    hi = ihi + u
-    @inbounds while lo < hi - u
-        m = lo + (hi - lo) ÷ 2
-        if Base.lt(o, v[m], x)
-            lo = m
-        elseif Base.lt(o, x, v[m])
-            hi = m
-        else
-            a = searchsortedfirst(v, x, max(lo,ilo), m, o)
-            b = searchsortedlast(v, x, m, min(hi,ihi), o)
-            return a : b
-        end
+# we may pass the searchsorted* functions to the parent, and wrap the offset
+for f in [:searchsortedfirst, :searchsortedlast, :searchsorted]
+    _safe_f = Symbol("_safe_" * String(f))
+    @eval function $_safe_f(v::OffsetArray, x, ilo, ihi, o::Base.Ordering)
+        offset = firstindex(v) - firstindex(parent(v))
+        $f(parent(v), x, ilo - offset, ihi - offset, o) .+ offset
     end
-    return (lo + 1) : (hi - 1)
+    @eval Base.$f(v::OffsetVector, x, ilo::T, ihi::T, o::Base.Ordering) where T<:Integer =
+        $_safe_f(v, x, ilo, ihi, o)
 end
-function _safe_searchsortedfirst(v::OffsetArray, x, lo::T, hi::T, o::Base.Ordering) where T<:Integer
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = lo + (hi - lo) ÷ 2
-        if Base.lt(o, v[m], x)
-            lo = m
-        else
-            hi = m
-        end
-    end
-    return hi
-end
-function _safe_searchsortedlast(v::OffsetArray, x, lo::T, hi::T, o::Base.Ordering) where T<:Integer
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = lo + (hi - lo) ÷ 2
-        if Base.lt(o, x, v[m])
-            hi = m
-        else
-            lo = m
-        end
-    end
-    return lo
-end
-
-Base.searchsorted(v::OffsetArray, x, ilo::T, ihi::T, o::Base.Ordering) where T<:Integer =
-    _safe_searchsorted(v, x, ilo, ihi, o)
-Base.searchsortedfirst(v::OffsetArray, x, lo::T, hi::T, o::Base.Ordering) where T<:Integer =
-    _safe_searchsortedfirst(v, x, lo, hi, o)
-Base.searchsortedlast(v::OffsetArray, x, lo::T, hi::T, o::Base.Ordering) where T<:Integer =
-    _safe_searchsortedlast(v, x, lo, hi, o)
-
 
 ##
 # Deprecations
