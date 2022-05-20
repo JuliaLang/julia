@@ -351,3 +351,10 @@ end
         Base.Rounding.setrounding_raw(T, Base.Rounding.to_fenv(old))
     end
 end
+
+@testset "rounding to AbstractFloat" begin
+    for T in [Float16, Float32, Float64]
+        @test floor(T, 2.3) <= 2.3
+        @test ceil(T, 3.8) >= 3.8
+    end
+end

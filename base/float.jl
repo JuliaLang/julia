@@ -355,7 +355,15 @@ trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
 
 # fallbacks
 floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
+function floor(::Type{T}, x) where T<:AbstractFloat
+    y = convert(T, x)
+    return y > x ? prevfloat(y) : y
+end
 ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
+function ceil(::Type{T}, x) where T<:AbstractFloat
+    y = convert(T, x)
+    return y < x ? nextfloat(y) : y
+end
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 
 # Bool
