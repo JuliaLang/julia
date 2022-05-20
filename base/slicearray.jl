@@ -301,5 +301,7 @@ function showarg(io::IO, s::Slices, toplevel)
     return nothing
 end
 
-# This hides the SubArray type in compact printing, e.g. (0, eachcol(Float32[1 2; 3 4]), 5)
+# This affects compact printing, 2-arg show. By default an array of arrays prints e.g. `Vector{Int}[[1,2], [3,4]]`.
+# Since the element type for Slices ia a complicated SubArray, this hides it, while still printing inner types
+# if nontrivial. Thus `(eachcol(Float32[1 2; 3 4]),)` prints `([Float32[1.0, 3.0], Float32[2.0, 4.0]],)`
 typeinfo_prefix(io::IO, @nospecialize s::Slices) = ("", true)
