@@ -24,7 +24,7 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
     const chunks::Vector{UInt64}
     len::Int
-    const dims::NTuple{N,Int}
+    dims::NTuple{N,Int}
 
     # Unexported inner constructor of BitArray
     global bitarray_internal(::Val{N}, chunks, len, dims) where {N} = new{N}(chunks, len, dims)
