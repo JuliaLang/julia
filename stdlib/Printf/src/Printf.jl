@@ -124,7 +124,7 @@ function Format(f::AbstractString)
         pos += 1
         if b == UInt8('%')
             last_percent_pos = pos-1
-            pos > len && throw(InvalidFormatStringError("Format specifier incomplete", f, last_percent_pos, last_percent_pos))
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, last_percent_pos))
             if bytes[pos] == UInt8('%')
                 # escaped '%'
                 b = bytes[pos]
@@ -191,14 +191,16 @@ function Format(f::AbstractString)
         # parse length modifier (ignored)
         if b == UInt8('h') || b == UInt8('l')
             prev = b
+            pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
             if b == prev
-                pos > len && throw(InvalidFormatStringError("Unterminated length modifier", f, last_percent_pos, pos-1))
+                pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
                 b = bytes[pos]
                 pos += 1
             end
         elseif b in b"Ljqtz" # what is q? Possibly quad?
+            pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
         end

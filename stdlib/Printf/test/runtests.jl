@@ -782,4 +782,10 @@ end
     @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
 end
 
+@testset "length modifiers" begin
+    @test_throws Printf.InvalidFormatStringError Printf.@sprintf("%h", 1)
+    @test_throws Printf.InvalidFormatStringError Printf.@sprintf("%hh", 1)
+    @test_throws Printf.InvalidFormatStringError Printf.@sprintf("%z", 1)
+end
+
 end # @testset "Printf"
