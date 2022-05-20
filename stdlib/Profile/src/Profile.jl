@@ -405,8 +405,7 @@ function getdict(data::Vector{UInt})
 end
 
 function getdict!(dict::LineInfoDict, data::Vector{UInt})
-    # we don't want metadata here as we're just looking up ips
-    unique_ips = unique(has_meta(data) ? strip_meta(data) : data)
+    unique_ips = unique(data)
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
