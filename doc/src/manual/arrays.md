@@ -876,10 +876,12 @@ introspect which is which).
 
 !!! warnings
 
-    When iterating over an entire array, it is
+    When iterating over the an entire array, and the values of the indices are needed, is
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
     Not only will the former be faster in cases where `A` is `IndexCartesian`,
     but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
+    If the values of the indices are not needed, on the other hand, it is preferable to iterate over
+    the array's elements (i.e. `for a in A`).
 
 #### Omitted and extra indices
 
