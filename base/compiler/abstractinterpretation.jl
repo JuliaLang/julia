@@ -2251,7 +2251,7 @@ end
     end
 end
 
-@inline function update_bbstate!(frame::InferenceState, bb::Int, vartable::VarTable)
+function update_bbstate!(frame::InferenceState, bb::Int, vartable::VarTable)
     bbtable = frame.bb_vartables[bb]
     if bbtable === nothing
         # if a basic block hasn't been analyzed yet,
