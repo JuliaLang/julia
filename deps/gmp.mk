@@ -26,6 +26,7 @@ $(SRCCACHE)/gmp-$(GMP_VER)/build-patched: $(SRCCACHE)/gmp-$(GMP_VER)/source-extr
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-exception.patch
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp_alloc_overflow_func.patch
 	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-apple-arm64.patch
+	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/gmp-CVE-2021-43618.patch
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted
