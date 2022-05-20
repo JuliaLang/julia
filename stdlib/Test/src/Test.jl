@@ -41,6 +41,8 @@ const DISPLAY_FAILED = (
     :contains
 )
 
+const FAIL_FAST = Ref{Bool}(false)
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -963,8 +965,22 @@ mutable struct DefaultTestSet <: AbstractTestSet
     showtiming::Bool
     time_start::Float64
     time_end::Union{Float64,Nothing}
+    failfast::Bool
 end
-DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true) = DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing)
+    if isnothing(failfast)
+        # pass failfast state into child testsets
+        parent_ts = get_testset()
+        if parent_ts isa DefaultTestSet
+            failfast = parent_ts.failfast
+        else
+            failfast = false
+        end
+    end
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast)
+end
+
+struct FailFastError <: Exception end
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
@@ -986,6 +1002,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error})
         end
     end
     push!(ts.results, t)
+    (FAIL_FAST[] || ts.failfast) && throw(FailFastError())
     return t
 end
 
@@ -1262,11 +1279,17 @@ along with a summary of the test results.
 Any custom testset type (subtype of `AbstractTestSet`) can be given and it will
 also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
-accepts two boolean options:
+accepts three boolean options:
 - `verbose`: if `true`, the result summary of the nested testsets is shown even
 when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
 (the default is `true`).
+- `failfast`: if `true`, any test failure or error will cause the testset and any
+child testsets to return immediately (the default is `false`). This can also be set
+globally via the env var `JULIA_TEST_FAILFAST`.
+
+!!! compat "Julia 1.9"
+    `failfast` requires at least Julia 1.9.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
@@ -1309,6 +1332,8 @@ macro testset(args...)
 
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
+
+    FAIL_FAST[] = something(tryparse(Bool, get(ENV, "JULIA_TEST_FAILFAST", "false")), false)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
@@ -1364,7 +1389,11 @@ function testset_beginend_call(args, tests, source)
             # something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+            if err isa FailFastError
+                get_testset_depth() > 1 ? rethrow() : failfast_print()
+            else
+                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+            end
         finally
             copy!(RNG, oldrng)
             Random.set_global_seed!(oldseed)
@@ -1380,6 +1409,10 @@ function testset_beginend_call(args, tests, source)
     return ex
 end
 
+function failfast_print()
+    printstyled("\nFail-fast enabled:"; color = Base.error_color(), bold=true)
+    printstyled(" Fail or Error occured\n\n"; color = Base.error_color())
+end
 
 """
 Generate the code for a `@testset` with a `for` loop argument
@@ -1443,7 +1476,9 @@ function testset_forloop(args, testloop, source)
             # Something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+            if !isa(err, FailFastError)
+                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+            end
         end
     end
     quote
