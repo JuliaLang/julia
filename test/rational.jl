@@ -253,6 +253,8 @@ end
     rational2 = Rational(-4500, 9000)
     @test sprint(show, rational1) == "1465//8593"
     @test sprint(show, rational2) == "-1//2"
+    @test sprint(show, -2//2) == "-1//1"
+    @test sprint(show, [-2//2,]) == "Rational{Int64}[-1]"
     let
         io1 = IOBuffer()
         write(io1, rational1)

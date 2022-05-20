@@ -83,6 +83,13 @@ end
 
 function show(io::IO, x::Rational)
     show(io, numerator(x))
+
+    if isone(denominator(x)) && (
+        ((:compact=>true) in io) || get(io, :typeinfo, Number) <: Rational
+    )
+        return
+    end
+
     print(io, "//")
     show(io, denominator(x))
 end
