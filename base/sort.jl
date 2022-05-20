@@ -174,7 +174,7 @@ midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
 # index of the first value of vector a that is greater than or equal to x;
-# returns length(v)+1 if x is greater than all values in v.
+# returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
@@ -191,7 +191,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::key
 end
 
 # index of the last value of vector a that is less than or equal to x;
-# returns 0 if x is less than all values of v.
+# returns firstindex(v)-1 if x is less than all values of v.
 function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
     lo = lo - u
