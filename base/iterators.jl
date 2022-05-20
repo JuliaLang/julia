@@ -675,7 +675,7 @@ end
 
 An iterator that generates at most the first `n` elements of `iter`.
 
-See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`first`](@ref), [`take!`](@ref).
+See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`Base.first`](@ref), [`take!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1411,7 +1411,7 @@ length(s::Stateful) = length(s.itr) - s.taken
 Return the one and only element of collection `x`, or throw an [`ArgumentError`](@ref) if the
 collection has zero or multiple elements.
 
-See also [`first`](@ref), [`last`](@ref).
+See also [`Base.first`](@ref), [`last`](@ref).
 
 !!! compat "Julia 1.4"
     This method requires at least Julia 1.4.
