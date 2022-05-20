@@ -535,7 +535,7 @@ end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
 macro pass(name, expr)
-    optimize_until= esc(:optimize_until)
+    optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
     macrocall = :(@timeit $(esc(name)) $(esc(expr)))
     macrocall.args[2] = __source__  # `@timeit` may want to use it
