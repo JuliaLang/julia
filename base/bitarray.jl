@@ -22,7 +22,7 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
-    const chunks::Vector{UInt64}
+    chunks::Vector{UInt64} # deprecate this in v2: make the fields const annotated
     len::Int
     dims::NTuple{N,Int}
 
