@@ -376,6 +376,16 @@ widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional
 ignorelimited(@nospecialize typ) = typ
 ignorelimited(typ::LimitedAccuracy) = typ.typ
 
+# remove any Conditional for this slot from the vartable
+function invalidate_conditional(vt::VarState, changeid::Int)
+    newtyp = ignorelimited(vt.typ)
+    if isa(newtyp, Conditional) && slot_id(newtyp.var) == changeid
+        newtyp = widenwrappedconditional(vt.typ)
+        return VarState(newtyp, vt.undef)
+    end
+    return nothing
+end
+
 function stupdate!(state::VarTable, changes::StateUpdate)
     changed = false
     changeid = slot_id(changes.var)
@@ -385,16 +395,13 @@ function stupdate!(state::VarTable, changes::StateUpdate)
         else
             newtype = changes.state[i]
         end
-        oldtype = state[i]
-        # remove any Conditional for this slot from the vtable
-        # (unless this change is came from the conditional)
-        if !changes.conditional && isa(newtype, VarState)
-            newtypetyp = ignorelimited(newtype.typ)
-            if isa(newtypetyp, Conditional) && slot_id(newtypetyp.var) == changeid
-                newtypetyp = widenwrappedconditional(newtype.typ)
-                newtype = VarState(newtypetyp, newtype.undef)
+        if !changes.conditional
+            invalidated = invalidate_conditional(newtype, changeid)
+            if invalidated !== nothing
+                newtype = invalidated
             end
         end
+        oldtype = state[i]
         if schanged(newtype, oldtype)
             state[i] = smerge(oldtype, newtype)
             changed = true
@@ -418,20 +425,11 @@ end
 
 function stupdate1!(state::VarTable, change::StateUpdate)
     changeid = slot_id(change.var)
-    # remove any Conditional for this slot from the catch block vtable
-    # (unless this change is came from the conditional)
     if !change.conditional
         for i = 1:length(state)
-            oldtype = state[i]
-            if isa(oldtype, VarState)
-                oldtypetyp = ignorelimited(oldtype.typ)
-                if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
-                    oldtypetyp = widenconditional(oldtypetyp)
-                    if oldtype.typ isa LimitedAccuracy
-                        oldtypetyp = LimitedAccuracy(oldtypetyp, (oldtype.typ::LimitedAccuracy).causes)
-                    end
-                    state[i] = VarState(oldtypetyp, oldtype.undef)
-                end
+            invalidated = invalidate_conditional(state[i], changeid)
+            if invalidated !== nothing
+                state[i] = invalidated
             end
         end
     end
@@ -454,20 +452,11 @@ end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
     changeid = slot_id(change.var)
-    # remove any Conditional for this slot from the catch block vtable
-    # (unless this change is came from the conditional)
     if !change.conditional
         for i = 1:length(state)
-            oldtype = state[i]
-            if isa(oldtype, VarState)
-                oldtypetyp = ignorelimited(oldtype.typ)
-                if isa(oldtypetyp, Conditional) && slot_id(oldtypetyp.var) == changeid
-                    oldtypetyp = widenconditional(oldtypetyp)
-                    if oldtype.typ isa LimitedAccuracy
-                        oldtypetyp = LimitedAccuracy(oldtypetyp, (oldtype.typ::LimitedAccuracy).causes)
-                    end
-                    state[i] = VarState(oldtypetyp, oldtype.undef)
-                end
+            invalidated = invalidate_conditional(state[i], changeid)
+            if invalidated !== nothing
+                state[i] = invalidated
             end
         end
     end
