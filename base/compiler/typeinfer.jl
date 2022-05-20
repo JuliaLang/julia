@@ -924,12 +924,18 @@ end
         method::Method,
         atype,
         sparams::SimpleVector,
-        optimize_level::Int,
+        optimize_until::Union{Integer,AbstractString,Nothing},
     ) -> (ir::Union{IRCode,Nothing}, returntype::Type)
 
 Infer a `method` and return an `IRCode` with inferred `returntype` on success.
 """
-function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, optimize_level::Int)
+function typeinf_ircode(
+    interp::AbstractInterpreter,
+    method::Method,
+    @nospecialize(atype),
+    sparams::SimpleVector,
+    optimize_until::Union{Integer,AbstractString,Nothing},
+)
     ccall(:jl_typeinf_begin, Cvoid, ())
     frame = typeinf_frame(interp, method, atype, sparams, false)
     if frame === nothing
@@ -939,7 +945,7 @@ function typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospeciali
     (; result) = frame
     opt_params = OptimizationParams(interp)
     opt = OptimizationState(frame, opt_params, interp)
-    ir = run_passes(opt.src, opt, result, optimize_level)
+    ir = run_passes(opt.src, opt, result, optimize_until)
     rt = widenconst(ignorelimited(result.result))
     ccall(:jl_typeinf_end, Cvoid, ())
     return ir, rt

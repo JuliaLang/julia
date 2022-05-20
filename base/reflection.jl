@@ -1308,18 +1308,28 @@ internals.
   methods, use current world age if not specified.
 - `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to
   use, use the native interpreter Julia uses if not specified.
-- `optimize_level`: Number of passes used in `Core.Compiler.run_passes`.  Run all passes by
-  default.
+- `optimize_until`: optional, controls the optimization passes to run.  If it is a string,
+  it specifies the name of the pass up to which the optimizer is run.  If it is an integer,
+  it specifies the number of passes to run.  If it is `nothing` (default), all passes are
+  run.
 
 # Example
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
 ```jldoctest
-julia> Base.code_ircode(+, (Float64, Float64))
+julia> Base.code_ircode(+, (Float64, Int64))
 1-element Vector{Any}:
- 383 1 ─ %1 = Base.add_float(_2, _3)::Float64
-    └──      return %1
+ 388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
+    │   %2 = Base.add_float(_2, %1)::Float64
+    └──      return %2
+     => Float64
+
+julia> Base.code_ircode(+, (Float64, Int64); optimize_until = "compact 1")
+1-element Vector{Any}:
+ 388 1 ─ %1 = Base.promote(_2, _3)::Tuple{Float64, Float64}
+    │   %2 = Core._apply_iterate(Base.iterate, Base.:+, %1)::Float64
+    └──      return %2
      => Float64
 ```
 """
@@ -1328,7 +1338,7 @@ function code_ircode(
     @nospecialize(types = default_tt(f));
     world = get_world_counter(),
     interp = Core.Compiler.NativeInterpreter(world),
-    optimize_level::Int = typemax(Int),
+    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
 )
     if isa(f, Core.OpaqueClosure)
         error("OpaqueClosure not supported")
@@ -1340,7 +1350,7 @@ function code_ircode(
     else
         tt = Tuple{ft,types...}
     end
-    return code_ircode_by_type(tt; world, interp, optimize_level)
+    return code_ircode_by_type(tt; world, interp, optimize_until)
 end
 
 """
@@ -1353,7 +1363,7 @@ function code_ircode_by_type(
     @nospecialize(tt::Type);
     world = get_world_counter(),
     interp = Core.Compiler.NativeInterpreter(world),
-    optimize_level::Int = typemax(Int),
+    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
 )
     ccall(:jl_is_in_pure_context, Bool, ()) &&
         error("code reflection cannot be used from generated functions")
@@ -1368,7 +1378,7 @@ function code_ircode_by_type(
             meth,
             match.spec_types,
             match.sparams,
-            optimize_level,
+            optimize_until,
         )
         if code === nothing
             push!(asts, meth => Any)

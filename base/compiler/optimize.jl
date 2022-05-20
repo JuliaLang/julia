@@ -535,18 +535,28 @@ end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
 macro pass(name, expr)
-    optimize_level = esc(:optimize_level)
+    optimize_until= esc(:optimize_until)
     stage = esc(:__stage__)
     macrocall = :(@timeit $(esc(name)) $(esc(expr)))
     macrocall.args[2] = __source__  # `@timeit` may want to use it
     quote
         $macrocall
-        $optimize_level < ($stage += 1) && $(esc(:(@goto __done__)))
+        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
     end
 end
 
-function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult, optimize_level::Int = typemax(Int))
+matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
+matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(::Nothing, _, _) = false
+
+function run_passes(
+    ci::CodeInfo,
+    sv::OptimizationState,
+    caller::InferenceResult,
+    optimize_until = nothing,  # run all passes by default
+)
     __stage__ = 1  # used by @pass
+    # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here

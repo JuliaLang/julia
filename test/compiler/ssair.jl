@@ -337,7 +337,9 @@ end
 
 @testset "code_ircode" begin
     @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
-    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_level = 3))) isa
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
+          Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
           Compiler.IRCode
 
     function demo(f)
@@ -346,7 +348,8 @@ end
         f()
     end
     @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
-    @test first(only(Base.code_ircode(demo; optimize_level = 3))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
 end
 
 let
