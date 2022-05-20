@@ -160,7 +160,7 @@ let t = take(0:2:8, 10), i = 0
 end
 
 let i = 0
-    for j = take(0:2:100, 10)
+    for j = Iterators.first(0:2:100, 10)
         @test j == i*2
         i += 1
     end

@@ -15,7 +15,7 @@ using .Base:
     LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
 
 import .Base:
-    first, last,
+    last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype,
     haskey, keys, values, pairs,
@@ -107,7 +107,7 @@ length(r::Reverse) = length(r.itr)
 size(r::Reverse) = size(r.itr)
 IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
 IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
-last(r::Reverse) = first(r.itr) # the first shall be last
+last(r::Reverse) = Base.first(r.itr) # the first shall be last
 
 # reverse-order array iterators: assumes more-specialized Reverse for eachindex
 @propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
@@ -487,7 +487,7 @@ IteratorEltype(::Type{Filter{F,I}}) where {F,I} = IteratorEltype(I)
 IteratorSize(::Type{<:Filter}) = SizeUnknown()
 
 reverse(f::Filter) = Filter(f.flt, reverse(f.itr))
-last(f::Filter) = first(reverse(f))
+last(f::Filter) = Base.first(reverse(f))
 
 # Accumulate -- partial reductions of a function over an iterator
 
@@ -671,6 +671,7 @@ end
 
 """
     take(iter, n)
+    Iterators.first(iter, n)
 
 An iterator that generates at most the first `n` elements of `iter`.
 
@@ -699,6 +700,7 @@ julia> collect(Iterators.take(a,3))
 """
 take(xs, n::Integer) = Take(xs, Int(n))
 take(xs::Take, n::Integer) = Take(xs.xs, min(Int(n), xs.n))
+const first = take
 
 eltype(::Type{Take{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Take{I}}) where {I} = IteratorEltype(I)
@@ -953,7 +955,7 @@ IteratorSize(::Type{<:Repeated}) = IsInfinite()
 IteratorEltype(::Type{<:Repeated}) = HasEltype()
 
 reverse(it::Union{Repeated,Take{<:Repeated}}) = it
-last(it::Union{Repeated,Take{<:Repeated}}) = first(it)
+last(it::Union{Repeated,Take{<:Repeated}}) = Base.first(it)
 
 # Product -- cartesian product of iterators
 struct ProductIterator{T<:Tuple}
@@ -1039,8 +1041,8 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
 
 @inline isdone(P::ProductIterator) = any(isdone, P.iterators)
 @inline function _pisdone(iters, states)
-    iter1 = first(iters)
-    done1 = isdone(iter1, first(states)[2]) # check step
+    iter1 = Base.first(iters)
+    done1 = isdone(iter1, Base.first(states)[2]) # check step
     done1 === true || return done1 # false or missing
     done1 = isdone(iter1) # check restart
     done1 === true || return done1 # false or missing
@@ -1065,8 +1067,8 @@ end
 
 @inline _piterate1(::Tuple{}, ::Tuple{}) = nothing
 @inline function _piterate1(iters, states)
-    iter1 = first(iters)
-    next = iterate(iter1, first(states)[2])
+    iter1 = Base.first(iters)
+    next = iterate(iter1, Base.first(states)[2])
     restnext = tail(states)
     if next === nothing
         isdone(iter1) === true && return nothing
@@ -1454,7 +1456,7 @@ only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
 only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
-only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
+only(x::NamedTuple{<:Any, <:Tuple{Any}}) = Base.first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
