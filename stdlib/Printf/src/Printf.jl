@@ -79,7 +79,7 @@ char(::Type{Val{c}}) where {c} = c
 
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(ArgumentError("Format string must be non-empty"))
+    isempty(f) && throw(ArgumentError("Format string must not be empty"))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
@@ -898,7 +898,7 @@ macro printf(io_or_fmt, args...)
         io = io_or_fmt
         isempty(args) && throw(ArgumentError("No format string provided to `@printf` - use like `@printf [io] <format string> [<args...>]."))
         fmt_str = first(args)
-        fmt_str isa String || throw(ArgumentError("First argument after io has to be a format string"))
+        fmt_str isa String || throw(ArgumentError("First argument after `io` must be a format string"))
         fmt = Format(fmt_str)
         return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
     end
@@ -916,7 +916,7 @@ julia> @sprintf "this is a %s %15.1f" "test" 34.567
 ```
 """
 macro sprintf(fmt, args...)
-    fmt isa String || throw(ArgumentError("First argument has to be a format string."))
+    fmt isa String || throw(ArgumentError("First argument must be a format string."))
     f = Format(fmt)
     return esc(:($Printf.format($f, $(args...))))
 end
