@@ -77,9 +77,43 @@ end
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
+struct InvalidFormatStringError <: Exception
+    message::String
+    format::String
+    position::Int
+end
+
+function showerror(io::IO, err::InvalidFormatStringError)
+    io_has_color = get(io, :color, false)
+
+    println(io, err.message, ':')
+    print(io, "\t'", @view err.format[begin:prevind(err.format, err.position)])
+    # err.position may be greater than the last character
+    invalid_text = if checkbounds(Bool, err.position, err.format)
+        format_str[pos]
+    else
+        ""
+    end
+
+    if io_has_color
+        printstyled(io, invalid_text, color=:red)
+    else
+        print(io, invalid_text)
+    end
+
+    println(io, @view err.format[min(end+1, pos):end], '\'')
+
+    arrow = '\t' * ('-'^pos) * "^\n"
+    if io_has_color
+        printstyled(io, arrow, color=:red)
+    else
+        print(io, arrow)
+    end
+end
+
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(ArgumentError("Format string must not be empty"))
+    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
@@ -90,7 +124,7 @@ function Format(f::AbstractString)
         b = bytes[pos]
         pos += 1
         if b == UInt8('%')
-            pos > len && throw(ArgumentError("Format string is invalid - first format specifier incomplete at end of string: '$f'"))
+            pos > len && throw(InvalidFormatStringError("First format specifier incomplete at end of string", f, pos))
             if bytes[pos] == UInt8('%')
                 # escaped '%'
                 b = bytes[pos]
@@ -122,7 +156,7 @@ function Format(f::AbstractString)
             else
                 break
             end
-            pos > len && throw(ArgumentError("Format string is invalid - last format specifier is incomplete: '$f'"))
+            pos > len && throw(InvalidFormatStringError("Last format specifier is incomplete", f, pos))
             b = bytes[pos]
             pos += 1
         end
@@ -141,7 +175,7 @@ function Format(f::AbstractString)
         precision = 0
         parsedprecdigits = false
         if b == UInt8('.')
-            pos > len && throw(ArgumentError("Format string is invalid - precision specifier is missing precision: '$f'"))
+            pos > len && throw(InvalidFormatStringError("Precision specifier is missing precision", f, pos))
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
@@ -160,7 +194,7 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == prev
-                pos > len && throw(ArgumentError("Format string is invalid - unterminated length modifier at end of string: '$f'"))
+                pos > len && throw(InvalidFormatStringError("Unterminated length modifier at end of string", f, pos))
                 b = bytes[pos]
                 pos += 1
             end
@@ -169,7 +203,7 @@ function Format(f::AbstractString)
             pos += 1
         end
         # parse type
-        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("Format string is invalid - '$(Char(b))' is not a valid type specifier: '$f'"))
+        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, pos))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
             zero = false
@@ -186,7 +220,7 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == UInt8('%')
-                pos > len && throw(ArgumentError("Format string is invalid - last format specifier is incomplete at end of string: '$f'"))
+                pos > len && throw(InvalidFormatStringError("Last format specifier is incomplete at end of string", f, pos))
                 if bytes[pos] == UInt8('%')
                     # escaped '%'
                     b = bytes[pos]
@@ -898,7 +932,7 @@ macro printf(io_or_fmt, args...)
         io = io_or_fmt
         isempty(args) && throw(ArgumentError("No format string provided to `@printf` - use like `@printf [io] <format string> [<args...>]."))
         fmt_str = first(args)
-        fmt_str isa String || throw(ArgumentError("First argument after `io` must be a format string"))
+        fmt_str isa String || throw(ArgumentError("First argument to `@printf` after `io` must be a format string"))
         fmt = Format(fmt_str)
         return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
     end
@@ -916,7 +950,7 @@ julia> @sprintf "this is a %s %15.1f" "test" 34.567
 ```
 """
 macro sprintf(fmt, args...)
-    fmt isa String || throw(ArgumentError("First argument must be a format string."))
+    fmt isa String || throw(ArgumentError("First argument to `@sprintf` must be a format string."))
     f = Format(fmt)
     return esc(:($Printf.format($f, $(args...))))
 end

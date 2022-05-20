@@ -339,10 +339,10 @@ end
     @test Printf.@sprintf("1%%2%%3") == "1%2%3"
     @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
-    @test_throws ArgumentError Printf.Format("")
-    @test_throws ArgumentError Printf.Format("%+")
-    @test_throws ArgumentError Printf.Format("%.")
-    @test_throws ArgumentError Printf.Format("%.0")
+    @test_throws InvalidFormatStringError Printf.Format("")
+    @test_throws InvalidFormatStringError Printf.Format("%+")
+    @test_throws InvalidFormatStringError Printf.Format("%.")
+    @test_throws InvalidFormatStringError Printf.Format("%.0")
     @test isempty(Printf.Format("%%").formats)
     @test Printf.@sprintf("%d%d", 1, 2) == "12"
     @test (Printf.@sprintf "%d%d" [1 2]...) == "12"
@@ -355,10 +355,10 @@ end
     @test (Printf.@sprintf("%d\u0f00%d", 1, 2)) == "1\u0f002"
     @test (Printf.@sprintf("%d\U0001ffff%d", 1, 2)) == "1\U0001ffff2"
     @test (Printf.@sprintf("%d\u2203%d\u0203", 1, 2)) == "1\u22032\u0203"
-    @test_throws ArgumentError Printf.Format("%y%d")
-    @test_throws ArgumentError Printf.Format("%\u00d0%d")
-    @test_throws ArgumentError Printf.Format("%\u0f00%d")
-    @test_throws ArgumentError Printf.Format("%\U0001ffff%d")
+    @test_throws InvalidFormatStringError Printf.Format("%y%d")
+    @test_throws InvalidFormatStringError Printf.Format("%\u00d0%d")
+    @test_throws InvalidFormatStringError Printf.Format("%\u0f00%d")
+    @test_throws InvalidFormatStringError Printf.Format("%\U0001ffff%d")
     @test Printf.@sprintf("%10.5d", 4) == "     00004"
     @test (Printf.@sprintf "%d" typemax(Int64)) == "9223372036854775807"
 
@@ -528,13 +528,13 @@ end
     @test Printf.@sprintf( "%0-5d", -42) == "-42  "
     @test Printf.@sprintf( "%0-15d",  42) == "42             "
     @test Printf.@sprintf( "%0-15d", -42) == "-42            "
-    @test_throws ArgumentError Printf.Format("%d %")
+    @test_throws InvalidFormatStringError Printf.Format("%d %")
 
     @test Printf.@sprintf("%lld", 18446744065119617025) == "18446744065119617025"
     @test Printf.@sprintf("%+8lld", 100) == "    +100"
     @test Printf.@sprintf("%+.8lld", 100) == "+00000100"
     @test Printf.@sprintf("%+10.8lld", 100) == " +00000100"
-    @test_throws ArgumentError Printf.Format("%_1lld")
+    @test_throws InvalidFormatStringError Printf.Format("%_1lld")
     @test Printf.@sprintf("%-1.5lld", -100) == "-00100"
     @test Printf.@sprintf("%5lld", 100) == "  100"
     @test Printf.@sprintf("%5lld", -100) == " -100"
