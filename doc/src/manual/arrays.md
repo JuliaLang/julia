@@ -872,7 +872,7 @@ slower than multiplication. While some arrays — like [`Array`](@ref) itself �
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
-introspect which is which). 
+introspect which is which).
 
 !!! warnings
 
