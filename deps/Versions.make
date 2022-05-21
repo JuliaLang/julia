@@ -108,7 +108,7 @@ UNWIND_JLL_NAME := LibUnwind
 UNWIND_JLL_VER  := 1.5.0+1
 
 # zlib
-ZLIB_VER := 1.2.11
+ZLIB_VER := 1.2.12
 ZLIB_JLL_NAME := Zlib
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.
