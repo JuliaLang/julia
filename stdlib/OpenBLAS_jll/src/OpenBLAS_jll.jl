@@ -38,7 +38,7 @@ function __init__()
     end
 
     if !haskey(ENV, "OPENBLAS_NUM_THREADS")
-        ENV["OPENBLAS_NUM_THREADS"] = 8
+        ENV["OPENBLAS_NUM_THREADS"] = max(1, Sys.CPU_THREADS ÷ 2)
     end
 
     global libopenblas_handle = dlopen(libopenblas)
