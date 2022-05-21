@@ -568,14 +568,6 @@ function widen_all_consts!(src::CodeInfo)
     return src
 end
 
-function widen_ssavaluetypes!(ssavaluetypes::Vector{Any})
-    for j = 1:length(ssavaluetypes)
-        t = ssavaluetypes[j]
-        ssavaluetypes[j] = t === NOT_FOUND ? Bottom : widenconditional(t)
-    end
-    return ssavaluetypes
-end
-
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -686,10 +678,10 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     # and compute which variables may be used undef
     stmt_info = sv.stmt_info
     src = sv.src
-    body = copy(src.code::Vector{Any})
+    body = src.code
     nexpr = length(body)
     codelocs = src.codelocs
-    ssavaluetypes = copy(sv.ssavaluetypes)
+    ssavaluetypes = sv.ssavaluetypes
     ssaflags = src.ssaflags
     slotflags = src.slotflags
     nslots = length(slotflags)
@@ -712,39 +704,31 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         end
     end
 
-    # dead code elimination for unreachable regions
-    i = 1
-    oldidx = 0
-    changemap = nothing
-    while i <= length(body)
-        oldidx += 1
+    # this statement traversal does three things:
+    # 1. introduce temporary `TypedSlot`s that are supposed to be replaced with π-nodes later
+    # 2. mark used-undef slots (required by the `slot2reg` conversion)
+    # 3. mark unreached statements for a bulk code deletion (see issue #7836)
+    # 4. widen `Conditional`s and remove `NOT_FOUND` from `ssavaluetypes`
+    # NOTE: because of 4, `was_reached` will no longer be available after this point
+    changemap = nothing # initialized if there is any dead region
+    for i = 1:nexpr
         expr = body[i]
-        if was_reached(sv, oldidx)
-            # introduce temporary TypedSlot for the later optimization passes
-            # and also mark used-undef slots
-            body[i] = annotate_slot_load!(undefs, oldidx, sv, expr)
-        else # unreached statement (see issue #7836)
-            if is_meta_expr(expr)
-                # keep any lexically scoped expressions
+        if was_reached(sv, i)
+            body[i] = annotate_slot_load!(undefs, i, sv, expr) # 1&2
+            ssavaluetypes[i] = widenconditional(ssavaluetypes[i]) # 4
+        else # i.e. any runtime execution will never reach this statement
+            if is_meta_expr(expr) # keep any lexically scoped expressions
+                ssavaluetypes[i] = Any # 4
             elseif run_optimizer
-                deleteat!(body, i)
-                deleteat!(ssavaluetypes, i)
-                deleteat!(codelocs, i)
-                deleteat!(stmt_info, i)
-                deleteat!(ssaflags, i)
                 if changemap === nothing
                     changemap = fill(0, nexpr)
                 end
-                changemap[oldidx] = -1
-                continue
+                changemap[i] = -1 # 3&4: mark for the bulk deletion
             else
+                ssavaluetypes[i] = Bottom # 4
                 body[i] = Const(expr) # annotate that this statement actually is dead
             end
         end
-        i += 1
-    end
-    if changemap !== nothing
-        renumber_ir_elements!(body, changemap)
     end
 
     # finish marking used-undef variables
@@ -754,10 +738,19 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         end
     end
 
-    src.code = body
-    src.ssavaluetypes = widen_ssavaluetypes!(ssavaluetypes)
-
-    return changemap !== nothing
+    # do the bulk deletion of unreached statements
+    if changemap !== nothing
+        inds = Int[i for (i,v) in enumerate(changemap) if v == -1]
+        deleteat!(body, inds)
+        deleteat!(ssavaluetypes, inds)
+        deleteat!(codelocs, inds)
+        deleteat!(stmt_info, inds)
+        deleteat!(ssaflags, inds)
+        renumber_ir_elements!(body, changemap)
+        return true
+    else
+        return false
+    end
 end
 
 # at the end, all items in b's cycle
