@@ -66,7 +66,7 @@ MPFR_VER := 4.1.0
 MPFR_JLL_NAME := MPFR
 
 # nghttp2
-NGHTTP2_VER := 1.41.0
+NGHTTP2_VER := 1.47.0
 NGHTTP2_JLL_NAME := nghttp2
 
 # Objconv (we don't ship this, so no need for a fake JLL; therefore we specify the JLL_VER here)
