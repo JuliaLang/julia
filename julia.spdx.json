@@ -3,29 +3,26 @@
     "dataLicense": "CC0-1.0",
     "SPDXID": "SPDXRef-DOCUMENT",
     "name": "julia-spdx",
-    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-dfcfa3b6-fcb6-4ad1-99e0-deb7bec44bee",
+    "documentNamespace": "https://julialang.org/spdxdocs/julia-spdx-156599cd-b5aa-442c-a0d4-72ed73a46d16",
     "creationInfo": {
         "creators": [
-            "Organization: julialang.org ()",
-            "Person: Simon Avery ()"
+            "Organization:  julialang.org  ()",
+            "Person:  Simon Avery  ()"
         ],
-        "created": "2022-02-16T11:46:38Z"
+        "created": "2022-05-19T06:17:33Z"
     },
-    "documentDescribes": [
-        "SPDXRef-JuliaMain"
-    ],
     "packages": [
         {
             "name": "Julia",
             "SPDXID": "SPDXRef-JuliaMain",
-            "versionInfo": "1.8.0-DEV",
+            "versionInfo": "1.9.0-DEV",
             "packageFileName": "./",
-            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.8.0-DEV",
+            "downloadLocation": "git+https://github.com/JuliaLang/julia.git@v1.9.0-DEV",
             "filesAnalyzed": false,
             "homepage": "https://julialang.org",
             "licenseConcluded": "MIT",
             "licenseDeclared": "MIT",
-            "copyrightText": "Copyright (c) 2009-2021: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
+            "copyrightText": "Copyright (c) 2009-2022: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
             "summary": "Julia is a high-level, high-performance dynamic language for technical computing.",
             "comment": "In addition to the source code described by this package, Julia pulls in code from many other respositories, which are also described in this document. See relationships for details."
         },
@@ -148,6 +145,18 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2014: Elliot Saba",
             "summary": "A performant, 100% native-julia SHA1, SHA2, and SHA3 implementation"
+        },
+        {
+            "name": "DelimitedFiles.jl",
+            "SPDXID": "SPDXRef-JuliaDelimitedFiles",
+            "downloadLocation": "git+https://github.com/JuliaData/DelimitedFiles.jl.git",
+            "filesAnalyzed": false,
+            "homepage": "https://julialang.org",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/DelimitedFiles.version",
+            "licenseConcluded": "MIT",
+            "licenseDeclared": "MIT",
+            "copyrightText": "Copyright (c) 2012-2022 The Julia Programming Language",
+            "summary": "A package for reading and writing files with delimited values."
         },
         {
             "name": "dSFMT",
@@ -426,9 +435,9 @@
             "name": "libwhich",
             "SPDXID": "SPDXRef-libwhich",
             "downloadLocation": "git+https://github.com/vtjnash/libwhich.git",
-            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/libwhich.version",
             "filesAnalyzed": false,
             "homepage": "https://github.com/vtjnash/libwhich",
+            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/libwhich.version",
             "licenseConcluded": "MIT",
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2017 Jameson Nash",
@@ -436,12 +445,14 @@
             "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
         }
     ],
-    "relationships": [
+    "hasExtractedLicensingInfos": [
         {
-            "spdxElementId": "SPDXRef-DOCUMENT",
-            "relationshipType": "DESCRIBES",
-            "relatedSpdxElement": "SPDXRef-JuliaMain"
-        },
+            "licenseId": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
+            "extractedText": "Note that the only valid version of the GPL as far as this project is concerned is _this_ particular version of the license (ie v2, not v2.2 or v3.x or whatever), unless explicitly otherwise stated.\n----------------------------------------------------------------------\nIn addition to the permissions in the GNU General Public License, the authors give you unlimited permission to link the compiled version of this library into combinations with other programs, and to distribute those combinations without any restriction coming from the use of this file.  (The General Public License restrictions do apply in other respects; for example, they cover modification of the file, and distribution when not linked into a combined executable.)\n----------------------------------------------------------------------\nGNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n\nCopyright (C) 1989, 1991 Free Software Foundation, Inc.\n59 Temple Place, Suite 330, Boston, MA  02111-1307  USA\nEveryone is permitted to copy and distribute verbatim copies\nof this license document, but changing it is not allowed.\n... [more text]",
+            "name": "GPL-2.0-only-with-libgit2-exception"
+        }
+    ],
+    "relationships": [
         {
             "spdxElementId": "SPDXRef-JuliaPkg",
             "relationshipType": "BUILD_DEPENDENCY_OF",
@@ -483,7 +494,17 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
+            "spdxElementId": "SPDXRef-JuliaSparseArrays",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
             "spdxElementId": "SPDXRef-JuliaSHA",
+            "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-JuliaDelimitedFiles",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
@@ -603,11 +624,7 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         }
     ],
-    "hasExtractedLicensingInfos": [
-        {
-            "licenseId": "LicenseRef-GPL-2.0-only-with-libgit2-exception",
-            "extractedText": "Note that the only valid version of the GPL as far as this project is concerned is _this_ particular version of the license (ie v2, not v2.2 or v3.x or whatever), unless explicitly otherwise stated.\n----------------------------------------------------------------------\nIn addition to the permissions in the GNU General Public License, the authors give you unlimited permission to link the compiled version of this library into combinations with other programs, and to distribute those combinations without any restriction coming from the use of this file.  (The General Public License restrictions do apply in other respects; for example, they cover modification of the file, and distribution when not linked into a combined executable.)\n----------------------------------------------------------------------\nGNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n\nCopyright (C) 1989, 1991 Free Software Foundation, Inc.\n59 Temple Place, Suite 330, Boston, MA  02111-1307  USA\nEveryone is permitted to copy and distribute verbatim copies\nof this license document, but changing it is not allowed.\n... [more text]",
-            "name": "GPL-2.0-only-with-libgit2-exception"
-        }
+    "documentDescribes": [
+        "SPDXRef-JuliaMain"
     ]
 }
