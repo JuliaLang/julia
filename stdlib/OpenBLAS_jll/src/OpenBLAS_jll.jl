@@ -37,10 +37,6 @@ function __init__()
         ENV["OPENBLAS_MAIN_FREE"] = "1"
     end
 
-    if !haskey(ENV, "OPENBLAS_NUM_THREADS")
-        ENV["OPENBLAS_NUM_THREADS"] = max(1, Sys.CPU_THREADS ÷ 2)
-    end
-
     global libopenblas_handle = dlopen(libopenblas)
     global libopenblas_path = dlpath(libopenblas_handle)
     global artifact_dir = dirname(Sys.BINDIR)
