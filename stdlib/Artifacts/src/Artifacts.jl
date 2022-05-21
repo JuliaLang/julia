@@ -524,9 +524,10 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
-    if haskey(Base.module_keys, __module__)
+    moduleroot = Base.moduleroot(__module__)
+    if haskey(Base.module_keys, moduleroot)
         # Process overrides for this UUID, if we know what it is
-        process_overrides(artifact_dict, Base.module_keys[__module__].uuid)
+        process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
     end
 
     # If the artifact exists, we're in the happy path and we can immediately
