@@ -550,22 +550,22 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     return get_shape(a, is_row_first, d - 1)
                 else
                     ashape = map(x -> get_shape(get_next(x), is_row_first, d - 1), a)
-                    if isa(ashape[1], Expr)
+                    if length(ashape) > 1
                         counts = ashape .|> first
                         prev_counts = ashape .|> last
-                        return [sum(counts), counts, map(x -> vcat(x...), prev_counts)]
+                        return [sum(counts), counts, vcat(map(x -> vcat(x...), prev_counts)...)]
                     else
                         return [sum(ashape), ashape]
                     end
                 end
             end
-            if any(a->isa(a,Expr) && (a.head === :nrow || a.head === :row), args)
+            if any(a -> isa(a, Expr) && (a.head === :nrow || a.head === :row), args)
                 extract_elements.(args)
-                get_shape(args, true, d)
+                shape = get_shape(args, true, d)
                 return Expr(:call, fcn, f,
                             Expr(:call, typesof,
                                 (ex0.head === :ncat ? [] : Any[esc(ex0.args[1])])...,
-                                Expr(:tuple, 2, 1, 2), # placeholder
+                                Expr(:tuple, map(x -> tuple(x...), shape)...), # shape variant, need dims variant and 1d variant
                                 true, #placeholder
                                 map(esc, xs)...), kws...)
             else
