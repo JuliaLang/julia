@@ -18,6 +18,8 @@ struct ResolvedInliningSpec
     # Effects of the call statement
     effects::Effects
 end
+ResolvedInliningSpec(ir::IRCode, effects::Effects) =
+    ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects)
 
 """
 Represents a callsite that our analysis has determined is legal to inline,
@@ -815,7 +817,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
             et !== nothing && push!(et, mi)
             return ConstantCase(quoted(inferred_src.val))
         else
-            src = inferred_src
+            src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
         end
         effects = match.ipo_effects
     else
@@ -829,7 +831,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
                 src = code.inferred
             end
             effects = decode_effects(code.ipo_purity_bits)
-        else
+        else # fallback pass for external AbstractInterpreter cache
             effects = Effects()
             src = code
         end
@@ -843,13 +845,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
-    if src === nothing
-        return compileable_specialization(et, match, effects)
-    end
-
-    if isa(src, IRCode)
-        src = copy(src)
-    end
+    src === nothing && return compileable_specialization(et, match, effects)
 
     et !== nothing && push!(et, mi)
     return InliningTodo(mi, src, effects)
@@ -913,16 +909,19 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode, effects::Effects)
-    return InliningTodo(mi, ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects))
+    ir = copy(ir)
+    return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
 end
 
-function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}}, effects::Effects)
+function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Vector{UInt8}}, effects::Effects)
     if !isa(src, CodeInfo)
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
+    else
+        src = copy(src)
     end
-
-    @timeit "inline IR inflation" begin;
-        return InliningTodo(mi, inflate_ir(src, mi)::IRCode, effects)
+    @timeit "inline IR inflation" begin
+        ir = inflate_ir!(src, mi)::IRCode
+        return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
     end
 end
 
