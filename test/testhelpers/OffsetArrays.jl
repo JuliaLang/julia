@@ -562,6 +562,10 @@ Base.reshape(A::OffsetVector, ::Tuple{Colon}) = A
 Base.reshape(A::OffsetArray, ::Colon) = reshape(A, (Colon(),))
 Base.reshape(A::OffsetArray, inds::Union{Int,Colon}...) = reshape(A, inds)
 Base.reshape(A::OffsetArray, inds::Tuple{Vararg{Union{Int,Colon}}}) = _reshape_nov(A, inds)
+# The following two additional methods for Colon are added to resolve method ambiguities to
+# Base: https://github.com/JuliaLang/julia/pull/45387#issuecomment-1132859663
+Base.reshape(A::OffsetArray, inds::Colon) = _reshape_nov(A, inds)
+Base.reshape(A::OffsetArray, inds::Tuple{Colon}) = _reshape_nov(A, inds)
 
 # permutedims in Base does not preserve axes, and can not be fixed in a non-breaking way
 # This is a stopgap solution
