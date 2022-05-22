@@ -6,8 +6,8 @@
 The default implementation of hash sets.
 
 `Set`s are containers that provide fast lookup and membership testing.
-Elements in a `Set` are unique, as determined by the element's implementation of
-`isequal` and `hash`. Adding an element that already is in a `Set` does nothing.
+Elements in a `Set` are unique, as determined by the elements' implementation of
+`isequal` and `hash`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
 See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref)
