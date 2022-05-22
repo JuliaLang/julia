@@ -559,6 +559,7 @@ add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_elt
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, (@nospecialize args...)->Nothing, 0)
+add_tfunc(Core.finalizer, 2, 2, (@nospecialize args...)->Nothing, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
 function typeof_concrete_vararg(t::DataType)
