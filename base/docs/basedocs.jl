@@ -2000,6 +2000,39 @@ for bit in (8, 16, 32, 64, 128)
 end
 
 """
+	$(Int) <: Signed
+
+`Int` is aliased to `Int64` on 64-bit systems and `Int32` on 32-bit systems.
+
+`Int` is the default integer type in Julia, and should be preferred unless there
+are explicit reasons for using another integer type.
+
+See also: [`UInt`](@ref).
+
+# Examples
+```jldoctest
+julia> 1 isa Int
+true
+
+julia> typeof(length(Dict())) === Int
+true
+
+julia> Threads.nthreads() isa Int
+true
+```
+"""
+Int
+
+"""
+	$(UInt) <: Unsigned
+
+`UInt` is aliased to `UInt64` on 64-bit systems and `UInt32` on 32-bit systems.
+
+See also: [`Int`](@ref).
+"""
+UInt
+
+"""
     Symbol
 
 The type of object used to represent identifiers in parsed julia code (ASTs).
