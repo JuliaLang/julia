@@ -45,6 +45,11 @@ The effects are composed of the following set of different properties:
 - `terminates::TriState`: this method is guaranteed to terminate
 - `nonoverlayed::Bool`: indicates that any methods that may be called within this method
   are not defined in an [overlayed method table](@ref OverlayMethodTable)
+- `notaskstate::TriState`: this method does not access any state bound to the current
+  task and may thus be moved to a different task without changing observable
+  behavior. Note that this currently implies that `noyield` as well, since
+  yielding modifies the state of the current task, though this may be split
+  in the future.
 See [`Base.@assume_effects`](@ref) for more detailed explanation on the definitions of these properties.
 
 Along the abstract interpretation, `Effects` at each statement are analyzed locally and
@@ -67,6 +72,7 @@ struct Effects
     nothrow::TriState
     terminates::TriState
     nonoverlayed::Bool
+    notaskstate::TriState
     # This effect is currently only tracked in inference and modified
     # :consistent before caching. We may want to track it in the future.
     inbounds_taints_consistency::Bool
@@ -76,20 +82,22 @@ function Effects(
     effect_free::TriState,
     nothrow::TriState,
     terminates::TriState,
-    nonoverlayed::Bool)
+    nonoverlayed::Bool,
+    notaskstate::TriState)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
         nonoverlayed,
+        notaskstate,
         false)
 end
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true)
-const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false) # unknown, really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true, ALWAYS_TRUE)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true, ALWAYS_TRUE)
+const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true, TRISTATE_UNKNOWN)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false, TRISTATE_UNKNOWN) # unknown, really
 
 function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::TriState = e.consistent,
@@ -97,6 +105,7 @@ function Effects(e::Effects = EFFECTS_UNKNOWN′;
     nothrow::TriState = e.nothrow,
     terminates::TriState = e.terminates,
     nonoverlayed::Bool = e.nonoverlayed,
+    notaskstate::TriState = e.notaskstate,
     inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
     return Effects(
         consistent,
@@ -104,6 +113,7 @@ function Effects(e::Effects = EFFECTS_UNKNOWN′;
         nothrow,
         terminates,
         nonoverlayed,
+        notaskstate,
         inbounds_taints_consistency)
 end
 
@@ -111,6 +121,7 @@ is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
 is_effect_free(effects::Effects)  = effects.effect_free === ALWAYS_TRUE
 is_nothrow(effects::Effects)      = effects.nothrow === ALWAYS_TRUE
 is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
+is_notaskstate(effects::Effects)  = effects.notaskstate === ALWAYS_TRUE
 is_nonoverlayed(effects::Effects) = effects.nonoverlayed
 
 is_concrete_eval_eligible(effects::Effects) =
@@ -132,7 +143,8 @@ function encode_effects(e::Effects)
            (e.effect_free.state << 2) |
            (e.nothrow.state << 4) |
            (e.terminates.state << 6) |
-           (UInt32(e.nonoverlayed) << 8)
+           (UInt32(e.nonoverlayed) << 8) |
+           (UInt32(e.notaskstate.state) << 9)
 end
 function decode_effects(e::UInt32)
     return Effects(
@@ -141,6 +153,7 @@ function decode_effects(e::UInt32)
         TriState((e >> 4) & 0x03),
         TriState((e >> 6) & 0x03),
         _Bool(   (e >> 8) & 0x01),
+        TriState((e >> 9) & 0x03),
         false)
 end
 
@@ -155,6 +168,8 @@ function tristate_merge(old::Effects, new::Effects)
         tristate_merge(
             old.terminates, new.terminates),
         old.nonoverlayed & new.nonoverlayed,
+        tristate_merge(
+            old.notaskstate, new.notaskstate),
         old.inbounds_taints_consistency | new.inbounds_taints_consistency)
 end
 
