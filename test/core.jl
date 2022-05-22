@@ -7800,3 +7800,11 @@ end
     m.x = 4.
     @test m.x === 4
 end
+
+# #45350 - Codegen for assignment to binding imported from module
+module Foo45350
+    global x45350::Int = 1
+end
+import .Foo45350: x45350
+f45350() = (global x45350 = 2)
+@test_throws ErrorException f45350()
