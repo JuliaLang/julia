@@ -1982,3 +1982,8 @@ end
 @test_throws TypeError(:typeassert, Type, Vararg{Int}) typeintersect(Int, Vararg{Int})
 @test_throws TypeError(:typeassert, Type, 1) typeintersect(1, Int)
 @test_throws TypeError(:typeassert, Type, 1) typeintersect(Int, 1)
+
+let A = Tuple{typeof(identity), Type{Union{}}},
+    B = Tuple{typeof(identity), typeof(Union{})}
+    @test A == B && (Base.isdispatchtuple(A) == Base.isdispatchtuple(B))
+end
