@@ -517,7 +517,8 @@ struct SplitIterator{S<:AbstractString,F}
     keepempty::Bool
 end
 
-eltype(::Type{<:SplitIterator}) = SubString
+eltype(::Type{<:SplitIterator{T}}) where T = SubString{T}
+eltype(::Type{<:SplitIterator{<:SubString{T}}}) where T = SubString{T}
 
 IteratorSize(::Type{<:SplitIterator}) = SizeUnknown()
 
