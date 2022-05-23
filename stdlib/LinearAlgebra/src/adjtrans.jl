@@ -96,6 +96,17 @@ julia> B = A' # equivalently adjoint(A)
  3-2im  0+0im
  9-2im  0+0im
 
+julia> B isa Adjoint
+true
+
+julia> adjoint(B) === A # the adjoint of an adjoint unwraps the parent
+true
+
+julia> Adjoint(B) # however, the constructor always wraps its argument
+2×2 adjoint(adjoint(::Matrix{Complex{Int64}})) with eltype Complex{Int64}:
+ 3+2im  9+2im
+ 0+0im  0+0im
+
 julia> B[1,2] = 4 + 5im; # modifying B will modify A automatically
 
 julia> A
@@ -177,6 +188,17 @@ julia> B = transpose(A)
 2×2 transpose(::Matrix{Int64}) with eltype Int64:
  3  0
  2  0
+
+julia> B isa Transpose
+true
+
+julia> transpose(B) === A # the transpose of a transpose unwraps the parent
+true
+
+julia> Transpose(B) # however, the constructor always wraps its argument
+2×2 transpose(transpose(::Matrix{Int64})) with eltype Int64:
+ 3  2
+ 0  0
 
 julia> B[1,2] = 4; # modifying B will modify A automatically
 
