@@ -969,7 +969,7 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
         return range(first(s) ? first(r) : last(r), length = last(s))
     else
         f = first(r)
-        # hardcode output for empty ranges to overflow in stop for Bool
+        # hardcode output for empty ranges to avoid overflow in stop for Bool
         # this works as empty ranges are all equal
         isempty(s) && return range(oneunit(f), zero(f))
         start = oftype(f, f + first(s) - firstindex(r))
