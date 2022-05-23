@@ -104,7 +104,7 @@ julia> A
  4-5im  0+0im
 ```
 
-For real matrices, the `adjoint` operation is equivalent to a [`transpose`](@ref).
+For real matrices, the `adjoint` operation is equivalent to a `transpose`.
 
 ```jldoctest
 julia> A = reshape([x for x in 1:4], 2, 2)
@@ -186,7 +186,7 @@ julia> A
  4  0
 ```
 
-For complex matrices, the [adjoint](@ref) operation is equivalent to a conjugate-transpose.
+For complex matrices, the `adjoint` operation is equivalent to a conjugate-transpose.
 ```jldoctest
 julia> A = reshape([Complex(x, x) for x in 1:4], 2, 2)
 2×2 Matrix{Complex{Int64}}:
