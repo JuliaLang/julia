@@ -1291,6 +1291,104 @@ function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
     end
 end
 
+"""
+    code_ircode(f, [types])
+
+Return an array of pairs of `IRCode` and inferred return type if type inference succeeds.
+The `Method` is included instead of `IRCode` otherwise.
+
+See also: [`code_typed`](@ref)
+
+# Internal Keyword Arguments
+
+This section should be considered internal, and is only for who understands Julia compiler
+internals.
+
+- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up
+  methods, use current world age if not specified.
+- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to
+  use, use the native interpreter Julia uses if not specified.
+- `optimize_until`: optional, controls the optimization passes to run.  If it is a string,
+  it specifies the name of the pass up to which the optimizer is run.  If it is an integer,
+  it specifies the number of passes to run.  If it is `nothing` (default), all passes are
+  run.
+
+# Example
+
+One can put the argument types in a tuple to get the corresponding `code_ircode`.
+
+```jldoctest
+julia> Base.code_ircode(+, (Float64, Int64))
+1-element Vector{Any}:
+ 388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
+    │   %2 = Base.add_float(_2, %1)::Float64
+    └──      return %2
+     => Float64
+
+julia> Base.code_ircode(+, (Float64, Int64); optimize_until = "compact 1")
+1-element Vector{Any}:
+ 388 1 ─ %1 = Base.promote(_2, _3)::Tuple{Float64, Float64}
+    │   %2 = Core._apply_iterate(Base.iterate, Base.:+, %1)::Float64
+    └──      return %2
+     => Float64
+```
+"""
+function code_ircode(
+    @nospecialize(f),
+    @nospecialize(types = default_tt(f));
+    world = get_world_counter(),
+    interp = Core.Compiler.NativeInterpreter(world),
+    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
+)
+    if isa(f, Core.OpaqueClosure)
+        error("OpaqueClosure not supported")
+    end
+    ft = Core.Typeof(f)
+    if isa(types, Type)
+        u = unwrap_unionall(types)
+        tt = rewrap_unionall(Tuple{ft,u.parameters...}, types)
+    else
+        tt = Tuple{ft,types...}
+    end
+    return code_ircode_by_type(tt; world, interp, optimize_until)
+end
+
+"""
+    code_ircode_by_type(types::Type{<:Tuple}; ...)
+
+Similar to [`code_ircode`](@ref), except the argument is a tuple type describing
+a full signature to query.
+"""
+function code_ircode_by_type(
+    @nospecialize(tt::Type);
+    world = get_world_counter(),
+    interp = Core.Compiler.NativeInterpreter(world),
+    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
+)
+    ccall(:jl_is_in_pure_context, Bool, ()) &&
+        error("code reflection cannot be used from generated functions")
+    tt = to_tuple_type(tt)
+    matches = _methods_by_ftype(tt, -1, world)::Vector
+    asts = []
+    for match in matches
+        match = match::Core.MethodMatch
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_ircode(
+            interp,
+            meth,
+            match.spec_types,
+            match.sparams,
+            optimize_until,
+        )
+        if code === nothing
+            push!(asts, meth => Any)
+        else
+            push!(asts, code => ty)
+        end
+    end
+    return asts
+end
+
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world = get_world_counter(),
                       interp = Core.Compiler.NativeInterpreter(world))
