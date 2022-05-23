@@ -21,20 +21,15 @@ This type is intended for linear algebra usage - for general data manipulation s
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
+julia> A = [3+2im 9+2im; 0 0]
 2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
- 8+7im  4+6im
+ 0+0im  0+0im
 
-julia> adjoint(A)
+julia> Adjoint(A)
 2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
- 3-2im  8-7im
- 9-2im  4-6im
-
-julia> copy(adjoint(A)) # materialize the adjoint matrix
-2×2 Matrix{Complex{Int64}}:
- 3-2im  8-7im
- 9-2im  4-6im
+ 3-2im  0+0im
+ 9-2im  0+0im
 ```
 """
 struct Adjoint{T,S} <: AbstractMatrix{T}
@@ -53,20 +48,15 @@ This type is intended for linear algebra usage - for general data manipulation s
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Matrix{Complex{Int64}}:
- 3+2im  9+2im
- 8+7im  4+6im
+julia> A = [2 3; 0 0]
+2×2 Matrix{Int64}:
+ 2  3
+ 0  0
 
-julia> transpose(A)
-2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
- 3+2im  8+7im
- 9+2im  4+6im
-
-julia> copy(transpose(A)) # materialize the transposed matrix
-2×2 Matrix{Complex{Int64}}:
- 3+2im  8+7im
- 9+2im  4+6im
+julia> Transpose(A)
+2×2 transpose(::Matrix{Int64}) with eltype Int64:
+ 2  0
+ 3  0
 ```
 """
 struct Transpose{T,S} <: AbstractMatrix{T}
@@ -96,21 +86,43 @@ This operation is intended for linear algebra usage - for general data manipulat
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
+julia> A = [3+2im 9+2im; 0  0]
 2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
- 8+7im  4+6im
+ 0+0im  0+0im
 
-julia> B = adjoint(A)
+julia> B = A' # equivalently adjoint(A)
 2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
- 3-2im  8-7im
- 9-2im  4-6im
+ 3-2im  0+0im
+ 9-2im  0+0im
 
-julia> B[1,2] = 4 + 5im; # modifying B will automatically modify A
+julia> B[1,2] = 4 + 5im; # modifying B will modify A automatically
 
-julia> A[2,1]
-4 - 5im
+julia> A
+2×2 Matrix{Complex{Int64}}:
+ 3+2im  9+2im
+ 4-5im  0+0im
+```
 
+For real matrices, the `adjoint` operation is equivalent to a [`transpose`](@ref).
+
+```jldoctest
+julia> A = reshape([x for x in 1:4], 2, 2)
+2×2 Matrix{Int64}:
+ 1  3
+ 2  4
+
+julia> A'
+2×2 adjoint(::Matrix{Int64}) with eltype Int64:
+ 1  2
+ 3  4
+
+julia> adjoint(A) == transpose(A)
+true
+```
+
+The adjoint of an `AbstractVector` is a row-vector:
+```jldoctest
 julia> x = [3, 4im]
 2-element Vector{Complex{Int64}}:
  3 + 0im
@@ -122,18 +134,24 @@ julia> x'
 
 julia> x'x # compute the dot product, equivalently x' * x
 25 + 0im
+```
 
-julia> A = [3+2im 9+2im; 8+7im  4+6im];
+For a matrix of matrices, the individual blocks are recursively operated on:
+```jldoctest
+julia> A = reshape([x + im*x for x in 1:4], 2, 2)
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  3+3im
+ 2+2im  4+4im
 
-julia> C = reshape([A, 2A, 3A, 4A], 2, 2) # construct a block matrix
+julia> C = reshape([A, 2A, 3A, 4A], 2, 2)
 2×2 Matrix{Matrix{Complex{Int64}}}:
- [3+2im 9+2im; 8+7im 4+6im]      [9+6im 27+6im; 24+21im 12+18im]
- [6+4im 18+4im; 16+14im 8+12im]  [12+8im 36+8im; 32+28im 16+24im]
+ [1+1im 3+3im; 2+2im 4+4im]  [3+3im 9+9im; 6+6im 12+12im]
+ [2+2im 6+6im; 4+4im 8+8im]  [4+4im 12+12im; 8+8im 16+16im]
 
-julia> C' # adjoint acts recursively on the blocks
+julia> C'
 2×2 adjoint(::Matrix{Matrix{Complex{Int64}}}) with eltype Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
- [3-2im 8-7im; 9-2im 4-6im]       [6-4im 16-14im; 18-4im 8-12im]
- [9-6im 24-21im; 27-6im 12-18im]  [12-8im 32-28im; 36-8im 16-24im]
+ [1-1im 2-2im; 3-3im 4-4im]    [2-2im 4-4im; 6-6im 8-8im]
+ [3-3im 6-6im; 9-9im 12-12im]  [4-4im 8-8im; 12-12im 16-16im]
 ```
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
@@ -150,26 +168,37 @@ This operation is intended for linear algebra usage - for general data manipulat
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Matrix{Complex{Int64}}:
- 3+2im  9+2im
- 8+7im  4+6im
+julia> A = [3 2; 0 0]
+2×2 Matrix{Int64}:
+ 3  2
+ 0  0
 
 julia> B = transpose(A)
-2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
- 3+2im  8+7im
- 9+2im  4+6im
+2×2 transpose(::Matrix{Int64}) with eltype Int64:
+ 3  0
+ 2  0
 
-julia> copy(B) # materialize the transposed matrix 
+julia> B[1,2] = 4; # modifying B will modify A automatically
+
+julia> A
+2×2 Matrix{Int64}:
+ 3  2
+ 4  0
+```
+
+For complex matrices, the [adjoint](@ref) operation is equivalent to a conjugate-transpose.
+```jldoctest
+julia> A = reshape([Complex(x, x) for x in 1:4], 2, 2)
 2×2 Matrix{Complex{Int64}}:
- 3+2im  8+7im
- 9+2im  4+6im
+ 1+1im  3+3im
+ 2+2im  4+4im
 
-julia> B[1,2] = 4 + 5im; # modifying B will automatically modify A
+julia> adjoint(A) == conj(transpose(A))
+true
+```
 
-julia> A[2,1]
-4 + 5im
-
+The `transpose` of an `AbstractVector` is a row-vector:
+```jldoctest
 julia> v = [1,2,3]
 3-element Vector{Int64}:
  1
@@ -182,7 +211,10 @@ julia> transpose(v) # returns a row-vector
 
 julia> transpose(v) * v # compute the dot product
 14
+```
 
+For a matrix of matrices, the individual blocks are recursively operated on:
+```jldoctest
 julia> C = reshape(1:4, 2, 2)
 2×2 reshape(::UnitRange{Int64}, 2, 2) with eltype Int64:
  1  3
