@@ -4,6 +4,7 @@
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
 
+# Used by `Base.finalizer` to validate mutability of an object being finalized.
 function _check_mutable(@nospecialize(o)) @noinline
     if !ismutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
