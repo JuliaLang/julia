@@ -580,6 +580,10 @@ function __init__()
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS")
+        BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+    end
 end
 
 end # module LinearAlgebra
