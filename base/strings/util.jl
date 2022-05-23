@@ -501,7 +501,7 @@ julia> a = "Ma.rch"
 "Ma.rch"
 
 julia> collect(eachsplit(a, "."))
-2-element Vector{SubString}:
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
