@@ -2396,6 +2396,9 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     # validate shapes for lowest level of concatenation
     d = findfirst(>(1), dims)
     if d !== nothing # all dims are 1
+        if row_first && d < 3
+            d = d == 1 ? 2 : 1
+        end
         nblocks = length(as) ÷ dims[d]
         for b ∈ 1:nblocks
             offset = ((b - 1) * dims[d])
@@ -2403,7 +2406,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
             for i ∈ offset .+ (2:dims[d])
                 for dd ∈ 1:N
                     dd == d && continue
-                    if size(as[startelementi], dd) != size(as[i], dd)
+                    if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
                         throw(ArgumentError("incompatible shape in element $i"))
                     end
                 end

@@ -864,6 +864,9 @@ namespace {
 } // namespace
 
 namespace {
+
+    typedef legacy::PassManager PassManager;
+
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
         return orc::JITTargetMachineBuilder(TM.getTargetTriple())
         .setCPU(TM.getTargetCPU().str())
@@ -899,7 +902,7 @@ namespace {
             swap(*this, other);
             return *this;
         }
-        std::unique_ptr<legacy::PassManager> operator()() {
+        std::unique_ptr<PassManager> operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
             addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
             addOptimizationPasses(PM.get(), optlevel);
@@ -967,7 +970,7 @@ namespace {
         }
     private:
         int optlevel;
-        JuliaOJIT::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
+        JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>> PMs;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {

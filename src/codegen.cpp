@@ -86,31 +86,7 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
-#define DEBUG_TYPE "julia_irgen_codegen"
-
 using namespace llvm;
-
-STATISTIC(EmittedAllocas, "Number of allocas emitted");
-STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
-STATISTIC(ModulesCreated, "Number of LLVM Modules created");
-STATISTIC(EmittedBoxCompares, "Number of box compares emitted");
-STATISTIC(EmittedBitsUnionCompares, "Number of bitsunion compares emitted");
-STATISTIC(EmittedBitsCompares, "Number of bits compares emitted");
-STATISTIC(EmittedEgals, "Number of egals emitted");
-STATISTIC(EmittedOpfields, "Number of opfields emitted");
-STATISTIC(EmittedBuiltinCalls, "Number of builtin calls emitted");
-STATISTIC(EmittedJLCalls, "Number of jlcalls emitted");
-STATISTIC(EmittedSpecfunCalls, "Number of specialized calls emitted");
-STATISTIC(EmittedInvokes, "Number of invokes emitted");
-STATISTIC(EmittedCalls, "Number of calls emitted");
-STATISTIC(EmittedUndefVarErrors, "Number of undef var errors emitted");
-STATISTIC(EmittedOpaqueClosureFunctions, "Number of opaque closures emitted");
-STATISTIC(EmittedToJLInvokes, "Number of tojlinvoke calls emitted");
-STATISTIC(EmittedCFuncInvalidates, "Number of C function invalidates emitted");
-STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");
-STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
-STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
-STATISTIC(EmittedFunctions, "Number of functions emitted");
 
 //Drag some useful type functions into our namespace
 //to reduce verbosity of our code
@@ -185,6 +161,31 @@ typedef Instruction TerminatorInst;
 #include "codegen_shared.h"
 #include "processor.h"
 #include "julia_assert.h"
+
+#undef DEBUG_TYPE //LLVM occasionally likes to set DEBUG_TYPE in a header...
+#define DEBUG_TYPE "julia_irgen_codegen"
+
+STATISTIC(EmittedAllocas, "Number of allocas emitted");
+STATISTIC(EmittedIntToPtrs, "Number of inttoptrs emitted");
+STATISTIC(ModulesCreated, "Number of LLVM Modules created");
+STATISTIC(EmittedBoxCompares, "Number of box compares emitted");
+STATISTIC(EmittedBitsUnionCompares, "Number of bitsunion compares emitted");
+STATISTIC(EmittedBitsCompares, "Number of bits compares emitted");
+STATISTIC(EmittedEgals, "Number of egals emitted");
+STATISTIC(EmittedOpfields, "Number of opfields emitted");
+STATISTIC(EmittedBuiltinCalls, "Number of builtin calls emitted");
+STATISTIC(EmittedJLCalls, "Number of jlcalls emitted");
+STATISTIC(EmittedSpecfunCalls, "Number of specialized calls emitted");
+STATISTIC(EmittedInvokes, "Number of invokes emitted");
+STATISTIC(EmittedCalls, "Number of calls emitted");
+STATISTIC(EmittedUndefVarErrors, "Number of undef var errors emitted");
+STATISTIC(EmittedOpaqueClosureFunctions, "Number of opaque closures emitted");
+STATISTIC(EmittedToJLInvokes, "Number of tojlinvoke calls emitted");
+STATISTIC(EmittedCFuncInvalidates, "Number of C function invalidates emitted");
+STATISTIC(GeneratedCFuncWrappers, "Number of C function wrappers generated");
+STATISTIC(GeneratedCCallables, "Number of C-callable functions generated");
+STATISTIC(GeneratedInvokeWrappers, "Number of invoke wrappers generated");
+STATISTIC(EmittedFunctions, "Number of functions emitted");
 
 extern "C" JL_DLLEXPORT
 void jl_dump_emitted_mi_name_impl(void *s)
@@ -4607,27 +4608,27 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     assert(!jl_is_ssavalue(l));
     jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
 
+    if (jl_is_slot(l)) {
+        int sl = jl_slot_number(l) - 1;
+        // it's a local variable
+        jl_varinfo_t &vi = ctx.slots[sl];
+        return emit_varinfo_assign(ctx, vi, rval_info, l);
+    }
+
     jl_binding_t *bnd = NULL;
     Value *bp = NULL;
     if (jl_is_symbol(l))
-        bp = global_binding_pointer(ctx, ctx.module, (jl_sym_t*)l, &bnd, true); // now bp != NULL or bnd != NULL
-    else if (jl_is_globalref(l))
-        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true); // now bp != NULL or bnd != NULL
-    else
-        assert(jl_is_slot(l));
-    if (bp != NULL || bnd != NULL) { // it is a global
-        if (bp != NULL) {
-            emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
-            // Global variable. Does not need debug info because the debugger knows about
-            // its memory location.
-        }
-        return;
+        bp = global_binding_pointer(ctx, ctx.module, (jl_sym_t*)l, &bnd, true);
+    else {
+        assert(jl_is_globalref(l));
+        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
     }
-
-    int sl = jl_slot_number(l) - 1;
-    // it's a local variable
-    jl_varinfo_t &vi = ctx.slots[sl];
-    emit_varinfo_assign(ctx, vi, rval_info, l);
+    if (bp != NULL) {
+        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
+        // Global variable. Does not need debug info because the debugger knows about
+        // its memory location.
+    }
+    return;
 }
 
 static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)

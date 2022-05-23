@@ -32,6 +32,9 @@ Command-line option changes
 * `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
 * The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
   number of interactive threads to create (`auto` currently means 1) ([#42302]).
+* New option `--heap-size-hint=<size>` gives a memory hint for triggering greedy garbage
+  collection. The size might be specified in bytes, kilobytes(1000k), megabytes(300M),
+  gigabytes(1.5G)
 
 Multi-threading changes
 -----------------------
@@ -100,6 +103,11 @@ Standard library changes
   executed upon existing the editor.
 
 #### SparseArrays
+
+#### Test
+* New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
+  Set either via the `@testset` kwarg `failfast=true` or by setting env var `JULIA_TEST_FAILFAST`
+  to `"true"` i.e. in CI runs to request the job failure be posted eagerly when issues occur ([#45317])
 
 #### Dates
 
