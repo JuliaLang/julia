@@ -3,29 +3,31 @@
 """
 	Set{T} <: AbstractSet{T}
 
-The default implementation of hash sets.
+`Set`s are containers that provide fast membership testing with `in`.
 
-`Set`s are containers that provide fast lookup and membership testing.
-Elements in a `Set` are unique, as determined by the elements' implementation of
+`Set`s have efficient implementations of set operations such as `union` and `intersect`.
+Elements in a `Set` are unique, as determined by the elements' definitions of
 `isequal` and `hash`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
-See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref)
+See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
+[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref)
 
 # Examples
 ```jldoctest filter = r"^Set{[A-Za-z0-9]+} with [0-9]+ element(s)?:"
-julia> Set()
-Set{Any}()
+julia> s = Set(Any[0, -0.0, 0.0])
+Set{Any} with 2 elements:
+  0.0
+  -0.0
 
-julia> Set(1)
-Set{Int64} with 1 element:
-  1
-
-julia> Set(['a', 'b', 'c'])
-Set{Char} with 3 elements:
+julia> push!(s, 'a'); push!(s, 0.0)
+Set{Any} with 2 elements:
+  0.0
   'a'
-  'c'
-  'b'
+  -0.0
+
+julia> 0 in s
+true
 ```
 """
 struct Set{T} <: AbstractSet{T}
