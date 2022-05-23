@@ -57,8 +57,18 @@ extern "C" jl_cgparams_t jl_default_cgparams;
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
+struct OptimizationOptions {
+    bool lower_intrinsics;
+    bool dump_native;
+    bool external_use;
+
+    static OptimizationOptions defaults() {
+        return {true, false, false};
+    }
+};
+
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, OptimizationOptions options = OptimizationOptions::defaults());
 void addMachinePasses(legacy::PassManagerBase *PM, int optlevel);
 void jl_finalize_module(orc::ThreadSafeModule  m);
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src);
