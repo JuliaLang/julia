@@ -588,8 +588,7 @@ julia> split(a, ".")
 """
 function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    itr = eachsplit(str, splitter; limit, keepempty)
-    collect(T <: SubString ? T : SubString{T}, itr)
+    collect(eachsplit(str, splitter; limit, keepempty))
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
