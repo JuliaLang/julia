@@ -1313,79 +1313,39 @@ static void registerCallbacks(PassBuilder &PB) {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "DemoteFloat16") {
-                PM.addPass(DemoteFloat16());
-                return true;
+#define FUNCTION_PASS(NAME, CREATE_PASS) \
+            if (Name == NAME) { \
+                PM.addPass(CREATE_PASS); \
+                return true; \
             }
-            if (Name == "CombineMulAdd") {
-              PM.addPass(CombineMulAdd());
-              return true;
-            }
-            if (Name == "LateLowerGCFrame") {
-                PM.addPass(LateLowerGC());
-                return true;
-            }
-            if (Name == "AllocOpt") {
-                PM.addPass(AllocOptPass());
-                return true;
-            }
-            if (Name == "PropagateJuliaAddrspaces") {
-                PM.addPass(PropagateJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "LowerExcHandlers") {
-                PM.addPass(LowerExcHandlers());
-                return true;
-            }
-            if (Name == "GCInvariantVerifier") {
-                // TODO: Parse option and allow users to set `Strong`
-                PM.addPass(GCInvariantVerifierPass());
-                return true;
-            }
+#include "llvm-julia-passes.inc"
+#undef FUNCTION_PASS
             return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "CPUFeatures") {
-              PM.addPass(CPUFeatures());
-              return true;
+#define MODULE_PASS(NAME, CREATE_PASS) \
+            if (Name == NAME) { \
+                PM.addPass(CREATE_PASS); \
+                return true; \
             }
-            if (Name == "RemoveNI") {
-              PM.addPass(RemoveNI());
-              return true;
-            }
-            if (Name == "LowerSIMDLoop") {
-              PM.addPass(LowerSIMDLoop());
-              return true;
-            }
-            if (Name == "FinalLowerGC") {
-                PM.addPass(FinalLowerGCPass());
-                return true;
-            }
-            if (Name == "RemoveJuliaAddrspaces") {
-                PM.addPass(RemoveJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "MultiVersioning") {
-                PM.addPass(MultiVersioning());
-                return true;
-            }
-            if (Name == "LowerPTLS") {
-                PM.addPass(LowerPTLSPass());
-                return true;
-            }
+#include "llvm-julia-passes.inc"
+#undef MODULE_PASS
             return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "JuliaLICM") {
-                PM.addPass(JuliaLICMPass());
-                return true;
+#define LOOP_PASS(NAME, CREATE_PASS) \
+            if (Name == NAME) { \
+                PM.addPass(CREATE_PASS); \
+                return true; \
             }
+#include "llvm-julia-passes.inc"
+#undef LOOP_PASS
             return false;
         });
 }
