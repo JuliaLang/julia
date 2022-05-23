@@ -968,8 +968,10 @@ function getindex(r::AbstractUnitRange, s::AbstractUnitRange{T}) where {T<:Integ
     if T === Bool
         return range(first(s) ? first(r) : last(r), length = last(s))
     else
-        isempty(s) && return range(first(r), length = 0)
         f = first(r)
+        # hardcode output for empty ranges to overflow in stop for Bool
+        # this works as empty ranges are all equal
+        isempty(s) && return range(oneunit(f), zero(f))
         start = oftype(f, f + first(s) - firstindex(r))
         len = length(s)
         stop = oftype(f, start + (len - oneunit(len)))

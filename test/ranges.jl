@@ -631,18 +631,23 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] === 3:2
+    @test (@inferred (3:6)[5:4]) === 1:0
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] === 0:2:-1
+    @test (@inferred (0:2:10)[7:6]) === 0:2:-1
     @test_throws BoundsError (0:2:10)[7:7]
+
+    for start in [true, false], stop in [true, false]
+        @test (@inferred (start:stop)[1:0]) === true:false
+    end
+    @test (@inferred (true:false)[true:false]) == true:false
 
     @testset "issue #40760" begin
         empty_range = 1:0
-        for r in Any[false:false, false:true:false, 1:2, 1:1:2]
-            @test r[1:0] isa AbstractRange
+        @testset for r in Any[false:false, false:true:false, 1:2, 1:1:2]
+            @test (@inferred r[1:0]) isa AbstractRange
             @test r[1:0] == empty_range
-            @test r[1:1:0] isa AbstractRange
+            @test (@inferred r[1:1:0]) isa AbstractRange
             @test r[1:1:0] == empty_range
         end
     end
