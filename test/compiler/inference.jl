@@ -4133,3 +4133,11 @@ end |> !Core.Compiler.is_concrete_eval_eligible
 @test !fully_eliminated() do
     entry_to_be_invalidated('a')
 end
+
+# Nothrow for assignment to globals
+global glob_assign_int::Int = 0
+f_glob_assign_int() = global glob_assign_int += 1
+let effects = Base.infer_effects(f_glob_assign_int, ())
+    @test !Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
