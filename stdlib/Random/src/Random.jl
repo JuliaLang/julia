@@ -425,7 +425,7 @@ true
 julia> rand(Random.seed!(rng), Bool) # not reproducible
 true
 
-julia> rand(Random.seed!(rng), Bool)
+julia> rand(Random.seed!(rng), Bool) # not reproducible either
 false
 
 julia> rand(Xoshiro(), Bool) # not reproducible either
