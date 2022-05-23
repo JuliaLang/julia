@@ -29,33 +29,6 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     StepRangeLen(start, step, floor(Integer, (stop-start)/step)+1)
 
 """
-	(:)(expr)
-
-`:expr` quotes `expr`, returning an abstract syntax tree (AST) of `expr`.
-The AST may be of type `Expr`, `Symbol`, or a literal value.
-Which of these three types are returned for any given expression is an
-implementation detail.
-
-See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
-
-# Examples
-```jldoctest
-julia> expr = :(a = b + 2*x)
-:(a = b + 2x)
-
-julia> sym = :some_identifier
-:some_identifier
-
-julia> value = :0xff
-0xff
-
-julia> typeof((expr, sym, value))
-Tuple{Expr, Symbol, UInt8}
-```
-"""
-(:)
-
-"""
     (:)(start, [step], stop)
 
 Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
