@@ -8155,8 +8155,6 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-void jl_init_debuginfo(void);
-
 extern "C" void jl_init_llvm(void)
 {
     builtin_func_map =
@@ -8199,7 +8197,6 @@ extern "C" void jl_init_llvm(void)
     jl_default_debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     imaging_mode = jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
     jl_default_cgparams.generic_context = jl_nothing;
-    jl_init_debuginfo();
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
