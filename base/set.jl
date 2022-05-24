@@ -14,20 +14,25 @@ See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
 [`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref)
 
 # Examples
-```jldoctest filter = r"^(true)|(Set{[A-Za-z0-9]+} with [0-9]+ element(s)?:)"
-julia> s = Set(Any[0, -0.0, 0.0])
-Set{Any} with 2 elements:
-  0.0
-  -0.0
+```jldoctest filter = r"^(true)|(false)|(Set{[A-Za-z0-9]+} with [0-9]+ element(s)?:)"
+julia> s = Set((1, 2, 1, 3))
+Set{Int64} with 3 elements:
+  2
+  3
+  1
 
-julia> push!(s, 'a'); push!(s, 0.0)
-Set{Any} with 3 elements:
-  0.0
-  'a'
-  -0.0
+julia> push!(s, 0)
+Set{Int64} with 4 elements:
+  0
+  2
+  3
+  1
 
-julia> 0 in s
+julia> 0.0 in s
 true
+
+julia> -0.0 in s
+false
 ```
 """
 struct Set{T} <: AbstractSet{T}
