@@ -3170,6 +3170,20 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         }
     }
 
+    // Readjust the max_total_memory based on what is currently available.
+    // LLVM or C may have allocated some of the memory since the last time
+    // we checked.
+
+    uint64_t total_mem = uv_get_total_memory();
+    uint64_t constrained_mem = uv_get_constrained_memory();
+
+    if (constrained_mem > 0 && constrained_mem < total_mem)
+        total_mem = constrained_mem;
+    size_t maxmem = total_mem / jl_cpu_threads() / 2;
+    if (maxmem > max_collect_interval)
+        max_collect_interval = maxmem;
+    max_total_memory = total_mem;
+
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
@@ -3442,6 +3456,7 @@ void jl_gc_init(void)
     size_t maxmem = total_mem / jl_cpu_threads() / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
+    max_total_memory = total_mem;
 #endif
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
@@ -3454,6 +3469,7 @@ void jl_gc_set_max_memory(uint64_t max_mem) {
         max_total_memory = max_mem;
     }
 }
+
 
 // callback for passing OOM errors from gmp
 JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
