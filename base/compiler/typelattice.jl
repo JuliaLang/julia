@@ -37,7 +37,7 @@ struct Conditional
     vtype
     elsetype
     function Conditional(
-                var,
+                var::SlotNumber,
                 @nospecialize(vtype),
                 @nospecialize(nottype))
         return new(var, vtype, nottype)
