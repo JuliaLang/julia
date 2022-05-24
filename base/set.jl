@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-	Set{T} <: AbstractSet{T}
+    Set{T} <: AbstractSet{T}
 
 `Set`s are mutable containers that provide fast membership testing.
 
@@ -11,7 +11,7 @@ Elements in a `Set` are unique, as determined by the elements' definitions of
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
 See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
-[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref) 
+[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
 
 # Examples
 ```jldoctest filter = r"^(true)|(false)|(Set{[A-Za-z0-9]+} with [0-9]+ element(s)?:)"
