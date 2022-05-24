@@ -468,7 +468,7 @@ function add_backedge!(li::MethodInstance, caller::InferenceState)
         edges = caller.stmt_edges[caller.currpc] = []
     end
     push!(edges, li)
-    nothing
+    return nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
@@ -480,7 +480,13 @@ function add_mt_backedge!(mt::Core.MethodTable, @nospecialize(typ), caller::Infe
     end
     push!(edges, mt)
     push!(edges, typ)
-    nothing
+    return nothing
+end
+
+function empty_backedges!(frame::InferenceState, currpc::Int = frame.currpc)
+    edges = frame.stmt_edges[currpc]
+    edges === nothing || empty!(edges)
+    return nothing
 end
 
 function print_callstack(sv::InferenceState)

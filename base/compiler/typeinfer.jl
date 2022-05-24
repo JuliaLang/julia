@@ -687,33 +687,29 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
     nslots = length(slotflags)
     undefs = fill(false, nslots)
 
-    # eliminate GotoIfNot if either of branch target is unreachable
-    if run_optimizer
-        for idx = 1:nexpr
-            stmt = body[idx]
-            if isa(stmt, GotoIfNot) && widenconst(argextype(stmt.cond, src, sv.sptypes)) === Bool
-                # replace live GotoIfNot with:
-                # - GotoNode if the fallthrough target is unreachable
-                # - no-op if the branch target is unreachable
-                if !was_reached(sv, idx+1)
-                    body[idx] = GotoNode(stmt.dest)
-                elseif !was_reached(sv, stmt.dest)
-                    body[idx] = nothing
-                end
-            end
-        end
-    end
-
-    # this statement traversal does three things:
+    # this statement traversal does five things:
     # 1. introduce temporary `TypedSlot`s that are supposed to be replaced with π-nodes later
     # 2. mark used-undef slots (required by the `slot2reg` conversion)
     # 3. mark unreached statements for a bulk code deletion (see issue #7836)
     # 4. widen `Conditional`s and remove `NOT_FOUND` from `ssavaluetypes`
-    # NOTE: because of 4, `was_reached` will no longer be available after this point
+    #    NOTE because of this, `was_reached` will no longer be available after this point
+    # 5. eliminate GotoIfNot if either branch target is unreachable
     changemap = nothing # initialized if there is any dead region
     for i = 1:nexpr
         expr = body[i]
         if was_reached(sv, i)
+            if run_optimizer
+                if isa(expr, GotoIfNot) && widenconst(argextype(expr.cond, src, sv.sptypes)) === Bool
+                    # 5: replace this live GotoIfNot with:
+                    # - GotoNode if the fallthrough target is unreachable
+                    # - no-op if the branch target is unreachable
+                    if !was_reached(sv, i+1)
+                        expr = GotoNode(expr.dest)
+                    elseif !was_reached(sv, expr.dest)
+                        expr = nothing
+                    end
+                end
+            end
             body[i] = annotate_slot_load!(undefs, i, sv, expr) # 1&2
             ssavaluetypes[i] = widenconditional(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement

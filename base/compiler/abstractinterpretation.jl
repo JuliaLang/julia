@@ -2298,6 +2298,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
 
         for currpc in bbstart:bbend
             frame.currpc = currpc
+            empty_backedges!(frame, currpc)
             stmt = frame.src.code[currpc]
             # If we're at the end of the basic block ...
             if currpc == bbend
