@@ -683,7 +683,7 @@ Expr
 Expr
 
 """
-	(:)(expr)
+    (:)(expr)
 
 `:expr` quotes `expr`, returning an abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
