@@ -465,9 +465,11 @@ end
     @test_throws ArgumentError reinterpret(Nothing, 1:6)
     @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
 
-    # reintepret of empty array with reshape
-    @test reinterpret(reshape, Nothing, fill(missing, (0,0,0))) == fill(nothing, (0,0,0))
+    # reintepret of empty array
+    @test reinterpret(reshape, Nothing, fill(missing, (1,0,3))) == fill(nothing, (1,0,3))
+    @test reinterpret(reshape, Missing, fill((), (0,))) == fill(missing, (0,))
     @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
+    @test_throws ArgumentError reinterpret(Missing, fill(77, (0,1)))
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
 
     # reinterpret of 0-dimensional array
