@@ -14,54 +14,27 @@ See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
 [`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
 
 # Examples
-```jldoctest filter = r"^(true)|(false)|(Set{[A-Za-z0-9]+} with [0-9]+ element(s)?:)"
-julia> s = Set((1, 2, 1, 3))
-Set{Int64} with 3 elements:
-  2
-  3
-  1
-
-julia> push!(s, 0)
-Set{Int64} with 4 elements:
-  0
-  2
-  3
-  1
-
-julia> 0.0 in s
-true
-```
-
-# Extended help
-`Set`s can be created using `Set()` with an optional element type, or from any iterable:
-```jldoctest filter = r"^Set{Char} with 3 elements:"
-julia> Set(), Set{Int32}()
-(Set{Any}(), Set{Int32}())
-
-julia> Set("aaBca")
+```jldoctest filter = r"^\\S.+"
+julia> s = Set("aaBca")
 Set{Char} with 3 elements:
   'a'
   'c'
   'B'
-```
 
-Because `Set`s use `isequal` for membership testing, `Set`s consider objects that compare
-`isequal` to be interchangeable, even if they do not compare equal using `==`:
-```jldoctest
-julia> s = Set(Any[NaN, 0]);
+julia> push!(s, 'b')
+Set{Char} with 4 elements:
+  'a'
+  'c'
+  'b'
+  'B'
 
-julia> NaN32 in s # isequal(NaN32, NaN)
+julia> s = Set([NaN, 0.0, 1.0, 2.0]);
+
+julia> -0.0 in s # isequal(0.0, -0.0) is false
+false
+
+julia> NaN in s # isequal(NaN, NaN) is true
 true
-
-julia> push!(s, 0.0); # isequal(0, 0.0), so only one is kept in the set
-
-julia> length(s)
-2
-
-julia> push!(s, -0.0); # 0.0 == -0.0, but they do not compare `isequal`
-
-julia> length(s)
-3
 ```
 """
 struct Set{T} <: AbstractSet{T}
