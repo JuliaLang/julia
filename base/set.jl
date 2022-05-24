@@ -3,15 +3,15 @@
 """
 	Set{T} <: AbstractSet{T}
 
-`Set`s are containers that provide fast membership testing with `in`.
+`Set`s are mutable containers that provide fast membership testing.
 
-`Set`s have efficient implementations of set operations such as `union` and `intersect`.
+`Set`s have efficient implementations of set operations such as `in`, `union` and `intersect`.
 Elements in a `Set` are unique, as determined by the elements' definitions of
 `isequal` and `hash`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
 See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
-[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref)
+[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref) 
 
 # Examples
 ```jldoctest filter = r"^(true)|(false)|(Set{[A-Za-z0-9]+} with [0-9]+ element(s)?:)"
@@ -30,9 +30,38 @@ Set{Int64} with 4 elements:
 
 julia> 0.0 in s
 true
+```
 
-julia> -0.0 in s
-false
+# Extended help
+`Set`s can be created using `Set()` with an optional element type, or from any iterable:
+```jldoctest filter = r"^Set{Char} with 3 elements:"
+julia> Set(), Set{Int32}()
+(Set{Any}(), Set{Int32}())
+
+julia> Set("aaBca")
+Set{Char} with 3 elements:
+  'a'
+  'c'
+  'B'
+```
+
+Because `Set`s use `isequal` for membership testing, `Set`s consider objects that compare
+`isequal` to be interchangeable, even if they do not compare equal using `==`:
+```jldoctest
+julia> s = Set(Any[NaN, 0]);
+
+julia> NaN32 in s # isequal(NaN32, NaN)
+true
+
+julia> push!(s, 0.0); # isequal(0, 0.0), so only one is kept in the set
+
+julia> length(s)
+2
+
+julia> push!(s, -0.0); # 0.0 == -0.0, but they do not compare `isequal`
+
+julia> length(s)
+3
 ```
 """
 struct Set{T} <: AbstractSet{T}
