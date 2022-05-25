@@ -34,9 +34,6 @@ extern "C" {
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
-// TODO: tune these parameters
-#define GC_PUBLIC_MARK_SP_SZ (1 << 18)
-
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
 
@@ -214,37 +211,27 @@ union _jl_gc_mark_data {
     gc_mark_finlist_t finlist;
 };
 
-// Returns a pointer to the bottom of the data queue currently in use (private queue is used in
-// case of public queue overflow)
-STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
+// Return a pointer to the bottom of the data queue
+STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_ws_queue_t *mark_queue) JL_NOTSAFEPOINT
 {
-    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
-    if (public_sp->overflow)
-        return sp->data; 
-    jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
-    return &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
+    jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&mark_queue->bottom);
+    return &array->data_start[bottom.data_offset % array->size];
 }
 
 // Re-push a frame to the mark queue (both data and pc)
 // The data and pc are expected to be on the queue (or updated in place) already.
 // Mainly useful to pause the current scanning in order to scan an new object.
-STATIC_INLINE void *gc_repush_markdata_(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, size_t size) JL_NOTSAFEPOINT
+STATIC_INLINE void *gc_repush_markdata(jl_gc_ws_queue_t *mark_queue) JL_NOTSAFEPOINT
 {
-    jl_gc_public_mark_sp_t *public_sp = &gc_cache->public_sp;
-    if (public_sp->overflow) {
-        jl_gc_mark_data_t *data = sp->data;
-        sp->pc++;
-        sp->data = (jl_gc_mark_data_t *)(((char*)sp->data) + size);
-        return data;
-    }
-    jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&public_sp->bottom);
-    jl_gc_mark_data_t *data = &public_sp->data_start[bottom.data_offset % GC_PUBLIC_MARK_SP_SZ];
+    jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
+    jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&mark_queue->bottom);
+    jl_gc_mark_data_t *data = &array->data_start[bottom.data_offset % array->size];
     bottom.pc_offset++;
     bottom.data_offset++;
-    jl_atomic_store_relaxed(&public_sp->bottom, bottom);
+    jl_atomic_store_relaxed(&mark_queue->bottom, bottom);
     return data;
 }
-#define gc_repush_markdata(gc_cache, sp, type) ((type*)gc_repush_markdata_(gc_cache, sp, sizeof(type)))
 
 // Used to determine whether the bottom of pc/data stack should be incremented
 // on a push
@@ -252,7 +239,7 @@ typedef enum {
     no_inc,
     inc,
     inc_data_only
-} jl_gc_push_mode;
+} jl_gc_push_mode_t;
 
 // layout for big (>2k) objects
 
@@ -519,17 +506,10 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
-STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
-{
-    sp->data = gc_cache->data_stack;
-    sp->pc = sp->pc_start = gc_cache->pc_stack;
-    sp->pc_end = gc_cache->pc_stack_end;
-}
-
-void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp);
-void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
+void gc_mark_queue_all_roots(jl_ptls_t ptls);
+void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache,
                            arraylist_t *list, size_t start);
-void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp);
+void gc_mark_loop(jl_ptls_t ptls);
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);
 
@@ -660,7 +640,7 @@ extern int gc_verifying;
 #endif
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset);
+// NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, int pc_offset);
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

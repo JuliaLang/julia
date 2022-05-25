@@ -200,19 +200,17 @@ static void gc_verify_track(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
-        jl_gc_mark_sp_t sp;
-        gc_mark_sp_init(gc_cache, &sp);
         arraylist_push(&lostval_parents_done, lostval);
         jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
-        gc_mark_queue_all_roots(ptls, &sp);
-        gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
+        gc_mark_queue_all_roots(ptls);
+        gc_mark_queue_finlist(gc_cache, &to_finalize, 0);
         for (int i = 0;i < jl_n_threads;i++) {
             jl_ptls_t ptls2 = jl_all_tls_states[i];
-            gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
+            gc_mark_queue_finlist(gc_cache, &ptls2->finalizers, 0);
         }
-        gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-        gc_mark_loop(ptls, sp);
+        gc_mark_queue_finlist(gc_cache, &finalizer_list_marked, 0);
+        gc_mark_loop(ptls);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -247,21 +245,19 @@ static void gc_verify_track(jl_ptls_t ptls)
 void gc_verify(jl_ptls_t ptls)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    jl_gc_mark_sp_t sp;
-    gc_mark_sp_init(gc_cache, &sp);
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
-    gc_mark_queue_all_roots(ptls, &sp);
-    gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
+    gc_mark_queue_all_roots(ptls);
+    gc_mark_queue_finlist(gc_cache, &to_finalize, 0);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
+        gc_mark_queue_finlist(gc_cache, &ptls2->finalizers, 0);
     }
-    gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-    gc_mark_loop(ptls, sp);
+    gc_mark_queue_finlist(gc_cache, &finalizer_list_marked, 0);
+    gc_mark_loop(ptls);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -1264,137 +1260,137 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 
 // Print a backtrace from the bottom (start) of the mark stack up to `sp`
 // `pc_offset` will be added to `sp` for convenience in the debugger.
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset)
-{
-    jl_jmp_buf *old_buf = jl_get_safe_restore();
-    jl_jmp_buf buf;
-    jl_set_safe_restore(&buf);
-    if (jl_setjmp(buf, 0) != 0) {
-        jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
-        jl_set_safe_restore(old_buf);
-        return;
-    }
-    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    void **top = sp.pc + pc_offset;
-    jl_gc_mark_data_t *data_top = sp.data;
-    sp.data = ptls->gc_cache.data_stack;
-    sp.pc = ptls->gc_cache.pc_stack;
-    int isroot = 1;
-    while (sp.pc < top) {
-        void *pc = *sp.pc;
-        const char *prefix = isroot ? "r--" : " `-";
-        isroot = 0;
-        if (pc == gc_mark_label_addrs[GC_MARK_L_marked_obj]) {
-            gc_mark_marked_obj_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_marked_obj_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p: Root object: %p :: %p (bits: %d)\n        of type ",
-                           (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
-            jl_((void*)data->tag);
-            isroot = 1;
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_scan_only]) {
-            gc_mark_marked_obj_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_marked_obj_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p: Queued root: %p :: %p (bits: %d)\n        of type ",
-                           (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
-            jl_((void*)data->tag);
-            isroot = 1;
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_finlist]) {
-            gc_mark_finlist_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_finlist_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p: Finalizer list from %p to %p\n",
-                           (void*)data, (void*)data->begin, (void*)data->end);
-            isroot = 1;
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_objarray]) {
-            gc_mark_objarray_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_objarray_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p:  %s Array in object %p :: %p -- [%p, %p)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (void*)data->begin, (void*)data->end);
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_obj8]) {
-            gc_mark_obj8_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_obj8_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            uint8_t *desc = (uint8_t*)jl_dt_layout_ptrs(vt->layout);
-            jl_safe_printf("%p:  %s Object (8bit) %p :: %p -- [%d, %d)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (int)(data->begin - desc), (int)(data->end - desc));
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_obj16]) {
-            gc_mark_obj16_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_obj16_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            uint16_t *desc = (uint16_t*)jl_dt_layout_ptrs(vt->layout);
-            jl_safe_printf("%p:  %s Object (16bit) %p :: %p -- [%d, %d)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (int)(data->begin - desc), (int)(data->end - desc));
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_obj32]) {
-            gc_mark_obj32_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_obj32_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
-            uint32_t *desc = (uint32_t*)jl_dt_layout_ptrs(vt->layout);
-            jl_safe_printf("%p:  %s Object (32bit) %p :: %p -- [%d, %d)\n        of type ",
-                           (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
-                           (int)(data->begin - desc), (int)(data->end - desc));
-            jl_(jl_typeof(data->parent));
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_stack]) {
-            gc_mark_stackframe_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_stackframe_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p:  %s Stack frame %p -- %d of %d (%s)\n",
-                           (void*)data, prefix, (void*)data->s, (int)data->i,
-                           (int)data->nroots >> 1,
-                           (data->nroots & 1) ? "indirect" : "direct");
-        }
-        else if (pc == gc_mark_label_addrs[GC_MARK_L_module_binding]) {
-            // module_binding
-            gc_mark_binding_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_binding_t);
-            if ((jl_gc_mark_data_t *)data > data_top) {
-                jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
-                break;
-            }
-            jl_safe_printf("%p:  %s Module (bindings) %p (bits %d) -- [%p, %p)\n",
-                           (void*)data, prefix, (void*)data->parent, (int)data->bits,
-                           (void*)data->begin, (void*)data->end);
-        }
-        else {
-            jl_safe_printf("Unknown pc %p --- ABORTING !!!\n", pc);
-            break;
-        }
-    }
-    jl_set_safe_restore(old_buf);
-}
+// NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, int pc_offset)
+// {
+//     jl_jmp_buf *old_buf = jl_get_safe_restore();
+//     jl_jmp_buf buf;
+//     jl_set_safe_restore(&buf);
+//     if (jl_setjmp(buf, 0) != 0) {
+//         jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
+//         jl_set_safe_restore(old_buf);
+//         return;
+//     }
+//     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
+//     void **top = sp.pc + pc_offset;
+//     jl_gc_mark_data_t *data_top = sp.data;
+//     sp.data = ptls->gc_cache.data_stack;
+//     sp.pc = ptls->gc_cache.pc_stack;
+//     int isroot = 1;
+//     while (sp.pc < top) {
+//         void *pc = *sp.pc;
+//         const char *prefix = isroot ? "r--" : " `-";
+//         isroot = 0;
+//         if (pc == gc_mark_label_addrs[GC_MARK_L_marked_obj]) {
+//             gc_mark_marked_obj_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_marked_obj_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_safe_printf("%p: Root object: %p :: %p (bits: %d)\n        of type ",
+//                            (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
+//             jl_((void*)data->tag);
+//             isroot = 1;
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_scan_only]) {
+//             gc_mark_marked_obj_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_marked_obj_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_safe_printf("%p: Queued root: %p :: %p (bits: %d)\n        of type ",
+//                            (void*)data, (void*)data->obj, (void*)data->tag, (int)data->bits);
+//             jl_((void*)data->tag);
+//             isroot = 1;
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_finlist]) {
+//             gc_mark_finlist_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_finlist_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_safe_printf("%p: Finalizer list from %p to %p\n",
+//                            (void*)data, (void*)data->begin, (void*)data->end);
+//             isroot = 1;
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_objarray]) {
+//             gc_mark_objarray_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_objarray_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_safe_printf("%p:  %s Array in object %p :: %p -- [%p, %p)\n        of type ",
+//                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
+//                            (void*)data->begin, (void*)data->end);
+//             jl_(jl_typeof(data->parent));
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj8]) {
+//             gc_mark_obj8_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_obj8_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
+//             uint8_t *desc = (uint8_t*)jl_dt_layout_ptrs(vt->layout);
+//             jl_safe_printf("%p:  %s Object (8bit) %p :: %p -- [%d, %d)\n        of type ",
+//                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
+//                            (int)(data->begin - desc), (int)(data->end - desc));
+//             jl_(jl_typeof(data->parent));
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj16]) {
+//             gc_mark_obj16_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_obj16_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
+//             uint16_t *desc = (uint16_t*)jl_dt_layout_ptrs(vt->layout);
+//             jl_safe_printf("%p:  %s Object (16bit) %p :: %p -- [%d, %d)\n        of type ",
+//                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
+//                            (int)(data->begin - desc), (int)(data->end - desc));
+//             jl_(jl_typeof(data->parent));
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_obj32]) {
+//             gc_mark_obj32_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_obj32_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(data->parent);
+//             uint32_t *desc = (uint32_t*)jl_dt_layout_ptrs(vt->layout);
+//             jl_safe_printf("%p:  %s Object (32bit) %p :: %p -- [%d, %d)\n        of type ",
+//                            (void*)data, prefix, (void*)data->parent, ((void**)data->parent)[-1],
+//                            (int)(data->begin - desc), (int)(data->end - desc));
+//             jl_(jl_typeof(data->parent));
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_stack]) {
+//             gc_mark_stackframe_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_stackframe_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_safe_printf("%p:  %s Stack frame %p -- %d of %d (%s)\n",
+//                            (void*)data, prefix, (void*)data->s, (int)data->i,
+//                            (int)data->nroots >> 1,
+//                            (data->nroots & 1) ? "indirect" : "direct");
+//         }
+//         else if (pc == gc_mark_label_addrs[GC_MARK_L_module_binding]) {
+//             // module_binding
+//             gc_mark_binding_t *data = gc_repush_markdata(gc_cache, &sp, gc_mark_binding_t);
+//             if ((jl_gc_mark_data_t *)data > data_top) {
+//                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
+//                 break;
+//             }
+//             jl_safe_printf("%p:  %s Module (bindings) %p (bits %d) -- [%p, %p)\n",
+//                            (void*)data, prefix, (void*)data->parent, (int)data->bits,
+//                            (void*)data->begin, (void*)data->end);
+//         }
+//         else {
+//             jl_safe_printf("Unknown pc %p --- ABORTING !!!\n", pc);
+//             break;
+//         }
+//     }
+//     jl_set_safe_restore(old_buf);
+// }
 
 static int gc_logging_enabled = 0;
 

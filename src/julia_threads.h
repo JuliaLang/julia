@@ -173,34 +173,25 @@ typedef struct {
 typedef union _jl_gc_mark_data jl_gc_mark_data_t;
 
 typedef struct {
-    void **pc; // Current stack address for the pc (up growing)
-    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
-    void **pc_start; // Cached value of `gc_cache->pc_stack`
-    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
-} jl_gc_mark_sp_t;
-
-// Top of gc public mark queue. See comment in `gc_pop_pc` for why a version number
-// is used
-typedef struct {
     int offset, version;
 } jl_gc_ws_top_t;
 
-// Bottom of gc public mark queue. Two offsets are used because number of items in pc/data queues
-// may differ (TODO: sizes are different only after popping from pc stack and before dispatching into
-// the right mark loop label/popping from data stack. Can we keep a single offset?)
 typedef struct {
     int pc_offset, data_offset;
 } jl_gc_ws_bottom_t;
 
-// Fixed size work-stealing deque used for marking in gc
 typedef struct {
-    // Whether elements must be pushed/popped into/from the private queue
-    uint8_t overflow;
-    _Atomic(jl_gc_ws_top_t) top;
-    _Atomic(jl_gc_ws_bottom_t) bottom;
     void **pc_start;
     jl_gc_mark_data_t *data_start;
-} jl_gc_public_mark_sp_t;
+    size_t size;
+} jl_gc_ws_array_t;
+
+typedef struct {
+    _Atomic(jl_gc_ws_top_t) top;
+    _Atomic(jl_gc_ws_bottom_t) bottom;
+    _Atomic(jl_gc_ws_array_t *) array;
+    arraylist_t *reclaim_set;
+} jl_gc_ws_queue_t;
 
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
@@ -218,10 +209,7 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];    
-    void **pc_stack;
-    void **pc_stack_end;
-    jl_gc_mark_data_t *data_stack;
-    jl_gc_public_mark_sp_t public_sp; 
+    jl_gc_ws_queue_t mark_queue; 
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
@@ -290,7 +278,6 @@ typedef struct _jl_tls_states_t {
     jl_thread_t system_id;
     arraylist_t finalizers;
     jl_gc_mark_cache_t gc_cache;
-    jl_gc_mark_sp_t gc_mark_sp;
     arraylist_t sweep_objs;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().

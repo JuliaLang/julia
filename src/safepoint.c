@@ -20,8 +20,6 @@ extern "C" {
 // 2: at least one sigint is pending, both safepoint pages are enabled.
 JL_DLLEXPORT sig_atomic_t jl_signal_pending = 0;
 _Atomic(uint32_t) jl_gc_running = 0;
-_Atomic(void *) jl_gc_recruiting_location = NULL;
-_Atomic(int32_t) jl_gc_safepoint_master = -1;
 char *jl_safepoint_pages = NULL;
 // The number of safepoints enabled on the three pages.
 // The first page, is the SIGINT page, only used by the master thread.
@@ -46,10 +44,13 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
 
+_Atomic(void *) jl_gc_recruiting_location = NULL;
+_Atomic(int32_t) jl_gc_safepoint_master = -1;
+
 extern uv_mutex_t *safepoint_sleep_locks;
 extern uv_cond_t *safepoint_wake_signals;
 
-const uint64_t timeout_ns = 1000;
+const uint64_t timeout_ns = 500;
 
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
@@ -173,18 +174,15 @@ int jl_safepoint_all_workers_done(jl_ptls_t ptls)
     return 1;
 }
 
-int jl_safepoint_try_recruit(jl_ptls_t ptls)
+void jl_safepoint_try_recruit(jl_ptls_t ptls)
 {
-    void *location = NULL;
     if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
         uint8_t state0 = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
-        location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
-        if (location) {
+        void *location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
+        if (location)
             ((void (*)(jl_ptls_t))location)(ptls);
-        }
         jl_gc_state_set(ptls, state0, JL_GC_STATE_PARALLEL);
     }
-    return (location != NULL);
 }
 
 size_t jl_safepoint_master_count_work(jl_ptls_t ptls)
@@ -196,11 +194,11 @@ size_t jl_safepoint_master_count_work(jl_ptls_t ptls)
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
             jl_gc_mark_cache_t *gc_cache2 = &ptls2->gc_cache;
-            jl_gc_public_mark_sp_t *public_sp2 = &gc_cache2->public_sp;
+            jl_gc_ws_queue_t *mark_queue2 = &gc_cache2->mark_queue;
             // This count can be slightly off, but it doesn't matter 
             // for recruitment heuristics
-            jl_gc_ws_bottom_t bottom2 = jl_atomic_load_relaxed(&public_sp2->bottom);
-            jl_gc_ws_top_t top2 = jl_atomic_load_relaxed(&public_sp2->top);
+            jl_gc_ws_bottom_t bottom2 = jl_atomic_load_relaxed(&mark_queue2->bottom);
+            jl_gc_ws_top_t top2 = jl_atomic_load_relaxed(&mark_queue2->top);
             work += bottom2.pc_offset - top2.offset;
         }
     }
@@ -212,7 +210,9 @@ void jl_safepoint_master_notify_all(jl_ptls_t ptls)
     for (int i = 0; i < jl_n_threads; i++) {
         if (i == ptls->tid)
             continue;
+        uv_mutex_lock(&safepoint_sleep_locks[i]);
         uv_cond_signal(&safepoint_wake_signals[i]);
+        uv_mutex_unlock(&safepoint_sleep_locks[i]);
     }
 }
 
@@ -223,7 +223,9 @@ void jl_safepoint_master_recruit_workers(jl_ptls_t ptls, size_t nworkers)
             continue;
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
+            uv_mutex_lock(&safepoint_sleep_locks[i]);
             uv_cond_signal(&safepoint_wake_signals[i]);
+            uv_mutex_unlock(&safepoint_sleep_locks[i]);
             nworkers--;
         }
     }
@@ -264,14 +266,23 @@ void jl_safepoint_wait_gc(void)
     jl_ptls_t ptls = jl_current_task->ptls;
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
         if (jl_safepoint_master_end_marking(ptls)) {
+            // Clean-up buffers from `reclaim_set`
+            jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
+            jl_gc_ws_queue_t *mark_queue = &gc_cache->mark_queue;
+            arraylist_t *rs = mark_queue->reclaim_set;
+            jl_gc_ws_array_t *a;
+            while ((a = arraylist_pop(rs)))
+                free(a);
             break;
         }
-        // Stopped waiting because we got a notification 
-        // from safepoint master: try to get recruited
+        uv_mutex_lock(&safepoint_sleep_locks[ptls->tid]);
         if (!uv_cond_timedwait(&safepoint_wake_signals[ptls->tid], 
                                &safepoint_sleep_locks[ptls->tid], timeout_ns)) {
+            // Stopped waiting because we got a notification 
+            // from safepoint master: try to get recruited
             jl_safepoint_try_recruit(ptls);
         }
+        uv_mutex_unlock(&safepoint_sleep_locks[ptls->tid]);
         // Otherwise, just go to the top of the loop and try
         // to become a safepoint master
     }
