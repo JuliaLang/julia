@@ -251,11 +251,11 @@ getindex(match::Core.MethodMatch, field::Int) =
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_total_may_throw_meta
+    @_foldable_meta
     Tuple{S, T.parameters...}
 end
 function parameter_upper_bound(t::UnionAll, idx)
-    @_total_may_throw_meta
+    @_foldable_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 

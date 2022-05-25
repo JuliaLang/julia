@@ -242,6 +242,7 @@ typedef union __jl_purity_overrides_t {
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
         uint8_t ipo_terminates_locally : 1;
+        uint8_t ipo_notaskstate : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
