@@ -6,8 +6,7 @@
 `Set`s are mutable containers that provide fast membership testing.
 
 `Set`s have efficient implementations of set operations such as `in`, `union` and `intersect`.
-Elements in a `Set` are unique, as determined by the elements' definitions of
-`isequal` and `hash`.
+Elements in a `Set` are unique, as determined by the elements' definition of `isequal`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
 See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
