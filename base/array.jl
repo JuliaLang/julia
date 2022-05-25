@@ -2523,7 +2523,7 @@ function filter(f, a::Array{T, N}) where {T, N}
     b = Vector{T}(undef, length(a))
     for ai in a
         @inbounds b[j] = ai
-        j = ifelse(f(ai), j+1, j)
+        j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(b, j-1)
     sizehint!(b, length(b))
@@ -2538,7 +2538,7 @@ function filter(f, a::AbstractArray)
     for idx in eachindex(a)
         @inbounds idxs[j] = idx
         ai = @inbounds a[idx]
-        j = ifelse(f(ai), j+1, j)
+        j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(idxs, j-1)
     res = a[idxs]
@@ -2568,7 +2568,7 @@ function filter!(f, a::AbstractVector)
     j = firstindex(a)
     for ai in a
         @inbounds a[j] = ai
-        j = ifelse(f(ai), nextind(a, j), j)
+        j = ifelse(f(ai)::Bool, nextind(a, j), j)
     end
     j > lastindex(a) && return a
     if a isa Vector
