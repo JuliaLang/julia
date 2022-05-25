@@ -192,8 +192,8 @@ function gcdx(a::Integer, b::Integer)
     x = a % T
     y = b % T
     while y != 0
-        q = div(x, y)
-        x, y = y, rem(x, y)
+        q, r = divrem(x, y)
+        x, y = y, r
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
