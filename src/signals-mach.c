@@ -262,6 +262,7 @@ kern_return_t catch_mach_exception_raise(
 #endif
     if (jl_addr_is_safepoint(fault_addr)) {
         if (jl_atomic_load_relaxed(&jl_gc_running))
+            // Fallback to POSIX signals and handle GC recruitment there
             return KERN_FAILURE;
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
