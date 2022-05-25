@@ -404,6 +404,7 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+_totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
 
@@ -419,9 +420,16 @@ function _findfirst_loop(f::Function, t)
 end
 findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, 1, t) : _findfirst_loop(f, t)
 
-function findlast(f::Function, x::Tuple)
+findlast(f::Function, t::Tuple) = length(t) < 32 ? _findlast_rec(f, t) : _findlast_loop(f, t)
+function _findlast_rec(f::Function, x::Tuple)
     r = findfirst(f, reverse(x))
     return isnothing(r) ? r : length(x) - r + 1
+end
+function _findlast_loop(f::Function, t)
+    for i in reverse(1:length(t))
+        f(t[i]) && return i
+    end
+    return nothing
 end
 
 ## filter ##

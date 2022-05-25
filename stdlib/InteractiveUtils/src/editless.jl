@@ -7,8 +7,8 @@ using Base: shell_split, shell_escape, find_source_file
 """
     EDITOR_CALLBACKS :: Vector{Function}
 
-A vector of editor callback functions, which take as arguments `cmd`, `path` and
-`line` and which is then expected to either open an editor and return `true` to
+A vector of editor callback functions, which take as arguments `cmd`, `path`, `line`
+and `column` and which is then expected to either open an editor and return `true` to
 indicate that it has handled the request, or return `false` to decline the
 editing request.
 """
@@ -21,19 +21,20 @@ Define a new editor matching `pattern` that can be used to open a file (possibly
 at a given line number) using `fn`.
 
 The `fn` argument is a function that determines how to open a file with the
-given editor. It should take three arguments, as follows:
+given editor. It should take four arguments, as follows:
 
 * `cmd` - a base command object for the editor
 * `path` - the path to the source file to open
 * `line` - the line number to open the editor at
+* `column` - the column number to open the editor at
 
-Editors which cannot open to a specific line with a command may ignore the
-`line` argument. The `fn` callback must return either an appropriate `Cmd`
-object to open a file or `nothing` to indicate that they cannot edit this file.
-Use `nothing` to indicate that this editor is not appropriate for the current
-environment and another editor should be attempted. It is possible to add more
-general editing hooks that need not spawn external commands by pushing a
-callback directly to the vector `EDITOR_CALLBACKS`.
+Editors which cannot open to a specific line with a command or a specific column
+may ignore the `line` and/or `column` argument. The `fn` callback must return
+either an appropriate `Cmd` object to open a file or `nothing` to indicate that
+they cannot edit this file. Use `nothing` to indicate that this editor is not
+appropriate for the current environment and another editor should be attempted.
+It is possible to add more general editing hooks that need not spawn
+external commands by pushing a callback directly to the vector `EDITOR_CALLBACKS`.
 
 The `pattern` argument is a string, regular expression, or an array of strings
 and regular expressions. For the `fn` to be called, one of the patterns must
@@ -52,7 +53,7 @@ set `wait=true` and julia will wait for the editor to close before resuming.
 If one of the editor environment variables is set, but no editor entry matches it,
 the default editor entry is invoked:
 
-    (cmd, path, line) -> `\$cmd \$path`
+    (cmd, path, line, column) -> `\$cmd \$path`
 
 Note that many editors are already defined. All of the following commands should
 already work:
@@ -88,9 +89,14 @@ The following defines the usage of terminal-based `emacs`:
     `define_editor` was introduced in Julia 1.4.
 """
 function define_editor(fn::Function, pattern; wait::Bool=false)
-    callback = function (cmd::Cmd, path::AbstractString, line::Integer)
+    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer)
         editor_matches(pattern, cmd) || return false
-        editor = fn(cmd, path, line)
+        editor = if !applicable(fn, cmd, path, line, column)
+            # Be backwards compatible with editors that did not define the newly added column argument
+            fn(cmd, path, line)
+        else
+            fn(cmd, path, line, column)
+        end
         if editor isa Cmd
             if wait
                 run(editor) # blocks while editor runs
@@ -113,35 +119,50 @@ editor_matches(ps::AbstractArray, cmd::Cmd) = any(editor_matches(p, cmd) for p i
 
 function define_default_editors()
     # fallback: just call the editor with the path as argument
-    define_editor(r".*") do cmd, path, line
+    define_editor(r".*") do cmd, path, line, column
         `$cmd $path`
     end
-    define_editor(Any[r"\bemacs", "gedit", r"\bgvim"]) do cmd, path, line
+    # vim family
+    for (editors, wait) in  [[Any["vim", "vi", "nvim", "mvim"], true],
+                             [Any["\bgvim"],                    false]]
+        define_editor(editors; wait) do cmd, path, line, column
+            cmd = line == 0 ? `$cmd $path` :
+                column == 0 ? `$cmd +$line $path` :
+                `$cmd "+normal $(line)G$(column)|" $path`
+        end
+    end
+    define_editor("nano"; wait=true) do cmd, path, line, column
+        cmd = `$cmd +$line,$column $path`
+    end
+    # emacs (must check that emacs not running in -t/-nw before regex match for general emacs)
+    for (editors, wait) in [[Any[r"\bemacs"],                                                                           false],
+                            [Any[r"\bemacs\b.*\s(-nw|--no-window-system)\b", r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], true]]
+        define_editor(editors; wait) do cmd, path, line, column
+            `$cmd +$line:$column $path`
+        end
+    end
+    # Other editors
+    define_editor("gedit") do cmd, path, line, column
+        `$cmd +$line:$column $path`
+    end
+    define_editor(Any["micro", "kak"]; wait=true) do cmd, path, line, column
         `$cmd +$line $path`
     end
-    # Must check that emacs not running in -t/-nw before regex match for general emacs
-    define_editor(Any[
-        "vim", "vi", "nvim", "mvim", "nano", "micro", "kak",
-        r"\bemacs\b.*\s(-nw|--no-window-system)\b",
-        r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b",
-    ], wait=true) do cmd, path, line
-        `$cmd +$line $path`
-    end
-    define_editor(["textmate", "mate", "kate"]) do cmd, path, line
+    define_editor(["textmate", "mate", "kate"]) do cmd, path, line, column
         `$cmd $path -l $line`
     end
-    define_editor(Any[r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line
+    define_editor(Any[r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line, column
         `$cmd $path:$line`
     end
-    define_editor(["code", "code-insiders"]) do cmd, path, line
-        `$cmd -g $path:$line`
+    define_editor(["code", "code-insiders"]) do cmd, path, line, column
+        `$cmd -g $path:$line:$column`
     end
-    define_editor(r"\bnotepad++") do cmd, path, line
+    define_editor(r"\bnotepad++") do cmd, path, line, column
         `$cmd $path -n$line`
     end
     if Sys.iswindows()
-        define_editor(r"\bCODE\.EXE\b"i) do cmd, path, line
-            `$cmd -g $path:$line`
+        define_editor(r"\bCODE\.EXE\b"i) do cmd, path, line, column
+            `$cmd -g $path:$line:$column`
         end
         callback = function (cmd::Cmd, path::AbstractString, line::Integer)
             cmd == `open` || return false
@@ -157,7 +178,7 @@ function define_default_editors()
         end
         pushfirst!(EDITOR_CALLBACKS, callback)
     elseif Sys.isapple()
-        define_editor("open") do cmd, path, line
+        define_editor("open") do cmd, path, line, column
             `open -t $path`
         end
     end
@@ -186,7 +207,7 @@ function editor()
 end
 
 """
-    edit(path::AbstractString, line::Integer=0)
+    edit(path::AbstractString, line::Integer=0, column::Integer=0)
 
 Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
@@ -194,7 +215,7 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
 See also [`define_editor`](@ref).
 """
-function edit(path::AbstractString, line::Integer=0)
+function edit(path::AbstractString, line::Integer=0, column::Integer=0)
     path isa String || (path = convert(String, path))
     if endswith(path, ".jl")
         p = find_source_file(path)
@@ -202,7 +223,11 @@ function edit(path::AbstractString, line::Integer=0)
     end
     cmd = editor()
     for callback in EDITOR_CALLBACKS
-        callback(cmd, path, line) && return
+        if !applicable(callback, cmd, path, line, column)
+            callback(cmd, path, line) && return
+        else
+            callback(cmd, path, line, column) && return
+        end
     end
     # shouldn't happen unless someone has removed fallback entry
     error("no editor found")

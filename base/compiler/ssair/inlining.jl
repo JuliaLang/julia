@@ -18,6 +18,8 @@ struct ResolvedInliningSpec
     # Effects of the call statement
     effects::Effects
 end
+ResolvedInliningSpec(ir::IRCode, effects::Effects) =
+    ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects)
 
 """
 Represents a callsite that our analysis has determined is legal to inline,
@@ -315,11 +317,11 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     def = item.mi.def::Method
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = Int(compact.result[idx][:line])
+    inlined_at = compact.result[idx][:line]
     topline::Int32 = linetable_offset + Int32(1)
     coverage = coverage_enabled(def.module)
     coverage_by_path = JLOptions().code_coverage == 3
-    push!(linetable, LineInfoNode(def.module, def.name, def.file, Int(def.line), inlined_at))
+    push!(linetable, LineInfoNode(def.module, def.name, def.file, def.line, inlined_at))
     oldlinetable = spec.ir.linetable
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
@@ -786,20 +788,20 @@ end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch, effects::Effects)
     mi = specialize_method(match; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, linfo::MethodInstance, effects::Effects)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult, effects::Effects)
-    return compileable_specialization(et, linfo, effects)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects)
+    return compileable_specialization(et, result.linfo, effects)
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
@@ -815,7 +817,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
             et !== nothing && push!(et, mi)
             return ConstantCase(quoted(inferred_src.val))
         else
-            src = inferred_src
+            src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
         end
         effects = match.ipo_effects
     else
@@ -829,7 +831,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
                 src = code.inferred
             end
             effects = decode_effects(code.ipo_purity_bits)
-        else
+        else # fallback pass for external AbstractInterpreter cache
             effects = Effects()
             src = code
         end
@@ -843,13 +845,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
-    if src === nothing
-        return compileable_specialization(et, match, effects)
-    end
-
-    if isa(src, IRCode)
-        src = copy(src)
-    end
+    src === nothing && return compileable_specialization(et, match, effects)
 
     et !== nothing && push!(et, mi)
     return InliningTodo(mi, src, effects)
@@ -913,16 +909,19 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode, effects::Effects)
-    return InliningTodo(mi, ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects))
+    ir = copy(ir)
+    return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
 end
 
-function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}}, effects::Effects)
+function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Vector{UInt8}}, effects::Effects)
     if !isa(src, CodeInfo)
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
+    else
+        src = copy(src)
     end
-
-    @timeit "inline IR inflation" begin;
-        return InliningTodo(mi, inflate_ir(src, mi)::IRCode, effects)
+    @timeit "inline IR inflation" begin
+        ir = inflate_ir!(src, mi)::IRCode
+        return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
     end
 end
 
@@ -951,9 +950,9 @@ end
 rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
 
 function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
-    if isa(typ, Const) && isa(typ.val, SimpleVector)
-        length(typ.val) > params.MAX_TUPLE_SPLAT && return false
-        for p in typ.val
+    if isa(typ, Const) && (v = typ.val; isa(v, SimpleVector))
+        length(v) > params.MAX_TUPLE_SPLAT && return false
+        for p in v
             is_inlineable_constant(p) || return false
         end
         return true
@@ -1098,12 +1097,12 @@ function inline_invoke!(
         return nothing
     end
     result = info.result
-    if isa(result, ConstResult)
-        item = const_result_item(result, state)
+    if isa(result, ConcreteResult)
+        item = concrete_result_item(result, state)
     else
         argtypes = invoke_rewrite(sig.argtypes)
-        if isa(result, InferenceResult)
-            (; mi) = item = InliningTodo(result, argtypes)
+        if isa(result, ConstPropResult)
+            (; mi) = item = InliningTodo(result.result, argtypes)
             validate_sparams(mi.sparam_vals) || return nothing
             if argtypes_to_type(argtypes) <: mi.def.sig
                 state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
@@ -1217,9 +1216,6 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         ir[SSAValue(idx)][:inst] = lateres.val
         check_effect_free!(ir, idx, lateres.val, rt)
         return nothing
-    elseif is_return_type(sig.f)
-        check_effect_free!(ir, idx, stmt, rt)
-        return nothing
     end
 
     return stmt, sig
@@ -1285,11 +1281,15 @@ function handle_const_call!(
             j += 1
             result = results[j]
             any_fully_covered |= match.fully_covers
-            if isa(result, ConstResult)
-                case = const_result_item(result, state)
-                push!(cases, InliningCase(result.mi.specTypes, case))
-            elseif isa(result, InferenceResult)
-                handled_all_cases &= handle_inf_result!(result, argtypes, flag, state, cases, true)
+            if isa(result, ConcreteResult)
+                case = concrete_result_item(result, state)
+                if case === nothing
+                    handled_all_cases = false
+                else
+                    push!(cases, InliningCase(result.mi.specTypes, case))
+                end
+            elseif isa(result, ConstPropResult)
+                handled_all_cases &= handle_const_prop_result!(result, argtypes, flag, state, cases, true)
             else
                 @assert result === nothing
                 handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, true)
@@ -1321,10 +1321,10 @@ function handle_match!(
     return true
 end
 
-function handle_inf_result!(
-    result::InferenceResult, argtypes::Vector{Any}, flag::UInt8, state::InliningState,
+function handle_const_prop_result!(
+    result::ConstPropResult, argtypes::Vector{Any}, flag::UInt8, state::InliningState,
     cases::Vector{InliningCase}, allow_abstract::Bool = false)
-    (; mi) = item = InliningTodo(result, argtypes)
+    (; mi) = item = InliningTodo(result.result, argtypes)
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
@@ -1334,7 +1334,7 @@ function handle_inf_result!(
     return true
 end
 
-function const_result_item(result::ConstResult, state::InliningState)
+function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
         return compileable_specialization(state.et, result.mi, result.effects)
     end
@@ -1361,9 +1361,9 @@ function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
 end
 
 function handle_const_opaque_closure_call!(
-    ir::IRCode, idx::Int, stmt::Expr, result::InferenceResult, flag::UInt8,
+    ir::IRCode, idx::Int, stmt::Expr, result::ConstPropResult, flag::UInt8,
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
-    item = InliningTodo(result, sig.argtypes)
+    item = InliningTodo(result.result, sig.argtypes)
     isdispatchtuple(item.mi.specTypes) || return
     validate_sparams(item.mi.sparam_vals) || return
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
@@ -1382,9 +1382,7 @@ function inline_const_if_inlineable!(inst::Instruction)
 end
 
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
-    # todo = (inline_idx, (isva, isinvoke, na), method, spvals, inline_linetable, inline_ir, lie)
     todo = Pair{Int, Any}[]
-    et = state.et
 
     for idx in 1:length(ir.stmts)
         simpleres = process_simple!(ir, idx, state, todo)
@@ -1407,13 +1405,13 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
 
         if isa(info, OpaqueClosureCallInfo)
             result = info.result
-            if isa(result, InferenceResult)
+            if isa(result, ConstPropResult)
                 handle_const_opaque_closure_call!(
                     ir, idx, stmt, result, flag,
                     sig, state, todo)
             else
-                if isa(result, ConstResult)
-                    item = const_result_item(result, state)
+                if isa(result, ConcreteResult)
+                    item = concrete_result_item(result, state)
                 else
                     item = analyze_method!(info.match, sig.argtypes, flag, state)
                 end
@@ -1589,6 +1587,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
             end
         end
     end
+    isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
         op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck)

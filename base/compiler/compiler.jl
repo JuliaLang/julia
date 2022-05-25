@@ -141,8 +141,10 @@ include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl") # TODO: break this up further + extract utilities
 
-# required for bootstrap
-# TODO: find why this is needed and remove it.
+# required for bootstrap because sort.jl uses extrema
+# to decide whether to dispatch to counting sort.
+#
+# TODO: remove it.
 function extrema(x::Array)
     isempty(x) && throw(ArgumentError("collection must be non-empty"))
     vmin = vmax = x[1]

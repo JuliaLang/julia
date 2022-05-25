@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const LineNum = Int
-
 # The type of a variable load is either a value or an UndefVarError
 # (only used in abstractinterpret, doesn't appear in optimize)
 struct VarState
@@ -83,98 +81,91 @@ function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
 end
 
 mutable struct InferenceState
-    params::InferenceParams
-    result::InferenceResult # remember where to put the result
+    #= information about this method instance =#
     linfo::MethodInstance
-    sptypes::Vector{Any}    # types of static parameter
-    slottypes::Vector{Any}
-    mod::Module
-    currpc::LineNum
-    pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
-    limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
-
-    # info on the state of inference and the linfo
-    src::CodeInfo
     world::UInt
-    valid_worlds::WorldRange
-    nargs::Int
+    mod::Module
+    sptypes::Vector{Any}
+    slottypes::Vector{Any}
+    src::CodeInfo
+
+    #= intermediate states for local abstract interpretation =#
+    currpc::Int
+    ip::BitSetBoundedMinPrioritySet # current active instruction pointers
+    handler_at::Vector{Int} # current exception handler info
+    ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     stmt_types::Vector{Union{Nothing, VarTable}}
     stmt_edges::Vector{Union{Nothing, Vector{Any}}}
     stmt_info::Vector{Any}
-    # return type
-    bestguess #::Type
-    # current active instruction pointers
-    ip::BitSetBoundedMinPrioritySet
-    # current exception handler info
-    handler_at::Vector{LineNum}
-    # ssavalue sparsity and restart info
-    ssavalue_uses::Vector{BitSet}
 
-    cycle_backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
+    #= interprocedural intermediate states for abstract interpretation =#
+    pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
+    limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
+    cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
-    parent::Union{Nothing, InferenceState}
-
-    # TODO: move these to InferenceResult / Params?
-    cached::Bool
-    inferred::Bool
     dont_work_on_me::Bool
+    parent::Union{Nothing, InferenceState}
+    inferred::Bool # TODO move this to InferenceResult?
 
+    #= results =#
+    result::InferenceResult # remember where to put the result
+    valid_worlds::WorldRange
+    bestguess #::Type
+    ipo_effects::Effects
+
+    #= flags =#
+    params::InferenceParams
     # Whether to restrict inference of abstract call sites to avoid excessive work
     # Set by default for toplevel frame.
     restrict_abstract_call_sites::Bool
-
-    # Inferred purity flags
-    ipo_effects::Effects
+    cached::Bool # TODO move this to InferenceResult?
 
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
     interp::AbstractInterpreter
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo,
-                            cache::Symbol, interp::AbstractInterpreter)
-        (; def) = linfo = result.linfo
+    function InferenceState(result::InferenceResult,
+        src::CodeInfo, cache::Symbol, interp::AbstractInterpreter)
+        linfo = result.linfo
+        world = get_world_counter(interp)
+        def = linfo.def
+        mod = isa(def, Method) ? def.module : def
+        sptypes = sptypes_from_meth_instance(linfo)
+
         code = src.code::Vector{Any}
-
-        params = InferenceParams(interp)
-
-        sp = sptypes_from_meth_instance(linfo::MethodInstance)
-
-        nssavalues = src.ssavaluetypes::Int
-        src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
-        stmt_info = Any[ nothing for i = 1:length(code) ]
-
         nstmts = length(code)
-        s_types = Union{Nothing, VarTable}[ nothing for i = 1:nstmts ]
-        s_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
+        currpc = 1
+        ip = BitSetBoundedMinPrioritySet(nstmts)
+        handler_at = compute_trycatch(code, ip.elems)
+        push!(ip, 1)
+        nssavalues = src.ssavaluetypes::Int
+        ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+        stmt_types = Union{Nothing, VarTable}[ nothing for i = 1:nstmts ]
+        stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
+        stmt_info = Any[ nothing for i = 1:nstmts ]
 
-        # initial types
         nslots = length(src.slotflags)
+        slottypes = Vector{Any}(undef, nslots)
         argtypes = result.argtypes
         nargs = length(argtypes)
-        s_argtypes = VarTable(undef, nslots)
-        slottypes = Vector{Any}(undef, nslots)
+        stmt_types[1] = stmt_type1 = VarTable(undef, nslots)
         for i in 1:nslots
-            at = (i > nargs) ? Bottom : argtypes[i]
-            s_argtypes[i] = VarState(at, i > nargs)
-            slottypes[i] = at
+            argtyp = (i > nargs) ? Bottom : argtypes[i]
+            stmt_type1[i] = VarState(argtyp, i > nargs)
+            slottypes[i] = argtyp
         end
-        s_types[1] = s_argtypes
 
-        ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+        pclimitations = IdSet{InferenceState}()
+        limitations = IdSet{InferenceState}()
+        cycle_backedges = Vector{Tuple{InferenceState,Int}}()
+        callers_in_cycle = Vector{InferenceState}()
+        dont_work_on_me = false
+        parent = nothing
+        inferred = false
 
-        # exception handlers
-        ip = BitSetBoundedMinPrioritySet(nstmts)
-        handler_at = compute_trycatch(src.code, ip.elems)
-        push!(ip, 1)
-
-        # `throw` block deoptimization
-        params.unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
-
-        mod = isa(def, Method) ? def.module : def
-        valid_worlds = WorldRange(src.min_world,
-            src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
-
+        valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+        bestguess = Bottom
         # TODO: Currently, any :inbounds declaration taints consistency,
         #       because we cannot be guaranteed whether or not boundschecks
         #       will be eliminated and if they are, we cannot be guaranteed
@@ -184,24 +175,27 @@ mutable struct InferenceState
         inbounds = inbounds_option()
         inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
         consistent = inbounds_taints_consistency ? TRISTATE_UNKNOWN : ALWAYS_TRUE
+        ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
 
+        params = InferenceParams(interp)
+        restrict_abstract_call_sites = isa(linfo.def, Module)
         @assert cache === :no || cache === :local || cache === :global
+        cached = cache === :global
+
         frame = new(
-            params, result, linfo,
-            sp, slottypes, mod, #=currpc=#0,
-            #=pclimitations=#IdSet{InferenceState}(), #=limitations=#IdSet{InferenceState}(),
-            src, get_world_counter(interp), valid_worlds,
-            nargs, s_types, s_edges, stmt_info,
-            #=bestguess=#Union{}, ip, handler_at, ssavalue_uses,
-            #=cycle_backedges=#Vector{Tuple{InferenceState,LineNum}}(),
-            #=callers_in_cycle=#Vector{InferenceState}(),
-            #=parent=#nothing,
-            #=cached=#cache === :global,
-            #=inferred=#false, #=dont_work_on_me=#false, #=restrict_abstract_call_sites=# isa(linfo.def, Module),
-            #=ipo_effects=#Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency),
+            linfo, world, mod, sptypes, slottypes, src,
+            currpc, ip, handler_at, ssavalue_uses, stmt_types, stmt_edges, stmt_info,
+            pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
+            result, valid_worlds, bestguess, ipo_effects,
+            params, restrict_abstract_call_sites, cached,
             interp)
+
+        # some more setups
+        src.ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+        params.unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
         result.result = frame
         cache !== :no && push!(get_inference_cache(interp), result)
+
         return frame
     end
 end

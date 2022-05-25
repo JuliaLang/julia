@@ -314,7 +314,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete,
-    &jl_f_getglobal, &jl_f_setglobal,
+    &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer,
     NULL };
 
 typedef struct {
@@ -568,6 +568,7 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         jl_serialize_value(s, tn->module);
         jl_serialize_value(s, tn->names);
         jl_serialize_value(s, tn->wrapper);
+        jl_serialize_value(s, tn->Typeofwrapper);
         jl_serialize_value_(s, (jl_value_t*)tn->cache, 0);
         jl_serialize_value_(s, (jl_value_t*)tn->linearcache, 0);
         jl_serialize_value(s, tn->mt);

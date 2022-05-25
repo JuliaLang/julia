@@ -1185,7 +1185,7 @@ PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
     auto GetCG = [&]() -> CallGraph & {
         return AM.getResult<CallGraphAnalysis>(M);
     };
-    if (runMultiVersioning(M, GetLI, GetCG, false)) {
+    if (runMultiVersioning(M, GetLI, GetCG, external_use)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<LoopAnalysis>();
         return preserved;

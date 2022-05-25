@@ -501,7 +501,7 @@ julia> a = "Ma.rch"
 "Ma.rch"
 
 julia> collect(eachsplit(a, "."))
-2-element Vector{SubString}:
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
@@ -517,7 +517,8 @@ struct SplitIterator{S<:AbstractString,F}
     keepempty::Bool
 end
 
-eltype(::Type{<:SplitIterator}) = SubString
+eltype(::Type{<:SplitIterator{T}}) where T = SubString{T}
+eltype(::Type{<:SplitIterator{<:SubString{T}}}) where T = SubString{T}
 
 IteratorSize(::Type{<:SplitIterator}) = SizeUnknown()
 
@@ -587,8 +588,7 @@ julia> split(a, ".")
 """
 function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    itr = eachsplit(str, splitter; limit, keepempty)
-    collect(T <: SubString ? T : SubString{T}, itr)
+    collect(eachsplit(str, splitter; limit, keepempty))
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:

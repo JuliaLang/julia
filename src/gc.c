@@ -488,7 +488,7 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     run_finalizers(ct);
 }
 
-static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
+void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 {
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
     arraylist_t *a = &ptls->finalizers;
@@ -518,7 +518,7 @@ static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
-    gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT
@@ -527,7 +527,7 @@ JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_funct
         jl_gc_add_ptr_finalizer(ptls, v, jl_unbox_voidpointer(f));
     }
     else {
-        gc_add_finalizer_(ptls, v, f);
+        jl_gc_add_finalizer_(ptls, v, f);
     }
 }
 
@@ -556,20 +556,21 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     arraylist_free(&copied_list);
 }
 
+// explicitly scheduled objects for the sweepfunc callback
 static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 {
     size_t p = 0;
     for (size_t i = 0; i < objs->len; i++) {
-        jl_value_t *v = (jl_value_t *)(objs->items[i]);
-        jl_datatype_t *t = (jl_datatype_t *)(jl_typeof(v));
+        jl_value_t *v = (jl_value_t*)(objs->items[i]);
+        jl_datatype_t *t = (jl_datatype_t*)(jl_typeof(v));
         const jl_datatype_layout_t *layout = t->layout;
         jl_fielddescdyn_t *desc = (jl_fielddescdyn_t*)jl_dt_layout_fields(layout);
-        if (!gc_ptr_tag(v, 1)) {
+
+        int bits = jl_astaggedvalue(v)->bits.gc;
+        if (!gc_marked(bits))
             desc->sweepfunc(v);
-        }
-        else {
+        else
             objs->items[p++] = v;
-        }
     }
     objs->len = p;
 }
@@ -588,17 +589,19 @@ static int64_t last_gc_total_bytes = 0;
 // max_total_memory is a suggestion.  We try very hard to stay
 // under this limit, but we will go above it rather than halting.
 #ifdef _P64
+typedef uint64_t memsize_t;
 #define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
 // Eventually we can expose this to the user/ci.
-static uint64_t max_total_memory = (uint64_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
+memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
+typedef uint32_t memsize_t;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t max_collect_interval =  500000000UL;
 // Work really hard to stay within 2GB
 // Alternative is to risk running out of address space
 // on 32 bit architectures.
-static uint32_t max_total_memory = (uint32_t) 2 * 1024 * 1024 * 1024;
+memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
 #endif
 
 // global variables for GC stats
@@ -3416,6 +3419,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
+    uint64_t max_memory = last_live_bytes + gc_num.allocd;
+    if (max_memory > gc_num.max_memory) {
+        gc_num.max_memory = max_memory;
+    }
+
     gc_num.allocd = 0;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.since_sweep;
@@ -3446,6 +3454,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.total_time += pause;
     gc_num.since_sweep = 0;
     gc_num.freed = 0;
+    if (pause > gc_num.max_pause) {
+        gc_num.max_pause = pause;
+    }
     reset_thread_gc_counts();
 
     return recollect;
@@ -3607,6 +3618,8 @@ void jl_gc_init(void)
     gc_num.interval = default_collect_interval;
     last_long_collect_interval = default_collect_interval;
     gc_num.allocd = 0;
+    gc_num.max_pause = 0;
+    gc_num.max_memory = 0;
 
 #ifdef _P64
     // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
@@ -3621,6 +3634,13 @@ void jl_gc_init(void)
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
     t_start = jl_hrtime();
+}
+
+void jl_gc_set_max_memory(uint64_t max_mem) {
+    if (max_mem > 0
+        && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
+        max_total_memory = max_mem;
+    }
 }
 
 // callback for passing OOM errors from gmp

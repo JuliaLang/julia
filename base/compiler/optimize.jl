@@ -58,10 +58,13 @@ struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInter
     interp::I
 end
 
+is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
+    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+
 function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
                          mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
-        src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+        src_inferred = is_source_inferred(src)
         src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
         return src_inferred && src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
@@ -73,7 +76,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
         inf_result === nothing && return nothing
         src = inf_result.src
         if isa(src, CodeInfo)
-            src_inferred = ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
+            src_inferred = is_source_inferred(src)
             return src_inferred ? src : nothing
         else
             return nothing
@@ -202,7 +205,6 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return false
-            is_return_type(f) && return true
             if isa(f, IntrinsicFunction)
                 intrinsic_effect_free_if_nothrow(f) || return false
                 return intrinsic_nothrow(f,
@@ -396,7 +398,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     (; def, specTypes) = linfo
 
     analyzed = nothing # `ConstAPI` if this call can use constant calling convention
-    force_noinline = _any(@nospecialize(x) -> isexpr(x, :meta) && x.args[1] === :noinline, ir.meta)
+    force_noinline = _any(x::Expr -> x.head === :meta && x.args[1] === :noinline, ir.meta)
 
     # compute inlining and other related optimizations
     result = caller.result
@@ -532,39 +534,57 @@ function ipo_escape_cache(mi_cache::MICache) where MICache
 end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
-function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
-    @timeit "convert"   ir = convert_to_ircode(ci, sv)
-    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
+macro pass(name, expr)
+    optimize_until = esc(:optimize_until)
+    stage = esc(:__stage__)
+    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    quote
+        $macrocall
+        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
+    end
+end
+
+matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
+matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(::Nothing, _, _) = false
+
+function run_passes(
+    ci::CodeInfo,
+    sv::OptimizationState,
+    caller::InferenceResult,
+    optimize_until = nothing,  # run all passes by default
+)
+    __stage__ = 1  # used by @pass
+    # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
+    @pass "convert"   ir = convert_to_ircode(ci, sv)
+    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @pass "compact 1" ir = compact!(ir)
+    @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
-    @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = sroa_pass!(ir)
-    @timeit "ADCE"      ir = adce_pass!(ir)
-    @timeit "type lift" ir = type_lift_pass!(ir)
-    @timeit "compact 3" ir = compact!(ir)
+    @pass "compact 2" ir = compact!(ir)
+    @pass "SROA"      ir = sroa_pass!(ir)
+    @pass "ADCE"      ir = adce_pass!(ir)
+    @pass "type lift" ir = type_lift_pass!(ir)
+    @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
+    @label __done__  # used by @pass
     return ir
 end
 
 function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
-    code = copy_exprargs(ci.code)
+    linetable = ci.linetable
+    if !isa(linetable, Vector{LineInfoNode})
+        linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
+    end
+
+    # check if coverage mode is enabled
     coverage = coverage_enabled(sv.mod)
-    # Go through and add an unreachable node after every
-    # Union{} call. Then reindex labels.
-    idx = 1
-    oldidx = 1
-    changemap = fill(0, length(code))
-    prevloc = zero(eltype(ci.codelocs))
-    stmtinfo = sv.stmt_info
-    codelocs = ci.codelocs
-    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    ssaflags = ci.ssaflags
     if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
-        for line in ci.linetable
+        for line in linetable
             if is_file_tracked(line.file)
                 # if any line falls in a tracked file enable coverage for all
                 coverage = true
@@ -572,7 +592,20 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             end
         end
     end
-    labelmap = coverage ? fill(0, length(code)) : changemap
+
+    # Go through and add an unreachable node after every
+    # Union{} call. Then reindex labels.
+    code = copy_exprargs(ci.code)
+    stmtinfo = sv.stmt_info
+    codelocs = ci.codelocs
+    ssavaluetypes = ci.ssavaluetypes::Vector{Any}
+    ssaflags = ci.ssaflags
+    meta = Expr[]
+    idx = 1
+    oldidx = 1
+    ssachangemap = fill(0, length(code))
+    labelchangemap = coverage ? fill(0, length(code)) : ssachangemap
+    prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
         if coverage && codeloc != prevloc && codeloc != 0
@@ -582,9 +615,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
             insert!(ssaflags, idx, IR_FLAG_NULL)
-            changemap[oldidx] += 1
-            if oldidx < length(labelmap)
-                labelmap[oldidx + 1] += 1
+            ssachangemap[oldidx] += 1
+            if oldidx < length(labelchangemap)
+                labelchangemap[oldidx + 1] += 1
             end
             idx += 1
             prevloc = codeloc
@@ -597,9 +630,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
                 insert!(ssaflags, idx + 1, ssaflags[idx])
-                if oldidx < length(changemap)
-                    changemap[oldidx + 1] += 1
-                    coverage && (labelmap[oldidx + 1] += 1)
+                if oldidx < length(ssachangemap)
+                    ssachangemap[oldidx + 1] += 1
+                    coverage && (labelchangemap[oldidx + 1] += 1)
                 end
                 idx += 1
             end
@@ -607,32 +640,23 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         idx += 1
         oldidx += 1
     end
-    renumber_ir_elements!(code, changemap, labelmap)
 
-    meta = Any[]
+    renumber_ir_elements!(code, ssachangemap, labelchangemap)
+
     for i = 1:length(code)
-        code[i] = remove_meta!(code[i], meta)
+        code[i] = process_meta!(meta, code[i])
     end
     strip_trailing_junk!(ci, code, stmtinfo)
-    cfg = compute_basic_blocks(code)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    linetable = ci.linetable
-    isa(linetable, Vector{LineInfoNode}) || (linetable = collect(LineInfoNode, linetable::Vector{Any}))
-    ir = IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
-    return ir
+    cfg = compute_basic_blocks(code)
+    return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
 end
 
-function remove_meta!(@nospecialize(stmt), meta::Vector{Any})
-    if isa(stmt, Expr)
-        head = stmt.head
-        if head === :meta
-            args = stmt.args
-            if length(args) > 0
-                push!(meta, stmt)
-            end
-            return nothing
-        end
+function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
+    if isexpr(stmt, :meta) && length(stmt.args) ≥ 1
+        push!(meta, stmt)
+        return nothing
     end
     return stmt
 end
@@ -790,31 +814,33 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     return maxcost
 end
 
-function renumber_ir_elements!(body::Vector{Any}, changemap::Vector{Int})
-    return renumber_ir_elements!(body, changemap, changemap)
+function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int})
+    return renumber_ir_elements!(body, ssachangemap, ssachangemap)
 end
 
-function cumsum_ssamap!(ssamap::Vector{Int})
+function cumsum_ssamap!(ssachangemap::Vector{Int})
+    any_change = false
     rel_change = 0
-    for i = 1:length(ssamap)
-        rel_change += ssamap[i]
-        if ssamap[i] == -1
+    for i = 1:length(ssachangemap)
+        val = ssachangemap[i]
+        any_change |= val ≠ 0
+        rel_change += val
+        if val == -1
             # Keep a marker that this statement was deleted
-            ssamap[i] = typemin(Int)
+            ssachangemap[i] = typemin(Int)
         else
-            ssamap[i] = rel_change
+            ssachangemap[i] = rel_change
         end
     end
+    return any_change
 end
 
 function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, labelchangemap::Vector{Int})
-    cumsum_ssamap!(labelchangemap)
+    any_change = cumsum_ssamap!(labelchangemap)
     if ssachangemap !== labelchangemap
-        cumsum_ssamap!(ssachangemap)
+        any_change |= cumsum_ssamap!(ssachangemap)
     end
-    if labelchangemap[end] == 0 && ssachangemap[end] == 0
-        return
-    end
+    any_change || return
     for i = 1:length(body)
         el = body[i]
         if isa(el, GotoNode)
@@ -824,7 +850,8 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             if isa(cond, SSAValue)
                 cond = SSAValue(cond.id + ssachangemap[cond.id])
             end
-            body[i] = GotoIfNot(cond, el.dest + labelchangemap[el.dest])
+            was_deleted = labelchangemap[el.dest] == typemin(Int)
+            body[i] = was_deleted ? cond : GotoIfNot(cond, el.dest + labelchangemap[el.dest])
         elseif isa(el, ReturnNode)
             if isdefined(el, :val)
                 val = el.val

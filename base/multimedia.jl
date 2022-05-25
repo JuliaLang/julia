@@ -104,6 +104,18 @@ for that case. If a type benefits from custom human-readable output though,
 `show(::IO, ::MIME"text/plain", ::T)` should be defined. For example, the `Day` type uses
 `1 day` as the output for the `text/plain` MIME type, and `Day(1)` as the output of 2-argument `show`.
 
+# Examples
+```jldoctest
+julia> struct Day
+           n::Int
+       end
+
+julia> Base.show(io::IO, ::MIME"text/plain", d::Day) = print(io, d.n, " day")
+
+julia> Day(1)
+1 day
+```
+
 Container types generally implement 3-argument `show` by calling `show(io, MIME"text/plain"(), x)`
 for elements `x`, with `:compact => true` set in an [`IOContext`](@ref) passed as the first argument.
 """
