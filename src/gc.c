@@ -3543,7 +3543,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 
     jl_gc_ws_array_t *array = (jl_gc_ws_array_t*)malloc_s(sizeof(jl_gc_ws_array_t));
 
-    size_t init_size = 1 << 16; // TODO: stress-test `resize` by decreasing `init_size`
+    size_t init_size = 1 << 10; // TODO: stress-test `resize` by decreasing `init_size`
     array->pc_start = (void**)malloc_s(init_size * sizeof(void*));
     array->data_start = (jl_gc_mark_data_t*)malloc_s(init_size * sizeof(jl_gc_mark_data_t));
     array->size = init_size;

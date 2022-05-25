@@ -271,8 +271,11 @@ void jl_safepoint_wait_gc(void)
             jl_gc_ws_queue_t *mark_queue = &gc_cache->mark_queue;
             arraylist_t *rs = mark_queue->reclaim_set;
             jl_gc_ws_array_t *a;
-            while ((a = arraylist_pop(rs)))
+            while ((a = (jl_gc_ws_array_t*)arraylist_pop(rs))) {
+                free(a->pc_start);
+                free(a->data_start);
                 free(a);
+            }
             break;
         }
         uv_mutex_lock(&safepoint_sleep_locks[ptls->tid]);
