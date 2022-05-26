@@ -3274,3 +3274,17 @@ end
 # issue 44723
 demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
 @test demo44723()() == 1
+
+# issue #45162
+f45162(f) = f(x=1)
+@test first(methods(f45162)).called != 0
+
+# issue #45024
+@test_throws ParseError("expected assignment after \"const\"") Meta.parse("const x")
+@test_throws ParseError("expected assignment after \"const\"") Meta.parse("const x::Int")
+# these cases have always been caught during lowering, since (const (global x)) is not
+# ambiguous with the lowered form (const x), but that could probably be changed.
+@test Meta.lower(@__MODULE__, :(global const x)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(global const x::Int)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(const global x)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(const global x::Int)) == Expr(:error, "expected assignment after \"const\"")

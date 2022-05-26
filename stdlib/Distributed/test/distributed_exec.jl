@@ -1616,7 +1616,11 @@ cluster_cookie("")
 for close_stdin in (true, false), stderr_to_stdout in (true, false)
     local npids = addprocs_with_testenv(RetainStdioTester(close_stdin,stderr_to_stdout))
     @test remotecall_fetch(myid, npids[1]) == npids[1]
-    @test close_stdin != remotecall_fetch(()->isopen(stdin), npids[1])
+    if close_stdin
+        @test remotecall_fetch(()->stdin === devnull && !isreadable(stdin), npids[1])
+    else
+        @test remotecall_fetch(()->stdin !== devnull && isopen(stdin) && isreadable(stdin), npids[1])
+    end
     @test stderr_to_stdout == remotecall_fetch(()->(stderr === stdout), npids[1])
     rmprocs(npids)
 end
