@@ -4141,3 +4141,15 @@ let effects = Base.infer_effects(f_glob_assign_int, ())
     @test !Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+
+# Nothrow for setfield!
+mutable struct SetfieldNothrow
+    x::Int
+end
+f_setfield_nothrow() = SetfieldNothrow(0).x = 1
+let effects = Base.infer_effects(f_setfield_nothrow, ())
+    # Technically effect free even though we use the heap, since the
+    # object doesn't escape, but the compiler doesn't know that.
+    #@test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
