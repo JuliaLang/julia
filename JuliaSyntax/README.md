@@ -550,6 +550,20 @@ parsing `key=val` pairs inside parentheses.
   `function (xs...) \n body end` parses the argument list as `(... xs)`, whereas
   `function (x) \n body end` parses the argument list as `(tuple x)`.
 
+* The difference between multidimensional vs flattened iterators is subtle, and
+  perhaps too syntactically permissive.  For example,
+  - `[(x,y) for x * in 1:10, y in 1:10]` is a multidimensional iterator
+  - `[(x,y) for x * in 1:10 for y in 1:10]` is a flattened iterator
+  - `[(x,y) for x in 1:10, y in 1:10 if y < x]` is a flattened iterator
+
+  It's this last case which seems problematic (why not *require* the second
+  form as a more explicit way to indicate flattening?). It's not even pretty
+  printed correctly:
+  ```
+  julia> :([(x,y) for x in 1:10, y in 1:10 if y < x])
+  :([(x, y) for $(Expr(:filter, :(y < x), :(x = 1:10), :(y = 1:10)))])
+  ```
+
 # Comparisons to other packages
 
 ### Official Julia compiler
