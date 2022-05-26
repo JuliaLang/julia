@@ -293,6 +293,13 @@ See also:
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
 """
+    Sys.rss()
+
+Get the current resident set size utilized in bytes.
+"""
+rss() = ccall(:jl_rss, Csize_t, ())
+
+"""
     Sys.isunix([os])
 
 Predicate for testing if the OS provides a Unix-like interface.

@@ -715,6 +715,15 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #endif
 }
 
+JL_DLLEXPORT size_t jl_rss(void) {
+    size_t rss;
+    int err = uv_resident_set_memory(&rss);
+    if (err) {
+        jl_safe_printf("WARNING: failed to get RSS (%s %d)\n", uv_err_name(err),  err);
+    }
+    return rss;
+}
+
 // Simple `rand()` like function, with global seed and added thread-safety
 // (but slow and insecure)
 static _Atomic(uint64_t) g_rngseed;

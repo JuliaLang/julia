@@ -404,6 +404,7 @@
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
     XX(jl_rettype_inferred) \
+    XX(jl_rss) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
     XX(jl_save_incremental) \
