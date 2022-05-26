@@ -1279,3 +1279,12 @@ end
 # Test that inlining doesn't accidentally delete a bad return_type call
 f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
 @test_throws MethodError f_bad_return_type()
+
+# Test that inlining doesn't leave useless globalrefs around
+f_ret_nothing(x) = (Base.donotdelete(x); return nothing)
+let src = code_typed1(Tuple{Int}) do x
+        f_ret_nothing(x)
+        return 1
+    end
+    @test count(x -> isa(x, Core.GlobalRef) && x.name === :nothing, src.code) == 0
+end
