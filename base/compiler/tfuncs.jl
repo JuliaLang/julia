@@ -1758,6 +1758,10 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
     elseif f === donotdelete
         return true
+    elseif f === Core.finalizer
+        2 <= length(argtypes) <= 4 || return false
+        # Core.finalizer does no error checking - that's done in Base.finalizer
+        return true
     end
     return false
 end

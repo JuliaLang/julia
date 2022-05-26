@@ -188,81 +188,90 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 """
-    stmt_effect_free(stmt, rt, src::Union{IRCode,IncrementalCompact})
+    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact})
 
-Determine whether a `stmt` is "side-effect-free", i.e. may be removed if it has no uses.
+Returns a tuple of (effect_free_and_nothrow, nothrow) for a given statement.
 """
-function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
-    isa(stmt, PiNode) && return true
-    isa(stmt, PhiNode) && return true
-    isa(stmt, ReturnNode) && return false
-    isa(stmt, GotoNode) && return false
-    isa(stmt, GotoIfNot) && return false
-    isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
-    isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
+function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+    # TODO: We're duplicating analysis from inference here.
+    isa(stmt, PiNode) && return (true, true)
+    isa(stmt, PhiNode) && return (true, true)
+    isa(stmt, ReturnNode) && return (false, true)
+    isa(stmt, GotoNode) && return (false, true)
+    isa(stmt, GotoIfNot) && return (false, argextype(stmt.cond, src) ⊑ Bool)
+    isa(stmt, Slot) && return (false, false) # Slots shouldn't occur in the IR at this point, but let's be defensive here
+    if isa(stmt, GlobalRef)
+        nothrow = isdefined(stmt.mod, stmt.name)
+        return (nothrow, nothrow)
+    end
     if isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
             etyp = (isa(src, IRCode) ? src.sptypes : src.ir.sptypes)[args[1]::Int]
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(etyp, Const)
+            nothrow = isa(etyp, Const)
+            return (nothrow, nothrow)
         end
         if head === :call
             f = argextype(args[1], src)
             f = singleton_type(f)
-            f === nothing && return false
+            f === nothing && return (false, false)
             if isa(f, IntrinsicFunction)
-                intrinsic_effect_free_if_nothrow(f) || return false
-                return intrinsic_nothrow(f,
-                        Any[argextype(args[i], src) for i = 2:length(args)])
+                nothrow = intrinsic_nothrow(f,
+                    Any[argextype(args[i], src) for i = 2:length(args)])
+                nothrow || return (false, false)
+                return (intrinsic_effect_free_if_nothrow(f), nothrow)
             end
-            contains_is(_PURE_BUILTINS, f) && return true
+            contains_is(_PURE_BUILTINS, f) && return (true, true)
             # `get_binding_type` sets the type to Any if the binding doesn't exist yet
             if f === Core.get_binding_type
                 length(args) == 3 || return false
                 M, s = argextype(args[2], src), argextype(args[3], src)
-                return get_binding_type_effect_free(M, s)
+                total = get_binding_type_effect_free(M, s)
+                return (total, total)
             end
-            contains_is(_EFFECT_FREE_BUILTINS, f) || return false
-            rt === Bottom && return false
-            return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
+            rt === Bottom && return (false, false)
+            nothrow = _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
+            nothrow || return (false, false)
+            return (contains_is(_EFFECT_FREE_BUILTINS, f), nothrow)
         elseif head === :new
             typ = argextype(args[1], src)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
-            isexact || return false
-            isconcretedispatch(typ) || return false
+            isexact || return (false, false)
+            isconcretedispatch(typ) || return (false, false)
             typ = typ::DataType
-            fieldcount(typ) >= length(args) - 1 || return false
+            fieldcount(typ) >= length(args) - 1 || return (false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
-                eT ⊑ fT || return false
+                eT ⊑ fT || return (false, false)
             end
-            return true
+            return (true, true)
         elseif head === :foreigncall
-            return foreigncall_effect_free(stmt, src)
+            total = foreigncall_effect_free(stmt, src)
+            return (total, total)
         elseif head === :new_opaque_closure
-            length(args) < 4 && return false
+            length(args) < 4 && return (false, false)
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ)
-            isexact || return false
-            typ ⊑ Tuple || return false
+            isexact || return (false, false)
+            typ ⊑ Tuple || return (false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
             src = argextype(args[4], src)
             if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
-                return false
+                return (false, false)
             end
-            return true
+            return (true, true)
         elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
-            return true
+            return (true, true)
         else
             # e.g. :loopinfo
-            return false
+            return (false, false)
         end
     end
-    return true
+    return (true, true)
 end
 
 function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
@@ -421,7 +430,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
                 stmt = node[:inst]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir)
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_flags(stmt, node[:type], ir)[1]
                     proven_pure = false
                     break
                 end
