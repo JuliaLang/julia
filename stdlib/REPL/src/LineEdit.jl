@@ -1085,8 +1085,9 @@ function edit_transpose_chars(s::MIState)
 end
 
 function edit_transpose_chars(buf::IOBuffer)
-    position(buf) == 0 && return false
+    # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
     eof(buf) && char_move_left(buf)
+    position(buf) == 0 && return false
     char_move_left(buf)
     pos = position(buf)
     a, b = read(buf, Char), read(buf, Char)
@@ -1646,7 +1647,7 @@ end
 throw_eager_redirection_cycle(key::Union{Char, String}) =
     error("Eager redirection cycle detected for key ", repr(key))
 throw_could_not_find_redirected_value(key::Union{Char, String}) =
-    error("Could not find redirected value ", repl(key))
+    error("Could not find redirected value ", repr(key))
 
 function keymap_unify(keymaps)
     ret = Dict{Char,Any}()

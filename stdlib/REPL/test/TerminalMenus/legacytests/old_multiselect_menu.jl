@@ -33,6 +33,6 @@ TerminalMenus.writeLine(buf, multi_menu, 1, true)
 
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), warn=false)
-@test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+@test simulate_input(multi_menu, :enter, :down, :enter, 'd') == Set([1,2])
 multi_menu = MultiSelectMenu(["single option"], warn=false)
-@test simulate_input(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')
+@test simulate_input(multi_menu, :up, :up, :down, :enter, 'd') == Set([1])

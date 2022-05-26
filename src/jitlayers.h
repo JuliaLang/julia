@@ -11,6 +11,7 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
+#include "debug-registry.h"
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -214,6 +215,10 @@ public:
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
+
+    JITDebugInfoRegistry &getDebugInfoRegistry() JL_NOTSAFEPOINT {
+        return DebugRegistry;
+    }
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
@@ -235,6 +240,8 @@ private:
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
+
+    JITDebugInfoRegistry DebugRegistry;
 
 #ifndef JL_USE_JITLINK
     std::shared_ptr<RTDyldMemoryManager> MemMgr;

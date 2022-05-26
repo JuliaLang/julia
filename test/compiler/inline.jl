@@ -1088,12 +1088,34 @@ recur_termination22(x) = x * recur_termination21(x-1)
     recur_termination21(12) + recur_termination22(12)
 end
 
-const ___CONST_DICT___ = Dict{Any,Any}(:a => 1, :b => 2)
-Base.@assume_effects :consistent :effect_free :terminates_globally consteval(
+const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
+Base.@assume_effects :total_may_throw concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
-    consteval(getindex, ___CONST_DICT___, :a)
+    concrete_eval(getindex, ___CONST_DICT___, :a)
 end
+
+# https://github.com/JuliaLang/julia/issues/44732
+struct Component44732
+    v
+end
+struct Container44732
+    x::Union{Nothing,Component44732}
+end
+
+# NOTE make sure to prevent inference bail out
+validate44732(::Component44732) = nothing
+validate44732(::Any) = error("don't erase this error!")
+
+function issue44732(c::Container44732)
+    validate44732(c.x)
+    return nothing
+end
+
+let src = code_typed1(issue44732, (Container44732,))
+    @test any(isinvoke(:validate44732), src.code)
+end
+@test_throws ErrorException("don't erase this error!") issue44732(Container44732(nothing))
 
 global x44200::Int = 0
 function f44200()

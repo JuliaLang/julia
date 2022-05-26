@@ -130,7 +130,7 @@ function show(io::IO, cmd::Cmd)
     print(io, '`')
     if print_cpus
         print(io, ", ")
-        show(io, collect(Int, cmd.cpus))
+        show(io, collect(Int, something(cmd.cpus)))
         print(io, ")")
     end
     print_env && (print(io, ","); show(io, cmd.env))

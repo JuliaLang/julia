@@ -1909,7 +1909,12 @@ f31404(a, b; kws...) = (a, b, values(kws))
 # issue #28992
 macro id28992(x) x end
 @test @id28992(1 .+ 2) == 3
-@test Meta.isexpr(Meta.lower(@__MODULE__, :(@id28992((.+)(a,b) = 0))), :error)
+@test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
+@test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
+let m = @__MODULE__
+    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\"")
+    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\"")
+end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
 @test @id28992(2 .^ -2) == 0.25
@@ -3269,3 +3274,17 @@ end
 # issue 44723
 demo44723()::Any = Base.Experimental.@opaque () -> true ? 1 : 2
 @test demo44723()() == 1
+
+# issue #45162
+f45162(f) = f(x=1)
+@test first(methods(f45162)).called != 0
+
+# issue #45024
+@test_throws ParseError("expected assignment after \"const\"") Meta.parse("const x")
+@test_throws ParseError("expected assignment after \"const\"") Meta.parse("const x::Int")
+# these cases have always been caught during lowering, since (const (global x)) is not
+# ambiguous with the lowered form (const x), but that could probably be changed.
+@test Meta.lower(@__MODULE__, :(global const x)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(global const x::Int)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(const global x)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(const global x::Int)) == Expr(:error, "expected assignment after \"const\"")

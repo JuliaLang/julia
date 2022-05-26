@@ -6,26 +6,17 @@ PCRE_CFLAGS := -O3
 PCRE_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://github.com/PhilipHazel/pcre2/releases/download/pcre2-$(PCRE_VER)/pcre2-$(PCRE_VER).tar.bz2
+	$(JLDOWNLOAD) $@ https://github.com/PCRE2Project/pcre2/releases/download/pcre2-$(PCRE_VER)/pcre2-$(PCRE_VER).tar.bz2
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
-	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/pcre2-$(PCRE_VER)/config.sub
 	echo 1 > $@
 
 checksum-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
-$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
-	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -d src/sljit -p2 -f < $(SRCDIR)/patches/pcre2-sljit-apple-silicon-support.patch
-	echo 1 > $@
-
-$(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied: $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied
-	cd $(SRCCACHE)/pcre2-$(PCRE_VER) && patch -d src/sljit -p2 -f < $(SRCDIR)/patches/pcre2-sljit-nomprotect.patch
-	echo 1 > $@
-
-$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-apple-silicon-support.patch-applied $(SRCCACHE)/pcre2-$(PCRE_VER)/pcre2-sljit-nomprotect.patch-applied
+$(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured: $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --enable-jit --includedir=$(build_includedir) CFLAGS="$(CFLAGS) $(PCRE_CFLAGS) -g -O0" LDFLAGS="$(LDFLAGS) $(PCRE_LDFLAGS)"

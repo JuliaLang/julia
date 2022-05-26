@@ -702,6 +702,23 @@ function f42645()
 end
 @test ((f42645()::B42645).y::A42645{Int}).x
 
+struct A44921{T}
+    x::T
+end
+function f44921(a)
+    if a == :x
+        A44921(_f) # _f purposefully undefined
+    elseif a == :p
+        g44921(a)
+    end
+end
+function g44921(a)
+    if !@isdefined _f # just needs to be some non constprop-able condition
+        A44921(())
+    end
+end
+@test f44921(:p) isa A44921
+
 # issue #43123
 @noinline cmp43123(a::Some, b::Some) = something(a) === something(b)
 @noinline cmp43123(a, b) = a[] === b[]
