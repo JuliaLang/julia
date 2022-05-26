@@ -23,7 +23,10 @@ function runtests(name, path, isolate=true; seed=nothing)
             seed != nothing && Random.seed!(seed)
             Base.include(m, "$path.jl")
         end
-        rss = Sys.maxrss()
+
+        # Force a GC so that `Sys.rss()` and `Sys.maxrss()` show independent pieces of information
+        GC.gc(true)
+
         #res_and_time_data[1] is the testset
         ts = res_and_time_data[1]
         passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
@@ -33,7 +36,9 @@ function runtests(name, path, isolate=true; seed=nothing)
                              res_and_time_data[3],
                              res_and_time_data[4],
                              res_and_time_data[5],
-                             rss)
+                             Sys.maxrss(),
+                             Sys.rss(),
+                             ccall((:jl_jit_total_bytes_impl, "libjulia-codegen"), Csize_t, ()))
         return res_and_time_data
     catch ex
         Test.TESTSET_PRINT_ENABLE[] = old_print_setting

@@ -141,10 +141,12 @@ cd(@__DIR__) do
     gc_align      = textwidth("GC (s)")
     percent_align = textwidth("GC %")
     alloc_align   = textwidth("Alloc (MB)")
-    rss_align     = textwidth("RSS (MB)")
+    rss_align     = textwidth("MRSS (MB)")
+    live_align    = textwidth("LIVE (MB)")
+    jit_align     = textwidth("JIT (MB)")
     printstyled(testgroupheader, color=:white)
     printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
-    printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)\n", color=:white)
+    printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB) | LIVE (MB) | JIT (MB)\n", color=:white)
     results = []
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
@@ -169,7 +171,11 @@ cd(@__DIR__) do
             alloc_str = @sprintf("%5.2f", resp[3] / 2^20)
             printstyled(lpad(alloc_str, alloc_align, " "), " | ", color=:white)
             rss_str = @sprintf("%5.2f", resp[6] / 2^20)
-            printstyled(lpad(rss_str, rss_align, " "), "\n", color=:white)
+            printstyled(lpad(rss_str, rss_align, " "), " | ", color=:white)
+            live_str = @sprintf("%5.2f", resp[7] / 2^20)
+            printstyled(lpad(live_str, live_align, " "), " | ", color=:white)
+            jit_str = @sprintf("%2.1f", resp[8] / 2^20)
+            printstyled(lpad(jit_str, jit_align, " "), "\n", color=:white)
         finally
             unlock(print_lock)
         end
@@ -282,7 +288,7 @@ cd(@__DIR__) do
                             end
                         else
                             print_testworker_stats(test, wrkr, resp)
-                            if resp[end] > max_worker_rss
+                            if resp[6] > max_worker_rss
                                 # the worker has reached the max-rss limit, recycle it
                                 # so future tests start with a smaller working set
                                 if n > 1
