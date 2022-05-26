@@ -1373,7 +1373,9 @@ isbanded(A::AbstractMatrix, kl::Integer, ku::Integer) = istriu(A, kl) && istril(
 """
     isdiag(A) -> Bool
 
-Test whether a matrix is diagonal.
+Test whether a matrix is diagonal in the sense that `iszero(A[i,j])` is true unless `i == j`.
+Note that it is not necessary for `A` to be square;
+if you would also like to check that, you need to check that `size(A, 1) == size(A, 2)`.
 
 # Examples
 ```jldoctest
@@ -1392,6 +1394,22 @@ julia> b = [im 0; 0 -im]
 
 julia> isdiag(b)
 true
+
+julia> c = [1 0 0; 0 2 0]
+2×3 Matrix{Int64}:
+ 1  0  0
+ 0  2  0
+
+julia> isdiag(c)
+true
+
+julia> d = [1 0 0; 0 2 3]
+2×3 Matrix{Int64}:
+ 1  0  0
+ 0  2  3
+
+julia> isdiag(d)
+false
 ```
 """
 isdiag(A::AbstractMatrix) = isbanded(A, 0, 0)

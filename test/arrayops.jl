@@ -1634,15 +1634,32 @@ end
 end
 
 @testset "isdiag, istril, istriu" begin
+    # Scalar
     @test isdiag(3)
     @test istril(4)
     @test istriu(5)
+
+    # Square matrix
     @test !isdiag([1 2; 3 4])
     @test !istril([1 2; 3 4])
     @test !istriu([1 2; 3 4])
     @test isdiag([1 0; 0 4])
     @test istril([1 0; 3 4])
     @test istriu([1 2; 0 4])
+
+    # Non-square matrix
+    @test !isdiag([1 2 0; 3 4 0])
+    @test !istril([1 2 0; 3 4 0])
+    @test !istriu([1 2 0; 3 4 0])
+    @test isdiag([1 0 0; 0 4 0])
+    @test istril([1 0 0; 3 4 0])
+    @test istriu([1 2 0; 0 4 0])
+    @test !isdiag([1 2 0; 3 4 1])
+    @test !istril([1 2 0; 3 4 1])
+    @test !istriu([1 2 0; 3 4 1])
+    @test !isdiag([1 0 0; 0 4 1])
+    @test !istril([1 0 0; 3 4 1])
+    @test istriu([1 2 0; 0 4 1])
 end
 
 # issue 4228
