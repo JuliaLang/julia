@@ -79,13 +79,15 @@
         ((char? e) (string "'" e "'"))
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
-         (string (deparse (cadr e)) '|.|
-                 (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                        (deparse-colon-dot (cadr (caddr e))))
-                       ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
-                        (deparse-colon-dot (cadr (cadr (caddr e)))))
-                       (else
-                        (string #\( (deparse (caddr e)) #\))))))
+         (if (length= e 2)
+             (string "(." (deparse (cadr e)) ")")
+             (string (deparse (cadr e)) '|.|
+                     (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
+                            (deparse-colon-dot (cadr (caddr e))))
+                           ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
+                            (deparse-colon-dot (cadr (cadr (caddr e)))))
+                           (else
+                            (string #\( (deparse (caddr e)) #\)))))))
         ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|) (eq? (car e) '-->))
@@ -141,7 +143,7 @@
            ((typed_hcat)  (string (deparse (cadr e))
                                   (deparse (cons 'hcat (cddr e)))))
            ((ncat)        (string #\[ (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " "))
-                                      (if (= (length (cddr e)) 1)
+                                      (if (<= (length (cddr e)) 1)
                                           (deparse-semicolons (cadr e))
                                           "") #\]))
            ((typed_ncat)  (string (deparse (cadr e))
@@ -177,7 +179,7 @@
                   (cdr e)
                   (list e)))
             (deparse-block (string (car e) " " (deparse (cadr e)))
-                           (block-stmts (caddr e))
+                           (if (null? (cddr e)) '() (block-stmts (caddr e)))
                            ilvl))
            ((return)         (string "return " (deparse (cadr e))))
            ((break continue) (string (car e)))
@@ -208,6 +210,13 @@
                                     (string " " (caddr e)))
                                 "\n"
                                 (indented-block (cdr (cadddr e)) ilvl))
+                        "")
+                    (if (length> e 5)
+                        (let ((els (cadddddr e)))
+                          (if (and (pair? els) (eq? (car els) 'block))
+                              (string (string.rep "    " ilvl) "else\n"
+                                      (indented-block (cdr els) ilvl))
+                              ""))
                         "")
                     (if (length> e 4)
                         (let ((fin (caddddr e)))
@@ -371,7 +380,7 @@
   (or (symbol? e) (decl? e)))
 
 (define (eventually-decl? e)
-  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
+  (or (symbol? e) (and (pair? e) (memq (car e) '(|::| atomic const)) (eventually-decl? (cadr e)))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 
@@ -438,7 +447,7 @@
   (if (dotop-named? e)
       (error (string "invalid function name \"" (deparse e) "\""))
       (if (pair? e)
-          (if (eq? (car e) '|.|)
+          (if (and (eq? (car e) '|.|) (length= e 3))
               (check-dotop (caddr e))
               (if (quoted? e)
                   (check-dotop (cadr e))))))
@@ -461,9 +470,6 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
-(define (complex-return? e) (and (return? e)
-                                 (let ((x (cadr e)))
-                                   (not (simple-atom? x)))))
 
 (define (tuple-call? e)
   (and (length> e 1)

@@ -41,7 +41,8 @@ static jl_sym_t *mk_symbol(const char *str, size_t len) JL_NOTSAFEPOINT
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked so that we won't look at it in the GC or write barrier.
     tag->header = ((uintptr_t)jl_symbol_type) | GC_OLD_MARKED;
-    sym->left = sym->right = NULL;
+    jl_atomic_store_relaxed(&sym->left, NULL);
+    jl_atomic_store_relaxed(&sym->right, NULL);
     sym->hash = hash_symbol(str, len);
     memcpy(jl_symbol_name(sym), str, len);
     jl_symbol_name(sym)[len] = 0;
@@ -87,15 +88,15 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT // (or throw)
     _Atomic(jl_sym_t*) *slot;
     jl_sym_t *node = symtab_lookup(&symtab, str, len, &slot);
     if (node == NULL) {
-        JL_LOCK_NOGC(&gc_perm_lock);
+        uv_mutex_lock(&gc_perm_lock);
         // Someone might have updated it, check and look up again
-        if (*slot != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
-            JL_UNLOCK_NOGC(&gc_perm_lock);
+        if (jl_atomic_load_relaxed(slot) != NULL && (node = symtab_lookup(slot, str, len, &slot))) {
+            uv_mutex_unlock(&gc_perm_lock);
             return node;
         }
         node = mk_symbol(str, len);
         jl_atomic_store_release(slot, node);
-        JL_UNLOCK_NOGC(&gc_perm_lock);
+        uv_mutex_unlock(&gc_perm_lock);
     }
     return node;
 }
@@ -119,12 +120,12 @@ JL_DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, size_t len)
 
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void)
 {
-    return symtab;
+    return jl_atomic_load_relaxed(&symtab);
 }
 
 static _Atomic(uint32_t) gs_ctr = 0;  // TODO: per-module?
-uint32_t jl_get_gs_ctr(void) { return gs_ctr; }
-void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
+uint32_t jl_get_gs_ctr(void) { return jl_atomic_load_relaxed(&gs_ctr); }
+void jl_set_gs_ctr(uint32_t ctr) { jl_atomic_store_relaxed(&gs_ctr, ctr); }
 
 JL_DLLEXPORT jl_sym_t *jl_gensym(void)
 {

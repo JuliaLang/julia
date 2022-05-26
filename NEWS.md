@@ -1,24 +1,26 @@
-Julia v1.8 Release Notes
+Julia v1.9 Release Notes
 ========================
-
 
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
-* `@inline` and `@noinline` annotations can be used within a function body to give an extra
-  hint about the inlining cost to the compiler. ([#41312])
-* `@inline` and `@noinline` annotations can now be applied to a function callsite or block
-  to enforce the involved function calls to be (or not to be) inlined. ([#41312])
-* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
-* New function `eachsplit(str)` for iteratively performing `split(str)`.
+* It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
+* Slurping in assignments is now also allowed in non-final position. This is
+  handled via `Base.split_rest`. ([#42902])
+* Character literals now support the same syntax allowed in string literals; i.e. the syntax can
+  represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
 
 Language changes
 ----------------
 
-* Newly created Task objects (`@spawn`, `@async`, etc.) now adopt the world-age for methods from their parent
-  Task upon creation, instead of using the global latest world at start. This is done to enable inference to
-  eventually optimize these calls. Places that wish for the old behavior may use `Base.invokelatest`. ([#41449])
+* New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
+  for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
+  `getfield`. ([#44137])
+* A few basic operators have been generalized to more naturally support vector space structures:
+  unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
+  binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
+  left- and right-division fall back to multiplication with the inverse from left and right,
+  respectively, as stated in the docstring. ([#44564])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -27,10 +29,22 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
+  process affinity which is set typically in HPC and cloud environments ([#42340]).
+* `--math-mode=fast` is now a no-op ([#41638]). Users are encouraged to use the @fastmath macro instead, which has more well-defined semantics.
+* The `--threads` command-line option now accepts `auto|N[,auto|M]` where `M` specifies the
+  number of interactive threads to create (`auto` currently means 1) ([#42302]).
+* New option `--heap-size-hint=<size>` gives a memory hint for triggering greedy garbage
+  collection. The size might be specified in bytes, kilobytes(1000k), megabytes(300M),
+  gigabytes(1.5G)
 
 Multi-threading changes
 -----------------------
 
+* `Threads.@spawn` now accepts an optional first argument: `:default` or `:interactive`.
+  An interactive task desires low latency and implicitly agrees to be short duration or to
+  yield frequently. Interactive tasks will run on interactive threads, if any are specified
+  when Julia is started ([#42302]).
 
 Build system changes
 --------------------
@@ -39,56 +53,63 @@ Build system changes
 New library functions
 ---------------------
 
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
+* `Iterators.flatmap` was added ([#44792]).
+* New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
+  inspecting which function `f` was originally wrapped. ([#42717])
 
-New library features
---------------------
+Library changes
+---------------
 
-* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
-  contains "some message" regardless of the specific exception type.
-  Regular expressions, lists of strings, and matching functions are also supported. ([#41888])
+* A known concurrency issue of `iterate` methods on `Dict` and other derived objects such
+  as `keys(::Dict)`, `values(::Dict)`, and `Set` is fixed.  These methods of `iterate` can
+  now be called on a dictionary or set shared by arbitrary tasks provided that there are no
+  tasks mutating the dictionary or set ([#44534]).
+* Predicate function negation `!f` now returns a composed function `(!) ∘ f` instead of an anonymous function ([#44752]).
+* `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
+* `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
+* `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
+* `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
+  a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 
 Standard library changes
 ------------------------
-
-* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
-* The `length` function on certain ranges of certain specific element types no longer checks for integer
-  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
-  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
-  constructing the range. ([#40382])
-* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
-* Intersect returns a result with the eltype of the type-promoted eltypes of the two inputs ([#41769]).
-
-#### InteractiveUtils
-* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
 
 #### Package Manager
 
 #### LinearAlgebra
 
+* The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector,
+  which were equivalent to `a * pinv(b)`, have been removed due to the
+  risk of confusion with elementwise division ([#44358]).
+* We are now wholly reliant on libblastrampoline (LBT) for calling
+  BLAS and LAPACK. OpenBLAS is shipped by default, but building the
+  system image with other BLAS/LAPACK libraries is not
+  supported. Instead, it is recommended that the LBT mechanism be used
+  for swapping BLAS/LAPACK with vendor provided ones. ([#44360])
+* `lu` now supports a new pivoting strategy `RowNonZero()` that chooses
+   the first non-zero pivot element, for use with new arithmetic types and for pedagogy ([#44571]).
+* `normalize(x, p=2)` now supports any normed vector space `x`, including scalars ([#44925]).
+
 #### Markdown
 
 #### Printf
-* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
-
-#### Profile
-* Profiling now records sample metadata including thread and task. `Profile.print()` has a new `groupby` kwarg that allows
-  grouping by thread, task, or nested thread/task, task/thread, and `threads` and `tasks` kwargs to allow filtering.
-  Further, percent utilization is now reported as a total or per-thread, based on whether the thread is idle or not at
-  each sample. `Profile.fetch()` by default strips out the new metadata to ensure backwards compatibility with external
-  profiling data consumers, but can be included with the `include_meta` kwarg. ([#41742])
 
 #### Random
 
+* `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).
+
 #### REPL
 
-* ` ?(x, y` followed by TAB displays all methods that can be called
-  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
-  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
-  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
-  to allow any compatible methods.
+* `Meta-e` now opens the current input in an editor. The content (if modified) will be
+  executed upon existing the editor.
 
 #### SparseArrays
+
+#### Test
+* New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
+  Set either via the `@testset` kwarg `failfast=true` or by setting env var `JULIA_TEST_FAILFAST`
+  to `"true"` i.e. in CI runs to request the job failure be posted eagerly when issues occur ([#45317])
 
 #### Dates
 
@@ -102,20 +123,28 @@ Standard library changes
 
 #### Distributed
 
+* The package environment (active project, `LOAD_PATH`, `DEPOT_PATH`) are now propagated
+  when adding *local* workers (e.g. with `addprocs(N::Int)` or through the `--procs=N`
+  command line flag) ([#43270]).
+* `addprocs` for local workers now accept the `env` keyword argument for passing
+  environment variables to the workers processes. This was already supported for
+  remote workers ([#43270]).
+
 #### UUIDs
+
+#### Unicode
+
+* `graphemes(s, m:n)` returns a substring of the `m`-th to `n`-th graphemes in `s` ([#44266]).
 
 #### Mmap
 
 #### DelimitedFiles
 
-#### Logging
-* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
-  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
-
 
 Deprecated or removed
 ---------------------
 
+* Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
 
 External dependencies
 ---------------------
@@ -123,6 +152,5 @@ External dependencies
 
 Tooling Improvements
 ---------------------
-
 
 <!--- generated by NEWS-update.jl: -->

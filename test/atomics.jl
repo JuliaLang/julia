@@ -370,3 +370,14 @@ let a = ARefxy(1, -1)
     @test_throws ConcurrencyViolationError @atomicreplace :not_atomic a.x xchg
     @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x xchg
 end
+
+# atomic getfield with boundcheck
+# via codegen
+getx(a, boundcheck) = getfield(a, :x, :sequentially_consistent, boundcheck)
+@test getx(ARefxy{Any}(42, 42), true) == 42
+@test getx(ARefxy{Any}(42, 42), false) == 42
+# via interpreter
+ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, true)
+@test ans == 42
+ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, false)
+@test ans == 42

@@ -28,7 +28,7 @@ julia> A = [1 2; 2 3]
  2  3
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 2×2 Tridiagonal{Float64, Vector{Float64}}:
  -0.333333  0.0
@@ -48,7 +48,7 @@ julia> d == S.D && u == S.U && p == S.p
 true
 
 julia> S = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 2×2 Tridiagonal{Float64, Vector{Float64}}:
  3.0   0.0
@@ -63,22 +63,25 @@ permutation:
  1
 ```
 """
-struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
+struct BunchKaufman{T,S<:AbstractMatrix,P<:AbstractVector{<:Integer}} <: Factorization{T}
     LD::S
-    ipiv::Vector{BlasInt}
+    ipiv::P
     uplo::Char
     symmetric::Bool
     rook::Bool
     info::BlasInt
 
-    function BunchKaufman{T,S}(LD, ipiv, uplo, symmetric, rook, info) where {T,S<:AbstractMatrix}
+    function BunchKaufman{T,S,P}(LD, ipiv, uplo, symmetric, rook, info) where {T,S<:AbstractMatrix,P<:AbstractVector}
         require_one_based_indexing(LD)
-        new(LD, ipiv, uplo, symmetric, rook, info)
+        new{T,S,P}(LD, ipiv, uplo, symmetric, rook, info)
     end
 end
-BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::AbstractChar, symmetric::Bool,
-             rook::Bool, info::BlasInt) where {T} =
-        BunchKaufman{T,typeof(A)}(A, ipiv, uplo, symmetric, rook, info)
+BunchKaufman(A::AbstractMatrix{T}, ipiv::AbstractVector{<:Integer}, uplo::AbstractChar,
+             symmetric::Bool, rook::Bool, info::BlasInt) where {T} =
+        BunchKaufman{T,typeof(A),typeof(ipiv)}(A, ipiv, uplo, symmetric, rook, info)
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(BunchKaufman(LD, ipiv, uplo, symmetric, rook, info) where {T,S},
+           BunchKaufman{T,S,typeof(ipiv)}(LD, ipiv, uplo, symmetric, rook, info))
 
 # iteration for destructuring into components
 Base.iterate(S::BunchKaufman) = (S.D, Val(:UL))
@@ -148,7 +151,7 @@ julia> A = [1 2; 2 3]
  2  3
 
 julia> S = bunchkaufman(A) # A gets wrapped internally by Symmetric(A)
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 2×2 Tridiagonal{Float64, Vector{Float64}}:
  -0.333333  0.0
@@ -173,7 +176,7 @@ julia> S.U*S.D*S.U' - S.P*A*S.P'
  0.0  0.0
 
 julia> S = bunchkaufman(Symmetric(A, :L))
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 2×2 Tridiagonal{Float64, Vector{Float64}}:
  3.0   0.0
@@ -194,7 +197,7 @@ julia> S.L*S.D*S.L' - A[S.p, S.p]
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
-    bunchkaufman!(copy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
+    bunchkaufman!(copymutable_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
 BunchKaufman{T}(B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)

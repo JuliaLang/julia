@@ -282,8 +282,8 @@ void gc_verify(jl_ptls_t ptls)
     }
     restore();
     gc_verify_track(ptls);
-    gc_debug_print_status();
-    gc_debug_critical_error();
+    jl_gc_debug_print_status();
+    jl_gc_debug_critical_error();
     abort();
 }
 #endif
@@ -467,10 +467,9 @@ static void gc_debug_alloc_init(jl_alloc_num_t *num, const char *name)
         return;
     if (*env == 'r') {
         env++;
-        srand((unsigned)uv_hrtime());
         for (int i = 0;i < 3;i++) {
             while (num->random[i] == 0) {
-                num->random[i] = rand();
+                num->random[i] = jl_rand();
             }
         }
     }
@@ -496,12 +495,12 @@ int gc_debug_check_pool(void)
     return gc_debug_alloc_check(&jl_gc_debug_env.pool);
 }
 
-int gc_debug_check_other(void)
+int jl_gc_debug_check_other(void)
 {
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void gc_debug_print_status(void)
+void jl_gc_debug_print_status(void)
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
@@ -510,9 +509,9 @@ void gc_debug_print_status(void)
                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void gc_debug_critical_error(void)
+void jl_gc_debug_critical_error(void)
 {
-    gc_debug_print_status();
+    jl_gc_debug_print_status();
     if (!jl_gc_debug_env.wait_for_debugger)
         return;
     jl_safe_printf("Waiting for debugger to attach\n");
@@ -521,11 +520,11 @@ void gc_debug_critical_error(void)
     }
 }
 
-void gc_debug_print(void)
+void jl_gc_debug_print(void)
 {
     if (!gc_debug_alloc_check(&jl_gc_debug_env.print))
         return;
-    gc_debug_print_status();
+    jl_gc_debug_print_status();
 }
 
 // a list of tasks for conservative stack scan during gc_scrub
@@ -582,7 +581,7 @@ static void gc_scrub_task(jl_task_t *ta)
 
     char *low;
     char *high;
-    if (ta->copy_stack && ptls2 && ta == ptls2->current_task) {
+    if (ta->copy_stack && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
         low  = (char*)ptls2->stackbase - ptls2->stacksize;
         high = (char*)ptls2->stackbase;
     }
@@ -593,7 +592,7 @@ static void gc_scrub_task(jl_task_t *ta)
     else
         return;
 
-    if (ptls == ptls2 && ptls2 && ta == ptls2->current_task) {
+    if (ptls == ptls2 && ptls2 && ta == jl_atomic_load_relaxed(&ptls2->current_task)) {
         // scan up to current `sp` for current thread and task
         low = (char*)jl_get_frame_addr();
     }
@@ -607,11 +606,11 @@ void gc_scrub(void)
     jl_gc_debug_tasks.len = 0;
 }
 #else
-void gc_debug_critical_error(void)
+void jl_gc_debug_critical_error(void)
 {
 }
 
-void gc_debug_print_status(void)
+void jl_gc_debug_print_status(void)
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
@@ -977,9 +976,25 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
                    sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
+
+void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
+                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t pause)
+{
+    if (sweep_full > 0)
+        jl_safe_printf("TS: %" PRIu64 " Major collection: estimate freed = %" PRIu64
+                       " live = %" PRIu64 "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
+                       end - start, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000 );
+    else
+        jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64 " live = %" PRIu64
+                       "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
+                       end - start, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000 );
+}
 #endif
 
-void gc_debug_init(void)
+void jl_gc_debug_init(void)
 {
 #ifdef GC_DEBUG_ENV
     char *env = getenv("JULIA_GC_NO_GENERATIONAL");
@@ -1378,6 +1393,23 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
         }
     }
     jl_set_safe_restore(old_buf);
+}
+
+static int gc_logging_enabled = 0;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
+    gc_logging_enabled = enable;
+}
+
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT {
+    if (!gc_logging_enabled) {
+        return;
+    }
+    jl_safe_printf("GC: pause %.2fms. collected %fMB. %s %s\n",
+        pause/1e6, freed/1e6,
+        full ? "full" : "incr",
+        recollect ? "recollect" : ""
+    );
 }
 
 #ifdef __cplusplus

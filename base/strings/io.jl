@@ -15,7 +15,7 @@ avoid Julia-specific details.
 For example, `show` displays strings with quotes, and `print` displays strings
 without quotes.
 
-See also [`println`](@ref), [`string`](@ref).
+See also [`println`](@ref), [`string`](@ref), [`printstyled`](@ref).
 
 # Examples
 ```jldoctest
@@ -56,6 +56,8 @@ end
 
 Print (using [`print`](@ref)) `xs` to `io` followed by a newline.
 If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
+
+See also [`printstyled`](@ref) to add colors etc.
 
 # Examples
 ```jldoctest
@@ -207,7 +209,7 @@ function show(
 
     # early out for short strings
     len = ncodeunits(str)
-    len ≤ limit - 2 && # quote chars
+    len ≤ limit - 2 && # quote chars
         return show(io, str)
 
     # these don't depend on string data

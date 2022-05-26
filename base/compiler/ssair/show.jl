@@ -47,7 +47,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
         sig = linfo.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(linfo.specTypes).parameters::Core.SimpleVector
-        print_arg(i) = sprint() do io
+        print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
                 print(io, "::", sig[i - 1])
@@ -82,7 +82,7 @@ function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::Strin
     args = String[let
         e = stmt.edges[i]
         v = !isassigned(stmt.values, i) ? "#undef" :
-            sprint() do io′
+            sprint(; context=io) do io′
                 show_unquoted(io′, stmt.values[i], indent)
             end
         "$prefix$e => $v"
@@ -382,7 +382,7 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                     # if so, drop all existing calls to it from the top of the context
                     # AND check if instead the context was previously printed that way
                     # but now has removed the recursive frames
-                    let method = method_name(context[nctx])
+                    let method = method_name(context[nctx]) # last matching frame
                         if (nctx < nframes && method_name(DI[nframes - nctx]) === method) ||
                            (nctx < length(context) && method_name(context[nctx + 1]) === method)
                             update_line_only = true
@@ -391,8 +391,15 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
                             end
                         end
                     end
-                elseif length(context) > 0
-                    update_line_only = true
+                end
+                # look at the first non-matching element to see if we are only changing the line number
+                if !update_line_only && nctx < length(context) && nctx < nframes
+                    let CtxLine = context[nctx + 1],
+                        FrameLine = DI[nframes - nctx]
+                        if method_name(CtxLine) === method_name(FrameLine)
+                            update_line_only = true
+                        end
+                    end
                 end
             elseif nctx < length(context) && nctx < nframes
                 # look at the first non-matching element to see if we are only changing the line number
@@ -622,8 +629,10 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
 
         @assert new_node_inst !== UNDEF # we filtered these out earlier
         show_type = should_print_ssa_type(new_node_inst)
-        with_output_color(:green, io) do io′
-            print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+        let maxlength_idx=maxlength_idx, show_type=show_type
+            with_output_color(:green, io) do io′
+                print_stmt(io′, node_idx, new_node_inst, used, maxlength_idx, false, show_type)
+            end
         end
 
         if new_node_type === UNDEF # try to be robust against errors
@@ -779,6 +788,24 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
     max_bb_idx_size = length(string(length(cfg.blocks)))
     config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
     nothing
+end
+
+tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
+tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :orange
+
+function Base.show(io::IO, e::Core.Compiler.Effects)
+    print(io, "(")
+    printstyled(io, string(tristate_letter(e.consistent), 'c'); color=tristate_color(e.consistent))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.effect_free), 'e'); color=tristate_color(e.effect_free))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.nothrow), 'n'); color=tristate_color(e.nothrow))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.terminates), 't'); color=tristate_color(e.terminates))
+    print(io, ',')
+    printstyled(io, string(tristate_letter(e.notaskstate), 's'); color=tristate_color(e.notaskstate))
+    print(io, ')')
+    e.nonoverlayed || printstyled(io, '′'; color=:red)
 end
 
 @specialize

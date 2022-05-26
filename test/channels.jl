@@ -2,6 +2,7 @@
 
 using Random
 using Base: Experimental
+using Base: n_avail
 
 @testset "single-threaded Condition usage" begin
     a = Condition()
@@ -274,21 +275,8 @@ end
         end
     end
 
-    try
-        timedwait(failure_cb(1), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
-
-    try
-        timedwait(failure_cb(2), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(1), 0)
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(2), 0)
 
     # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
     # doesn't exceed a maximum duration but that would require guarantees from the OS.
@@ -577,4 +565,44 @@ let c = Channel(3)
     @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
     close(c)
     @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
+end
+
+# PR #41833: data races in Channel
+@testset "n_avail(::Channel)" begin
+    # Buffered: n_avail() = buffer length + number of waiting tasks
+    let c = Channel(2)
+        @test n_avail(c) == 0;   put!(c, 0)
+        @test n_avail(c) == 1;   put!(c, 0)
+        @test n_avail(c) == 2;   t1 = @task put!(c, 0); yield(t1)
+        @test n_avail(c) == 3;   t2 = @task put!(c, 0); yield(t2)
+        @test n_avail(c) == 4
+        # Test n_avail(c) after interrupting a task waiting on the channel
+                                t3 = @task put!(c, 0)
+                                yield(t3)
+        @test n_avail(c) == 5
+                                @async Base.throwto(t3, ErrorException("Exit put!"))
+                                try wait(t3) catch end
+        @test n_avail(c) == 4
+                                close(c)
+                                try wait(t1) catch end
+                                try wait(t2) catch end
+        @test n_avail(c) == 2    # Already-buffered items remain
+    end
+    # Unbuffered: n_avail() = number of waiting tasks
+    let c = Channel()
+        @test n_avail(c) == 0;   t1 = @task put!(c, 0); yield(t1)
+        @test n_avail(c) == 1;   t2 = @task put!(c, 0); yield(t2)
+        @test n_avail(c) == 2
+        # Test n_avail(c) after interrupting a task waiting on the channel
+                                t3 = @task put!(c, 0)
+                                yield(t3)
+        @test n_avail(c) == 3
+                                @async Base.throwto(t3, ErrorException("Exit put!"))
+                                try wait(t3) catch end
+        @test n_avail(c) == 2
+                                close(c)
+                                try wait(t1) catch end
+                                try wait(t2) catch end
+        @test n_avail(c) == 0
+    end
 end

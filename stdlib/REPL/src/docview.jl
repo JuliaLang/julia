@@ -283,7 +283,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Fields")
             println(io, "```")
             pad = maximum(length(string(f)) for f in fieldnames(T))
-            for (f, t) in zip(fieldnames(T), T.types)
+            for (f, t) in zip(fieldnames(T), fieldtypes(T))
                 println(io, rpad(f, pad), " :: ", t)
             end
             println(io, "```")
@@ -720,7 +720,19 @@ accessible(mod::Module) =
            map(names, moduleusings(mod))...;
            collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
 
-doc_completions(name) = fuzzysort(name, accessible(Main))
+function doc_completions(name)
+    res = fuzzysort(name, accessible(Main))
+
+    # to insert an entry like `raw""` for `"@raw_str"` in `res`
+    ms = match.(r"^@(.*?)_str$", res)
+    idxs = findall(!isnothing, ms)
+
+    # avoid messing up the order while inserting
+    for i in reverse(idxs)
+        insert!(res, i, "$(only(ms[i].captures))\"\"")
+    end
+    res
+end
 doc_completions(name::Symbol) = doc_completions(string(name))
 
 
@@ -800,6 +812,11 @@ stripmd(x::Markdown.Table) =
 Search available docstrings for entries containing `pattern`.
 
 When `pattern` is a string, case is ignored. Results are printed to `io`.
+
+`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
+```
+help?> "pattern"
+```
 """
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))

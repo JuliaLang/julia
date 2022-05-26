@@ -12,13 +12,13 @@ begin
     f265a(x::Any) = 1
     @test g265a() == 1
     @test Base.return_types(g265a, ()) == Any[Int]
-    @test Core.Compiler.return_type(g265a, ()) == Int
+    @test Core.Compiler.return_type(g265a, Tuple{}) == Int
 
     f265a(x::Any) = 2.0
     @test g265a() == 2.0
 
     @test Base.return_types(g265a, ()) == Any[Float64]
-    @test Core.Compiler.return_type(g265a, ()) == Float64
+    @test Core.Compiler.return_type(g265a, Tuple{}) == Float64
 end
 
 # test signature widening
@@ -29,13 +29,13 @@ begin
     end
     @test g265b(1) == 1
     @test Base.return_types(g265b, (Int,)) == Any[Int]
-    @test Core.Compiler.return_type(g265b, (Int,)) == Int
+    @test Core.Compiler.return_type(g265b, Tuple{Int,}) == Int
 
     f265b(x::Any) = 2.0
     @test g265b(1) == 1
     @test g265b(2) == 2.0
     @test Base.return_types(g265b, (Int,)) == Any[Union{Int, Float64}]
-    @test Core.Compiler.return_type(g265b, (Int,)) == Union{Int, Float64}
+    @test Core.Compiler.return_type(g265b, Tuple{Int,}) == Union{Int, Float64}
 end
 
 # test signature narrowing
@@ -44,13 +44,13 @@ begin
     f265c(x::Any) = 1
     @test g265c() == 1
     @test Base.return_types(g265c, ()) == Any[Int]
-    @test Core.Compiler.return_type(g265c, ()) == Int
+    @test Core.Compiler.return_type(g265c, Tuple{}) == Int
 
     f265c(x::Int) = 2.0
     @test g265c() == 2.0
 
     @test Base.return_types(g265c, ()) == Any[Float64]
-    @test Core.Compiler.return_type(g265c, ()) == Float64
+    @test Core.Compiler.return_type(g265c, Tuple{}) == Float64
 end
 
 # test constructor narrowing
@@ -78,7 +78,7 @@ end
 @test_throws MethodError B265_(2)
 @test_throws MethodError B265_(3)
 @test Base.return_types(B265_, (Int,)) == Any[B265{Int}]
-@test Core.Compiler.return_type(B265_, (Int,)) == B265{Int}
+@test Core.Compiler.return_type(B265_, Tuple{Int,}) == B265{Int}
 
   # add new constructors
 B265(x::Float64, dummy::Nothing) = B265{Float64}(x, dummy)
@@ -90,7 +90,7 @@ B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 @test (B265_(3)::B265{UInt8}).field1 === 0x03
 
 @test B265{UInt8} <: only(Base.return_types(B265_, (Int,))) <: B265
-@test B265{UInt8} <: Core.Compiler.return_type(B265_, (Int,)) <: B265
+@test B265{UInt8} <: Core.Compiler.return_type(B265_, Tuple{Int,}) <: B265
 
 
 # test oldworld call / inference
@@ -136,15 +136,15 @@ f265(::Int) = 1
 @test put_n_take!(tls_world_age, ()) == wc265
 
 @test g265() == Int[1, 1, 1]
-@test Core.Compiler.return_type(f265, (Any,)) == Union{Float64, Int}
-@test Core.Compiler.return_type(f265, (Int,)) == Int
-@test Core.Compiler.return_type(f265, (Float64,)) == Float64
+@test Core.Compiler.return_type(f265, Tuple{Any,}) == Union{Float64, Int}
+@test Core.Compiler.return_type(f265, Tuple{Int,}) == Int
+@test Core.Compiler.return_type(f265, Tuple{Float64,}) == Float64
 
 @test put_n_take!(g265, ()) == Float64[1.0, 1.0, 1.0]
-@test put_n_take!(Core.Compiler.return_type, (f265, (Any,))) == Float64
-@test put_n_take!(Core.Compiler.return_type, (f265, (Int,))) == Float64
-@test put_n_take!(Core.Compiler.return_type, (f265, (Float64,))) == Float64
-@test put_n_take!(Core.Compiler.return_type, (f265, (Float64,))) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Any,})) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Int,})) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Float64,})) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Float64,})) == Float64
 
 # test that reflection ignores worlds
 @test Base.return_types(f265, (Any,)) == Any[Int, Float64]
@@ -152,7 +152,9 @@ f265(::Int) = 1
 
 # test for method errors
 h265() = true
-loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+loc_h265 = "$file:$(@__LINE__() - 3)"
 @test h265()
 @test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)
@@ -189,7 +191,7 @@ f_gen265(x::Type{Int}) = 3
 # intermediate worlds by later additions to the method table that
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
-g26506(x) = f26506(x[1])
+g26506(x) = Base.inferencebarrier(f26506)(x[1])
 z = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z) # Places an entry for f26506(::String) in mt.name.cache

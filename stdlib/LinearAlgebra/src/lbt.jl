@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## This file contains libblastrampoline-specific APIs
 
 # Keep these in sync with `src/libblastrampoline_internal.h`
@@ -7,7 +9,9 @@ struct lbt_library_info_t
     suffix::Cstring
     active_forwards::Ptr{UInt8}
     interface::Int32
+    complex_retstyle::Int32
     f2c::Int32
+    cblas::Int32
 end
 const LBT_INTERFACE_LP64    = 32
 const LBT_INTERFACE_ILP64   = 64
@@ -29,13 +33,35 @@ const LBT_F2C_MAP = Dict(
 )
 const LBT_INV_F2C_MAP = Dict(v => k for (k, v) in LBT_F2C_MAP)
 
+const LBT_COMPLEX_RETSTYLE_NORMAL   =  0
+const LBT_COMPLEX_RETSTYLE_ARGUMENT =  1
+const LBT_COMPLEX_RETSTYLE_UNKNOWN  = -1
+const LBT_COMPLEX_RETSTYLE_MAP = Dict(
+    LBT_COMPLEX_RETSTYLE_NORMAL   => :normal,
+    LBT_COMPLEX_RETSTYLE_ARGUMENT => :argument,
+    LBT_COMPLEX_RETSTYLE_UNKNOWN  => :unknown,
+)
+const LBT_INV_COMPLEX_RETSTYLE_MAP = Dict(v => k for (k, v) in LBT_COMPLEX_RETSTYLE_MAP)
+
+const LBT_CBLAS_CONFORMANT =  0
+const LBT_CBLAS_DIVERGENT  =  1
+const LBT_CBLAS_UNKNOWN    = -1
+const LBT_CBLAS_MAP = Dict(
+    LBT_CBLAS_CONFORMANT => :conformant,
+    LBT_CBLAS_DIVERGENT  => :divergent,
+    LBT_CBLAS_UNKNOWN    => :unknown,
+)
+const LBT_INV_CBLAS_MAP = Dict(v => k for (k, v) in LBT_CBLAS_MAP)
+
 struct LBTLibraryInfo
     libname::String
     handle::Ptr{Cvoid}
     suffix::String
     active_forwards::Vector{UInt8}
     interface::Symbol
+    complex_retstyle::Symbol
     f2c::Symbol
+    cblas::Symbol
 
     function LBTLibraryInfo(lib_info::lbt_library_info_t, num_exported_symbols::UInt32)
         return new(
@@ -44,7 +70,9 @@ struct LBTLibraryInfo
             unsafe_string(lib_info.suffix),
             unsafe_wrap(Vector{UInt8}, lib_info.active_forwards, div(num_exported_symbols,8)+1),
             LBT_INTERFACE_MAP[lib_info.interface],
+            LBT_COMPLEX_RETSTYLE_MAP[lib_info.complex_retstyle],
             LBT_F2C_MAP[lib_info.f2c],
+            LBT_CBLAS_MAP[lib_info.cblas],
         )
     end
 end
@@ -110,7 +138,9 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTLibraryInfo
     summary(io, lbt); println(io)
     println(io, "├ Library: ", basename(lbt.libname))
     println(io, "├ Interface: ", lbt.interface)
-      print(io, "└ F2C: ", lbt.f2c)
+    println(io, "├ Complex return style: ", lbt.complex_retstyle)
+    println(io, "├ F2C: ", lbt.f2c)
+      print(io, "└ CBLAS: ", lbt.cblas)
 end
 
 function Base.show(io::IO, lbt::LBTConfig)
@@ -141,9 +171,32 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
     end
 end
 
+mutable struct ConfigCache
+    @atomic config::Union{Nothing,LBTConfig}
+    lock::ReentrantLock
+end
+
+# In the event that users want to call `lbt_get_config()` multiple times (e.g. for
+# runtime checks of which BLAS vendor is providing a symbol), let's cache the value
+# and clear it only when someone calls something that would cause it to change.
+const _CACHED_CONFIG = ConfigCache(nothing, ReentrantLock())
+
 function lbt_get_config()
-    config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
-    return LBTConfig(unsafe_load(config_ptr))
+    config = @atomic :acquire _CACHED_CONFIG.config
+    config === nothing || return config
+    return lock(_CACHED_CONFIG.lock) do
+        local config = @atomic :monotonic _CACHED_CONFIG.config
+        config === nothing || return config
+        config_ptr = ccall((:lbt_get_config, libblastrampoline), Ptr{lbt_config_t}, ())
+        @atomic :release _CACHED_CONFIG.config = LBTConfig(unsafe_load(config_ptr))
+    end
+end
+
+function _clear_config_with(f)
+    lock(_CACHED_CONFIG.lock) do
+        @atomic :release _CACHED_CONFIG.config = nothing
+        f()
+    end
 end
 
 function lbt_get_num_threads()
@@ -154,12 +207,16 @@ function lbt_set_num_threads(nthreads)
     return ccall((:lbt_set_num_threads, libblastrampoline), Cvoid, (Int32,), nthreads)
 end
 
-function lbt_forward(path; clear::Bool = false, verbose::Bool = false)
-    ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32), path, clear ? 1 : 0, verbose ? 1 : 0)
+function lbt_forward(path; clear::Bool = false, verbose::Bool = false, suffix_hint::Union{String,Nothing} = nothing)
+    _clear_config_with() do
+        return ccall((:lbt_forward, libblastrampoline), Int32, (Cstring, Int32, Int32, Cstring), path, clear ? 1 : 0, verbose ? 1 : 0, something(suffix_hint, C_NULL))
+    end
 end
 
 function lbt_set_default_func(addr)
-    return ccall((:lbt_set_default_func, libblastrampoline), Cvoid, (Ptr{Cvoid},), addr)
+    _clear_config_with() do
+        return ccall((:lbt_set_default_func, libblastrampoline), Cvoid, (Ptr{Cvoid},), addr)
+    end
 end
 
 function lbt_get_default_func()
@@ -208,20 +265,31 @@ end
 ## NOTE: Manually setting forwards is referred to as the 'footgun API'.  It allows truly
 ## bizarre and complex setups to be created.  If you run into strange errors while using
 ## it, the first thing you should ask yourself is whether you've set things up properly.
-function lbt_set_forward(symbol_name, addr, interface, f2c = LBT_F2C_PLAIN; verbose::Bool = false)
-    return ccall(
-        (:lbt_set_forward, libblastrampoline),
-        Int32,
-        (Cstring, Ptr{Cvoid}, Int32, Int32, Int32),
-        string(symbol_name),
-        addr,
-        Int32(interface),
-        Int32(f2c),
-        verbose ? Int32(1) : Int32(0),
-    )
+function lbt_set_forward(symbol_name, addr, interface,
+                         complex_retstyle = LBT_COMPLEX_RETSTYLE_NORMAL,
+                         f2c = LBT_F2C_PLAIN; verbose::Bool = false)
+    _clear_config_with() do
+        return ccall(
+            (:lbt_set_forward, libblastrampoline),
+            Int32,
+            (Cstring, Ptr{Cvoid}, Int32, Int32, Int32, Int32),
+            string(symbol_name),
+            addr,
+            Int32(interface),
+            Int32(complex_retstyle),
+            Int32(f2c),
+            verbose ? Int32(1) : Int32(0),
+        )
+    end
 end
-function lbt_set_forward(symbol_name, addr, interface::Symbol, f2c::Symbol = :plain; kwargs...)
-    return lbt_set_forward(symbol_name, addr, LBT_INV_INTERFACE_MAP[interface], LBT_INV_F2C_MAP[f2c]; kwargs...)
+function lbt_set_forward(symbol_name, addr, interface::Symbol,
+                         complex_retstyle::Symbol = :normal,
+                         f2c::Symbol = :plain; kwargs...)
+    return lbt_set_forward(symbol_name, addr,
+                           LBT_INV_INTERFACE_MAP[interface],
+                           LBT_INV_COMPLEX_RETSTYLE_MAP[complex_retstyle],
+                           LBT_INV_F2C_MAP[f2c];
+                           kwargs...)
 end
 
 function lbt_get_forward(symbol_name, interface, f2c = LBT_F2C_PLAIN)

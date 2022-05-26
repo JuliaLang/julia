@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 #include "../../src/support/platform.h"
 
 // Preprocessor annoyances

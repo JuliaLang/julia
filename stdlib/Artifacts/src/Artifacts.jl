@@ -272,17 +272,17 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict{Symbol, String}()
+    tags = Dict{String, String}()
     for (k, v) in entry
         if v isa String
-            tags[Symbol(k)] = v
+            tags[k] = v
         end
     end
     # Removing some known entries that shouldn't be passed through `tags`
-    delete!(tags, :os)
-    delete!(tags, :arch)
-    delete!(tags, Symbol("git-tree-sha1"))
-    return Platform(entry["arch"], entry["os"]; tags...)
+    delete!(tags, "os")
+    delete!(tags, "arch")
+    delete!(tags, "git-tree-sha1")
+    return Platform(entry["arch"], entry["os"], tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -524,9 +524,10 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
-    if haskey(Base.module_keys, __module__)
+    moduleroot = Base.moduleroot(__module__)
+    if haskey(Base.module_keys, moduleroot)
         # Process overrides for this UUID, if we know what it is
-        process_overrides(artifact_dict, Base.module_keys[__module__].uuid)
+        process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
     end
 
     # If the artifact exists, we're in the happy path and we can immediately
@@ -717,5 +718,10 @@ split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
     artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+
+# Precompilation to reduce latency
+precompile(load_artifacts_toml, (String,))
+precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
+precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 
 end # module Artifacts

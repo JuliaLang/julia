@@ -152,6 +152,7 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::DimensionMismatch) = print(io, "DimensionMismatch: ", ex.msg)
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
@@ -168,6 +169,10 @@ function showerror(io::IO, ex::InexactError)
     nameof(ex.T) === ex.func || print(io, ex.T, ", ")
     print(io, ex.val, ')')
     Experimental.show_error_hints(io, ex)
+end
+
+function showerror(io::IO, ex::CanonicalIndexError)
+    print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
 end
 
 typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
@@ -267,8 +272,7 @@ function showerror(io::IO, ex::MethodError)
         if !isempty(kwargs)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "=")
-                show(IOContext(io, :limit => true), v)
+                print(io, k, "::", typeof(v))
                 i == length(kwargs)::Int || print(io, ", ")
             end
         end
@@ -345,13 +349,15 @@ function showerror_ambiguous(io::IO, meth, f, args)
         sigfix = typeintersect(m.sig, sigfix)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
-        if all(m->morespecific(sigfix, m.sig), meth)
-            print(io, "\nPossible fix, define\n  ")
-            Base.show_tuple_as_call(io, :function,  sigfix)
-        else
-            println(io)
-            print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
-            print(io, "adding a new method more specific than any of the existing applicable methods.")
+        let sigfix=sigfix
+            if all(m->morespecific(sigfix, m.sig), meth)
+                print(io, "\nPossible fix, define\n  ")
+                Base.show_tuple_as_call(io, :function,  sigfix)
+            else
+                println(io)
+                print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
+                print(io, "adding a new method more specific than any of the existing applicable methods.")
+            end
         end
     end
     nothing
@@ -366,6 +372,13 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_static_show, Csize_t, (Ptr{Cvoid},Any), stderr_stream, err)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
+
+stacktrace_expand_basepaths()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
+stacktrace_contract_userdir()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
+stacktrace_linebreaks()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
@@ -395,7 +408,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
             tv = Any[]
-            sig0 = method.sig
+            if func isa Core.OpaqueClosure
+                sig0 = signature_type(func, typeof(func).parameters[1])
+            else
+                sig0 = method.sig
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 iob = IOContext(iob, :unionall_env => sig0.var)
@@ -494,7 +511,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 print(iob, ")")
                 show_method_params(iob0, tv)
-                print(iob, " at ", method.file, ":", method.line)
+                file, line = updated_methodloc(method)
+                if file === nothing
+                    file = string(method.file)
+                end
+                stacktrace_contract_userdir() && (file = contractuser(file))
+                print(iob, " at ", file, ":", line)
                 if !isempty(kwargs)::Bool
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
@@ -553,13 +575,6 @@ const update_stackframes_callback = Ref{Function}(identity)
 
 const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
-
-stacktrace_expand_basepaths()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
-stacktrace_contract_userdir()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
-stacktrace_linebreaks()::Bool =
-    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_frames = length(trace)
@@ -689,6 +704,7 @@ end
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
     file, line = string(frame.file), frame.line
+    file = fixup_stdlib_path(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = contractuser(file))
 

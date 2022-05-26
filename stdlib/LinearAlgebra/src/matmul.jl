@@ -1,17 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Matrix-matrix multiplication
+
+AdjOrTransStridedMat{T} = Union{Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
+
 # matmul.jl: Everything to do with dense matrix multiplication
 
 matprod(x, y) = x*y + x*y
 
 # dot products
 
-dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
-dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
+dot(x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasReal} = BLAS.dot(x, y)
+dot(x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
 function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
-        throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -24,7 +29,7 @@ end
 
 function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasComplex,TI<:Integer}
     if length(rx) != length(ry)
-        throw(DimensionMismatch("length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
     end
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
@@ -59,18 +64,19 @@ end
 @inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
              alpha::Number, beta::Number) where {T<:BlasFloat} =
     gemv!(y, 'N', A, x, alpha, beta)
-# Complex matrix times real vector. Reinterpret the matrix as a real matrix and do real matvec compuation.
-for elty in (Float32,Float64)
-    @eval begin
-        @inline function mul!(y::StridedVector{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, x::StridedVector{$elty},
-                              alpha::Real, beta::Real)
-            Afl = reinterpret($elty, A)
-            yfl = reinterpret($elty, y)
-            mul!(yfl, Afl, x, alpha, beta)
-            return y
-        end
-    end
-end
+
+# Complex matrix times real vector.
+# Reinterpret the matrix as a real matrix and do real matvec compuation.
+@inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+        alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemv!(y, 'N', A, x, alpha, beta)
+
+# Real matrix times complex vector.
+# Multiply the matrix with the real and imaginary parts separately
+@inline mul!(y::StridedVector{Complex{T}}, A::StridedMaybeAdjOrTransMat{T}, x::StridedVector{Complex{T}},
+        alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemv!(y, A isa StridedArray ? 'N' : 'T', A isa StridedArray ? A : parent(A), x, alpha, beta)
+
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
              alpha::Number, beta::Number) =
     generic_matvecmul!(y, 'N', A, x, MulAddMul(alpha, beta))
@@ -113,7 +119,9 @@ end
 (*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
 (*)(x::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A)*transpose(x))
 
-# Matrix-matrix multiplication
+_parent(A) = A
+_parent(A::Adjoint) = parent(A)
+_parent(A::Transpose) = parent(A)
 
 """
     *(A::AbstractMatrix, B::AbstractMatrix)
@@ -130,18 +138,22 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), A, B)
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
 end
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
-function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasFloat})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, _parent(B))))
 end
-function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMatrix{<:BlasComplex})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasComplex})
     TS = promote_type(eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A,1), size(B,2))), convert(AbstractArray{TS}, A), convert(AbstractArray{TS}, B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         wrapperop(A)(convert(AbstractArray{TS}, _parent(A))),
+         wrapperop(B)(convert(AbstractArray{TS}, _parent(B))))
 end
 
 @inline function mul!(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
@@ -150,17 +162,28 @@ end
 end
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
-for elty in (Float32,Float64)
-    @eval begin
-        @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, B::StridedVecOrMat{$elty},
-                              alpha::Real, beta::Real)
-            Afl = reinterpret($elty, A)
-            Cfl = reinterpret($elty, C)
-            mul!(Cfl, Afl, B, alpha, beta)
-            return C
-        end
-    end
+function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         convert(AbstractArray{TS}, A),
+         wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
 end
+function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+    TS = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, TS, (size(A, 1), size(B, 2))),
+         copymutable_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
+         wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
+end
+# the following case doesn't seem to benefit from the translation A*B = (B' * A')'
+function (*)(A::StridedMatrix{<:BlasReal}, B::StridedMatrix{<:BlasComplex})
+    temp = real(B)
+    R = A * temp
+    temp .= imag.(B)
+    I = A * temp
+    Complex.(R, I)
+end
+(*)(A::AdjOrTransStridedMat{<:BlasReal}, B::StridedMatrix{<:BlasComplex}) = copy(transpose(transpose(B) * parent(A)))
+(*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::AdjOrTransStridedMat{<:BlasComplex}) = copy(wrapperop(B)(parent(B) * transpose(A)))
 
 """
     muladd(A, y, z)
@@ -212,8 +235,6 @@ Base.muladd(x::AdjointAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrM
     muladd(A', x', z')'
 Base.muladd(x::TransposeAbsVec, A::AbstractMatrix, z::Union{Number, AbstractVecOrMat}) =
     transpose(muladd(transpose(A), transpose(x), transpose(z)))
-
-StridedMaybeAdjOrTransMat{T} = Union{StridedMatrix{T}, Adjoint{T, <:StridedMatrix}, Transpose{T, <:StridedMatrix}}
 
 function Base.muladd(A::StridedMaybeAdjOrTransMat{<:Number}, y::AbstractVector{<:Number}, z::Union{Number, AbstractVector})
     T = promote_type(eltype(A), eltype(y), eltype(z))
@@ -370,18 +391,14 @@ end
         return gemm_wrapper!(C, 'N', 'T', A, B, MulAddMul(alpha, beta))
     end
 end
-# Complex matrix times transposed real matrix. Reinterpret the first matrix to real for efficiency.
-for elty in (Float32,Float64)
-    @eval begin
-        @inline function mul!(C::StridedMatrix{Complex{$elty}}, A::StridedVecOrMat{Complex{$elty}}, tB::Transpose{<:Any,<:StridedVecOrMat{$elty}},
-                         alpha::Real, beta::Real)
-            Afl = reinterpret($elty, A)
-            Cfl = reinterpret($elty, C)
-            mul!(Cfl, Afl, tB, alpha, beta)
-            return C
-        end
-    end
-end
+# Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
+@inline mul!(C::StridedMatrix{Complex{T}}, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+                    alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemm_wrapper!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+@inline mul!(C::StridedMatrix{Complex{T}}, A::StridedVecOrMat{Complex{T}}, tB::Transpose{<:Any,<:StridedVecOrMat{T}},
+                    alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemm_wrapper!(C, 'N', 'T', A, parent(tB), MulAddMul(alpha, beta))
+
 # collapsing the following two defs with C::AbstractVecOrMat yields ambiguities
 @inline mul!(C::AbstractVector, A::AbstractVecOrMat, tB::Transpose{<:Any,<:AbstractVecOrMat},
              alpha::Number, beta::Number) =
@@ -465,7 +482,7 @@ end
             A[i,j] = conjugate ? adjoint(A[j,i]) : transpose(A[j,i])
         end
     else
-        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
     end
     A
 end
@@ -473,22 +490,61 @@ end
 function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
-    if nA != length(x)
-        throw(DimensionMismatch("second dimension of A, $nA, does not match length of x, $(length(x))"))
-    end
-    if mA != length(y)
-        throw(DimensionMismatch("first dimension of A, $mA, does not match length of y, $(length(y))"))
-    end
-    if mA == 0
-        return y
-    end
-    if nA == 0
-        return _rmul_or_fill!(y, β)
-    end
-
+    nA != length(x) &&
+        throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
+    mA != length(y) &&
+        throw(DimensionMismatch(lazy"first dimension of A, $mA, does not match length of y, $(length(y))"))
+    mA == 0 && return y
+    nA == 0 && return _rmul_or_fill!(y, β)
     alpha, beta = promote(α, β, zero(T))
-    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} && stride(A, 1) == 1 && stride(A, 2) >= size(A, 1)
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
+        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        !iszero(stride(x, 1)) # We only check input's stride here.
         return BLAS.gemv!(tA, alpha, A, x, beta, y)
+    else
+        return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+    end
+end
+
+function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+    α::Number = true, β::Number = false) where {T<:BlasReal}
+    mA, nA = lapack_size(tA, A)
+    nA != length(x) &&
+        throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
+    mA != length(y) &&
+        throw(DimensionMismatch(lazy"first dimension of A, $mA, does not match length of y, $(length(y))"))
+    mA == 0 && return y
+    nA == 0 && return _rmul_or_fill!(y, β)
+    alpha, beta = promote(α, β, zero(T))
+    if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
+        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        stride(y, 1) == 1 && tA == 'N' && # reinterpret-based optimization is valid only for contiguous `y`
+        !iszero(stride(x, 1))
+        BLAS.gemv!(tA, alpha, reinterpret(T, A), x, beta, reinterpret(T, y))
+        return y
+    else
+        return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
+    end
+end
+
+function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+    α::Number = true, β::Number = false) where {T<:BlasFloat}
+    mA, nA = lapack_size(tA, A)
+    nA != length(x) &&
+        throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
+    mA != length(y) &&
+        throw(DimensionMismatch(lazy"first dimension of A, $mA, does not match length of y, $(length(y))"))
+    mA == 0 && return y
+    nA == 0 && return _rmul_or_fill!(y, β)
+    alpha, beta = promote(α, β, zero(T))
+    @views if alpha isa Union{Bool,T} && beta isa Union{Bool,T} &&
+        stride(A, 1) == 1 && abs(stride(A, 2)) >= size(A, 1) &&
+        !iszero(stride(x, 1))
+        xfl = reinterpret(reshape, T, x) # Use reshape here.
+        yfl = reinterpret(reshape, T, y)
+        BLAS.gemv!(tA, alpha, A, xfl[1, :], beta, yfl[1, :])
+        BLAS.gemv!(tA, alpha, A, xfl[2, :], beta, yfl[2, :])
+        return y
     else
         return generic_matvecmul!(y, tA, A, x, MulAddMul(α, β))
     end
@@ -505,7 +561,7 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
         tAt = 'T'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0 || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
@@ -543,7 +599,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
         tAt = 'C'
     end
     if nC != mA
-        throw(DimensionMismatch("output matrix has size: $(nC), but should have size $(mA)"))
+        throw(DimensionMismatch(lazy"output matrix has size: $(nC), but should have size $(mA)"))
     end
     if mA == 0 || nA == 0 || iszero(_add.alpha)
         return _rmul_or_fill!(C, _add.beta)
@@ -587,7 +643,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     mB, nB = lapack_size(tB, B)
 
     if nA != mB
-        throw(DimensionMismatch("A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch(lazy"A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
     end
 
     if C === A || B === C
@@ -596,7 +652,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
 
     if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
         if size(C) != (mA, nB)
-            throw(DimensionMismatch("C has dimensions $(size(C)), should have ($mA,$nB)"))
+            throw(DimensionMismatch(lazy"C has dimensions $(size(C)), should have ($mA,$nB)"))
         end
         return _rmul_or_fill!(C, _add.beta)
     end
@@ -616,6 +672,49 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         stride(B, 2) >= size(B, 1) &&
         stride(C, 2) >= size(C, 1))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+    end
+    generic_matmatmul!(C, tA, tB, A, B, _add)
+end
+
+function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
+                       A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+                       _add = MulAddMul()) where {T<:BlasReal}
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+
+    if nA != mB
+        throw(DimensionMismatch(lazy"A has dimensions ($mA,$nA) but B has dimensions ($mB,$nB)"))
+    end
+
+    if C === A || B === C
+        throw(ArgumentError("output matrix must not be aliased with input matrix"))
+    end
+
+    if mA == 0 || nA == 0 || nB == 0 || iszero(_add.alpha)
+        if size(C) != (mA, nB)
+            throw(DimensionMismatch(lazy"C has dimensions $(size(C)), should have ($mA,$nB)"))
+        end
+        return _rmul_or_fill!(C, _add.beta)
+    end
+
+    if mA == 2 && nA == 2 && nB == 2
+        return matmul2x2!(C, tA, tB, A, B, _add)
+    end
+    if mA == 3 && nA == 3 && nB == 3
+        return matmul3x3!(C, tA, tB, A, B, _add)
+    end
+
+    alpha, beta = promote(_add.alpha, _add.beta, zero(T))
+
+    # Make-sure reinterpret-based optimization is BLAS-compatible.
+    if (alpha isa Union{Bool,T} &&
+        beta isa Union{Bool,T} &&
+        stride(A, 1) == stride(B, 1) == stride(C, 1) == 1 &&
+        stride(A, 2) >= size(A, 1) &&
+        stride(B, 2) >= size(B, 1) &&
+        stride(C, 2) >= size(C, 1)) && tA == 'N'
+        BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
+        return C
     end
     generic_matmatmul!(C, tA, tB, A, B, _add)
 end
@@ -657,10 +756,10 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
     mB = length(B)
     mA, nA = lapack_size(tA, A)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), vector B has length $mB"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA), vector B has length $mB"))
     end
     if mA != length(C)
-        throw(DimensionMismatch("result C has length $(length(C)), needs length $mA"))
+        throw(DimensionMismatch(lazy"result C has length $(length(C)), needs length $mA"))
     end
 
     Astride = size(A, 1)
@@ -726,10 +825,6 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
-# per-thread arrays of buffers resized by __init__ if needed
-const Abuf = [Vector{UInt8}(undef, tilebufsize)]
-const Bbuf = [Vector{UInt8}(undef, tilebufsize)]
-const Cbuf = [Vector{UInt8}(undef, tilebufsize)]
 
 function generic_matmatmul!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                             _add::MulAddMul=MulAddMul())
@@ -758,10 +853,10 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     if mB != nA
-        throw(DimensionMismatch("matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
+        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
     end
     if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch("result C has dimensions $(size(C)), needs ($mA,$nB)"))
+        throw(DimensionMismatch(lazy"result C has dimensions $(size(C)), needs ($mA,$nB)"))
     end
 
     if iszero(_add.alpha) || isempty(A) || isempty(B)
@@ -775,9 +870,8 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
     @inbounds begin
     if tile_size > 0
         sz = (tile_size, tile_size)
-        # FIXME: This code is completely invalid!!!
-        Atile = unsafe_wrap(Array, convert(Ptr{T}, pointer(Abuf[Threads.threadid()])), sz)
-        Btile = unsafe_wrap(Array, convert(Ptr{S}, pointer(Bbuf[Threads.threadid()])), sz)
+        Atile = Array{T}(undef, sz)
+        Btile = Array{S}(undef, sz)
 
         z1 = zero(A[1, 1]*B[1, 1] + A[1, 1]*B[1, 1])
         z = convert(promote_type(typeof(z1), R), z1)
@@ -797,8 +891,7 @@ function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat
                 end
             end
         else
-            # FIXME: This code is completely invalid!!!
-            Ctile = unsafe_wrap(Array, convert(Ptr{R}, pointer(Cbuf[Threads.threadid()])), sz)
+            Ctile = Array{R}(undef, sz)
             for jb = 1:tile_size:nB
                 jlim = min(jb+tile_size-1,nB)
                 jlen = jlim-jb+1
@@ -936,7 +1029,7 @@ function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
+        throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
     @inbounds begin
     if tA == 'T'
@@ -979,7 +1072,7 @@ function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMat
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))
-        throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
+        throw(DimensionMismatch(lazy"A has size $(size(A)), B has size $(size(B)), C has size $(size(C))"))
     end
     @inbounds begin
     if tA == 'T'

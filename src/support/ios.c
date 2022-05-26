@@ -1105,9 +1105,12 @@ int ios_ungetc(int c, ios_t *s)
 {
     if (s->state == bst_wr)
         return IOS_EOF;
+    if (c == '\n') s->lineno--;
+    if (s->u_colno > 0) s->u_colno--;
     if (s->bpos > 0) {
         s->bpos--;
-        s->buf[s->bpos] = (char)c;
+        if (s->buf[s->bpos] != (char)c)
+            s->buf[s->bpos] = (char)c;
         s->_eof = 0;
         return c;
     }
@@ -1129,11 +1132,14 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
     char c0;
     char buf[8];
 
-    c = ios_getc(s);
-    if (c == IOS_EOF)
+    c = ios_peekc(s);
+    if (c == IOS_EOF) {
+        s->_eof = 1;
         return IOS_EOF;
+    }
     c0 = (char)c;
     if ((unsigned char)c0 < 0x80) {
+        (void)ios_getc(s); // consume peeked char, increment lineno
         *pwc = (uint32_t)(unsigned char)c0;
         if (c == '\n')
             s->u_colno = 0;
@@ -1141,13 +1147,12 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
             s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
-    if (ios_ungetc(c, s) == IOS_EOF)
-        return IOS_EOF;
     sz = u8_seqlen(&c0);
     if (!isutf(c0) || sz > 4)
         return 0;
     if (ios_readprep(s, sz) < sz)
-        // NOTE: this can return EOF even if some bytes are available
+        // NOTE: this returns EOF even though some bytes are available,
+        // so we do not set s->_eof on this code path
         return IOS_EOF;
     int valid = u8_isvalid(&s->buf[s->bpos], sz);
     if (valid) {

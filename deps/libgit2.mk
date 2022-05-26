@@ -1,7 +1,7 @@
 ## libgit2
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
-LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
+LIBGIT2_GIT_URL := https://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
 
@@ -40,28 +40,14 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5685 lands
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-incdir.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
 	echo 1 > $@
 
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5740 lands
-$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-continue-zlib.patch
-	echo 1 > $@
-
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -94,8 +80,8 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
-	-rm $(build_datarootdir)/julia/cert.pem
-	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
+	-rm -f $(build_datarootdir)/julia/cert.pem
+	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)

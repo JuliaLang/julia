@@ -14,8 +14,6 @@
  *      Compiler:
  *          _COMPILER_CLANG_
  *          _COMPILER_GCC_
- *          _COMPILER_INTEL_
- *          _COMPILER_MICROSOFT_
  *      OS:
  *          _OS_FREEBSD_
  *          _OS_LINUX_
@@ -35,19 +33,14 @@
 *                               Compiler                                       *
 *******************************************************************************/
 
-/*
- * Note: Checking for Intel's compiler should be done before checking for
- * Microsoft's. On Windows Intel's compiler also defines _MSC_VER as the
- * acknowledgement of the fact that it is integrated with Visual Studio.
- */
 #if defined(__clang__)
 #define _COMPILER_CLANG_
-#elif defined(__INTEL_COMPILER) || defined(__ICC)
-#define _COMPILER_INTEL_
-#elif defined(_MSC_VER)
-#define _COMPILER_MICROSOFT_
 #elif defined(__GNUC__)
 #define _COMPILER_GCC_
+#elif defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
+#else
+#error Unsupported compiler
 #endif
 
 #if defined(__has_feature) // Clang flavor

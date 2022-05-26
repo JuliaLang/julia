@@ -653,6 +653,10 @@ end
     @test typeof(round(Int64, x)) == Int64 && round(Int64, x) == 42
     @test typeof(round(Int, x)) == Int && round(Int, x) == 42
     @test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
+
+    # Issue #44662
+    @test_throws InexactError round(Integer, big(Inf))
+    @test_throws InexactError round(Integer, big(NaN))
 end
 @testset "string representation" begin
     str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012"
@@ -1020,5 +1024,18 @@ end
     for x in (2f0, pi, 7.8, big(ℯ))
         @test big(typeof(x)) == typeof(big(x))
         @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+    end
+end
+
+@testset "precision base" begin
+    setprecision(53) do
+        @test precision(Float64, base=10) == precision(BigFloat, base=10) == 15
+    end
+    for (p, b) in ((100,10), (50,100))
+        setprecision(p, base=b) do
+            @test precision(BigFloat, base=10) == 100
+            @test precision(BigFloat, base=100) == 50
+            @test precision(BigFloat) == precision(BigFloat, base=2) == 333
+        end
     end
 end

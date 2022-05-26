@@ -13,7 +13,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "llvm-version.h"
 
 #ifdef _OS_WINDOWS_
 #include <psapi.h>
@@ -49,27 +48,14 @@
 #include <xmmintrin.h>
 #endif
 
-#if defined _MSC_VER
-#include <io.h>
-#include <intrin.h>
-#endif
-
 #ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
 
 #include "julia_assert.h"
 
-#include <llvm-c/Core.h>
-
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char *dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
@@ -232,229 +218,22 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
-JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, size_t uid)
+JL_DLLEXPORT unsigned long jl_getuid(void)
 {
 #ifdef _OS_WINDOWS_
-  return UV_ENOTSUP;
+    return -1;
 #else
-  // taken directly from libuv
-  struct passwd pw;
-  struct passwd* result;
-  char* buf;
-  size_t bufsize;
-  size_t name_size;
-  size_t homedir_size;
-  size_t shell_size;
-  size_t gecos_size;
-  long initsize;
-  int r;
-
-  if (pwd == NULL)
-    return UV_EINVAL;
-
-  initsize = sysconf(_SC_GETPW_R_SIZE_MAX);
-
-  if (initsize <= 0)
-    bufsize = 4096;
-  else
-    bufsize = (size_t) initsize;
-
-  buf = NULL;
-
-  for (;;) {
-    free(buf);
-    buf = (char*)malloc(bufsize);
-
-    if (buf == NULL)
-      return UV_ENOMEM;
-
-    r = getpwuid_r(uid, &pw, buf, bufsize, &result);
-
-    if (r != ERANGE)
-      break;
-
-    bufsize *= 2;
-  }
-
-  if (r != 0) {
-    free(buf);
-    return -r;
-  }
-
-  if (result == NULL) {
-    free(buf);
-    return UV_ENOENT;
-  }
-
-  /* Allocate memory for the username, gecos, shell, and home directory. */
-  name_size = strlen(pw.pw_name) + 1;
-  homedir_size = strlen(pw.pw_dir) + 1;
-  shell_size = strlen(pw.pw_shell) + 1;
-
-#ifdef __MVS__
-  gecos_size = 0; /* pw_gecos does not exist on zOS. */
-#else
-  if (pw.pw_gecos != NULL)
-    gecos_size = strlen(pw.pw_gecos) + 1;
-  else
-    gecos_size = 0;
-#endif
-
-  pwd->username = (char*)malloc(name_size +
-                         homedir_size +
-                         shell_size +
-                         gecos_size);
-
-  if (pwd->username == NULL) {
-    free(buf);
-    return UV_ENOMEM;
-  }
-
-  /* Copy the username */
-  memcpy(pwd->username, pw.pw_name, name_size);
-
-  /* Copy the home directory */
-  pwd->homedir = pwd->username + name_size;
-  memcpy(pwd->homedir, pw.pw_dir, homedir_size);
-
-  /* Copy the shell */
-  pwd->shell = pwd->homedir + homedir_size;
-  memcpy(pwd->shell, pw.pw_shell, shell_size);
-
-  /* Copy the gecos field */
-#ifdef __MVS__
-  pwd->gecos = NULL;  /* pw_gecos does not exist on zOS. */
-#else
-  if (pw.pw_gecos == NULL) {
-    pwd->gecos = NULL;
-  } else {
-    pwd->gecos = pwd->shell + shell_size;
-    memcpy(pwd->gecos, pw.pw_gecos, gecos_size);
-  }
-#endif
-
-  /* Copy the uid and gid */
-  pwd->uid = pw.pw_uid;
-  pwd->gid = pw.pw_gid;
-
-  free(buf);
-
-  return 0;
+    return getuid();
 #endif
 }
 
-typedef struct jl_group_s {
-    char* groupname;
-    long gid;
-    char** members;
-} jl_group_t;
-
-JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, size_t gid)
+JL_DLLEXPORT unsigned long jl_geteuid(void)
 {
 #ifdef _OS_WINDOWS_
-  return UV_ENOTSUP;
+    return -1;
 #else
-  // modified directly from uv_os_get_password
-  struct group gp;
-  struct group* result;
-  char* buf;
-  char* gr_mem;
-  size_t bufsize;
-  size_t name_size;
-  long members;
-  size_t mem_size;
-  long initsize;
-  int r;
-
-  if (grp == NULL)
-    return UV_EINVAL;
-
-  initsize = sysconf(_SC_GETGR_R_SIZE_MAX);
-
-  if (initsize <= 0)
-    bufsize = 4096;
-  else
-    bufsize = (size_t) initsize;
-
-  buf = NULL;
-
-  for (;;) {
-    free(buf);
-    buf = (char*)malloc(bufsize);
-
-    if (buf == NULL)
-      return UV_ENOMEM;
-
-    r = getgrgid_r(gid, &gp, buf, bufsize, &result);
-
-    if (r != ERANGE)
-      break;
-
-    bufsize *= 2;
-  }
-
-  if (r != 0) {
-    free(buf);
-    return -r;
-  }
-
-  if (result == NULL) {
-    free(buf);
-    return UV_ENOENT;
-  }
-
-  /* Allocate memory for the groupname and members. */
-  name_size = strlen(gp.gr_name) + 1;
-  members = 0;
-  mem_size = sizeof(char*);
-  for (r = 0; gp.gr_mem[r] != NULL; r++) {
-    mem_size += strlen(gp.gr_mem[r]) + 1 + sizeof(char*);
-    members++;
-  }
-
-  gr_mem = (char*)malloc(name_size + mem_size);
-  if (gr_mem == NULL) {
-    free(buf);
-    return UV_ENOMEM;
-  }
-
-  /* Copy the members */
-  grp->members = (char**) gr_mem;
-  grp->members[members] = NULL;
-  gr_mem = (char*) ((char**) gr_mem + members + 1);
-  for (r = 0; r < members; r++) {
-    grp->members[r] = gr_mem;
-    gr_mem = stpcpy(gr_mem, gp.gr_mem[r]) + 1;
-  }
-  assert(gr_mem == (char*)grp->members + mem_size);
-
-  /* Copy the groupname */
-  grp->groupname = gr_mem;
-  memcpy(grp->groupname, gp.gr_name, name_size);
-  gr_mem += name_size;
-
-  /* Copy the gid */
-  grp->gid = gp.gr_gid;
-
-  free(buf);
-
-  return 0;
+    return geteuid();
 #endif
-}
-
-JL_DLLEXPORT void jl_os_free_group(jl_group_t *grp)
-{
-  if (grp == NULL)
-    return;
-
-  /*
-    The memory for is allocated in a single uv__malloc() call. The base of the
-    pointer is stored in grp->members, so that is the only field that needs
-    to be freed.
-  */
-  free(grp->members);
-  grp->members = NULL;
-  grp->groupname = NULL;
 }
 
 // --- buffer manipulation ---
@@ -520,9 +299,7 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             a = jl_take_buffer(&dest);
         }
         else {
-#ifdef STORE_ARRAY_LEN
             a->length = n;
-#endif
             a->nrows = n;
             ((char*)a->data)[n] = '\0';
         }
@@ -610,14 +387,23 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
     }
 
 #if defined(__APPLE__) && defined(_CPU_AARCH64_)
-    // Manually subtract efficiency cores for Apple's big.LITTLE cores
-    int32_t family = 0;
-    len = 4;
-    sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
-    if (family >= 1 && count > 1) {
-        if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
-            // We know the Apple M1 has 4 efficiency cores, so subtract them out.
-            count -= 4;
+//MacOS 12 added a way to query performance cores
+    char buf[7];
+    len = 7;
+    sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
+    if (buf[0] > 1 && buf[1] > 0){
+        len = 4;
+        sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
+    }
+    else {
+        int32_t family = 0;
+        len = 4;
+        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+        if (family >= 1 && count > 1) {
+            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+                count -= 4;
+            }
         }
     }
 #endif
@@ -642,6 +428,29 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #warning "cpu core detection not defined for this platform"
     return 1;
 #endif
+}
+
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
+{
+    int cpu = jl_cpu_threads();
+    int masksize = uv_cpumask_size();
+    if (masksize < 0 || jl_running_under_rr(0))
+        return cpu;
+    uv_thread_t tid = uv_thread_self();
+    char *cpumask = (char *)calloc(masksize, sizeof(char));
+    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
+    if (err) {
+        free(cpumask);
+        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
+                       err);
+        return cpu;
+    }
+    int n = 0;
+    for (size_t i = 0; i < masksize; i++) {
+        n += cpumask[i];
+    }
+    free(cpumask);
+    return n < cpu ? n : cpu;
 }
 
 
@@ -673,7 +482,7 @@ JL_DLLEXPORT jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
-#if defined _MSC_VER || defined _OS_WINDOWS_
+#if defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -850,12 +659,11 @@ JL_DLLEXPORT int jl_dllist(jl_array_t *list)
     } while (cb < cbNeeded);
     for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
         const char *path = jl_pathname_for_handle(hMods[i]);
-        // XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
         if (path == NULL)
             continue;
         jl_array_grow_end((jl_array_t*)list, 1);
         jl_value_t *v = jl_cstr_to_string(path);
-        free(path);
+        free((char*)path);
         jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
     }
     free(hMods);
@@ -907,35 +715,38 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #endif
 }
 
-JL_DLLEXPORT int jl_threading_enabled(void)
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
 {
-    return 1;
+    uint64_t max = UINT64_MAX;
+    uint64_t unbias = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, unbias, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT {
-#if defined(_OS_WINDOWS_)
-    HMODULE mod;
-    // FIXME: GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS on LLVMContextCreate,
-    //        but that just points to libjulia.dll
-#if JL_LLVM_VERSION <= 110000
-    const char* libLLVM = "LLVM";
-#else
-    const char* libLLVM = "libLLVM";
-#endif
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
 
-    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, libLLVM, &mod))
-        return jl_nothing;
-
-    char path[MAX_PATH];
-    if (!GetModuleFileNameA(mod, path, sizeof(path)))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(path);
-#else
-    Dl_info dli;
-    if (!dladdr(LLVMContextCreate, &dli))
-        return jl_nothing;
-    return (jl_value_t*) jl_symbol(dli.dli_fname);
-#endif
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
 }
 
 #ifdef __cplusplus

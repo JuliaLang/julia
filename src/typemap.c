@@ -279,7 +279,7 @@ static void mtcache_hash_insert(_Atomic(jl_array_t*) *cache, jl_value_t *parent,
     }
     a = jl_eqtable_put(a, key, val, &inserted);
     assert(inserted);
-    if (a != *cache) {
+    if (a != jl_atomic_load_relaxed(cache)) {
         jl_atomic_store_release(cache, a);
         jl_gc_wb(parent, a);
     }
@@ -402,7 +402,7 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
         if (t == jl_nothing || t == NULL)
             continue;
         if (tparam & 2) {
-            jl_typemap_t *ml = data[i + 1];
+            jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i + 1]);
             JL_GC_PROMISE_ROOTED(ml);
             if (ty == (jl_value_t*)jl_any_type || // easy case: Any always matches
                 tname_intersection((jl_datatype_t*)ty, (jl_typename_t*)t, height)) {
@@ -1037,7 +1037,7 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                 _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(tname);
                 JL_GC_PUSH1(&tname);
                 for (i = 1; i < l; i += 2) {
-                    jl_typemap_t *ml_or_cache = data[i];
+                    jl_typemap_t *ml_or_cache = jl_atomic_load_relaxed(&data[i]);
                     if (ml_or_cache == NULL || ml_or_cache == jl_nothing)
                         continue;
                     jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs + 1, world);
@@ -1082,7 +1082,7 @@ static unsigned jl_typemap_list_count_locked(jl_typemap_entry_t *ml) JL_NOTSAFEP
     unsigned count = 0;
     while (ml != (void*)jl_nothing) {
         count++;
-        ml = ml->next;
+        ml = jl_atomic_load_relaxed(&ml->next);
     }
     return count;
 }
@@ -1095,12 +1095,12 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
     jl_typemap_level_t *cache =
         (jl_typemap_level_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_level_t),
                                          jl_typemap_level_type);
-    cache->arg1 = (jl_array_t*)jl_an_empty_vec_any;
-    cache->targ = (jl_array_t*)jl_an_empty_vec_any;
-    cache->name1 = (jl_array_t*)jl_an_empty_vec_any;
-    cache->tname = (jl_array_t*)jl_an_empty_vec_any;
-    cache->linear = (jl_typemap_entry_t*)jl_nothing;
-    cache->any = jl_nothing;
+    jl_atomic_store_relaxed(&cache->arg1, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&cache->targ, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&cache->name1, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&cache->tname, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&cache->linear, (jl_typemap_entry_t*)jl_nothing);
+    jl_atomic_store_relaxed(&cache->any, jl_nothing);
     return cache;
 }
 
@@ -1111,8 +1111,9 @@ static jl_typemap_level_t *jl_method_convert_list_to_cache(
     jl_typemap_entry_t *next = NULL;
     JL_GC_PUSH3(&cache, &next, &ml);
     while (ml != (void*)jl_nothing) {
-        next = ml->next;
-        ml->next = (jl_typemap_entry_t*)jl_nothing;
+        next = jl_atomic_load_relaxed(&ml->next);
+        jl_atomic_store_relaxed(&ml->next, (jl_typemap_entry_t*)jl_nothing);
+        // n.b. this is being done concurrently with lookups!
         // TODO: is it safe to be doing this concurrently with lookups?
         jl_typemap_level_insert_(map, cache, ml, offs);
         ml = next;
@@ -1132,10 +1133,10 @@ static void jl_typemap_list_insert_(
                 break;
         pml = &l->next;
         parent = (jl_value_t*)l;
-        l = l->next;
+        l = jl_atomic_load_relaxed(&l->next);
     }
-    newrec->next = l;
-    jl_gc_wb(newrec, newrec->next);
+    jl_atomic_store_relaxed(&newrec->next, l);
+    jl_gc_wb(newrec, l);
     jl_atomic_store_release(pml, newrec);
     jl_gc_wb(parent, newrec);
 }

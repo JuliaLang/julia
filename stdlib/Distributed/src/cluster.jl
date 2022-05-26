@@ -95,9 +95,10 @@ end
 @enum WorkerState W_CREATED W_CONNECTED W_TERMINATING W_TERMINATED
 mutable struct Worker
     id::Int
-    del_msgs::Array{Any,1}
+    msg_lock::Threads.ReentrantLock # Lock for del_msgs, add_msgs, and gcflag
+    del_msgs::Array{Any,1} # XXX: Could del_msgs and add_msgs be Channels?
     add_msgs::Array{Any,1}
-    gcflag::Bool
+    @atomic gcflag::Bool
     state::WorkerState
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
@@ -133,7 +134,7 @@ mutable struct Worker
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
+        w=new(id, Threads.ReentrantLock(), [], [], false, W_CREATED, Condition(), time(), conn_func)
         w.initialized = Event()
         register_worker(w)
         w
@@ -231,7 +232,10 @@ start_worker(cookie::AbstractString=readline(stdin); kwargs...) = start_worker(s
 function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_stdin::Bool=true, stderr_to_stdout::Bool=true)
     init_multi()
 
-    close_stdin && close(stdin) # workers will not use it
+    if close_stdin # workers will not use it
+        redirect_stdin(devnull)
+        close(stdin)
+    end
     stderr_to_stdout && redirect_stderr(stdout)
 
     init_worker(cookie)
@@ -471,6 +475,10 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     # The `launch` method should add an object of type WorkerConfig for every
     # worker launched. It provides information required on how to connect
     # to it.
+
+    # FIXME: launched should be a Channel, launch_ntfy should be a Threads.Condition
+    # but both are part of the public interface. This means we currently can't use
+    # `Threads.@spawn` in the code below.
     launched = WorkerConfig[]
     launch_ntfy = Condition()
 
@@ -526,8 +534,9 @@ default_addprocs_params(::ClusterManager) = default_addprocs_params()
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
+    :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,
+    :env      => [],
     :enable_threaded_blas => false,
     :lazy => true)
 

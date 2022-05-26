@@ -1,13 +1,13 @@
-; RUN: opt -load libjulia-internal%shlibext -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='FinalLowerGC' -S %s | FileCheck %s
+
 
 @tag = external addrspace(10) global {}
 
 declare void @boxed_simple({} addrspace(10)*, {} addrspace(10)*)
-declare {} addrspace(10)* @jl_box_int64(i64)
+declare {} addrspace(10)* @ijl_box_int64(i64)
 declare {}*** @julia.ptls_states()
 declare {}*** @julia.get_pgcstack()
-declare void @jl_safepoint()
-declare {} addrspace(10)* @jl_apply_generic({} addrspace(10)*, {} addrspace(10)**, i32)
 
 declare noalias nonnull {} addrspace(10)** @julia.new_gc_frame(i32)
 declare void @julia.push_gc_frame({} addrspace(10)**, i32)
@@ -34,11 +34,11 @@ top:
 ; CHECK-DAG: [[GCFRAME_SLOT2:%.*]] = bitcast {}*** [[GCFRAME_SLOT]] to {} addrspace(10)***
 ; CHECK-NEXT: store {} addrspace(10)** %gcframe, {} addrspace(10)*** [[GCFRAME_SLOT2]], align 8
   call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)
-  %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
+  %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
 ; CHECK: %frame_slot_1 = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 3
   %frame_slot_1 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 1)
   store {} addrspace(10)* %aboxed, {} addrspace(10)** %frame_slot_1, align 8
-  %bboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %b)
+  %bboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %b)
 ; CHECK: %frame_slot_2 = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %gcframe, i32 2
   %frame_slot_2 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
   store {} addrspace(10)* %bboxed, {} addrspace(10)** %frame_slot_2, align 8
@@ -59,7 +59,7 @@ top:
   %pgcstack = call {}*** @julia.get_pgcstack()
   %ptls = call {}*** @julia.ptls_states()
   %ptls_i8 = bitcast {}*** %ptls to i8*
-; CHECK: %v = call noalias nonnull {} addrspace(10)* @jl_gc_pool_alloc
+; CHECK: %v = call noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc
   %v = call {} addrspace(10)* @julia.gc_alloc_bytes(i8* %ptls_i8, i64 8)
   %0 = bitcast {} addrspace(10)* %v to {} addrspace(10)* addrspace(10)*
   %1 = getelementptr {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %0, i64 -1

@@ -278,10 +278,23 @@ end
     @test (|)(a, b, c, d) == parse(BigInt,"-1396834561")
     @test (|)(a, b, c, d, f) == parse(BigInt,"-1358954753")
     @test (|)(a, b, c, d, f, g) == parse(BigInt,"-1")
+end
 
-    @test trailing_ones(a) == 8
-    @test trailing_zeros(b) == 2
-    @test count_ones(a) == 14
+@testset "bit operations" begin
+    for x in (315135, 12412, 3426495623485904783478347)
+        @test trailing_ones(big(x)) == trailing_ones(x)
+        @test trailing_zeros(big(x)) == trailing_zeros(x)
+        @test count_ones(big(x)) == count_ones(x)
+        @test count_zeros(-big(x)) == count_zeros(-x)
+    end
+
+    @test_throws DomainError trailing_zeros(big(0))
+    @test_throws DomainError trailing_ones(big(-1)) # -1 is all ones
+
+    @test_throws DomainError count_zeros(big(0))
+    @test_throws DomainError count_zeros(big(rand(UInt)))
+    @test_throws DomainError count_ones(big(-1))
+    @test_throws DomainError count_ones(-big(rand(UInt))-1)
 end
 
 # Large Fibonacci to exercise BigInt
@@ -366,28 +379,24 @@ end
     @test_throws InexactError convert(BigInt, 2.1)
     @test_throws InexactError convert(BigInt, big(2.1))
 end
-@testset "issue #13367" begin
-    @test trunc(BigInt,2.1) == 2
-    @test round(BigInt,2.1) == 2
-    @test floor(BigInt,2.1) == 2
-    @test ceil(BigInt,2.1) == 3
+@testset "truncation" begin
+    # cf. issue #13367
+    for T = (Float16, Float32, Float64)
+        @test trunc(BigInt, T(2.1)) == 2
+        @test unsafe_trunc(BigInt, T(2.1)) == 2
+        @test round(BigInt, T(2.1)) == 2
+        @test floor(BigInt, T(2.1)) == 2
+        @test ceil(BigInt, T(2.1)) == 3
 
-    @test trunc(BigInt,2.1f0) == 2
-    @test round(BigInt,2.1f0) == 2
-    @test floor(BigInt,2.1f0) == 2
-    @test ceil(BigInt,2.1f0) == 3
-
-    @test_throws InexactError trunc(BigInt,Inf)
-    @test_throws InexactError round(BigInt,Inf)
-    @test_throws InexactError floor(BigInt,Inf)
-    @test_throws InexactError ceil(BigInt,Inf)
-
-    @test string(big(3), base = 2) == "11"
-    @test string(big(9), base = 8) == "11"
-    @test string(-big(9), base = 8) == "-11"
-    @test string(big(12), base = 16) == "c"
+        @test_throws InexactError trunc(BigInt, T(Inf))
+        @test_throws InexactError round(BigInt, T(Inf))
+        @test_throws InexactError floor(BigInt, T(Inf))
+        @test_throws InexactError ceil(BigInt, T(Inf))
+    end
 end
-@testset "Issue #18849" begin
+
+@testset "string(::BigInt)" begin
+    # cf. issue #18849"
     # bin, oct, dec, hex should not call sizeof on BigInts
     # when padding is desired
     padding = 4
@@ -412,14 +421,19 @@ end
     @test string(-high, pad = padding, base = 8) == "-4000000"
     @test string(-high, pad = padding, base = 10) == "-1048576"
     @test string(-high, pad = padding, base = 16) == "-100000"
-end
 
-# respect 0-padding on big(0)
-for base in (2, 8, 10, 16)
-    local base
-    @test string(big(0), base=base, pad=0) == ""
+    # cf. issue #13367
+    @test string(big(3), base = 2) == "11"
+    @test string(big(9), base = 8) == "11"
+    @test string(-big(9), base = 8) == "-11"
+    @test string(big(12), base = 16) == "c"
+
+    # respect 0-padding on big(0)
+    for base in (2, 8, 10, 16)
+        @test string(big(0), base=base, pad=0) == ""
+    end
+    @test string(big(0), base = rand(2:62), pad = 0) == ""
 end
-@test string(big(0), base = rand(2:62), pad = 0) == ""
 
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
@@ -526,5 +540,166 @@ end
         @test T(big"2"^(n+1)) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T))) === T(Inf)
         @test T(big"2"^(n+1) - big"2"^(n-precision(T)) - 1) === floatmax(T)
+    end
+end
+
+a = Rational{BigInt}(12345678901234567890123456789, 987654321987654320)
+b = Rational{BigInt}(12345678902222222212111111109, 987654321987654320)
+c = Rational{BigInt}(24691357802469135780246913578, 987654321987654320)
+d = Rational{BigInt}(- 12345678901234567890123456789, 493827160993827160)
+e = Rational{BigInt}(12345678901234567890123456789, 12345678902222222212111111109)
+@testset "big rational basics" begin
+    @test a+BigInt(1) == b
+    @test typeof(a+1) == Rational{BigInt}
+    @test a+1 == b
+    @test isequal(a+1, b)
+    @test b == a+1
+    @test !(b == a)
+    @test b > a
+    @test b >= a
+    @test !(b < a)
+    @test !(b <= a)
+
+    @test typeof(a * 2) == Rational{BigInt}
+    @test a*2 == c
+    @test c-a == a
+    @test c == a + a
+    @test c+1 == a+b
+
+    @test typeof(d) == Rational{BigInt}
+    @test d == -c
+
+
+    @test e == a // b
+
+    @testset "gmp cmp" begin
+        @test Base.GMP.MPQ.cmp(b, a) ==  1
+        @test Base.GMP.MPQ.cmp(a, b) == -1
+        @test Base.GMP.MPQ.cmp(a, a) ==  0
+    end
+
+    @testset "division errors" begin
+        oz = Rational{BigInt}(0, 1)
+        zo = Rational{BigInt}(1, 0)
+
+        @test oz + oz == 3 * oz == oz
+        @test oz // zo == oz
+        @test zo // oz == zo
+
+        @test_throws DivideError() zo - zo
+        @test_throws DivideError() zo + (-zo)
+        @test_throws DivideError() zo * oz
+        @test_throws DivideError() oz // oz
+        @test_throws DivideError() zo // zo
+    end
+
+    @testset "big infinities" begin
+        oz   = Rational{BigInt}(1, 0)
+        zo   = Rational{BigInt}(0, 1)
+        o    = Rational{BigInt}(1, 1)
+
+        @test oz + zo    == oz
+        @test zo - oz    == -oz
+        @test zo + (-oz) == -oz
+        @test -oz + zo   == -oz
+
+        @test (-oz) * (-oz) == oz
+        @test (-oz) * oz    == -oz
+
+        @test o // zo       == oz
+        @test (-o) // zo    == -oz
+
+        @test Rational{BigInt}(-1, 0) == -1//0
+        @test Rational{BigInt}(1, 0) == 1//0
+    end
+end
+
+
+aa = 1//2
+bb = -1//3
+cc = 3//2
+a = Rational{BigInt}(aa)
+b = Rational{BigInt}(bb)
+c = Rational{BigInt}(cc)
+t = Rational{BigInt}(0, 1)
+@testset "big rational inplace" begin
+    @test Base.GMP.MPQ.add!(t, a, b) == 1//6
+    @test t == 1//6
+    @test Base.GMP.MPQ.add!(t, t) == 1//3
+    @test t == 1//3
+
+    @test iszero(Base.GMP.MPQ.sub!(t, t))
+    @test iszero(t)
+    @test Base.GMP.MPQ.sub!(t, b, c) == -11//6
+    @test t == -11//6
+
+    @test Base.GMP.MPQ.mul!(t, a, b) == -1//6
+    @test t == -1//6
+    @test Base.GMP.MPQ.mul!(t, t) == 1//36
+    @test t == 1//36
+    @test iszero(Base.GMP.MPQ.mul!(t, Rational{BigInt}(0)))
+
+    @test Base.GMP.MPQ.div!(t, a, b) == -3//2
+    @test t == -3//2
+    @test Base.GMP.MPQ.div!(t, a) == -3//1
+    @test t == -3//1
+
+    @test aa == a && bb == b && cc == c
+
+    @testset "set" begin
+        @test Base.GMP.MPQ.set!(a, b) == b
+        @test a == b == bb
+
+        Base.GMP.MPQ.add!(a, b, c)
+        @test b == bb
+
+        @test Base.GMP.MPQ.set_z!(a, BigInt(0)) == 0
+        @test iszero(a)
+        @test Base.GMP.MPQ.set_z!(a, BigInt(3)) == 3
+        @test a == BigInt(3)
+
+        @test Base.GMP.MPQ.set_ui(1, 2)      == 1//2
+        @test Base.GMP.MPQ.set_ui(0, 1)      == 0//1
+        @test Base.GMP.MPQ.set_ui!(a, 1, 2)  == 1//2
+        @test a == 1//2
+
+        @test Base.GMP.MPQ.set_si(1, 2)      == 1//2
+        @test Base.GMP.MPQ.set_si(-1, 2)     == -1//2
+        @test Base.GMP.MPQ.set_si!(a, -1, 2) == -1//2
+        @test a == -1//2
+    end
+
+    @testset "infinities" begin
+        oz   = Rational{BigInt}(1, 0)
+        zo   = Rational{BigInt}(0, 1)
+        oo   = Rational{BigInt}(1, 1)
+
+        @test Base.GMP.MPQ.add!(zo, oz) == oz
+        @test zo == oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.sub!(zo, oz) == -oz
+        @test zo == -oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.add!(zo, -oz) == -oz
+        @test zo == -oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.sub!(zo, -oz) == oz
+        @test zo == oz
+        zo = Rational{BigInt}(0, 1)
+
+        @test Base.GMP.MPQ.mul!(-oz, -oz) == oz
+        @test Base.GMP.MPQ.mul!(-oz, oz)  == -oz
+        @test Base.GMP.MPQ.mul!(oz, -oz)  == -1//0
+        @test oz == -1//0
+        oz = Rational{BigInt}(1, 0)
+
+        @test Base.GMP.MPQ.div!(oo, zo) == oz
+        @test oo == oz
+        oo = Rational{BigInt}(1, 1)
+
+        @test Base.GMP.MPQ.div!(-oo, zo) == -oz
     end
 end

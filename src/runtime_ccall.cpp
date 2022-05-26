@@ -36,7 +36,7 @@ void *jl_get_library_(const char *f_lib, int throw_err)
         return jl_exe_handle;
     if (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
         return jl_libjulia_internal_handle;
-    if (strcmp(f_lib, JL_LIBJULIA_DL_LIBNAME) == 0)
+    if (f_lib == JL_LIBJULIA_DL_LIBNAME)
         return jl_libjulia_handle;
 #endif
     JL_LOCK(&libmap_lock);
@@ -157,7 +157,7 @@ std::string jl_format_filename(StringRef output_pattern)
             }
             switch (c) {
             case 'p':
-                outfile << jl_getpid();
+                outfile << uv_os_getpid();
                 break;
             case 'd':
                 if (got_pwd)
@@ -208,7 +208,7 @@ extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
 }
 
 
-static jl_mutex_t trampoline_lock; // for accesses to the cache and freelist
+static uv_mutex_t trampoline_lock; // for accesses to the cache and freelist
 
 static void *trampoline_freelist;
 
@@ -246,13 +246,13 @@ static void *trampoline_alloc() JL_NOTSAFEPOINT // lock taken by caller
     return tramp;
 }
 
-static void trampoline_free(void *tramp)    // lock taken by caller
+static void trampoline_free(void *tramp) JL_NOTSAFEPOINT    // lock taken by caller
 {
     *(void**)tramp = trampoline_freelist;
     trampoline_freelist = tramp;
 }
 
-static void trampoline_deleter(void **f)
+static void trampoline_deleter(void **f) JL_NOTSAFEPOINT
 {
     void *tramp = f[0];
     void *fobj = f[1];
@@ -261,14 +261,14 @@ static void trampoline_deleter(void **f)
     f[0] = NULL;
     f[2] = NULL;
     f[3] = NULL;
-    JL_LOCK_NOGC(&trampoline_lock);
+    uv_mutex_lock(&trampoline_lock);
     if (tramp)
         trampoline_free(tramp);
     if (fobj && cache)
         ptrhash_remove((htable_t*)cache, fobj);
     if (nval)
         free(nval);
-    JL_UNLOCK_NOGC(&trampoline_lock);
+    uv_mutex_unlock(&trampoline_lock);
 }
 
 typedef void *(*init_trampoline_t)(void *tramp, void **nval) JL_NOTSAFEPOINT;
@@ -288,7 +288,7 @@ jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t **vals)
 {
     // lookup (fobj, vals) in cache
-    JL_LOCK_NOGC(&trampoline_lock);
+    uv_mutex_lock(&trampoline_lock);
     if (!cache->table)
         htable_new(cache, 1);
     if (fill != jl_emptysvec) {
@@ -300,7 +300,7 @@ jl_value_t *jl_get_cfunction_trampoline(
         }
     }
     void *tramp = ptrhash_get(cache, (void*)fobj);
-    JL_UNLOCK_NOGC(&trampoline_lock);
+    uv_mutex_unlock(&trampoline_lock);
     if (tramp != HT_NOTFOUND) {
         assert((jl_datatype_t*)jl_typeof(tramp) == result_type);
         return (jl_value_t*)tramp;
@@ -350,12 +350,18 @@ jl_value_t *jl_get_cfunction_trampoline(
         free(nval);
         jl_rethrow();
     }
-    JL_LOCK_NOGC(&trampoline_lock);
+    uv_mutex_lock(&trampoline_lock);
     tramp = trampoline_alloc();
     ((void**)result)[0] = tramp;
     tramp = init_trampoline(tramp, nval);
     ptrhash_put(cache, (void*)fobj, result);
-    JL_UNLOCK_NOGC(&trampoline_lock);
+    uv_mutex_unlock(&trampoline_lock);
     return result;
 }
 JL_GCC_IGNORE_STOP
+
+void jl_init_runtime_ccall(void)
+{
+    JL_MUTEX_INIT(&libmap_lock);
+    uv_mutex_init(&trampoline_lock);
+}

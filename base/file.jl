@@ -8,6 +8,7 @@ export
     chown,
     cp,
     cptree,
+    diskstat,
     hardlink,
     mkdir,
     mkpath,
@@ -196,7 +197,8 @@ end
 Create all intermediate directories in the `path` as required. Directories are created with
 the permissions `mode` which defaults to `0o777` and is modified by the current file
 creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path` (or parts of it)
-already exists. Return `path`.
+already exists. However, an error will be thrown if `path` (or parts of it) points to an
+existing file. Return `path`.
 
 If `path` includes a filename you will probably want to use `mkpath(dirname(path))` to
 avoid creating a directory using the filename.
@@ -320,12 +322,12 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             if Base.samefile(src, dst)
                 abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
                 abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
-                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
+                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
                                            "`dst` refers to: $(abs_dst)\n")))
             end
-            rm(dst; recursive=true)
+            rm(dst; recursive=true, force=true)
         else
             throw(ArgumentError(string("'$dst' exists. `force=true` ",
                                        "is required to remove '$dst' before $(txt).")))
@@ -427,6 +429,7 @@ end
 
 """
     touch(path::AbstractString)
+    touch(fd::File)
 
 Update the last-modified timestamp on a file to the current time.
 
@@ -452,18 +455,13 @@ We can see the [`mtime`](@ref) has been modified by `touch`.
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
-        if Sys.isunix()
-            ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
-            systemerror(:futimes, ret != 0, extrainfo=path)
-        else
-            t = time()
-            futime(f,t,t)
-        end
+        touch(f)
     finally
         close(f)
     end
     path
 end
+
 
 """
     tempdir()
@@ -553,15 +551,52 @@ end
 
 const temp_prefix = "jl_"
 
-if Sys.iswindows()
+# Use `Libc.rand()` to generate random strings
+function _rand_filename(len = 10)
+    slug = Base.StringVector(len)
+    chars = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:len
+        slug[i] = chars[(Libc.rand() % length(chars)) + 1]
+    end
+    return String(slug)
+end
 
-function _win_tempname(temppath::AbstractString, uunique::UInt32)
+
+# Obtain a temporary filename.
+function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+
+    prefix = joinpath(parent, temp_prefix)
+    filename = nothing
+    for i in 1:max_tries
+        filename = string(prefix, _rand_filename())
+        if ispath(filename)
+            filename = nothing
+        else
+            break
+        end
+    end
+
+    if filename === nothing
+        error("tempname: max_tries exhausted")
+    end
+
+    cleanup && temp_cleanup_later(filename)
+    return filename
+end
+
+if Sys.iswindows()
+# While this isn't a true analog of `mkstemp`, it _does_ create an
+# empty file for us, ensuring that other simultaneous calls to
+# `_win_mkstemp()` won't collide, so it's a better name for the
+# function than `tempname()`.
+function _win_mkstemp(temppath::AbstractString)
     tempp = cwstring(temppath)
     temppfx = cwstring(temp_prefix)
     tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
                     (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, uunique, tname)
+                    tempp, temppfx, UInt32(0), tname)
     windowserror("GetTempFileName", uunique == 0)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
@@ -570,48 +605,12 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    filename = _win_tempname(parent, UInt32(0))
+    filename = _win_mkstemp(parent)
     cleanup && temp_cleanup_later(filename)
     return (filename, Base.open(filename, "r+"))
 end
 
-# generate a random string from random bytes
-function _rand_string()
-    nchars = 10
-    A = Vector{UInt8}(undef, nchars)
-    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-            A, sizeof(A)))
-
-    slug = Base.StringVector(10)
-    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for i = 1:nchars
-        slug[i] = chars[(A[i] % length(chars)) + 1]
-    end
-    return name = String(slug)
-end
-
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    name = _rand_string()
-    filename = joinpath(parent, temp_prefix * name)
-    @assert !ispath(filename)
-    cleanup && temp_cleanup_later(filename)
-    return filename
-end
-
 else # !windows
-
-# Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
-    systemerror(:tempnam, p == C_NULL)
-    s = unsafe_string(p)
-    Libc.free(p)
-    cleanup && temp_cleanup_later(s)
-    return s
-end
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
@@ -621,7 +620,6 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     cleanup && temp_cleanup_later(b)
     return (b, fdio(p, true))
 end
-
 
 end # os-test
 
@@ -1167,4 +1165,58 @@ function chown(path::AbstractString, owner::Integer, group::Integer=-1)
     err = ccall(:jl_fs_chown, Int32, (Cstring, Cint, Cint), path, owner, group)
     err < 0 && uv_error("chown($(repr(path)), $owner, $group)", err)
     path
+end
+
+
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_fs_statfs (libuv function docs)
+# - http://docs.libuv.org/en/v1.x/fs.html#c.uv_statfs_t (libuv docs of the returned struct)
+"""
+    DiskStat
+
+Stores information about the disk in bytes. Populate by calling `diskstat`.
+"""
+struct DiskStat
+    ftype::UInt64
+    bsize::UInt64
+    blocks::UInt64
+    bfree::UInt64
+    bavail::UInt64
+    files::UInt64
+    ffree::UInt64
+    fspare::NTuple{4, UInt64} # reserved
+end
+
+function Base.getproperty(stats::DiskStat, field::Symbol)
+    total = Int64(getfield(stats, :bsize) * getfield(stats, :blocks))
+    available = Int64(getfield(stats, :bsize) * getfield(stats, :bavail))
+    field === :total && return total
+    field === :available && return available
+    field === :used && return total - available
+    return getfield(stats, field)
+end
+
+@eval Base.propertynames(stats::DiskStat) =
+    $((fieldnames(DiskStat)[1:end-1]..., :available, :total, :used))
+
+Base.show(io::IO, x::DiskStat) =
+    print(io, "DiskStat(total=$(x.total), used=$(x.used), available=$(x.available))")
+
+"""
+    diskstat(path=pwd())
+
+Returns statistics in bytes about the disk that contains the file or directory pointed at by
+`path`. If no argument is passed, statistics about the disk that contains the current
+working directory are returned.
+
+!!! compat "Julia 1.8"
+    This method was added in Julia 1.8.
+"""
+function diskstat(path::AbstractString=pwd())
+    req = zeros(UInt8, _sizeof_uv_fs)
+    err = ccall(:uv_fs_statfs, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                C_NULL, req, path, C_NULL)
+    err < 0 && uv_error("diskstat($(repr(path)))", err)
+    statfs_ptr = ccall(:jl_uv_fs_t_ptr, Ptr{Nothing}, (Ptr{Cvoid},), req)
+
+    return unsafe_load(reinterpret(Ptr{DiskStat}, statfs_ptr))
 end

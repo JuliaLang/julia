@@ -5,19 +5,10 @@ module LAPACK
 Interfaces to LAPACK subroutines.
 """ LAPACK
 
-const libblastrampoline = "libblastrampoline"
+using ..LinearAlgebra.BLAS: @blasfunc, chkuplo
 
-# Legacy binding maintained for backwards-compatibility but new packages
-# should not look at this, instead preferring to parse the output
-# of BLAS.get_config()
-const liblapack = libblastrampoline
-
-import ..LinearAlgebra.BLAS.@blasfunc
-
-import ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException,
-    DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare
-
-using ..LinearAlgebra: triu, tril, dot
+using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
+    SingularException, PosDefException, chkstride1, checksquare,triu, tril, dot
 
 using Base: iszero, require_one_based_indexing
 
@@ -54,14 +45,6 @@ function chkposdef(ret::BlasInt)
     if ret > 0
         throw(PosDefException(ret))
     end
-end
-
-"Check that upper/lower (for special matrices) is correctly specified"
-function chkuplo(uplo::AbstractChar)
-    if !(uplo == 'U' || uplo == 'L')
-        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
-    end
-    uplo
 end
 
 "Check that {c}transpose is correctly specified"
@@ -523,7 +506,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(1),BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end
@@ -552,7 +535,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(m), BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end

@@ -149,7 +149,7 @@ bool jl_atomic_cmpswap_explicit(std::atomic<T> *ptr, T *expected, S val, std::me
 {
      return std::atomic_compare_exchange_strong_explicit<T>(ptr, expected, val, order, order);
 }
-#define jl_atomic_cmpswap_relaxed(ptr, val) jl_atomic_cmpswap_explicit(ptr, val, memory_order_relaxed)
+#define jl_atomic_cmpswap_relaxed(ptr, expected, val) jl_atomic_cmpswap_explicit(ptr, expected, val, memory_order_relaxed)
 template<class T, class S>
 T jl_atomic_exchange(std::atomic<T> *ptr, S desired)
 {
@@ -190,9 +190,8 @@ extern "C" {
 #  define jl_atomic_store_relaxed(obj, val)             \
     atomic_store_explicit(obj, val, memory_order_relaxed)
 
-#  if defined(__clang__) || defined(__ICC) || defined(__INTEL_COMPILER) || \
-    !(defined(_CPU_X86_) || defined(_CPU_X86_64_))
-// ICC and Clang doesn't have this bug...
+#  if defined(__clang__) || !(defined(_CPU_X86_) || defined(_CPU_X86_64_))
+// Clang doesn't have this bug...
 #    define jl_atomic_store_release(obj, val)           \
     atomic_store_explicit(obj, val, memory_order_release)
 #  else

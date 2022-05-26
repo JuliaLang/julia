@@ -1,6 +1,6 @@
 ## Zlib ##
 ifneq ($(USE_BINARYBUILDER_ZLIB), 1)
-ZLIB_GIT_URL := git://github.com/madler/zlib.git
+ZLIB_GIT_URL := https://github.com/madler/zlib.git
 ZLIB_TAR_URL = https://api.github.com/repos/madler/zlib/tarball/$1
 $(eval $(call git-external,zlib,ZLIB,,,$(SRCCACHE)))
 
@@ -19,7 +19,7 @@ $(eval $(call staged-install, \
 	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $(build_shlibdir)/libz.$(SHLIB_EXT)))
 
 clean-zlib:
-	-rm $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled $(build_libdir)/libz.a* $(build_libdir)/libz.so* $(build_includedir)/zlib.h $(build_includedir)/zconf.h
+	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled $(build_libdir)/libz.a* $(build_libdir)/libz.so* $(build_includedir)/zlib.h $(build_includedir)/zconf.h
 	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) distclean $(ZLIB_FLAGS)
 
 get-zlib: $(ZLIB_SRC_FILE)

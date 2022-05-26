@@ -48,8 +48,9 @@ include("testenv.jl")
     end
 end
 
-
-cfile = " at $(@__FILE__):"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+cfile = " at $file:"
 c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
@@ -174,7 +175,7 @@ let no_kwsorter_match, e
     no_kwsorter_match() = 0
     no_kwsorter_match(a;y=1) = y
     e = try no_kwsorter_match(y=1) catch ex; ex; end
-    @test occursin(r"no method matching.+\(; y=1\)", sprint(showerror, e))
+    @test occursin(Regex("no method matching.+\\(; y::$(Int)\\)"), sprint(showerror, e))
 end
 
 ac15639line = @__LINE__
@@ -276,7 +277,7 @@ let
     @test occursin("column vector", err_str)
 end
 
-struct TypeWithIntParam{T <: Integer} end
+struct TypeWithIntParam{T<:Integer, Vector{T}<:A<:AbstractArray{T}} end
 struct Bounded  # not an AbstractArray
     bound::Int
 end
@@ -322,7 +323,13 @@ let undefvar
     @test err_str == "TypeError: in Type, in parameter, expected Type, got a value of type String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
     @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
+    err_str = @except_str TypeWithIntParam{Int64,Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
+    err_str = @except_str TypeWithIntParam{Int64}{Vector{Float64}} TypeError
+    @test err_str == "TypeError: in TypeWithIntParam, in A, expected Vector{Int64}<:A<:(AbstractArray{Int64}), got Type{Vector{Float64}}"
     err_str = @except_str Type{Vararg} TypeError
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
+    err_str = @except_str Ref{Vararg} TypeError
     @test err_str == "TypeError: in Type, in parameter, expected Type, got Vararg"
 
     err_str = @except_str mod(1,0) DivideError
@@ -391,8 +398,8 @@ let err_str
     @test occursin("MethodError: no method matching +(::$Int, ::Vector{Float64})", err_str)
     @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
     err_str = @except_str rand(5) - 1//3 MethodError
-    @test occursin("MethodError: no method matching -(::Vector{Float64}, ::Rational{$Int})", err_str)
-    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
+    @test occursin("MethodError: no method matching +(::Vector{Float64}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise addition, use broadcasting with dot syntax: array .+ scalar", err_str)
 end
 
 
@@ -616,7 +623,7 @@ let err_str
     @test occursin(r"MethodError: no method matching one\(::.*HasNoOne\)", err_str)
     @test occursin("HasNoOne does not support `one`; did you mean `oneunit`?", err_str)
     err_str = @except_str one(HasNoOne(); value=2) MethodError
-    @test occursin(r"MethodError: no method matching one\(::.*HasNoOne; value=2\)", err_str)
+    @test occursin(Regex("MethodError: no method matching one\\(::.*HasNoOne; value::$(Int)\\)"), err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
 pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
@@ -772,7 +779,7 @@ end
 
 # issue #37587
 # TODO: enable on more platforms
-if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
+if (Sys.isapple() || Sys.islinux()) && Sys.ARCH === :x86_64
     single_repeater() = single_repeater()
     pair_repeater_a() = pair_repeater_b()
     pair_repeater_b() = pair_repeater_a()
@@ -796,4 +803,121 @@ if Sys.isapple() || (Sys.islinux() && Sys.ARCH === :x86_64)
             @test occursin(r"the last 2 lines are repeated \d+ more times", bt_str)
         end
     end
-end  # Sys.isapple()
+end
+
+@testset "ScheduledAfterSyncException" begin
+    t = :DummyTask
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t]))
+    @test occursin(":DummyTask is registered after the end of a `@sync` block", msg)
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t, t]))
+    @test occursin(
+        ":DummyTask and one more Symbol are registered after the end of a `@sync` block",
+        msg,
+    )
+    msg = sprint(showerror, Base.ScheduledAfterSyncException(Any[t, t, t]))
+    @test occursin(
+        ":DummyTask and 2 more objects are registered after the end of a `@sync` block",
+        msg,
+    )
+end
+
+@testset "error message hints relative modules #40959" begin
+    m = Module()
+    expr = :(module Foo
+        module Bar
+        end
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        using Bar
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        module Bar end
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        Bar = 3
+        module Buzz
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test !contains(err_str, "maybe you meant `import/using ..Bar`")
+    end
+
+    m = Module()
+    expr = :(module Foo
+        module Bar end
+        module Buzz
+            module Bar end
+            using Bar
+        end
+    end)
+    try
+        Base.eval(m, expr)
+    catch err
+        err_str = sprint(showerror, err)
+        @test contains(err_str, "maybe you meant `import/using .Bar`")
+    end
+end
+
+for (expr, errmsg) in
+    [
+        (:(struct Foo <: 1 end),       "can only subtype data types"),
+        (:(struct Foo <: Float64 end), "can only subtype abstract types"),
+        (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
+        (:(struct Foo <: Tuple{Float64} end), "cannot subtype a tuple type"),
+        (:(struct Foo <: NamedTuple{(:a,), Tuple{Int64}} end), "cannot subtype a named tuple type"),
+        (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
+        (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
+        (:(struct Foo <: typeof(Core.apply_type) end), "cannot add subtypes to Core.Builtin"),
+    ]
+    err = try @eval $expr
+    catch e
+        e
+    end
+    @test contains(sprint(showerror, err), errmsg)
+end

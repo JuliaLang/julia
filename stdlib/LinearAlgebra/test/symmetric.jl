@@ -2,7 +2,7 @@
 
 module TestSymmetric
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 
 Random.seed!(1010)
 
@@ -60,6 +60,10 @@ end
                 @test Hermitian(Hermitian(aherm, :U), :U) === Hermitian(aherm, :U)
                 @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
                 @test_throws ArgumentError Hermitian(Hermitian(aherm, :U), :L)
+
+                @test_throws ArgumentError Symmetric(asym, :R)
+                @test_throws ArgumentError Hermitian(asym, :R)
+
                 # mixed cases with Hermitian/Symmetric
                 if eltya <: Real
                     @test Symmetric(Hermitian(aherm, :U))     === Symmetric(aherm, :U)
@@ -268,6 +272,7 @@ end
                         @test abs.(eigen(Symmetric(asym), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         @test abs.(eigen(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                         @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
+                        @test eigvals(Symmetric(asym), sortby= x -> -x) ≈ eigvals(eigen(Symmetric(asym), sortby = x -> -x))
                         @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                         # eigen doesn't support Symmetric{Complex}
                         @test Matrix(eigen(asym)) ≈ asym
@@ -281,6 +286,7 @@ end
                     @test abs.(eigen(Hermitian(aherm), 1:2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     @test abs.(eigen(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2).vectors'v[:,1:2]) ≈ Matrix(I, 2, 2)
                     @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
+                    @test eigvals(Hermitian(aherm), sortby= x -> -x) ≈ eigvals(eigen(Hermitian(aherm), sortby = x -> -x))
                     @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
                     @test Matrix(eigen(aherm)) ≈ aherm
                     @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
@@ -534,20 +540,6 @@ end
         H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
         @test norm(inv(Symmetric(H))*(H*fill(1., 8)) .- 1) ≈ 0 atol = 1e-5
         @test norm(inv(Hermitian(H))*(H*fill(1., 8)) .- 1) ≈ 0 atol = 1e-5
-    end
-end
-
-@testset "similar should preserve underlying storage type and uplo flag" begin
-    m, n = 4, 3
-    sparsemat = sprand(m, m, 0.5)
-    for SymType in (Symmetric, Hermitian)
-        symsparsemat = SymType(sparsemat)
-        @test isa(similar(symsparsemat), typeof(symsparsemat))
-        @test similar(symsparsemat).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
-        @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
     end
 end
 

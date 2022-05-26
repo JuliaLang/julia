@@ -1,2 +1,4 @@
 TAR_BRANCH = master
-TAR_SHA1 = 67f004d2af9570c7c19e679e4469bb77e918f0fc
+TAR_SHA1 = 56062695b92920c8b75e997fb0c8c3b015d04b78
+TAR_GIT_URL := https://github.com/JuliaIO/Tar.jl.git
+TAR_TAR_URL = https://api.github.com/repos/JuliaIO/Tar.jl/tarball/$1
