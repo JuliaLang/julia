@@ -18,39 +18,58 @@
 # end
 import Core: Const, PartialStruct
 
-# The type of this value might be Bool.
-# However, to enable a limited amount of back-propagation,
-# we also keep some information about how this Bool value was created.
-# In particular, if you branch on this value, then may assume that in
-# the true branch, the type of `var` will be limited by `thentype` and in
-# the false branch, it will be limited by `elsetype`. Example:
-# ```
-# cond = isa(x::Union{Int, Float}, Int)::Conditional(x, Int, Float)
-# if cond
-#    # May assume x is `Int` now
-# else
-#    # May assume x is `Float` now
-# end
-# ```
+"""
+    cnd::Conditional
+
+The type of this value might be `Bool`.
+However, to enable a limited amount of back-propagation,
+we also keep some information about how this `Bool` value was created.
+In particular, if you branch on this value, then may assume that in the true branch,
+the type of `SlotNumber(cnd.slot)` will be limited by `cnd.thentype`
+and in the false branch, it will be limited by `cnd.elsetype`.
+Example:
+```julia
+let cond = isa(x::Union{Int, Float}, Int)::Conditional(x, Int, Float)
+    if cond
+       # May assume x is `Int` now
+    else
+       # May assume x is `Float` now
+    end
+end
+```
+"""
 struct Conditional
-    var::SlotNumber
+    slot::Int
     thentype
     elsetype
-    Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
-        new(var, thentype, elsetype)
+    Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
+        new(slot, thentype, elsetype)
 end
+Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
+    Conditional(slot_id(var), thentype, elsetype)
 
-# # Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
-# # This is separate from `Conditional` to catch logic errors: the lattice element name is InterConditional
-# # while processing a call, then Conditional everywhere else. Thus InterConditional does not appear in
-# # CompilerTypes—these type's usages are disjoint—though we define the lattice for InterConditional.
+# """
+#     cnd::InterConditional
+#
+# Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
+# This is separate from `Conditional` to catch logic errors: the lattice element name is `InterConditional`
+# while processing a call, then `Conditional` everywhere else. Thus `InterConditional` does not appear in
+# `CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
+# """
 # struct InterConditional
 #     slot::Int
 #     thentype
 #     elsetype
+#     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
+#         new(slot, thentype, elsetype)
 # end
 import Core: InterConditional
+InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
+    InterConditional(slot_id(var), thentype, elsetype)
+
 const AnyConditional = Union{Conditional,InterConditional}
+Conditional(cnd::InterConditional) = Conditinal(cnd.slot, cnd.thentype, cnd.elsetype)
+InterConditional(cnd::Conditional) = InterConditional(cnd.slot, cnd.thentype, cnd.elsetype)
 
 struct PartialTypeVar
     tv::TypeVar
@@ -123,8 +142,8 @@ function issubconditional(a::C, b::C) where {C<:AnyConditional}
     return false
 end
 
-is_same_conditionals(a::Conditional,      b::Conditional)      = slot_id(a.var) === slot_id(b.var)
-is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot === b.slot
+is_same_conditionals(a::Conditional,      b::Conditional)      = a.slot == b.slot
+is_same_conditionals(a::InterConditional, b::InterConditional) = a.slot == b.slot
 
 is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
 
@@ -375,7 +394,7 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 # remove any Conditional for this slot from the vartable
 function invalidate_conditional(vt::VarState, changeid::Int)
     newtyp = ignorelimited(vt.typ)
-    if isa(newtyp, Conditional) && slot_id(newtyp.var) == changeid
+    if isa(newtyp, Conditional) && newtyp.slot == changeid
         newtyp = widenwrappedconditional(vt.typ)
         return VarState(newtyp, vt.undef)
     end

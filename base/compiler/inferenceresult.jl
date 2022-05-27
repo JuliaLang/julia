@@ -49,7 +49,7 @@ function matching_cache_argtypes(
                         condargs = Tuple{Int,Int}[]
                     end
                     push!(condargs, (slotid, i))
-                    given_argtypes[i] = Conditional(SlotNumber(slotid), thentype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
                 end
                 continue
             end

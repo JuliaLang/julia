@@ -391,16 +391,16 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     # type-lattice for Conditional wrapper
     if isa(typea, Conditional) && isa(typeb, Const)
         if typeb.val === true
-            typeb = Conditional(typea.var, Any, Union{})
+            typeb = Conditional(typea.slot, Any, Union{})
         elseif typeb.val === false
-            typeb = Conditional(typea.var, Union{}, Any)
+            typeb = Conditional(typea.slot, Union{}, Any)
         end
     end
     if isa(typeb, Conditional) && isa(typea, Const)
         if typea.val === true
-            typea = Conditional(typeb.var, Any, Union{})
+            typea = Conditional(typeb.slot, Any, Union{})
         elseif typea.val === false
-            typea = Conditional(typeb.var, Union{}, Any)
+            typea = Conditional(typeb.slot, Union{}, Any)
         end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
@@ -408,7 +408,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
             thentype = tmerge(typea.thentype, typeb.thentype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
-                return Conditional(typea.var, thentype, elsetype)
+                return Conditional(typea.slot, thentype, elsetype)
             end
         end
         val = maybe_extract_const_bool(typea)

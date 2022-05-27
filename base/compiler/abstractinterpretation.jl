@@ -436,7 +436,7 @@ function from_interconditional(@nospecialize(typ), sv::InferenceState, (; fargs,
     if thentype === Bottom && elsetype === Bottom
         return Bottom # accidentally proved this call to be dead / throw !
     elseif slot > 0
-        return Conditional(SlotNumber(slot), thentype, elsetype) # record a Conditional improvement to this slot
+        return Conditional(slot, thentype, elsetype) # record a Conditional improvement to this slot
     end
     return widenconditional(typ)
 end
@@ -971,7 +971,7 @@ function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{An
 end
 
 function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
-    slot = slot_id(cnd.var)
+    slot = cnd.slot
     for i in 1:length(fargs)
         arg = ssa_def_slot(fargs[i], sv)
         if isa(arg, SlotNumber) && slot_id(arg) == slot
@@ -1395,10 +1395,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
                 a = ssa_def_slot(fargs[3], sv)
                 b = ssa_def_slot(fargs[4], sv)
-                if isa(a, SlotNumber) && slot_id(cnd.var) == slot_id(a)
+                if isa(a, SlotNumber) && cnd.slot == slot_id(a)
                     tx = (cnd.thentype ⊑ tx ? cnd.thentype : tmeet(tx, widenconst(cnd.thentype)))
                 end
-                if isa(b, SlotNumber) && slot_id(cnd.var) == slot_id(b)
+                if isa(b, SlotNumber) && cnd.slot == slot_id(b)
                     ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : tmeet(ty, widenconst(cnd.elsetype)))
                 end
                 return tmerge(tx, ty)
@@ -1471,7 +1471,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 elseif rt === Const(true)
                     elty = Union{}
                 end
-                return Conditional(aty.var, ifty, elty)
+                return Conditional(aty.slot, ifty, elty)
             end
         elseif f === isdefined
             uty = argtypes[2]
@@ -1650,13 +1650,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         aty = argtypes[2]
         if isa(aty, Conditional)
             call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Bool]), Tuple{typeof(f), Bool}, sv, max_methods) # make sure we've inferred `!(::Bool)`
-            return CallMeta(Conditional(aty.var, aty.elsetype, aty.thentype), call.effects, call.info)
+            return CallMeta(Conditional(aty.slot, aty.elsetype, aty.thentype), call.effects, call.info)
         end
     elseif la == 3 && istopfunction(f, :!==)
         # mark !== as exactly a negated call to ===
         rty = abstract_call_known(interp, (===), arginfo, sv, max_methods).rt
         if isa(rty, Conditional)
-            return CallMeta(Conditional(rty.var, rty.elsetype, rty.thentype), EFFECTS_TOTAL, false) # swap if-else
+            return CallMeta(Conditional(rty.slot, rty.elsetype, rty.thentype), EFFECTS_TOTAL, false) # swap if-else
         elseif isa(rty, Const)
             return CallMeta(Const(rty.val === false), EFFECTS_TOTAL, MethodResultPure())
         end
@@ -2115,7 +2115,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nargs::Int, sl
         rt = widenconditional(rt)
     else
         if isa(rt, Conditional)
-            id = slot_id(rt.var)
+            id = rt.slot
             if 1 ≤ id ≤ nargs
                 old_id_type = widenconditional(slottypes[id]) # same as `(states[1]::VarTable)[id].typ`
                 if (!(rt.thentype ⊑ old_id_type) || old_id_type ⊑ rt.thentype) &&
@@ -2133,7 +2133,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nargs::Int, sl
             end
         end
         if isa(rt, Conditional)
-            rt = InterConditional(slot_id(rt.var), rt.thentype, rt.elsetype)
+            rt = InterConditional(rt.slot, rt.thentype, rt.elsetype)
         elseif is_lattice_bool(rt)
             if isa(bestguess, InterConditional)
                 # if the bestguess so far is already `Conditional`, try to convert
@@ -2154,7 +2154,7 @@ function widenreturn(@nospecialize(rt), @nospecialize(bestguess), nargs::Int, sl
 
     # only propagate information we know we can store
     # and is valid and good inter-procedurally
-    isa(rt, Conditional) && return InterConditional(slot_id(rt.var), rt.thentype, rt.elsetype)
+    isa(rt, Conditional) && return InterConditional(rt)
     isa(rt, InterConditional) && return rt
     return widenreturn_noconditional(rt)
 end
@@ -2346,14 +2346,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             # We continue with the true branch, but process the false
                             # branch here.
                             if isa(condt, Conditional)
-                                else_change = conditional_change(currstate, condt.elsetype, condt.var)
+                                else_change = conditional_change(currstate, condt.elsetype, condt.slot)
                                 if else_change !== nothing
                                     false_vartable = stoverwrite1!(copy(currstate), else_change)
                                 else
                                     false_vartable = currstate
                                 end
                                 changed = update_bbstate!(frame, falsebb, false_vartable)
-                                then_change = conditional_change(currstate, condt.thentype, condt.var)
+                                then_change = conditional_change(currstate, condt.thentype, condt.slot)
                                 if then_change !== nothing
                                     stoverwrite1!(currstate, then_change)
                                 end
@@ -2482,15 +2482,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     nothing
 end
 
-function conditional_change(state::VarTable, @nospecialize(typ), var::SlotNumber)
-    vtype = state[slot_id(var)]
+function conditional_change(state::VarTable, @nospecialize(typ), slot::Int)
+    vtype = state[slot]
     oldtyp = vtype.typ
     # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
     # since we probably formed these types with `typesubstract`, the comparison is likely simple
     if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
         # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
         oldtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes)))
-        return StateUpdate(var, VarState(typ, vtype.undef), state, true)
+        return StateUpdate(SlotNumber(slot), VarState(typ, vtype.undef), state, true)
     end
     return nothing
 end
