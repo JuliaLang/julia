@@ -26,6 +26,13 @@ module DeprecationTests # to test @deprecate
     struct A{T} end
     @deprecate A{T}(x::S) where {T, S} f()
 
+    module Sub
+    f1() = true
+    function f2 end
+    end
+    @deprecate Sub.f1() f() false
+    @deprecate Sub.f2 f false
+
     # test that @deprecate_moved can be overridden by an import
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
@@ -74,6 +81,8 @@ begin # @deprecate
 
     @test @test_warn "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead." A{Int}(1.)
 
+    @test @test_warn "`Sub.f1()` is deprecated, use `f()` instead." DeprecationTests.Sub.f1()
+
     redirect_stderr(devnull) do
         @test call(f1)
         @test call(DeprecationTests.f2)
@@ -81,6 +90,8 @@ begin # @deprecate
         @test call(DeprecationTests.f4)
         @test call(f5, 1)
         @test call(A{Int}, 1.)
+        @test call(DeprecationTests.Sub.f1)
+        @test call(DeprecationTests.Sub.f2)
     end
 
     @test @test_nowarn call(f1)
@@ -89,6 +100,8 @@ begin # @deprecate
     @test @test_nowarn call(DeprecationTests.f4)
     @test @test_nowarn call(f5, 1)
     @test @test_nowarn call(A{Int}, 1.)
+    @test @test_nowarn call(DeprecationTests.Sub.f1)
+    @test @test_nowarn call(DeprecationTests.Sub.f2)
 
     # issue #21972
     @noinline function f21972()
@@ -142,4 +155,25 @@ begin # tuple indexed by float deprecation
     @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((), 1.0)
     @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), 0.0)
     @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
+end
+
+@testset "@deprecated error message" begin
+    @test_throws(
+        "if the third `export_old` argument is not specified or `true`,",
+        @eval @deprecate M.f() g()
+    )
+    @test_throws(
+        "if the third `export_old` argument is not specified or `true`,",
+        @eval @deprecate M.f() g() true
+    )
+
+    # Given `@deprecated Old{T} where {...} new`, it is unclear if we should generate
+    # `Old{T}(args...) where {...} = new(args...)` or
+    # `(Old{T} where {...})(args...) = new(args...)`.
+    # Since nobody has requested this feature yet, make sure that it throws, until we
+    # conciously define
+    @test_throws(
+        "invalid usage of @deprecate",
+        @eval @deprecate Foo{T} where {T <: Int} g true
+    )
 end
