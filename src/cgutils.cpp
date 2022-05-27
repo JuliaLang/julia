@@ -3640,7 +3640,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                             promotion_point = inst;
                             promotion_ssa = fval_info.promotion_ssa;
                         }
-                    } 
+                    }
                     else if (!promotion_point) {
                         promotion_point = inst;
                     }
