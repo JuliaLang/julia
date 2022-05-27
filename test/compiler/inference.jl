@@ -1464,8 +1464,8 @@ let egal_tfunc
         @test egal_tfunc(c, Any) === Bool
     end
     let c = Conditional(Core.SlotNumber(0), Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.vtype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.vtype, Union{})
+        @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.thentype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.thentype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool

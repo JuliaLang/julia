@@ -2577,7 +2577,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_emptysvec, 0, 0, 2);
 
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
-                                          jl_perm_symsvec(3, "slot", "vtype", "elsetype"),
+                                          jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
                                           jl_svec(3, jl_long_type, jl_any_type, jl_any_type),
                                           jl_emptysvec, 0, 0, 3);
 

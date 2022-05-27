@@ -22,7 +22,7 @@ import Core: Const, PartialStruct
 # However, to enable a limited amount of back-propagation,
 # we also keep some information about how this Bool value was created.
 # In particular, if you branch on this value, then may assume that in
-# the true branch, the type of `var` will be limited by `vtype` and in
+# the true branch, the type of `var` will be limited by `thentype` and in
 # the false branch, it will be limited by `elsetype`. Example:
 # ```
 # cond = isa(x::Union{Int, Float}, Int)::Conditional(x, Int, Float)
@@ -34,14 +34,10 @@ import Core: Const, PartialStruct
 # ```
 struct Conditional
     var::SlotNumber
-    vtype
+    thentype
     elsetype
-    function Conditional(
-                var::SlotNumber,
-                @nospecialize(vtype),
-                @nospecialize(nottype))
-        return new(var, vtype, nottype)
-    end
+    Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
+        new(var, thentype, elsetype)
 end
 
 # # Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
@@ -50,7 +46,7 @@ end
 # # CompilerTypes—these type's usages are disjoint—though we define the lattice for InterConditional.
 # struct InterConditional
 #     slot::Int
-#     vtype
+#     thentype
 #     elsetype
 # end
 import Core: InterConditional
@@ -118,7 +114,7 @@ const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStr
 # (i.e. local inference and inter-procedural call), as such they will never be compared
 function issubconditional(a::C, b::C) where {C<:AnyConditional}
     if is_same_conditionals(a, b)
-        if a.vtype ⊑ b.vtype
+        if a.thentype ⊑ b.thentype
             if a.elsetype ⊑ b.elsetype
                 return true
             end
@@ -134,8 +130,8 @@ is_lattice_bool(@nospecialize(typ)) = typ !== Bottom && typ ⊑ Bool
 
 maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
 function maybe_extract_const_bool(c::AnyConditional)
-    (c.vtype === Bottom && !(c.elsetype === Bottom)) && return false
-    (c.elsetype === Bottom && !(c.vtype === Bottom)) && return true
+    (c.thentype === Bottom && !(c.elsetype === Bottom)) && return false
+    (c.elsetype === Bottom && !(c.thentype === Bottom)) && return true
     nothing
 end
 maybe_extract_const_bool(@nospecialize c) = nothing
@@ -358,7 +354,7 @@ end
 
 function widenconditional(@nospecialize typ)
     if isa(typ, AnyConditional)
-        if typ.vtype === Union{}
+        if typ.thentype === Union{}
             return Const(false)
         elseif typ.elsetype === Union{}
             return Const(true)
