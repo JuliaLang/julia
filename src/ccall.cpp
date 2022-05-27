@@ -684,7 +684,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         rt = static_eval(ctx, args[2]);
         if (rt == NULL) {
             JL_GC_POP();
-            jl_cgval_t argv[2] = {jl_cgval_t(ctx.builder.getContext()), jl_cgval_t(ctx.builder.getContext())};
+            jl_cgval_t argv[2] = {jl_cgval_t(), jl_cgval_t()};
             argv[0] = emit_expr(ctx, args[1]);
             argv[1] = emit_expr(ctx, args[2]);
             return emit_runtime_call(ctx, JL_I::cglobal, argv, nargs);
@@ -760,7 +760,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     ir = static_eval(ctx, ir_arg);
     if (!ir) {
         emit_error(ctx, "error statically evaluating llvm IR argument");
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
         jl_value_t *rtt = jl_arrayref((jl_array_t*)ctx.source->ssavaluetypes, ((jl_ssavalue_t*)args[2])->id - 1);
@@ -771,7 +771,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         rt = static_eval(ctx, args[2]);
         if (!rt) {
             emit_error(ctx, "error statically evaluating llvmcall return type");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
     }
     if (jl_is_ssavalue(args[3]) && !jl_is_long(ctx.source->ssavaluetypes)) {
@@ -783,31 +783,31 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         at = static_eval(ctx, args[3]);
         if (!at) {
             emit_error(ctx, "error statically evaluating llvmcall argument tuple");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
     }
     if (jl_is_tuple(ir)) {
         // if the IR is a tuple, we expect (mod, fn)
         if (jl_nfields(ir) != 2) {
             emit_error(ctx, "Tuple as first argument to llvmcall must have exactly two children");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         entry = jl_fieldref(ir, 1);
         if (!jl_is_string(entry)) {
             emit_error(ctx, "Function name passed to llvmcall must be a string");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         ir = jl_fieldref(ir, 0);
 
         if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type)) {
             emit_error(ctx, "Module IR passed to llvmcall must be a string or an array of bytes");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
     }
     else {
         if (!jl_is_string(ir)) {
             emit_error(ctx, "Function IR passed to llvmcall must be a string");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
     }
 
@@ -835,7 +835,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         argtypes.push_back(t);
         if (4 + i > nargs) {
             emit_error(ctx, "Missing arguments to llvmcall!");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         jl_value_t *argi = args[4 + i];
         jl_cgval_t arg = emit_expr(ctx, argi);
@@ -889,7 +889,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             raw_string_ostream stream(message);
             Err.print("", stream, true);
             emit_error(ctx, stream.str());
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
 
         Function *f = Mod->getFunction(ir_name);
@@ -906,7 +906,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                 raw_string_ostream stream(message);
                 Err.print("", stream, true);
                 emit_error(ctx, stream.str());
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t();
             }
         }
         else {
@@ -923,7 +923,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                 raw_string_ostream stream(message);
                 stream << Message;
                 emit_error(ctx, stream.str());
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t();
             }
             Mod = std::move(ModuleOrErr.get());
         }
@@ -931,7 +931,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         Function *f = Mod->getFunction(jl_string_data(entry));
         if (!f) {
             emit_error(ctx, "Module IR does not contain specified entry function");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         f->setName(ir_name);
 
@@ -959,7 +959,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     raw_string_ostream stream(message);
     if (verifyFunction(*def, &stream)) {
         emit_error(ctx, stream.str());
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
     def->setLinkage(GlobalVariable::LinkOnceODRLinkage);
 
@@ -983,7 +983,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         stream << "llvmcall return type " << *inst->getType()
                << " does not match declared return type" << *rettype;
         emit_error(ctx, stream.str());
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     return mark_julia_type(ctx, inst, retboxed, rtt);
@@ -1351,7 +1351,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     if (f_name == NULL && fptr == NULL && jl_ptr == NULL) {
         emit_error(ctx, "ccall: null function pointer");
         JL_GC_POP();
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     auto ccallarg = [=] (size_t i) {
@@ -1408,7 +1408,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     if (jl_is_abstract_ref_type(rt)) {
         if (!verify_ref_type(ctx, jl_tparam0(rt), unionall, 0, "ccall")) {
             JL_GC_POP();
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
     }
@@ -1442,7 +1442,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     if (!err.empty()) {
         emit_error(ctx, "ccall " + err);
         JL_GC_POP();
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
     if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
         jl_add_method_root(ctx, rt);
@@ -1454,7 +1454,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         if (jl_is_abstract_ref_type(tti)) {
             if (!verify_ref_type(ctx, jl_tparam0(tti), unionall, i + 1, "ccall")) {
                 JL_GC_POP();
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t();
             }
         }
     }
@@ -1899,7 +1899,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     ++EmittedCCalls;
     if (!err_msg.empty()) {
         emit_error(ctx, err_msg);
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     FunctionType *functype = this->functype(ctx.builder.getContext());
@@ -1946,7 +1946,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
 
         if (isa<UndefValue>(v)) {
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         assert(v->getType() == pargty);
         argvals[ai + sret] = v;
@@ -1987,15 +1987,15 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         ++EmittedLLVMCalls;
         if (symarg.jl_ptr != NULL) {
             emit_error(ctx, "llvmcall doesn't support dynamic pointers");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         else if (symarg.fptr != NULL) {
             emit_error(ctx, "llvmcall doesn't support static pointers");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         else if (symarg.f_lib != NULL) {
             emit_error(ctx, "llvmcall doesn't support dynamic libraries");
-            return jl_cgval_t(ctx.builder.getContext());
+            return jl_cgval_t();
         }
         else {
             assert(symarg.f_name != NULL);
@@ -2031,7 +2031,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             }
             if (llvmf == NULL) {
                 emit_error(ctx, "llvmcall only supports intrinsic calls");
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t();
             }
         }
     }
@@ -2098,7 +2098,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 
     if (rt == jl_bottom_type) {
         CreateTrap(ctx.builder);
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     // Finally we need to box the result into julia type
@@ -2116,7 +2116,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (!jlretboxed) {
             // something alloca'd above is SSA
             if (static_rt)
-                return mark_julia_slot(result, rt, NULL, ctx.tbaa(), ctx.tbaa().tbaa_stack);
+                return mark_julia_slot(result, rt, NULL, ctx.tbaa().tbaa_stack);
             ++SRetCCalls;
             result = ctx.builder.CreateLoad(sretty, result);
         }
