@@ -2090,14 +2090,8 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     return ty
 end
 
-function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(rhs))
-    M = lhs.mod
-    s = lhs.name
-    nothrow = false
-    if isdefined(M, s) && !isconst(M, s)
-        ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
-        nothrow = ty === nothing || rhs ⊑ ty
-    end
+function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(newty))
+    nothrow = global_assignemnt_nothrow(lhs.mod, lhs.name, newty)
     tristate_merge!(frame, Effects(EFFECTS_TOTAL,
         effect_free=TRISTATE_UNKNOWN,
         nothrow=nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))

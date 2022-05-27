@@ -4141,6 +4141,41 @@ let effects = Base.infer_effects(f_glob_assign_int, ())
     @test !Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+# Nothrow for setglobal!
+global SETGLOBAL!_NOTHROW::Int = 0
+let effects = Base.infer_effects() do
+        setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
+    end
+    @test Core.Compiler.is_nothrow(effects)
+end
+
+# we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
+# as the cached effects can be easily wrong otherwise
+# since the inference curently doesn't track "world-age" of global variables
+@eval global_assignment_undefiendyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
+setglobal!_nothrow_undefiendyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
+let effects = Base.infer_effects() do
+        global_assignment_undefiendyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        setglobal!_nothrow_undefiendyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+global UNDEFINEDYET::String = "0"
+let effects = Base.infer_effects() do
+        global_assignment_undefiendyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        setglobal!_nothrow_undefiendyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+@test_throws ErrorException setglobal!_nothrow_undefiendyet()
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
