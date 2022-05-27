@@ -901,7 +901,7 @@ static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNo
         emit_bitcast(ctx, vptr, PointerType::get(type, 0)))));
  }
 
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v);
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
 static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull);
 
 static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull)
@@ -3163,6 +3163,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
+//Used for allocation hoisting in *boxed
 static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsigned ToAS)
 {
     for (auto *User : Val->users()) {
@@ -3171,7 +3172,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
-        else if (isa<IntrinsicInst>(User)) {
+        else if (isa<IntrinsicInst>(User)) { //mangling based on function_sig_t::emit_a_ccall
             IntrinsicInst *II = cast<IntrinsicInst>(User);
             SmallVector<Type*, 3> ArgTys;
             Intrinsic::getIntrinsicSignature(II->getCalledFunction(), ArgTys);
@@ -3194,7 +3195,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
 // Returns ctx.types().T_prjlvalue
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotable)
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == jl_bottom_type || jt == NULL)
@@ -3224,7 +3225,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
         box = _boxed_special(ctx, vinfo, t);
         if (!box) {
             bool do_promote = vinfo.promotion_point;
-            if (do_promote) {
+            if (do_promote && is_promotable) {
                 auto IP = ctx.builder.saveIP();
                 ctx.builder.SetInsertPoint(vinfo.promotion_point);
                 box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
@@ -3238,7 +3239,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
                 recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
                 originalAlloca->replaceAllUsesWith(decayed);
                 // end illegal IR
-                cast<Instruction>(vinfo.V)->eraseFromParent();
+                originalAlloca->eraseFromParent();
                 ctx.builder.restoreIP(IP);
             } else {
                 box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
@@ -3639,13 +3640,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                             promotion_point = inst;
                             promotion_ssa = fval_info.promotion_ssa;
                         }
-                    } else if (!promotion_point) {
+                    } 
+                    else if (!promotion_point) {
                         promotion_point = inst;
                     }
                 }
                 Value *fval = NULL;
                 if (jl_field_isptr(sty, i)) {
-                    fval = boxed(ctx, fval_info);
+                    fval = boxed(ctx, fval_info, is_promotable);
                     if (!init_as_value)
                         cast<StoreInst>(tbaa_decorate(ctx.tbaa().tbaa_stack,
                                     ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i)))))
@@ -3708,7 +3710,8 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     if (field_promotable) {
                         fval_info.V->replaceAllUsesWith(dest);
                         cast<Instruction>(fval_info.V)->eraseFromParent();
-                    } else {
+                    }
+                    else {
                         fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa().tbaa_stack);
                     }
                 }
