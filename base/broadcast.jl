@@ -252,9 +252,11 @@ function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) wh
 end
 
 _maxndims(::Type{Tuple{}}) = 0
-_maxndims(::Type{Tuple{T}}) where {T} = _ndims(T)
-_maxndims(Args::Type{<:Tuple{T,Vararg{Any}}}) where {T} = max(_ndims(T), _maxndims(Base.tuple_type_tail(Args)))
-_ndims(::Type{T}) where {T} = T <: Tuple ? 1 : Int(ndims(T))::Int
+_maxndims(::Type{Tuple{T}}) where {T} = T <: Tuple ? 1 : Int(ndims(T))::Int
+function _maxndims(Args::Type{<:Tuple{T,Vararg{Any}}}) where {T}
+    Argstail = Tuple{ntuple(i -> fieldtype(Args, i + 1), fieldcount(Args) - 1)...}
+    max(_maxndims(Tuple{T}), _maxndims(Argstail))
+end
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
 Base.length(bc::Broadcasted) = prod(size(bc))
