@@ -4115,7 +4115,7 @@ const CONST_DICT = let d = Dict()
     end
     d
 end
-Base.@assume_effects :total_may_throw getcharid(c) = CONST_DICT[c]
+Base.@assume_effects :foldable getcharid(c) = CONST_DICT[c]
 @noinline callf(f, args...) = f(args...)
 function entry_to_be_invalidated(c)
     return callf(getcharid, c)

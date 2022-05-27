@@ -357,7 +357,7 @@ Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`.
 """
 function datatype_alignment(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return Int(alignment)
@@ -374,7 +374,7 @@ LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
 
 # amount of total space taken by T when stored in a container
 function aligned_sizeof(@nospecialize T::Type)
-    @_total_may_throw_meta
+    @_foldable_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
         return LLT_ALIGN(sz, al)
@@ -397,7 +397,7 @@ with no intervening padding bytes.
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
@@ -410,7 +410,7 @@ Return the number of fields known to this datatype's layout.
 Can be called on any `isconcretetype`.
 """
 function datatype_nfields(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
@@ -422,7 +422,7 @@ Return whether instances of this type can contain references to gc-managed memor
 Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
     return npointers == 0
@@ -438,7 +438,7 @@ Can be called on any `isconcretetype`.
 See also [`fieldoffset`](@ref).
 """
 function datatype_fielddesc_type(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return (flags >> 1) & 3
@@ -706,7 +706,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000060, :ctime, Float64)
 ```
 """
-fieldoffset(x::DataType, idx::Integer) = (@_total_may_throw_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -752,7 +752,7 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
-    @_total_may_throw_meta
+    @_foldable_meta
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
@@ -776,7 +776,7 @@ Get the number of fields that an instance of the given type would have.
 An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
-    @_total_may_throw_meta
+    @_foldable_meta
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
         if t === nothing
@@ -828,7 +828,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = (@_total_may_throw_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
+fieldtypes(T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
 
 # return all instances, for types that can be enumerated
 

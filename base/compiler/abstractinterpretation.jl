@@ -1999,7 +1999,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 effects.nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.terminates_globally ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 #=nonoverlayed=#true,
-                #=notaskstate=#TRISTATE_UNKNOWN
+                effects.notaskstate ? ALWAYS_TRUE : TRISTATE_UNKNOWN
             ))
         else
             tristate_merge!(sv, EFFECTS_UNKNOWN)
