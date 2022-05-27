@@ -534,21 +534,44 @@ function ipo_escape_cache(mi_cache::MICache) where MICache
 end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
-function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
-    @timeit "convert"   ir = convert_to_ircode(ci, sv)
-    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
+macro pass(name, expr)
+    optimize_until = esc(:optimize_until)
+    stage = esc(:__stage__)
+    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    quote
+        $macrocall
+        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
+    end
+end
+
+matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
+matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(::Nothing, _, _) = false
+
+function run_passes(
+    ci::CodeInfo,
+    sv::OptimizationState,
+    caller::InferenceResult,
+    optimize_until = nothing,  # run all passes by default
+)
+    __stage__ = 1  # used by @pass
+    # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
+    @pass "convert"   ir = convert_to_ircode(ci, sv)
+    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @pass "compact 1" ir = compact!(ir)
+    @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
-    @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = sroa_pass!(ir)
-    @timeit "ADCE"      ir = adce_pass!(ir)
-    @timeit "type lift" ir = type_lift_pass!(ir)
-    @timeit "compact 3" ir = compact!(ir)
+    @pass "compact 2" ir = compact!(ir)
+    @pass "SROA"      ir = sroa_pass!(ir)
+    @pass "ADCE"      ir = adce_pass!(ir)
+    @pass "type lift" ir = type_lift_pass!(ir)
+    @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
+    @label __done__  # used by @pass
     return ir
 end
 

@@ -38,7 +38,7 @@ end
 
 block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
 
-function basic_blocks_starts(stmts::Vector{Any})
+@inline function basic_blocks_starts(stmts::Vector{Any})
     jump_dests = BitSet()
     push!(jump_dests, 1) # function entry point
     # First go through and compute jump destinations
@@ -85,15 +85,14 @@ function basic_blocks_starts(stmts::Vector{Any})
 end
 
 function compute_basic_blocks(stmts::Vector{Any})
-    bb_starts = basic_blocks_starts(stmts)
     # Compute ranges
+    bb_starts = basic_blocks_starts(stmts) # ::BitSet and already sorted
     pop!(bb_starts, 1)
-    basic_block_index = sort!(collect(bb_starts); alg=QuickSort)
-    blocks = BasicBlock[]
-    sizehint!(blocks, length(basic_block_index))
+    basic_block_index = Int[bb for bb in bb_starts]
+    blocks = Vector{BasicBlock}(undef, length(basic_block_index))
     let first = 1
-        for last in basic_block_index
-            push!(blocks, BasicBlock(StmtRange(first, last - 1)))
+        for (i, last) in enumerate(basic_block_index)
+            blocks[i] = BasicBlock(StmtRange(first, last - 1))
             first = last
         end
     end
@@ -120,16 +119,14 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(b.succs, block′)
             end
-        elseif isa(terminator, Expr)
-            if terminator.head === :enter
-                # :enter gets a virtual edge to the exception handler and
-                # the exception handler gets a virtual edge from outside
-                # the function.
-                block′ = block_for_inst(basic_block_index, terminator.args[1]::Int)
-                push!(blocks[block′].preds, num)
-                push!(blocks[block′].preds, 0)
-                push!(b.succs, block′)
-            end
+        elseif isexpr(terminator, :enter)
+            # :enter gets a virtual edge to the exception handler and
+            # the exception handler gets a virtual edge from outside
+            # the function.
+            block′ = block_for_inst(basic_block_index, terminator.args[1]::Int)
+            push!(blocks[block′].preds, num)
+            push!(blocks[block′].preds, 0)
+            push!(b.succs, block′)
         end
         # statement fall-through
         if num + 1 <= length(blocks)

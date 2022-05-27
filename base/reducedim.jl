@@ -1027,7 +1027,7 @@ end
 ##### findmin & findmax #####
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.
 #
-function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
+function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
@@ -1048,8 +1048,8 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRi = Rind[i1,IR]
             for i in axes(A,1)
                 k, kss = y::Tuple
-                tmpAv = A[i,IA]
-                if tmpRi == zi || f(tmpRv, tmpAv)
+                tmpAv = f(A[i,IA])
+                if tmpRi == zi || op(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -1063,10 +1063,10 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
                 k, kss = y::Tuple
-                tmpAv = A[i,IA]
+                tmpAv = f(A[i,IA])
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
-                if tmpRi == zi || f(tmpRv, tmpAv)
+                if tmpRi == zi || op(tmpRv, tmpAv)
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -1086,7 +1086,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(identity, isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -1110,16 +1110,40 @@ julia> findmin(A, dims=2)
 ```
 """
 findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
+_findmin(A, dims) = _findmin(identity, A, dims)
 
-function _findmin(A, region)
+"""
+    findmin(f, A; dims) -> (f(x), index)
+
+For an array input, returns the value in the codomain and index of the corresponding value
+which minimize `f` over the given dimensions.
+
+# Examples
+```jldoctest
+julia> A = [-1.0 1; -0.5 2]
+2×2 Matrix{Float64}:
+ -1.0  1.0
+ -0.5  2.0
+
+julia> findmin(abs2, A, dims=1)
+([0.25 1.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(1, 2)])
+
+julia> findmin(abs2, A, dims=2)
+([1.0; 0.25;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
+```
+"""
+findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
+
+function _findmin(f, A, region)
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, ri), zeros(eltype(keys(A)), ri))
+        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
+        fA = f(first(A))
+        findminmax!(f, isgreater, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
@@ -1133,7 +1157,7 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(identity, isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -1157,18 +1181,52 @@ julia> findmax(A, dims=2)
 ```
 """
 findmax(A::AbstractArray; dims=:) = _findmax(A, dims)
+_findmax(A, dims) = _findmax(identity, A, dims)
 
-function _findmax(A, region)
+"""
+    findmax(f, A; dims) -> (f(x), index)
+
+For an array input, returns the value in the codomain and index of the corresponding value
+which maximize `f` over the given dimensions.
+
+# Examples
+```jldoctest
+julia> A = [-1.0 1; -0.5 2]
+2×2 Matrix{Float64}:
+ -1.0  1.0
+ -0.5  2.0
+
+julia> findmax(abs2, A, dims=1)
+([1.0 4.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(2, 2)])
+
+julia> findmax(abs2, A, dims=2)
+([1.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 2);;])
+```
+"""
+findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
+
+function _findmax(f, A, region)
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        similar(A, ri), zeros(eltype(keys(A)), ri)
+        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(isless, fill!(similar(A, ri), first(A)),
+        fA = f(first(A))
+        findminmax!(f, isless, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
+end
+
+function _findminmax_inittype(f, A::AbstractArray)
+    T = _realtype(f, promote_union(eltype(A)))
+    v0 = f(first(A))
+    # First conditional: T is >: typeof(v0), so return it
+    # Second conditional: handle missing specifically, as most often, f(missing) = missing;
+    # certainly, some predicate functions return Bool, but not all.
+    # Else, return the type of the transformation.
+    Tr = v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
 end
 
 reducedim1(R, A) = length(axes1(R)) == 1

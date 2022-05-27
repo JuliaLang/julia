@@ -7,6 +7,8 @@ New language features
 * It is now possible to assign to bindings in another module using `setproperty!(::Module, ::Symbol, x)`. ([#44137])
 * Slurping in assignments is now also allowed in non-final position. This is
   handled via `Base.split_rest`. ([#42902])
+* Character literals now support the same syntax allowed in string literals; i.e. the syntax can
+  represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
 
 Language changes
 ----------------
@@ -103,6 +105,11 @@ Standard library changes
   executed upon existing the editor.
 
 #### SparseArrays
+
+#### Test
+* New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
+  Set either via the `@testset` kwarg `failfast=true` or by setting env var `JULIA_TEST_FAILFAST`
+  to `"true"` i.e. in CI runs to request the job failure be posted eagerly when issues occur ([#45317])
 
 #### Dates
 

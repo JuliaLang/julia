@@ -1126,7 +1126,8 @@ static const auto &builtin_func_map() {
           { jl_f_arrayset_addr,           new JuliaFunction{XSTR(jl_f_arrayset), get_func_sig, get_func_attrs} },
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
-          { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} }
+          { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
+          { jl_f_finalizer_addr,          new JuliaFunction{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} }
         };
     return builtins;
 }
@@ -4608,27 +4609,27 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
     assert(!jl_is_ssavalue(l));
     jl_cgval_t rval_info = emit_expr(ctx, r, ssaval);
 
+    if (jl_is_slot(l)) {
+        int sl = jl_slot_number(l) - 1;
+        // it's a local variable
+        jl_varinfo_t &vi = ctx.slots[sl];
+        return emit_varinfo_assign(ctx, vi, rval_info, l);
+    }
+
     jl_binding_t *bnd = NULL;
     Value *bp = NULL;
     if (jl_is_symbol(l))
-        bp = global_binding_pointer(ctx, ctx.module, (jl_sym_t*)l, &bnd, true); // now bp != NULL or bnd != NULL
-    else if (jl_is_globalref(l))
-        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true); // now bp != NULL or bnd != NULL
-    else
-        assert(jl_is_slot(l));
-    if (bp != NULL || bnd != NULL) { // it is a global
-        if (bp != NULL) {
-            emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
-            // Global variable. Does not need debug info because the debugger knows about
-            // its memory location.
-        }
-        return;
+        bp = global_binding_pointer(ctx, ctx.module, (jl_sym_t*)l, &bnd, true);
+    else {
+        assert(jl_is_globalref(l));
+        bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
     }
-
-    int sl = jl_slot_number(l) - 1;
-    // it's a local variable
-    jl_varinfo_t &vi = ctx.slots[sl];
-    emit_varinfo_assign(ctx, vi, rval_info, l);
+    if (bp != NULL) {
+        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
+        // Global variable. Does not need debug info because the debugger knows about
+        // its memory location.
+    }
+    return;
 }
 
 static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)

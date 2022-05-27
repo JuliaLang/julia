@@ -1160,6 +1160,111 @@ end
     end
 end
 
+@testset "failfast option" begin
+    @testset "non failfast (default)" begin
+        expected = r"""
+        Test Summary: | Pass  Fail  Error  Total  Time
+        Foo           |    1     2      1      4  \s*\d*.\ds
+          Bar         |    1     1             2  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast passes to child testsets" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        PackageName   |    1      1  \s*\d*.\ds
+          1           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "1" begin
+                   @test false
+                end
+                @testset "2" begin
+                   @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast via env var" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            ENV["JULIA_TEST_FAILFAST"] = true
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+end
+
 # Non-booleans in @test (#35888)
 struct T35888 end
 Base.isequal(::T35888, ::T35888) = T35888()
