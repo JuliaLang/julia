@@ -157,14 +157,15 @@ end
             This = "$this_uuid"
             """)
 
-            @test Base.env_project_file(joinpath(dir, "Root")).uuid == root_uuid
-            @test Base.env_project_file(joinpath(project_file, "Root")).uuid == root_uuid
+            @test Base.env_project_file(joinpath(dir)) == project_file
+            @test Base.env_project_file(joinpath(project_file)) == project_file
 
-            @test Base.env_project_file(joinpath(dir, "This")).uuid == this_uuid
-            @test Base.env_project_file(joinpath(project_file, "This")).uuid == this_uuid
+            @test Base.env_project_file(joinpath(dir, "This")) === false
+            @test Base.env_project_file(joinpath(project_file, "This")) === false
 
-            @test Base.env_project_file(joinpath(dir, "That")).uuid == nothing
-            @test Base.env_project_file(joinpath(project_file, "That")).uuid == nothing
+            mkdir(joinpath(dir, "Inner"))
+            @test Base.env_project_file(joinpath(dir, "Inner")) === true
+            @test Base.env_project_file(joinpath(dir, "Inner", "Project.toml")) === false
 
             # look up various packages by name
             root = Base.identify_package("Root")
