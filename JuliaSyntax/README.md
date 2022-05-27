@@ -742,10 +742,12 @@ Points of note:
 
 ## Diagnostics
 
-Rust is renowned for having great compiler diagnostics, so it's probably a good
-place to get inspiration from.
+The paper [P2429 - Concepts Error Messages for
+Humans](https://wg21.tartanllama.xyz/P2429%20-%20Concepts%20Error%20Messages%20for%20Humans.pdf)
+is C++ centric, but has a nice review of quality error reporting in various
+compilers including Elm, ReasonML, Flow, D and Rust.
 
-Some resources:
+Some Rust-specific resources:
 * [rustc_errors::Diagnostic](https://doc.rust-lang.org/stable/nightly-rustc/rustc_errors/struct.Diagnostic.html)
 * The source of the Rust compiler's diagnostics system:
   - The [`println!` macro](https://github.com/rust-lang/rust/blob/0b6f079e4987ded15c13a15b734e7cfb8176839f/compiler/rustc_builtin_macros/src/format.rs)
