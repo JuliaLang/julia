@@ -3,7 +3,7 @@
 ## Background
 
 Beginning in Julia 0.7, parts of the compiler use a new [SSA-form](https://en.wikipedia.org/wiki/Static_single_assignment_form)
-intermediate representation. Historically, the compiler would directly generate LLVM IR from a lowered form of the Julia
+intermediate representation (IR). Historically, the compiler would directly generate LLVM IR from a lowered form of the Julia
 AST. This form had most syntactic abstractions removed, but still looked a lot like an abstract syntax tree.
 Over time, in order to facilitate optimizations, SSA values were introduced to this IR and the IR was
 linearized (i.e. turned into a form where function arguments could only be SSA values or constants). However, non-SSA values
