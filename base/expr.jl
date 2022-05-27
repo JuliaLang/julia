@@ -427,6 +427,8 @@ The following `setting`s are supported.
 - `:nothrow`
 - `:terminates_globally`
 - `:terminates_locally`
+- `:notaskstate`
+- `:foldable`
 - `:total`
 
 ---
@@ -598,13 +600,16 @@ the following other `setting`s:
     number of effect overrides apply to a set of functions, a custom macro is
     recommended over the use of `:total`.
 
+---
+
 ## Negated effects
 
 Effect names may be prefixed by `!` to indicate that the effect should be removed
 from an earlier meta effect. For example, `:total !:nothrow` indicates that while
 the call is generally total, it may however throw.
 
-## Comparison to @pure
+## Comparison to `@pure`
+
 `@assume_effects :foldable` is similar to [`@pure`](@ref) with the primary
 distinction that the `:consistent`-cy requirement applies world-age wise rather
 than globally as described above. However, in particular, a method annotated
@@ -616,7 +621,7 @@ macro assume_effects(args...)
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate) =
         (false, false, false, false, false, false, false)
     for org_setting in args[1:end-1]
-        (setting, val) = compute_setting(org_setting)
+        (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
         elseif setting === :effect_free
@@ -649,11 +654,11 @@ macro assume_effects(args...)
     return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate))
 end
 
-function compute_setting(@nospecialize(setting), val::Bool=true)
+function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
-        return compute_setting(setting.args[2], !val)
+        return compute_assumed_setting(setting.args[2], !val)
     elseif isa(setting, QuoteNode)
-        return compute_setting(setting.value, val)
+        return compute_assumed_setting(setting.value, val)
     else
         return (setting, val)
     end
