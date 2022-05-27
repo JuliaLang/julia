@@ -788,20 +788,20 @@ end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch, effects::Effects)
     mi = specialize_method(match; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, linfo::MethodInstance, effects::Effects)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult, effects::Effects)
-    return compileable_specialization(et, linfo, effects)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects)
+    return compileable_specialization(et, result.linfo, effects)
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
@@ -1332,7 +1332,9 @@ end
 
 function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        return compileable_specialization(state.et, result.mi, result.effects)
+        case = compileable_specialization(state.et, result.mi, result.effects)
+        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
+        return case
     end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
