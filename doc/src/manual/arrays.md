@@ -103,7 +103,8 @@ same type, then that is its `eltype`. If they all have a common
 [promotion type](@ref conversion-and-promotion) then they get converted to that type using
 [`convert`](@ref) and that type is the array's `eltype`. Otherwise, a heterogeneous array
 that can hold anything — a `Vector{Any}` — is constructed; this includes the literal `[]`
-where no arguments are given.
+where no arguments are given. [Array literal can be typed](@ref man-array-typed-literal) with
+the syntax `T[A, B, C, ...]` where `T` is a type.
 
 ```jldoctest
 julia> [1,2,3] # An array of `Int`s
@@ -117,6 +118,12 @@ julia> promote(1, 2.3, 4//5) # This combination of Int, Float64 and Rational pro
 
 julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
 3-element Vector{Float64}:
+ 1.0
+ 2.3
+ 0.8
+
+julia> Float32[1, 2.3, 4//5] # Specify element type manually
+3-element Vector{Float32}:
  1.0
  2.3
  0.8
@@ -324,7 +331,7 @@ These syntaxes are shorthands for function calls that themselves are convenience
 | `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
 | `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
-### Typed array literals
+### [Typed array literals](@id man-array-typed-literal)
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
