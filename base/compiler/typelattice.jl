@@ -4,7 +4,7 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
+# N.B.: Const/PartialStruct are defined in Core, to allow them to be used
 # inside the global code cache.
 #
 # # The type of a value might be constant
@@ -48,22 +48,21 @@ end
 Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     Conditional(slot_id(var), thentype, elsetype)
 
-# """
-#     cnd::InterConditional
-#
-# Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
-# This is separate from `Conditional` to catch logic errors: the lattice element name is `InterConditional`
-# while processing a call, then `Conditional` everywhere else. Thus `InterConditional` does not appear in
-# `CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
-# """
-# struct InterConditional
-#     slot::Int
-#     thentype
-#     elsetype
-#     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
-#         new(slot, thentype, elsetype)
-# end
-import Core: InterConditional
+"""
+    cnd::InterConditional
+
+Similar to `Conditional`, but conveys inter-procedural constraints imposed on call arguments.
+This is separate from `Conditional` to catch logic errors: the lattice element name is `InterConditional`
+while processing a call, then `Conditional` everywhere else. Thus `InterConditional` does not appear in
+`CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
+"""
+struct InterConditional
+    slot::Int
+    thentype
+    elsetype
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
+        new(slot, thentype, elsetype)
+end
 InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
 

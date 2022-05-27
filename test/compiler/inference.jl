@@ -2037,17 +2037,14 @@ end
         return nothing
     end == Any[Union{Nothing,Expr}]
 
-    # handle the edge case
-    let ts = @eval Module() begin
-            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
-            # create cache
-            Base.return_types(edgecase, (Any,))
-            Base.return_types((Any,)) do x
-                edgecase(x) ? x : nothing # ::Any
-            end
+    # handle edge case
+    @test (@eval Module() begin
+        edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+        Base.return_types(edgecase, (Any,)) # create cache
+        Base.return_types((Any,)) do x
+            edgecase(x)
         end
-        @test ts == Any[Any]
-    end
+    end) == Any[Core.Compiler.InterConditional]
 
     # a tricky case: if constant inference derives `Const` while non-constant inference has
     # derived `InterConditional`, we should not discard that constant information
