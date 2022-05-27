@@ -2965,7 +2965,7 @@ JL_DLLEXPORT void jl_gc_reset_stats(void)
 {
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
-    gc_num.max_ttsp = 0;
+    gc_num.max_time_to_safepoint = 0;
 }
 
 // TODO: these were supposed to be thread local
@@ -3064,7 +3064,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_mark_sp_t sp;
     gc_mark_sp_init(gc_cache, &sp);
 
-    uint64_t gc_start_t = jl_hrtime();
+    uint64_t gc_start_time = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     JL_PROBE_GC_MARK_BEGIN();
     uint64_t start_mark_time = jl_hrtime();
@@ -3096,7 +3096,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
-    gc_time_mark_pause(gc_start_t, scanned_bytes, perm_scanned_bytes);
+    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
     uint64_t end_mark_time = jl_hrtime();
     uint64_t mark_time = end_mark_time - start_mark_time;
     gc_num.mark_time = mark_time;
@@ -3214,9 +3214,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_sweep_perm_alloc();
     JL_PROBE_GC_SWEEP_END();
 
-    uint64_t gc_end_t = jl_hrtime();
-    uint64_t pause = gc_end_t - gc_start_t;
-    uint64_t sweep_time = gc_end_t - start_sweep_time;
+    uint64_t gc_end_time = jl_hrtime();
+    uint64_t pause = gc_end_time - gc_start_time;
+    uint64_t sweep_time = gc_end_time - start_sweep_time;
     gc_num.total_sweep_time += sweep_time;
     gc_num.sweep_time = sweep_time;
 
@@ -3255,8 +3255,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
-    gc_final_pause_end(t0, gc_end_t);
-    gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
+    gc_final_pause_end(t0, gc_end_time);
+    gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
@@ -3287,8 +3287,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
        }
     }
 
-    gc_time_summary(sweep_full, t_start, gc_end_t, gc_num.freed,
-                    live_bytes, gc_num.interval, pause, gc_num.ttsp,
+    gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
+                    live_bytes, gc_num.interval, pause,
+                    gc_num.time_to_safepoint,
                     gc_num.mark_time, gc_num.sweep_time);
 
     prev_sweep_full = sweep_full;
@@ -3343,9 +3344,9 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     uint64_t t1 = jl_hrtime();
     uint64_t duration = t1 - t0;
-    if (duration > gc_num.max_ttsp)
-        gc_num.max_ttsp = duration;
-    gc_num.ttsp = duration;
+    if (duration > gc_num.max_time_to_safepoint)
+        gc_num.max_time_to_safepoint = duration;
+    gc_num.time_to_safepoint = duration;
 
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
