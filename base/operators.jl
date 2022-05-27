@@ -302,8 +302,6 @@ const ⩶ = ===
 
 """
     !==(x, y)
-    !⩵(x, y)
-    !⩶(x, y)
     ≢(x, y)
 
 Always gives the opposite answer as [`===`](@ref).
@@ -320,8 +318,6 @@ false
 ```
 """
 !==(@nospecialize(x), @nospecialize(y)) = !(x === y)
-!⩵(@nospecialize(x), @nospecialize(y)) = !(x === y)
-!⩶(@nospecialize(x), @nospecialize(y)) = !(x === y)
 const ≢ = !==
 
 """
@@ -536,7 +532,6 @@ identity(@nospecialize x) = x
 (|)(x::Integer) = x
 xor(x::Integer) = x
 
-const − = -
 const ⊻ = xor
 const ⊼ = nand
 const ⊽ = nor
