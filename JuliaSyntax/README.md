@@ -453,6 +453,8 @@ useful, even for DSLs:
 * `abstract type A < B end` and other subtype comparisons are allowed, but
   only `A <: B` makes sense.
 * `x where {S T}` produces `(where x (bracescat (row S T)))`. This seems pretty weird!
+* `[x for outer x in xs]` parses, but `outer` makes no real sense in this
+  context (and using this form is a lowering error)
 
 ### `kw` and `=` inconsistencies
 
