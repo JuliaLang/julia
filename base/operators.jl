@@ -345,6 +345,27 @@ false
 ```
 """
 <(x, y) = isless(x, y)
+
+"""
+    ≮(x, y)
+
+Not-less-than comparison operator. Always gives the opposite answer as [`<`](@ref).
+
+# Examples
+```jldoctest
+julia> 'a' ≮ 'b'
+false
+
+julia> "abc" ≮ "abd"
+false
+
+julia> 5 ≮ 3
+true
+```
+
+!!! compat "Julia 1.8"
+    The ≮ operator requires at least Julia 1.8.
+"""
 ≮(x, y) = !<(x, y)
 
 """
@@ -372,6 +393,30 @@ true
 ```
 """
 >(x, y) = y < x
+
+"""
+    ≯(x, y)
+
+Not-greater-than comparison operator. Always gives the opposite answer as [`>`](@ref).
+
+# Examples
+```jldoctest
+julia> 'a' ≯ 'b'
+true
+
+julia> 1 ≯ 3 ≯ 7
+true
+
+julia> "abc" ≯ "abd"
+true
+
+julia> 5 ≯ 3
+false
+```
+
+!!! compat "Julia 1.8"
+    The ≯ operator requires at least Julia 1.8.
+"""
 ≯(x, y) = !>(x, y)
 
 """
@@ -395,10 +440,37 @@ true
 julia> 5 <= 3
 false
 ```
+
+!!! compat "Julia 1.8"
+    The ⩽ operator requires at least Julia 1.8.
 """
 <=(x, y) = (x < y) | (x == y)
 const ≤ = <=
 const ⩽ = ≤
+
+"""
+    ≰(x, y)
+
+Not-less-than-or-equals comparison operator. Always gives the opposite answer as [`≤`](@ref).
+
+# Examples
+```jldoctest
+julia> 'a' ≰ 'b'
+false
+
+julia> 9 ≰ 8 ≰ 7
+true
+
+julia> "abc" ≰ "abc"
+false
+
+julia> 5 ≰ 3
+true
+```
+
+!!! compat "Julia 1.8"
+    The ≰ operator requires at least Julia 1.8.
+"""
 ≰(x, y) = !≤(x, y)
 
 """
@@ -422,10 +494,37 @@ true
 julia> 5 >= 3
 true
 ```
+
+!!! compat "Julia 1.8"
+    The ⩾ operator requires at least Julia 1.8.
 """
 >=(x, y) = (y <= x)
 const ≥ = >=
 const ⩾ = ≥
+
+"""
+    ≱(x, y)
+
+Not-greater-than-or-equals comparison operator. Always gives the opposite answer as [`≥`](@ref).
+
+# Examples
+```jldoctest
+julia> 'a' ≱ 'b'
+true
+
+julia> 3 ≱ 5 ≱ 7
+true
+
+julia> "abc" ≱ "abc"
+false
+
+julia> 5 ≱ 3
+false
+```
+
+!!! compat "Julia 1.8"
+    The ≱ operator requires at least Julia 1.8.
+"""
 ≱(x, y) = !≥(x, y)
 
 # this definition allows Number types to implement < instead of isless,
@@ -1169,8 +1268,8 @@ a function equivalent to `y -> y ≱ x`.
 The returned function is of type `Base.Fix2{typeof(≱)}`, which can be
 used to implement specialized methods.
 
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
 """
 ≱(x) = Fix2(≱, x)
 
@@ -1195,8 +1294,8 @@ a function equivalent to `y -> y ≰ x`.
 The returned function is of type `Base.Fix2{typeof(≰)}`, which can be
 used to implement specialized methods.
 
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
 """
 ≰(x) = Fix2(≰, x)
 
@@ -1221,8 +1320,8 @@ a function equivalent to `y -> y ≯ x`.
 The returned function is of type `Base.Fix2{typeof(≯)}`, which can be
 used to implement specialized methods.
 
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
 """
 ≯(x) = Fix2(≯, x)
 
@@ -1247,8 +1346,8 @@ a function equivalent to `y -> y ≮ x`.
 The returned function is of type `Base.Fix2{typeof(≮)}`, which can be
 used to implement specialized methods.
 
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
 """
 ≮(x) = Fix2(≮, x)
 
