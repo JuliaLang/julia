@@ -210,6 +210,15 @@ typedef struct {
     jl_gc_ws_queue_t mark_queue;
 } jl_gc_mark_cache_t;
 
+typedef enum {
+    JL_GC_STATE_WAITING = 1, // gc_state = 1 means the thread is doing GC or is waiting for
+                             // the GC to finish.
+    JL_GC_STATE_SAFE = 2, // gc_state = 2 means the thread is running unmanaged code that
+                          // can be execute at the same time with the GC.
+    JL_GC_STATE_PARALLEL = 3, // gc_state = 3 means the thread is doing GC work that can be
+                              // executed concurrently on multiple threads.
+} jl_gc_state_t;
+
 struct _jl_bt_element_t;
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
@@ -220,16 +229,6 @@ typedef struct _jl_tls_states_t {
     uint64_t rngseed;
     volatile size_t *safepoint;
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
-    // Whether it is safe to execute GC at the same time.
-#define JL_GC_STATE_WAITING 1
-    // gc_state = 1 means the thread is doing GC or is waiting for the GC to
-    //              finish.
-#define JL_GC_STATE_SAFE 2
-    // gc_state = 2 means the thread is running unmanaged code that can be
-    //              execute at the same time with the GC.
-#define JL_GC_STATE_PARALLEL 3
-    // gc_state = 3 means the thread is doing GC work that can be executed
-    //              concurrently on multiple threads.
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain

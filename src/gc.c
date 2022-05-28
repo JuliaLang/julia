@@ -1721,8 +1721,8 @@ size_t gc_mark_label_sizes[_GC_MARK_L_MAX];
 STATIC_INLINE void *gc_mark_deque_pop_pc(jl_gc_ws_queue_t *mark_queue)
 {
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&mark_queue->bottom);
-    int b = bottom.pc_offset - 1;
     jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
+    int b = bottom.pc_offset - 1;
     jl_gc_ws_bottom_t bottom2 = {b, bottom.data_offset};
     jl_atomic_store_relaxed(&mark_queue->bottom, bottom2);
     jl_fence();
@@ -1768,7 +1768,7 @@ gc_mark_deque_resize(jl_gc_ws_queue_t *mark_queue, jl_gc_ws_top_t top,
     // Resize/copy pc queue
     void **old_pc_start = old_array->pc_start;
     void **new_pc_start = (void **)malloc_s(2 * old_array->size * sizeof(void *));
-    for (size_t i = top.offset; i <= bottom.pc_offset; i++) {
+    for (size_t i = top.offset; i < bottom.pc_offset; i++) {
         new_pc_start[i % (2 * old_array->size)] = old_pc_start[i % old_array->size];
     }
 
@@ -1776,7 +1776,7 @@ gc_mark_deque_resize(jl_gc_ws_queue_t *mark_queue, jl_gc_ws_top_t top,
     jl_gc_mark_data_t *old_data_start = old_array->data_start;
     jl_gc_mark_data_t *new_data_start =
         (jl_gc_mark_data_t *)malloc_s(2 * old_array->size * sizeof(jl_gc_mark_data_t));
-    for (size_t i = top.offset; i <= bottom.data_offset; i++) {
+    for (size_t i = top.offset; i < bottom.data_offset; i++) {
         new_data_start[i % (2 * old_array->size)] = old_data_start[i % old_array->size];
     }
 
@@ -1809,7 +1809,7 @@ STATIC_INLINE void gc_mark_deque_push(jl_gc_mark_cache_t *gc_cache, void *pc, vo
     jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
     int64_t size = bottom.data_offset - top.offset;
     // Queue overflow
-    if (__unlikely(size >= array->size - 1))
+    if (__unlikely(size >= array->size))
         array = gc_mark_deque_resize(mark_queue, top, bottom);
     // Copy pc/data items
     memcpy(&array->data_start[bottom.data_offset % array->size], data, data_size);
@@ -3563,7 +3563,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 
     jl_atomic_store_release(&mark_queue->array, array);
 
-    size_t reclaim_set_size = 10; // TODO: does `reclaim_set` need resize?
+    size_t reclaim_set_size = 32;
     arraylist_t *a = (arraylist_t *)malloc(sizeof(arraylist_t));
     mark_queue->reclaim_set = arraylist_new(a, reclaim_set_size);
 
