@@ -27,8 +27,12 @@ export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle,
 """
     Iterators.map(f, iterators...)
 
-Create a lazy mapping.  This is another syntax for writing
-`(f(args...) for args in zip(iterators...))`.
+Create a lazy mapping.
+
+When calling `Iterators.map`, `f` is assumed to be 
+[pure](https://en.wikipedia.org/wiki/Pure_function) if working with sparse 
+data structures. Using an impure function with `map` may cause bugs on sparse or diagonal
+arrays, as `f` may only be called once on duplicated elements.
 
 !!! compat "Julia 1.6"
     This function requires at least Julia 1.6.

@@ -277,6 +277,11 @@ In general, it will be necessary to provide `init` to work with empty collection
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
 
+Note that `mapreduce` makes no guarantees about the order of execution. In addition, `f` is 
+assumed to be [pure](https://en.wikipedia.org/wiki/Pure_function) when working with sparse 
+data structures. Using an impure function with `mapreduce` may cause bugs on sparse or
+diagonal arrays, as `f` may only be called once on duplicated elements.
+
 !!! compat "Julia 1.2"
     `mapreduce` with multiple iterators requires Julia 1.2 or later.
 
