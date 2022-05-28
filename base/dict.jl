@@ -77,6 +77,9 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
         new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
     end
 end
+function Dict(d::Dict{K,V}) where V where K
+    Dict{K,V}(d)
+end
 function Dict{K,V}(kv) where V where K
     h = Dict{K,V}()
     haslength(kv) && sizehint!(h, Int(length(kv))::Int)
