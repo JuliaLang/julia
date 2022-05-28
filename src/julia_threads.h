@@ -181,7 +181,7 @@ typedef struct {
 typedef struct {
     void **pc_start;
     jl_gc_mark_data_t *data_start;
-    size_t size;
+    int64_t size;
 } jl_gc_ws_array_t;
 
 typedef struct {

@@ -166,9 +166,8 @@ int jl_safepoint_all_workers_done(jl_ptls_t ptls)
         if (i == ptls->tid)
             continue;
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
+        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL)
             return 0;
-        }
     }
     return 1;
 }

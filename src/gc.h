@@ -214,8 +214,8 @@ union _jl_gc_mark_data {
 // Return a pointer to the bottom of the data queue
 STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_ws_queue_t *mark_queue) JL_NOTSAFEPOINT
 {
-    jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&mark_queue->bottom);
+    jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
     return &array->data_start[bottom.data_offset % array->size];
 }
 
@@ -224,8 +224,8 @@ STATIC_INLINE void *gc_get_markdata_bottom(jl_gc_ws_queue_t *mark_queue) JL_NOTS
 // Mainly useful to pause the current scanning in order to scan an new object.
 STATIC_INLINE void *gc_repush_markdata(jl_gc_ws_queue_t *mark_queue) JL_NOTSAFEPOINT
 {
-    jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
     jl_gc_ws_bottom_t bottom = jl_atomic_load_relaxed(&mark_queue->bottom);
+    jl_gc_ws_array_t *array = jl_atomic_load_relaxed(&mark_queue->array);
     jl_gc_mark_data_t *data = &array->data_start[bottom.data_offset % array->size];
     bottom.pc_offset++;
     bottom.data_offset++;
