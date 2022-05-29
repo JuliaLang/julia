@@ -8,6 +8,10 @@ ifeq ($(USE_SYSTEM_ZLIB),0)
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
+ifeq ($(USE_SYSTEM_LLVM),0)
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: | $(build_prefix)/manifest/llvm
+endif
+
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER_TAG)/libunwind-$(UNWIND_VER).tar.gz
 
