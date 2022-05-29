@@ -242,6 +242,7 @@ typedef union __jl_purity_overrides_t {
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
         uint8_t ipo_terminates_locally : 1;
+        uint8_t ipo_notaskstate : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -1723,7 +1724,7 @@ JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_relative_path);
+                                     const char *image_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);

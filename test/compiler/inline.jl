@@ -1190,7 +1190,7 @@ recur_termination22(x) = x * recur_termination21(x-1)
 end
 
 const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
-Base.@assume_effects :total_may_throw concrete_eval(
+Base.@assume_effects :foldable concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
     concrete_eval(getindex, ___CONST_DICT___, :a)

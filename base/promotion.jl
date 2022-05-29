@@ -128,7 +128,7 @@ end
 # WARNING: this is wrong for some objects for which subtyping is broken
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
-    @_total_may_throw_meta
+    @_foldable_meta
     if a <: b
         return Bottom
     end
@@ -180,7 +180,7 @@ function promote_typejoin_union(::Type{T}) where T
 end
 
 function typejoin_union_tuple(T::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     u = Base.unwrap_unionall(T)
     p = (u::DataType).parameters
     lr = length(p)::Int
