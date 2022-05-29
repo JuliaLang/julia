@@ -3,15 +3,18 @@
 #include "llvm-version.h"
 #include "passes.h"
 
-#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/LoopPass.h>
-#include "llvm/Analysis/LoopIterator.h"
+#include <llvm/Analysis/LoopIterator.h>
+#include <llvm/Analysis/MemorySSA.h>
+#include <llvm/Analysis/MemorySSAUpdater.h>
+#include <llvm/Analysis/ValueTracking.h>
+#include <llvm/Analysis/ScalarEvolution.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/LoopUtils.h>
-#include <llvm/Analysis/ValueTracking.h>
 
 #include "llvm-pass-helpers.h"
 #include "julia.h"
@@ -37,6 +40,82 @@ STATISTIC(HoistedAllocation, "Number of allocations hoisted out of a loop");
 
 namespace {
 
+//Stolen and modified from LICM.cpp
+static void eraseInstruction(Instruction &I,
+                             MemorySSAUpdater &MSSAU) {
+  if (MSSAU.getMemorySSA())
+    MSSAU.removeMemoryAccess(&I);
+  I.eraseFromParent();
+}
+
+//Stolen and modified from LICM.cpp
+static void moveInstructionBefore(Instruction &I, Instruction &Dest,
+                                  MemorySSAUpdater &MSSAU,
+                                  ScalarEvolution *SE) {
+  I.moveBefore(&Dest);
+  if (MSSAU.getMemorySSA())
+    if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
+            MSSAU.getMemorySSA()->getMemoryAccess(&I)))
+      MSSAU.moveToPlace(OldMemAcc, Dest.getParent(),
+                         MemorySSA::BeforeTerminator);
+  if (SE)
+    SE->forgetValue(&I);
+}
+
+static void createNewInstruction(Instruction *New, Instruction *Ref, MemorySSAUpdater &MSSAU) {
+  if (MSSAU.getMemorySSA() && MSSAU.getMemorySSA()->getMemoryAccess(Ref)) {
+    // Create a new MemoryAccess and let MemorySSA set its defining access.
+    MemoryAccess *NewMemAcc = MSSAU.createMemoryAccessInBB(
+        New, nullptr, New->getParent(), MemorySSA::Beginning);
+    if (NewMemAcc) {
+      if (auto *MemDef = dyn_cast<MemoryDef>(NewMemAcc))
+        MSSAU.insertDef(MemDef, /*RenameUses=*/true);
+      else {
+        auto *MemUse = cast<MemoryUse>(NewMemAcc);
+        MSSAU.insertUse(MemUse, /*RenameUses=*/true);
+      }
+    }
+  }
+}
+
+//Stolen and modified to update SE from LoopInfo.cpp
+static bool makeLoopInvariant(Loop *L, Value *V, bool &Changed, Instruction *InsertPt, MemorySSAUpdater &MSSAU, ScalarEvolution *SE);
+
+static bool makeLoopInvariant(Loop *L, Instruction *I, bool &Changed, Instruction *InsertPt, MemorySSAUpdater &MSSAU, ScalarEvolution *SE) {
+  // Test if the value is already loop-invariant.
+  if (L->isLoopInvariant(I))
+    return true;
+  if (!isSafeToSpeculativelyExecute(I))
+    return false;
+  if (I->mayReadFromMemory())
+    return false;
+  // EH block instructions are immobile.
+  if (I->isEHPad())
+    return false;
+  // Don't hoist instructions with loop-variant operands.
+  for (Value *Operand : I->operands())
+    if (!makeLoopInvariant(L, Operand, Changed, InsertPt, MSSAU, SE))
+      return false;
+
+  // Hoist.
+  moveInstructionBefore(*I, *InsertPt, MSSAU, SE);
+
+  // There is possibility of hoisting this instruction above some arbitrary
+  // condition. Any metadata defined on it can be control dependent on this
+  // condition. Conservatively strip it here so that we don't give any wrong
+  // information to the optimizer.
+  I->dropUnknownNonDebugMetadata();
+
+  Changed = true;
+  return true;
+}
+
+static bool makeLoopInvariant(Loop *L, Value *V, bool &Changed, Instruction *InsertPt, MemorySSAUpdater &MSSAU, ScalarEvolution *SE) {
+  if (Instruction *I = dyn_cast<Instruction>(V))
+    return makeLoopInvariant(L, I, Changed, InsertPt, MSSAU, SE);
+  return true; // All non-instructions are loop-invariant.
+}
+
 struct JuliaLICMPassLegacy : public LoopPass {
     static char ID;
     JuliaLICMPassLegacy() : LoopPass(ID) {};
@@ -52,8 +131,16 @@ struct JuliaLICMPassLegacy : public LoopPass {
 struct JuliaLICM : public JuliaPassContext {
     function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
+    function_ref<MemorySSA *()> GetMSSA;
+    function_ref<ScalarEvolution *()> GetSE;
     JuliaLICM(function_ref<DominatorTree &()> GetDT,
-              function_ref<LoopInfo &()> GetLI) : GetDT(GetDT), GetLI(GetLI) {}
+              function_ref<LoopInfo &()> GetLI,
+              function_ref<MemorySSA *()> GetMSSA,
+              function_ref<ScalarEvolution *()> GetSE) :
+                GetDT(GetDT),
+                GetLI(GetLI),
+                GetMSSA(GetMSSA),
+                GetSE(GetSE) {}
 
     bool runOnLoop(Loop *L)
     {
@@ -74,6 +161,9 @@ struct JuliaLICM : public JuliaPassContext {
             return false;
         auto LI = &GetLI();
         auto DT = &GetDT();
+        auto MSSA = GetMSSA();
+        auto SE = GetSE();
+        MemorySSAUpdater MSSAU(MSSA);
 
         // Lazy initialization of exit blocks insertion points.
         bool exit_pts_init = false;
@@ -123,7 +213,7 @@ struct JuliaLICM : public JuliaPassContext {
                     if (!canhoist)
                         continue;
                     ++HoistedPreserveBegin;
-                    call->moveBefore(preheader->getTerminator());
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
                 }
                 else if (callee == gc_preserve_end_func) {
@@ -134,28 +224,31 @@ struct JuliaLICM : public JuliaPassContext {
                     auto exit_pts = get_exit_pts();
                     if (exit_pts.empty()) {
                         ++ErasedPreserveEnd;
-                        call->eraseFromParent();
+                        eraseInstruction(*call, MSSAU);
                         continue;
                     }
                     ++SunkPreserveEnd;
-                    call->moveBefore(exit_pts[0]);
+                    moveInstructionBefore(*call, *exit_pts[0], MSSAU, SE);
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
-                        CallInst::Create(call, {}, exit_pts[i]);
+                        auto CI = CallInst::Create(call, {}, exit_pts[i]);
+                        createNewInstruction(CI, call, MSSAU);
                     }
                 }
                 else if (callee == write_barrier_func ||
                          callee == write_barrier_binding_func) {
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
-                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                        if (!makeLoopInvariant(L, call->getArgOperand(i),
+                            changed, preheader->getTerminator(),
+                            MSSAU, SE)) {
                             valid = false;
                             break;
                         }
                     }
                     if (valid) {
                         ++HoistedWriteBarrier;
-                        call->moveBefore(preheader->getTerminator());
+                        moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                         changed = true;
                     }
                 }
@@ -169,7 +262,8 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
-                        if (!L->makeLoopInvariant(call->getArgOperand(i), changed)) {
+                        if (!makeLoopInvariant(L, call->getArgOperand(i), changed,
+                            preheader->getTerminator(), MSSAU, SE)) {
                             valid = false;
                             break;
                         }
@@ -181,11 +275,14 @@ struct JuliaLICM : public JuliaPassContext {
                     }
                     if (valid) {
                         ++HoistedAllocation;
-                        call->moveBefore(preheader->getTerminator());
+                        moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                         changed = true;
                     }
                 }
             }
+        }
+        if (changed && SE) {
+            SE->forgetLoopDispositions(L);
         }
         assert(!verifyFunction(*L->getHeader()->getParent()));
         return changed;
@@ -199,7 +296,13 @@ bool JuliaLICMPassLegacy::runOnLoop(Loop *L, LPPassManager &LPM) {
     auto GetLI = [this]() -> LoopInfo & {
         return getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    auto GetMSSA = []() {
+        return nullptr;
+    };
+    auto GetSE = []() {
+        return nullptr;
+    };
+    auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
     return juliaLICM.runOnLoop(L);
 }
 
@@ -218,11 +321,17 @@ PreservedAnalyses JuliaLICMPass::run(Loop &L, LoopAnalysisManager &AM,
     auto GetLI = [&AR]() -> LoopInfo & {
         return AR.LI;
     };
-    auto juliaLICM = JuliaLICM(GetDT, GetLI);
+    auto GetMSSA = [&AR]() {
+        return AR.MSSA;
+    };
+    auto GetSE = [&AR]() {
+        return &AR.SE;
+    };
+    auto juliaLICM = JuliaLICM(GetDT, GetLI, GetMSSA, GetSE);
     if (juliaLICM.runOnLoop(&L)) {
-        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
-        preserved.preserve<LoopAnalysis>();
-        preserved.preserve<DominatorTreeAnalysis>();
+        auto preserved = getLoopPassPreservedAnalyses();
+        preserved.preserveSet<CFGAnalyses>();
+        preserved.preserve<MemorySSAAnalysis>();
         return preserved;
     }
     return PreservedAnalyses::all();
