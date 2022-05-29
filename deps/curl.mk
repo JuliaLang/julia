@@ -22,13 +22,11 @@ CURL_LDFLAGS += -lpthread
 endif
 
 $(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
+	$(JLDOWNLOAD) $@ https://curl.se/download/curl-$(CURL_VER).tar.bz2
 
 $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
-	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/curl-$(CURL_VER)/config.sub
-	touch -c $(SRCCACHE)/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
@@ -51,8 +49,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/sour
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
 		--without-ssl --without-gnutls --without-gssapi --disable-ares \
-		--without-libidn --without-libidn2 --without-librtmp \
-		--without-nss --without-polarssl --without-spnego --without-libpsl \
+		--without-libidn2 --without-librtmp --without-nss --without-libpsl \
 		--disable-ldap --disable-ldaps --without-zsh-functions-dir --disable-static \
 		--with-libssh2=$(build_prefix) --with-zlib=$(build_prefix) --with-nghttp2=$(build_prefix) \
 		$(CURL_TLS_CONFIGURE_FLAGS) \
