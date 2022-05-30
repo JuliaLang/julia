@@ -914,7 +914,6 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode, effects::Effects)
-    ir = copy(ir)
     return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
 end
 
