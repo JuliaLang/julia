@@ -380,12 +380,31 @@ function Base.show(io::IO, rbs::RainBowString)
     end
 end
 
+struct BoldRainBowString
+    s::String
+end
+
+function Base.show(io::IO, rbs::BoldRainBowString)
+    for s in rbs.s
+        _, color = rand(Base.text_colors)
+        printstyled(io, color, s, "\e[0m"; bold=true)
+    end
+end
+
 @testset "Display with colors" begin
     d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
     str = sprint(io -> show(io, MIME("text/plain"), d); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     lines = split(str, '\n')
     @test all(endswith('…'), lines[2:end])
     @test all(x -> length(x) > 100, lines[2:end])
+
+    d2 = Dict(:foo => RainBowString("bar"))
+    str2 = sprint(io -> show(io, MIME("text/plain"), d2); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test !endswith(str2, '…')
+
+    d3 = Dict(:foo => BoldRainBowString("bar"))
+    str3 = sprint(io -> show(io, MIME("text/plain"), d3); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test endswith(str3, "r\e[0m\e[22m")
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate

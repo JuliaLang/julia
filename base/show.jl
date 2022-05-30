@@ -49,6 +49,7 @@ show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 
 const ansi_regex = r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+const start_ansi_regex = r"^\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 # An iterator similar to `pairs` but skips over "tokens" corresponding to
 # ansi sequences
 struct IgnoreAnsiIterator
@@ -60,12 +61,11 @@ IgnoreAnsiIterator(s::AbstractString) =
 Base.IteratorSize(::Type{IgnoreAnsiIterator}) = Base.SizeUnknown()
 function iterate(I::IgnoreAnsiIterator, (i, m_st)=(1, iterate(I.captures)))
     # Advance until the next non ansi sequence
-    if m_st !== nothing
+    while m_st !== nothing
         m, j = m_st
-        if m.offset == i
-            i += sizeof(m.match)
-            return iterate(I, (i, iterate(I.captures, j)))
-        end
+        m.offset == i || break
+        i += sizeof(m.match)
+        m_st = iterate(I.captures, j)
     end
     ci = iterate(I.captures.string, i)
     ci === nothing && return nothing
@@ -88,8 +88,20 @@ function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", tr
         end
         (wid >= width || c in chars) && break
     end
-    if lastidx != 0 && str[lastidx] in chars
+    lastidx == 0 && return ""
+    lastchar = str[lastidx]
+    if lastchar in chars
         lastidx = prevind(str, lastidx)
+    elseif ignore_ansi
+        last_char_size = ncodeunits(lastchar)
+        lastidx += last_char_size
+        next_ansi = match(start_ansi_regex, SubString(str, lastidx))
+        while next_ansi !== nothing
+            lastidx += ncodeunits(next_ansi.match)
+            last_char_size = ncodeunits(last(next_ansi.match))
+            next_ansi = match(start_ansi_regex, SubString(str, lastidx))
+        end
+        lastidx -= last_char_size
     end
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
