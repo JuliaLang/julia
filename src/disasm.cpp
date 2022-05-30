@@ -488,16 +488,14 @@ void jl_strip_llvm_addrspaces(Module *m)
 }
 
 // print an llvm IR acquired from jl_get_llvmf
-// warning: this takes ownership of, and destroys, f->getParent()
+// warning: this takes ownership of, and destroys, dump->TSM
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
+jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
     std::string code;
     raw_string_ostream stream(code);
 
     {
-        //RAII will release the struct itself
-        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
         //RAII will release the module
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
@@ -1203,12 +1201,11 @@ public:
 
 // get a native assembly for llvm::Function
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
     { // scope block
-        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(F));
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         TSM->withModuleDo([&](Module &m) {

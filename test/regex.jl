@@ -69,6 +69,10 @@
     @test findall('→', "OH⁻ + H₃CBr →  HOH₃CBr⁻ → HOCH₃ + Br⁻") == [17, 35]
     @test findall('a', "") == Int[]
     @test findall('c', "batman") == Int[]
+    @test findall([0x52, 0x62], [0x40, 0x52, 0x62, 0x63]) == [2:3]
+    @test findall([0x52, 0x62], [0x40, 0x52, 0x62, 0x63, 0x52, 0x62]) == [2:3, 5:6]
+    @test findall([0x01, 0x01], [0x01, 0x01, 0x01, 0x01]) == [1:2, 3:4]
+    @test findall([0x01, 0x01], [0x01, 0x01, 0x01, 0x01]; overlap=true) == [1:2, 2:3, 3:4]
 
     # count
     @test count(r"\w+", "foo bar") == 2

@@ -335,6 +335,23 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
 end
 
+@testset "code_ircode" begin
+    @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
+          Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
+          Compiler.IRCode
+
+    function demo(f)
+        f()
+        f()
+        f()
+    end
+    @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
+end
+
 let
     function test_useref(stmt, v, op)
         if isa(stmt, Expr)

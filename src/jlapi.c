@@ -48,18 +48,19 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
 }
 
 // First argument is the usr/bin directory where the julia binary is, or NULL to guess.
-// Second argument is the path of a system image file (*.ji) relative to the
-// first argument path, or relative to the default julia home dir.
-// The default is something like ../lib/julia/sys.ji
+// Second argument is the path of a system image file (*.so).
+// A non-absolute path is interpreted as relative to the first argument path, or
+// relative to the default julia home dir.
+// The default is something like ../lib/julia/sys.so
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_relative_path)
+                                     const char *image_path)
 {
     if (jl_is_initialized())
         return;
     libsupport_init();
     jl_options.julia_bindir = julia_bindir;
-    if (image_relative_path != NULL)
-        jl_options.image_file = image_relative_path;
+    if (image_path != NULL)
+        jl_options.image_file = image_path;
     else
         jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);

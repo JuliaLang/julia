@@ -107,7 +107,9 @@ addprocs([
   processes. Default is `false`.
 
 * `exename`: name of the `julia` executable. Defaults to `"\$(Sys.BINDIR)/julia"` or
-  `"\$(Sys.BINDIR)/julia-debug"` as the case may be.
+  `"\$(Sys.BINDIR)/julia-debug"` as the case may be. It is recommended that a common Julia
+  version is used on all remote machines because serialization and code distribution might
+  fail otherwise.
 
 * `exeflags`: additional flags passed to the worker processes.
 

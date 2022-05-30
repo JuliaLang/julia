@@ -18,6 +18,8 @@ struct ResolvedInliningSpec
     # Effects of the call statement
     effects::Effects
 end
+ResolvedInliningSpec(ir::IRCode, effects::Effects) =
+    ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects)
 
 """
 Represents a callsite that our analysis has determined is legal to inline,
@@ -379,6 +381,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 inline_compact[idx′] = val
                 inline_compact.result[idx′][:type] =
                     argextype(val, isa(val, Argument) || isa(val, Expr) ? compact : inline_compact)
+                # Everything legal in value position is guaranteed to be effect free in stmt position
+                inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE
                 break
             end
             inline_compact[idx′] = stmt′
@@ -401,21 +405,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
-                    # GlobalRefs can have side effects, but are currently
-                    # allowed in arguments of ReturnNodes
+                    @assert !isa(val, Expr) # GlobalRefs with side-effects are disallowed in value position in IRCode
                     push!(pn.edges, inline_compact.active_result_bb-1)
-                    if isa(val, GlobalRef) || isa(val, Expr)
-                        stmt′ = val
-                        inline_compact.result[idx′][:type] =
-                            argextype(val, isa(val, Expr) ? compact : inline_compact)
-                        insert_node_here!(inline_compact, NewInstruction(GotoNode(post_bb_id),
-                                          Any, compact.result[idx′][:line]),
-                                          true)
-                        push!(pn.values, SSAValue(idx′))
-                    else
-                        push!(pn.values, val)
-                        stmt′ = GotoNode(post_bb_id)
-                    end
+                    push!(pn.values, val)
+                    stmt′ = GotoNode(post_bb_id)
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
@@ -786,20 +779,20 @@ end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch, effects::Effects)
     mi = specialize_method(match; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, linfo::MethodInstance, effects::Effects)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult, effects::Effects)
-    return compileable_specialization(et, linfo, effects)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects)
+    return compileable_specialization(et, result.linfo, effects)
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
@@ -815,7 +808,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
             et !== nothing && push!(et, mi)
             return ConstantCase(quoted(inferred_src.val))
         else
-            src = inferred_src
+            src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
         end
         effects = match.ipo_effects
     else
@@ -829,7 +822,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
                 src = code.inferred
             end
             effects = decode_effects(code.ipo_purity_bits)
-        else
+        else # fallback pass for external AbstractInterpreter cache
             effects = Effects()
             src = code
         end
@@ -843,13 +836,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
-    if src === nothing
-        return compileable_specialization(et, match, effects)
-    end
-
-    if isa(src, IRCode)
-        src = copy(src)
-    end
+    src === nothing && return compileable_specialization(et, match, effects)
 
     et !== nothing && push!(et, mi)
     return InliningTodo(mi, src, effects)
@@ -913,16 +900,19 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode, effects::Effects)
-    return InliningTodo(mi, ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects))
+    ir = copy(ir)
+    return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
 end
 
-function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}}, effects::Effects)
+function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Vector{UInt8}}, effects::Effects)
     if !isa(src, CodeInfo)
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
+    else
+        src = copy(src)
     end
-
-    @timeit "inline IR inflation" begin;
-        return InliningTodo(mi, inflate_ir(src, mi)::IRCode, effects)
+    @timeit "inline IR inflation" begin
+        ir = inflate_ir!(src, mi)::IRCode
+        return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
     end
 end
 
@@ -1333,7 +1323,9 @@ end
 
 function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        return compileable_specialization(state.et, result.mi, result.effects)
+        case = compileable_specialization(state.et, result.mi, result.effects)
+        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
+        return case
     end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))

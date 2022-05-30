@@ -1600,6 +1600,14 @@ JL_CALLABLE(jl_f_donotdelete)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_finalizer)
+{
+    JL_NARGS(finalizer, 2, 2);
+    jl_task_t *ct = jl_current_task;
+    jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);
+    return jl_nothing;
+}
+
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
 {
     size_t nf = jl_svec_len(ft);
@@ -1970,6 +1978,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
+    add_builtin_func("finalizer", jl_f_finalizer);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -2001,7 +2010,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
     add_builtin("PartialOpaque", (jl_value_t*)jl_partial_opaque_type);
-    add_builtin("InterConditional", (jl_value_t*)jl_interconditional_type);
     add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);

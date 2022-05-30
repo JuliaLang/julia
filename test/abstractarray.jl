@@ -1543,6 +1543,8 @@ using Base: typed_hvncat
     # Issue 43933 - semicolon precedence mistake should produce an error
     @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
     @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
+
+    @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
 end
 
 @testset "keepat!" begin

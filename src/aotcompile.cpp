@@ -480,8 +480,6 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
-    legacy::PassManager PM;
-    addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -498,20 +496,28 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
+    legacy::PassManager preopt, postopt;
+
     if (unopt_bc_fname)
-        PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname) {
-        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, jl_options.opt_level);
-    }
+        preopt.add(createBitcodeWriterPass(unopt_bc_OS));
+
+    //Is this necessary for TM?
+    // addTargetPasses(&postopt, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (bc_fname)
-        PM.add(createBitcodeWriterPass(bc_OS));
+        postopt.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
+
+    legacy::PassManager optimizer;
+    if (bc_fname || obj_fname || asm_fname) {
+        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+        addMachinePasses(&optimizer, jl_options.opt_level);
+    }
 
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
@@ -542,7 +548,9 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        PM.run(M);
+        preopt.run(M);
+        optimizer.run(M);
+        postopt.run(M);
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -982,20 +990,13 @@ llvmGetPassPluginInfo() {
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
         // not a generic function
-        return NULL;
-    }
-
-    static legacy::PassManager *PM;
-    if (!PM) {
-        PM = new legacy::PassManager();
-        addTargetPasses(PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
-        addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_options.opt_level);
+        dump->F = NULL;
+        return;
     }
 
     // get the source code for this function
@@ -1050,9 +1051,14 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             // and will better match what's actually in sysimg.
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
-            if (optimize)
+            if (optimize) {
+                legacy::PassManager PM;
+                addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
+                addOptimizationPasses(&PM, jl_options.opt_level);
+                addMachinePasses(&PM, jl_options.opt_level);
                 //Safe b/c context lock is held by output
-                PM->run(*m.getModuleUnlocked());
+                PM.run(*m.getModuleUnlocked());
+            }
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;
@@ -1066,8 +1072,11 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
-        if (F)
-            return new jl_llvmf_dump_t{wrap(new orc::ThreadSafeModule(std::move(m))), wrap(F)};
+        if (F) {
+            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(m)));
+            dump->F = wrap(F);
+            return;
+        }
     }
 
     const char *mname = name_from_method_instance(mi);

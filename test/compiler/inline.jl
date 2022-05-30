@@ -1190,7 +1190,7 @@ recur_termination22(x) = x * recur_termination21(x-1)
 end
 
 const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
-Base.@assume_effects :total_may_throw concrete_eval(
+Base.@assume_effects :foldable concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
     concrete_eval(getindex, ___CONST_DICT___, :a)
@@ -1279,3 +1279,12 @@ end
 # Test that inlining doesn't accidentally delete a bad return_type call
 f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
 @test_throws MethodError f_bad_return_type()
+
+# Test that inlining doesn't leave useless globalrefs around
+f_ret_nothing(x) = (Base.donotdelete(x); return nothing)
+let src = code_typed1(Tuple{Int}) do x
+        f_ret_nothing(x)
+        return 1
+    end
+    @test count(x -> isa(x, Core.GlobalRef) && x.name === :nothing, src.code) == 0
+end
