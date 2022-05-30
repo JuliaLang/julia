@@ -4152,30 +4152,30 @@ end
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
 # as the cached effects can be easily wrong otherwise
 # since the inference curently doesn't track "world-age" of global variables
-@eval global_assignment_undefiendyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
-setglobal!_nothrow_undefiendyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
+@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
+setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
 let effects = Base.infer_effects() do
-        global_assignment_undefiendyet()
+        global_assignment_undefinedyet()
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefiendyet()
+        setglobal!_nothrow_undefinedyet()
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
 global UNDEFINEDYET::String = "0"
 let effects = Base.infer_effects() do
-        global_assignment_undefiendyet()
+        global_assignment_undefinedyet()
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
 let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefiendyet()
+        setglobal!_nothrow_undefinedyet()
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-@test_throws ErrorException setglobal!_nothrow_undefiendyet()
+@test_throws ErrorException setglobal!_nothrow_undefinedyet()
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow

@@ -2134,12 +2134,12 @@ function setglobal!_nothrow(argtypes::Vector{Any})
     M, s, newty = argtypes
     if M isa Const && s isa Const
         M, s = M.val, s.val
-        return global_assignemnt_nothrow(M, s, newty)
+        return global_assignment_nothrow(M, s, newty)
     end
     return false
 end
 
-function global_assignemnt_nothrow(M::Module, s::Symbol, @nospecialize(newty))
+function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
     if isdefined(M, s) && !isconst(M, s)
         ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
         return ty === nothing || newty ⊑ ty
