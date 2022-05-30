@@ -1274,11 +1274,7 @@ function handle_const_call!(
             any_fully_covered |= match.fully_covers
             if isa(result, ConcreteResult)
                 case = concrete_result_item(result, state)
-                if case === nothing
-                    handled_all_cases = false
-                else
-                    push!(cases, InliningCase(result.mi.specTypes, case))
-                end
+                push!(cases, InliningCase(result.mi.specTypes, case))
             elseif isa(result, ConstPropResult)
                 handled_all_cases &= handle_const_prop_result!(result, argtypes, flag, state, cases, true)
             else
@@ -1327,7 +1323,9 @@ end
 
 function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        return compileable_specialization(state.et, result.mi, result.effects)
+        case = compileable_specialization(state.et, result.mi, result.effects)
+        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
+        return case
     end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
