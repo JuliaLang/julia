@@ -1555,7 +1555,8 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     match === nothing && return CallMeta(Any, Effects(), false)
     update_valid_age!(sv, valid_worlds)
     method = match.method
-    (ti, env::SimpleVector) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
+    ti = tienv[1]; env = tienv[2]::SimpleVector
     (; rt, edge) = result = abstract_call_method(interp, method, ti, env, false, sv)
     effects = result.edge_effects
     edge !== nothing && add_backedge!(edge::MethodInstance, sv)
@@ -1738,7 +1739,7 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
         body_call = abstract_call_opaque_closure(interp, ft, ArgInfo(arginfo.fargs, newargtypes), sv)
         # Analyze implicit type asserts on argument and return type
         ftt = ft.typ
-        (at, rt) = unwrap_unionall(ftt).parameters
+        (at, rt) = (unwrap_unionall(ftt)::DataType).parameters
         if isa(rt, TypeVar)
             rt = rewrap_unionall(rt.lb, ftt)
         else
@@ -2039,7 +2040,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
             end
-        elseif isa(sym, Expr) && sym.head === :static_parameter
+        elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
                 spty = sv.sptypes[n]
@@ -2058,7 +2059,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         t = Const(t.instance)
     end
     if !isempty(sv.pclimitations)
-        if t isa Const || t === Union{}
+        if t isa Const || t === Bottom
             empty!(sv.pclimitations)
         else
             t = LimitedAccuracy(t, sv.pclimitations)
@@ -2097,9 +2098,10 @@ function handle_global_assignment!(interp::AbstractInterpreter, frame::Inference
         nothrow=nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
 end
 
-abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.src)
-function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
-    typ = (src.ssavaluetypes::Vector{Any})[s.id]
+abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
+abstract_eval_ssavalue(s::SSAValue, src::CodeInfo) = abstract_eval_ssavalue(s, src.ssavaluetypes::Vector{Any})
+function abstract_eval_ssavalue(s::SSAValue, ssavaluetypes::Vector{Any})
+    typ = ssavaluetypes[s.id]
     if typ === NOT_FOUND
         return Bottom
     end
@@ -2194,211 +2196,303 @@ function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     return nothing
 end
 
+struct BasicStmtChange
+    changes::Union{Nothing,StateUpdate}
+    type::Any # ::Union{Type, Nothing} - `nothing` if this statement may not be used as an SSA Value
+    # TODO effects::Effects
+    BasicStmtChange(changes::Union{Nothing,StateUpdate}, @nospecialize type) = new(changes, type)
+end
+
+@inline function abstract_eval_basic_statement(interp::AbstractInterpreter,
+    @nospecialize(stmt), pc_vartable::VarTable, frame::InferenceState)
+    if isa(stmt, NewvarNode)
+        changes = StateUpdate(stmt.slot, VarState(Bottom, true), pc_vartable, false)
+        return BasicStmtChange(changes, nothing)
+    elseif !isa(stmt, Expr)
+        t = abstract_eval_statement(interp, stmt, pc_vartable, frame)
+        return BasicStmtChange(nothing, t)
+    end
+    changes = nothing
+    stmt = stmt::Expr
+    hd = stmt.head
+    if hd === :(=)
+        t = abstract_eval_statement(interp, stmt.args[2], pc_vartable, frame)
+        if t === Bottom
+            return BasicStmtChange(nothing, Bottom)
+        end
+        lhs = stmt.args[1]
+        if isa(lhs, SlotNumber)
+            changes = StateUpdate(lhs, VarState(t, false), pc_vartable, false)
+        elseif isa(lhs, GlobalRef)
+            handle_global_assignment!(interp, frame, lhs, t)
+        elseif !isa(lhs, SSAValue)
+            tristate_merge!(frame, EFFECTS_UNKNOWN)
+        end
+        return BasicStmtChange(changes, t)
+    elseif hd === :method
+        fname = stmt.args[1]
+        if isa(fname, SlotNumber)
+            changes = StateUpdate(fname, VarState(Any, false), pc_vartable, false)
+        end
+        return BasicStmtChange(changes, nothing)
+    elseif (hd === :code_coverage_effect || (
+            hd !== :boundscheck && # :boundscheck can be narrowed to Bool
+            is_meta_expr(stmt)))
+        return BasicStmtChange(nothing, Nothing)
+    else
+        t = abstract_eval_statement(interp, stmt, pc_vartable, frame)
+        return BasicStmtChange(nothing, t)
+    end
+end
+
+function update_bbstate!(frame::InferenceState, bb::Int, vartable::VarTable)
+    bbtable = frame.bb_vartables[bb]
+    if bbtable === nothing
+        # if a basic block hasn't been analyzed yet,
+        # we can update its state a bit more aggressively
+        frame.bb_vartables[bb] = copy(vartable)
+        return true
+    else
+        return stupdate!(bbtable, vartable)
+    end
+end
+
+function init_vartable!(vartable::VarTable, frame::InferenceState)
+    nargtypes = length(frame.result.argtypes)
+    for i = 1:length(vartable)
+        vartable[i] = VarState(Bottom, i > nargtypes)
+    end
+    return vartable
+end
+
 # make as much progress on `frame` as possible (without handling cycles)
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    states = frame.stmt_types
     def = frame.linfo.def
     isva = isa(def, Method) && def.isva
     nargs = length(frame.result.argtypes) - isva
     slottypes = frame.slottypes
-    ssavaluetypes = frame.src.ssavaluetypes::Vector{Any}
-    while !isempty(W)
-        # make progress on the active ip set
-        local pc::Int = popfirst!(W)
-        local pc´::Int = pc + 1 # next program-counter (after executing instruction)
-        frame.currpc = pc
-        edges = frame.stmt_edges[pc]
-        edges === nothing || empty!(edges)
-        frame.stmt_info[pc] = nothing
-        stmt = frame.src.code[pc]
-        changes = states[pc]::VarTable
-        t = nothing
+    ssavaluetypes = frame.ssavaluetypes
+    bbs = frame.cfg.blocks
+    nbbs = length(bbs)
 
-        hd = isa(stmt, Expr) ? stmt.head : nothing
+    currbb = frame.currbb
+    if currbb != 1
+        currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
+    end
 
-        if isa(stmt, NewvarNode)
-            sn = slot_id(stmt.slot)
-            changes[sn] = VarState(Bottom, true)
-        elseif isa(stmt, GotoNode)
-            l = (stmt::GotoNode).label
-            handle_control_backedge!(frame, pc, l)
-            pc´ = l
-        elseif isa(stmt, GotoIfNot)
-            condx = stmt.cond
-            condt = abstract_eval_value(interp, condx, changes, frame)
-            if condt === Bottom
-                empty!(frame.pclimitations)
-                continue
-            end
-            if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
-                # if this non-`Conditional` object is a slot, we form and propagate
-                # the conditional constraint on it
-                condt = Conditional(condx, Const(true), Const(false))
-            end
-            condval = maybe_extract_const_bool(condt)
-            l = stmt.dest::Int
-            if !isempty(frame.pclimitations)
-                # we can't model the possible effect of control
-                # dependencies on the return value, so we propagate it
-                # directly to all the return values (unless we error first)
-                condval isa Bool || union!(frame.limitations, frame.pclimitations)
-                empty!(frame.pclimitations)
-            end
-            # constant conditions
-            if condval === true
-            elseif condval === false
-                handle_control_backedge!(frame, pc, l)
-                pc´ = l
-            else
-                # general case
-                changes_else = changes
-                if isa(condt, Conditional)
-                    changes_else = conditional_changes(changes_else, condt.elsetype, condt.var)
-                    changes      = conditional_changes(changes,      condt.vtype,    condt.var)
-                end
-                newstate_else = stupdate!(states[l], changes_else)
-                if newstate_else !== nothing
-                    handle_control_backedge!(frame, pc, l)
-                    # add else branch to active IP list
-                    push!(W, l)
-                    states[l] = newstate_else
-                end
-            end
-        elseif isa(stmt, ReturnNode)
-            bestguess = frame.bestguess
-            rt = abstract_eval_value(interp, stmt.val, changes, frame)
-            rt = widenreturn(rt, bestguess, nargs, slottypes, changes)
-            # narrow representation of bestguess slightly to prepare for tmerge with rt
-            if rt isa InterConditional && bestguess isa Const
-                let slot_id = rt.slot
-                    old_id_type = slottypes[slot_id]
-                    if bestguess.val === true && rt.elsetype !== Bottom
-                        bestguess = InterConditional(slot_id, old_id_type, Bottom)
-                    elseif bestguess.val === false && rt.vtype !== Bottom
-                        bestguess = InterConditional(slot_id, Bottom, old_id_type)
+    states = frame.bb_vartables
+    currstate = copy(states[currbb]::VarTable)
+    while currbb <= nbbs
+        delete!(W, currbb)
+        bbstart = first(bbs[currbb].stmts)
+        bbend = last(bbs[currbb].stmts)
+
+        for currpc in bbstart:bbend
+            frame.currpc = currpc
+            empty_backedges!(frame, currpc)
+            stmt = frame.src.code[currpc]
+            # If we're at the end of the basic block ...
+            if currpc == bbend
+                # Handle control flow
+                if isa(stmt, GotoNode)
+                    succs = bbs[currbb].succs
+                    @assert length(succs) == 1
+                    nextbb = succs[1]
+                    ssavaluetypes[currpc] = Any
+                    handle_control_backedge!(frame, currpc, stmt.label)
+                    @goto branch
+                elseif isa(stmt, GotoIfNot)
+                    condx = stmt.cond
+                    condt = abstract_eval_value(interp, condx, currstate, frame)
+                    if condt === Bottom
+                        ssavaluetypes[currpc] = Bottom
+                        empty!(frame.pclimitations)
+                        @goto find_next_bb
                     end
-                end
-            end
-            # copy limitations to return value
-            if !isempty(frame.pclimitations)
-                union!(frame.limitations, frame.pclimitations)
-                empty!(frame.pclimitations)
-            end
-            if !isempty(frame.limitations)
-                rt = LimitedAccuracy(rt, copy(frame.limitations))
-            end
-            if tchanged(rt, bestguess)
-                # new (wider) return type for frame
-                bestguess = tmerge(bestguess, rt)
-                # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
-                frame.bestguess = bestguess
-                for (caller, caller_pc) in frame.cycle_backedges
-                    # notify backedges of updated type information
-                    typeassert(caller.stmt_types[caller_pc], VarTable) # we must have visited this statement before
-                    if !((caller.src.ssavaluetypes::Vector{Any})[caller_pc] === Any)
-                        # no reason to revisit if that call-site doesn't affect the final result
-                        push!(caller.ip, caller_pc)
+                    if !(isa(condt, Const) || isa(condt, Conditional)) && isa(condx, SlotNumber)
+                        # if this non-`Conditional` object is a slot, we form and propagate
+                        # the conditional constraint on it
+                        condt = Conditional(condx, Const(true), Const(false))
                     end
+                    condval = maybe_extract_const_bool(condt)
+                    if !isempty(frame.pclimitations)
+                        # we can't model the possible effect of control
+                        # dependencies on the return
+                        # directly to all the return values (unless we error first)
+                        condval isa Bool || union!(frame.limitations, frame.pclimitations)
+                        empty!(frame.pclimitations)
+                    end
+                    ssavaluetypes[currpc] = Any
+                    if condval === true
+                        @goto fallthrough
+                    else
+                        succs = bbs[currbb].succs
+                        if length(succs) == 1
+                            @assert condval === false || (stmt.dest === currpc + 1)
+                            nextbb = succs[1]
+                            @goto branch
+                        end
+                        @assert length(succs) == 2
+                        truebb = currbb + 1
+                        falsebb = succs[1] == truebb ? succs[2] : succs[1]
+                        if condval === false
+                            nextbb = falsebb
+                            handle_control_backedge!(frame, currpc, stmt.dest)
+                            @goto branch
+                        else
+                            # We continue with the true branch, but process the false
+                            # branch here.
+                            if isa(condt, Conditional)
+                                else_change = conditional_change(currstate, condt.elsetype, condt.var)
+                                if else_change !== nothing
+                                    false_vartable = stoverwrite1!(copy(currstate), else_change)
+                                else
+                                    false_vartable = currstate
+                                end
+                                changed = update_bbstate!(frame, falsebb, false_vartable)
+                                then_change = conditional_change(currstate, condt.vtype, condt.var)
+                                if then_change !== nothing
+                                    stoverwrite1!(currstate, then_change)
+                                end
+                            else
+                                changed = update_bbstate!(frame, falsebb, currstate)
+                            end
+                            if changed
+                                handle_control_backedge!(frame, currpc, stmt.dest)
+                                push!(W, falsebb)
+                            end
+                            @goto fallthrough
+                        end
+                    end
+                elseif isa(stmt, ReturnNode)
+                    bestguess = frame.bestguess
+                    rt = abstract_eval_value(interp, stmt.val, currstate, frame)
+                    rt = widenreturn(rt, bestguess, nargs, slottypes, currstate)
+                    # narrow representation of bestguess slightly to prepare for tmerge with rt
+                    if rt isa InterConditional && bestguess isa Const
+                        let slot_id = rt.slot
+                            old_id_type = slottypes[slot_id]
+                            if bestguess.val === true && rt.elsetype !== Bottom
+                                bestguess = InterConditional(slot_id, old_id_type, Bottom)
+                            elseif bestguess.val === false && rt.vtype !== Bottom
+                                bestguess = InterConditional(slot_id, Bottom, old_id_type)
+                            end
+                        end
+                    end
+                    # copy limitations to return value
+                    if !isempty(frame.pclimitations)
+                        union!(frame.limitations, frame.pclimitations)
+                        empty!(frame.pclimitations)
+                    end
+                    if !isempty(frame.limitations)
+                        rt = LimitedAccuracy(rt, copy(frame.limitations))
+                    end
+                    if tchanged(rt, bestguess)
+                        # new (wider) return type for frame
+                        bestguess = tmerge(bestguess, rt)
+                        # TODO: if bestguess isa InterConditional && !interesting(bestguess); bestguess = widenconditional(bestguess); end
+                        frame.bestguess = bestguess
+                        for (caller, caller_pc) in frame.cycle_backedges
+                            if !(caller.ssavaluetypes[caller_pc] === Any)
+                                # no reason to revisit if that call-site doesn't affect the final result
+                                push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
+                            end
+                        end
+                    end
+                    ssavaluetypes[frame.currpc] = Any
+                    @goto find_next_bb
+                elseif isexpr(stmt, :enter)
+                    # Propagate entry info to exception handler
+                    l = stmt.args[1]::Int
+                    catchbb = block_for_inst(frame.cfg, l)
+                    if update_bbstate!(frame, catchbb, currstate)
+                        push!(W, catchbb)
+                    end
+                    ssavaluetypes[currpc] = Any
+                    @goto fallthrough
                 end
+                # Fall through terminator - treat as regular stmt
             end
-            continue
-        elseif hd === :enter
-            stmt = stmt::Expr
-            l = stmt.args[1]::Int
-            # propagate type info to exception handler
-            old = states[l]
-            newstate_catch = stupdate!(old, changes)
-            if newstate_catch !== nothing
-                push!(W, l)
-                states[l] = newstate_catch
+            # Process non control-flow statements
+            (; changes, type) = abstract_eval_basic_statement(interp,
+                stmt, currstate, frame)
+            if type === Bottom
+                ssavaluetypes[currpc] = Bottom
+                @goto find_next_bb
             end
-            typeassert(states[l], VarTable)
-        elseif hd === :leave
-        else
-            if hd === :(=)
-                stmt = stmt::Expr
-                t = abstract_eval_statement(interp, stmt.args[2], changes, frame)
-                if t === Bottom
-                    continue
-                end
-                ssavaluetypes[pc] = t
-                lhs = stmt.args[1]
-                if isa(lhs, SlotNumber)
-                    changes = StateUpdate(lhs, VarState(t, false), changes, false)
-                elseif isa(lhs, GlobalRef)
-                    handle_global_assignment!(interp, frame, lhs, t)
-                elseif !isa(lhs, SSAValue)
-                    tristate_merge!(frame, EFFECTS_UNKNOWN)
-                end
-            elseif hd === :method
-                stmt = stmt::Expr
-                fname = stmt.args[1]
-                if isa(fname, SlotNumber)
-                    changes = StateUpdate(fname, VarState(Any, false), changes, false)
-                end
-            elseif hd === :code_coverage_effect || (
-                    hd !== :boundscheck && # :boundscheck can be narrowed to Bool
-                    is_meta_expr(stmt))
-                # these do not generate code
-            else
-                t = abstract_eval_statement(interp, stmt, changes, frame)
-                if t === Bottom
-                    continue
-                end
-                if !isempty(frame.ssavalue_uses[pc])
-                    record_ssa_assign(pc, t, frame)
-                else
-                    ssavaluetypes[pc] = t
-                end
-            end
-            if isa(changes, StateUpdate)
-                let cur_hand = frame.handler_at[pc], l, enter
+            if changes !== nothing
+                stoverwrite1!(currstate, changes)
+                let cur_hand = frame.handler_at[currpc], l, enter
                     while cur_hand != 0
-                        enter = frame.src.code[cur_hand]
-                        l = (enter::Expr).args[1]::Int
+                        enter = frame.src.code[cur_hand]::Expr
+                        l = enter.args[1]::Int
+                        exceptbb = block_for_inst(frame.cfg, l)
                         # propagate new type info to exception handler
                         # the handling for Expr(:enter) propagates all changes from before the try/catch
                         # so this only needs to propagate any changes
-                        if stupdate1!(states[l]::VarTable, changes::StateUpdate) !== false
-                            push!(W, l)
+                        if stupdate1!(states[exceptbb]::VarTable, changes)
+                            push!(W, exceptbb)
                         end
                         cur_hand = frame.handler_at[cur_hand]
                     end
                 end
             end
+            if type === nothing
+                ssavaluetypes[currpc] = Any
+                continue
+            end
+            if !isempty(frame.ssavalue_uses[currpc])
+                record_ssa_assign!(currpc, type, frame)
+            else
+                ssavaluetypes[currpc] = type
+            end
+        end # for currpc in bbstart:bbend
+
+        # Case 1: Fallthrough termination
+        begin @label fallthrough
+            nextbb = currbb + 1
         end
 
-        @assert isempty(frame.pclimitations) "unhandled LimitedAccuracy"
-
-        if t === nothing
-            # mark other reached expressions as `Any` to indicate they don't throw
-            ssavaluetypes[pc] = Any
+        # Case 2: Directly branch to a different BB
+        begin @label branch
+            if update_bbstate!(frame, nextbb, currstate)
+                push!(W, nextbb)
+            end
         end
 
-        newstate = stupdate!(states[pc´], changes)
-        if newstate !== nothing
-            states[pc´] = newstate
-            push!(W, pc´)
+        # Case 3: Control flow ended along the current path (converged, return or throw)
+        begin @label find_next_bb
+            currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
+            currbb == -1 && break # the working set is empty
+            currbb > nbbs && break
+
+            nexttable = states[currbb]
+            if nexttable === nothing
+                init_vartable!(currstate, frame)
+            else
+                stoverwrite!(currstate, nexttable)
+            end
         end
-    end
+    end # while currbb <= nbbs
+
     frame.dont_work_on_me = false
     nothing
 end
 
-function conditional_changes(changes::VarTable, @nospecialize(typ), var::SlotNumber)
-    vtype = changes[slot_id(var)]
+function conditional_change(state::VarTable, @nospecialize(typ), var::SlotNumber)
+    vtype = state[slot_id(var)]
     oldtyp = vtype.typ
     # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
     # since we probably formed these types with `typesubstract`, the comparison is likely simple
     if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
         # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
         oldtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes)))
-        return StateUpdate(var, VarState(typ, vtype.undef), changes, true)
+        return StateUpdate(var, VarState(typ, vtype.undef), state, true)
     end
-    return changes
+    return nothing
 end
 
 function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)

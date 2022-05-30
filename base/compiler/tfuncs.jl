@@ -1827,7 +1827,8 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         effect_free = true
     elseif f === getglobal && length(argtypes) >= 3
         nothrow = getglobal_nothrow(argtypes[2:end])
-        ipo_consistent = nothrow && isconst((argtypes[2]::Const).val, (argtypes[3]::Const).val)
+        ipo_consistent = nothrow && isconst( # types are already checked in `getglobal_nothrow`
+            (argtypes[2]::Const).val::Module, (argtypes[3]::Const).val::Symbol)
         effect_free = true
     else
         ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
