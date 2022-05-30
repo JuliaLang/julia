@@ -735,20 +735,20 @@ end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch, effects::Effects)
     mi = specialize_method(match; compilesig=true)
+    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
-    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, linfo::MethodInstance, effects::Effects)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
+    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
-    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects)
-    return compileable_specialization(et, result.linfo, effects)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult, effects::Effects)
+    return compileable_specialization(et, linfo, effects)
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
@@ -1257,11 +1257,7 @@ function handle_const_call!(
             result = results[j]
             if isa(result, ConstResult)
                 case = const_result_item(result, state)
-                if case === nothing
-                    fully_covered = false
-                else
-                    push!(cases, InliningCase(result.mi.specTypes, case))
-                end
+                push!(cases, InliningCase(result.mi.specTypes, case))
             elseif isa(result, InferenceResult)
                 fully_covered &= handle_inf_result!(result, argtypes, flag, state, cases)
             else
