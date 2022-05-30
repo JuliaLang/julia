@@ -52,7 +52,6 @@
     XX(jl_int32_type) \
     XX(jl_int64_type) \
     XX(jl_int8_type) \
-    XX(jl_interconditional_type) \
     XX(jl_interrupt_exception) \
     XX(jl_intrinsic_type) \
     XX(jl_lineinfonode_type) \

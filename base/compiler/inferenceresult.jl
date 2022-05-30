@@ -38,9 +38,9 @@ function matching_cache_argtypes(
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
                 sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
-                vtype = tmeet(cnd.vtype, sigt)
+                thentype = tmeet(cnd.thentype, sigt)
                 elsetype = tmeet(cnd.elsetype, sigt)
-                if vtype === Bottom && elsetype === Bottom
+                if thentype === Bottom && elsetype === Bottom
                     # we accidentally proved this method match is impossible
                     # TODO bail out here immediately rather than just propagating Bottom ?
                     given_argtypes[i] = Bottom
@@ -49,7 +49,7 @@ function matching_cache_argtypes(
                         condargs = Tuple{Int,Int}[]
                     end
                     push!(condargs, (slotid, i))
-                    given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
                 end
                 continue
             end
