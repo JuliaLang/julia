@@ -55,7 +55,7 @@ for u in Any[
 	Union{Int, UInt},
 	Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
 	Union{Char, UInt8, UInt},
-	Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing}.
+	Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
 	Union{Missing, Nothing}
 ]
 	@test InteractiveUtils.is_expected_union(u)

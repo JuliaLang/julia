@@ -32,10 +32,10 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     str = "::$ty"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
-        Base.emphasize(io, str)
     elseif ty isa Union && is_expected_union(ty)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
+    elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
+        Base.emphasize(io, str)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
@@ -46,8 +46,10 @@ end
 # i.e. must be small with concrete types.
 function is_expected_union(u::Union)
 	Base.unionlen(u) < 4 || return false
-	Base.isdispatchelem(u.a) || return false
-	ub = u.b
+	ua, ub = u.a, u.b
+	if !Base.isdispatchelem(ua) || ua == Core.Box
+	    return false
+	end
 	ub isa Union ? is_expected_union(ub) : Base.isdispatchelem(ub)
 end
 
