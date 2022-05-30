@@ -1350,7 +1350,7 @@ let isa_tfunc = Core.Compiler.isa_tfunc
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test isa_tfunc(c, Const(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
         @test isa_tfunc(c, Const(Real)) === Const(true)
@@ -1401,7 +1401,7 @@ let subtype_tfunc = Core.Compiler.subtype_tfunc
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
@@ -1444,7 +1444,7 @@ let egal_tfunc
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
     @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test egal_tfunc(c, Const(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
         @test egal_tfunc(c, Const(Real)) === Const(false)
@@ -1455,17 +1455,17 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Union{}, Const(Union{})) # === Const(false)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, c.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, Union{}, c.elsetype)
+    let c = Conditional(0, Union{}, Const(Union{})) # === Const(false)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, Union{}, c.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.vtype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.vtype, Union{})
+    let c = Conditional(0, Const(Union{}), Union{}) # === Const(true)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, Union{}, c.thentype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.thentype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
@@ -1940,19 +1940,22 @@ function foo25261()
         next = f25261(Core.getfield(next, 2))
     end
 end
-opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
-i = 1
-# Skip to after the branch
-while !isa(opt25261[i], GotoIfNot); global i += 1; end
-foundslot = false
-for expr25261 in opt25261[i:end]
-    if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
-        # This should be the assignment to the SSAValue into the getfield
-        # call - make sure it's a TypedSlot
-        global foundslot = true
+let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
+    i = 1
+    # Skip to after the branch
+    while !isa(opt25261[i], GotoIfNot)
+        i += 1
     end
+    foundslot = false
+    for expr25261 in opt25261[i:end]
+        if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+            # This should be the assignment to the SSAValue into the getfield
+            # call - make sure it's a TypedSlot
+            foundslot = true
+        end
+    end
+    @test foundslot
 end
-@test foundslot
 
 @testset "inter-procedural conditional constraint propagation" begin
     # simple cases
@@ -2034,17 +2037,14 @@ end
         return nothing
     end == Any[Union{Nothing,Expr}]
 
-    # handle the edge case
-    let ts = @eval Module() begin
-            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
-            # create cache
-            Base.return_types(edgecase, (Any,))
-            Base.return_types((Any,)) do x
-                edgecase(x) ? x : nothing # ::Any
-            end
+    # handle edge case
+    @test (@eval Module() begin
+        edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+        Base.return_types(edgecase, (Any,)) # create cache
+        Base.return_types((Any,)) do x
+            edgecase(x)
         end
-        @test ts == Any[Any]
-    end
+    end) == Any[Core.Compiler.InterConditional]
 
     # a tricky case: if constant inference derives `Const` while non-constant inference has
     # derived `InterConditional`, we should not discard that constant information
@@ -4134,6 +4134,11 @@ end |> !Core.Compiler.is_concrete_eval_eligible
     entry_to_be_invalidated('a')
 end
 
+# control flow backedge should taint `terminates`
+@test Base.infer_effects((Int,)) do n
+    for i = 1:n; end
+end |> !Core.Compiler.is_terminates
+
 # Nothrow for assignment to globals
 global glob_assign_int::Int = 0
 f_glob_assign_int() = global glob_assign_int += 1
@@ -4141,6 +4146,41 @@ let effects = Base.infer_effects(f_glob_assign_int, ())
     @test !Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+# Nothrow for setglobal!
+global SETGLOBAL!_NOTHROW::Int = 0
+let effects = Base.infer_effects() do
+        setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
+    end
+    @test Core.Compiler.is_nothrow(effects)
+end
+
+# we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
+# as the cached effects can be easily wrong otherwise
+# since the inference curently doesn't track "world-age" of global variables
+@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
+setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
+let effects = Base.infer_effects() do
+        global_assignment_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        setglobal!_nothrow_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+global UNDEFINEDYET::String = "0"
+let effects = Base.infer_effects() do
+        global_assignment_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        setglobal!_nothrow_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+@test_throws ErrorException setglobal!_nothrow_undefinedyet()
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -4153,3 +4193,13 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     #@test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+
+# check the inference convergence with an empty vartable:
+# the inference state for the toplevel chunk below will have an empty vartable,
+# and so we may fail to terminate (or optimize) it if we don't update vartables correctly
+let # NOTE make sure this toplevel chunk doesn't contain any local binding
+    Base.Experimental.@force_compile
+    global xcond::Bool = false
+    while xcond end
+end
+@test !xcond

@@ -704,7 +704,7 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
             elseif xinfo !== nothing
                 return !xinfo.attach_after
             else
-                return yinfo.attach_after
+                return (yinfo::NewNodeInfo).attach_after
             end
         end
         return x′.id < y′.id

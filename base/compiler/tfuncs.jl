@@ -226,11 +226,11 @@ function egal_tfunc(@nospecialize(x), @nospecialize(y))
     xx = widenconditional(x)
     yy = widenconditional(y)
     if isa(x, Conditional) && isa(yy, Const)
-        yy.val === false && return Conditional(x.var, x.elsetype, x.vtype)
+        yy.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
         yy.val === true && return x
         return Const(false)
     elseif isa(y, Conditional) && isa(xx, Const)
-        xx.val === false && return Conditional(y.var, y.elsetype, y.vtype)
+        xx.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
         xx.val === true && return y
         return Const(false)
     elseif isa(xx, Const) && isa(yy, Const)
@@ -1748,6 +1748,8 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return false
     elseif f === getglobal
         return getglobal_nothrow(argtypes)
+    elseif f === setglobal!
+        return setglobal!_nothrow(argtypes)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return false
         return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
@@ -1825,7 +1827,8 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         effect_free = true
     elseif f === getglobal && length(argtypes) >= 3
         nothrow = getglobal_nothrow(argtypes[2:end])
-        ipo_consistent = nothrow && isconst((argtypes[2]::Const).val, (argtypes[3]::Const).val)
+        ipo_consistent = nothrow && isconst( # types are already checked in `getglobal_nothrow`
+            (argtypes[2]::Const).val::Module, (argtypes[3]::Const).val::Symbol)
         effect_free = true
     else
         ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
@@ -2092,7 +2095,7 @@ end
 function getglobal_nothrow(argtypes::Vector{Any})
     2 ≤ length(argtypes) ≤ 3 || return false
     if length(argtypes) == 3
-        global_order_nothrow(argtypes[3], true, false) || return false
+        global_order_nothrow(argtypes[3], #=loading=#true, #=storing=#false) || return false
     end
     M, s = argtypes
     if M isa Const && s isa Const
@@ -2124,6 +2127,26 @@ function setglobal!_tfunc(@nospecialize(M), @nospecialize(s), @nospecialize(v),
 end
 add_tfunc(getglobal, 2, 3, getglobal_tfunc, 1)
 add_tfunc(setglobal!, 3, 4, setglobal!_tfunc, 3)
+function setglobal!_nothrow(argtypes::Vector{Any})
+    3 ≤ length(argtypes) ≤ 4 || return false
+    if length(argtypes) == 4
+        global_order_nothrow(argtypes[4], #=loading=#false, #=storing=#true) || return false
+    end
+    M, s, newty = argtypes
+    if M isa Const && s isa Const
+        M, s = M.val, s.val
+        return global_assignment_nothrow(M, s, newty)
+    end
+    return false
+end
+
+function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
+    if isdefined(M, s) && !isconst(M, s)
+        ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+        return ty === nothing || newty ⊑ ty
+    end
+    return false
+end
 
 function get_binding_type_effect_free(@nospecialize(M), @nospecialize(s))
     if M isa Const && s isa Const
