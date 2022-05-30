@@ -265,7 +265,7 @@ Because you changed the UUID, the package manager treats the stdlib package as
 different from the one in the system image, and the system image version will
 not override the package.
 
-Be sure to change the UUID value back before making the pull request. 
+Be sure to change the UUID value back before making the pull request.
 
 ### Contributing to patch releases
 
