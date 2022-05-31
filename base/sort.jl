@@ -383,9 +383,9 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 """ searchsortedlast
 
 """
-    insorted(a, x; by=<transform>, lt=<comparison>, rev=false) -> Bool
+    insorted(x, a; by=<transform>, lt=<comparison>, rev=false) -> Bool
 
-Determine whether an item is in the given sorted collection, in the sense that
+Determine whether an item `x` is in the sorted collection `a`, in the sense that
 it is [`==`](@ref) to one of the values of the collection according to the order
 specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
 sorted in that order, see [`sort`](@ref) for the keywords.
