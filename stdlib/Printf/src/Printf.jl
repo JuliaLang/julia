@@ -88,20 +88,16 @@ function Base.showerror(io::IO, err::InvalidFormatStringError)
     io_has_color = get(io, :color, false)
 
     println(io, "InvalidFormatStringError: ", err.message)
-    print(io, "\t\"", @view(err.format[begin:prevind(err.format, err.start_color)]))
+    print(io, "    \"", @view(err.format[begin:prevind(err.format, err.start_color)]))
     invalid_text = @view err.format[err.start_color:err.end_color]
 
-    if io_has_color
-        printstyled(io, invalid_text, color=:red)
-    else
-        print(io, invalid_text)
-    end
+    printstyled(io, invalid_text, color=:red)
 
     # +1 is okay, since all format characters are single bytes
     println(io, @view(err.format[err.end_color+1:end]), "\"")
 
     arrow_error = '-'^(length(invalid_text)-1)
-    arrow = "\t" * ' '^err.start_color * arrow_error * "^\n"
+    arrow = "    " * ' '^err.start_color * arrow_error * "^\n"
     if io_has_color
         printstyled(io, arrow, color=:red)
     else
@@ -199,7 +195,7 @@ function Format(f::AbstractString)
                 b = bytes[pos]
                 pos += 1
             end
-        elseif b in b"Ljqtz" # what is q? Possibly quad?
+        elseif b in b"Ljqtz" # q was a synonym for ll above, see `man 3 printf`. Not to be used.
             pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
@@ -433,6 +429,10 @@ _snprintf(ptr, siz, str, arg) =
     @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
                                    arg::Ref{BigFloat})::Cint
 
+# Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
+# 8KiB seems like a reasonable default. Larger BigFloat representations should probably
+# use a custom printing routine. Printing values with results larger than this ourselves
+# seems like a dangerous thing to do.
 const __BIG_FLOAT_MAX__ = 8192
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
@@ -444,19 +444,15 @@ const __BIG_FLOAT_MAX__ = 8192
             GC.@preserve buf begin
                 siz = length(buf) - pos + 1
                 str = string(spec; modifier="R")
-                len = _snprintf(pointer(buf, pos), siz, str, x)
-                if len > siz
-                    maxout = max(__BIG_FLOAT_MAX__,
-                                 ceil(Int, precision(x) * log(2) / log(10)) + 25)
-                    # TODO: `error` is kind of generic, is there a more appropriate one to throw?
-                    len > maxout &&
-                        error("Over $maxout bytes $len needed to output BigFloat $x")
-                    resize!(buf, len + 1)
-                    len = _snprintf(pointer(buf, pos), len + 1, str, x)
+                required_length = _snprintf(pointer(buf, pos), siz, str, x)
+                if required_length > siz
+                    required_length > __BIG_FLOAT_MAX__ &&
+                        throw(ArgumentError("The given BigFloat requires $required_length bytes to be printed, which is more than the maximum of $__BIG_FLOAT_MAX__ bytes supported."))
+                    resize!(buf, required_length + 1)
+                    required_length = _snprintf(pointer(buf, pos), required_length + 1, str, x)
                 end
-                # TODO: when will this actually be thrown? What more informative error would be appropriate?
-                len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
-                return pos + len
+                required_length > 0 || throw(ArgumentError("The given BigFloat would produce less than the maximum allowed number of bytes $__BIG_FLOAT_MAX__, but still couldn't be printed fully for an unknown reason."))
+                return pos + required_length
             end
         end
         x = Float64(x)
