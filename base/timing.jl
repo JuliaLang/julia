@@ -27,7 +27,7 @@ struct GC_Num
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
-reset_gc_stats() = ccall(:jl_gc_reset_stats,Cvoid,())
+reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
