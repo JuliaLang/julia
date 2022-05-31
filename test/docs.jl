@@ -1434,25 +1434,34 @@ end
 struct t_docs_abc end
 @test "t_docs_abc" in accessible(@__MODULE__)
 
-# Call overloading issue #20087
+# Call overloading issues #20087 and #44889
 """
 Docs for `MyFunc` struct.
 """
-mutable struct MyFunc
-    x
-end
+mutable struct MyFunc x end
+"""
+Docs for `MyParametricFunc{T}` struct.
+"""
+struct MyParametricFunc{T} end
 
 """
 Docs for calling `f::MyFunc`.
 """
-function (f::MyFunc)(x)
-    f.x = x
-    return f
-end
+(f::MyFunc)(x) = f
+
+"""
+Docs for calling `f::MyParametricFunc{T}`.
+"""
+(f::MyParametricFunc{T})(x) = f
 
 @test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
+""")
+
+@test docstrings_equal(@doc((::MyParametricFunc{T})(44889)),
+doc"""
+Docs for calling `f::MyParametricFunc{T}`.
 """)
 
 struct A_20087 end
