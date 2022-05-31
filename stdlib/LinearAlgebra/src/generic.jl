@@ -723,8 +723,8 @@ The result is always a floating point array. To avoid this when `eltype(A) <: In
 0-norm is `count(!iszero, A; dims)`, 1-norm is `sum(abs, A; dims)`,
 and the `Inf`-norm is `maximum(abs, A; dims)`.
 
-!!! compat "Julia 1.8"
-    Methods taking keyword `dims` require Julia 1.8.
+!!! compat "Julia 1.9"
+    Methods taking keyword `dims` require Julia 1.9.
 
 # Examples
 ```jldoctest
@@ -2033,30 +2033,39 @@ normalize(x, p::Real) = x / norm(x, p)
     normalize(A::AbstractArray, p::Real=2; dims)
 
 Return a similar array for which `norm(result, p; dims)` is everywhere 1.
+Equivalent to `mapslices(x -> normalize(x, p), mat; dims)`, but usually more efficient.
 
 !!! compat "Julia 1.11"
     The `dims` keyword requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
-julia> d = [1 2 5 ; 1 2 5]
+julia> mat = [1 2 5 ; 1 2 5]
 2×3 Matrix{Int64}:
  1  2  5
  1  2  5
 
-julia> e = normalize(d; dims=1)
+julia> cols2 = normalize(mat; dims=1)
 2×3 Matrix{Float64}:
  0.707107  0.707107  0.707107
  0.707107  0.707107  0.707107
 
-julia> norm(e; dims=1)
+julia> norm(cols2; dims=1)
 1×3 Matrix{Float64}:
  1.0  1.0  1.0
 
-julia> normalize(d, 1; dims=2)
+julia> rows1 = normalize(mat, 1; dims=2)
 2×3 Matrix{Float64}:
  0.125  0.25  0.625
  0.125  0.25  0.625
+
+julia> sum(rows1, dims=2)
+2×1 Matrix{Float64}:
+ 1.0
+ 1.0
+
+julia> rows1 == mapslices(x -> normalize(x, 1), mat; dims=2)
+true
 ```
 """
 function normalize(a::AbstractArray, p::Real = 2; dims=:)
