@@ -765,9 +765,27 @@ max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbi
 min(x::T, y::T) where {T<:AbstractFloat} = ifelse((y < x) | (signbit(y) > signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
-minmax(x::T, y::T) where {T<:AbstractFloat} =
-    ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
-           ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
+function max(x::T, y::T) where {T<:IEEEFloat}
+    a = x > y ? x : y
+    b = y > x ? y : x
+    # if either argument is NaN, a != b and at least one is NaN
+    # else if they are opposite zeros, a == b and a !== b
+    # else a == b and a ==== b
+    argplus = a + b # a+b is NaN iff x or y is NaN or they are are opposite-signed Infs - opposite Infs are impossible given the preceding comparisons
+    argand = reinterpret(T, reinterpret(Unsigned, a) & reinterpret(Unsigned, b)) # no-op for a==b except to prefer +0.0 over -0.0
+    return isnan(argplus) ? argplus : argand
+end
+
+function min(x::T, y::T) where {T<:IEEEFloat}
+    a = x < y ? x : y
+    b = y < x ? y : x
+    # if either argument is NaN, a != b and at least one is NaN
+    # else if they are opposite zeros, a == b and a !== b
+    # else a == b and a ==== b
+    argplus = a + b # a+b is NaN iff x or y is NaN or they are are opposite-signed Infs - opposite Infs are impossible given the preceding comparisons
+    argor = reinterpret(T, reinterpret(Unsigned, a) | reinterpret(Unsigned, b)) # no-op for a==b except to prefer -0.0 over +0.0
+    return isnan(argplus) ? argplus : argor
+end
 
 
 """

@@ -104,8 +104,8 @@ end
     @test minmax(-Inf, NaN) ≣ (NaN, NaN)
     @test minmax(NaN, -Inf) ≣ (NaN, NaN)
     @test minmax(NaN, NaN) ≣ (NaN, NaN)
-    @test min(-0.0,0.0) === min(0.0,-0.0)
-    @test max(-0.0,0.0) === max(0.0,-0.0)
+    @test min(-0.0,0.0) === min(0.0,-0.0) === -0.0
+    @test max(-0.0,0.0) === max(0.0,-0.0) === 0.0
     @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
     @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
     @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2

@@ -487,6 +487,6 @@ minmax(x::Real) = (x, x)
 
 max(x::T, y::T) where {T<:Real} = ifelse(y < x, x, y)
 min(x::T, y::T) where {T<:Real} = ifelse(y < x, y, x)
-minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
+minmax(x::T, y::T) where {T<:Real} = (min(x, y), max(x, y))
 
 flipsign(x::T, y::T) where {T<:Signed} = no_op_err("flipsign", T)
