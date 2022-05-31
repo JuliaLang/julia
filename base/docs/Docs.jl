@@ -299,9 +299,8 @@ function astname(x::Expr, ismacro::Bool)
     head = x.head
     if head === :.
         ismacro ? macroname(x) : x
-    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
-    elseif (head === :function || head === :(=)) && isexpr(x.args[1], :call) && isexpr((x.args[1]::Expr).args[1], :(::))
-        return astname(((x.args[1]::Expr).args[1]::Expr).args[end], ismacro)
+    elseif head === :call && isexpr(x.args[1], :(::))
+        return astname((x.args[1]::Expr).args[end], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
         astname(x.args[n], ismacro)

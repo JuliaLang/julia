@@ -177,7 +177,7 @@ t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
 
 # Docstrings to parametric methods after definition using where syntax (#32960):
 tw(x::T) where T = nothing
@@ -357,7 +357,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -655,7 +655,7 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found.
 
@@ -1457,7 +1457,7 @@ function (f::MyFunc)(x)
     return f
 end
 
-@test docstrings_equal(@doc(MyFunc(2)),
+@test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
 """)
