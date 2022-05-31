@@ -43,7 +43,9 @@ Compiler/Runtime improvements
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
-* Conditional type constraints can now be forwarded interprocedurally (i.e. propagated from caller to callee) ([#42529]).
+* Conditional type constraints are now be forwarded interprocedurally (i.e. propagated from caller to callee).
+  This allows inference to understand e.g. `Base.ifelse(isa(x, Int), x, 0)` returns `::Int`-value
+  even if the type of `x` is not known ([#42529]).
 * Julia-level SROA (Scalar Replacement of Aggregates) has been improved: allowing elimination of
   `getfield` calls with constant global fields ([#42355]), enabling elimination of mutable structs with
   uninitialized fields ([#43208]), improving performance ([#43232]), and handling more nested `getfield`
@@ -53,7 +55,7 @@ Compiler/Runtime improvements
 * Inference now tracks various effects such as side-effectful-ness and nothrow-ness on a per-specialization basis.
   Code heavily dependent on constant propagation should see significant compile-time performance improvements and
   certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance
-  improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro ([#43852]).
+  improvements. Effects may be overwritten manually with the `Base.@assume_effects` macro ([#43852]).
 * Precompilation (with explicit `precompile` directives or representative workloads) now saves more type-inferred code,
   resulting in reduced time-to-first task for packages that use precompilation.  This change also eliminates the
   runtime performance degradation occasionally triggered by precompilation on older Julia versions. More specifically,
