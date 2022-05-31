@@ -1088,20 +1088,49 @@ end
 # This is only for use with `Conditional`.
 # In general, usage of this is wrong.
 function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
+    code = sv.src.code
     init = sv.currpc
     while isa(arg, SSAValue)
         init = arg.id
-        arg = sv.src.code[init]
+        arg = code[init]
     end
-    arg isa SlotNumber || return nothing
-    for i = init:(sv.currpc - 1)
-        # conservatively make sure there isn't potentially another conflicting assignment to
-        # the same slot between the def and usage
+    if arg isa SlotNumber
+        # found this kind of pattern:
+        # %init = SlotNumber(x)
+        # [...]
+        # goto if not isa(%init, T)
+        # now conservatively make sure there isn't potentially another conflicting assignment
+        # to the same slot between the def and usage
         # we can assume the IR is sorted, since the front-end only creates SSA values in order
-        e = sv.src.code[i]
-        e isa Expr || continue
-        if e.head === :(=) && e.args[1] === arg
-            return nothing
+        for i = init:(sv.currpc-1)
+            e = code[i]
+            if isexpr(e, :(=)) && e.args[1] === arg
+                return nothing
+            end
+        end
+    else
+        # there might still be the following kind of pattern (see #45499):
+        # %init = ...
+        # [...]
+        # SlotNumber(x) = %init
+        # [...]
+        # goto if not isa(%init, T)
+        # let's check if there is a slot assigned to the def SSA value but also there isn't
+        # any potentially conflicting assignment to the same slot
+        arg = nothing
+        def = SSAValue(init)
+        for i = (init+1):(sv.currpc-1)
+            e = code[i]
+            if isexpr(e, :(=))
+                lhs = e.args[1]
+                if isa(lhs, SlotNumber)
+                    lhs === arg && return nothing
+                    rhs = e.args[2]
+                    if rhs === def
+                        arg = lhs
+                    end
+                end
+            end
         end
     end
     return arg
