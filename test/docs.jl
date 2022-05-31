@@ -12,26 +12,19 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
-    #if s1 != s2 # for debugging
-    #    e1 = eachline(IOBuffer(s1))
-    #    e2 = eachline(IOBuffer(s2))
-    #    for (l1, l2) in zip(e1, e2)
-    #        l1 == l2 || println(l1, "\n", l2, "\n")
-    #    end
-    #    for l1 in e1
-    #        println(l1, "\n[missing]\n")
-    #    end
-    #    for l2 in e2
-    #        println("[missing]\n", l2, "\n")
-    #    end
-    #end
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
     return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
@@ -723,7 +716,7 @@ f12593_2() = 1
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
-                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}); debug=false)
 
 # test that macro documentation works
 @test (@repl :@assert) !== nothing
