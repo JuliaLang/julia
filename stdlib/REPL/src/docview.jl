@@ -230,8 +230,8 @@ function lookup_doc(ex)
         end
     end
     binding = esc(bindingexpr(namify(ex)))
-    if isexpr(ex, :call) || isexpr(ex, :macrocall)
-        sig = esc(signature(ex))
+    sig = esc(signature(ex))
+    if sig != :(Union{})
         :($(doc)($binding, $sig))
     else
         :($(doc)($binding))

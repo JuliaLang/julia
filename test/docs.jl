@@ -1527,7 +1527,10 @@ A() = nothing
 A{Int, Int}() = nothing
 
 "A{S, T}(::S, ::T) where {S, T}"
-(A{S, T}(::S, ::T) where {S, T}) = nothing
+A{S, T}(::S, ::T) where {S, T} = nothing
+
+"A{T}(x) where T"
+A{T}(x) where T
 
 "(::A)()"
 (::A)() = nothing
@@ -1544,9 +1547,10 @@ A{Int, Int}() = nothing
 end
 
 debug = true
-@test docstrings_equal(@doc(FunctorCalls.A()), doc"A()"; debug)
-@test docstrings_equal(@doc(FunctorCalls.A{Int, Int}()), doc"A{Int, Int}()"; debug)
-@test docstrings_equal(@doc(FunctorCalls.A{S, T}(::S, ::T) where T where S), doc"A{S, T}(::S, ::T) where {S, T}"; debug)
-@test docstrings_equal(@doc((::FunctorCalls.A)()), doc"(::A)()"; debug)
-@test docstrings_equal(@doc((::FunctorCalls.A{S, T})(::S, ::T) where {S, T}), doc"(::A{S, T})(::S, ::T) where {S, T}"; debug)
-@test docstrings_equal(@doc((a::(FunctorCalls.A::UnionAll){T::TypeVar, T::TypeVar})() where T), Docs.catdoc(doc"(::A)()", doc"(::A{T, T})() where T"); debug)
+@test docstrings_equal(@doc(FunctorCalls.A()), doc"A()")
+@test docstrings_equal(@doc(FunctorCalls.A{Int, Int}()), doc"A{Int, Int}()")
+@test docstrings_equal(@doc(FunctorCalls.A{S, T}(::S, ::T) where T where S), doc"A{S, T}(::S, ::T) where {S, T}")
+@test docstrings_equal(@doc(FunctorCalls.A{T}(x) where T), doc"A{T}(x) where T")
+@test docstrings_equal(@doc((::FunctorCalls.A)()), doc"(::A)()")
+@test docstrings_equal(@doc((::FunctorCalls.A{S, T})(::S, ::T) where {S, T}), doc"(::A{S, T})(::S, ::T) where {S, T}")
+@test docstrings_equal(@doc((a::(FunctorCalls.A::UnionAll){T::TypeVar, T::TypeVar})() where T), Docs.catdoc(doc"(::A)()", doc"(::A{T, T})() where T"))

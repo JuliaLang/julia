@@ -21,7 +21,7 @@ function docm(source::LineNumberNode, mod::Module, str, x)
     out = Expr(:call, doc!, QuoteNode(source), mod, lazy_iterpolate(str), QuoteNode(x))
     if isexpr(x, :module)
         out = Expr(:toplevel, out, x)
-    elseif isexpr(x, :call)
+    elseif isexpr(x, :call) || isexpr(x, :where) && isexpr(x.args[1], :call)
     else
         out = Expr(:block, x, out)
     end
