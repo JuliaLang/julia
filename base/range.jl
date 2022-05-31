@@ -1517,22 +1517,22 @@ julia> LogRange(10, 4000, 3)
 julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
 true
 
-julia> LogRange(-250_000, -0.04, 5) |> collect
+julia> LogRange(-62_500, -0.01, 5) |> collect  # endpoints are always exact
 5-element Vector{Float64}:
- -250000.0
-   -5000.000000000003
-    -100.0
-      -1.9999999999999998
-      -0.04
+ -62500.0
+  -1250.0
+    -25.0
+     -0.49999999999999994
+     -0.01
 
 julia> LogRange(√2, 32, 10)
 10-element LogRange{Float64}:
  1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
 
-julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)
+julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)  # was logspace(0,3,4) in Julia < 1.0
 true
 
-julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))
+julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))  # complex numbers
 true
 ```
 """
