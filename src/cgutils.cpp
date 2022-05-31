@@ -3172,14 +3172,23 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
-        else if (isa<IntrinsicInst>(User)) { //mangling based on function_sig_t::emit_a_ccall
+        else if (isa<IntrinsicInst>(User)) { //mangling based on function_sig_t::emit_a_ccall and replaceIntrinsicWith
             IntrinsicInst *II = cast<IntrinsicInst>(User);
-            SmallVector<Type*, 3> ArgTys;
-            Intrinsic::getIntrinsicSignature(II->getCalledFunction(), ArgTys);
-            assert(ArgTys.size() <= II->arg_size());
-            for (size_t i = 0; i < ArgTys.size(); ++i)
-                ArgTys[i] = II->getArgOperand(i)->getType();
-            II->setCalledFunction(Intrinsic::getDeclaration(II->getModule(), II->getIntrinsicID(), ArgTys));
+            Intrinsic::ID ID = II->getIntrinsicID();
+            SmallVector<Type*, 4> overloadTys;
+            SmallVector<Intrinsic::IITDescriptor, 8> Table;
+            getIntrinsicInfoTableEntries(ID, Table);
+            ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+            auto functype = II->getFunctionType();
+            auto res = Intrinsic::matchIntrinsicSignature(functype, TableRef, overloadTys);
+            if (res == Intrinsic::MatchIntrinsicTypes_Match) {
+                bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
+                if (matchvararg) {
+                    Function *intrinsic = Intrinsic::getDeclaration(II->getModule(), ID, overloadTys);
+                    assert(intrinsic->getFunctionType() == functype);
+                    II->setCalledFunction(intrinsic);
+                }
+            }
         }
 #ifndef JL_LLVM_OPAQUE_POINTERS
         else if (isa<BitCastInst>(User)) {
