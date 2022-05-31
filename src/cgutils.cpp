@@ -3163,6 +3163,44 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
+static Function *mangleIntrinsic(IntrinsicInst *call)
+{
+    Intrinsic::ID ID = call->getIntrinsicID();
+    auto nargs = call->arg_size();
+    SmallVector<Value*, 8> args(nargs);
+    SmallVector<Type*, 8> argTys(nargs);
+    for (unsigned i = 0; i < nargs; i++) {
+        auto arg = call->getArgOperand(i);
+        args[i] = arg;
+        argTys[i] = args[i]->getType();
+    }
+    auto oldfType = call->getFunctionType();
+    auto newfType = FunctionType::get(
+            oldfType->getReturnType(),
+            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            oldfType->isVarArg());
+
+    // Accumulate an array of overloaded types for the given intrinsic
+    // and compute the new name mangling schema
+    SmallVector<Type*, 4> overloadTys;
+    {
+        SmallVector<Intrinsic::IITDescriptor, 8> Table;
+        getIntrinsicInfoTableEntries(ID, Table);
+        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
+        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
+        (void)res;
+        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(matchvararg);
+        (void)matchvararg;
+    }
+    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    assert(newF->getFunctionType() == newfType);
+    newF->setCallingConv(call->getCallingConv());
+    return newF;
+}
+
+
 //Used for allocation hoisting in *boxed
 static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsigned ToAS)
 {
@@ -3173,22 +3211,8 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) { //mangling based on function_sig_t::emit_a_ccall and replaceIntrinsicWith
-            IntrinsicInst *II = cast<IntrinsicInst>(User);
-            Intrinsic::ID ID = II->getIntrinsicID();
-            SmallVector<Type*, 4> overloadTys;
-            SmallVector<Intrinsic::IITDescriptor, 8> Table;
-            getIntrinsicInfoTableEntries(ID, Table);
-            ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
-            auto functype = II->getFunctionType();
-            auto res = Intrinsic::matchIntrinsicSignature(functype, TableRef, overloadTys);
-            if (res == Intrinsic::MatchIntrinsicTypes_Match) {
-                bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
-                if (matchvararg) {
-                    Function *intrinsic = Intrinsic::getDeclaration(II->getModule(), ID, overloadTys);
-                    assert(intrinsic->getFunctionType() == functype);
-                    II->setCalledFunction(intrinsic);
-                }
-            }
+            IntrinsicInst *call = cast<IntrinsicInst>(User);
+            call->setCalledFunction(mangleIntrinsic(call));
         }
 #ifndef JL_LLVM_OPAQUE_POINTERS
         else if (isa<BitCastInst>(User)) {
