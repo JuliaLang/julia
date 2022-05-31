@@ -445,7 +445,7 @@ function conditional_argtype(@nospecialize(rt), @nospecialize(sig), argtypes::Ve
     if isa(rt, InterConditional) && rt.slot == i
         return rt
     else
-        thentype = elsetype = tmeet(argtypes[i], fieldtype(sig, i))
+        thentype = elsetype = tmeet(widenconditional(argtypes[i]), fieldtype(sig, i))
         condval = maybe_extract_const_bool(rt)
         condval === true && (elsetype = Bottom)
         condval === false && (thentype = Bottom)
@@ -2167,7 +2167,7 @@ function widenreturn_noconditional(@nospecialize(rt))
         local anyrefine = false
         for i in 1:length(fields)
             a = fields[i]
-            a = isvarargtype(a) ? a : widenreturn_noconditional(widenconditional(a))
+            a = isvarargtype(a) ? a : widenreturn_noconditional(a)
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
                 anyrefine = has_const_info(a) ||
