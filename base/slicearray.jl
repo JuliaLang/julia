@@ -118,7 +118,7 @@ julia> s[1]
  2
  3
 
-julia> eachslice(m, dims=1, drop=false)  # keyword changes outer size
+julia> eachslice(m, dims=1, drop=false)  # keyword changes size of container
 3×1 eachslice(::Matrix{Int64}, dims = 1, drop = false) of 3-element slices with eltype Int64:
  [1, 2, 3]
  [4, 5, 6]
@@ -300,8 +300,3 @@ function showarg(io::IO, s::Slices, toplevel)
     toplevel && print(io, " of ", dims2string(_element_size(s)), " slices with eltype ", eltype(eltype(s)))
     return nothing
 end
-
-# This affects compact printing, 2-arg show. By default an array of arrays prints e.g. `Vector{Int}[[1,2], [3,4]]`.
-# Since the element type for Slices ia a complicated SubArray, this hides it, while still printing inner types
-# if nontrivial. Thus `(eachcol(Float32[1 2; 3 4]),)` prints `([Float32[1.0, 3.0], Float32[2.0, 4.0]],)`
-typeinfo_prefix(io::IO, @nospecialize s::Slices) = ("", true)
