@@ -5,6 +5,9 @@ module TestDiagonal
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
 
+include("../../../test/testhelpers/OffsetArrays.jl")
+using .OffsetArrays
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
@@ -783,6 +786,16 @@ end
     @test Diagonal(A) * Diagonal(A) == A * A
     @test_throws DimensionMismatch [1 0;0 1] * Diagonal([2 3])   # Issue #40726
     @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
+end
+
+@testset "Multiplication of a Diagonal with an OffsetArray" begin
+    # Offset indices should throw
+    D = Diagonal(1:4)
+    A = OffsetArray(rand(4,4), 2, 2)
+    @test_throws ArgumentError D * A
+    @test_throws ArgumentError A * D
+    @test_throws ArgumentError mul!(similar(A, size(A)), A, D)
+    @test_throws ArgumentError mul!(similar(A, size(A)), D, A)
 end
 
 @testset "Triangular division by Diagonal #27989" begin
