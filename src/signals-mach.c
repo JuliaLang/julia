@@ -135,9 +135,6 @@ static void allocate_mach_handler()
         jl_error("pthread_create failed");
     }
     pthread_attr_destroy(&attr);
-    for (int16_t tid = 0; tid < jl_n_threads; tid++) {
-        attach_exception_port(pthread_mach_thread_np(jl_all_tls_states[tid]->system_id), 0);
-    }
 }
 
 #ifdef LLVMLIBUNWIND
@@ -271,7 +268,7 @@ kern_return_t catch_mach_exception_raise(
             break;
         }
     }
-    if (!ptls2) {
+    if (!ptls2 || ptls2->current_task == NULL) {
         // We don't know about this thread, let the kernel try another handler
         // instead. This shouldn't actually happen since we only register the
         // handler for the threads we know about.

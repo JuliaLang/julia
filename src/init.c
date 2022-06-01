@@ -233,46 +233,43 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
-
-    if (loop == NULL) {
-        return;
-    }
-
-    struct uv_shutdown_queue queue = {NULL, NULL};
-    JL_UV_LOCK();
-    uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
-    struct uv_shutdown_queue_item *item = queue.first;
-    if (ct != NULL) {
-        while (item) {
-            JL_TRY {
-                while (item) {
-                    jl_close_item_atexit(item->h);
+    if (loop != NULL) {
+        struct uv_shutdown_queue queue = {NULL, NULL};
+        JL_UV_LOCK();
+        uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+        struct uv_shutdown_queue_item *item = queue.first;
+        if (ct != NULL) {
+            while (item) {
+                JL_TRY {
+                    while (item) {
+                        jl_close_item_atexit(item->h);
+                        item = next_shutdown_queue_item(item);
+                    }
+                }
+                JL_CATCH {
+                    //error handling -- continue cleanup, as much as possible
+                    assert(item);
+                    uv_unref(item->h);
+                    jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
+                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                    jlbacktrace(); // written to STDERR_FILENO
                     item = next_shutdown_queue_item(item);
                 }
             }
-            JL_CATCH {
-                //error handling -- continue cleanup, as much as possible
-                assert(item);
-                uv_unref(item->h);
-                jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
-                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                jlbacktrace(); // written to STDERR_FILENO
+        }
+        else {
+            while (item) {
+                jl_close_item_atexit(item->h);
                 item = next_shutdown_queue_item(item);
             }
         }
-    }
-    else {
-        while (item) {
-            jl_close_item_atexit(item->h);
-            item = next_shutdown_queue_item(item);
-        }
-    }
 
-    // force libuv to spin until everything has finished closing
-    loop->stop_flag = 0;
-    while (uv_run(loop, UV_RUN_DEFAULT)) { }
-    JL_UV_UNLOCK();
+        // force libuv to spin until everything has finished closing
+        loop->stop_flag = 0;
+        while (uv_run(loop, UV_RUN_DEFAULT)) { }
+        JL_UV_UNLOCK();
+    }
 
     // TODO: Destroy threads
 
@@ -289,8 +286,8 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
     if (jl_all_tls_states == NULL)
         return;
 
-    jl_task_t *ct = jl_current_task;
     if (jl_base_module) {
+        jl_task_t *ct = jl_get_current_task();
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_postoutput"));
         if (f != NULL) {
             JL_TRY {
@@ -712,6 +709,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_runtime_ccall();
     jl_init_tasks();
     jl_init_threading();
+    jl_init_threadinginfra();
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handlers();
 
     jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
@@ -723,8 +723,6 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
-    jl_init_threadinginfra();
-
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (jl_options.image_file)
@@ -760,10 +758,6 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_n_threads = 1;
     }
     jl_start_threads();
-
-    // This needs to be after jl_start_threads
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        jl_install_default_signal_handlers();
 
     jl_gc_enable(1);
 

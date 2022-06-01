@@ -5,6 +5,7 @@
 
 #include "options.h"
 #include "julia_locks.h"
+#include "julia_threads.h"
 #include "support/utils.h"
 #include "support/hashing.h"
 #include "support/ptrhash.h"

@@ -630,6 +630,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     if (sigaltstack(&ss, NULL) < 0) {
         jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
     }
+
+#ifdef HAVE_MACH
+    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
+#endif
 }
 
 static void jl_sigsetset(sigset_t *sset)
