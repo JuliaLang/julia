@@ -683,6 +683,33 @@ Expr
 Expr
 
 """
+    (:)(expr)
+
+`:expr` quotes the expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+The AST may be of type `Expr`, `Symbol`, or a literal value.
+Which of these three types are returned for any given expression is an
+implementation detail.
+
+See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
+
+# Examples
+```jldoctest
+julia> expr = :(a = b + 2*x)
+:(a = b + 2x)
+
+julia> sym = :some_identifier
+:some_identifier
+
+julia> value = :0xff
+0xff
+
+julia> typeof((expr, sym, value))
+Tuple{Expr, Symbol, UInt8}
+```
+"""
+(:)
+
+"""
     \$
 
 Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
