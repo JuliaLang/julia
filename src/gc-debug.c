@@ -979,18 +979,25 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
 
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t freed, uint64_t live, uint64_t interval,
-                     uint64_t pause)
+                     uint64_t pause, uint64_t ttsp, uint64_t mark,
+                     uint64_t sweep)
 {
     if (sweep_full > 0)
         jl_safe_printf("TS: %" PRIu64 " Major collection: estimate freed = %" PRIu64
-                       " live = %" PRIu64 "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
-                       end - start, freed, live/1024/1024,
-                       interval/1024/1024, pause/1000000 );
+                       " live = %" PRIu64 "m new interval = %" PRIu64
+                       "m time = %" PRIu64 "ms ttsp = %" PRIu64 "us mark time = %"
+                       PRIu64 "ms sweep time = %" PRIu64 "ms \n",
+                       end, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000, ttsp,
+                       mark/1000000,sweep/1000000);
     else
-        jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64 " live = %" PRIu64
-                       "m new interval = %" PRIu64 "m time = %" PRIu64 "ms\n",
-                       end - start, freed, live/1024/1024,
-                       interval/1024/1024, pause/1000000 );
+        jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64
+                       " live = %" PRIu64 "m new interval = %" PRIu64 "m pause time = %"
+                       PRIu64 "ms ttsp = %" PRIu64 "us mark time = %" PRIu64
+                       "ms sweep time = %" PRIu64 "ms \n",
+                       end, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000, ttsp,
+                       mark/1000000,sweep/1000000);
 }
 #endif
 

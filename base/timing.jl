@@ -18,9 +18,16 @@ struct GC_Num
     full_sweep      ::Cint
     max_pause       ::Int64
     max_memory      ::Int64
+    time_to_safepoint             ::Int64
+    max_time_to_safepointp        ::Int64
+    sweep_time      ::Int64
+    mark_time       ::Int64
+    total_sweep_time  ::Int64
+    total_mark_time   ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
+reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff

@@ -2963,6 +2963,13 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
     return num;
 }
 
+JL_DLLEXPORT void jl_gc_reset_stats(void)
+{
+    gc_num.max_pause = 0;
+    gc_num.max_memory = 0;
+    gc_num.max_time_to_safepoint = 0;
+}
+
 // TODO: these were supposed to be thread local
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT
 {
@@ -3059,9 +3066,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_mark_sp_t sp;
     gc_mark_sp_init(gc_cache, &sp);
 
-    uint64_t t0 = jl_hrtime();
+    uint64_t gc_start_time = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     JL_PROBE_GC_MARK_BEGIN();
+    uint64_t start_mark_time = jl_hrtime();
 
     // 1. fix GC bits of objects in the remset.
     for (int t_i = 0; t_i < jl_n_threads; t_i++)
@@ -3090,7 +3098,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
-    gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes);
+    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
+    uint64_t end_mark_time = jl_hrtime();
+    uint64_t mark_time = end_mark_time - start_mark_time;
+    gc_num.mark_time = mark_time;
+    gc_num.total_mark_time += mark_time;
     int64_t actual_allocd = gc_num.since_sweep;
     // marking is over
 
@@ -3191,6 +3203,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
     scanned_bytes = 0;
     // 5. start sweeping
+    uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
     sweep_weak_refs();
     sweep_stack_pools();
@@ -3202,6 +3215,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (sweep_full)
         gc_sweep_perm_alloc();
     JL_PROBE_GC_SWEEP_END();
+
+    uint64_t gc_end_time = jl_hrtime();
+    uint64_t pause = gc_end_time - gc_start_time;
+    uint64_t sweep_time = gc_end_time - start_sweep_time;
+    gc_num.total_sweep_time += sweep_time;
+    gc_num.sweep_time = sweep_time;
+
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -3234,13 +3254,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 #endif
 
-    uint64_t gc_end_t = jl_hrtime();
-    uint64_t pause = gc_end_t - t0;
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
-    gc_final_pause_end(t0, gc_end_t);
-    gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
+    gc_final_pause_end(t0, gc_end_time);
+    gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
@@ -3271,7 +3289,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
        }
     }
 
-    gc_time_summary(sweep_full, t_start, gc_end_t, gc_num.freed, live_bytes, gc_num.interval, pause);
+    gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
+                    live_bytes, gc_num.interval, pause,
+                    gc_num.time_to_safepoint,
+                    gc_num.mark_time, gc_num.sweep_time);
 
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
@@ -3305,6 +3326,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     // `jl_safepoint_start_gc()` makes sure only one thread can
     // run the GC.
+    uint64_t t0 = jl_hrtime();
     if (!jl_safepoint_start_gc()) {
         // Multithread only. See assertion in `safepoint.c`
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
@@ -3321,6 +3343,12 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
     JL_PROBE_GC_STOP_THE_WORLD();
+
+    uint64_t t1 = jl_hrtime();
+    uint64_t duration = t1 - t0;
+    if (duration > gc_num.max_time_to_safepoint)
+        gc_num.max_time_to_safepoint = duration;
+    gc_num.time_to_safepoint = duration;
 
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));

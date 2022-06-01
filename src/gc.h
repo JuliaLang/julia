@@ -56,7 +56,7 @@ typedef struct {
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
 
-// This struct must be kept in sync with the Julia type of the same name in base/util.jl
+// This struct must be kept in sync with the Julia type of the same name in base/timing.jl
 typedef struct {
     int64_t     allocd;
     int64_t     deferred_alloc;
@@ -74,6 +74,12 @@ typedef struct {
     int         full_sweep;
     uint64_t    max_pause;
     uint64_t    max_memory;
+    uint64_t    time_to_safepoint;
+    uint64_t    max_time_to_safepoint;
+    uint64_t    sweep_time;
+    uint64_t    mark_time;
+    uint64_t    total_sweep_time;
+    uint64_t    total_mark_time;
 } jl_gc_num_t;
 
 enum {
@@ -561,7 +567,8 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int sweep_full);
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t freed, uint64_t live, uint64_t interval,
-                     uint64_t pause);
+                     uint64_t pause, uint64_t ttsp, uint64_t mark,
+                     uint64_t sweep);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
@@ -588,7 +595,7 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
-                            interval, pause)
+                         interval, pause, ttsp, mark, sweep)
 #endif
 
 #ifdef MEMFENCE
