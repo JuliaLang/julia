@@ -201,6 +201,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
