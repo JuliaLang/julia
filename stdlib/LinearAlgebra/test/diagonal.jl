@@ -5,12 +5,12 @@ module TestDiagonal
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
 
-include("../../../test/testhelpers/OffsetArrays.jl")
-using .OffsetArrays
-
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 n=12 #Size of matrix problem to test
 Random.seed!(1)
