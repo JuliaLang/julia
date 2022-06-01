@@ -46,6 +46,7 @@ uv_mutex_t safepoint_lock;
 
 _Atomic(void *) jl_gc_recruiting_location = NULL;
 _Atomic(int32_t) jl_gc_safepoint_master = -1;
+_Atomic(int32_t) nworkers_marking = 0;
 
 extern uv_mutex_t *safepoint_sleep_locks;
 extern uv_cond_t *safepoint_wake_signals;
@@ -98,9 +99,10 @@ void jl_safepoint_init(void)
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
-    char *addr = (char *)VirtualAlloc(NULL, pgsz * 3, MEM_COMMIT, PAGE_READONLY);
+    char *addr = (char*)VirtualAlloc(NULL, pgsz * 3, MEM_COMMIT, PAGE_READONLY);
 #else
-    char *addr = (char *)mmap(0, pgsz * 3, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char *addr = (char*)mmap(0, pgsz * 3, PROT_READ,
+                             MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (addr == MAP_FAILED)
         addr = NULL;
 #endif
@@ -156,30 +158,18 @@ void jl_safepoint_end_gc(void)
     uv_mutex_unlock(&safepoint_lock);
 }
 
-// Thread recruitment scheme inspired by Hassanein,
+// Thread recruitment scheme inspired by Hassanein, 
 // `Understanding and Improving JVM GC Work Stealing at the
 // Data Center Scale`
-
-int jl_safepoint_all_workers_done(jl_ptls_t ptls)
-{
-    for (int i = 0; i < jl_n_threads; i++) {
-        if (i == ptls->tid)
-            continue;
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_PARALLEL)
-            return 0;
-    }
-    return 1;
-}
 
 void jl_safepoint_try_recruit(jl_ptls_t ptls)
 {
     if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
-        uint8_t state0 = jl_gc_state_save_and_set(ptls, JL_GC_STATE_PARALLEL);
+        jl_gc_mark_loop_enter(ptls);
         void *location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
         if (location)
             ((void (*)(jl_ptls_t))location)(ptls);
-        jl_gc_state_set(ptls, state0, JL_GC_STATE_PARALLEL);
+        jl_gc_mark_loop_leave(ptls);
     }
 }
 
@@ -193,7 +183,7 @@ size_t jl_safepoint_master_count_work(jl_ptls_t ptls)
         if (jl_atomic_load_relaxed(&ptls2->gc_state) == JL_GC_STATE_PARALLEL) {
             jl_gc_mark_cache_t *gc_cache2 = &ptls2->gc_cache;
             jl_gc_ws_queue_t *mark_queue2 = &gc_cache2->mark_queue;
-            // This count can be slightly off, but it doesn't matter
+            // This count can be slightly off, but it doesn't matter 
             // for recruitment heuristics
             jl_gc_ws_bottom_t bottom2 = jl_atomic_load_relaxed(&mark_queue2->bottom);
             jl_gc_ws_top_t top2 = jl_atomic_load_relaxed(&mark_queue2->top);
@@ -231,14 +221,13 @@ void jl_safepoint_master_recruit_workers(jl_ptls_t ptls, size_t nworkers)
 
 int jl_safepoint_master_end_marking(jl_ptls_t ptls)
 {
-    // Fast path for mark-loop termination
-    if (jl_safepoint_all_workers_done(ptls))
+    // All workers done with marking
+    if (jl_atomic_load_acquire(&nworkers_marking) == 0)
         return 1;
     int no_master = -1;
     if (jl_atomic_cmpswap(&jl_gc_safepoint_master, &no_master, ptls->tid)) {
-        spin : {
-            // Check if all threads have finished marking
-            if (!jl_safepoint_all_workers_done(ptls)) {
+        spin: {
+            if (jl_atomic_load_acquire(&nworkers_marking) > 0) {
                 size_t work = jl_safepoint_master_count_work(ptls);
                 // If there is enough work, recruit workers and also become a worker,
                 // relinquishing the safepoint master status
@@ -251,7 +240,6 @@ int jl_safepoint_master_end_marking(jl_ptls_t ptls)
                 goto spin;
             }
         }
-        jl_atomic_store_release(&jl_gc_recruiting_location, NULL);
         jl_atomic_store_release(&jl_gc_safepoint_master, -1);
         jl_safepoint_master_notify_all(ptls);
         return 1;
@@ -262,15 +250,14 @@ int jl_safepoint_master_end_marking(jl_ptls_t ptls)
 void jl_safepoint_wait_gc(void)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    while (jl_atomic_load_relaxed(&jl_gc_running) ||
-           jl_atomic_load_acquire(&jl_gc_running)) {
+    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
         if (jl_safepoint_master_end_marking(ptls)) {
             // Clean-up buffers from `reclaim_set`
             jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
             jl_gc_ws_queue_t *mark_queue = &gc_cache->mark_queue;
             arraylist_t *rs = mark_queue->reclaim_set;
             jl_gc_ws_array_t *a;
-            while ((a = (jl_gc_ws_array_t *)arraylist_pop(rs))) {
+            while ((a = (jl_gc_ws_array_t*)arraylist_pop(rs))) {
                 free(a->pc_start);
                 free(a->data_start);
                 free(a);
@@ -278,9 +265,9 @@ void jl_safepoint_wait_gc(void)
             break;
         }
         uv_mutex_lock(&safepoint_sleep_locks[ptls->tid]);
-        if (!uv_cond_timedwait(&safepoint_wake_signals[ptls->tid],
+        if (!uv_cond_timedwait(&safepoint_wake_signals[ptls->tid], 
                                &safepoint_sleep_locks[ptls->tid], timeout_ns)) {
-            // Stopped waiting because we got a notification
+            // Stopped waiting because we got a notification 
             // from safepoint master: try to get recruited
             jl_safepoint_try_recruit(ptls);
         }
@@ -295,7 +282,8 @@ void jl_safepoint_enable_sigint(void)
     uv_mutex_lock(&safepoint_lock);
     // Make sure both safepoints are enabled exactly once for SIGINT.
     switch (jl_signal_pending) {
-    default: assert(0 && "Shouldn't happen.");
+    default:
+        assert(0 && "Shouldn't happen.");
     case 0:
         // Enable SIGINT page
         jl_safepoint_enable(0);
@@ -304,7 +292,8 @@ void jl_safepoint_enable_sigint(void)
         // SIGINT page is enabled, enable GC page
         jl_safepoint_enable(1);
         // fall through
-    case 2: jl_signal_pending = 2;
+    case 2:
+        jl_signal_pending = 2;
     }
     uv_mutex_unlock(&safepoint_lock);
 }
@@ -326,7 +315,8 @@ int jl_safepoint_consume_sigint(void)
     uv_mutex_lock(&safepoint_lock);
     // Make sure both safepoints are disabled for SIGINT.
     switch (jl_signal_pending) {
-    default: assert(0 && "Shouldn't happen.");
+    default:
+        assert(0 && "Shouldn't happen.");
     case 2:
         // Disable gc page
         jl_safepoint_disable(1);
@@ -336,7 +326,8 @@ int jl_safepoint_consume_sigint(void)
         jl_safepoint_disable(0);
         has_signal = 1;
         // fall through
-    case 0: jl_signal_pending = 0;
+    case 0:
+        jl_signal_pending = 0;
     }
     uv_mutex_unlock(&safepoint_lock);
     return has_signal;
