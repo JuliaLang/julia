@@ -47,9 +47,6 @@ uint64_t io_wakeup_enter;
 uint64_t io_wakeup_leave;
 );
 
-uv_mutex_t *sleep_locks;
-uv_cond_t *wake_signals;
-
 JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 {
     // Try to acquire the lock on this task.
@@ -95,14 +92,6 @@ void jl_init_threadinginfra(void)
             sleep_threshold = UINT64_MAX;
         else
             sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
-    }
-
-    int16_t tid;
-    sleep_locks = (uv_mutex_t*)calloc(jl_n_threads, sizeof(uv_mutex_t));
-    wake_signals = (uv_cond_t*)calloc(jl_n_threads, sizeof(uv_cond_t));
-    for (tid = 0; tid < jl_n_threads; tid++) {
-        uv_mutex_init(&sleep_locks[tid]);
-        uv_cond_init(&wake_signals[tid]);
     }
 }
 
@@ -192,9 +181,9 @@ static int wake_thread(int16_t tid)
     if (jl_atomic_load_relaxed(&other->sleep_check_state) == sleeping) {
         if (jl_atomic_cmpswap_relaxed(&other->sleep_check_state, &state, not_sleeping)) {
             JL_PROBE_RT_SLEEP_CHECK_WAKE(other, state);
-            uv_mutex_lock(&sleep_locks[tid]);
-            uv_cond_signal(&wake_signals[tid]);
-            uv_mutex_unlock(&sleep_locks[tid]);
+            uv_mutex_lock(&other->sleep_lock);
+            uv_cond_signal(&other->wake_signal);
+            uv_mutex_unlock(&other->sleep_lock);
             return 1;
         }
     }
@@ -233,7 +222,8 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         if (wake_thread(tid)) {
             // check if we need to notify uv_run too
             jl_fence();
-            jl_task_t *tid_task = jl_atomic_load_relaxed(&jl_all_tls_states[tid]->current_task);
+            jl_ptls_t other = jl_all_tls_states[tid];
+            jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
             // now that we have changed the thread to not-sleeping, ensure that
             // either it has not yet acquired the libuv lock, or that it will
             // observe the change of state to not_sleeping
@@ -406,13 +396,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             // the other threads will just wait for an individual wake signal to resume
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
             int8_t gc_state = jl_gc_safe_enter(ptls);
-            uv_mutex_lock(&sleep_locks[ptls->tid]);
+            uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
-                uv_cond_wait(&wake_signals[ptls->tid], &sleep_locks[ptls->tid]);
+                uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 // TODO: help with gc work here, if applicable
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
-            uv_mutex_unlock(&sleep_locks[ptls->tid]);
+            uv_mutex_unlock(&ptls->sleep_lock);
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
             start_cycles = 0;

@@ -66,7 +66,11 @@
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
+typedef struct _jl_tls_states_t *jl_ptls_t;
 
+#ifdef LIBRARY_EXPORTS
+#include "uv.h"
+#endif
 #include "julia_atomics.h"
 #include "julia_threads.h"
 #include "julia_assert.h"
