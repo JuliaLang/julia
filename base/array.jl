@@ -2338,7 +2338,11 @@ julia> findall(x -> x >= 0, d)
 
 ```
 """
-findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p)))
+function findall(testf::Function, A)
+    T = eltype(keys(A))
+    gen = (first(p) for p in pairs(A) if testf(last(p)))
+    isconcretetype(T) ? collect(T, gen) : collect(gen)
+end
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
