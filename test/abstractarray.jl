@@ -1469,9 +1469,7 @@ using Base: typed_hvncat
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            # current behavior, not potentially dangerous.
-            # should throw error like above loop
-            @test [v1 ;;; v2 v3] == [v2 v3;;;]
+            @test_throws ArgumentError [v1 ;;; v2 v3]
             @test_throws ArgumentError [v1 ;;; v2]
             @test_throws ArgumentError [v1 v1 ;;; v2 v3]
         end
