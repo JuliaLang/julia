@@ -402,7 +402,7 @@ julia> code_typed() do
 1 ─     return 479001600
 ) => Int64
 
-julia> Base.@assume_effects :total_may_throw @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
+julia> Base.@assume_effects :foldable @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
 Vector{Int64} (alias for Array{Int64, 1})
 ```
 
@@ -541,7 +541,7 @@ This `setting` combines the following other assertions:
 and is a convenient shortcut.
 
 ---
-# `:total_may_throw`
+# `:foldable`
 
 This `setting` combines the following other assertions:
 - `:consistent`
@@ -554,10 +554,10 @@ and is a convenient shortcut.
     the applied method when all the call arguments are fully known to be constant, no matter
     if the call results in an error or not.
 
-    `@assume_effects :total_may_throw` is similar to [`@pure`](@ref) with the primary
+    `@assume_effects :foldable` is similar to [`@pure`](@ref) with the primary
     distinction that the `:consistent`-cy requirement applies world-age wise rather
     than globally as described above. However, in particular, a method annotated
-    `@pure` should always be `:total` or `:total_may_throw`.
+    `@pure` should always be `:total` or `:foldable`.
     Another advantage is that effects introduced by `@assume_effects` are propagated to
     callers interprocedurally while a purity defined by `@pure` is not.
 """
@@ -580,7 +580,7 @@ macro assume_effects(args...)
             terminates_locally = true
         elseif setting === :total
             consistent = effect_free = nothrow = terminates_globally = true
-        elseif setting === :total_may_throw
+        elseif setting === :foldable
             consistent = effect_free = terminates_globally = true
         else
             throw(ArgumentError("@assume_effects $setting not supported"))
