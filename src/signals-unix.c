@@ -701,7 +701,7 @@ void trigger_profile_peek(void)
     if (bt_size_max == 0){
         // If the buffer hasn't been initialized, initialize with default size
         // Keep these values synchronized with Profile.default_init()
-        if (jl_profile_init(10000000 * jl_n_threads, 1000000) == -1){
+        if (jl_profile_init(10000000, 1000000) == -1) {
             jl_safe_printf("ERROR: could not initialize the profile buffer");
             return;
         }

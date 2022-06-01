@@ -102,8 +102,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-        return round(Int, n_cur / nthreads), delay_cur
+        return n_cur, delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -111,20 +110,17 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
-    buffer_samples = n * nthreads
+    buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
-        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
-        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
-        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_samples = floor(Int, 2^29 / sample_size_bytes)
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
     end
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
+        error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
     end
 end
 
