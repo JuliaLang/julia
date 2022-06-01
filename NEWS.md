@@ -11,8 +11,8 @@ New language features
   e.g. `[;;;]` creates a 0×0×0 `Array` ([#41618]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown ([#42211]).
-* `@inline` and `@noinline` annotations can now be placed within a function body ([#41312]).
-* `@inline` and `@noinline` annotations can now be applied to a function call site or block
+* `@inline` and `@noinline` can now be placed within a function body, allowing one to annotate anonymous function ([#41312]).
+* `@inline` and `@noinline` can now be applied to a function at callsite or block
   to enforce the involved function calls to be (or not to be) inlined ([#41328]).
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
