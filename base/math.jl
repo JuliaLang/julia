@@ -770,7 +770,7 @@ function max(x::T, y::T) where {T<:IEEEFloat}
     b = y > x ? y : x
     # if either argument is NaN, a != b and at least one is NaN
     # else if they are opposite zeros, a == b and a !== b
-    # else a == b and a ==== b
+    # else a == b and a === b
     argplus = a + b # a+b is NaN iff x or y is NaN or they are are opposite-signed Infs - opposite Infs are impossible given the preceding comparisons
     argand = reinterpret(T, reinterpret(Unsigned, a) & reinterpret(Unsigned, b)) # no-op for a==b except to prefer +0.0 over -0.0
     return isnan(argplus) ? argplus : argand
@@ -781,7 +781,7 @@ function min(x::T, y::T) where {T<:IEEEFloat}
     b = y < x ? y : x
     # if either argument is NaN, a != b and at least one is NaN
     # else if they are opposite zeros, a == b and a !== b
-    # else a == b and a ==== b
+    # else a == b and a === b
     argplus = a + b # a+b is NaN iff x or y is NaN or they are are opposite-signed Infs - opposite Infs are impossible given the preceding comparisons
     argor = reinterpret(T, reinterpret(Unsigned, a) | reinterpret(Unsigned, b)) # no-op for a==b except to prefer -0.0 over +0.0
     return isnan(argplus) ? argplus : argor
