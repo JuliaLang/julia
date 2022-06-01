@@ -2069,11 +2069,13 @@ get_compiletime_preferences(::Nothing) = String[]
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                # Issue #13606: compensate for Docker images rounding mtimes
-                # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
-                # The `ftime != 1.0` condition below provides compatibility with Nix mtime.
                 ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6) && ftime != 1.0
+                is_stale = ( ftime != ftime_req ) &&
+                           ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                           ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
+                           ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
+                           !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
+                if is_stale
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
                 end
