@@ -1982,6 +1982,8 @@ for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
 end
 
 for bit in (8, 16, 32, 64, 128)
+    # Int and UInt are special, and have their own docstrings
+    bit == Sys.WORD_SIZE && continue
     @eval begin
         """
             Int$($bit) <: Signed
@@ -1999,38 +2001,40 @@ for bit in (8, 16, 32, 64, 128)
     end
 end
 
-"""
-	$(Int) <: Signed
+@eval begin
+    """
+    $(Int) <: Signed
 
-`Int` is aliased to `Int64` on 64-bit systems and `Int32` on 32-bit systems.
+    `Int` is aliased to `Int64` on 64-bit systems and `Int32` on 32-bit systems.
 
-`Int` is the default integer type in Julia, and should be preferred unless there
-are explicit reasons for using another integer type.
+    `Int` is the default integer type in Julia, and should be preferred unless there
+    are explicit reasons for using another integer type.
 
-See also: [`UInt`](@ref).
+    See also: [`UInt`](@ref).
 
-# Examples
-```jldoctest
-julia> 1 isa Int
-true
+    # Examples
+    ```jldoctest
+    julia> 1 isa Int
+    true
 
-julia> typeof(length(Dict())) === Int
-true
+    julia> typeof(length(Dict())) === Int
+    true
 
-julia> Threads.nthreads() isa Int
-true
-```
-"""
-Int
+    julia> Threads.nthreads() isa Int
+    true
+    ```
+    """
+    $(Symbol("Int", Sys.WORD_SIZE))
 
-"""
-	$(UInt) <: Unsigned
+    """
+    $(UInt) <: Unsigned
 
-`UInt` is aliased to `UInt64` on 64-bit systems and `UInt32` on 32-bit systems.
+    `UInt` is aliased to `UInt64` on 64-bit systems and `UInt32` on 32-bit systems.
 
-See also: [`Int`](@ref).
-"""
-UInt
+    See also: [`Int`](@ref).
+    """
+    $(Symbol("UInt", Sys.WORD_SIZE))
+end
 
 """
     Symbol
