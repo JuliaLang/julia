@@ -1452,14 +1452,14 @@ Docs for calling `f::MyFunc`.
 """
 Docs for calling `f::MyParametricFunc{T}`.
 """
-(f::MyParametricFunc{T})(x) = f
+(f::MyParametricFunc{T})(x) where T = f
 
 @test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
 """)
 
-@test docstrings_equal(@doc((::MyParametricFunc{T})(44889)),
+@test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
 doc"""
 Docs for calling `f::MyParametricFunc{T}`.
 """)
