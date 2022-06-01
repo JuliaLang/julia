@@ -136,6 +136,8 @@ Deprecated or removed
 ---------------------
 
 * Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
+* `Libc.TimeVal` is deprecated in favor of `Libc.TimeSpec`, which (generally) has higher resolution.
+  This deprecation follows the deprecation of `gettimeofday` in libc.
 
 External dependencies
 ---------------------
