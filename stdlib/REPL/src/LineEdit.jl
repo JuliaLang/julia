@@ -2432,7 +2432,7 @@ AnyDict(
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
     "\ee" => (s::MIState,o...) -> edit_input(s),
-    "\emm" => (s::MIState, o...) -> activate_module(s)
+    "\em" => (s::MIState, o...) -> activate_module(s)
 )
 
 const history_keymap = AnyDict(
