@@ -3802,11 +3802,75 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
 {
     ++EmittedDeferSignal;
     Value *ptls = emit_bitcast(ctx, get_current_ptls(ctx),
-                                        PointerType::get(ctx.types().T_sigatomic, 0));
+                               PointerType::get(ctx.types().T_sigatomic, 0));
     Constant *offset = ConstantInt::getSigned(getInt32Ty(ctx.builder.getContext()),
-        offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));
+            offsetof(jl_tls_states_t, defer_signal) / sizeof(sig_atomic_t));
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_sigatomic, ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
+
+static void emit_gc_safepoint(jl_codectx_t &ctx)
+{
+    ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
+    emit_signal_fence(ctx);
+    ctx.builder.CreateLoad(getSizeTy(ctx.builder.getContext()), get_current_signal_page(ctx), true);
+    emit_signal_fence(ctx);
+}
+
+static Value *emit_gc_state_set(jl_codectx_t &ctx, Value *state, Value *old_state)
+{
+    Type *T_int8 = state->getType();
+    Value *ptls = emit_bitcast(ctx, get_current_ptls(ctx), getInt8PtrTy(ctx.builder.getContext()));
+    Constant *offset = ConstantInt::getSigned(getInt32Ty(ctx.builder.getContext()), offsetof(jl_tls_states_t, gc_state));
+    Value *gc_state = ctx.builder.CreateInBoundsGEP(T_int8, ptls, ArrayRef<Value*>(offset), "gc_state");
+    if (old_state == nullptr) {
+        old_state = ctx.builder.CreateLoad(T_int8, gc_state);
+        cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);
+    }
+    ctx.builder.CreateAlignedStore(state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+    if (auto *C = dyn_cast<ConstantInt>(old_state))
+        if (C->isZero())
+            return old_state;
+    if (auto *C = dyn_cast<ConstantInt>(state))
+        if (!C->isZero())
+            return old_state;
+    BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "safepoint", ctx.f);
+    BasicBlock *exitBB = BasicBlock::Create(ctx.builder.getContext(), "after_safepoint", ctx.f);
+    Constant *zero8 = ConstantInt::get(T_int8, 0);
+    ctx.builder.CreateCondBr(ctx.builder.CreateAnd(ctx.builder.CreateICmpNE(old_state, zero8), // if (old_state && !state)
+                                                   ctx.builder.CreateICmpEQ(state, zero8)),
+                             passBB, exitBB);
+    ctx.builder.SetInsertPoint(passBB);
+    emit_gc_safepoint(ctx);
+    ctx.builder.CreateBr(exitBB);
+    ctx.builder.SetInsertPoint(exitBB);
+    return old_state;
+}
+
+static Value *emit_gc_unsafe_enter(jl_codectx_t &ctx)
+{
+    Value *state = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0);
+    return emit_gc_state_set(ctx, state, nullptr);
+}
+
+static Value *emit_gc_unsafe_leave(jl_codectx_t &ctx, Value *state)
+{
+    Value *old_state = ConstantInt::get(state->getType(), 0);
+    return emit_gc_state_set(ctx, state, old_state);
+}
+
+//static Value *emit_gc_safe_enter(jl_codectx_t &ctx)
+//{
+//    Value *state = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), JL_GC_STATE_SAFE);
+//    return emit_gc_state_set(ctx, state, nullptr);
+//}
+//
+//static Value *emit_gc_safe_leave(jl_codectx_t &ctx, Value *state)
+//{
+//    Value *old_state = ConstantInt::get(state->getType(), JL_GC_STATE_SAFE);
+//    return emit_gc_state_set(ctx, state, old_state);
+//}
+
+
 
 #ifndef JL_NDEBUG
 static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)

@@ -51,6 +51,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
     return prepare_global_in(M, jlRTLD_DEFAULT_var);
 }
 
+
 // Find or create the GVs for the library and symbol lookup.
 // Return `runtime_lib` (whether the library name is a string)
 // The `lib` and `sym` GV returned may not be in the current module.
@@ -1546,10 +1547,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getVoidTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
-        emit_signal_fence(ctx);
-        ctx.builder.CreateLoad(getSizeTy(ctx.builder.getContext()), get_current_signal_page(ctx), true);
-        emit_signal_fence(ctx);
+        emit_gc_safepoint(ctx);
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (is_libjulia_func("jl_get_ptls_states")) {
