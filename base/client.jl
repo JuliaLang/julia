@@ -379,11 +379,7 @@ const REPL_MODULE_REF = Ref{Module}()
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if isdefined(mod, :InteractiveUtils)
-        # InteractiveUtils is only `import`ed (like in REPL)
-        Core.eval(mod, :(using .InteractiveUtils))
-        return InteractiveUtils
-    else
+    if !isdefined(mod, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
                 Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
