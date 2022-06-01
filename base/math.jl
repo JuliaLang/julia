@@ -763,11 +763,29 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-_isless(x::T, y::T) where {T<:Union{Float32,Float64}} = signbit(x - y)
-min(x::T, y::T) where {T<:Union{Float32,Float64}} = ifelse(isnan(x) | ~isnan(y) & _isless(x, y), x, y)
-max(x::T, y::T) where {T<:Union{Float32,Float64}} = ifelse(isnan(x) | ~isnan(y) & _isless(y, x), x, y)
+_isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
 
-_isless(x::Float16, y::Float16) = _isless(widen(x), widen(y))
+function min(x::T, y::T) where {T<:Union{Float32,Float64}}
+    diff = x - y
+    argmin = ifelse(signbit(diff), x, y)
+    anynan = isnan(x)|isnan(y)
+    ifelse(anynan, diff, argmin)
+end
+
+function max(x::T, y::T) where {T<:Union{Float32,Float64}}
+    diff = x - y
+    argmax = ifelse(signbit(diff), y, x)
+    anynan = isnan(x)|isnan(y)
+    ifelse(anynan, diff, argmax)
+end
+
+function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
+    diff = x - y
+    sdiff = signbit(diff)
+    min, max = ifelse(sdiff, x, y), ifelse(sdiff, y, x)
+    anynan = isnan(x)|isnan(y)
+    ifelse(anynan, diff, min), ifelse(anynan, diff, max)
+end
 
 """
     ldexp(x, n)
