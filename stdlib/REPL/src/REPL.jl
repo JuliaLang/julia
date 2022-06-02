@@ -504,6 +504,7 @@ both for evaluating expressions and printing them.
 """
 function activate(mod::Module=Main)
     Base.active_repl.mistate.active_module = mod
+    Base.load_InteractiveUtils(mod)
     nothing
 end
 
