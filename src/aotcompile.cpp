@@ -679,6 +679,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                 PM->add(createCFGSimplificationPass(simplifyCFGOptions));
             }
         }
+#if defined(_CPU_PPC_)
+        // PPC does't support atomics on custom AS, so take the hit and remove them
+        PM->add(createBarrierNoopPass());
+        PM->add(createRemoveJuliaAddrspacesPass());
+#endif
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
@@ -838,6 +843,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     }
     PM->add(createCombineMulAddPass());
     PM->add(createDivRemPairsPass());
+#if defined(_CPU_PPC_)
+    // PPC does't support atomics on custom AS, so take the hit and remove them
+    PM->add(createBarrierNoopPass());
+    PM->add(createRemoveJuliaAddrspacesPass());
+#endif
 #if defined(_COMPILER_ASAN_ENABLED_)
     PM->add(createAddressSanitizerFunctionPass());
 #endif
