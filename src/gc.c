@@ -2816,15 +2816,15 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
     gc_heap_snapshot_record_root(ptls2->current_task, "root task");
     if (ptls2->next_task) {
         gc_mark_queue_obj(gc_cache, sp, ptls2->next_task);
-        gc_heap_snapshot_record_root(ptls2->current_task, "next task");
+        gc_heap_snapshot_record_root(ptls2->next_task, "next task");
     }
     if (ptls2->previous_task) { // shouldn't be necessary, but no reason not to
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_task);
-        gc_heap_snapshot_record_root(ptls2->current_task, "previous task");
+        gc_heap_snapshot_record_root(ptls2->previous_task, "previous task");
     }
     if (ptls2->previous_exception) {
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
-        gc_heap_snapshot_record_root(ptls2->current_task, "previous exception");
+        gc_heap_snapshot_record_root(ptls2->previous_exception, "previous exception");
     }
 }
 
