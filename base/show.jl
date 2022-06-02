@@ -482,7 +482,7 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
-active_module() = isdefined(Base, :active_repl) && isdefined(Base.active_repl, :mistate) && Base.active_repl.mistate !== nothing ?
+active_module()::Module = isdefined(Base, :active_repl) && isdefined(Base.active_repl, :mistate) && Base.active_repl.mistate !== nothing ?
                       Base.active_repl.mistate.active_module :
                       Main
 
