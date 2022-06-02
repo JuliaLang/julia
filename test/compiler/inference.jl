@@ -2191,6 +2191,14 @@ function conflicting_assignment_conditional()
 end
 @test @inferred(conflicting_assignment_conditional()) === 4
 
+# https://github.com/JuliaLang/julia/issues/45499
+@test Base.return_types((Vector{Int},Int,)) do xs, x
+    if (i = findfirst(==(x), xs)) !== nothing
+        return i
+    end
+    return 0
+end |> only === Int
+
 # 26826 constant prop through varargs
 
 struct Foo26826{A,B}
