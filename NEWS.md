@@ -98,7 +98,8 @@ Standard library changes
   executed upon existing the editor.
 
 * The contextual module which is active at the REPL can be changed (it is `Main` by default),
-  via the `REPL.activate` function or via a keybinding ([#33872]).
+  via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
+  the keybinding Alt-m ([#33872]).
 
 #### SparseArrays
 
