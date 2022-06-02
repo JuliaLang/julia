@@ -290,7 +290,9 @@ void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
 }
 #endif
 
+static uv_mutex_t tls_lock; // controls write-access to these variables:
 jl_ptls_t *jl_all_tls_states JL_GLOBALLY_ROOTED;
+static uv_cond_t cond;
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -463,6 +465,9 @@ void jl_init_threading(void)
 {
     char *cp;
 
+    uv_mutex_init(&tls_lock);
+    uv_cond_init(&cond);
+
 #ifdef JL_ELF_TLS_VARIANT
     jl_check_tls();
 #endif
@@ -616,6 +621,13 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         if (safepoint) {
             jl_gc_safepoint_(self->ptls);
         }
+        if (jl_running_under_rr(0)) {
+            // when running under `rr`, use system mutexes rather than spin locking
+            uv_mutex_lock(&tls_lock);
+            if (jl_atomic_load_relaxed(&lock->owner))
+                uv_cond_wait(&cond, &tls_lock);
+            uv_mutex_unlock(&tls_lock);
+        }
         jl_cpu_pause();
         owner = jl_atomic_load_relaxed(&lock->owner);
     }
@@ -681,6 +693,12 @@ void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
     if (--lock->count == 0) {
         jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
         jl_cpu_wake();
+        if (jl_running_under_rr(0)) {
+            // when running under `rr`, use system mutexes rather than spin locking
+            uv_mutex_lock(&tls_lock);
+            uv_cond_broadcast(&cond);
+            uv_mutex_unlock(&tls_lock);
+        }
     }
 #endif
 }
