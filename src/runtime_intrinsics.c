@@ -15,6 +15,9 @@
 const unsigned int host_char_bit = 8;
 
 // float16 intrinsics
+// TODO: use LLVM's compiler-rt on all platforms (Xcode already links compiler-rt)
+
+#if !defined(_OS_DARWIN_)
 
 static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
 {
@@ -185,17 +188,22 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     return h;
 }
 
-JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param)
+JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
 {
     return half_to_float(param);
 }
 
-JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param)
+JL_DLLEXPORT float __extendhfsf2(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
 {
     return float_to_half(param);
 }
 
-JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
+JL_DLLEXPORT uint16_t __truncdfhf2(double param)
 {
     float res = (float)param;
     uint32_t resi;
@@ -217,25 +225,7 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
     return float_to_half(res);
 }
 
-//JL_DLLEXPORT double julia__extendhfdf2(uint16_t n) { return (double)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT int32_t julia__fixhfsi(uint16_t n) { return (int32_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT int64_t julia__fixhfdi(uint16_t n) { return (int64_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT uint32_t julia__fixunshfsi(uint16_t n) { return (uint32_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT uint64_t julia__fixunshfdi(uint16_t n) { return (uint64_t)julia__gnu_h2f_ieee(n); }
-//JL_DLLEXPORT uint16_t julia__floatsihf(int32_t n) { return julia__gnu_f2h_ieee((float)n); }
-//JL_DLLEXPORT uint16_t julia__floatdihf(int64_t n) { return julia__gnu_f2h_ieee((float)n); }
-//JL_DLLEXPORT uint16_t julia__floatunsihf(uint32_t n) { return julia__gnu_f2h_ieee((float)n); }
-//JL_DLLEXPORT uint16_t julia__floatundihf(uint64_t n) { return julia__gnu_f2h_ieee((float)n); }
-//HANDLE_LIBCALL(F16, F128, __extendhftf2)
-//HANDLE_LIBCALL(F16, F80, __extendhfxf2)
-//HANDLE_LIBCALL(F80, F16, __truncxfhf2)
-//HANDLE_LIBCALL(F128, F16, __trunctfhf2)
-//HANDLE_LIBCALL(PPCF128, F16, __trunctfhf2)
-//HANDLE_LIBCALL(F16, I128, __fixhfti)
-//HANDLE_LIBCALL(F16, I128, __fixunshfti)
-//HANDLE_LIBCALL(I128, F16, __floattihf)
-//HANDLE_LIBCALL(I128, F16, __floatuntihf)
-
+#endif
 
 // run time version of bitcast intrinsic
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
@@ -561,9 +551,9 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
     }
 
 #define fp_select(a, func) \
-    sizeof(a) <= sizeof(float) ? func##f((float)a) : func(a)
+    sizeof(a) == sizeof(float) ? func##f((float)a) : func(a)
 #define fp_select2(a, b, func) \
-    sizeof(a) <= sizeof(float) ? func##f(a, b) : func(a, b)
+    sizeof(a) == sizeof(float) ? func##f(a, b) : func(a, b)
 
 // fast-function generators //
 
@@ -607,11 +597,11 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     uint16_t a = *(uint16_t*)pa; \
-    float A = julia__gnu_h2f_ieee(a); \
+    float A = __gnu_h2f_ieee(a); \
     if (osize == 16) { \
         float R; \
         OP(&R, A); \
-        *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
+        *(uint16_t*)pr = __gnu_f2h_ieee(R); \
     } else { \
         OP((uint16_t*)pr, A); \
     } \
@@ -635,11 +625,11 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = julia__gnu_h2f_ieee(a); \
-    float B = julia__gnu_h2f_ieee(b); \
+    float A = __gnu_h2f_ieee(a); \
+    float B = __gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     float R = OP(A, B); \
-    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
 }
 
 // float or integer inputs, bool output
@@ -660,8 +650,8 @@ static int jl_##name##16(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEP
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = julia__gnu_h2f_ieee(a); \
-    float B = julia__gnu_h2f_ieee(b); \
+    float A = __gnu_h2f_ieee(a); \
+    float B = __gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     return OP(A, B); \
 }
@@ -701,12 +691,12 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
     uint16_t c = *(uint16_t*)pc; \
-    float A = julia__gnu_h2f_ieee(a); \
-    float B = julia__gnu_h2f_ieee(b); \
-    float C = julia__gnu_h2f_ieee(c); \
+    float A = __gnu_h2f_ieee(a); \
+    float B = __gnu_h2f_ieee(b); \
+    float C = __gnu_h2f_ieee(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
 }
 
 
@@ -1328,7 +1318,7 @@ static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
 fpiseq_n(float, 32)
 fpiseq_n(double, 64)
 #define fpiseq(a,b) \
-    sizeof(a) <= sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
+    sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
 bool_fintrinsic(eq,eq_float)
 bool_fintrinsic(ne,ne_float)
@@ -1377,7 +1367,7 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
         if (!(osize < 8 * sizeof(a))) \
             jl_error("fptrunc: output bitsize must be < input bitsize"); \
         else if (osize == 16) \
-            *(uint16_t*)pr = julia__gnu_f2h_ieee(a); \
+            *(uint16_t*)pr = __gnu_f2h_ieee(a); \
         else if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
