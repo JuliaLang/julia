@@ -612,6 +612,8 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 
 void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 {
+    PM->add(createBarrierNoopPass());
+    PM->add(createRemoveJuliaAddrspacesPass());
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
     if (optlevel > 1)
