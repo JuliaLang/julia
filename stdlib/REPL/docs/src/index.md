@@ -567,9 +567,10 @@ julia> @__MODULE__
 Main
 ```
 
-It is possible to change this contextual module via the `REPL.activate(m)` where `m` is a `Module` or by typing the
-module in the REPL and pressing the keybinding Alt-m (the cursor must be on
-the module name). The active module is shown in the prompt:
+It is possible to change this contextual module via the function
+`REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
+and pressing the keybinding Alt-m (the cursor must be on the module name). The
+active module is shown in the prompt:
 
 ```julia-repl
 julia> using REPL
@@ -594,8 +595,9 @@ julia> Core<Alt-m> # using the keybinding to change module
 julia>
 ```
 
-Function that take an optional module argument often defaults to the REPL context module. As an example, calling `varinfo()` will show the
-variables of the current active module:
+Functions that take an optional module argument often defaults to the REPL
+context module. As an example, calling `varinfo()` will show the variables of
+the current active module:
 
 ```julia-repl
 julia> module CustomMod
