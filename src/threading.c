@@ -601,6 +601,100 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
     }
 }
 
+void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
+{
+    jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
+    if (owner == self) {
+        lock->count++;
+        return;
+    }
+    while (1) {
+        if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+            lock->count = 1;
+            return;
+        }
+        if (safepoint) {
+            jl_gc_safepoint_(self->ptls);
+        }
+        jl_cpu_pause();
+        owner = jl_atomic_load_relaxed(&lock->owner);
+    }
+}
+
+static void jl_lock_frame_push(jl_task_t *self, jl_mutex_t *lock)
+{
+    jl_ptls_t ptls = self->ptls;
+    small_arraylist_t *locks = &ptls->locks;
+    uint32_t len = locks->len;
+    if (__unlikely(len >= locks->max)) {
+        small_arraylist_grow(locks, 1);
+    }
+    else {
+        locks->len = len + 1;
+    }
+    locks->items[len] = (void*)lock;
+}
+
+static void jl_lock_frame_pop(jl_task_t *self)
+{
+    jl_ptls_t ptls = self->ptls;
+    assert(ptls->locks.len > 0);
+    ptls->locks.len--;
+}
+
+void _jl_mutex_lock(jl_task_t *self, jl_mutex_t *lock)
+{
+    JL_SIGATOMIC_BEGIN_self();
+    _jl_mutex_wait(self, lock, 1);
+    jl_lock_frame_push(self, lock);
+}
+
+int _jl_mutex_trylock_nogc(jl_task_t *self, jl_mutex_t *lock)
+{
+    jl_task_t *owner = jl_atomic_load_acquire(&lock->owner);
+    if (owner == self) {
+        lock->count++;
+        return 1;
+    }
+    if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
+        lock->count = 1;
+        return 1;
+    }
+    return 0;
+}
+
+int _jl_mutex_trylock(jl_task_t *self, jl_mutex_t *lock)
+{
+    int got = _jl_mutex_trylock_nogc(self, lock);
+    if (got) {
+        JL_SIGATOMIC_BEGIN_self();
+        jl_lock_frame_push(self, lock);
+    }
+    return got;
+}
+
+void _jl_mutex_unlock_nogc(jl_mutex_t *lock)
+{
+#ifndef __clang_gcanalyzer__
+    assert(jl_atomic_load_relaxed(&lock->owner) == jl_current_task &&
+           "Unlocking a lock in a different thread.");
+    if (--lock->count == 0) {
+        jl_atomic_store_release(&lock->owner, (jl_task_t*)NULL);
+        jl_cpu_wake();
+    }
+#endif
+}
+
+void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
+{
+    _jl_mutex_unlock_nogc(lock);
+    jl_lock_frame_pop(self);
+    JL_SIGATOMIC_END_self();
+    if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers)) {
+        jl_gc_run_pending_finalizers(self); // may GC
+    }
+}
+
 
 // Make gc alignment available for threading
 // see threads.jl alignment
