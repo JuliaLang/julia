@@ -5,7 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, length, (:), iterate, elsize,
+using .Base: copymutable, LinearIndices, length, (:), iterate, elsize, checkbounds,
     eachindex, axes, first, last, similar, zip, OrdinalRange, firstindex, lastindex,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -605,7 +605,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = midpoint(lo, hi)
-        t = workspace(v, t0, m-lo+1)
+        t = workspace(v, t0, Base.OneTo(m-lo+1))
 
         sort!(v, lo,  m,  a, o, t)
         sort!(v, m+1, hi, a, o, t)
@@ -683,7 +683,7 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
                      t::AbstractVector{U}, chunk_size=radix_chunk_size_heuristic(lo, hi, bits)) where U <: Unsigned
     # bits is unsigned for performance reasons.
     mask = UInt(1) << chunk_size - 1
-    counts = Vector{UInt}(undef, mask+2)
+    counts = Vector{Int}(undef, mask+2)
 
     @inbounds for shift in 0:chunk_size:bits-1
 
@@ -746,9 +746,9 @@ function sort!(v::AbstractVector{B}, lo::Integer, hi::Integer, a::AdaptiveSort, 
     v
 end
 
-workspace(v::AbstractVector, ::Nothing, len::Integer) = similar(v, len)
-function workspace(v::AbstractVector{T}, t::AbstractVector{T}, len::Integer) where T
-    length(t) < len ? resize!(t, len) : t
+workspace(v::AbstractVector, ::Nothing, indices::AbstractUnitRange=eachindex(v)) = similar(v, indices)
+function workspace(v::AbstractVector{T}, t::AbstractVector{T}, indices::AbstractUnitRange=eachindex(v)) where T
+    checkbounds(Bool, t, indices) ? t : similar(t, indices)
 end
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
@@ -856,7 +856,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
         u[i] -= u_min
     end
 
-    u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, workspace(v, t, hi)))
+    u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, workspace(v, t)))
     uint_unmap!(v, u2, lo, hi, o, u_min)
 end
 
