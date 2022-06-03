@@ -143,10 +143,9 @@ cd(@__DIR__) do
     alloc_align   = textwidth("Alloc (MB)")
     rss_align     = textwidth("MRSS (MB)")
     live_align    = textwidth("LIVE (MB)")
-    jit_align     = textwidth("JIT (MB)")
     printstyled(testgroupheader, color=:white)
     printstyled(lpad(workerheader, name_align - textwidth(testgroupheader) + 1), " | ", color=:white)
-    printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB) | LIVE (MB) | JIT (MB)\n", color=:white)
+    printstyled("Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB) | LIVE (MB)\n", color=:white)
     results = []
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
@@ -174,8 +173,13 @@ cd(@__DIR__) do
             printstyled(lpad(rss_str, rss_align, " "), " | ", color=:white)
             live_str = @sprintf("%5.2f", resp[7] / 2^20)
             printstyled(lpad(live_str, live_align, " "), " | ", color=:white)
-            jit_str = @sprintf("%2.1f", resp[8] / 2^20)
-            printstyled(lpad(jit_str, jit_align, " "), "\n", color=:white)
+
+            # Dump virtual memory statistics
+            stats = resp[8]
+            println("VM stats:")
+            for name in sort(collect(keys(stats)))
+                println(" -> $(name): $(Base.format_bytes(stats[name]))")
+            end
         finally
             unlock(print_lock)
         end

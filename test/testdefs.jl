@@ -2,6 +2,25 @@
 
 using Test, Random
 
+function vm_stats()
+    stats = Dict{String,UInt64}()
+    @static if Sys.islinux()
+        lines = split(String(read("/proc/self/status")), "\n")
+        filter!(l -> startswith(l, "Vm"), lines)
+
+        for l in lines
+            name, size = strip.(split(l, ":"))
+            if endswith(size, " kB")
+                size = parse(UInt64, first(split(size, " ")))*1024
+            else
+                size = parse(UInt64, size)
+            end
+            stats[name] = size
+        end
+    end
+    return stats
+end
+
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
@@ -31,14 +50,16 @@ function runtests(name, path, isolate=true; seed=nothing)
         ts = res_and_time_data[1]
         passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
         # simplify our stored data to just contain the counts
-        res_and_time_data = (TestSetException(passes+c_passes, fails+c_fails, errors+c_errors, broken+c_broken, Test.filter_errors(ts)),
-                             res_and_time_data[2],
-                             res_and_time_data[3],
-                             res_and_time_data[4],
-                             res_and_time_data[5],
-                             Sys.maxrss(),
-                             Sys.rss(),
-                             ccall((:jl_jit_total_bytes_impl, "libjulia-codegen"), Csize_t, ()))
+        res_and_time_data = (
+            TestSetException(passes+c_passes, fails+c_fails, errors+c_errors, broken+c_broken, Test.filter_errors(ts)),
+            res_and_time_data[2],
+            res_and_time_data[3],
+            res_and_time_data[4],
+            res_and_time_data[5],
+            Sys.maxrss(),
+            Sys.rss(),
+            vm_stats(),
+        )
         return res_and_time_data
     catch ex
         Test.TESTSET_PRINT_ENABLE[] = old_print_setting

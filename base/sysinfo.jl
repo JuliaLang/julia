@@ -425,6 +425,21 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
+"""
+    Sys.total_mapped_memory()
+
+Get the total amount of consumed memory address space, including shared memory
+and mapped files.
+"""
+function total_mapped_memory()
+    @static if islinux(KERNEL) || isfreebsd(KERNEL)
+        return parse(UInt, split(String(read("/proc/self/stat")), " ")[23])
+    end
+    # TODO: Implement for macOS via `mach_task_basic_info().virtual_size`
+    # TODO: Implement for Windows via `GetProcessMemoryInfo()`
+    error("Not implemented")
+end
+
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
