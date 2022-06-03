@@ -1116,7 +1116,8 @@ julia> any([false, missing])
 missing
 ```
 """
-any(itr) = any(identity, itr)
+any(itr) = _any(identity, itr, :) # dims separated out for earlier error message
+any(a::AbstractArray; dims=:) = _any(identity, a, dims)
 
 """
     all(itr) -> Bool
@@ -1155,7 +1156,8 @@ julia> all([true, missing])
 missing
 ```
 """
-all(itr) = all(identity, itr)
+all(itr) = _all(identity, itr, :) # dims separated out for earlier error message
+all(a::AbstractArray; dims=:) = _all(identity, a, dims)
 
 """
     any(p, itr) -> Bool
@@ -1190,8 +1192,10 @@ julia> any(i -> i > 0, [-1, 0])
 false
 ```
 """
-any(f, itr) = _any(f, itr, :)
+any(f, itr) = _any(f, itr, :) # dims separated out for earlier error message
+any(f, a::AbstractArray; dims=:) = _any(f, a, dims)
 
+_any(f, a, dims) = mapslices(slice -> _any(f, slice, :), a; dims)
 function _any(f, itr, ::Colon)
     anymissing = false
     for x in itr
@@ -1258,8 +1262,10 @@ julia> all(i -> i > 0, [1, 2])
 true
 ```
 """
-all(f, itr) = _all(f, itr, :)
+all(f, itr) = _all(f, itr, :) # dims separated out for earlier error message
+all(f, a::AbstractArray; dims=:) = _all(f, a, dims)
 
+_all(f, a, dims) = mapslices(slice -> _all(f, slice, :), a; dims)
 function _all(f, itr, ::Colon)
     anymissing = false
     for x in itr

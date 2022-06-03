@@ -545,8 +545,6 @@ end
     @test prod(x->x+1, [1], dims=1)[1] === prod(x->x+1, [1]) === 2
     @test mapreduce(x->x+1, +, [1], dims=1)[1] === mapreduce(x->x+1, +, [1]) === 2
     @test mapreduce(x->x+1, *, [1], dims=1)[1] === mapreduce(x->x+1, *, [1]) === 2
-    @test mapreduce(!, &, [false], dims=1)[1] === mapreduce(!, &, [false]) === true
-    @test mapreduce(!, |, [true], dims=1)[1] === mapreduce(!, |, [true]) === false
     @test mapreduce(x->1/x, max, [1], dims=1)[1] === mapreduce(x->1/x, max, [1]) === 1.0
     @test mapreduce(x->-1/x, min, [1], dims=1)[1] === mapreduce(x->-1/x, min, [1]) === -1.0
 end
