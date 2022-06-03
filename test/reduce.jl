@@ -681,6 +681,13 @@ end
     end
 end
 
+@testset "issue #45562" begin
+    @test all([true, true,  true], dims = 1) == [true]
+    @test any([true, true,  true], dims = 1) == [true]
+    @test_throws TypeError all([3, 3, 3], dims = 1)
+    @test_throws TypeError any([3, 3, 3], dims = 1)
+end
+
 # issue #45748
 @testset "foldl's stability for nested Iterators" begin
     a = Iterators.flatten((1:3, 1:3))
