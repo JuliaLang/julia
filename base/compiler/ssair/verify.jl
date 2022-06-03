@@ -11,7 +11,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool)
+function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
@@ -38,6 +38,16 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     elseif isa(op, GlobalRef)
         if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
             @verify_error "Unbound GlobalRef not allowed in value position"
+            error("")
+        end
+    elseif isa(op, Expr)
+        # Only Expr(:boundscheck) is allowed in value position
+        if isforeigncall && arg_idx == 1 && op.head === :call
+            # Allow a tuple in symbol position for foreigncall - this isn't actually
+            # a real call - it's interpreted in global scope by codegen. However,
+            # we do need to keep this a real use, because it could also be a pointer.
+        elseif op.head !== :boundscheck
+            @verify_error "Expr not allowed in value position"
             error("")
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
@@ -178,11 +188,8 @@ function verify_ir(ir::IRCode, print::Bool=true)
                         #"""
                         #error("")
                     end
-                elseif isa(val, GlobalRef) || isa(val, Expr)
-                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
-                    error("")
                 end
-                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
+                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print, false, i)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -204,6 +211,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     end
                 end
             end
+            isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
                     if stmt.args[1] isa SSAValue
@@ -219,14 +227,19 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
-                elseif stmt.head === :isdefined && length(stmt.args) == 1 && stmt.args[1] isa GlobalRef
-                    # a GlobalRef isdefined check does not evaluate its argument
+                elseif stmt.head === :foreigncall
+                    isforeigncall = true
+                elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
+                        (stmt.args[1] isa GlobalRef || (stmt.args[1] isa Expr && stmt.args[1].head === :static_parameter))
+                    # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 end
             end
+            n = 1
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx, print)
+                check_op(ir, domtree, op, bb, idx, print, isforeigncall, n)
+                n += 1
             end
         end
     end

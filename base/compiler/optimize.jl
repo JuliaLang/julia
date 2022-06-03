@@ -96,17 +96,20 @@ mutable struct OptimizationState
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     inlining::InliningState
-    function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
+    cfg::Union{Nothing,CFG}
+    function OptimizationState(frame::InferenceState, params::OptimizationParams,
+                               interp::AbstractInterpreter, recompute_cfg::Bool=true)
         s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
             interp)
-        return new(frame.linfo,
-                   frame.src, nothing, frame.stmt_info, frame.mod,
-                   frame.sptypes, frame.slottypes, inlining)
+        cfg = recompute_cfg ? nothing : frame.cfg
+        return new(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
+                   frame.sptypes, frame.slottypes, inlining, cfg)
     end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
+    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
+                               interp::AbstractInterpreter)
         # prepare src for running optimization passes
         # if it isn't already
         nssavalues = src.ssavaluetypes
@@ -115,6 +118,7 @@ mutable struct OptimizationState
         else
             nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
+        sptypes = sptypes_from_meth_instance(linfo)
         nslots = length(src.slotflags)
         slottypes = src.slottypes
         if slottypes === nothing
@@ -130,9 +134,8 @@ mutable struct OptimizationState
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
             interp)
-        return new(linfo,
-                   src, nothing, stmt_info, mod,
-                   sptypes_from_meth_instance(linfo), slottypes, inlining)
+        return new(linfo, src, nothing, stmt_info, mod,
+                   sptypes, slottypes, inlining, nothing)
     end
 end
 
@@ -603,8 +606,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     meta = Expr[]
     idx = 1
     oldidx = 1
-    ssachangemap = fill(0, length(code))
-    labelchangemap = coverage ? fill(0, length(code)) : ssachangemap
+    nstmts = length(code)
+    ssachangemap = labelchangemap = nothing
     prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
@@ -615,6 +618,12 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
             insert!(ssaflags, idx, IR_FLAG_NULL)
+            if ssachangemap === nothing
+                ssachangemap = fill(0, nstmts)
+            end
+            if labelchangemap === nothing
+                labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+            end
             ssachangemap[oldidx] += 1
             if oldidx < length(labelchangemap)
                 labelchangemap[oldidx + 1] += 1
@@ -630,6 +639,12 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
                 insert!(ssaflags, idx + 1, ssaflags[idx])
+                if ssachangemap === nothing
+                    ssachangemap = fill(0, nstmts)
+                end
+                if labelchangemap === nothing
+                    labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+                end
                 if oldidx < length(ssachangemap)
                     ssachangemap[oldidx + 1] += 1
                     coverage && (labelchangemap[oldidx + 1] += 1)
@@ -641,7 +656,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         oldidx += 1
     end
 
-    renumber_ir_elements!(code, ssachangemap, labelchangemap)
+    cfg = sv.cfg
+    if ssachangemap !== nothing && labelchangemap !== nothing
+        renumber_ir_elements!(code, ssachangemap, labelchangemap)
+        cfg = nothing # recompute CFG
+    end
 
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
@@ -649,7 +668,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     strip_trailing_junk!(ci, code, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    cfg = compute_basic_blocks(code)
+    if cfg === nothing
+        cfg = compute_basic_blocks(code)
+    end
     return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
 end
 

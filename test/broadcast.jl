@@ -855,6 +855,39 @@ let
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
 
+# issue 43847: collect preserves shape of broadcasted
+let
+    bc = Broadcast.broadcasted(*, [1 2; 3 4], 2)
+    @test collect(Iterators.product(bc, bc)) == collect(Iterators.product(copy(bc), copy(bc)))
+
+    a1 = AD1(rand(2,3))
+    bc1 = Broadcast.broadcasted(*, a1, 2)
+    @test collect(Iterators.product(bc1, bc1)) == collect(Iterators.product(copy(bc1), copy(bc1)))
+
+    # using ndims of second arg
+    bc2 = Broadcast.broadcasted(*, 2, a1)
+    @test collect(Iterators.product(bc2, bc2)) == collect(Iterators.product(copy(bc2), copy(bc2)))
+
+    # >2 args
+    bc3 = Broadcast.broadcasted(*, a1, 3, a1)
+    @test collect(Iterators.product(bc3, bc3)) == collect(Iterators.product(copy(bc3), copy(bc3)))
+
+    # including a tuple and custom array type
+    bc4 = Broadcast.broadcasted(*, (1,2,3), AD1(rand(3)))
+    @test collect(Iterators.product(bc4, bc4)) == collect(Iterators.product(copy(bc4), copy(bc4)))
+
+    # testing ArrayConflict
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
+
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted((1,2,3),a1,zeros(3,3,3)))) === Base.HasShape{3}()
+
+    # inference on nested
+    bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
+    bc_nest = Base.broadcasted(+, bc , bc)
+    @test @inferred(Base.IteratorSize(bc_nest)) === Base.HasShape{1}()
+ end
+
 # issue #31295
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)

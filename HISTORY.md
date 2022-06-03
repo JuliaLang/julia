@@ -11,8 +11,8 @@ New language features
   e.g. `[;;;]` creates a 0×0×0 `Array` ([#41618]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown ([#42211]).
-* `@inline` and `@noinline` annotations can now be placed within a function body ([#41312]).
-* `@inline` and `@noinline` annotations can now be applied to a function call site or block
+* `@inline` and `@noinline` can now be placed within a function body, allowing one to annotate anonymous function ([#41312]).
+* `@inline` and `@noinline` can now be applied to a function at callsite or block
   to enforce the involved function calls to be (or not to be) inlined ([#41328]).
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
@@ -43,7 +43,9 @@ Compiler/Runtime improvements
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
-* Conditional type constraints can now be forwarded interprocedurally (i.e. propagated from caller to callee) ([#42529]).
+* Conditional type constraints are now be forwarded interprocedurally (i.e. propagated from caller to callee).
+  This allows inference to understand e.g. `Base.ifelse(isa(x, Int), x, 0)` returns `::Int`-value
+  even if the type of `x` is not known ([#42529]).
 * Julia-level SROA (Scalar Replacement of Aggregates) has been improved: allowing elimination of
   `getfield` calls with constant global fields ([#42355]), enabling elimination of mutable structs with
   uninitialized fields ([#43208]), improving performance ([#43232]), and handling more nested `getfield`
@@ -53,7 +55,7 @@ Compiler/Runtime improvements
 * Inference now tracks various effects such as side-effectful-ness and nothrow-ness on a per-specialization basis.
   Code heavily dependent on constant propagation should see significant compile-time performance improvements and
   certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance
-  improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro ([#43852]).
+  improvements. Effects may be overwritten manually with the `Base.@assume_effects` macro ([#43852]).
 
 Command-line option changes
 ---------------------------

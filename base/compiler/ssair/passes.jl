@@ -1413,7 +1413,7 @@ function type_lift_pass!(ir::IRCode)
                                     end
                                 else
                                     while isa(node, PiNode)
-                                        id = node.val.id
+                                        id = (node.val::SSAValue).id
                                         node = insts[id][:inst]
                                     end
                                     if isa(node, Union{PhiNode, PhiCNode})

@@ -124,6 +124,7 @@ is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
 is_notaskstate(effects::Effects)  = effects.notaskstate === ALWAYS_TRUE
 is_nonoverlayed(effects::Effects) = effects.nonoverlayed
 
+# implies :notaskstate, but not explicitly checked here
 is_concrete_eval_eligible(effects::Effects) =
     is_consistent(effects) &&
     is_effect_free(effects) &&
@@ -179,6 +180,7 @@ struct EffectsOverride
     nothrow::Bool
     terminates_globally::Bool
     terminates_locally::Bool
+    notaskstate::Bool
 end
 
 function encode_effects_override(eo::EffectsOverride)
@@ -188,6 +190,7 @@ function encode_effects_override(eo::EffectsOverride)
     eo.nothrow && (e |= 0x04)
     eo.terminates_globally && (e |= 0x08)
     eo.terminates_locally && (e |= 0x10)
+    eo.notaskstate && (e |= 0x20)
     return e
 end
 
@@ -197,7 +200,8 @@ function decode_effects_override(e::UInt8)
         (e & 0x02) != 0x00,
         (e & 0x04) != 0x00,
         (e & 0x08) != 0x00,
-        (e & 0x10) != 0x00)
+        (e & 0x10) != 0x00,
+        (e & 0x20) != 0x00)
 end
 
 """
