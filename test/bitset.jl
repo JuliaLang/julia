@@ -351,3 +351,12 @@ end
     # union! with an empty range doesn't modify the BitSet
     @test union!(x, b:a) == y
 end
+
+@testset "union!(::BitSet, ::AbstractUnitRange) when two ranges do not overlap" begin
+    # see #45574
+    a, b = minmax(rand(-1000:1000, 2)...)
+    c, d = minmax(rand(2000:3000, 2)...)
+    @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
+    c, d = minmax(rand(-3000:-2000, 2)...)
+    @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
+end
