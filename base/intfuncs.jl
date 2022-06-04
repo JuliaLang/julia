@@ -61,20 +61,21 @@ end
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 # Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
 # Since this is used in the Rational constructor, constant folding is something we do care about here.
-@assume_effects :terminates_locally function _gcd(a::T, b::T) where T<:BitInteger
-    za = trailing_zeros(a)
-    zb = trailing_zeros(b)
+@assume_effects :terminates_locally function _gcd(ain::T, bin::T) where T<:BitInteger
+    b = abs(bin)
+    zb = trailing_zeros(bin)
+    za = trailing_zeros(ain)
+    a = abs(ain)
     k = min(za, zb)
-    u = unsigned(abs(a >> za))
-    v = unsigned(abs(b >> zb))
-    while u != v
-        if u > v
-            u, v = v, u
-        end
-        v -= u
-        v >>= trailing_zeros(v)
+    b >>= zb
+    while a != 0
+        a >>= za
+        diff = b - a
+        za = trailing_zeros(diff)
+        b = min(a, b)
+        a = abs(diff)
     end
-    r = u << k
+    r = b << k
     return r % T
 end
 
