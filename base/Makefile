@@ -215,7 +215,7 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
-ifeq ($(APPLE_ARCH),arm64)
+ifeq ($(OS),Darwin)
 $(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
 else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
