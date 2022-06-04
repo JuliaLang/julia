@@ -51,7 +51,6 @@ show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 const ansi_regex = r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 const start_ansi_regex = r"^(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 
-# Indices of the corresponding inverse code in `ansi_code_inverse`
 const ansi_code_index = Dict{String,Int8}(
     "[1m" => 1, # bold
     "[4m" => 2, # underline
@@ -64,16 +63,8 @@ const ansi_code_index = Dict{String,Int8}(
     "[27m" => -4, # remove reverse
     "[28m" => -5, # remove hidden
     "[39m" => -6, # reset default color
+    "[0m" => 0 # reset everything
 )
-
-const ansi_code_inverse = String[
-    "\033[22m", # bold
-    "\033[24m", # underline
-    "\033[25m", # blink
-    "\033[27m", # reverse
-    "\033[28m", # hidden
-    "\033[39m", # default
-]
 
 function find_lastidx_withcolor(str, width, chars, truncwidth)
     lastidx = 0
@@ -98,8 +89,10 @@ function find_lastidx_withcolor(str, width, chars, truncwidth)
             ansi_idx = get(ansi_code_index, m.match, Int8(6))
             if ansi_idx > 0
                 ansi_mask |= (one(UInt32) << (ansi_idx % UInt8)) # set the bit
-            else
+            elseif ansi_idx < 0
                 ansi_mask &= ~(one(UInt32) << (ansi_idx % UInt8)) # erase the bit
+            else # encountered code "\e[0m" a.k.a. erase all properties
+                ansi_mask = 0
             end
             s = sizeof(m.match)
             idx += s
@@ -113,11 +106,6 @@ function find_lastidx_withcolor(str, width, chars, truncwidth)
         stop = (wid >= width || c in chars)
     end
     return lastidx, truncidx, ansi_mask
-end
-
-function ansi_end(ansi_mask)
-    iszero(ansi_mask) && return ""
-    join((@inbounds ansi_code_inverse[i]) for i in 1:6 if (ansi_mask >> (i % UInt8))%Bool)
 end
 
 function find_lastidx_nocolor(str, width, chars, truncwidth)
@@ -156,9 +144,9 @@ function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", tr
     end
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
-        return string(SubString(str, 1, truncidx), ansi_end(ansi_mask), truncmark)
+        return string(SubString(str, 1, truncidx), iszero(ansi_mask) ? "" : "\e[0m", truncmark)
     else
-        return iszero(ansi_mask) ? String(str) : string(str, ansi_end(ansi_mask))
+        return iszero(ansi_mask) ? String(str) : string(str, "\e[0m")
     end
 end
 
