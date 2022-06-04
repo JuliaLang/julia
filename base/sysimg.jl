@@ -52,6 +52,7 @@ let
         :LibGit2,
         :Profile,
         :SparseArrays,
+        :StandardSortingAlgorithms,
         :UUIDs,
 
         # 3-depth packages
