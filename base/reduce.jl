@@ -417,10 +417,14 @@ mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 function _mapreduce(f, op, A::AbstractArrayOrBroadcasted)
     fT = _return_type(f, Tuple{eltype(A)})
-    accelerator = _makefast_preproc(op, fT)
-    ffast = accelerator ∘ f
-    rfast = _mapreduce(ffast, op, IndexStyle(A), A)
-    return _makefast_postproc(op, fT, rfast)
+    if isconcretetype(fT)
+        accelerator = _makefast_preproc(op, fT)
+        ffast = accelerator ∘ f
+        rfast = _mapreduce(ffast, op, IndexStyle(A), A)
+        return _makefast_postproc(op, fT, rfast)
+    else
+        return _mapreduce(f, op, IndexStyle(A), A)
+    end
 end
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
