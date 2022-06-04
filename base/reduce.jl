@@ -349,6 +349,11 @@ reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, 
 reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
+# return a function to transform a value of type `T` to be fast when the operation `op` is applied
+_makefast_preproc(op, T) = identity
+# reverse the transform used by makefast_preproc, restoring `x` to a value of type `T`
+_makefast_postproc(op, T, x) = x
+
 """
     Base.mapreduce_empty(f, op, T)
 
@@ -410,7 +415,13 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
+function _mapreduce(f, op, A::AbstractArrayOrBroadcasted)
+    fT = _return_type(f, Tuple{eltype(A)})
+    accelerator = _makefast_preproc(op, fT)
+    ffast = accelerator ∘ f
+    rfast = _mapreduce(ffast, op, IndexStyle(A), A)
+    return _makefast_postproc(op, fT, rfast)
+end
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
@@ -604,62 +615,45 @@ julia> prod(1:5; init = 1.0)
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
-## maximum, minimum, & extrema
-_fast(::typeof(min),x,y) = min(x,y)
-_fast(::typeof(max),x,y) = max(x,y)
-function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x > y, x, y))
+# The idea behind the following functions is to transform `IEEEFloat` values to native `Signed` values that obey the same `min`/`max` behavior.
+# Namely, the float values must match the semantics of `<` except that `-0.0 < +0.0` and `NaN` is preferred over any other value.
+# In the case that both arguments are `NaN`, either value may be returned.
+# If we reinterpret(Signed,::IEEEFloat), the signed-integer ordering is:
+#   -0.0, ... negative values in ascending magnitude ..., -Inf, -NaN, 0.0, ... positive values in ascending magnitude ..., +Inf, +NaN
+# The desired ordering for min is:
+#   NaN (unspecified sign), -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf
+# The desired ordering for max is:
+#   -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf, NaN (unspecified sign)
+# Achieving this ordering requires two steps:
+#   1) flip the ordering of all values with a negative sign
+#   2) circularly-shift the values so that NaNs are together at the correct end of the spectrum
+# The following functions perform this transformation and reverse it.
+# Under this scheme, we place a total order on every value (including NaNs), although the ordering of NaNs is an implementation detail.
+function _makefast_preproc(op::typeof(min), ::Type{T}) where T<:IEEEFloat
+    # transform an item of type `T` such that the ordering of `op` is still respected but `op` is faster
+    topval = flipifneg(reinterpret(Signed, typemax(T)))
+    offset = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
+    floatorder_min(x) = flipifneg(reinterpret(Signed, x)) + offset
+    return floatorder_min
 end
-
-function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
-        x,
-        ifelse(x < y, x, y))
+function _makefast_postproc(op::typeof(min), ::Type{T}, x::Base.BitSigned) where T<:IEEEFloat
+    # undo the transformation of _makefast_preproc
+    topval = flipifneg(reinterpret(Signed, typemax(T)))
+    offset = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
+    return reinterpret(T, flipifneg(x - offset))
 end
-
-isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
-isbadzero(::typeof(min), x::AbstractFloat) = (x == zero(x)) & !signbit(x)
-isbadzero(op, x) = false
-isgoodzero(::typeof(max), x) = isbadzero(min, x)
-isgoodzero(::typeof(min), x) = isbadzero(max, x)
-
-function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
-    a1 = @inbounds A[first]
-    v1 = mapreduce_first(f, op, a1)
-    v2 = v3 = v4 = v1
-    chunk_len = 256
-    start = first + 1
-    simdstop  = start + chunk_len - 4
-    while simdstop <= last - 3
-        @inbounds for i in start:4:simdstop
-            v1 = _fast(op, v1, f(A[i+0]))
-            v2 = _fast(op, v2, f(A[i+1]))
-            v3 = _fast(op, v3, f(A[i+2]))
-            v4 = _fast(op, v4, f(A[i+3]))
-        end
-        checkbounds(A, simdstop+3)
-        start += chunk_len
-        simdstop += chunk_len
-    end
-    v = op(op(v1,v2),op(v3,v4))
-    for i in start:last
-        @inbounds ai = A[i]
-        v = op(v, f(ai))
-    end
-
-    # enforce correct order of 0.0 and -0.0
-    # e.g. maximum([0.0, -0.0]) === 0.0
-    # should hold
-    if isbadzero(op, v)
-        for i in first:last
-            x = @inbounds A[i]
-            isgoodzero(op,x) && return x
-        end
-    end
-    return v
+function _makefast_preproc(op::typeof(max), ::Type{T}) where T<:IEEEFloat
+    # transform an item of type `T` such that the ordering of `op` is still respected but `op` is faster
+    botval = flipifneg(reinterpret(Signed, typemin(T)))
+    offset = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
+    floatorder_max(x) = flipifneg(reinterpret(Signed, x)) + offset
+    return floatorder_max
+end
+function _makefast_postproc(op::typeof(max), ::Type{T}, x::Base.BitSigned) where T<:IEEEFloat
+    # undo the transformation of _makefast_preproc
+    botval = flipifneg(reinterpret(Signed, typemin(T)))
+    offset = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
+    return reinterpret(T, flipifneg(x - offset))
 end
 
 """

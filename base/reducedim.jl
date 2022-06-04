@@ -363,7 +363,7 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
-    _mapreduce(f, op, IndexStyle(A), A)
+    _mapreduce(f, op, A)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
