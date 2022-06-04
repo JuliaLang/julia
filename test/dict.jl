@@ -369,42 +369,49 @@ end
 end
 
 
-struct RainBowString
+struct RainbowString
     s::String
+    bold::Bool
+    valid::Bool
 end
+RainbowString(s, bold=false) = RainbowString(s, bold, true)
 
-function Base.show(io::IO, rbs::RainBowString)
+function Base.show(io::IO, rbs::RainbowString)
     for s in rbs.s
         _, color = rand(Base.text_colors)
-        print(io, color, s, "\e[0m")
-    end
-end
-
-struct BoldRainBowString
-    s::String
-end
-
-function Base.show(io::IO, rbs::BoldRainBowString)
-    for s in rbs.s
-        _, color = rand(Base.text_colors)
-        printstyled(io, color, s, "\e[0m"; bold=true)
+        printstyled(io, color, s; bold=rbs.bold)
+        rbs.valid && print(io, "\e[0m") # end of color marker
     end
 end
 
 @testset "Display with colors" begin
-    d = Dict([randstring(8) => [RainBowString(randstring(8)) for i in 1:10] for j in 1:5]...)
+    d = Dict([randstring(8) => [RainbowString(randstring(8)) for i in 1:10] for j in 1:5]...)
     str = sprint(io -> show(io, MIME("text/plain"), d); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     lines = split(str, '\n')
-    @test all(endswith('…'), lines[2:end])
+    @test all(endswith("\e[39m…"), lines[2:end])
     @test all(x -> length(x) > 100, lines[2:end])
 
-    d2 = Dict(:foo => RainBowString("bar"))
+    d2 = Dict(:foo => RainbowString("bar"))
     str2 = sprint(io -> show(io, MIME("text/plain"), d2); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
-    @test !endswith(str2, '…')
+    @test !occursin('…', str2)
 
-    d3 = Dict(:foo => BoldRainBowString("bar"))
+    d3 = Dict(:foo => RainbowString("bar", true))
     str3 = sprint(io -> show(io, MIME("text/plain"), d3); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     @test endswith(str3, "r\e[0m\e[22m")
+
+    d4 = Dict(RainbowString(randstring(20), true) => nothing)
+    str4 = sprint(io -> show(io, MIME("text/plain"), d4); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
+    @test endswith(str4, "\e[22m\e[39m… => nothing")
+
+    d5 = Dict(RainbowString(randstring(20), true, false) => nothing)
+    str5 = sprint(io -> show(io, MIME("text/plain"), d5); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
+    @test endswith(str5, "\e[22m\e[39m… => nothing")
+
+    d6 = Dict(randstring(8) => RainbowString(randstring(70), false, false) for _ in 1:3)
+    str6 = sprint(io -> show(io, MIME("text/plain"), d6); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    lines6 = split(str6, '\n')
+    @test all(endswith("\e[39m…"), lines6[2:end])
+    @test all(x -> length(x) > 100, lines6[2:end])
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate

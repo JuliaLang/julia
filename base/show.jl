@@ -49,65 +49,116 @@ show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 
 const ansi_regex = r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
-const start_ansi_regex = r"^\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
-# An iterator similar to `pairs` but skips over "tokens" corresponding to
-# ansi sequences
-struct IgnoreAnsiIterator
-    captures::Base.RegexMatchIterator
-end
-IgnoreAnsiIterator(s::AbstractString) =
-    IgnoreAnsiIterator(eachmatch(ansi_regex, s))
+const start_ansi_regex = r"^(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 
-Base.IteratorSize(::Type{IgnoreAnsiIterator}) = Base.SizeUnknown()
-function iterate(I::IgnoreAnsiIterator, (i, m_st)=(1, iterate(I.captures)))
-    # Advance until the next non ansi sequence
-    while m_st !== nothing
-        m, j = m_st
-        m.offset == i || break
-        i += sizeof(m.match)
-        m_st = iterate(I.captures, j)
-    end
-    ci = iterate(I.captures.string, i)
-    ci === nothing && return nothing
-    i_prev = i
-    (c, i) = ci
-    return (i_prev => c), (i, m_st)
-end
+# Indices of the corresponding inverse code in `ansi_code_inverse`
+const ansi_code_index = Dict{String,Int8}(
+    "[1m" => 1, # bold
+    "[4m" => 2, # underline
+    "[5m" => 3, # blink
+    "[7m" => 4, # reverse
+    "[8m" => 5, # hidden
+    "[22m" => -1, # remove bold
+    "[24m" => -2, # remove underline
+    "[25m" => -3, # remove blink
+    "[27m" => -4, # remove reverse
+    "[28m" => -5, # remove hidden
+    "[39m" => -6, # reset default color
+)
 
-function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
-    wid = truncidx = lastidx = 0
-    ignore_ansi &= match(ansi_regex, str) !== nothing
-    I = ignore_ansi ? IgnoreAnsiIterator(str) : pairs(str)
-    for (_lastidx, c) in I
+const ansi_code_inverse = String[
+    "\033[22m", # bold
+    "\033[24m", # underline
+    "\033[25m", # blink
+    "\033[27m", # reverse
+    "\033[28m", # hidden
+    "\033[39m", # default
+]
+
+function find_lastidx_withcolor(str, width, chars, truncwidth)
+    lastidx = 0
+    truncidx = 0
+    idx = 1
+    ansi_mask = zero(UInt32) # one-hot encoding of the encountered ansi color characters.
+    # For example, if ansi_mask = 0b0001100 at the end of the function, then the "blink"
+    # and "underline" characters were appear without their corresponding end delimiter.
+    # The encoding is a bitset: in this example `ansi_mask == (1 << 3) | (1 << 2)` hence
+    # the 3rd and 2nd delimiters ("blink" and "underline") are missing.
+    wid = 0
+    stop = false
+    while true
+        str_iter = iterate(str, idx)
+        isnothing(str_iter) && break
+        _lastidx = idx
+        c, idx = str_iter
+        m = c == '\033' ? match(start_ansi_regex, SubString(str, idx)) : nothing
+        stop && isnothing(m) && break
         lastidx = _lastidx
+        if !isnothing(m)
+            ansi_idx = get(ansi_code_index, m.match, Int8(6))
+            if ansi_idx > 0
+                ansi_mask |= (one(UInt32) << (ansi_idx % UInt8)) # set the bit
+            else
+                ansi_mask &= ~(one(UInt32) << (ansi_idx % UInt8)) # erase the bit
+            end
+            s = sizeof(m.match)
+            idx += s
+            lastidx += s
+            continue
+        end
+        wid += textwidth(c)
+        if wid >= (width - truncwidth) && truncidx == 0
+            truncidx = lastidx
+        end
+        stop = (wid >= width || c in chars)
+    end
+    return lastidx, truncidx, ansi_mask
+end
+
+function ansi_end(ansi_mask)
+    iszero(ansi_mask) && return ""
+    join((@inbounds ansi_code_inverse[i]) for i in 1:6 if (ansi_mask >> (i % UInt8))%Bool)
+end
+
+function find_lastidx_nocolor(str, width, chars, truncwidth)
+    lastidx = 0
+    truncidx = 0
+    idx = 1
+    wid = 0
+    while true
+        str_iter = iterate(str, idx)
+        isnothing(str_iter) && break
+        lastidx = idx
+        c, idx = str_iter
         wid += textwidth(c)
         if wid >= (width - truncwidth) && truncidx == 0
             truncidx = lastidx
         end
         (wid >= width || c in chars) && break
     end
+    return lastidx, truncidx
+end
+
+function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
+    truncwidth = textwidth(truncmark)
+    (width <= 0 || width < truncwidth) && return ""
+    ignore_ansi &= match(ansi_regex, SubString(str, 1, thisind(str, min(ncodeunits(str), width)))) !== nothing
+    if ignore_ansi
+        lastidx, truncidx, ansi_mask = find_lastidx_withcolor(str, width, chars, truncwidth)
+    else
+        lastidx, truncidx = find_lastidx_nocolor(str, width, chars, truncwidth)
+        ansi_mask = zero(UInt32)
+    end
     lastidx == 0 && return ""
     lastchar = str[lastidx]
     if lastchar in chars
         lastidx = prevind(str, lastidx)
-    elseif ignore_ansi
-        last_char_size = ncodeunits(lastchar)
-        lastidx += last_char_size
-        next_ansi = match(start_ansi_regex, SubString(str, lastidx))
-        while next_ansi !== nothing
-            lastidx += ncodeunits(next_ansi.match)
-            last_char_size = ncodeunits(last(next_ansi.match))
-            next_ansi = match(start_ansi_regex, SubString(str, lastidx))
-        end
-        lastidx -= last_char_size
     end
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
+        return string(SubString(str, 1, truncidx), ansi_end(ansi_mask), truncmark)
     else
-        return String(str)
+        return iszero(ansi_mask) ? String(str) : string(str, ansi_end(ansi_mask))
     end
 end
 
