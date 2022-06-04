@@ -57,7 +57,7 @@ function gcd(a::T, b::T) where T<:BitInteger
         else
             a, b = b, a
         end
-    else
+    end
     r = _gcd(a, b)
     @label OVERFLOWCHECK
     signbit(r) && Base.__throw_gcd_overflow(a, b)
