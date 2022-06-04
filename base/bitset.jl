@@ -138,19 +138,9 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
     # grow s.bits as necessary
     if diffb >= len
         _growend0!(s.bits, diffb - len + 1)
-        # we set only some values to CHK0, those which will not be
-        # fully overwritten (i.e. only or'ed with `|`)
-        s.bits[end] = CHK0 # end == diffb + 1
-        if diffa >= len
-            s.bits[diffa + 1] = CHK0
-        end
     end
     if diffa < 0
         _growbeg0!(s.bits, -diffa)
-        s.bits[1] = CHK0
-        if diffb < 0
-            s.bits[diffb - diffa + 1] = CHK0
-        end
         s.offset = cidxa # s.offset += diffa
         diffb -= diffa
         diffa = 0
