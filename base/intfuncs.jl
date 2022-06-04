@@ -52,7 +52,7 @@ function gcd(a::T, b::T) where T<:BitInteger
     b == 0 && return Base.checked_abs(a)
     if a isa Signed && a == typemin(Int)
         if a == b
-            r = -1
+            r = T(-1)
             @goto OVERFLOWCHECK
         else
             a, b = b, a
