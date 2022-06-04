@@ -48,10 +48,19 @@ function gcd(a::T, b::T) where T<:Integer
 end
 
 function gcd(a::T, b::T) where T<:BitInteger
-    a == 0 && return checked_abs(b)
-    b == 0 && return checked_abs(a)
-    r = _gcd(a, b)
-    signbit(r) && __throw_gcd_overflow(a, b)
+    a == 0 && return Base.checked_abs(b)
+    b == 0 && return Base.checked_abs(a)
+    if a isa Signed && a == typemin(Int)
+        if a == b
+            r = -1
+            @goto OVERFLOWCHECK
+        else
+            a, b = b, a
+        end
+    else
+    r = _newgcd(a, b)
+    @label OVERFLOWCHECK
+    signbit(r) && Base.__throw_gcd_overflow(a, b)
     return r
 end
 @noinline __throw_gcd_overflow(a, b) =
@@ -62,12 +71,11 @@ end
 # Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
 # Since this is used in the Rational constructor, constant folding is something we do care about here.
 @assume_effects :terminates_locally function _gcd(ain::T, bin::T) where T<:BitInteger
-    b = abs(bin)
     zb = trailing_zeros(bin)
     za = trailing_zeros(ain)
     a = abs(ain)
+    b = abs(bin >> zb)
     k = min(za, zb)
-    b >>= zb
     while a != 0
         a >>= za
         diff = b - a
