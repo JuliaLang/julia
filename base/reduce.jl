@@ -634,30 +634,42 @@ prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 # The following functions perform this transformation and reverse it.
 # Under this scheme, we place a total order on every value (including NaNs), although the ordering of NaNs is an implementation detail.
 function _makefast_preproc(op::typeof(min), ::Type{T}) where T<:IEEEFloat
-    # transform an item of type `T` such that the ordering of `op` is still respected but `op` is faster
     topval = flipifneg(reinterpret(Signed, typemax(T)))
     offset = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
-    floatorder_min(x) = flipifneg(reinterpret(Signed, x)) + offset
+    floatorder_min(x::T) = flipifneg(reinterpret(Signed, x)) + offset
     return floatorder_min
 end
 function _makefast_postproc(op::typeof(min), ::Type{T}, x::Base.BitSigned) where T<:IEEEFloat
-    # undo the transformation of _makefast_preproc
     topval = flipifneg(reinterpret(Signed, typemax(T)))
     offset = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
     return reinterpret(T, flipifneg(x - offset))
 end
 function _makefast_preproc(op::typeof(max), ::Type{T}) where T<:IEEEFloat
-    # transform an item of type `T` such that the ordering of `op` is still respected but `op` is faster
     botval = flipifneg(reinterpret(Signed, typemin(T)))
     offset = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
-    floatorder_max(x) = flipifneg(reinterpret(Signed, x)) + offset
+    floatorder_max(x::T) = flipifneg(reinterpret(Signed, x)) + offset
     return floatorder_max
 end
 function _makefast_postproc(op::typeof(max), ::Type{T}, x::Base.BitSigned) where T<:IEEEFloat
-    # undo the transformation of _makefast_preproc
     botval = flipifneg(reinterpret(Signed, typemin(T)))
     offset = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
     return reinterpret(T, flipifneg(x - offset))
+end
+function _makefast_preproc(op::typeof(_extrema_rf), ::Type{NTuple{2,T}}) where T<:IEEEFloat
+    topval = flipifneg(reinterpret(Signed, typemax(T)))
+    offset_min = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
+    botval = flipifneg(reinterpret(Signed, typemin(T)))
+    offset_max = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
+    floatorder_extrema((x,y)::NTuple{2,T}) = (flipifneg(reinterpret(Signed, x))+offset_min, flipifneg(reinterpret(Signed, y))+offset_max)
+    return floatorder_extrema
+end
+function _makefast_postproc(op::typeof(_extrema_rf), ::Type{NTuple{2,T}}, (x,y)::NTuple{2,Base.BitSigned}) where T<:IEEEFloat
+    # undo the transformation of _makefast_preproc
+    topval = flipifneg(reinterpret(Signed, typemax(T)))
+    offset_min = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
+    botval = flipifneg(reinterpret(Signed, typemin(T)))
+    offset_max = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
+    return (reinterpret(T, flipifneg(x - offset_min)), reinterpret(T, flipifneg(x - offset_max)))
 end
 
 """
