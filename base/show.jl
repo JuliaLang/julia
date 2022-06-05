@@ -51,7 +51,39 @@ show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 const possible_ansi_regex = r"\x1B(?:[@-Z\\-_\[])"
 const start_ansi_regex = r"\G(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 
-const ansi_code_index = Dict{String,Int8}(
+const text_colors = Dict{Union{Symbol,Int},String}(
+    :black         => "\033[30m",
+    :red           => "\033[31m",
+    :green         => "\033[32m",
+    :yellow        => "\033[33m",
+    :blue          => "\033[34m",
+    :magenta       => "\033[35m",
+    :cyan          => "\033[36m",
+    :white         => "\033[37m",
+    :light_black   => "\033[90m", # gray
+    :light_red     => "\033[91m",
+    :light_green   => "\033[92m",
+    :light_yellow  => "\033[93m",
+    :light_blue    => "\033[94m",
+    :light_magenta => "\033[95m",
+    :light_cyan    => "\033[96m",
+    :light_white   => "\033[97m",
+    :normal        => "\033[0m",
+    :default       => "\033[39m",
+    :bold          => "\033[1m",
+    :underline     => "\033[4m",
+    :blink         => "\033[5m",
+    :reverse       => "\033[7m",
+    :hidden        => "\033[8m",
+    :nothing       => "",
+)
+
+for i in 0:255
+    text_colors[i] = String(['\033', '[', '3', '8', ';', '5', ';', string(i)..., 'm'])
+end
+
+const ansi_code_index = Dict{String,Int8}(x[2:end] => 6 for x in values(text_colors) if !isempty(x))
+merge!(ansi_code_index, Dict{String,Int8}(
     "[1m" => 1, # bold
     "[4m" => 2, # underline
     "[5m" => 3, # blink
@@ -64,19 +96,24 @@ const ansi_code_index = Dict{String,Int8}(
     "[28m" => -5, # remove hidden
     "[39m" => -6, # reset default color
     "[0m" => 0 # reset everything
-)
+))
 
-function find_lastidx_withcolor(str, width, chars, truncwidth)
-    lastidx = 0
-    truncidx = 0
-    idx = 1
+function find_lastidx_withcolor(str, width, chars, truncwidth, start)
+    idx = lastidx = start
+    truncidx = 0 # if str needs to be truncated, index of truncation.
+    wid = textwidth(SubString(str, 1, idx)) # text width up to idx.
+    if wid ≥ width - truncwidth
+        # ensure that truncidx is correctly set in the main loop
+        idx = 1
+        wid = lastidx = 0
+    end
     ansi_mask = zero(UInt32) # one-hot encoding of the encountered ansi color characters.
-    # For example, if ansi_mask = 0b0001100 at the end of the function, then the "blink"
-    # and "underline" characters were appear without their corresponding end delimiter.
-    # The encoding is a bitset: in this example `ansi_mask == (1 << 3) | (1 << 2)` hence
-    # the 3rd and 2nd delimiters ("blink" and "underline") are missing.
-    wid = 0
-    stop = false
+    # For example, if `ansi_mask == (1 << 7) | (1 << 3) | (1 << 2)`, i.e. if
+    # `ansi_mask == 0b10001100`, then the ansi delimiters number 3 ("blink") and number 2
+    # ("underline") were encountered without their corresponding end delimiter, as well as
+    # an unknown ansi character (represented by the bit in position 7).
+    stop = false # when set, only ansi delimiters will be kept as new characters.
+    firstmatch = 0 # index of the first ansi delimiter
     while true
         str_iter = iterate(str, idx)
         isnothing(str_iter) && break
@@ -86,13 +123,14 @@ function find_lastidx_withcolor(str, width, chars, truncwidth)
         stop && isnothing(m) && break
         lastidx = _lastidx
         if !isnothing(m)
-            ansi_idx = get(ansi_code_index, m.match, Int8(6))
+            firstmatch == 0 && (firstmatch = lastidx)
+            ansi_idx = get(ansi_code_index, m.match, Int8(7))
             if ansi_idx > 0
                 ansi_mask |= (one(UInt32) << (ansi_idx % UInt8)) # set the bit
             elseif ansi_idx < 0
-                ansi_mask &= ~(one(UInt32) << (ansi_idx % UInt8)) # erase the bit
+                ansi_mask &= ~(one(UInt32) << (-ansi_idx % UInt8)) # erase the bit
             else # encountered code "\033[0m" a.k.a. erase all properties
-                ansi_mask = 0
+                ansi_mask = zero(UInt32)
             end
             s = sizeof(m.match)
             idx += s
@@ -104,6 +142,9 @@ function find_lastidx_withcolor(str, width, chars, truncwidth)
             truncidx = lastidx
         end
         stop = (wid >= width || c in chars)
+    end
+    if lastidx < lastindex(str) && truncidx < firstmatch
+        ansi_mask = zero(UInt32) # disregard ansi delimiters if they are truncated away
     end
     return lastidx, truncidx, ansi_mask
 end
@@ -130,17 +171,17 @@ end
 function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
     truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
-    if ignore_ansi && occursin(possible_ansi_regex, SubString(str, 1, thisind(str, min(ncodeunits(str), width+1))))
-        lastidx, truncidx, ansi_mask = find_lastidx_withcolor(str, width, chars, truncwidth)
-    else
+    # possible_substring is a subset of str at least as large as the returned string
+    possible_substring = SubString(str, 1, thisind(str, min(ncodeunits(str), width+1)))
+    m = ignore_ansi ? match(possible_ansi_regex, possible_substring) : nothing
+    if isnothing(m)
         lastidx, truncidx = find_lastidx_nocolor(str, width, chars, truncwidth)
         ansi_mask = zero(UInt32)
+    else
+        lastidx, truncidx, ansi_mask = find_lastidx_withcolor(str, width, chars, truncwidth, m.offset)
     end
     lastidx == 0 && return ""
-    lastchar = str[lastidx]
-    if lastchar in chars
-        lastidx = prevind(str, lastidx)
-    end
+    str[lastidx] in chars && (lastidx = prevind(str, lastidx))
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
         return string(SubString(str, 1, truncidx), iszero(ansi_mask) ? "" : "\033[0m", truncmark)

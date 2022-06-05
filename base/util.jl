@@ -2,37 +2,6 @@
 
 ## printing with color ##
 
-const text_colors = Dict{Union{Symbol,Int},String}(
-    :black         => "\033[30m",
-    :red           => "\033[31m",
-    :green         => "\033[32m",
-    :yellow        => "\033[33m",
-    :blue          => "\033[34m",
-    :magenta       => "\033[35m",
-    :cyan          => "\033[36m",
-    :white         => "\033[37m",
-    :light_black   => "\033[90m", # gray
-    :light_red     => "\033[91m",
-    :light_green   => "\033[92m",
-    :light_yellow  => "\033[93m",
-    :light_blue    => "\033[94m",
-    :light_magenta => "\033[95m",
-    :light_cyan    => "\033[96m",
-    :light_white   => "\033[97m",
-    :normal        => "\033[0m",
-    :default       => "\033[39m",
-    :bold          => "\033[1m",
-    :underline     => "\033[4m",
-    :blink         => "\033[5m",
-    :reverse       => "\033[7m",
-    :hidden        => "\033[8m",
-    :nothing       => "",
-)
-
-for i in 0:255
-    text_colors[i] = "\033[38;5;$(i)m"
-end
-
 const disable_text_style = Dict{Symbol,String}(
     :bold      => "\033[22m",
     :underline => "\033[24m",
