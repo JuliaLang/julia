@@ -666,10 +666,11 @@ end
 
 @testset "workspace()" begin
     for v in [[1, 2, 3], [0.0]]
-        for t0 in vcat([nothing], [similar(v,i) for i in 1:5]), axes in [0:5, 1:3, Base.OneTo(7), 3:2, -1:0]
-            t = Base.Sort.workspace(v, t0, axes)
+        for t0 in vcat([nothing], [similar(v,i) for i in 1:5]), len in 0:5
+            t = Base.Sort.workspace(v, t0, len)
             @test eltype(t) == eltype(v)
-            @test checkbounds(Bool, t, axes)
+            @test length(t) >= len
+            @test firstindex(t) == 1
         end
     end
 end
