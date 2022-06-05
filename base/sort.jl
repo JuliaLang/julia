@@ -857,8 +857,20 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
         u[i] -= u_min
     end
 
-    u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, reinterpret(U, workspace(v, t, hi-lo+1)))
-    uint_unmap!(v, u2, lo, hi, o, u_min)
+    # If it is possible to allocate a workspace with indices 1:hi...
+    if axes(v, 1) isa Base.OneTo
+        # ...do it to avoid the overhead of a view
+        t2 = reinterpret(U, workspace(v, t, hi))
+        u2 = radix_sort!(u, lo, hi, bits, t2)
+        uint_unmap!(v, u2, lo, hi, o, u_min)
+    else # ...if that is impossible,
+        # use a view to bring the input into the indices
+        # 1:hi-lo+1 and allocate only what is necessary
+        t2 = reinterpret(U, workspace(v, t, hi-lo+1))
+        u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, t2)
+        uint_unmap!(view(v, lo:hi), u2, 1, hi-lo+1, o, u_min)
+    end
+    v
 end
 
 ## generic sorting methods ##
@@ -1394,8 +1406,8 @@ end
 
 function uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
                      order::Ordering, offset::U=zero(U)) where U <: Unsigned
-    @inbounds for (i, j) in zip(lo:hi, eachindex(u))
-        v[i] = uint_unmap(eltype(v), u[j]+offset, order)
+    @inbounds for i in lo:hi
+        v[i] = uint_unmap(eltype(v), u[i]+offset, order)
     end
     v
 end
