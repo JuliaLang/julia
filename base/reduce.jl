@@ -416,15 +416,11 @@ The default is `reduce_first(op, f(x))`.
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 function _mapreduce(f, op, A::AbstractArrayOrBroadcasted)
-    fT = _return_type(f, Tuple{eltype(A)})
-    if isconcretetype(fT)
-        accelerator = _makefast_preproc(op, fT)
-        ffast = accelerator ∘ f
-        rfast = _mapreduce(ffast, op, IndexStyle(A), A)
-        return _makefast_postproc(op, fT, rfast)
-    else
-        return _mapreduce(f, op, IndexStyle(A), A)
-    end
+    fT = _return_type(f, Tuple{eltype(A)}) # determine type of f(A[i])
+    preproc = _makefast_preproc(op, fT) # fetch an accelerator, if available
+    ffast = preproc == identity ? f : preproc ∘ f # apply accelerator, if available
+    rfast = _mapreduce(ffast, op, IndexStyle(A), A)
+    return _makefast_postproc(op, fT, rfast)
 end
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
