@@ -52,20 +52,24 @@ function gcd(a::T, b::T) where T<:BitInteger
     b == 0 && return Base.checked_abs(a)
     if a isa Signed && a == typemin(T)
         if a == b
-            r = T(-1)
-            @goto OVERFLOWCHECK
+            Base.__throw_gcd_overflow(a, b)
         else
             a, b = b, a
         end
     end
-    r = _gcd(a, b)
-    @label OVERFLOWCHECK
-    signbit(r) && Base.__throw_gcd_overflow(a, b)
-    return r
+    return _gcd(a, b)
 end
 @noinline __throw_gcd_overflow(a, b) =
     throw(OverflowError(LazyString("gcd(", a, ", ", b, ") overflows")))
 
+function absdiff(x::T,y::T) where {T<:Unsigned}
+    d = max(x,y) - min(x,y)
+    d, d
+end
+function absdiff(x::T,y::T) where {T<:Signed}
+    d = x - y
+    abs(d), d
+end
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
 # Unfortunately, we need to manually annotate this as `@assume_effects :terminates_locally` to work around #41694.
@@ -78,10 +82,10 @@ end
     k = min(za, zb)
     while a != 0
         a >>= za
-        diff = b - a
+        absd, diff = absdiff(a, b)
         za = trailing_zeros(diff)
         b = min(a, b)
-        a = abs(diff)
+        a = absd
     end
     r = b << k
     return r % T
