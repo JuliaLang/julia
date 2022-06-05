@@ -77,7 +77,7 @@ Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
 
-See also [`coalesce`](@ref), [`skipmissing`](@ref), [`@something`](@ref).
+See also [`coalesce`](@ref), [`skipmissing`](@ref), [`@something`](@ref), [`@something!`](@ref).
 
 # Examples
 ```jldoctest
@@ -134,6 +134,7 @@ true
 
 !!! compat "Julia 1.7"
     This macro is available as of Julia 1.7.
+
 """
 macro something(args...)
     expr = :(nothing)
@@ -142,4 +143,33 @@ macro something(args...)
     end
     something = GlobalRef(Base, :something)
     return :($something($expr))
+end
+
+
+"""
+    @something!(x, y...)
+
+Short-circuiting version of [`something`](@ref), similar to [`@something`](@ref) but
+assigns the result back to the first arg.
+
+# Examples
+```jldoctest
+julia> x = nothing
+
+julia> @something! x 1
+1
+
+julia> x
+1
+```
+
+!!! compat "Julia 1.9"
+    This macro is available as of Julia 1.9.
+"""
+macro something!(args...)
+    length(args) < 2 && return :(throw(ArgumentError("Two or more arguments must be provided")))
+    first(args) isa Symbol || return :(throw(ArgumentError("The first argument must be a variable")))
+    quote
+        $(esc(first(args))) = @something($(esc(first(args))), $(esc(args[2:end]...)))
+    end
 end

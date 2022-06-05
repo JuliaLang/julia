@@ -717,6 +717,7 @@ export
     missing,
     skipmissing,
     @something,
+    @something!,
     something,
     isnothing,
     nonmissingtype,

@@ -94,6 +94,14 @@ end
     end == 1
 end
 
+@testset "@something!" begin
+    @test_throws ArgumentError @something!()
+    @test_throws ArgumentError @something!(nothing)
+    x = nothing
+    @test @something!(x, 1) === 1
+    @test x === 1
+end
+
 # issue #26927
 a = [missing, nothing, Some(nothing), Some(missing)]
 @test a isa Vector{Union{Missing, Nothing, Some}}
