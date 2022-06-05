@@ -48,8 +48,8 @@ show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 
-const ansi_regex = r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
-const start_ansi_regex = r"^(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+const possible_ansi_regex = r"\x1B(?:[@-Z\\-_\[])"
+const start_ansi_regex = r"\G(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
 
 const ansi_code_index = Dict{String,Int8}(
     "[1m" => 1, # bold
@@ -82,7 +82,7 @@ function find_lastidx_withcolor(str, width, chars, truncwidth)
         isnothing(str_iter) && break
         _lastidx = idx
         c, idx = str_iter
-        m = c == '\033' ? match(start_ansi_regex, SubString(str, idx)) : nothing
+        m = c == '\033' ? match(start_ansi_regex, str, idx) : nothing
         stop && isnothing(m) && break
         lastidx = _lastidx
         if !isnothing(m)
@@ -91,7 +91,7 @@ function find_lastidx_withcolor(str, width, chars, truncwidth)
                 ansi_mask |= (one(UInt32) << (ansi_idx % UInt8)) # set the bit
             elseif ansi_idx < 0
                 ansi_mask &= ~(one(UInt32) << (ansi_idx % UInt8)) # erase the bit
-            else # encountered code "\e[0m" a.k.a. erase all properties
+            else # encountered code "\033[0m" a.k.a. erase all properties
                 ansi_mask = 0
             end
             s = sizeof(m.match)
@@ -130,8 +130,7 @@ end
 function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
     truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
-    ignore_ansi &= match(ansi_regex, SubString(str, 1, thisind(str, min(ncodeunits(str), width)))) !== nothing
-    if ignore_ansi
+    if ignore_ansi && occursin(possible_ansi_regex, SubString(str, 1, thisind(str, min(ncodeunits(str), width+1))))
         lastidx, truncidx, ansi_mask = find_lastidx_withcolor(str, width, chars, truncwidth)
     else
         lastidx, truncidx = find_lastidx_nocolor(str, width, chars, truncwidth)
@@ -144,9 +143,9 @@ function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", tr
     end
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
-        return string(SubString(str, 1, truncidx), iszero(ansi_mask) ? "" : "\e[0m", truncmark)
+        return string(SubString(str, 1, truncidx), iszero(ansi_mask) ? "" : "\033[0m", truncmark)
     else
-        return iszero(ansi_mask) ? String(str) : string(str, "\e[0m")
+        return iszero(ansi_mask) ? String(str) : string(str, "\033[0m")
     end
 end
 
