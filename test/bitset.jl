@@ -354,9 +354,9 @@ end
 
 @testset "union!(::BitSet, ::AbstractUnitRange) when two ranges do not overlap" begin
     # see #45574
-    a, b = minmax(rand(-1000:1000, 2)...)
-    c, d = minmax(rand(2000:3000, 2)...)
+    a, b = rand(-10000:-5000), rand(5000:10000)
+    c, d = minmax(rand(20000:30000, 2)...)
     @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
-    c, d = minmax(rand(-3000:-2000, 2)...)
+    c, d = minmax(rand(-30000:-20000, 2)...)
     @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
 end
