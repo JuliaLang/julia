@@ -406,18 +406,19 @@ end
     d2 = Dict(:foo => RainbowString("bar"))
     str2 = sprint(io -> show(io, MIME("text/plain"), d2); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     @test !occursin('…', str2)
-    @test endswith(str2, "\033[39m")
+    @test endswith(str2, "\033[0m")
 
     d3 = Dict(:foo => RainbowString("bar", true))
     str3 = sprint(io -> show(io, MIME("text/plain"), d3); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
-    @test endswith(str3, "\033[22m\033[39m")
+    @test !occursin('…', str3)
+    @test endswith(str3, "\033[0m")
 
     d4 = Dict(RainbowString(randstring(8), true) => nothing)
     str4 = sprint(io -> show(io, MIME("text/plain"), d4); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
     @test endswith(str4, "\033[0m… => nothing")
 
-    d5 = Dict(RainbowString(randstring(20), false, true, false) => nothing)
-    str5 = sprint(io -> show(io, MIME("text/plain"), d5); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
+    d5 = Dict(RainbowString(randstring(30), false, true, false) => nothing)
+    str5 = sprint(io -> show(io, MIME("text/plain"), d5); context = (:displaysize=>(30,30), :color=>true, :limit=>true))
     @test endswith(str5, "\033[0m… => nothing")
 
     d6 = Dict(randstring(8) => RainbowString(randstring(30), true, true, false) for _ in 1:3)
@@ -426,21 +427,31 @@ end
     @test all(endswith("\033[0m…"), lines6[2:end])
     @test all(x -> length(x) > 100, lines6[2:end])
 
-    d7 = Dict(randstring(8) => RainbowString(randstring(30), false, false))
+    d7 = Dict(randstring(8) => RainbowString(randstring(30)))
     str7 = sprint(io -> show(io, MIME("text/plain"), d7); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
     line7 = split(str7, '\n')[2]
     @test endswith(line7, "\033[0m…")
     @test length(line7) > 100
 
     d8 = Dict(:x => RainbowString(randstring(10), false, false, false, 6))
-    str8 = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,15), :color=>true, :limit=>true))
+    str8 = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,14), :color=>true, :limit=>true))
     line8 = split(str8, '\n')[2]
     @test !occursin(line8, "\033[")
-    @test length(line8) == 15
+    @test length(line8) == 14
     str8_long = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,16), :color=>true, :limit=>true))
     line8_long = split(str8_long, '\n')[2]
     @test endswith(line8_long, "\033[0m…")
     @test length(line8_long) > 20
+
+    d9 = Dict(:x => RainbowString(repeat('苹', 5), false, true, false))
+    str9 = sprint(io -> show(io, MIME("text/plain"), d9); context = (:displaysize=>(30,15), :color=>true, :limit=>true))
+    @test endswith(str9, "\033[0m…")
+    @test count('苹', str9) == 3
+
+    d10 = Dict(:xy => RainbowString(repeat('苹', 5), false, true, false))
+    str10 = sprint(io -> show(io, MIME("text/plain"), d10); context = (:displaysize=>(30,15), :color=>true, :limit=>true))
+    @test endswith(str10, "\033[0m…")
+    @test count('苹', str10) == 2
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
