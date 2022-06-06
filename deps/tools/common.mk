@@ -142,35 +142,35 @@ define BINFILE_INSTALL
 endef
 
 define staged-install
-stage-$(strip $1): $$(build_staging)/$2.tgz
+stage-$(strip $1): $$(build_staging)/$2.tar
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
 
-ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tgz ] && echo exists ))
+ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tar ] && echo exists ))
 # clean depends on uninstall only if the staged file exists
 distclean-$(strip $1) clean-$(strip $1): uninstall-$(strip $1)
 else
 # uninstall depends on staging only if the staged file doesn't exist
 # otherwise, uninstall doesn't actually want the file to be updated first
-uninstall-$(strip $1): | $$(build_staging)/$2.tgz
+uninstall-$(strip $1): | $$(build_staging)/$2.tar
 endif
 
 reinstall-$(strip $1):
 	+$$(MAKE) uninstall-$(strip $1)
-	-rm -f $$(build_staging)/$2.tgz
+	-rm -f $$(build_staging)/$2.tar
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
-$$(build_staging)/$2.tgz: $$(BUILDDIR)/$2/build-compiled
+$$(build_staging)/$2.tar: $$(BUILDDIR)/$2/build-compiled
 	rm -rf $$(build_staging)/$2
 	mkdir -p $$(build_staging)/$2$$(build_prefix)
 	$(call $3,$$(BUILDDIR)/$2,$$(build_staging)/$2,$4)
-	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -czf $$@.tmp .
+	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -cf $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
 
 UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
-$$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tgz | $(build_prefix)/manifest
+$$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
 	$(UNTAR) $$< -C $$(build_prefix)
 	$6
@@ -179,7 +179,7 @@ endef
 
 define staged-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tzf $$(build_staging)/$2.tgz | grep -v '/$$$$')
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tf $$(build_staging)/$2.tar | grep -v '/$$$$')
 	-rm -f $$(build_prefix)/manifest/$(strip $1)
 endef
 
@@ -224,10 +224,10 @@ endef
 
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 #gnu tar
-UNTAR = $(TAR) -xmzf
+UNTAR = $(TAR) -xmf
 else
 #bsd tar
-UNTAR = $(TAR) -xmUzf
+UNTAR = $(TAR) -xmUf
 endif
 
 

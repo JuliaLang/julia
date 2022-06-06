@@ -17,6 +17,10 @@
 #     fields::Vector{Any} # elements are other type lattice members
 # end
 import Core: Const, PartialStruct
+function PartialStruct(typ::DataType, fields::Vector{Any})
+    for i = 1:length(fields) assert_nested_type(fields[i]) end
+    return Core._PartialStruct(typ, fields)
+end
 
 """
     cnd::Conditional
@@ -42,8 +46,10 @@ struct Conditional
     slot::Int
     thentype
     elsetype
-    Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
-        new(slot, thentype, elsetype)
+    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype))
+        assert_nested_type(thentype); assert_nested_type(elsetype)
+        return new(slot, thentype, elsetype)
+    end
 end
 Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     Conditional(slot_id(var), thentype, elsetype)
@@ -60,8 +66,10 @@ struct InterConditional
     slot::Int
     thentype
     elsetype
-    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
-        new(slot, thentype, elsetype)
+    function InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype))
+        assert_nested_type(thentype); assert_nested_type(elsetype)
+        return new(slot, thentype, elsetype)
+    end
 end
 InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
@@ -101,7 +109,7 @@ struct LimitedAccuracy
     typ
     causes::IdSet{InferenceState}
     function LimitedAccuracy(@nospecialize(typ), causes::IdSet{InferenceState})
-        @assert !isa(typ, LimitedAccuracy) "malformed LimitedAccuracy"
+        @assert !isa(typ, LimitedAccuracy) "found nested LimitedAccuracy"
         return new(typ, causes)
     end
 end
@@ -127,6 +135,8 @@ const CompilerTypes = Union{MaybeUndef, Const, Conditional, NotFound, PartialStr
 #################
 # lattice logic #
 #################
+
+assert_nested_type(@nospecialize t) = @assert !(t isa AnyConditional) "found nested conditional"
 
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
