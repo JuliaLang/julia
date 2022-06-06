@@ -557,6 +557,65 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
+
+## Changing the contextual module which is active at the REPL
+
+When entering expressions at the REPL, they are by default evaluated in the `Main` module;
+
+```julia-repl
+julia> @__MODULE__
+Main
+```
+
+It is possible to change this contextual module via the function
+`REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
+and pressing the keybinding Alt-m (the cursor must be on the module name). The
+active module is shown in the prompt:
+
+```julia-repl
+julia> using REPL
+
+julia> REPL.activate(Base)
+
+(Base) julia> @__MODULE__
+Base
+
+(Base) julia> using REPL # Need to load REPL into Base module to use it
+
+(Base) julia> REPL.activate(Main)
+
+julia>
+
+julia> Core<Alt-m> # using the keybinding to change module
+
+(Core) julia>
+
+(Core) julia> Main<Alt-m> # going back to Main via keybinding
+
+julia>
+```
+
+Functions that take an optional module argument often defaults to the REPL
+context module. As an example, calling `varinfo()` will show the variables of
+the current active module:
+
+```julia-repl
+julia> module CustomMod
+           export var, f
+           var = 1
+           f(x) = x^2
+       end;
+
+julia> REPL.activate(CustomMod)
+
+(Main.CustomMod) julia> varinfo()
+  name         size summary
+  ––––––––– ––––––– ––––––––––––––––––––––––––––––––––
+  CustomMod         Module
+  f         0 bytes f (generic function with 1 method)
+  var       8 bytes Int64
+```
+
 ## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.

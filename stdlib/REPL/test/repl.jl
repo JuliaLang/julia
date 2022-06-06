@@ -478,6 +478,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
 
         # Some manual setup
         s = LineEdit.init_state(repl.t, repl.interface)
+        repl.mistate = s
         LineEdit.edit_insert(s, "wip")
 
         # LineEdit functions related to history
@@ -1096,7 +1097,34 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+# test activate_module
+fake_repl() do stdin_write, stdout_read, repl
+    repl.history_file = false
+    repl.interface = REPL.setup_interface(repl)
+    repl.mistate = LineEdit.init_state(repl.t, repl.interface)
+
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    write(stdin_write, "(123, Base.Fix1)\n")
+    @test occursin("julia> ", split(readline(stdout_read), "Base.Fix1")[2])
+    @test occursin("(123, Base.Fix1)", readline(stdout_read))
+    readline(stdout_read)
+
+    repl.mistate.active_module = Base # simulate activate_module(Base)
+    write(stdin_write, "(456, Base.Fix2)\n")
+    @test occursin("(Base) julia> ", split(readline(stdout_read), "Base.Fix2")[2])
+    # ".Base" prefix not shown here
+    @test occursin("(456, Fix2)", readline(stdout_read))
+    readline(stdout_read)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+help_result(line, mod::Module=Base) = mod.eval(REPL._helpmode(IOBuffer(), line))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1139,6 +1167,13 @@ end
 
 # Issue #40563
 @test occursin("does not exist", sprint(show, help_result("..")))
+# test that helpmode is sensitive to contextual module
+@test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Base.Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Fix2", Base)))
+
 
 # Issue #25930
 

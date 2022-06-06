@@ -115,6 +115,10 @@ Standard library changes
 * `Meta-e` now opens the current input in an editor. The content (if modified) will be
   executed upon existing the editor.
 
+* The contextual module which is active at the REPL can be changed (it is `Main` by default),
+  via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
+  the keybinding Alt-m ([#33872]).
+
 #### SparseArrays
 
 #### Test
