@@ -655,8 +655,8 @@ end
 end
 
 @testset "workspace()" begin
-    for v in [[1, 2, 3], [0.0]]
-        for t0 in vcat([nothing], [similar(v,i) for i in 1:5]), len in 0:5
+    for v in [Int16[1, 2, 3], [0.0], [[7], [2]]]
+        for t0 in vcat([nothing], [Vector{UInt8}(undef, i) for i in 1:13]), len in 0:5
             t = Base.Sort.workspace(v, t0, len)
             @test eltype(t) == eltype(v)
             @test length(t) >= len
@@ -665,14 +665,14 @@ end
     end
 end
 
-@testset "sort(x; workspace=w) " begin
+@testset "sort(x; workspace=w)" begin
     for n in [1,10,100,1000]
         v = rand(n)
-        w = [0.0]
+        w = UInt8[]
         @test sort(v) == sort(v; workspace=w)
         @test sort!(copy(v)) == sort!(copy(v); workspace=w)
-        @test sortperm(v) == sortperm(v; workspace=[4])
-        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; workspace=[4])
+        @test sortperm(v) == sortperm(v; workspace=w)
+        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; workspace=w)
 
         n > 100 && continue
         M = rand(n, n)
@@ -681,7 +681,7 @@ end
     end
 end
 
-
+# This testset is at the end of the file because it is slow
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
                 UInt8, UInt16, UInt32, UInt64, UInt128,
