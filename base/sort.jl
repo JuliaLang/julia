@@ -765,8 +765,8 @@ workspace(v::AbstractVector, ::Nothing, len::Integer) = similar(v, len)
 workspace(v::AbstractVector, data::Vector{UInt8}, len::Integer) = Workspace(eltype(v), data, len)
 
 Base.size(w::Workspace) = size(w.wrapper)
-Base.@propagate_inbounds getindex(w::Workspace, i::Int) = getindex(w.wrapper, i)
-Base.@propagate_inbounds setindex!(w::Workspace, v, i::Int) = setindex!(w.wrapper, v, i)
+Base.@propagate_inbounds Base.getindex(w::Workspace, i::Int) = getindex(w.wrapper, i)
+Base.@propagate_inbounds Base.setindex!(w::Workspace, v, i::Int) = setindex!(w.wrapper, v, i)
 
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
