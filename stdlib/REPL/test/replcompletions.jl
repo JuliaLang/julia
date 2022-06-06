@@ -7,7 +7,7 @@ using REPL
     @testset "Check symbols previously not shown by REPL.doc_completions()" begin
     symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
         for i in symbols
-            @test i ∈ REPL.doc_completions(i)
+            @test i ∈ REPL.doc_completions(i, Main)
         end
     end
 let ex = quote

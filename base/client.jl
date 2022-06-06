@@ -373,21 +373,21 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 # The REPL stdlib hooks into Base using this Ref
 const REPL_MODULE_REF = Ref{Module}()
 
-function load_InteractiveUtils()
+function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(Main, :InteractiveUtils)
+    if !isdefined(mod, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(Main, :(using .InteractiveUtils))
+                Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
+                Core.eval(mod, :(using .InteractiveUtils))
                 return InteractiveUtils
             end
         catch ex
-            @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+            @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
         end
         return nothing
     end
-    return getfield(Main, :InteractiveUtils)
+    return getfield(mod, :InteractiveUtils)
 end
 
 # run the requested sort of evaluation loop on stdio
