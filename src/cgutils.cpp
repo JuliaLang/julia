@@ -3163,18 +3163,17 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
-static Function *mangleIntrinsic(IntrinsicInst *call)
+static Function *mangleIntrinsic(IntrinsicInst *call) //mangling based on replaceIntrinsicUseWith
 {
     Intrinsic::ID ID = call->getIntrinsicID();
     auto nargs = call->arg_size();
-    SmallVector<Value*, 8> args(nargs);
     SmallVector<Type*, 8> argTys(nargs);
-    for (unsigned i = 0; i < nargs; i++) {
-        auto arg = call->getArgOperand(i);
-        args[i] = arg;
-        argTys[i] = args[i]->getType();
-    }
     auto oldfType = call->getFunctionType();
+    for (unsigned i = 0; i < oldfType->getNumParams(); i++) {
+        auto argi = call->getArgOperand(i);
+        argTys[i] = argi->getType();
+    }
+    
     auto newfType = FunctionType::get(
             oldfType->getReturnType(),
             makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
@@ -3210,7 +3209,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
-        else if (isa<IntrinsicInst>(User)) { //mangling based on function_sig_t::emit_a_ccall and replaceIntrinsicWith
+        else if (isa<IntrinsicInst>(User)) { 
             IntrinsicInst *call = cast<IntrinsicInst>(User);
             call->setCalledFunction(mangleIntrinsic(call));
         }
