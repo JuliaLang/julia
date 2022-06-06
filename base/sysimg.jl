@@ -57,7 +57,6 @@ let
         # 3-depth packages
         :REPL,
         :SharedArrays,
-        :Statistics,
         :SuiteSparse,
         :TOML,
         :Test,
