@@ -3173,7 +3173,7 @@ static Function *mangleIntrinsic(IntrinsicInst *call) //mangling based on replac
         auto argi = call->getArgOperand(i);
         argTys[i] = argi->getType();
     }
-    
+
     auto newfType = FunctionType::get(
             oldfType->getReturnType(),
             makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
@@ -3209,7 +3209,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
-        else if (isa<IntrinsicInst>(User)) { 
+        else if (isa<IntrinsicInst>(User)) {
             IntrinsicInst *call = cast<IntrinsicInst>(User);
             call->setCalledFunction(mangleIntrinsic(call));
         }
