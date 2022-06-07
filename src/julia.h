@@ -88,7 +88,7 @@ extern "C" {
 typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
-    uintptr_t gc:3;
+    uintptr_t gc:2;
 };
 
 JL_EXTENSION struct _jl_taggedvalue_t {
