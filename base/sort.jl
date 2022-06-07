@@ -6,7 +6,7 @@ import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
 using .Base: length, first, last, axes, firstindex, lastindex, eltype,
-    similar, iterate, keytype, copymutable, fill, eachindex, zip, 
+    similar, iterate, keytype, copymutable, fill, eachindex, zip,
     copyto!, reverse!, resize!, require_one_based_indexing,
     AbstractVector, Vector, AbstractRange, OrdinalRange, UnitRange, LinearIndices,
     identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
@@ -477,7 +477,7 @@ Characteristics:
   * *not in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
   * *good performance* for most large collections.
-  * *quadratic worst case runtime* in pathological cases 
+  * *quadratic worst case runtime* in pathological cases
     (vanishingly rare for non-malicious input)
 """
 const QuickSort = PartialQuickSort(missing, missing)
