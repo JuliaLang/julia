@@ -27,6 +27,9 @@ const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE = 0x01 << 4
+# This statement was proven not to throw
+const IR_FLAG_NOTHROW     = 0x01 << 5
+
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -567,7 +570,7 @@ function run_passes(
     @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
-    @pass "SROA"      ir = sroa_pass!(ir)
+    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir)
     @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
