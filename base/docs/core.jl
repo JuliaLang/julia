@@ -12,6 +12,12 @@ function doc!(source::LineNumberNode, mod::Module, str, ex)
 end
 const DOCS = Array{Core.SimpleVector,1}()
 
+# iscallexpr checks if an expression is a :call expression. The call expression may be
+# also part of a :where expression, so it unwraps the :where layers until it reaches the
+# "actual" expression
+iscallexpr(ex::Expr) = isexpr(ex, :where) ? iscallexpr(ex.args[1]) : isexpr(ex, :call)
+iscallexpr(ex) = false
+
 isexpr(x, h::Symbol) = isa(x, Expr) && x.head === h
 
 lazy_iterpolate(s::AbstractString) = Expr(:call, Core.svec, s)
@@ -21,7 +27,7 @@ function docm(source::LineNumberNode, mod::Module, str, x)
     out = Expr(:call, doc!, QuoteNode(source), mod, lazy_iterpolate(str), QuoteNode(x))
     if isexpr(x, :module)
         out = Expr(:toplevel, out, x)
-    elseif isexpr(x, :call) || isexpr(x, :where) && isexpr(x.args[1], :call)
+    elseif iscallexpr(x)
     else
         out = Expr(:block, x, out)
     end

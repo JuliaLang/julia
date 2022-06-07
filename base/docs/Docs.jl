@@ -63,7 +63,7 @@ include("bindings.jl")
 import .Base.Meta: quot, isexpr
 import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
-import ..CoreDocs: lazy_iterpolate
+import ..CoreDocs: lazy_iterpolate, iscallexpr
 
 export doc
 
@@ -528,12 +528,6 @@ function docm(source::LineNumberNode, mod::Module, ex)
 end
 # Drop incorrect line numbers produced by nested macro calls.
 docm(source::LineNumberNode, mod::Module, _, _, x...) = docm(source, mod, x...)
-
-# iscallexpr checks if an expression is a :call expression. The call expression may be
-# also part of a :where expression, so it unwraps the :where layers until it reaches the
-# "actual" expression
-iscallexpr(ex::Expr) = isexpr(ex, :where) ? iscallexpr(ex.args[1]) : isexpr(ex, :call)
-iscallexpr(ex) = false
 
 function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true)
     @nospecialize meta ex
