@@ -1545,6 +1545,9 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             if size(B,2) != n
                 throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
             end
+            if j != size(B,1)
+                throw(DimensionMismatch(lazy"A has second dimension $j but needs to match first dimension of B, $(size(B,1))"))
+            end
             chkstride1(A)
             chkstride1(B)
             chkstride1(C)
@@ -1618,6 +1621,9 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
             end
             if size(B,2) != n
                 throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+            end
+            if j != size(B,1)
+                throw(DimensionMismatch(lazy"A has second dimension $j but needs to match first dimension of B, $(size(B,1))"))
             end
             chkstride1(A)
             chkstride1(B)
