@@ -872,13 +872,16 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e);
 static Value *data_pointer(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
     assert(x.ispointer());
-    Value *data = x.V;
+    Value *data;
     if (x.constant) {
         Constant *val = julia_const_to_llvm(ctx, x.constant);
         if (val)
             data = get_pointer_to_constant(ctx.emission_context, val, "_j_const", *jl_Module);
         else
             data = literal_pointer_val(ctx, x.constant);
+    }
+    else {
+        data = maybe_decay_tracked(ctx, x.V);
     }
     return data;
 }
@@ -965,7 +968,6 @@ static void emit_memcpy(jl_codectx_t &ctx, Value *dst, MDNode *tbaa_dst, const j
 {
     emit_memcpy_llvm(ctx, dst, tbaa_dst, data_pointer(ctx, src), src.tbaa, sz, align, is_volatile);
 }
-
 
 static Value *emit_nthptr_addr(jl_codectx_t &ctx, Value *v, ssize_t n, bool gctracked = true)
 {
@@ -2253,7 +2255,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             }
             Value *fldptr = ctx.builder.CreateInBoundsGEP(
                     ctx.types().T_prjlvalue,
-                    maybe_decay_tracked(ctx, emit_bitcast(ctx, data_pointer(ctx, strct), ctx.types().T_pprjlvalue)),
+                    emit_bitcast(ctx, data_pointer(ctx, strct), ctx.types().T_pprjlvalue),
                     idx0());
             LoadInst *fld = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, fldptr, Align(sizeof(void*)));
             fld->setOrdering(AtomicOrdering::Unordered);
@@ -2269,7 +2271,7 @@ static bool emit_getfield_unknownidx(jl_codectx_t &ctx,
             jl_value_t *jft = jl_svecref(stt->types, 0); // n.b. jl_get_fieldtypes assigned stt->types for here
             assert(jl_is_concrete_type(jft));
             idx = idx0();
-            Value *ptr = maybe_decay_tracked(ctx, data_pointer(ctx, strct));
+            Value *ptr = data_pointer(ctx, strct);
             if (!stt->name->mutabl && !(maybe_null && (jft == (jl_value_t*)jl_bool_type ||
                                                  ((jl_datatype_t*)jft)->layout->npointers))) {
                 // just compute the pointer and let user load it when necessary
@@ -2346,7 +2348,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     if (tbaa == ctx.tbaa().tbaa_datatype && byte_offset != offsetof(jl_datatype_t, types))
         tbaa = ctx.tbaa().tbaa_const;
     if (strct.ispointer()) {
-        Value *staddr = maybe_decay_tracked(ctx, data_pointer(ctx, strct));
+        Value *staddr = data_pointer(ctx, strct);
         bool isboxed;
         Type *lt = julia_type_to_llvm(ctx, (jl_value_t*)jt, &isboxed);
         Value *addr;
@@ -3468,7 +3470,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
     if (byte_offset > 0) {
         addr = ctx.builder.CreateInBoundsGEP(
                 getInt8Ty(ctx.builder.getContext()),
-                emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), getInt8PtrTy(ctx.builder.getContext())),
+                emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
                 ConstantInt::get(getSizeTy(ctx.builder.getContext()), byte_offset)); // TODO: use emit_struct_gep
     }
     jl_value_t *jfty = jl_field_type(sty, idx0);
@@ -3481,7 +3483,9 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jfty);
         if (rhs_union.typ == jl_bottom_type)
             return jl_cgval_t();
-        Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), getInt8PtrTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), fsz));
+        Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()),
+                emit_bitcast(ctx, addr, getInt8PtrTy(ctx.builder.getContext())),
+                ConstantInt::get(getSizeTy(ctx.builder.getContext()), fsz));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
         BasicBlock *ModifyBB = NULL;
@@ -3557,7 +3561,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         size_t nfields = jl_datatype_nfields(sty);
         bool maybe_null = idx0 >= nfields - (unsigned)sty->name->n_uninitialized;
         return typed_store(ctx, addr, NULL, rhs, cmp, jfty, strct.tbaa, nullptr,
-            wb ? maybe_bitcast(ctx, data_pointer(ctx, strct), ctx.types().T_pjlvalue) : nullptr,
+            wb ? boxed(ctx, strct) : nullptr,
             isboxed, Order, FailOrder, align,
             needlock, issetfield, isreplacefield, isswapfield, ismodifyfield, maybe_null, modifyop, fname);
     }
