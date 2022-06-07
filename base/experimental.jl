@@ -134,9 +134,9 @@ in poorly-inferred cases. For example, when `@max_methods 2` is set and there ar
 potentially-matching methods returning different types inside a function body, then Julia
 will compile subsequent calls for both types so that the compiled function body accounts
 for both possibilities. Also the compiled code is vulnerable to invalidations that would
-happen when either of the two methods gets invalidated. The speculative compilation and
-the invalidations can be avoided by setting `@max_methods 1` and allowing the compiled code
-to resort to runtime dispatch instead.
+happen when either of the two methods gets invalidated. This speculative compilation and
+these invalidations can be avoided by setting `@max_methods 1` and allowing the compiled
+code to resort to runtime dispatch instead.
 
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
