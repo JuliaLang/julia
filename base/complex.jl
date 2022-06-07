@@ -290,7 +290,7 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
-function *(z::Complex{Union{BigInt,BigFloat}}, w::Complex{Union{BigInt,BigFloat}})
+function *(z::Complex{<:Union{BigInt,BigFloat}}, w::Complex{<:Union{BigInt,BigFloat}})
     remult = real(z) * real(w)
     imagmult = imag(z) * imag(w)
     mult = (real(z) + imag(z)) * (real(w) + imag(w))
