@@ -531,33 +531,12 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
     return v
 end
 
-# TODO Stable doesnt make sense because rev may be true!!!!
-# return the index of the stable median of v[lo], v[mi], and v[hi]
-# that is, compare the elements and break ties using the index
+# select a pivot for QuickSort
 #
-# for example, the stable median of [4, 4, 5] is the second
-# element and the stable median of [4, 4, 3] is the first element
-#
-# TODO replace with rand(lo:hi) if Random is ever a part of Base
-function select_pivot(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
-    mi = midpoint(lo, hi)
-    @inbounds a, b, c = v[lo], v[mi], v[hi]
-
-    if lt(o, b, a)
-        b, a = a, b
-        lo, mi = mi, lo
-    end
-
-    # a is stably less than b
-
-    if lt(o, c, a)
-        lo
-    elseif lt(o, c, b)
-        hi
-    else
-        mi
-    end
-end
+# This method is redefined to rand(lo:hi) in Random.jl
+# We can't use rand here because it is not available in Core.Compiler and
+# because rand is defined in the stdlib Random.jl after sorting it used in Base.
+select_pivot(lo::Integer, hi::Integer) = midpoint(lo, hi)
 
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
@@ -565,7 +544,7 @@ end
 # returns (pivot, pivot_index) where pivot_index is the location the pivot
 # should end up, but does not set t[pivot_index] = pivot
 function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v::AbstractVector, rev::Bool)
-    pivot_index = select_pivot(v, lo, hi, o)
+    pivot_index = select_pivot(lo, hi)
     trues = 0
     @inbounds begin
         pivot = v[pivot_index]

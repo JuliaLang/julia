@@ -30,17 +30,6 @@ end
     @test -1 <= Base.Sort.midpoint(typemin(Int), typemax(Int)) <= 0
 end
 
-@testset "select_pivot" begin
-    @test Base.Sort.select_pivot([1, 1, 1], 1, 3, Forward) == 2
-    @test Base.Sort.select_pivot([1, 3, 1], 1, 3, Reverse) == 1
-    @test Base.Sort.select_pivot([2, 2, 3], 1, 3, Forward) == 2
-    @test Base.Sort.select_pivot([2, 3, 1, 3, 1], 1, 5, Forward) == 5
-    @test Base.Sort.select_pivot([2, 3, 1, 4, 2], 3, 5, Reverse) == 5
-    @test Base.Sort.select_pivot([2, 2, 1], 1, 3, Forward) == 1
-    @test Base.Sort.select_pivot([2, 2, 1], 1, 3, By(x -> 0)) == 2
-    @test Base.Sort.select_pivot([3, 2, 1], 1, 3, Reverse) == 2
-end
-
 @testset "sort" begin
     @test sort([2,3,1]) == [1,2,3] == sort([2,3,1]; order=Forward)
     @test sort([2,3,1], rev=true) == [3,2,1] == sort([2,3,1], order=Reverse)

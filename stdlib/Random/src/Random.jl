@@ -434,4 +434,9 @@ true
 """
 seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
 
+# Randomize quicksort pivot selection. This code is here because of bootstrapping:
+# we need to sort things before we load this standard library.
+# TODO move this into Sort.jl
+Base.Sort.select_pivot(lo::Integer, hi::Integer) = rand(lo:hi)
+
 end # module
