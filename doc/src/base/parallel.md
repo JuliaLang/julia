@@ -59,8 +59,8 @@ Base.ReentrantLock
 ```@docs
 Base.AbstractChannel
 Base.Channel
-Base.Channel(::Function)
-Base.put!(::Channel, ::Any)
+Base.Channel{T}(::Function) where T
+Base.put!(::Channel{T}, ::Any) where T
 Base.take!(::Channel)
 Base.isready(::Channel)
 Base.fetch(::Channel)
