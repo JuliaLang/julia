@@ -1306,8 +1306,11 @@ end
 # returns an array of types
 function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(typ),
                                 sv::Union{InferenceState, IRCode})
-    if isa(typ, PartialStruct) && typ.typ.name === Tuple.name
-        return typ.fields, nothing
+    if isa(typ, PartialStruct)
+        widet = typ.typ
+        if isa(widet, DataType) && widet.name === Tuple.name
+            return typ.fields, nothing
+        end
     end
 
     if isa(typ, Const)

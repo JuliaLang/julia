@@ -17,7 +17,7 @@
 #     fields::Vector{Any} # elements are other type lattice members
 # end
 import Core: Const, PartialStruct
-function PartialStruct(typ::DataType, fields::Vector{Any})
+function PartialStruct(@nospecialize(typ), fields::Vector{Any})
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end
@@ -279,19 +279,22 @@ function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
         if isa(a, Const)
             nf = nfields(a.val)
             nf == length(b.fields) || return false
-            widenconst(b).name === widenconst(a).name || return false
+            widea = widenconst(a)::DataType
+            wideb = widenconst(b)
+            wideb′ = unwrap_unionall(wideb)::DataType
+            widea.name === wideb′.name || return false
             # We can skip the subtype check if b is a Tuple, since in that
             # case, the ⊑ of the elements is sufficient.
-            if b.typ.name !== Tuple.name && !(widenconst(a) <: widenconst(b))
+            if wideb′.name !== Tuple.name && !(widea <: wideb)
                 return false
             end
             for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
-                bf = b.fields[i]
+                bfᵢ = b.fields[i]
                 if i == nf
-                    bf = unwrapva(bf)
+                    bfᵢ = unwrapva(bfᵢ)
                 end
-                ⊑(lattice, Const(getfield(a.val, i)), bf) || return false
+                ⊑(lattice, Const(getfield(a.val, i)), bfᵢ) || return false
             end
             return true
         end
@@ -414,20 +417,22 @@ function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type
             return v
         end
         valid_as_lattice(ti) || return Bottom
-        @assert widev <: Tuple
-        new_fields = Vector{Any}(undef, length(v.fields))
-        for i = 1:length(new_fields)
-            vfi = v.fields[i]
-            if isvarargtype(vfi)
-                new_fields[i] = vfi
-            else
-                new_fields[i] = tmeet(lattice, vfi, widenconst(getfield_tfunc(lattice, t, Const(i))))
-                if new_fields[i] === Bottom
-                    return Bottom
+        if widev <: Tuple
+            new_fields = Vector{Any}(undef, length(v.fields))
+            for i = 1:length(new_fields)
+                vfi = v.fields[i]
+                if isvarargtype(vfi)
+                    new_fields[i] = vfi
+                else
+                    nfi = new_fields[i] = tmeet(lattice, vfi, widenconst(getfield_tfunc(lattice, t, Const(i))))
+                    if nfi === Bottom
+                        return Bottom
+                    end
                 end
             end
+            return tuple_tfunc(lattice, new_fields)
         end
-        return tuple_tfunc(lattice, new_fields)
+        v = widev
     elseif isa(v, PartialOpaque)
         has_free_typevars(t) && return v
         widev = widenconst(v)
