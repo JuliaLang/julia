@@ -437,6 +437,27 @@ function pkgdir(m::Module, paths::String...)
     return joinpath(dirname(dirname(path)), paths...)
 end
 
+"""
+    pkgversion(m::Module)
+
+Return the version of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package or a
+package without a version field set.
+
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9.
+"""
+function pkgversion(m::Module)
+    _pkgdir = pkgdir(m)
+    _pkgdir === nothing && return nothing
+    project_file = locate_project_file(_pkgdir)
+    if project_file isa String
+        return get_project_version(project_file)
+    else
+        return nothing
+    end
+end
+
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
@@ -1209,14 +1230,23 @@ function set_pkgorigin_version_path(pkg, path)
     if path !== nothing
         project_file = locate_project_file(joinpath(dirname(path), ".."))
         if project_file isa String
-            d = parsed_toml(project_file)
-            v = get(d, "version", nothing)
+            v = get_project_version(project_file)
             if v !== nothing
-                pkgorigin.version = VersionNumber(v::AbstractString)
+                pkgorigin.version = v
             end
         end
     end
     pkgorigin.path = path
+end
+
+function get_project_version(project_file::String)
+    d = parsed_toml(project_file)
+    v = get(d, "version", nothing)
+    if isnothing(v)
+        return nothing
+    else
+        return VersionNumber(v::AbstractString)
+    end
 end
 
 # Returns `nothing` or the name of the newly-created cachefile
