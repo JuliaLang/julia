@@ -484,10 +484,6 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-trunc(::Type{T}, x::Rational) where {T} = round(T, x, RoundToZero)
-floor(::Type{T}, x::Rational) where {T} = round(T, x, RoundDown)
-ceil(::Type{T}, x::Rational) where {T} = round(T, x, RoundUp)
-
 round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}

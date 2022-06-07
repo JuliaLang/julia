@@ -146,6 +146,7 @@ round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
     throw(MissingException(missing_conversion_msg(T)))
 round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 # to fix ambiguities
+round(::Type{T}, x::Real, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
 round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
 
@@ -158,6 +159,7 @@ for f in (:(ceil), :(floor), :(trunc))
         ($f)(::Type{T}, x::Any) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
         # to fix ambiguities
         ($f)(::Type{T}, x::Rational) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
+        ($f)(::Type{T}, x::Real) where {T>:Missing} = $f(nonmissingtype_checked(T), x)
     end
 end
 
