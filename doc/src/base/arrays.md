@@ -8,19 +8,19 @@ Base.AbstractVector
 Base.AbstractMatrix
 Base.AbstractVecOrMat
 Core.Array
-Core.Array(::UndefInitializer, ::Any)
-Core.Array(::Nothing, ::Any)
-Core.Array(::Missing, ::Any)
+Core.Array{T,N}(::UndefInitializer, ::Any) where {T,N}
+Core.Array{T,N}(::Nothing, ::Any) where {T,N}
+Core.Array{T,N}(::Missing, ::Any) where {T,N}
 Core.UndefInitializer
 Core.undef
 Base.Vector
-Base.Vector(::UndefInitializer, ::Any)
-Base.Vector(::Nothing, ::Any)
-Base.Vector(::Missing, ::Any)
+Base.Vector{T}(::UndefInitializer, ::Any) where T
+Base.Vector{T}(::Nothing, ::Any) where T
+Base.Vector{T}(::Missing, ::Any) where T
 Base.Matrix
-Base.Matrix(::UndefInitializer, ::Any, ::Any)
-Base.Matrix(::Nothing, ::Any, ::Any)
-Base.Matrix(::Missing, ::Any, ::Any)
+Base.Matrix{T}(::UndefInitializer, ::Any, ::Any) where T
+Base.Matrix{T}(::Nothing, ::Any, ::Any) where T
+Base.Matrix{T}(::Missing, ::Any, ::Any) where T
 Base.VecOrMat
 Core.DenseArray
 Base.DenseVector
