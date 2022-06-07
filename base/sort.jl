@@ -5,7 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
-using .Base: copymutable, LinearIndices, length, (:), iterate, elsize,
+using .Base: copymutable, LinearIndices, length, (:), iterate, elsize, OneTo,
     eachindex, axes, first, last, similar, zip, OrdinalRange, firstindex, lastindex,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -858,7 +858,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
     end
 
     # If it is possible to allocate a workspace with indices 1:hi...
-    if axes(v, 1) isa Base.OneTo
+    if axes(v, 1) isa OneTo
         # ...do it to avoid the overhead of a view
         t2 = reinterpret(U, workspace(v, t, hi))
         u2 = radix_sort!(u, lo, hi, bits, t2)
