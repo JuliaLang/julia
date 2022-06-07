@@ -199,7 +199,7 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
                 return rename
             end
         end
-        def = compact[defssa]
+        def = compact[defssa][:inst]
         if isa(def, PiNode)
             if callback(def, defssa)
                 return defssa
@@ -246,7 +246,7 @@ Starting at `val` walk use-def chains to get all the leaves feeding into this `v
 function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint))
     visited_phinodes = AnySSAValue[]
     isa(defssa, AnySSAValue) || return Any[defssa], visited_phinodes
-    def = compact[defssa]
+    def = compact[defssa][:inst]
     isa(def, PhiNode) || return Any[defssa], visited_phinodes
     visited_constraints = IdDict{AnySSAValue, Any}()
     worklist_defs = AnySSAValue[]
@@ -258,7 +258,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
         defssa = pop!(worklist_defs)
         typeconstraint = pop!(worklist_constraints)
         visited_constraints[defssa] = typeconstraint
-        def = compact[defssa]
+        def = compact[defssa][:inst]
         if isa(def, PhiNode)
             push!(visited_phinodes, defssa)
             possible_predecessors = Int[]
@@ -479,12 +479,12 @@ function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
             leaf = simple_walk(compact, leaf)
         end
         if isa(leaf, AnySSAValue)
-            def = compact[leaf]
+            def = compact[leaf][:inst]
         else
             def = leaf
         end
     elseif isa(leaf, AnySSAValue)
-        def = compact[leaf]
+        def = compact[leaf][:inst]
     else
         def = leaf
     end
@@ -653,7 +653,7 @@ function perform_lifting!(compact::IncrementalCompact,
         cached = false
         if cached
             ssa = lifting_cache[ckey]
-            push!(lifted_phis, LiftedPhi(ssa, compact[ssa]::PhiNode, false))
+            push!(lifted_phis, LiftedPhi(ssa, compact[ssa][:inst]::PhiNode, false))
             continue
         end
         n = PhiNode()
@@ -664,7 +664,7 @@ function perform_lifting!(compact::IncrementalCompact,
 
     # Fix up arguments
     for (old_node_ssa, lf) in zip(visited_phinodes, lifted_phis)
-        old_node = compact[old_node_ssa]::PhiNode
+        old_node = compact[old_node_ssa][:inst]::PhiNode
         new_node = lf.node
         lf.need_argupdate || continue
         for i = 1:length(old_node.edges)
@@ -790,7 +790,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
                     def = simple_walk(compact, preserved_arg, callback)
                     isa(def, SSAValue) || continue
                     defidx = def.id
-                    def = compact[defidx]
+                    def = compact[def][:inst]
                     if is_known_call(def, tuple, compact)
                         record_immutable_preserve!(new_preserves, def, compact)
                         push!(preserved, preserved_arg.id)
@@ -1289,7 +1289,7 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
         for ur in userefs(compact.result[phi][:inst])
             val = ur[]
             isa(val, SSAValue) || continue
-            isa(compact[val], PhiNode) || continue
+            isa(compact[val][:inst], PhiNode) || continue
             (val.id in safe_phis) && continue
             push!(worklist, val.id)
         end
@@ -1399,7 +1399,7 @@ function adce_pass!(ir::IRCode)
             continue
         end
         to_drop = Int[]
-        stmt = compact[phi]
+        stmt = compact[SSAValue(phi)][:inst]
         stmt === nothing && continue
         stmt = stmt::PhiNode
         for i = 1:length(stmt.values)
