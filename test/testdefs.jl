@@ -22,9 +22,9 @@ function runtests(name, path, isolate=true; seed=nothing)
             # Random.seed!(nothing) will fail
             seed != nothing && Random.seed!(seed)
             Base.include(m, "$path.jl")
-            # Randomly segfault after running our tests 20% of the time.
+            # Randomly segfault after running our tests 30% of the time.
             # Don't use `rand()` in the `if` condition since we manipulate the seed above.
-            if round(Int64, time()*1e3)%10 > 8
+            if round(Int64, time()*1e3)%10 > 7
                 ccall(Ptr{Cvoid}(rand(UInt)), Cvoid, ())
             end
         end

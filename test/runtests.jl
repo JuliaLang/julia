@@ -89,6 +89,7 @@ linalg_tests = tests[linalg_test_ids]
 deleteat!(tests, linalg_test_ids)
 prepend!(tests, linalg_tests)
 
+empty!(node1_tests)
 filter!(tests) do t
     return !occursin("LinearAlgebra", t) &&
            !occursin("Sparse", t) &&
