@@ -125,13 +125,13 @@ is_notaskstate(effects::Effects)  = effects.notaskstate === ALWAYS_TRUE
 is_nonoverlayed(effects::Effects) = effects.nonoverlayed
 
 # implies :notaskstate, but not explicitly checked here
-is_concrete_eval_eligible(effects::Effects) =
+is_foldable(effects::Effects) =
     is_consistent(effects) &&
     is_effect_free(effects) &&
     is_terminates(effects)
 
 is_total(effects::Effects) =
-    is_concrete_eval_eligible(effects) &&
+    is_foldable(effects) &&
     is_nothrow(effects)
 
 is_removable_if_unused(effects::Effects) =
