@@ -664,17 +664,6 @@ end
     end
 end
 
-@testset "workspace()" begin
-    for v in [[1, 2, 3], [0.0]]
-        for t0 in vcat([nothing], [similar(v,i) for i in 1:5]), len in 0:5
-            t = Base.Sort.workspace(v, t0, len)
-            @test eltype(t) == eltype(v)
-            @test length(t) >= len
-            @test firstindex(t) == 1
-        end
-    end
-end
-
 @testset "sort(x; workspace=w) " begin
     for n in [1,10,100,1000]
         v = rand(n)
