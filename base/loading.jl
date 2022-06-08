@@ -441,11 +441,11 @@ end
     pkgversion(m::Module)
 
 Return the version of the package that imported module `m`,
-or `nothing` if `m` was not imported from a package or a
-package without a version field set.
+or `nothing` if `m` was not imported from a package, or imported
+from a package without a version field set.
 
-The version is read from the package's Project.toml at package
-load time.
+The version is read from the package's Project.toml during package
+load.
 
 !!! compat "Julia 1.9"
     This function was introduced in Julia 1.9.
