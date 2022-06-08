@@ -91,7 +91,8 @@ prepend!(tests, linalg_tests)
 
 filter!(tests) do t
     return !occursin("LinearAlgebra", t) &&
-           !occursin("Sparse", t)
+           !occursin("Sparse", t) &&
+           rand() < 0.1
 end
 
 import LinearAlgebra
