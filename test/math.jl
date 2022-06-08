@@ -1449,3 +1449,21 @@ end
     f44336()
     @test (@allocated f44336()) == 0
 end
+
+# test constant-foldability
+for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
+           # TODO :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+           # TODO :exp, :exp2, :exp10, :expm1
+           )
+    for T in (Float32, Float64)
+        f = getfield(@__MODULE__, fn)
+        eff = Base.infer_effects(f, (T,))
+        if Core.Compiler.is_foldable(eff)
+            @test true
+        else
+            @error "bad effects found for $f(::$T)" eff
+            @test false
+        end
+    end
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(^, (Float32,Int)))
