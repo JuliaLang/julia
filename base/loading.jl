@@ -453,8 +453,8 @@ load.
 function pkgversion(m::Module)
     rootmodule = moduleroot(m)
     pkg = PkgId(rootmodule)
-    pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
-    return pkgorigin.version
+    pkgorigin = get(pkgorigins, pkg, nothing)
+    return pkgorigin === nothing ? nothing : pkgorigin.version
 end
 
 ## generic project & manifest API ##
