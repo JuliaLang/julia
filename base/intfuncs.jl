@@ -259,7 +259,7 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     "\nMake x a float matrix by adding a zero decimal ",
     "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
-function power_by_squaring(x_, p::Integer)
+@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
