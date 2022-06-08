@@ -284,7 +284,7 @@ struct JuliaLICM : public JuliaPassContext {
         if (changed && SE) {
             SE->forgetLoopDispositions(L);
         }
-        assert(!verifyFunction(*L->getHeader()->getParent()));
+        assert(!verifyFunction(*L->getHeader()->getParent(), &errs()));
         return changed;
     }
 };
