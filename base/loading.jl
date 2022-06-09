@@ -437,6 +437,26 @@ function pkgdir(m::Module, paths::String...)
     return joinpath(dirname(dirname(path)), paths...)
 end
 
+"""
+    pkgversion(m::Module)
+
+Return the version of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package, or imported
+from a package without a version field set.
+
+The version is read from the package's Project.toml during package
+load.
+
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9.
+"""
+function pkgversion(m::Module)
+    rootmodule = moduleroot(m)
+    pkg = PkgId(rootmodule)
+    pkgorigin = get(pkgorigins, pkg, nothing)
+    return pkgorigin === nothing ? nothing : pkgorigin.version
+end
+
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
