@@ -362,7 +362,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 
 #if !defined(JL_DISABLE_LIBUNWIND)
 static unw_context_t *volatile signal_context;
-static pthread_mutex_t in_signal_lock;
+pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
 
@@ -815,11 +815,12 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile) {
             jl_lock_profile();
-            if (!critical)
-                jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+            int *randperm;
+            if (profile)
+                 randperm = profile_get_randperm(jl_n_threads);
             for (int idx = jl_n_threads; idx-- > 0; ) {
-                // Stop the threads in the random round-robin order.
-                int i = critical ? idx : profile_round_robin_thread_order[idx];
+                // Stop the threads in the random or reverse round-robin order.
+                int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
                 if (signal_context == NULL)
