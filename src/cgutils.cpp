@@ -3679,7 +3679,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 }
                 Value *fval = NULL;
                 if (jl_field_isptr(sty, i)) {
-                    fval = boxed(ctx, fval_info, is_promotable);
+                    fval = boxed(ctx, fval_info, field_promotable);
                     if (!init_as_value)
                         cast<StoreInst>(tbaa_decorate(ctx.tbaa().tbaa_stack,
                                     ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i)))))
