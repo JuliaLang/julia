@@ -385,6 +385,9 @@ end
 `@assume_effects` overrides the compiler's effect modeling for the given method.
 `ex` must be a method definition or `@ccall` expression.
 
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
+    
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
            # this :terminates_locally allows `pow` to be constant-folded
@@ -431,6 +434,8 @@ The following `setting`s are supported.
 - `:foldable`
 - `:total`
 
+# Extended help
+    
 ---
 # `:consistent`
 
