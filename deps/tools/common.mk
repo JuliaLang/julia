@@ -141,22 +141,29 @@ define BINFILE_INSTALL
 	cp $3 $2/$$(build_depsbindir)
 endef
 
+XZ := $(shell which xz 2>/dev/null|| echo NOTFOUND)
+ifeq (${XZ},NOTFOUND)
+	STAGING_EXTENSION=tar
+else
+	STAGING_EXTENSION=tar.xz
+endif
+
 define staged-install
-stage-$(strip $1): $$(build_staging)/$2.tar
+stage-$(strip $1): $$(build_staging)/$2.$(STAGING_EXTENSION)
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
 
-ifeq (exists, $$(shell [ -e $$(build_staging)/$2.tar ] && echo exists ))
+ifeq (exists, $$(shell [ -e $$(build_staging)/$2.$(STAGING_EXTENSION) ] && echo exists ))
 # clean depends on uninstall only if the staged file exists
 distclean-$(strip $1) clean-$(strip $1): uninstall-$(strip $1)
 else
 # uninstall depends on staging only if the staged file doesn't exist
 # otherwise, uninstall doesn't actually want the file to be updated first
-uninstall-$(strip $1): | $$(build_staging)/$2.tar
+uninstall-$(strip $1): | $$(build_staging)/$2.$(STAGING_EXTENSION)
 endif
 
 reinstall-$(strip $1):
 	+$$(MAKE) uninstall-$(strip $1)
-	-rm -f $$(build_staging)/$2.tar
+	-rm -f $$(build_staging)/$2.$(STAGING_EXTENSION)
 	+$$(MAKE) stage-$(strip $1)
 	+$$(MAKE) install-$(strip $1)
 
@@ -167,19 +174,29 @@ $$(build_staging)/$2.tar: $$(BUILDDIR)/$2/build-compiled
 	cd $$(build_staging)/$2$$(build_prefix) && $$(TAR) -cf $$@.tmp .
 	rm -rf $$(build_staging)/$2
 	mv $$@.tmp $$@
+$$(build_staging)/$2.tar.xz: $$(build_staging)/$2.tar
+	$$(XZ) -z -T0 -f $$<
 
 UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
+ifeq ($(STAGING_EXTENSION),tar)
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
-	$(UNTAR) $$< -C $$(build_prefix)
+	$$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
+else
+$$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar.xz | $(build_prefix)/manifest
+	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
+	$$(XZ) -d -T0 -c $$< | $$(UNTAR) - -C $$(build_prefix)
+	$6
+	echo '$$(UNINSTALL_$(strip $1))' > $$@
+endif
 endef
 
 define staged-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tf $$(build_staging)/$2.tar | grep -v '/$$$$')
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tf $$(build_staging)/$2.$(STAGING_EXTENSION) | grep -v '/$$$$')
 	-rm -f $$(build_prefix)/manifest/$(strip $1)
 endef
 
