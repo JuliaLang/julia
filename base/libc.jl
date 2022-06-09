@@ -14,7 +14,7 @@ if Sys.iswindows()
     export GetLastError, FormatMessage
 end
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
+include("../errno_h.jl")
 
 ## RawFD ##
 
