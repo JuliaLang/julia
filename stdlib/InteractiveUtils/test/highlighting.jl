@@ -159,10 +159,10 @@ const XU = B * "}" * XB
 
     @testset "attributes" begin
         @test hilight_llvm(
-            """attributes #1 = { uwtable "frame-pointer"="all" "thunk" }""") ==
+            """attributes #1 = { uwtable "frame-pointer"="all" }""") ==
             "$(K)attributes$(XK) $(D)#1$(XD) $EQU " *
             "$U $(K)uwtable$(XK) $(V)\"frame-pointer\"$(XV)$EQU" *
-            "$(V)\"all\"$(XV) $(V)\"thunk\"$(XV) $XU\n"
+            "$(V)\"all\"$(XV) $XU\n"
     end
 
     @testset "terminator" begin
