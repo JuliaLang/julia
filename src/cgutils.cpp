@@ -1759,6 +1759,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     if (issetfield || (Order == AtomicOrdering::NotAtomic && isswapfield)) {
         if (isswapfield) {
             auto *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
+            if (isboxed)
+                load->setOrdering(AtomicOrdering::Unordered);
             if (aliasscope)
                 load->setMetadata("noalias", aliasscope);
             if (tbaa)
@@ -1767,7 +1769,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             instr = load;
         }
         StoreInst *store = ctx.builder.CreateAlignedStore(r, ptr, Align(alignment));
-        store->setOrdering(Order);
+        store->setOrdering(Order == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Release : Order);
         if (aliasscope)
             store->setMetadata("noalias", aliasscope);
         if (tbaa)
@@ -1807,7 +1809,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                     ctx.builder.CreateCondBr(SameType, BB, SkipBB);
                     ctx.builder.SetInsertPoint(SkipBB);
                     LoadInst *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
-                    load->setOrdering(FailOrder);
+                    load->setOrdering(FailOrder == AtomicOrdering::NotAtomic && isboxed ? AtomicOrdering::Monotonic : FailOrder);
                     if (aliasscope)
                         load->setMetadata("noalias", aliasscope);
                     if (tbaa)
@@ -1838,7 +1840,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
         else { // swap or modify
             LoadInst *Current = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
-            Current->setOrdering(Order == AtomicOrdering::NotAtomic ? Order : AtomicOrdering::Monotonic);
+            Current->setOrdering(Order == AtomicOrdering::NotAtomic && !isboxed ? Order : AtomicOrdering::Monotonic);
             if (aliasscope)
                 Current->setMetadata("noalias", aliasscope);
             if (tbaa)
@@ -1893,6 +1895,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             // modifyfield or replacefield
             assert(elty == realelty && !intcast);
             auto *load = ctx.builder.CreateAlignedLoad(elty, ptr, Align(alignment));
+            if (isboxed)
+                load->setOrdering(AtomicOrdering::Monotonic);
             if (aliasscope)
                 load->setMetadata("noalias", aliasscope);
             if (tbaa)
@@ -1921,6 +1925,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         else {
             if (Order == AtomicOrdering::Unordered)
                 Order = AtomicOrdering::Monotonic;
+            if (Order == AtomicOrdering::Monotonic && isboxed)
+                Order = AtomicOrdering::Release;
             if (!isreplacefield)
                 FailOrder = AtomicOrdering::Monotonic;
             else if (FailOrder == AtomicOrdering::Unordered)

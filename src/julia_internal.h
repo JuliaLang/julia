@@ -207,12 +207,12 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
     _Atomic(void*) *dstpa = (_Atomic(void*)*)dstp;
     if (dstp < srcp || dstp > srcp + n) {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
+            jl_atomic_store_release(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
         }
     }
     else {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
+            jl_atomic_store_release(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
         }
     }
 }
