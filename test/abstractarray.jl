@@ -1567,8 +1567,12 @@ end
 end
 
 @testset "reshape methods for AbstractVectors" begin
-    r = Base.IdentityUnitRange(3:4)
-    @test reshape(r, :) === reshape(r, (:,)) === r
+    for r in Any[1:3, Base.IdentityUnitRange(3:4)]
+        @test reshape(r, :) === reshape(r, (:,)) === r
+    end
+    r = 3:5
+    rr = reshape(r, 1, 3)
+    @test length(rr) == length(r)
 end
 
 @testset "strides for ReshapedArray" begin
