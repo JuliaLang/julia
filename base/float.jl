@@ -202,20 +202,6 @@ function Float64(x::Int128)
 end
 
 function Float32(x::UInt128)
-    x == 0 && return 0f0
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 24
-        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
-    else
-        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
-        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
-    end
-    d = ((n+126) % UInt32) << 23
-    reinterpret(Float32, d + y)
-end
-
-function u128_to_f32_default(x::UInt128)
     n = leading_zeros(x)
     y = x << n  
     mantissa = (y >> 104) % UInt32
