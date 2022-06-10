@@ -164,34 +164,41 @@ promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
-function Float64(x::UInt128)
-    x == 0 && return 0.0
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
-    else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+function u128_to_f64_default(x::UInt128)
+    n = leading_zeros(x)
+    y = x << n  
+    mantissa = (y >> 75) % UInt64
+    dropped_bits = (y >> 11 | y & 0xffff_ffff) % UInt64
+    mantissa += (dropped_bits - (dropped_bits >> 63 & (1 - (mantissa & 1)))) >> 63
+    exponent = x == 0 ? 0x0 : (1149 - n) % UInt64
+    reinterpret(Float64, exponent << 52 + mantissa)
+end
+
+function u128_to_f64_x86_64(x::UInt128)
+    A = 4.503599627370496e15 # Float64(UInt128(1) << 52)
+    B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
+    C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
+    D = 3.402823669209385e38 # Float64(typemax(UInt128))
+    if x < UInt128(1) << 104 
+        l = reinterpret(Float64, reinterpret(UInt64, A) | ((x << 12) % UInt64) >> 12) - A;
+        h = reinterpret(Float64, reinterpret(UInt64, B) | ((x >> 52) % UInt64)) - B;
+        l + h
+    else 
+        l = reinterpret(Float64, reinterpret(UInt64, C) | ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF) - C;
+        h = reinterpret(Float64, reinterpret(UInt64, D) | ((x >> 76) % UInt64)) - D;
+        l + h
     end
-    d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, d + y)
+end
+
+function Float64(x::UInt128)
+    # How to choose based on platform type?
+    #u128_to_f64_default(x)
+    u128_to_f64_x86_64(x)
 end
 
 function Float64(x::Int128)
-    x == 0 && return 0.0
-    s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
-    x = abs(x) % UInt128
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
-    else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
-    end
-    d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, s | d + y)
+    sign_bit = ((x >> 127) % UInt64) << 63
+    reinterpret(Float64, reinterpret(UInt64, Float64(unsigned(abs(x)))) | sign_bit)
 end
 
 function Float32(x::UInt128)
@@ -206,6 +213,16 @@ function Float32(x::UInt128)
     end
     d = ((n+126) % UInt32) << 23
     reinterpret(Float32, d + y)
+end
+
+function u128_to_f32_default(x::UInt128)
+    n = leading_zeros(x)
+    y = x << n  
+    mantissa = (y >> 104) % UInt32
+    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32
+    mantissa += (dropped_bits - (dropped_bits >> 31 & (Int32(1) - (mantissa & Int32(1))))) >> 31
+    exponent = x == 0 ? 0x0 : (253 - n) % UInt32
+    reinterpret(Float32, exponent << 23 + mantissa)
 end
 
 function Float32(x::Int128)
