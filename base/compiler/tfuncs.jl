@@ -247,9 +247,12 @@ add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(argtypes::Array{Any, 1})
     length(argtypes) == 2 || return false
-    return hasintersect(widenconst(argtypes[1]), Module) ?
-           argtypes[2] ⊑ Symbol :
-           (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int)
+    a1, a2 = argtypes[1], argtypes[2]
+    if hasintersect(widenconst(a1), Module)
+        return a2 ⊑ Symbol
+    else
+        return a2 ⊑ Symbol || a2 ⊑ Int
+    end
 end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))

@@ -215,7 +215,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         # but we can still ignore nonoverlayed effect here since we already accounted for it
         all_effects = tristate_merge(all_effects, EFFECTS_UNKNOWN)
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
-            (!_all(b->b, matches.fullmatches) || any_ambig(matches))
+            (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
         all_effects = Effects(all_effects; nothrow=TRISTATE_UNKNOWN)
     end
@@ -750,7 +750,8 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
            is_all_const_arg(arginfo)
 end
 
-function is_all_const_arg((; argtypes)::ArgInfo)
+is_all_const_arg(arginfo::ArgInfo) = is_all_const_arg(arginfo.argtypes)
+function is_all_const_arg(argtypes::Vector{Any})
     for i = 2:length(argtypes)
         a = widenconditional(argtypes[i])
         isa(a, Const) || isconstType(a) || issingletontype(a) || return false
@@ -758,12 +759,13 @@ function is_all_const_arg((; argtypes)::ArgInfo)
     return true
 end
 
-function collect_const_args((; argtypes)::ArgInfo)
+collect_const_args(arginfo::ArgInfo) = collect_const_args(arginfo.argtypes)
+function collect_const_args(argtypes::Vector{Any})
     return Any[ let a = widenconditional(argtypes[i])
                     isa(a, Const) ? a.val :
                     isconstType(a) ? (a::DataType).parameters[1] :
                     (a::DataType).instance
-                end for i in 2:length(argtypes) ]
+                end for i = 2:length(argtypes) ]
 end
 
 function concrete_eval_call(interp::AbstractInterpreter,
