@@ -231,11 +231,7 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
             print(io, "; ")
             for kw in kwargs
                 skw = sym_to_string(kw)
-                if QuoteNode(kw) in m.roots # then it's required
-                    printstyled(io, skw, color=:bold)
-                else
-                    print(io, skw)
-                end
+                print(io, skw)
                 if kw != last(kwargs)
                     print(io, ", ")
                 end
@@ -268,7 +264,11 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
                : # else
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
-        printstyled(io, ms.mt.module, color=:blue)
+
+        modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
+        col = get!(() -> popfirst!(modulecolorcycler), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(ms.mt.module))
+
+        printstyled(io, ms.mt.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
     elseif mt === _TYPE_NAME.mt
@@ -278,8 +278,6 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     end
     !iszero(n) && print(io, ":")
 end
-
-const METHODLIST_MODULECOLORS = [:cyan, :green, :yellow]
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
     mt = ms.mt
@@ -300,10 +298,9 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
         else
             mt.module
         end
-    modulecolordict = Dict{Module, Symbol}()
-    modulecolorcycler = Iterators.Stateful(Iterators.cycle(METHODLIST_MODULECOLORS))
-    modulecolordict[parentmodule_before_main(modul)] = :blue
 
+    modulecolordict = STACKTRACE_FIXEDCOLORS
+    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
     digit_align_width = length(string(max > 0 ? max : length(ms)))
 
     for meth in ms

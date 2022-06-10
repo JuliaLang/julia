@@ -405,7 +405,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         end
     end
 
-    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
+    modulecolordict = STACKTRACE_FIXEDCOLORS
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     for (func, arg_types_param) in funcs
@@ -591,7 +591,7 @@ function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
-    modulecolordict = copy(STACKTRACE_FIXEDCOLORS)
+    modulecolordict = STACKTRACE_FIXEDCOLORS
     modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
 
     println(io, "\nStacktrace:")
@@ -755,9 +755,6 @@ function print_module_path_file(io, modul, file, line, modulecolor = :light_blac
         print(io, " ")
         printstyled(io, modul, color = modulecolor)
     end
-
-    # no file/line location info to print
-    iszero(line) && return
 
     # filepath
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
