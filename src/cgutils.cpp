@@ -1802,7 +1802,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ret = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
         }
         else {
-            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, JLCALL_F_CC);
+            Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
             ret = mark_julia_type(ctx, callval, true, jl_any_type);
         }
         if (!jl_subtype(ret.typ, jltype)) {
@@ -3549,7 +3549,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
                     rhs = emit_invoke(ctx, *modifyop, argv, 3, (jl_value_t*)jl_any_type);
                 }
                 else {
-                    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, JLCALL_F_CC);
+                    Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, 3, julia_call);
                     rhs = mark_julia_type(ctx, callval, true, jl_any_type);
                 }
                 if (!jl_subtype(rhs.typ, jfty)) {
