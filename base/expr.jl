@@ -386,7 +386,7 @@ end
 `ex` must be a method definition or `@ccall` expression.
 
 !!! compat "Julia 1.8"
-    Using `Base.@assume_effects` requires julia version 1.8.
+    Using `Base.@assume_effects` requires Julia version 1.8.
 
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
