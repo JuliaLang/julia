@@ -324,7 +324,7 @@ Because of the behavior of floating-point NaN values, this operator implements
 a partial order.
 
 # Implementation
-New numeric types with a canonical partial order should implement this function for
+New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 
