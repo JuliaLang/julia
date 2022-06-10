@@ -27,6 +27,9 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -513,6 +516,31 @@ JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+
+// terminal workarounds
+JL_DLLEXPORT int jl_getch(void) JL_NOTSAFEPOINT
+{
+#if defined(_OS_WINDOWS_)
+    // Windows has an actual `_getch()`, use that:
+    return _getch();
+#else
+    // On all other platforms, we do the POSIX terminal manipulation dance
+    char c;
+    int r;
+    struct termios old_termios = {0};
+    struct termios new_termios = {0};
+    if (tcgetattr(0, &old_termios) != 0)
+        return -1;
+    new_termios = old_termios;
+    cfmakeraw(&new_termios);
+    if (tcsetattr(0, TCSADRAIN, &new_termios) != 0)
+        return -1;
+    r = read(0, &c, 1);
+    if (tcsetattr(0, TCSADRAIN, &old_termios) != 0)
+        return -1;
+    return r == 1 ? c : -1;
+#endif
+}
 
 // -- processor native alignment information --
 
