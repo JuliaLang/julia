@@ -384,10 +384,11 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return;
         }
-        if (request == -1)
+        if (request == -1) {
             err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+            assert(!err);
+        }
     }
-    assert(!err);
     int request = jl_atomic_load_acquire(&ptls2->signal_request);
     assert(request == 0 || request == -1); (void) request;
     *ctx = signal_context;
