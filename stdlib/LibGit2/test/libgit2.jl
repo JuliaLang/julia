@@ -10,25 +10,26 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
 import .Main.FakePTYs: with_fake_pty
 
-function challenge_prompt(code::Expr, challenges; timeout::Integer=60, debug::Bool=true)
+const timeout = 60
+
+function challenge_prompt(code::Expr, challenges)
     input_code = tempname()
     open(input_code, "w") do fp
         serialize(fp, code)
     end
     output_file = tempname()
-    wrapped_code = quote
+    torun = """
+        import LibGit2
         using Serialization
-        result = open($input_code) do fp
+        result = open($(repr(input_code))) do fp
             eval(deserialize(fp))
         end
-        open($output_file, "w") do fp
+        open($(repr(output_file)), "w") do fp
             serialize(fp, result)
-        end
-    end
-    torun = "import LibGit2; $wrapped_code"
+        end"""
     cmd = `$(Base.julia_cmd()) --startup-file=no -e $torun`
     try
-        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
+        challenge_prompt(cmd, challenges)
         return open(output_file, "r") do fp
             deserialize(fp)
         end
@@ -39,16 +40,15 @@ function challenge_prompt(code::Expr, challenges; timeout::Integer=60, debug::Bo
     return nothing
 end
 
-function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool=true)
+function challenge_prompt(cmd::Cmd, challenges)
     function format_output(output)
-        !debug && return ""
         str = read(seekstart(output), String)
         isempty(str) && return ""
         return "Process output found:\n\"\"\"\n$str\n\"\"\""
     end
     out = IOBuffer()
     with_fake_pty() do pts, ptm
-        p = run(detach(cmd), pts, pts, pts, wait=false)
+        p = run(detach(cmd), pts, pts, pts, wait=false) # getpass uses stderr by default
         Base.close_stdio(pts)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
@@ -78,21 +78,25 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
             wait(p)
         end
 
-        for (challenge, response) in challenges
-            write(out, readuntil(ptm, challenge, keep=true))
-            if !isopen(ptm)
-                error("Could not locate challenge: \"$challenge\". ",
-                      format_output(out))
-            end
-            write(ptm, response)
-        end
-
-        # Capture output from process until `pts` is closed
+        wroteall = false
         try
+            for (challenge, response) in challenges
+                write(out, readuntil(ptm, challenge, keep=true))
+                if !isopen(ptm)
+                    error("Could not locate challenge: \"$challenge\". ",
+                          format_output(out))
+                end
+                write(ptm, response)
+            end
+            wroteall = true
+
+            # Capture output from process until `pts` is closed
             write(out, ptm)
         catch ex
-            if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
-                rethrow() # ignore EIO from `ptm` after `pts` dies
+            if !(wroteall && ex isa Base.IOError && ex.code == Base.UV_EIO)
+                # ignore EIO from `ptm` after `pts` dies
+                error("Process failed possibly waiting for a response. ",
+                      format_output(out))
             end
         end
 
@@ -222,8 +226,7 @@ end
 
 @testset "Trace" begin
     code = "import LibGit2; LibGit2.trace_set(LibGit2.Consts.TRACE_DEBUG); exit(LibGit2.trace_set(0))"
-    p = run(`$(Base.julia_cmd()) --startup-file=no -e $code`, wait=false); wait(p)
-    @test success(p)
+    run(`$(Base.julia_cmd()) --startup-file=no -e $code`)
 end
 
 # See #21872 and #21636
@@ -3158,7 +3161,7 @@ mktempdir() do dir
                 # certificate. The minimal server can't actually serve a Git repository.
                 mkdir(joinpath(root, "Example.jl"))
                 pobj = cd(root) do
-                    run(`openssl s_server -key $key -cert $cert -WWW -accept $port`, wait=false)
+                    run(pipeline(`openssl s_server -key $key -cert $cert -WWW -accept $port`, stderr=RawFD(2)), wait=false)
                 end
 
                 errfile = joinpath(root, "error")
