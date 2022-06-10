@@ -706,6 +706,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     }
 
     jl_init_rand();
+    jl_init_profile_lock();
     jl_init_runtime_ccall();
     jl_init_tasks();
     jl_init_threading();

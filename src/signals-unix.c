@@ -362,7 +362,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 
 #if !defined(JL_DISABLE_LIBUNWIND)
 static unw_context_t *volatile signal_context;
-static pthread_mutex_t in_signal_lock;
+pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
 
@@ -384,10 +384,12 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return;
         }
-        err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+        if (request == -1)
+            err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
     }
     assert(!err);
-    assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
+    int request = jl_atomic_load_acquire(&ptls2->signal_request);
+    assert(request == 0 || request == -1); (void) request;
     *ctx = signal_context;
 }
 
@@ -397,7 +399,8 @@ static void jl_thread_resume(int tid, int sig)
     jl_atomic_store_release(&ptls2->signal_request, sig == -1 ? 3 : 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
-    assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
+    int request = jl_atomic_load_acquire(&ptls2->signal_request);
+    assert(request == 0 || request == -1); (void) request;
     pthread_mutex_unlock(&in_signal_lock);
 }
 #endif
@@ -456,11 +459,12 @@ static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
 }
 
 // request:
-// 0: nothing
-// 1: get state
-// 2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
-//    is reached
-// 3: exit with `thread0_exit_state`
+// -1: beginning processing [invalid outside here]
+//  0: nothing [not from here]
+//  1: get state
+//  2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
+//     is reached
+//  3: exit with `thread0_exit_state`
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -470,10 +474,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (ptls == NULL)
         return;
     int errno_save = errno;
-    sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
+    sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, -1);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
         signal_context = jl_to_bt_context(ctx);
+        jl_atomic_exchange(&ptls->signal_request, 0);
 
         pthread_mutex_lock(&in_signal_lock);
         pthread_cond_broadcast(&signal_caught_cond);
@@ -484,6 +489,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
         pthread_mutex_unlock(&in_signal_lock);
     }
 #endif
+    jl_atomic_exchange(&ptls->signal_request, 0);
     if (request == 2) {
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
@@ -809,11 +815,12 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile) {
             jl_lock_profile();
-            if (!critical)
-                jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+            int *randperm;
+            if (profile)
+                 randperm = profile_get_randperm(jl_n_threads);
             for (int idx = jl_n_threads; idx-- > 0; ) {
-                // Stop the threads in the random round-robin order.
-                int i = critical ? idx : profile_round_robin_thread_order[idx];
+                // Stop the threads in the random or reverse round-robin order.
+                int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
                 if (signal_context == NULL)

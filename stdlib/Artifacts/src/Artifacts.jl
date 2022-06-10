@@ -532,7 +532,8 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
 
     # If the artifact exists, we're in the happy path and we can immediately
     # return the path to the artifact:
-    for dir in artifact_paths(hash; honor_overrides=true)
+    dirs = artifact_paths(hash; honor_overrides=true)
+    for dir in dirs
         if isdir(dir)
             return jointail(dir, path_tail)
         end
@@ -549,7 +550,20 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
-    error("Artifact $(repr(name)) was not installed correctly. Try `using Pkg; Pkg.instantiate()` to re-install all missing resources.")
+
+    path_str = if length(dirs) == 1
+        "path \"$(first(dirs))\". "
+    else
+        string("paths:\n", join("  " .* contractuser.(dirs), '\n'), '\n')
+    end
+
+    suggestion_str = if query_override(hash) !== nothing
+        "Check that your `Overrides.toml` file is correct (https://pkgdocs.julialang.org/v1/artifacts/#Overriding-artifact-locations)."
+    else
+        "Try `using Pkg; Pkg.instantiate()` to re-install all missing resources."
+    end
+
+    error("Artifact $(repr(name)) was not found by looking in the $(path_str)$suggestion_str")
 end
 
 raw"""

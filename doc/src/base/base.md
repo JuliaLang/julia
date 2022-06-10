@@ -32,6 +32,7 @@ Base.include
 Base.MainInclude.include
 Base.include_string
 Base.include_dependency
+__init__
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show
@@ -418,6 +419,7 @@ Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
 Base.pkgdir(::Module)
+Base.pkgversion(::Module)
 Base.moduleroot
 __module__
 __source__

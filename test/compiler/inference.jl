@@ -4130,14 +4130,14 @@ function entry_to_be_invalidated(c)
 end
 @test Base.infer_effects((Char,)) do x
     entry_to_be_invalidated(x)
-end |> Core.Compiler.is_concrete_eval_eligible
+end |> Core.Compiler.is_foldable
 @test fully_eliminated(; retval=97) do
     entry_to_be_invalidated('a')
 end
 getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
 @test Base.infer_effects((Char,)) do x
     entry_to_be_invalidated(x)
-end |> !Core.Compiler.is_concrete_eval_eligible
+end |> !Core.Compiler.is_foldable
 @test !fully_eliminated() do
     entry_to_be_invalidated('a')
 end

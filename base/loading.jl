@@ -42,7 +42,7 @@ elseif Sys.isapple()
     #    char filename[max_filename_length];
     # };
     # Buffer buf;
-    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    # getattrlist(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isaccessiblefile(path) || return false
         path_basename = String(basename(path))
@@ -437,6 +437,26 @@ function pkgdir(m::Module, paths::String...)
     return joinpath(dirname(dirname(path)), paths...)
 end
 
+"""
+    pkgversion(m::Module)
+
+Return the version of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package, or imported
+from a package without a version field set.
+
+The version is read from the package's Project.toml during package
+load.
+
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9.
+"""
+function pkgversion(m::Module)
+    rootmodule = moduleroot(m)
+    pkg = PkgId(rootmodule)
+    pkgorigin = get(pkgorigins, pkg, nothing)
+    return pkgorigin === nothing ? nothing : pkgorigin.version
+end
+
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
@@ -784,7 +804,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "src", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 

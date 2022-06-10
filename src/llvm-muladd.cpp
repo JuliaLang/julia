@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "combine_muladd"
 #undef DEBUG
 #include "llvm-version.h"
 #include "passes.h"
@@ -21,6 +20,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#define DEBUG_TYPE "combine_muladd"
 
 #include "julia.h"
 #include "julia_assert.h"

@@ -359,6 +359,13 @@ module NotPkgModule; end
         @test pkgdir(NotPkgModule, "src") === nothing
     end
 
+    @testset "pkgversion" begin
+        @test pkgversion(Foo) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo1) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo2) == v"1.2.3"
+        @test pkgversion(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##
