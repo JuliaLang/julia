@@ -6,7 +6,7 @@ $(eval $(call git-external,zlib,ZLIB,,,$(SRCCACHE)))
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(abspath $(build_prefix)) -DCMAKE_BUILD_TYPE=Release -DUNIX=true $(dir $<)
+	cd $(dir $@) && $(CMAKE) $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUNIX=true $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
