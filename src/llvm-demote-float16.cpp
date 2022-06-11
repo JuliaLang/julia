@@ -335,7 +335,7 @@ static bool demoteFloat16(Function &F)
     if (erase.size() > 0) {
         for (auto V : erase)
             V->eraseFromParent();
-        assert(!verifyFunction(F));
+        assert(!verifyFunction(F, &errs()));
         return true;
     }
     else

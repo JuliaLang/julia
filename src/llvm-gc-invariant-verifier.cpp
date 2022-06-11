@@ -118,7 +118,7 @@ void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
     if (Ty->isPointerTy()) {
         unsigned AS = cast<PointerType>(Ty)->getAddressSpace();
         Check(AS != AddressSpace::CalleeRooted,
-              "Illegal store of callee rooted value", &LI);
+              "Illegal load of callee rooted value", &LI);
     }
 }
 
