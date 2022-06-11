@@ -2677,7 +2677,7 @@ The function should return arrays (or tuples, or other iterators) all of the sam
 These become slices of the result, each separated along `dims` (if given) or by default
 along the last dimensions.
 
-See also [`mapslices`](@ref), [`eachcol`](@ref).
+See also [`mapslices`](@ref), [`eachcol`](@ref), [`Iterators.flatmap`](@ref).
 
 # Examples
 ```jldoctest
@@ -2685,6 +2685,9 @@ julia> stack(c -> (c, c-32), "julia")
 2×5 Matrix{Char}:
  'j'  'u'  'l'  'i'  'a'
  'J'  'U'  'L'  'I'  'A'
+
+julia> Iterators.flatmap(c -> (c, '_'), "julia") |> collect |> String
+"j_u_l_i_a_"
 
 julia> stack(eachcol([1 2 3; 4 5 6]), eachrow([1 -1; 10 -10; 100 -100]); dims=1) do col, row
          vcat(col .* row, 0, col ./ row)
