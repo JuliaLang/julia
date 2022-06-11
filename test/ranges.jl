@@ -537,7 +537,7 @@ end
             @test !(x in r)
         end
     end
-    @testset "in() works across types, including non-numeric types (#21728)" begin
+    @testset "in() works across types, including non-numeric types (#21728 and #45646)" begin
         @test 1//1 in 1:3
         @test 1//1 in 1.0:3.0
         @test !(5//1 in 1:3)
@@ -558,6 +558,22 @@ end
         @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+        # We use Ducks because of their propensity to stand in a row and because we know
+        # that no additional methods (e.g. isfinite) are defined specifically for Ducks.
+        struct Duck
+            location::Int
+        end
+        Base.:+(x::Duck, y::Int) = Duck(x.location + y)
+        Base.:-(x::Duck, y::Int) = Duck(x.location - y)
+        Base.:-(x::Duck, y::Duck) = x.location - y.location
+        Base.isless(x::Duck, y::Duck) = isless(x.location, y.location)
+
+        @test Duck(3) ∈ Duck(1):2:Duck(5)
+        @test Duck(3) ∈ Duck(5):-2:Duck(2)
+        @test Duck(4) ∉ Duck(5):-2:Duck(1)
+        @test Duck(4) ∈ Duck(1):Duck(5)
+        @test Duck(0) ∉ Duck(1):Duck(5)
     end
 end
 @testset "indexing range with empty range (#4309)" begin
