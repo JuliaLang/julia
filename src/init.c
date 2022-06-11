@@ -73,7 +73,9 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
 #pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
         *stack_hi = (void*)&stacksize;
 #pragma GCC diagnostic pop
         return;
@@ -108,7 +110,9 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 #  ifndef __clang_analyzer__
     *stack_hi = (void*)&stacksize;
 #pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     *stack_lo = (void*)((char*)*stack_hi - stacksize);
 #pragma GCC diagnostic pop
 #  else
@@ -728,9 +732,11 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
-    // warning: this changes `jl_current_task`, so be careful not to call that from this function
 #pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+    // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
