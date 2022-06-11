@@ -204,6 +204,7 @@ public:
     void RegisterJITEventListener(JITEventListener *L);
 #endif
 
+    orc::SymbolStringPtr mangle(StringRef Name);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(std::unique_ptr<Module> M);
 
