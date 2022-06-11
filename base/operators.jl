@@ -1200,6 +1200,9 @@ its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
 passes a tuple as that single argument. Additionally has pretty printing.
 
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
+
 # Example usage:
 ```jldoctest
 julia> map(Base.Splat(+), zip(1:3,4:6))
