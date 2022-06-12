@@ -207,8 +207,8 @@ function Float32(x::Int128)
 end
 
 # TODO: optimize
-Float16(x::UInt128) = convert(Float16, Float32(x))
-Float16(x::Int128)  = convert(Float16, Float32(x))
+Float16(x::UInt128) = convert(Float16, Float64(x))
+Float16(x::Int128)  = convert(Float16, Float64(x))
 
 Float16(x::Float32) = fptrunc(Float16, x)
 Float16(x::Float64) = fptrunc(Float16, x)
