@@ -2126,9 +2126,45 @@ macro __DIR__()
 end
 
 """
+    Base.is_serializing_code()
+
+Returns whether julia is being run in a mode where code is being serialized
+to file. For instance during precompilation.
+
+For example, to run or precompile code only during package precompilation:
+```julia
+module FooBar
+
+foo(x::Int, y::Float64) = ...
+
+if Base.is_serializing_code()
+    foo(1, 1.0) # execute this method of foo to ensure it and any internal methods are precompiled
+
+    precompile(foo, (Int, Float64)) # precompile just this method of foo without executing it
+end
+end # module
+```
+
+Note that the first example here actually executes `foo(1, 1.0)` so can be slower, but is usually more robust
+to changes in the codebase than the latter approach of using `precompile` statements. The latter requires explicitly
+calling `precompile` on all methods, not just the entry method. i.e. `foo(1, 1.0)` will likely call other methods
+which will also need `precompile` statements. Consequently the latter can be more work to maintain, but can be
+automated via tooling such as the package `SnoopCompile.jl`.
+
+It is therefore recommended, where possible, to find minimal code to execute to get the desired precompilation coverage.
+
+See also [`precompile`](@ref).
+"""
+function is_serializing_code()
+    return ccall(:jl_generating_output, Cint, ()) == 1
+end
+
+"""
     precompile(f, args::Tuple{Vararg{Any}})
 
 Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+
+See also [`is_serializing_code`](@ref).
 """
 function precompile(@nospecialize(f), @nospecialize(args::Tuple))
     precompile(Tuple{Core.Typeof(f), args...})

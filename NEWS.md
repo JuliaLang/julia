@@ -69,6 +69,8 @@ New library functions
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)`. ([#45607])
+* New function `Base.is_serializing_code()` to replace `ccall(:jl_generating_output, Cint, ()) == 1` which is being
+  used widely for guarding precompilation code. ([#45650])
 
 Library changes
 ---------------

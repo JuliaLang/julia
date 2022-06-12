@@ -464,6 +464,7 @@ Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered
 Base.code_typed
+Base.is_serializing_code
 Base.precompile
 Base.jit_total_bytes
 ```
