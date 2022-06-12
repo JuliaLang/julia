@@ -164,17 +164,7 @@ promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
-function u128_to_f64_default(x::UInt128)
-    n = leading_zeros(x)
-    y = x << n  
-    mantissa = (y >> 75) % UInt64
-    dropped_bits = (y >> 11 | y & 0xffff_ffff) % UInt64
-    mantissa += (dropped_bits - (dropped_bits >> 63 & (1 - (mantissa & 1)))) >> 63
-    exponent = x == 0 ? 0x0 : (1149 - n) % UInt64
-    reinterpret(Float64, exponent << 52 + mantissa)
-end
-
-function u128_to_f64_x86_64(x::UInt128)
+function Float64(x::UInt128)
     A = 4.503599627370496e15 # Float64(UInt128(1) << 52)
     B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
     C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
@@ -190,12 +180,6 @@ function u128_to_f64_x86_64(x::UInt128)
     end
 end
 
-function Float64(x::UInt128)
-    # How to choose based on platform type?
-    #u128_to_f64_default(x)
-    u128_to_f64_x86_64(x)
-end
-
 function Float64(x::Int128)
     sign_bit = ((x >> 127) % UInt64) << 63
     reinterpret(Float64, reinterpret(UInt64, Float64(unsigned(abs(x)))) | sign_bit)
@@ -203,7 +187,7 @@ end
 
 function Float32(x::UInt128)
     n = leading_zeros(x)
-    y = x << n  
+    y = x << n
     mantissa = (y >> 104) % UInt32
     dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32
     mantissa += (dropped_bits - (dropped_bits >> 31 & (Int32(1) - (mantissa & Int32(1))))) >> 31
@@ -212,19 +196,14 @@ function Float32(x::UInt128)
 end
 
 function Float32(x::Int128)
-    x == 0 && return 0f0
+    n = leading_zeros(x)
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
-    x = abs(x) % UInt128
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 24
-        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
-    else
-        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
-        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
-    end
-    d = ((n+126) % UInt32) << 23
-    reinterpret(Float32, s | d + y)
+    y = x << n
+    mantissa = (y >> 104) % UInt32
+    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32
+    mantissa += (dropped_bits - (dropped_bits >> 31 & (Int32(1) - (mantissa & Int32(1))))) >> 31
+    exponent = x == 0 ? 0x0 : (253 - n) % UInt32
+    reinterpret(Float32, s | exponent << 23 + mantissa)
 end
 
 # TODO: optimize
