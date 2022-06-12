@@ -2156,7 +2156,7 @@ It is therefore recommended, where possible, to find minimal code to execute to 
 See also [`precompile`](@ref).
 """
 function is_serializing_code()
-    return ccall(:jl_generating_output, Cint, ()) == 1
+    return ccall(:jl_generating_output, Cint, ()) != 0
 end
 
 """
