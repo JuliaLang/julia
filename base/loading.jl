@@ -1074,7 +1074,7 @@ If a module or file is *not* safely precompilable, it should call `__precompile_
 order to throw an error if Julia attempts to precompile it.
 """
 @noinline function __precompile__(isprecompilable::Bool=true)
-    if !isprecompilable && ccall(:jl_generating_output, Cint, ()) != 0
+    if !isprecompilable && is_serializing_code()
         throw(PrecompilableError())
     end
     nothing
@@ -1285,7 +1285,7 @@ function _require(pkg::PkgId)
         end
 
         if JLOptions().use_compiled_modules != 0
-            if (0 == ccall(:jl_generating_output, Cint, ())) || (JLOptions().incremental != 0)
+            if !is_serializing_code() || (JLOptions().incremental != 0)
                 # spawn off a new incremental pre-compile task for recursive `require` calls
                 # or if the require search declared it was pre-compiled before (and therefore is expected to still be pre-compilable)
                 cachefile = compilecache(pkg, path)
