@@ -67,6 +67,7 @@ Command-line option changes
   code when building a system image. The resulting image will only work if `--compile=all` is
   used, or if all needed code is precompiled ([#42925]).
 * When the program file is `-` the code to be executed is read from standard in ([#43191]).
+* `isinteractive()` now returns the same value in the startup file as during execution, no matter if `-i` is used ([#42507]).
 
 Multi-threading changes
 -----------------------
