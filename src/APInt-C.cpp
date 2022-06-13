@@ -316,7 +316,7 @@ void LLVMByteSwap(unsigned numbits, integerPart *pa, integerPart *pr) {
 void LLVMFPtoInt(unsigned numbits, void *pa, unsigned onumbits, integerPart *pr, bool isSigned, bool *isExact) {
     double Val;
     if (numbits == 16)
-        Val = julia__gnu_h2f_ieee(*(uint16_t*)pa);
+        Val = __gnu_h2f_ieee(*(uint16_t*)pa);
     else if (numbits == 32)
         Val = *(float*)pa;
     else if (numbits == 64)
@@ -391,7 +391,7 @@ void LLVMSItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         val = a.roundToDouble(true);
     }
     if (onumbits == 16)
-        *(uint16_t*)pr = julia__gnu_f2h_ieee(val);
+        *(uint16_t*)pr = __gnu_f2h_ieee(val);
     else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
@@ -408,7 +408,7 @@ void LLVMUItoFP(unsigned numbits, integerPart *pa, unsigned onumbits, integerPar
         val = a.roundToDouble(false);
     }
     if (onumbits == 16)
-        *(uint16_t*)pr = julia__gnu_f2h_ieee(val);
+        *(uint16_t*)pr = __gnu_f2h_ieee(val);
     else if (onumbits == 32)
         *(float*)pr = val;
     else if (onumbits == 64)
