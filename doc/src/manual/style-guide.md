@@ -372,6 +372,21 @@ conversions between color spaces. Another example might be a package that acts a
 wrapper for some C code, which another package might then pirate to implement a
 higher-level, Julia-friendly API.
 
+## Be careful with extending functions from other modules
+
+As an addition to the note on type piracy, extending methods in Base or other packages
+should be limited as much as possible. The reason is that adding a function to a global
+function is a global operation. Specifically, it modifies the global method method table.
+It can also increase compilation time for your package because methods that were already
+compiled may be invalidation meaning that they have to be compiled again to incorporate the
+newly added method.
+
+Cases where extending global functions is suitable is where the newly defined method is
+called from a location in another package or Base. For example, a well-known example is
+implementing custom pretty printing by adding a method to `Base.show` for some user-defined
+type `T`. In this case, `Base.show` is called internally by Julia and will dispatch on type
+`T`.
+
 ## Be careful with type equality
 
 You generally want to use [`isa`](@ref) and [`<:`](@ref) for testing types,
