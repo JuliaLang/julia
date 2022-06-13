@@ -376,10 +376,10 @@ higher-level, Julia-friendly API.
 
 As an addition to the note on type piracy, extending methods in Base or other packages
 should be limited as much as possible. The reason is that adding a function to a global
-function is a global operation. Specifically, it modifies the global method method table.
-It can also increase compilation time for your package because methods that were already
-compiled may be invalidation meaning that they have to be compiled again to incorporate the
-newly added method.
+function is a global operation. Specifically, it modifies the global method table. It can
+also increase compilation time for your package because methods that were already compiled
+may be invalidation meaning that they have to be compiled again to incorporate the newly
+added method.
 
 Cases where extending global functions is suitable is where the newly defined method is
 called from a location in another package or Base. For example, a well-known example is
