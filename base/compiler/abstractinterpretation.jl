@@ -31,21 +31,29 @@ end
 
 const empty_bitset = BitSet()
 
+function should_infer_this_call(sv::InferenceState)
+    if sv.params.unoptimize_throw_blocks
+        # Disable inference of calls in throw blocks, since we're unlikely to
+        # need their types. There is one exception however: If up until now, the
+        # function has not seen any side effects, we would like to make sure there
+        # aren't any in the throw block either to enable other optimizations.
+        if is_stmt_throw_block(get_curr_ssaflag(sv))
+            should_infer_for_effects(sv) || return false
+        end
+    end
+    return true
+end
+
 function should_infer_for_effects(sv::InferenceState)
-    sv.ipo_effects.terminates === ALWAYS_TRUE &&
-    sv.ipo_effects.effect_free === ALWAYS_TRUE
+    effects = Effects(sv)
+    return effects.terminates === ALWAYS_TRUE &&
+           effects.effect_free === ALWAYS_TRUE
 end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
                                   sv::InferenceState, max_methods::Int)
-    if !should_infer_for_effects(sv) &&
-            sv.params.unoptimize_throw_blocks &&
-            is_stmt_throw_block(get_curr_ssaflag(sv))
-        # Disable inference of calls in throw blocks, since we're unlikely to
-        # need their types. There is one exception however: If up until now, the
-        # function has not seen any side effects, we would like to make sure there
-        # aren't any in the throw block either to enable other optimizations.
+    if !should_infer_this_call(sv)
         add_remark!(interp, sv, "Skipped call in throw block")
         nonoverlayed = false
         if isoverlayed(method_table(interp)) && is_nonoverlayed(sv.ipo_effects)
@@ -53,7 +61,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
             matches = find_matching_methods(arginfo.argtypes, atype, method_table(interp),
-            InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+                InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
             if !isa(matches, FailedMethodMatch)
                 nonoverlayed = matches.nonoverlayed
             end
@@ -741,8 +749,8 @@ end
 
 function concrete_eval_eligible(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
-    # disable concrete-evaluation since this function call is tainted by some overlayed
-    # method and currently there is no direct way to execute overlayed methods
+    # disable concrete-evaluation if this function call is tainted by some overlayed
+    # method since currently there is no direct way to execute overlayed methods
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.edge_effects) && return false
     return f !== nothing &&
            result.edge !== nothing &&
