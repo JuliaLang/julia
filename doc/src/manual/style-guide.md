@@ -372,7 +372,7 @@ conversions between color spaces. Another example might be a package that acts a
 wrapper for some C code, which another package might then pirate to implement a
 higher-level, Julia-friendly API.
 
-## Be careful with extending functions from other modules
+## Be careful with extending functions from other packages
 
 As an addition to the note on type piracy, extending methods in Base or other packages
 should be limited as much as possible. The reason is that adding a function to a global
