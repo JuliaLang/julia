@@ -375,17 +375,10 @@ higher-level, Julia-friendly API.
 ## Be careful with extending functions from other packages
 
 As an addition to the note on type piracy, extending methods in Base or other packages
-should be limited as much as possible. The reason is that adding a function to a global
-function is a global operation. Specifically, it modifies the global method table. It can
-also increase compilation time for your package because methods that were already compiled
-may be invalidated meaning that they have to be compiled again to incorporate the newly
-added method.
-
-Cases where extending global functions is suitable is where the newly defined method is
-called from a location in another package or Base. For example, a well-known example is
-implementing custom pretty printing by adding a method to `Base.show` for some user-defined
-type `T`. In this case, `Base.show` is called internally by Julia and will dispatch on type
-`T`.
+should be limited in cases where the newly added method is internal. In such cases,
+consider to create a local function. This has the benefit that it does not alter the global
+method table and it also avoids the risk of causing method invalidations in earlier compiled
+methods.
 
 ## Be careful with type equality
 
