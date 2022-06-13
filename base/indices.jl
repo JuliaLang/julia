@@ -323,7 +323,6 @@ not all index types are guaranteed to propagate to `Base.to_index`.
 
 # Examples
 ```jldoctest
-
 julia> A = zeros(1,2,3,4);
 
 julia> to_indices(A, (1,1,2,2))
