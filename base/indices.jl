@@ -306,7 +306,7 @@ to_index(i) = throw(ArgumentError("invalid index: $(limitrepr(i)) of type $(type
 
 Convert the tuple `I` to a tuple of indices for use in indexing into array `A`.
 
-The returned tuple must only contain either `Int`s, `CartesianIndex`s or `AbstractArray`s of
+The returned tuple must only contain either `Int`s or `AbstractArray`s of
 scalar indices that are supported by array `A`. It will error upon encountering
 a novel index type that it does not know how to process.
 
