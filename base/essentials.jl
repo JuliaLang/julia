@@ -513,7 +513,7 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the size, in bytes, of object `obj` if it is not a `DataType`.
 
-See also [`summarysize`](@ref).
+See also [`Base.summarysize`](@ref).
 
 # Examples
 ```jldoctest
