@@ -3,6 +3,7 @@ agents:
   # Only run on `sandbox.jl` machines (not `docker`-isolated ones) since we need nestable sandboxing
   sandbox.jl: "true"
   os: "linux"
+  arch: "x86_64"
 steps:
   - label: "embedding"
     key: "embedding"
