@@ -186,25 +186,33 @@ function Float64(x::Int128)
 end
 
 function Float32(x::UInt128)
-    n = leading_zeros(x)
-    y = x << n
-    mantissa = (y >> 104) % UInt32 # Keep 24 bit mantissa
-    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32 # Merge dropped bits to figure out rounding
-    mantissa += (dropped_bits - (dropped_bits >> 31 & (UInt32(1) - (mantissa & UInt32(1))))) >> 31 # Round to even
-    exponent = x == 0 ? UInt32(0) : (253 - n) % UInt32 # Branch is optimized away
-    reinterpret(Float32, exponent << 23 + mantissa)
+    x == 0 && return 0f0
+    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    if n <= 24
+        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+    else
+        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
+        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+    end
+    d = ((n+126) % UInt32) << 23
+    reinterpret(Float32, d + y)
 end
 
 function Float32(x::Int128)
-    sign_bit = ((x >>> 96) % UInt32) & 0x8000_0000 
-    ux = unsigned(abs(x))
-    n = leading_zeros(ux)
-    y = ux << n
-    mantissa = (y >> 104) % UInt32 # Keep 24 bit mantissa
-    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32 # Merge dropped bits to figure out rounding
-    mantissa += (dropped_bits - (dropped_bits >> 31 & (UInt32(1) - (mantissa & UInt32(1))))) >> 31 # Round to even
-    exponent = ux == 0 ? UInt32(0) : (253 - n) % UInt32 # Branch is optimized away
-    reinterpret(Float32, sign_bit | exponent << 23 + mantissa)
+    x == 0 && return 0f0
+    s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
+    x = abs(x) % UInt128
+    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    if n <= 24
+        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+    else
+        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
+        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+    end
+    d = ((n+126) % UInt32) << 23
+    reinterpret(Float32, s | d + y)
 end
 
 # TODO: optimize
