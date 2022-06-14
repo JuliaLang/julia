@@ -93,6 +93,7 @@ enum class CPU : uint32_t {
     amd_barcelona,
     amd_znver1,
     amd_znver2,
+    amd_znver3,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -226,6 +227,7 @@ constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rd
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
                                                     rdseed, sha, sse4a, xsavec, xsaves);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
+constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 
 }
 
@@ -286,6 +288,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
+    {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -553,6 +556,10 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
         if (model >= 0x30)
             return CPU::amd_znver2;
         return CPU::amd_znver1;
+    case 0x19:  // AMD Family 19h
+        if (model <= 0x0f || model == 0x21)
+            return CPU::amd_znver3;  // 00h-0Fh, 21h: Zen3
+        return CPU::amd_znver3; // fallback
     }
 }
 

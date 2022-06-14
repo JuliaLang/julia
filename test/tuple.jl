@@ -64,6 +64,9 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #44179
+    @test_throws TypeError NTuple{3}([1, nothing, nothing])
+    @test_throws TypeError NTuple{3}([nothing, 1, nothing])
     # issue #31824
     @test convert(NTuple, (1, 1.0)) === (1, 1.0)
     let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)

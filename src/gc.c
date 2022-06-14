@@ -3182,6 +3182,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         }
     }
 
+
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
@@ -3278,7 +3279,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
       if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
 
-    // We need this for 32 bit but will be useful to set limits on 64 bit
     if (gc_num.interval + live_bytes > max_total_memory) {
         if (live_bytes < max_total_memory) {
             gc_num.interval = max_total_memory - live_bytes;
@@ -3471,6 +3471,14 @@ void jl_gc_init(void)
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif
+
+    // We allocate with abandon until we get close to the free memory on the machine.
+    uint64_t free_mem = uv_get_free_memory();
+    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
+
+    if (high_water_mark < max_total_memory)
+       max_total_memory = high_water_mark;
+
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
     t_start = jl_hrtime();

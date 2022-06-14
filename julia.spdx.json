@@ -41,9 +41,9 @@
         {
             "name": "Statistics.jl",
             "SPDXID": "SPDXRef-JuliaStatistics",
-            "downloadLocation": "git+https://github.com/JuliaLang/Statistics.jl.git",
+            "downloadLocation": "git+https://github.com/JuliaStats/Statistics.jl.git",
             "filesAnalyzed": false,
-            "homepage": "https://julialang.org",
+            "homepage": "https://juliastats.org",
             "sourceInfo": "The git hash of the version in use can be found in the file stdlib/Statistics.version",
             "licenseConcluded": "MIT",
             "licenseDeclared": "MIT",

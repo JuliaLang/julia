@@ -6,6 +6,7 @@ import .Main.OffsetArrays: IdOffsetRange
 using Random
 using LinearAlgebra
 using Base: IdentityUnitRange
+using Test
 
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
@@ -242,7 +243,7 @@ targets2 = ["(fill(1.0), fill(1.0))",
 end
 P = OffsetArray(rand(8,8), (1,1))
 PV = view(P, 2:3, :)
-@test endswith(summary(PV), "with indices Base.OneTo(2)×OffsetArrays.IdOffsetRange(2:9)")
+@test endswith(summary(PV), "with indices Base.OneTo(2)×$(repr(axes(P,2)))")
 
 # Similar
 B = similar(A, Float32)

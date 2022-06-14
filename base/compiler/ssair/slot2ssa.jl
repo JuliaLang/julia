@@ -562,7 +562,7 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any})
+function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int)
     new_typ = Union{}
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)
@@ -579,7 +579,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         end
         @assert !isa(typ, MaybeUndef)
         while isa(typ, DelayedTyp)
-            typ = types(ir)[typ.phi::NewSSAValue]
+            typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
         end
         new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
@@ -856,7 +856,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 orig_typ = typ = typ_for_val(phic_values[i], ci, ir.sptypes, -1, slottypes)
                 @assert !isa(typ, MaybeUndef)
                 while isa(typ, DelayedTyp)
-                    typ = types(ir)[typ.phi::NewSSAValue]
+                    typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
                 end
                 new_typ = tmerge(new_typ, typ)
             end
@@ -871,7 +871,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes)
+            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts)
             if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
                 node[:type] = new_typ
                 changed = true
@@ -881,14 +881,14 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     for i in 1:length(result_types)
         rt_i = result_types[i]
         if rt_i isa DelayedTyp
-            result_types[i] = types(ir)[rt_i.phi::NewSSAValue]
+            result_types[i] = types(ir)[new_to_regular(rt_i.phi::NewSSAValue, nstmts)]
         end
     end
     for i = 1:length(new_nodes)
         local node = new_nodes.stmts[i]
         local typ = node[:type]
         if isa(typ, DelayedTyp)
-            node[:type] = types(ir)[typ.phi::NewSSAValue]
+            node[:type] = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
         end
     end
     # Renumber SSA values

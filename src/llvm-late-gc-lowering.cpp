@@ -2285,7 +2285,6 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ++it;
                 continue;
             }
-            CallingConv::ID CC = CI->getCallingConv();
             Value *callee = CI->getCalledOperand();
             if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
@@ -2389,20 +2388,22 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ChangesMade = true;
                 ++it;
                 continue;
-            } else if (CC == JLCALL_F_CC ||
-                       CC == JLCALL_F2_CC) {
+            } else if ((call_func && callee == call_func) ||
+                       (call2_func && callee == call2_func)) {
                 assert(T_prjlvalue);
                 size_t nargs = CI->arg_size();
-                size_t nframeargs = nargs;
-                if (CC == JLCALL_F_CC)
+                size_t nframeargs = nargs-1;
+                if (callee == call_func)
                     nframeargs -= 1;
-                else if (CC == JLCALL_F2_CC)
+                else if (callee == call2_func)
                     nframeargs -= 2;
                 SmallVector<Value*, 4> ReplacementArgs;
                 auto arg_it = CI->arg_begin();
                 assert(arg_it != CI->arg_end());
+                Value *new_callee = *(arg_it++);
+                assert(arg_it != CI->arg_end());
                 ReplacementArgs.push_back(*(arg_it++));
-                if (CC != JLCALL_F_CC) {
+                if (callee == call2_func) {
                     assert(arg_it != CI->arg_end());
                     ReplacementArgs.push_back(*(arg_it++));
                 }
@@ -2410,7 +2411,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 int slot = 0;
                 IRBuilder<> Builder (CI);
                 for (; arg_it != CI->arg_end(); ++arg_it) {
-                    Builder.CreateAlignedStore(*arg_it,
+                    // Julia emits IR with proper pointer types here, but because
+                    // the julia.call signature is varargs, the optimizer is allowed
+                    // to rewrite pointee types. It'll go away with opaque pointer
+                    // types anyway.
+                    Builder.CreateAlignedStore(Builder.CreateBitCast(*arg_it, T_prjlvalue),
                             Builder.CreateInBoundsGEP(T_prjlvalue, Frame, ConstantInt::get(T_int32, slot++)),
                             Align(sizeof(void*)));
                 }
@@ -2418,24 +2423,25 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
                     (llvm::Value*)Frame);
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
-                if (CC == JLCALL_F2_CC) {
+                if (callee == call2_func) {
                     // move trailing arg to the end now
                     Value *front = ReplacementArgs.front();
                     ReplacementArgs.erase(ReplacementArgs.begin());
                     ReplacementArgs.push_back(front);
                 }
                 FunctionType *FTy;
-                if  (CC == JLCALL_F_CC) // jl_fptr_args
+                if  (callee == call_func) // jl_fptr_args
                     FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32}, false);
-                else // CC == JLCALL_F2_CC // jl_invoke
+                else // callee == call2_func // jl_invoke
                     FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32, T_prjlvalue}, false);
-                Value *newFptr = Builder.CreateBitCast(callee, FTy->getPointerTo());
+                Value *newFptr = Builder.CreateBitCast(new_callee, FTy->getPointerTo());
                 CallInst *NewCall = CallInst::Create(FTy, newFptr, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto old_attrs = CI->getAttributes();
                 NewCall->setAttributes(AttributeList::get(CI->getContext(),
                                                           getFnAttrs(old_attrs),
                                                           getRetAttrs(old_attrs), {}));
+                NewCall->takeName(CI);
                 NewCall->copyMetadata(*CI);
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
