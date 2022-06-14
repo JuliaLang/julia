@@ -182,33 +182,34 @@ end
 
 function Float64(x::Int128)
     sign_bit = ((x >> 127) % UInt64) << 63
-    reinterpret(Float64, reinterpret(UInt64, Float64(unsigned(abs(x)))) | sign_bit)
+    reinterpret(Float64, sign_bit | reinterpret(UInt64, Float64(unsigned(abs(x)))))
 end
 
 function Float32(x::UInt128)
     n = leading_zeros(x)
     y = x << n
-    mantissa = (y >> 104) % UInt32
-    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32
-    mantissa += (dropped_bits - (dropped_bits >> 31 & (Int32(1) - (mantissa & Int32(1))))) >> 31
-    exponent = x == 0 ? 0x0 : (253 - n) % UInt32
+    mantissa = (y >> 104) % UInt32 # Keep 24 bit mantissa
+    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32 # Merge dropped bits to figure out rounding
+    mantissa += (dropped_bits - (dropped_bits >> 31 & (UInt32(1) - (mantissa & UInt32(1))))) >> 31 # Round to even
+    exponent = x == 0 ? UInt32(0) : (253 - n) % UInt32 # Branch is optimized away
     reinterpret(Float32, exponent << 23 + mantissa)
 end
 
 function Float32(x::Int128)
-    n = leading_zeros(x)
-    s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
-    y = x << n
-    mantissa = (y >> 104) % UInt32
-    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32
-    mantissa += (dropped_bits - (dropped_bits >> 31 & (Int32(1) - (mantissa & Int32(1))))) >> 31
-    exponent = x == 0 ? 0x0 : (253 - n) % UInt32
-    reinterpret(Float32, s | exponent << 23 + mantissa)
+    sign_bit = ((x >>> 96) % UInt32) & 0x8000_0000 
+    ux = unsigned(abs(x))
+    n = leading_zeros(ux)
+    y = ux << n
+    mantissa = (y >> 104) % UInt32 # Keep 24 bit mantissa
+    dropped_bits = (y >> 72 | (y << 32 >> 32 != 0)) % UInt32 # Merge dropped bits to figure out rounding
+    mantissa += (dropped_bits - (dropped_bits >> 31 & (UInt32(1) - (mantissa & UInt32(1))))) >> 31 # Round to even
+    exponent = ux == 0 ? UInt32(0) : (253 - n) % UInt32 # Branch is optimized away
+    reinterpret(Float32, sign_bit | exponent << 23 + mantissa)
 end
 
 # TODO: optimize
 Float16(x::UInt128) = convert(Float16, Float64(x))
-Float16(x::Int128)  = convert(Float16, Float64(x))
+Float16(x::Int128)  = convert(Float16, Float32(x))
 
 Float16(x::Float32) = fptrunc(Float16, x)
 Float16(x::Float64) = fptrunc(Float16, x)
