@@ -757,11 +757,13 @@ function enq_work(t::Task)
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
         push!(workqueue_for(tid), t)
+        # wake this thread, in case it is asleep
+        ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid-1) % Int16)
     else
         Partr.multiq_insert(t, t.priority)
-        tid = 0
+        # wake some threads (not all, to avoid the thundering herd problem)
+        ccall(:jl_wakeup_some_threads, Cvoid, ())
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
 end
 
