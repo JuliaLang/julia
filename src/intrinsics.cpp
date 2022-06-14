@@ -371,8 +371,8 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     return unboxed;
 }
 
-// emit code to unpack a raw value from a box into registers or a stack slot
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, MDNode *tbaa_dest, bool isVolatile)
+// emit code to unpack a raw value from a box into registers
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt)
 {
     assert(to != getVoidTy(ctx.builder.getContext()));
     // TODO: fully validate that x.typ == jt?
@@ -390,13 +390,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
-        if (!dest)
-            return emit_unboxed_coercion(ctx, to, unboxed);
-        Type *dest_ty = unboxed->getType()->getPointerTo();
-        if (dest->getType() != dest_ty)
-            dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, Align(julia_alignment(jt))));
-        return NULL;
+        return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
     // bools stored as int8, so an extra Trunc is needed to get an int1
@@ -413,42 +407,64 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             unboxed = ctx.builder.CreateTrunc(unbox_load, getInt1Ty(ctx.builder.getContext()));
         else
             unboxed = unbox_load; // `to` must be getInt8Ty(ctx.builder.getContext())
-        if (!dest)
-            return unboxed;
-        Type *dest_ty = unboxed->getType()->getPointerTo();
-        if (dest->getType() != dest_ty)
-            dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
-        return NULL;
+        return unboxed;
     }
 
     unsigned alignment = julia_alignment(jt);
     Type *ptype = to->getPointerTo();
-    if (dest) {
-        emit_memcpy(ctx, dest, tbaa_dest, p, x.tbaa, jl_datatype_size(jt), alignment, false);
-        return NULL;
-    }
-    else {
-        if (p->getType() != ptype && isa<AllocaInst>(p)) {
-            // LLVM's mem2reg can't handle coercion if the load/store type does
-            // not match the type of the alloca. As such, it is better to
-            // perform the load using the alloca's type and then perform the
-            // appropriate coercion manually.
-            AllocaInst *AI = cast<AllocaInst>(p);
-            Type *AllocType = AI->getAllocatedType();
-            const DataLayout &DL = jl_Module->getDataLayout();
-            if (!AI->isArrayAllocation() &&
-                    (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
-                    (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
-                    DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-                Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
-                return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
-            }
+    if (p->getType() != ptype && isa<AllocaInst>(p)) {
+        // LLVM's mem2reg can't handle coercion if the load/store type does
+        // not match the type of the alloca. As such, it is better to
+        // perform the load using the alloca's type and then perform the
+        // appropriate coercion manually.
+        AllocaInst *AI = cast<AllocaInst>(p);
+        Type *AllocType = AI->getAllocatedType();
+        const DataLayout &DL = jl_Module->getDataLayout();
+        if (!AI->isArrayAllocation() &&
+                (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
+                (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
+                DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
+            Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
+            return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
         }
-        p = maybe_bitcast(ctx, p, ptype);
-        Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
-        return tbaa_decorate(x.tbaa, load);
     }
+    p = maybe_bitcast(ctx, p, ptype);
+    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
+    return tbaa_decorate(x.tbaa, load);
+}
+
+// emit code to store a raw value into a destination
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile)
+{
+    if (x.isghost) {
+        // this can happen when a branch yielding a different type ends
+        // up being dead code, and type inference knows that the other
+        // branch's type is the only one that matters.
+        return;
+    }
+
+    Value *unboxed = nullptr;
+    if (!x.ispointer()) { // already unboxed, but sometimes need conversion
+        unboxed = x.V;
+        assert(unboxed);
+    }
+
+    // bools stored as int8, but can be narrowed to int1 often
+    if (x.typ == (jl_value_t*)jl_bool_type)
+        unboxed = emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), x, (jl_value_t*)jl_bool_type);
+
+    if (unboxed) {
+        Type *dest_ty = unboxed->getType()->getPointerTo();
+        if (dest->getType() != dest_ty)
+            dest = emit_bitcast(ctx, dest, dest_ty);
+        StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, Align(alignment));
+        store->setVolatile(isVolatile);
+        tbaa_decorate(tbaa_dest, store);
+        return;
+    }
+
+    Value *src = data_pointer(ctx, x);
+    emit_memcpy(ctx, dest, tbaa_dest, src, x.tbaa, jl_datatype_size(x.typ), alignment, isVolatile);
 }
 
 static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
