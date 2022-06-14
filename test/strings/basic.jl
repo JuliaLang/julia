@@ -1129,6 +1129,12 @@ end
     @test codeunit(l) == UInt8
     @test codeunit(l,2) == 0x2b
     @test isvalid(l, 1)
+    @test Base.infer_effects() do
+        lazy"1+2=3"
+    end |> Core.Compiler.is_foldable
+    @test Base.infer_effects((Any,)) do a
+        lazy"a is $a"
+    end |> Core.Compiler.is_foldable
     @test Base.infer_effects((Any,)) do a
         throw(lazy"a is $a")
     end |> Core.Compiler.is_foldable
