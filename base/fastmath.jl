@@ -215,7 +215,7 @@ ComplexTypes = Union{ComplexF32, ComplexF64}
 
     mul_fast(x::T, y::T) where {T<:ComplexTypes} =
         T(complex(muladd(-imag(x), imag(y), real(x)*real(y)),
-                  muladd( real(x), imag(y), imag(x)*real(y)))
+                  muladd( real(x), imag(y), imag(x)*real(y))))
     mul_fast(x::Complex{T}, b::T) where {T<:FloatTypes} =
         Complex{T}(real(x)*b, imag(x)*b)
     mul_fast(a::T, y::Complex{T}) where {T<:FloatTypes} =
