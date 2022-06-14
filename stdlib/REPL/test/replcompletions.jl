@@ -514,6 +514,17 @@ let s = """CompletionFoo.test4("\\"","""
     @test length(c) == 2
 end
 
+# Test max method suggestions
+let s = "convert("
+    c, _, res = test_complete_noshift(s)
+    @test !res
+    @test only(c) == "convert( too many methods, use SHIFT-TAB to show )"
+    c2, _, res2 = test_complete(s)
+    @test !res2
+    @test any(==(string(first(methods(convert)))), c2)
+    @test length(c2) > REPL.REPLCompletions.MAX_METHOD_COMPLETIONS
+end
+
 ########## Test where the current inference logic fails ########
 # Fails due to inference fails to determine a concrete type for arg 1
 # But it returns AbstractArray{T,N} and hence is able to remove test5(x::Float64) from the suggestions
