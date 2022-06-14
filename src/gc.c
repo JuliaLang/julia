@@ -3762,7 +3762,6 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #endif
     errno = last_errno;
     jl_may_leak(base);
-    assert(align > 0);
     unsigned diff = (offset - base) % align;
     return (void*)(base + diff);
 }
