@@ -78,6 +78,9 @@ LLVM_CMAKE += -DLLVM_EXTERNAL_RV_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/rv
 LLVM_CMAKE += -DLLVM_CXX_STD=c++14
 endif
 
+# Otherwise LLVM will translate \\ to / on mingw
+LLVM_CMAKE += -DLLVM_WINDOWS_PREFER_FORWARD_SLASH=False
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
@@ -285,16 +288,26 @@ else # USE_BINARYBUILDER_LLVM
 
 # We provide a way to subversively swap out which LLVM JLL we pull artifacts from
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
-LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
-LLVM_TOOLS_JLL_DOWNLOAD_NAME := LLVM_assert
-LLVM_TOOLS_JLL_VER := $(LLVM_TOOLS_ASSERT_JLL_VER)
+# LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
+# LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
+# LLVM_TOOLS_JLL_DOWNLOAD_NAME := LLVM_assert
+# LLVM_TOOLS_JLL_VER := $(LLVM_TOOLS_ASSERT_JLL_VER)
+LLVM_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+CLANG_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+LLD_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+LLVM_TOOLS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+else
+LLVM_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+CLANG_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+LLD_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+LLVM_TOOLS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
 endif
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
+$(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
-install-clang install-llvm-tools: install-llvm
+install-lld install-clang install-llvm-tools: install-llvm
 
 endif # USE_BINARYBUILDER_LLVM

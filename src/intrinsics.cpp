@@ -596,7 +596,7 @@ static jl_cgval_t generic_cast(
         // rounding first instead of carrying around incorrect low bits.
         Value *jlfloattemp_var = emit_static_alloca(ctx, from->getType());
         ctx.builder.CreateStore(from, jlfloattemp_var);
-        from  = ctx.builder.CreateLoad(jlfloattemp_var, /*force this to load from the stack*/true);
+        from  = ctx.builder.CreateLoad(from->getType(), jlfloattemp_var, /*force this to load from the stack*/true);
 #endif
     }
     Value *ans = ctx.builder.CreateCast(Op, from, to);
