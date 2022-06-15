@@ -761,6 +761,12 @@ function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     end
     mn, mx
 end
+function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+    @inbounds for i in (lo+1):hi
+        lt(o, v[i], v[i-1]) && return false
+    end
+    true
+end
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering,
             t::Union{AbstractVector{T}, Nothing}=nothing) where T
     # if the sorting task is not UIntMappable, then we can't radix sort or sort_int_range!
@@ -779,11 +785,11 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
     # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
     # arrays it is essentially free (<1%). Insertion sort runs in a fast O(n) on presorted
     # input and this guarantees presorted input will always be efficiently handled
-    issorted(view(v, lo:hi), o) && return v
+    _issorted(v, lo, hi, o) && return v
 
     # For large arrays, a reverse-sorted check is essentially free (overhead < 1%)
-    if lenm1 >= 500 && issorted(view(v, lo:hi), ReverseOrdering(o))
-        reverse!(view(v, lo:hi))
+    if lenm1 >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
+        reverse!(v, lo, hi)
         return v
     end
 
