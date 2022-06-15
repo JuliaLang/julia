@@ -367,9 +367,7 @@ module NotPkgModule; end
         @test pkgversion(Foo) == v"1.2.3"
         @test pkgversion(Foo.SubFoo1) == v"1.2.3"
         @test pkgversion(Foo.SubFoo2) == v"1.2.3"
-        @test @eval(Foo, pkgversion()) == v"1.2.3"
         @test pkgversion(NotPkgModule) === nothing
-        @test pkgversion() === nothing # current module isn't from a package
     end
 
 end

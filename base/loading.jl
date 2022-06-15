@@ -448,12 +448,11 @@ pkgdir() = pkgdir(@__MODULE__)
 pkgdir(paths::String...) = pkgdir(@__MODULE__, paths...)
 
 """
-    pkgversion()
     pkgversion(m::Module)
 
-Return the version of the package that imported the current module, or
-a given module `m`. Returns `nothing` if the module was not imported from a package,
-or imported from a package without a version field set.
+Return the version of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package, or imported
+from a package without a version field set.
 
 The version is read from the package's Project.toml during package
 load.
@@ -461,7 +460,7 @@ load.
 !!! compat "Julia 1.9"
     This function was introduced in Julia 1.9.
 """
-function pkgversion(m::Module = @__MODULE__)
+function pkgversion(m::Module)
     rootmodule = moduleroot(m)
     pkg = PkgId(rootmodule)
     pkgorigin = get(pkgorigins, pkg, nothing)
