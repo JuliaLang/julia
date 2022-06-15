@@ -169,20 +169,33 @@ function Float64(x::UInt128)
     B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
     C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
     D = 3.402823669209385e38 # Float64(typemax(UInt128))
-    if x < UInt128(1) << 104 
-        l = reinterpret(Float64, reinterpret(UInt64, A) | ((x << 12) % UInt64) >> 12) - A;
-        h = reinterpret(Float64, reinterpret(UInt64, B) | ((x >> 52) % UInt64)) - B;
+    if x < UInt128(1) << 104 # Can fit all info in two 52 bit mantissas
+        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A; 
+        h = reinterpret(Float64, reinterpret(UInt64, B) | ((x >> 52) % UInt64)) - B
         l + h
-    else 
-        l = reinterpret(Float64, reinterpret(UInt64, C) | ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF) - C;
-        h = reinterpret(Float64, reinterpret(UInt64, D) | ((x >> 76) % UInt64)) - D;
+    else # Squish lowest bits to fit all info into two 52 bit mantissas, possible since lowest bits only affect rounding
+        l = reinterpret(Float64, reinterpret(UInt64, C) | ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xffffff) - C
+        h = reinterpret(Float64, reinterpret(UInt64, D) | ((x >> 76) % UInt64)) - D
         l + h
     end
 end
 
 function Float64(x::Int128)
     sign_bit = ((x >> 127) % UInt64) << 63
-    reinterpret(Float64, sign_bit | reinterpret(UInt64, Float64(unsigned(abs(x)))))
+    ux = unsigned(abs(x))
+    A = 4.503599627370496e15 # Float64(UInt128(1) << 52)
+    B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
+    C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
+    D = 3.402823669209385e38 # Float64(typemax(UInt128))
+    if ux < UInt128(1) << 104 
+        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A; 
+        h = reinterpret(Float64, reinterpret(UInt64, B) | ((ux >> 52) % UInt64)) - B;
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, l + h))
+    else 
+        l = reinterpret(Float64, reinterpret(UInt64, C) | ((ux >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF) - C;
+        h = reinterpret(Float64, reinterpret(UInt64, D) | ((ux >> 76) % UInt64)) - D;
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, l + h))
+    end
 end
 
 function Float32(x::UInt128)
@@ -217,7 +230,7 @@ end
 
 # TODO: optimize
 Float16(x::UInt128) = convert(Float16, Float64(x))
-Float16(x::Int128)  = convert(Float16, Float32(x))
+Float16(x::Int128)  = convert(Float16, Float64(x))
 
 Float16(x::Float32) = fptrunc(Float16, x)
 Float16(x::Float64) = fptrunc(Float16, x)
