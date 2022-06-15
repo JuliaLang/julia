@@ -6,12 +6,14 @@ BLASTRAMPOLINE_GIT_URL := https://github.com/JuliaLinearAlgebra/libblastrampolin
 BLASTRAMPOLINE_TAR_URL = https://api.github.com/repos/JuliaLinearAlgebra/libblastrampoline/tarball/$1
 $(eval $(call git-external,blastrampoline,BLASTRAMPOLINE,,,$(BUILDDIR)))
 
+BLASTRAMPOLINE_BUILD_OPTS := $(MAKE_COMMON) CC="$(CC)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	echo 1 > $@
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
-	cd $(dir $@)/src && $(MAKE) $(MAKE_COMMON)
+	cd $(dir $@)/src && $(MAKE) $(BLASTRAMPOLINE_BUILD_OPTS)
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
