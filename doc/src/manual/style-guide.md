@@ -375,11 +375,11 @@ higher-level, Julia-friendly API.
 ## Be careful with extending functions from other packages
 
 As an addition to the note on type piracy, extending methods in Base or other packages
-should be limited in cases where the newly added method is internal. In such cases,
-consider to create a local function. This has the benefit that avoids the risk of causing
-method invalidations in earlier compiled methods, makes it easier to readers and static
-analysis tools to match method definitions to method calls and avoids causing runtime
-dispatches in other places.
+should be limited in cases where the newly added method is used only internally. In such
+cases, consider to create a local function when that is easy to do. This has the benefit
+that avoids the risk of causing method invalidations in earlier compiled methods, makes it
+easier to readers and static analysis tools to match method definitions to method calls and
+avoids causing runtime dispatches in other places.
 
 ## Be careful with type equality
 
