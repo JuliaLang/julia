@@ -170,11 +170,11 @@ function Float64(x::UInt128)
     C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
     D = 3.402823669209385e38 # Float64(typemax(UInt128))
     if x < UInt128(1) << 104 # Can fit all info in two 52 bit mantissas
-        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A; 
+        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A
         h = reinterpret(Float64, reinterpret(UInt64, B) | ((x >> 52) % UInt64)) - B
         l + h
     else # Squish lowest bits to fit all info into two 52 bit mantissas, possible since lowest bits only affect rounding
-        l = reinterpret(Float64, reinterpret(UInt64, C) | ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xffffff) - C
+        l = reinterpret(Float64, reinterpret(UInt64, C) | ((x >> 24) % UInt64) & significand_mask(Float64) | (x % UInt64) & 0xffffff) - C
         h = reinterpret(Float64, reinterpret(UInt64, D) | ((x >> 76) % UInt64)) - D
         l + h
     end
@@ -187,13 +187,13 @@ function Float64(x::Int128)
     B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
     C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
     D = 3.402823669209385e38 # Float64(typemax(UInt128))
-    if ux < UInt128(1) << 104 
-        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A; 
-        h = reinterpret(Float64, reinterpret(UInt64, B) | ((ux >> 52) % UInt64)) - B;
+    if ux < UInt128(1) << 104
+        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A
+        h = reinterpret(Float64, reinterpret(UInt64, B) | ((ux >> 52) % UInt64)) - B
         reinterpret(Float64, sign_bit | reinterpret(UInt64, l + h))
-    else 
-        l = reinterpret(Float64, reinterpret(UInt64, C) | ((ux >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF) - C;
-        h = reinterpret(Float64, reinterpret(UInt64, D) | ((ux >> 76) % UInt64)) - D;
+    else
+        l = reinterpret(Float64, reinterpret(UInt64, C) | ((ux >> 24) % UInt64) & significand_mask(Float64) | (x % UInt64) & 0xffffff) - C
+        h = reinterpret(Float64, reinterpret(UInt64, D) | ((ux >> 76) % UInt64)) - D
         reinterpret(Float64, sign_bit | reinterpret(UInt64, l + h))
     end
 end
