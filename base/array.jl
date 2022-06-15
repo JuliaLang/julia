@@ -1753,7 +1753,7 @@ function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
 end
 
 """
-    reverse(v [, start=1 [, stop=length(v) ]] )
+    reverse(v [, start=firstindex(v) [, stop=lastindex(v) ]] )
 
 Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
 for reverse-order iteration without making a copy, and in-place [`reverse!`](@ref).
@@ -1827,7 +1827,7 @@ function reverseind(a::AbstractVector, i::Integer)
 end
 
 """
-    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+    reverse!(v [, start=firstindex(v) [, stop=lastindex(v) ]]) -> v
 
 In-place version of [`reverse`](@ref).
 
