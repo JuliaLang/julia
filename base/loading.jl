@@ -419,6 +419,9 @@ or `nothing` if `m` was not imported from a package. Optionally further
 path component strings can be provided to construct a path within the
 package root.
 
+To get the root directory of the package that imported the current module
+the form `pkgdir(@__MODULE__)` can be used.
+
 ```julia-repl
 julia> pkgdir(Foo)
 "/path/to/Foo.jl"
@@ -446,6 +449,9 @@ from a package without a version field set.
 
 The version is read from the package's Project.toml during package
 load.
+
+To get the version of the package that imported the current module
+the form `pkgversion(@__MODULE__)` can be used.
 
 !!! compat "Julia 1.9"
     This function was introduced in Julia 1.9.
