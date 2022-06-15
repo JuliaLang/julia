@@ -7,7 +7,7 @@
 # file_from_compile (deprecated)
 # SRCDIR is either $(SRCCACHE) or $(BUILDDIR), depending on whether the target supports out-of-tree builds
 #
-# also, in a file named dirname.version, define variables VARNAME_BRANCH and VARNAME_SHA1
+# also, in a file named Versions.make, define variables VARNAME_BRANCH and VARNAME_SHA1
 #
 # also, define a Makefile variable VARNAME_GIT_URL to use as the clone origin
 # and a Makefile variable VARNAME_TAR_URL to use as the clone origin when DEPS_GIT is set
@@ -21,7 +21,7 @@
 #   distclean-dirname:
 #
 define git-external
-include $$(SRCDIR)/$1.version
+include $$(SRCDIR)/Versions.make
 $2_SHA1 := $$(strip $$($2_SHA1))
 $2_BRANCH := $$(strip $$($2_BRANCH))
 
@@ -44,12 +44,12 @@ $$(BUILDDIR)/$1:
 	mkdir -p $$@
 $5/$1/source-extracted: | $$(BUILDDIR)/$1
 endif
-$5/$1/source-extracted: $$(SRCDIR)/$1.version | $5/$1/.git/HEAD
+$5/$1/source-extracted: $$(SRCDIR)/Versions.make | $5/$1/.git/HEAD
 	# try to update the cache, if that fails, attempt to continue anyways (the ref might already be local)
 	-cd $$(SRCCACHE)/$1.git && git fetch -q $$($2_GIT_URL) $$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git fetch -q $$(SRCCACHE)/$1.git remotes/origin/$$($2_BRANCH):remotes/origin/$$($2_BRANCH)
 	cd $5/$1 && git checkout -q --detach $$($2_SHA1)
-	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match $1.version file'$$(ENDCOLOR)
+	@[ '$$($2_SHA1)' = "$$$$(cd $5/$1 && git show -s --format='%H' HEAD)" ] || echo $$(WARNCOLOR)'==> warning: SHA1 hash did not match Versions.make file'$$(ENDCOLOR)
 	echo 1 > $$@
 $5/$1/source-compiled: $5/$1/.git/HEAD
 $$($2_SRC_FILE): | $$($2_SRC_FILE)/HEAD
@@ -72,7 +72,7 @@ checksum-$(1): $$($2_SRC_FILE)
 	$$(JLCHECKSUM) $$<
 endif # DEPS_GIT
 
-$$(build_prefix)/manifest/$1: $$(SRCDIR)/$1.version # make the manifest stale if the version file is touched (causing re-install for compliant targets)
+$$(build_prefix)/manifest/$1: $$(SRCDIR)/Versions.make # make the manifest stale if the version file is touched (causing re-install for compliant targets)
 distclean-$1:
 	rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$$($2_SRC_DIR)
 endef

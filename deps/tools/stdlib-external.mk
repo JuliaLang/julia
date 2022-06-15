@@ -1,6 +1,6 @@
 # Define a set of targets for downloading, caching, and building the source of
 # a stdlib library. The commit and git branch should be defined in a file
-# $stdlib_name.version in the current directory. See the git-external macro for
+# Versions.make in the current directory. See the git-external macro for
 # additional documentation.
 #
 # Parameters to the stdlib-external macro:
