@@ -361,7 +361,7 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 }
 
 #if !defined(JL_DISABLE_LIBUNWIND)
-static unw_context_t *volatile signal_context;
+static unw_context_t *signal_context;
 pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
@@ -384,13 +384,21 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return;
         }
+        // Request is either now 0 (meaning the other thread is waiting for
+        //   exit_signal_cond already),
+        // Or it is now -1 (meaning the other thread
+        //   is waiting for in_signal_lock, and we need to release that lock
+        //   here for a bit, until the other thread has a chance to get to the
+        //   exit_signal_cond)
         if (request == -1) {
             err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
             assert(!err);
         }
     }
+    // Now the other thread is waiting on exit_signal_cond (verify that here by
+    // checking it is 0, and add an acquire barrier for good measure)
     int request = jl_atomic_load_acquire(&ptls2->signal_request);
-    assert(request == 0 || request == -1); (void) request;
+    assert(request == 0); (void) request;
     *ctx = signal_context;
 }
 
@@ -400,8 +408,10 @@ static void jl_thread_resume(int tid, int sig)
     jl_atomic_store_release(&ptls2->signal_request, sig == -1 ? 3 : 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
+    // The other thread is waiting to leave exit_signal_cond (verify that here by
+    // checking it is 0, and add an acquire barrier for good measure)
     int request = jl_atomic_load_acquire(&ptls2->signal_request);
-    assert(request == 0 || request == -1); (void) request;
+    assert(request == 0); (void) request;
     pthread_mutex_unlock(&in_signal_lock);
 }
 #endif
@@ -475,22 +485,26 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (ptls == NULL)
         return;
     int errno_save = errno;
+    // acknowledge that we saw the signal_request
     sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, -1);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
-        signal_context = jl_to_bt_context(ctx);
-        jl_atomic_exchange(&ptls->signal_request, 0);
-
         pthread_mutex_lock(&in_signal_lock);
+        signal_context = jl_to_bt_context(ctx);
+        // acknowledge that we set the signal_caught_cond broadcast
+        request = jl_atomic_exchange(&ptls->signal_request, 0);
+        assert(request == -1); (void) request;
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_cond_wait(&exit_signal_cond, &in_signal_lock);
         request = jl_atomic_exchange(&ptls->signal_request, 0);
         assert(request == 1 || request == 3);
+        // acknowledge that we got the resume signal
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_mutex_unlock(&in_signal_lock);
     }
+    else
 #endif
-    jl_atomic_exchange(&ptls->signal_request, 0);
+    jl_atomic_exchange(&ptls->signal_request, 0); // returns -1
     if (request == 2) {
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
