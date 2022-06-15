@@ -2935,9 +2935,11 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (idx != -1) {
             jl_value_t *ft = jl_field_type(uty, idx);
             if (!jl_has_free_typevars(ft)) {
-                if (!ismodifyfield && !jl_subtype(val.typ, ft)) {
+                if (!ismodifyfield) {
                     emit_typecheck(ctx, val, ft, fname);
                     val = update_julia_type(ctx, val, ft);
+                    if (val.typ == jl_bottom_type)
+                        return true;
                 }
                 // TODO: attempt better codegen for approximate types
                 bool isboxed = jl_field_isptr(uty, idx);
@@ -3027,7 +3029,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (jl_is_type_type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
             jl_value_t *tp0 = jl_tparam0(ty.typ);
             emit_typecheck(ctx, arg, tp0, "typeassert");
-            *ret = arg;
+            *ret = update_julia_type(ctx, arg, tp0);
             return true;
         }
         if (jl_subtype(ty.typ, (jl_value_t*)jl_type_type)) {
@@ -3230,10 +3232,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             jl_value_t *ety = jl_tparam0(aty_dt);
             jl_value_t *ndp = jl_tparam1(aty_dt);
             if (!jl_has_free_typevars(ety) && (jl_is_long(ndp) || nargs == 4)) {
-                if (!jl_subtype(val.typ, ety)) {
-                    emit_typecheck(ctx, val, ety, "arrayset");
-                    val = update_julia_type(ctx, val, ety);
-                }
+                emit_typecheck(ctx, val, ety, "arrayset");
+                val = update_julia_type(ctx, val, ety);
+                if (val.typ == jl_bottom_type)
+                    return true;
                 size_t elsz = 0, al = 0;
                 int union_max = jl_islayout_inline(ety, &elsz, &al);
                 bool isboxed = (union_max == 0);
@@ -7185,7 +7187,7 @@ static jl_llvm_functions_t
 
                 jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
                     theArg.tbaa, nullptr, false, AtomicOrdering::NotAtomic, false, sizeof(size_t));
-                emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), closure_world, (jl_value_t*)jl_long_type, world_age_field, ctx.tbaa().tbaa_gcframe);
+                emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, sizeof(size_t));
 
                 // Load closure env
                 Value *envaddr = ctx.builder.CreateInBoundsGEP(
@@ -7809,7 +7811,6 @@ static jl_llvm_functions_t
             if (val.constant)
                 val = mark_julia_const(ctx, val.constant); // be over-conservative at making sure `.typ` is set concretely, not tindex
             if (!jl_is_uniontype(phiType) || !TindexN) {
-                Type *lty = julia_type_to_llvm(ctx, phiType);
                 if (VN) {
                     Value *V;
                     if (val.typ == (jl_value_t*)jl_bottom_type) {
@@ -7834,10 +7835,9 @@ static jl_llvm_functions_t
                 else if (dest && val.typ != (jl_value_t*)jl_bottom_type) {
                     // must be careful to emit undef here (rather than a bitcast or
                     // load of val) if the runtime type of val isn't phiType
-                    assert(lty != ctx.types().T_prjlvalue);
                     Value *isvalid = emit_isa_and_defined(ctx, val, phiType);
                     emit_guarded_test(ctx, isvalid, nullptr, [&] {
-                        (void)emit_unbox(ctx, lty, val, phiType, maybe_decay_tracked(ctx, dest), ctx.tbaa().tbaa_stack);
+                        emit_unbox_store(ctx, update_julia_type(ctx, val, phiType), dest, ctx.tbaa().tbaa_stack, julia_alignment(phiType));
                         return nullptr;
                     });
                 }
@@ -7863,9 +7863,8 @@ static jl_llvm_functions_t
                     else {
                         if (VN)
                             V = Constant::getNullValue(ctx.types().T_prjlvalue);
-                        Type *lty = julia_type_to_llvm(ctx, val.typ);
-                        if (dest && !type_is_ghost(lty)) // basically, if !ghost union
-                            emit_unbox(ctx, lty, val, val.typ, dest, ctx.tbaa().tbaa_stack);
+                        if (dest)
+                            emit_unbox_store(ctx, val, dest, ctx.tbaa().tbaa_stack, julia_alignment(val.typ));
                         RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex);
                     }
                 }
