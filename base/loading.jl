@@ -412,13 +412,11 @@ function pathof(m::Module)
 end
 
 """
-    pkgdir()
-    pkgdir(paths::String...)
     pkgdir(m::Module[, paths::String...])
 
-Return the root directory of the package that imported the current module,
-or a given module.  Returns `nothing` if the module was not imported from a package.
-Optionally further path component strings can be provided to construct a path within the
+Return the root directory of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package. Optionally further
+path component strings can be provided to construct a path within the
 package root.
 
 ```julia-repl
@@ -427,16 +425,10 @@ julia> pkgdir(Foo)
 
 julia> pkgdir(Foo, "src", "file.jl")
 "/path/to/Foo.jl/src/file.jl"
-
-julia> pkgdir() # returns nothing because Main isn't a package module
-
 ```
 
 !!! compat "Julia 1.7"
     The optional argument `paths` requires at least Julia 1.7.
-
-!!! compat "Julia 1.9"
-    The current module (no Module argument) methods require at least Julia 1.9.
 """
 function pkgdir(m::Module, paths::String...)
     rootmodule = moduleroot(m)
@@ -444,8 +436,6 @@ function pkgdir(m::Module, paths::String...)
     path === nothing && return nothing
     return joinpath(dirname(dirname(path)), paths...)
 end
-pkgdir() = pkgdir(@__MODULE__)
-pkgdir(paths::String...) = pkgdir(@__MODULE__, paths...)
 
 """
     pkgversion(m::Module)
