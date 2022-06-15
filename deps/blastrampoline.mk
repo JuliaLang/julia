@@ -14,10 +14,15 @@ $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPO
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
 	cd $(dir $@)/src && $(MAKE) $(BLASTRAMPOLINE_BUILD_OPTS)
+ifeq ($(OS), WINNT)
+	# Windows doesn't like soft link, use hard link
+	cd $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src/build/ && \
+		cp -f --dereference --link libblastrampoline.dll libblastrampoline.dll
+endif
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
-	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src $(MAKE_COMMON) install
+	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src install $(MAKE_COMMON) DESTDIR="$2" 
 endef
 $(eval $(call staged-install, \
 	blastrampoline,$(BLASTRAMPOLINE_SRC_DIR), \
