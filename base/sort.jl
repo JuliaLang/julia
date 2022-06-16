@@ -1139,7 +1139,7 @@ function sortperm(A::AbstractArray;
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward,
-                  workspace::Union{AbstractVector{<:Integer}, Nothing}=nothing)
+                  workspace::Union{AbstractVector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(A, Vector) && eltype(A) <: Integer
@@ -1204,8 +1204,8 @@ function sortperm!(ix::AbstractArray{<:Integer}, A::AbstractArray;
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false,
-                   workspace::Union{AbstractVector{T}, Nothing}=nothing) where T <: Integer,
-                   dims...) #to optionally specify dims argument
+                   workspace::Union{AbstractVector{T}, Nothing}=nothing,
+                   dims...) where T <: Integer #to optionally specify dims argument
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
 
