@@ -29,6 +29,7 @@ include("value_parsing.jl")
 # Tree data structures
 include("green_tree.jl")
 include("syntax_tree.jl")
+include("expr.jl")
 
 # Hooks to integrate the parser with Base
 include("hooks.jl")
