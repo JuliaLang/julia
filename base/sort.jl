@@ -11,7 +11,7 @@ using .Base: copymutable, LinearIndices, length, (:), iterate,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
-    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned
+    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val
 
 using .Base: >>>, !==
 
@@ -1067,101 +1067,75 @@ end
 ## sortperm: the permutation to sort an array ##
 
 """
-    sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sortperm(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, [dims::Integer])
 
-Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
+Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension. 
+If `A` is an `AbstractArray`, then the `dims` keyword argument must be specified. The order is specified
 using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
 
 See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
+To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
-
 julia> p = sortperm(v)
 3-element Vector{Int64}:
  2
  3
  1
-
 julia> v[p]
 3-element Vector{Int64}:
  1
  2
  3
+julia> A = [8 7; 5 6]
+2×2 Matrix{Int64}:
+ 8  7
+ 5  6
+
+julia> sortperm(A, dims = 1)
+2×2 Matrix{Int64}:
+ 2  4
+ 1  3
+
+julia> sortperm(A, dims = 2)
+2×2 Matrix{Int64}:
+ 3  1
+ 2  4
 ```
 """
-function sortperm(v::AbstractVector;
-                  alg::Algorithm=DEFAULT_UNSTABLE,
-                  lt=isless,
-                  by=identity,
-                  rev::Union{Bool,Nothing}=nothing,
-                  order::Ordering=Forward)
-    ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = length(v)
+function sortperm(A::AbstractArray;
+    alg::Algorithm=DEFAULT_UNSTABLE,
+    lt=isless,
+    by=identity,
+    rev::Union{Bool,Nothing}=nothing,
+    order::Ordering=Forward,
+    dims... #to optionally specify dims argument
+)
+    ordr =  ord(lt, by, rev, order)
+    if ordr === Forward && isa(A, Vector) && eltype(A) <: Integer
+        n = length(A)
         if n > 1
-            min, max = extrema(v)
+            min, max = extrema(A)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
-                return sortperm_int_range(v, rangelen, min)
+            if !o1 && !o2 && rangelen < div(n, 2)
+                return sortperm_int_range(A, rangelen, min)
             end
         end
     end
-    ax = axes(v, 1)
-    p = similar(Vector{eltype(ax)}, ax)
-    for (i,ind) in zip(eachindex(p), ax)
-        p[i] = ind
-    end
-    sort!(p, alg, Perm(ordr,v))
+    perm = Perm(
+        ordr,
+        vec(A)
+    )
+    ix = Base.copymutable(LinearIndices(A))
+    sort!(ix; dims..., alg = alg, order=perm)
 end
 
 
-"""
-    sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
-
-Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
-(the default), `ix` is initialized to contain the values `1:length(v)`.
-
-# Examples
-```jldoctest
-julia> v = [3, 1, 2]; p = zeros(Int, 3);
-
-julia> sortperm!(p, v); p
-3-element Vector{Int64}:
- 2
- 3
- 1
-
-julia> v[p]
-3-element Vector{Int64}:
- 1
- 2
- 3
-```
-"""
-function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector;
-                   alg::Algorithm=DEFAULT_UNSTABLE,
-                   lt=isless,
-                   by=identity,
-                   rev::Union{Bool,Nothing}=nothing,
-                   order::Ordering=Forward,
-                   initialized::Bool=false)
-    if axes(x,1) != axes(v,1)
-        throw(ArgumentError("index vector must have the same length/indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
-    end
-    if !initialized
-        @inbounds for i in eachindex(v)
-            x[i] = i
-        end
-    end
-    sort!(x, alg, Perm(ord(lt,by,rev,order),v))
-end
-
-# sortperm for vectors of few unique integers
 function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
@@ -1186,6 +1160,62 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
 
     return P
 end
+
+"""
+    sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
+
+Like [`sortperm`](@ref), but accepts a preallocated index Vector or Array `ix` of the same length and indexing as `ix`.  If `initialized` is `false`
+(the default), `ix` is initialized to contain the values `LinearIndices(A)`.
+
+# Examples
+```jldoctest
+julia> v = [3, 1, 2]; p = zeros(Int, 3);
+julia> sortperm!(p, v); p
+3-element Vector{Int64}:
+ 2
+ 3
+ 1
+julia> v[p]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+julia> A = [8 7; 5 6]; p = zeros(Int,2, 2);
+
+julia> sortperm!(p, A;dims=1); p
+2×2 Matrix{Int64}:
+ 2  4
+ 1  3
+
+julia> sortperm!(p, A;dims=2); p
+2×2 Matrix{Int64}:
+ 3  1
+ 2  4
+```
+"""
+function sortperm!(ix::AbstractArray{<:Integer}, A::AbstractArray;
+    alg::Algorithm=DEFAULT_UNSTABLE,
+    lt=isless,
+    by=identity,
+    rev::Union{Bool,Nothing}=nothing,
+    order::Ordering=Forward,
+    initialized::Bool=false,
+    dims... #to optionally specify dims argument
+)
+    (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
+    axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
+
+    if !initialized
+        ix .= LinearIndices(A)
+    end
+    perm = Perm(
+        ord(lt, by, rev, order),
+        vec(A)
+    )
+    sort!(ix; dims..., alg, order=perm)
+end
+
+
 
 ## sorting multi-dimensional arrays ##
 
@@ -1283,16 +1313,17 @@ function sort!(A::AbstractArray;
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward)
-    ordr = ord(lt, by, rev, order)
+    _sort!(A, Val(dims), alg, ord(lt, by, rev, order))
+end
+function _sort!(A::AbstractArray, ::Val{K}, alg::Algorithm, order::Ordering) where K
     nd = ndims(A)
-    k = dims
 
-    1 <= k <= nd || throw(ArgumentError("dimension out of range"))
+    1 <= K <= nd || throw(ArgumentError("dimension out of range"))
 
-    remdims = ntuple(i -> i == k ? 1 : axes(A, i), nd)
+    remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
-        Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
-        sort!(Av, alg, ordr)
+        Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
+        sort!(Av, alg, order)
     end
     A
 end
