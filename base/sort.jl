@@ -605,7 +605,6 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = midpoint(lo, hi)
-
         t = t0 === nothing ? similar(v, m-lo+1) : t0
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
@@ -1140,15 +1139,16 @@ function sortperm(A::AbstractArray;
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward,
+                  workspace::Union{AbstractVector{<:Integer}, Nothing}=nothing)
                   dims...) #to optionally specify dims argument
-    ordr =  ord(lt, by, rev, order)
+    ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(A, Vector) && eltype(A) <: Integer
         n = length(A)
         if n > 1
             min, max = extrema(A)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n, 2)
+            if !o1 && !o2 && rangelen < div(n,2)
                 return sortperm_int_range(A, rangelen, min)
             end
         end
@@ -1204,6 +1204,7 @@ function sortperm!(ix::AbstractArray{<:Integer}, A::AbstractArray;
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false,
+                   workspace::Union{AbstractVector{T}, Nothing}=nothing) where T <: Integer,
                    dims...) #to optionally specify dims argument
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
