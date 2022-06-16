@@ -1069,7 +1069,7 @@ end
 """
     sortperm(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, [dims::Integer])
 
-Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension. 
+Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
 If `A` is an `AbstractArray`, then the `dims` keyword argument must be specified. The order is specified
 using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
