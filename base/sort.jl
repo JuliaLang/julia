@@ -605,7 +605,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = midpoint(lo, hi)
-        
+
         t = t0 === nothing ? similar(v, m-lo+1) : t0
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
@@ -1183,15 +1183,15 @@ julia> v[p]
  1
  2
  3
- 
+
 julia> A = [8 7; 5 6]; p = zeros(Int,2, 2);
 
-julia> sortperm!(p, A;dims=1); p
+julia> sortperm!(p, A; dims=1); p
 2×2 Matrix{Int64}:
  2  4
  1  3
 
-julia> sortperm!(p, A;dims=2); p
+julia> sortperm!(p, A; dims=2); p
 2×2 Matrix{Int64}:
  3  1
  2  4
@@ -1340,14 +1340,14 @@ function sort!(A::AbstractArray{T};
                lt=isless,
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
-               order::Ordering=Forward)
-    _sort!(A, Val(dims), alg, ord(lt, by, rev, order))
+               order::Ordering=Forward,
+               workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), workspace)
 end
 function _sort!(A::AbstractArray, ::Val{K},
                 alg::Algorithm,
-                order::Ordering=Forward,
+                order::Ordering,
                 workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where {K,T}
-    ordr = ord(lt, by, rev, order)
     nd = ndims(A)
 
     1 <= K <= nd || throw(ArgumentError("dimension out of range"))
@@ -1355,7 +1355,7 @@ function _sort!(A::AbstractArray, ::Val{K},
     remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
         Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
-        sort!(Av, alg, ordr, workspace)
+        sort!(Av, alg, order, workspace)
     end
     A
 end
@@ -1599,7 +1599,7 @@ function sort!(v::FPSortable, a::Algorithm, o::DirectOrdering,
         t::Union{FPSortable, Nothing}=nothing)
     fpsort!(v, a, o, t)
 end
-function sort!(v::AbstractVector{T}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}, 
+function sort!(v::AbstractVector{T}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable},
         t::Union{AbstractVector{T}, Nothing}=nothing) where T <: Union{Signed, Unsigned}
     fpsort!(v, a, o, t)
 end
