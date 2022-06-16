@@ -1,4 +1,5 @@
 ## LIBSUITESPARSE ##
+include $(SRCDIR)/libsuitesparse.version
 
 ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG := -DLONGBLAS='long long'
