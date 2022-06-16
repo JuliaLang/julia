@@ -12,5 +12,5 @@
     # Meta.ParseError when Core integration is enabled.
     @test_throws JuliaSyntax.ParseError Meta.parse("[x")
 
-    JuliaSyntax.disable_in_core!()
+    JuliaSyntax.enable_in_core!(false)
 end
