@@ -1081,16 +1081,19 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
+
 julia> p = sortperm(v)
 3-element Vector{Int64}:
  2
  3
  1
+
 julia> v[p]
 3-element Vector{Int64}:
  1
  2
  3
+
 julia> A = [8 7; 5 6]
 2×2 Matrix{Int64}:
  8  7
@@ -1135,32 +1138,6 @@ function sortperm(A::AbstractArray;
     sort!(ix; dims..., alg = alg, order=perm)
 end
 
-
-function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
-    offs = 1 - minval
-    n = length(x)
-
-    counts = fill(0, rangelen+1)
-    counts[1] = 1
-    @inbounds for i = 1:n
-        counts[x[i] + offs + 1] += 1
-    end
-
-    #cumsum!(counts, counts)
-    @inbounds for i = 2:length(counts)
-        counts[i] += counts[i-1]
-    end
-
-    P = Vector{Int}(undef, n)
-    @inbounds for i = 1:n
-        label = x[i] + offs
-        P[counts[label]] = i
-        counts[label] += 1
-    end
-
-    return P
-end
-
 """
     sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
 
@@ -1170,12 +1147,15 @@ Like [`sortperm`](@ref), but accepts a preallocated index Vector or Array `ix` o
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
+
 julia> sortperm!(p, v); p
+
 3-element Vector{Int64}:
  2
  3
  1
 julia> v[p]
+
 3-element Vector{Int64}:
  1
  2
@@ -1215,6 +1195,31 @@ function sortperm!(ix::AbstractArray{<:Integer}, A::AbstractArray;
     sort!(ix; dims..., alg, order=perm)
 end
 
+
+function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
+    offs = 1 - minval
+    n = length(x)
+
+    counts = fill(0, rangelen+1)
+    counts[1] = 1
+    @inbounds for i = 1:n
+        counts[x[i] + offs + 1] += 1
+    end
+
+    #cumsum!(counts, counts)
+    @inbounds for i = 2:length(counts)
+        counts[i] += counts[i-1]
+    end
+
+    P = Vector{Int}(undef, n)
+    @inbounds for i = 1:n
+        label = x[i] + offs
+        P[counts[label]] = i
+        counts[label] += 1
+    end
+
+    return P
+end
 
 
 ## sorting multi-dimensional arrays ##
