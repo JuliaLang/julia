@@ -1150,17 +1150,17 @@ Like [`sortperm`](@ref), but accepts a preallocated index Vector or Array `ix` o
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
 
 julia> sortperm!(p, v); p
-
 3-element Vector{Int64}:
  2
  3
  1
+
 julia> v[p]
-
 3-element Vector{Int64}:
  1
  2
  3
+ 
 julia> A = [8 7; 5 6]; p = zeros(Int,2, 2);
 
 julia> sortperm!(p, A;dims=1); p
