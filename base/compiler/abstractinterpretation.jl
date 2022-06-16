@@ -1953,9 +1953,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 at = tmeet(at, ft)
                 if at === Bottom
                     t = Bottom
-                    tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-                        # consistent = ALWAYS_TRUE, # N.B depends on !ismutabletype(t) above
-                        nothrow = TRISTATE_UNKNOWN))
+                    tristate_merge!(sv, EFFECTS_THROWS)
                     @goto t_computed
                 elseif !isa(at, Const)
                     allconst = false
@@ -2003,7 +2001,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = ismutabletype(t) ? TRISTATE_UNKNOWN : ALWAYS_TRUE,
+            consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
             nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
     elseif ehead === :new_opaque_closure
         tristate_merge!(sv, Effects()) # TODO
@@ -2040,7 +2038,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             effects = v[2]
             effects = decode_effects_override(effects)
             tristate_merge!(sv, Effects(
-                effects.consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+                effects.consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
                 effects.effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
                 effects.terminates_globally ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
@@ -2127,20 +2125,20 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     ty = abstract_eval_global(M, s)
     isa(ty, Const) && return ty
     if isdefined(M,s)
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=TRISTATE_UNKNOWN))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
     else
         tristate_merge!(frame, Effects(EFFECTS_TOTAL;
-            consistent=TRISTATE_UNKNOWN,
+            consistent=ALWAYS_FALSE,
             nothrow=TRISTATE_UNKNOWN))
     end
     return ty
 end
 
 function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(newty))
-    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
-    tristate_merge!(frame, Effects(EFFECTS_TOTAL,
-        effect_free=TRISTATE_UNKNOWN,
-        nothrow=nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
+    effect_free = TRISTATE_UNKNOWN
+    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty) ?
+        ALWAYS_TRUE : TRISTATE_UNKNOWN
+    tristate_merge!(frame, Effects(EFFECTS_TOTAL; effect_free, nothrow))
 end
 
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
@@ -2230,9 +2228,7 @@ end
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
-        if is_effect_overridden(frame, :terminates_globally)
-            # this frame is known to terminate
-        elseif is_effect_overridden(frame, :terminates_locally)
+        if is_effect_overridden(frame, :terminates_locally)
             # this backedge is known to terminate
         else
             tristate_merge!(frame, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))

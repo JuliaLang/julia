@@ -94,10 +94,10 @@ function Effects(
         false)
 end
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true, ALWAYS_TRUE)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true, ALWAYS_TRUE)
-const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true, TRISTATE_UNKNOWN)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false, TRISTATE_UNKNOWN) # unknown, really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true,  ALWAYS_TRUE)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true,  ALWAYS_TRUE)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true,  TRISTATE_UNKNOWN)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false, TRISTATE_UNKNOWN) # unknown, really
 
 function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::TriState = e.consistent,

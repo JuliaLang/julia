@@ -430,10 +430,18 @@ end
 function adjust_effects(sv::InferenceState)
     ipo_effects = Effects(sv)
 
-    # Always throwing an error counts or never returning both count as consistent,
-    # but we don't currently model idempontency using dataflow, so we don't notice.
-    # Fix that up here to improve precision.
-    if !ipo_effects.inbounds_taints_consistency && sv.bestguess === Union{}
+    # refine :consistent-cy effect using the return type information
+    # TODO this adjustment tries to compromise imprecise :consistent-cy information,
+    # that is currently modeled in a flow-insensitive way: ideally we want to model it
+    # with a proper dataflow analysis instead
+    rt = sv.bestguess
+    if !ipo_effects.inbounds_taints_consistency && rt === Bottom
+        # always throwing an error counts or never returning both count as consistent
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    elseif ipo_effects.consistent === TRISTATE_UNKNOWN && is_consistent_rt(rt)
+        # in a case when the :consistent-cy here is only tainted by mutable allocations
+        # (indicated by `TRISTATE_UNKNOWN`), we may be able to refine it if the return
+        # type guarantees that the allocations are never returned
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
 
@@ -459,6 +467,14 @@ function adjust_effects(sv::InferenceState)
     end
 
     return ipo_effects
+end
+
+is_consistent_rt(@nospecialize rt) = _is_consistent_rt(widenconst(ignorelimited(rt)))
+function _is_consistent_rt(@nospecialize ty)
+    if isa(ty, Union)
+        return _is_consistent_rt(ty.a) && _is_consistent_rt(ty.b)
+    end
+    return ty === Symbol || isbitstype(ty)
 end
 
 # inference completed on `me`
