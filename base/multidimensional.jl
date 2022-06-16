@@ -1113,16 +1113,18 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
     checkbounds(src, first(Rsrc))
     checkbounds(src, last(Rsrc))
     src′ = unalias(dest, src)
-    ΔI = first(Rdest) - first(Rsrc)
+    CRdest = CartesianIndices(Rdest)
+    CRsrc = CartesianIndices(Rsrc)
+    ΔI = first(CRdest) - first(CRsrc)
     if @generated
         quote
-            @nloops $N i (n->Rsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->i_n+ΔI[n]) = @nref($N,src′,i)
+            @nloops $N i (n->CRsrc.indices[n]) begin
+                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src′,n->Rsrc.indices[n][i_n])
             end
         end
     else
-        for I in Rsrc
-            @inbounds dest[I + ΔI] = src′[I]
+        for I in CRsrc
+            @inbounds dest[Rdest[I + ΔI]] = src′[Rsrc[I]]
         end
     end
     dest

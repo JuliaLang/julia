@@ -345,7 +345,7 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 if nameof(@__MODULE__) === :Base
 
 function tuple_type_tail(T::Type)
-    @_total_may_throw_meta # TODO: this method is wrong (and not :total_may_throw)
+    @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
@@ -383,7 +383,7 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
-    return (t1, ts...)
+    return (t1, ts...)::T
 end
 
 # use iterative algorithm for long tuples
@@ -404,6 +404,7 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+_totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
 

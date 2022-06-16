@@ -318,6 +318,8 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 
 ## left-division \
 \(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
+\(u::AdjointAbsVec, y::Number) = adjoint(conj(y) / u.parent)
+\(u::TransposeAbsVec, y::Number) = transpose(y / u.parent)
 
 
 ## right-division /

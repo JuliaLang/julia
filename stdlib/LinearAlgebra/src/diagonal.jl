@@ -285,6 +285,7 @@ function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
 end
 
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
+    require_one_based_indexing(B)
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -306,6 +307,7 @@ end
     return out
 end
 @inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
+    require_one_based_indexing(A)
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)

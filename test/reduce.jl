@@ -671,7 +671,7 @@ end
 # issue #38627
 @testset "overflow in mapreduce" begin
     # at len = 16 and len = 1025 there is a change in codepath
-    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+    for len in [1, 15, 16, 1024, 1025, 2048, 2049]
         oa = OffsetArray(repeat([1], len), typemax(Int)-len)
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len

@@ -43,6 +43,9 @@ end
     let x = @inferred(convert(Tuple{Integer, UInt8, UInt16, UInt32, Int, Vararg{Real}}, (2.0, 3, 5, 6.0, 42, 3.0+0im)))
         @test x == (2, 0x03, 0x0005, 0x00000006, 42, 3.0)
     end
+    for x in (Int(2), UInt8(3), UInt16(5), UInt32(6), 42, 5.0, 3.0+0im)
+        @test (x,) == @inferred Tuple(x)
+    end
 
     @test_throws MethodError convert(Tuple{Int}, ())
     @test_throws MethodError convert(Tuple{Any}, ())
@@ -61,6 +64,9 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #44179
+    @test_throws TypeError NTuple{3}([1, nothing, nothing])
+    @test_throws TypeError NTuple{3}([nothing, 1, nothing])
     # issue #31824
     @test convert(NTuple, (1, 1.0)) === (1, 1.0)
     let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)

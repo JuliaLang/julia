@@ -371,8 +371,8 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
     return unboxed;
 }
 
-// emit code to unpack a raw value from a box into registers or a stack slot
-static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *dest, MDNode *tbaa_dest, bool isVolatile)
+// emit code to unpack a raw value from a box into registers
+static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt)
 {
     assert(to != getVoidTy(ctx.builder.getContext()));
     // TODO: fully validate that x.typ == jt?
@@ -390,13 +390,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
     if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
-        if (!dest)
-            return emit_unboxed_coercion(ctx, to, unboxed);
-        Type *dest_ty = unboxed->getType()->getPointerTo();
-        if (dest->getType() != dest_ty)
-            dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateAlignedStore(unboxed, dest, Align(julia_alignment(jt))));
-        return NULL;
+        return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
     // bools stored as int8, so an extra Trunc is needed to get an int1
@@ -413,42 +407,64 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
             unboxed = ctx.builder.CreateTrunc(unbox_load, getInt1Ty(ctx.builder.getContext()));
         else
             unboxed = unbox_load; // `to` must be getInt8Ty(ctx.builder.getContext())
-        if (!dest)
-            return unboxed;
-        Type *dest_ty = unboxed->getType()->getPointerTo();
-        if (dest->getType() != dest_ty)
-            dest = emit_bitcast(ctx, dest, dest_ty);
-        tbaa_decorate(tbaa_dest, ctx.builder.CreateStore(unboxed, dest));
-        return NULL;
+        return unboxed;
     }
 
     unsigned alignment = julia_alignment(jt);
     Type *ptype = to->getPointerTo();
-    if (dest) {
-        emit_memcpy(ctx, dest, tbaa_dest, p, x.tbaa, jl_datatype_size(jt), alignment, false);
-        return NULL;
-    }
-    else {
-        if (p->getType() != ptype && isa<AllocaInst>(p)) {
-            // LLVM's mem2reg can't handle coercion if the load/store type does
-            // not match the type of the alloca. As such, it is better to
-            // perform the load using the alloca's type and then perform the
-            // appropriate coercion manually.
-            AllocaInst *AI = cast<AllocaInst>(p);
-            Type *AllocType = AI->getAllocatedType();
-            const DataLayout &DL = jl_Module->getDataLayout();
-            if (!AI->isArrayAllocation() &&
-                    (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
-                    (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
-                    DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-                Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
-                return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
-            }
+    if (p->getType() != ptype && isa<AllocaInst>(p)) {
+        // LLVM's mem2reg can't handle coercion if the load/store type does
+        // not match the type of the alloca. As such, it is better to
+        // perform the load using the alloca's type and then perform the
+        // appropriate coercion manually.
+        AllocaInst *AI = cast<AllocaInst>(p);
+        Type *AllocType = AI->getAllocatedType();
+        const DataLayout &DL = jl_Module->getDataLayout();
+        if (!AI->isArrayAllocation() &&
+                (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
+                (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
+                DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
+            Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
+            return emit_unboxed_coercion(ctx, to, tbaa_decorate(x.tbaa, load));
         }
-        p = maybe_bitcast(ctx, p, ptype);
-        Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
-        return tbaa_decorate(x.tbaa, load);
     }
+    p = maybe_bitcast(ctx, p, ptype);
+    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
+    return tbaa_decorate(x.tbaa, load);
+}
+
+// emit code to store a raw value into a destination
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile)
+{
+    if (x.isghost) {
+        // this can happen when a branch yielding a different type ends
+        // up being dead code, and type inference knows that the other
+        // branch's type is the only one that matters.
+        return;
+    }
+
+    Value *unboxed = nullptr;
+    if (!x.ispointer()) { // already unboxed, but sometimes need conversion
+        unboxed = x.V;
+        assert(unboxed);
+    }
+
+    // bools stored as int8, but can be narrowed to int1 often
+    if (x.typ == (jl_value_t*)jl_bool_type)
+        unboxed = emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), x, (jl_value_t*)jl_bool_type);
+
+    if (unboxed) {
+        Type *dest_ty = unboxed->getType()->getPointerTo();
+        if (dest->getType() != dest_ty)
+            dest = emit_bitcast(ctx, dest, dest_ty);
+        StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, Align(alignment));
+        store->setVolatile(isVolatile);
+        tbaa_decorate(tbaa_dest, store);
+        return;
+    }
+
+    Value *src = data_pointer(ctx, x);
+    emit_memcpy(ctx, dest, tbaa_dest, src, x.tbaa, jl_datatype_size(x.typ), alignment, isVolatile);
 }
 
 static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -501,7 +517,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             }
             else {
                 emit_error(ctx, "bitcast: expected primitive type value for second argument");
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t();
             }
         }
         if (!jl_is_datatype(v.typ) || jl_datatype_size(v.typ) != nb) {
@@ -513,7 +529,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             }
             else {
                 emit_error(ctx, "bitcast: argument size does not match size of target type");
-                return jl_cgval_t(ctx.builder.getContext());
+                return jl_cgval_t();
             }
         }
     }
@@ -630,7 +646,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerref(ctx, argv);
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "pointerref: invalid pointer type");
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     Value *idx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), i, (jl_value_t*)jl_long_type);
@@ -698,7 +714,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         return emit_runtime_pointerset(ctx, argv);
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "pointerset: invalid pointer type");
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
     emit_typecheck(ctx, x, ety, "pointerset");
 
@@ -727,7 +743,7 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, jl_cgval_t *argv)
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
             thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
-            typed_store(ctx, thePtr, im1, x, jl_cgval_t(ctx.builder.getContext()), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
+            typed_store(ctx, thePtr, im1, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                         AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, false, true, false, false, false, false, nullptr, "");
         }
     }
@@ -741,7 +757,7 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, jl_cgval_t *argv)
         enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, true);
         if (order == jl_memory_order_invalid) {
             emit_atomic_error(ctx, "invalid atomic ordering");
-            return jl_cgval_t(ctx.builder.getContext()); // unreachable
+            return jl_cgval_t(); // unreachable
         }
         if (order > jl_memory_order_monotonic)
             ctx.builder.CreateFence(get_llvm_atomic_order(order));
@@ -763,7 +779,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, false);
     if (order == jl_memory_order_invalid) {
         emit_atomic_error(ctx, "invalid atomic ordering");
-        return jl_cgval_t(ctx.builder.getContext()); // unreachable
+        return jl_cgval_t(); // unreachable
     }
     AtomicOrdering llvm_order = get_llvm_atomic_order(order);
 
@@ -777,13 +793,13 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (!is_valid_intrinsic_elptr(ety)) {
         emit_error(ctx, "atomic_pointerref: invalid pointer type");
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     size_t nb = jl_datatype_size(ety);
     if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE) {
         emit_error(ctx, "atomic_pointerref: invalid pointer for atomic operation");
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     if (!jl_isbits(ety)) {
@@ -829,7 +845,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     bool isreplacefield = f == atomic_pointerreplace;
     bool isswapfield = f == atomic_pointerswap;
     bool ismodifyfield = f == atomic_pointermodify;
-    const jl_cgval_t undefval(ctx.builder.getContext());
+    const jl_cgval_t undefval;
     const jl_cgval_t &e = argv[0];
     const jl_cgval_t &x = isreplacefield || ismodifyfield ? argv[2] : argv[1];
     const jl_cgval_t &y = isreplacefield || ismodifyfield ? argv[1] : undefval;
@@ -850,7 +866,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
     enum jl_memory_order failorder = isreplacefield ? jl_get_atomic_order((jl_sym_t*)failord.constant, true, false) : order;
     if (order == jl_memory_order_invalid || failorder == jl_memory_order_invalid || failorder > order) {
         emit_atomic_error(ctx, "invalid atomic ordering");
-        return jl_cgval_t(ctx.builder.getContext()); // unreachable
+        return jl_cgval_t(); // unreachable
     }
     AtomicOrdering llvm_order = get_llvm_atomic_order(order);
     AtomicOrdering llvm_failorder = get_llvm_atomic_order(failorder);
@@ -871,7 +887,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         std::string msg(StringRef(jl_intrinsic_name((int)f)));
         msg += ": invalid pointer type";
         emit_error(ctx, msg);
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
     if (!ismodifyfield)
         emit_typecheck(ctx, x, ety, std::string(jl_intrinsic_name((int)f)));
@@ -881,7 +897,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, const jl
         std::string msg(StringRef(jl_intrinsic_name((int)f)));
         msg += ": invalid pointer for atomic operation";
         emit_error(ctx, msg);
-        return jl_cgval_t(ctx.builder.getContext());
+        return jl_cgval_t();
     }
 
     if (!jl_isbits(ety)) {
@@ -962,7 +978,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
     jl_value_t *t2 = y.typ;
     // handle cases where the condition is irrelevant based on type info
     if (t1 == jl_bottom_type && t2 == jl_bottom_type)
-        return jl_cgval_t(ctx.builder.getContext()); // undefined
+        return jl_cgval_t(); // undefined
     if (t1 == jl_bottom_type)
         return y;
     if (t2 == jl_bottom_type)
@@ -1075,7 +1091,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 ctx.builder.Insert(ret);
                 tindex = ret;
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ctx.tbaa(), ifelse_tbaa);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa);
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));

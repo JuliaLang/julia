@@ -398,8 +398,8 @@ let err_str
     @test occursin("MethodError: no method matching +(::$Int, ::Vector{Float64})", err_str)
     @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
     err_str = @except_str rand(5) - 1//3 MethodError
-    @test occursin("MethodError: no method matching -(::Vector{Float64}, ::Rational{$Int})", err_str)
-    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
+    @test occursin("MethodError: no method matching +(::Vector{Float64}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise addition, use broadcasting with dot syntax: array .+ scalar", err_str)
 end
 
 
@@ -902,4 +902,22 @@ end
         err_str = sprint(showerror, err)
         @test contains(err_str, "maybe you meant `import/using .Bar`")
     end
+end
+
+for (expr, errmsg) in
+    [
+        (:(struct Foo <: 1 end),       "can only subtype data types"),
+        (:(struct Foo <: Float64 end), "can only subtype abstract types"),
+        (:(struct Foo <: Foo end),     "a type cannot subtype itself"),
+        (:(struct Foo <: Tuple{Float64} end), "cannot subtype a tuple type"),
+        (:(struct Foo <: NamedTuple{(:a,), Tuple{Int64}} end), "cannot subtype a named tuple type"),
+        (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
+        (:(struct Foo <: Type{Float64} end), "cannot add subtypes to Type"),
+        (:(struct Foo <: typeof(Core.apply_type) end), "cannot add subtypes to Core.Builtin"),
+    ]
+    err = try @eval $expr
+    catch e
+        e
+    end
+    @test contains(sprint(showerror, err), errmsg)
 end

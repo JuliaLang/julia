@@ -135,9 +135,6 @@ static void allocate_mach_handler()
         jl_error("pthread_create failed");
     }
     pthread_attr_destroy(&attr);
-    for (int16_t tid = 0; tid < jl_n_threads; tid++) {
-        attach_exception_port(pthread_mach_thread_np(jl_all_tls_states[tid]->system_id), 0);
-    }
 }
 
 #ifdef LLVMLIBUNWIND
@@ -271,7 +268,7 @@ kern_return_t catch_mach_exception_raise(
             break;
         }
     }
-    if (!ptls2) {
+    if (!ptls2 || ptls2->current_task == NULL) {
         // We don't know about this thread, let the kernel try another handler
         // instead. This shouldn't actually happen since we only register the
         // handler for the threads we know about.
@@ -608,10 +605,11 @@ void *mach_profile_listener(void *arg)
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
         int keymgr_locked = jl_lock_profile_mach(0);
-        jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+
+        int *randperm = profile_get_randperm(jl_n_threads);
         for (int idx = jl_n_threads; idx-- > 0; ) {
-            // Stop the threads in the random round-robin order.
-            int i = profile_round_robin_thread_order[idx];
+            // Stop the threads in the random or reverse round-robin order.
+            int i = randperm[idx];
             // if there is no space left, break early
             if (jl_profile_is_buffer_full()) {
                 jl_profile_stop_timer();

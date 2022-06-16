@@ -27,6 +27,9 @@ const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE = 0x01 << 4
+# This statement was proven not to throw
+const IR_FLAG_NOTHROW     = 0x01 << 5
+
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -96,17 +99,20 @@ mutable struct OptimizationState
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     inlining::InliningState
-    function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
+    cfg::Union{Nothing,CFG}
+    function OptimizationState(frame::InferenceState, params::OptimizationParams,
+                               interp::AbstractInterpreter, recompute_cfg::Bool=true)
         s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
             interp)
-        return new(frame.linfo,
-                   frame.src, nothing, frame.stmt_info, frame.mod,
-                   frame.sptypes, frame.slottypes, inlining)
+        cfg = recompute_cfg ? nothing : frame.cfg
+        return new(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
+                   frame.sptypes, frame.slottypes, inlining, cfg)
     end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
+    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
+                               interp::AbstractInterpreter)
         # prepare src for running optimization passes
         # if it isn't already
         nssavalues = src.ssavaluetypes
@@ -115,6 +121,7 @@ mutable struct OptimizationState
         else
             nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
+        sptypes = sptypes_from_meth_instance(linfo)
         nslots = length(src.slotflags)
         slottypes = src.slottypes
         if slottypes === nothing
@@ -130,9 +137,8 @@ mutable struct OptimizationState
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
             interp)
-        return new(linfo,
-                   src, nothing, stmt_info, mod,
-                   sptypes_from_meth_instance(linfo), slottypes, inlining)
+        return new(linfo, src, nothing, stmt_info, mod,
+                   sptypes, slottypes, inlining, nothing)
     end
 end
 
@@ -205,7 +211,6 @@ function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRC
             f = argextype(args[1], src)
             f = singleton_type(f)
             f === nothing && return false
-            is_return_type(f) && return true
             if isa(f, IntrinsicFunction)
                 intrinsic_effect_free_if_nothrow(f) || return false
                 return intrinsic_nothrow(f,
@@ -535,21 +540,44 @@ function ipo_escape_cache(mi_cache::MICache) where MICache
 end
 null_escape_cache(linfo::Union{InferenceResult,MethodInstance}) = nothing
 
-function run_passes(ci::CodeInfo, sv::OptimizationState, caller::InferenceResult)
-    @timeit "convert"   ir = convert_to_ircode(ci, sv)
-    @timeit "slot2reg"  ir = slot2reg(ir, ci, sv)
+macro pass(name, expr)
+    optimize_until = esc(:optimize_until)
+    stage = esc(:__stage__)
+    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    quote
+        $macrocall
+        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
+    end
+end
+
+matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
+matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(::Nothing, _, _) = false
+
+function run_passes(
+    ci::CodeInfo,
+    sv::OptimizationState,
+    caller::InferenceResult,
+    optimize_until = nothing,  # run all passes by default
+)
+    __stage__ = 1  # used by @pass
+    # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
+    @pass "convert"   ir = convert_to_ircode(ci, sv)
+    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @timeit "compact 1" ir = compact!(ir)
-    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @pass "compact 1" ir = compact!(ir)
+    @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
-    @timeit "compact 2" ir = compact!(ir)
-    @timeit "SROA"      ir = sroa_pass!(ir)
-    @timeit "ADCE"      ir = adce_pass!(ir)
-    @timeit "type lift" ir = type_lift_pass!(ir)
-    @timeit "compact 3" ir = compact!(ir)
+    @pass "compact 2" ir = compact!(ir)
+    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
+    @pass "ADCE"      ir = adce_pass!(ir)
+    @pass "type lift" ir = type_lift_pass!(ir)
+    @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir); verify_linetable(ir.linetable))
     end
+    @label __done__  # used by @pass
     return ir
 end
 
@@ -581,8 +609,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     meta = Expr[]
     idx = 1
     oldidx = 1
-    ssachangemap = fill(0, length(code))
-    labelchangemap = coverage ? fill(0, length(code)) : ssachangemap
+    nstmts = length(code)
+    ssachangemap = labelchangemap = nothing
     prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
@@ -593,6 +621,12 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
             insert!(ssaflags, idx, IR_FLAG_NULL)
+            if ssachangemap === nothing
+                ssachangemap = fill(0, nstmts)
+            end
+            if labelchangemap === nothing
+                labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+            end
             ssachangemap[oldidx] += 1
             if oldidx < length(labelchangemap)
                 labelchangemap[oldidx + 1] += 1
@@ -608,6 +642,12 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
                 insert!(ssaflags, idx + 1, ssaflags[idx])
+                if ssachangemap === nothing
+                    ssachangemap = fill(0, nstmts)
+                end
+                if labelchangemap === nothing
+                    labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+                end
                 if oldidx < length(ssachangemap)
                     ssachangemap[oldidx + 1] += 1
                     coverage && (labelchangemap[oldidx + 1] += 1)
@@ -619,7 +659,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         oldidx += 1
     end
 
-    renumber_ir_elements!(code, ssachangemap, labelchangemap)
+    cfg = sv.cfg
+    if ssachangemap !== nothing && labelchangemap !== nothing
+        renumber_ir_elements!(code, ssachangemap, labelchangemap)
+        cfg = nothing # recompute CFG
+    end
 
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
@@ -627,7 +671,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     strip_trailing_junk!(ci, code, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    cfg = compute_basic_blocks(code)
+    if cfg === nothing
+        cfg = compute_basic_blocks(code)
+    end
     return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
 end
 

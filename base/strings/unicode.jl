@@ -421,6 +421,8 @@ end
 
 Tests whether a character is a decimal digit (0-9).
 
+See also: [`isletter`](@ref).
+
 # Examples
 ```jldoctest
 julia> isdigit('❤')
@@ -441,6 +443,8 @@ isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
 Test whether a character is a letter.
 A character is classified as a letter if it belongs to the Unicode general
 category Letter, i.e. a character whose category code begins with 'L'.
+
+See also: [`isdigit`](@ref).
 
 # Examples
 ```jldoctest

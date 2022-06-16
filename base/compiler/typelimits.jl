@@ -332,17 +332,17 @@ function issimplertype(@nospecialize(typea), @nospecialize(typeb))
         return issimpleenoughtype(typea)
     # elseif typea isa Const # fall-through good
     elseif typea isa Conditional # follow issubconditional query
-      typeb isa Const && return true
-      typeb isa Conditional || return false
-      is_same_conditionals(typea, typeb) || return false
-      issimplertype(typea.vtype, typeb.vtype) || return false
-      issimplertype(typea.elsetype, typeb.elsetype) || return false
+        typeb isa Const && return true
+        typeb isa Conditional || return false
+        is_same_conditionals(typea, typeb) || return false
+        issimplertype(typea.thentype, typeb.thentype) || return false
+        issimplertype(typea.elsetype, typeb.elsetype) || return false
     elseif typea isa InterConditional # ibid
-      typeb isa Const && return true
-      typeb isa InterConditional || return false
-      is_same_conditionals(typea, typeb) || return false
-      issimplertype(typea.vtype, typeb.vtype) || return false
-      issimplertype(typea.elsetype, typeb.elsetype) || return false
+        typeb isa Const && return true
+        typeb isa InterConditional || return false
+        is_same_conditionals(typea, typeb) || return false
+        issimplertype(typea.thentype, typeb.thentype) || return false
+        issimplertype(typea.elsetype, typeb.elsetype) || return false
     elseif typea isa PartialOpaque
         # TODO
     end
@@ -382,33 +382,35 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     elseif isa(typeb, LimitedAccuracy)
         return LimitedAccuracy(tmerge(typea, typeb.typ), typeb.causes)
     end
+
     # type-lattice for MaybeUndef wrapper
     if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
         return MaybeUndef(tmerge(
             isa(typea, MaybeUndef) ? typea.typ : typea,
             isa(typeb, MaybeUndef) ? typeb.typ : typeb))
     end
-    # type-lattice for Conditional wrapper
+
+    # type-lattice for Conditional wrapper (NOTE never be merged with InterConditional)
     if isa(typea, Conditional) && isa(typeb, Const)
         if typeb.val === true
-            typeb = Conditional(typea.var, Any, Union{})
+            typeb = Conditional(typea.slot, Any, Union{})
         elseif typeb.val === false
-            typeb = Conditional(typea.var, Union{}, Any)
+            typeb = Conditional(typea.slot, Union{}, Any)
         end
     end
     if isa(typeb, Conditional) && isa(typea, Const)
         if typea.val === true
-            typea = Conditional(typeb.var, Any, Union{})
+            typea = Conditional(typeb.slot, Any, Union{})
         elseif typea.val === false
-            typea = Conditional(typeb.var, Union{}, Any)
+            typea = Conditional(typeb.slot, Union{}, Any)
         end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
         if is_same_conditionals(typea, typeb)
-            vtype = tmerge(typea.vtype, typeb.vtype)
+            thentype = tmerge(typea.thentype, typeb.thentype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
-            if vtype !== elsetype
-                return Conditional(typea.var, vtype, elsetype)
+            if thentype !== elsetype
+                return Conditional(typea.slot, thentype, elsetype)
             end
         end
         val = maybe_extract_const_bool(typea)
@@ -417,7 +419,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
-    # type-lattice for InterConditional wrapper, InterConditional will never be merged with Conditional
+    # type-lattice for InterConditional wrapper (NOTE never be merged with Conditional)
     if isa(typea, InterConditional) && isa(typeb, Const)
         if typeb.val === true
             typeb = InterConditional(typea.slot, Any, Union{})
@@ -434,10 +436,10 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     end
     if isa(typea, InterConditional) && isa(typeb, InterConditional)
         if is_same_conditionals(typea, typeb)
-            vtype = tmerge(typea.vtype, typeb.vtype)
+            thentype = tmerge(typea.thentype, typeb.thentype)
             elsetype = tmerge(typea.elsetype, typeb.elsetype)
-            if vtype !== elsetype
-                return InterConditional(typea.slot, vtype, elsetype)
+            if thentype !== elsetype
+                return InterConditional(typea.slot, thentype, elsetype)
             end
         end
         val = maybe_extract_const_bool(typea)
@@ -446,6 +448,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+
     # type-lattice for Const and PartialStruct wrappers
     if ((isa(typea, PartialStruct) || isa(typea, Const)) &&
         (isa(typeb, PartialStruct) || isa(typeb, Const)))
@@ -497,6 +500,8 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
             return anyrefine ? PartialStruct(aty, fields) : aty
         end
     end
+
+    # type-lattice for PartialOpaque wrapper
     if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
         if !(typea.source === typeb.source &&
              typea.parent === typeb.parent)
@@ -505,6 +510,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
             typea.parent, typea.source)
     end
+
     # no special type-inference lattice, join the types
     typea, typeb = widenconst(typea), widenconst(typeb)
     if !isa(typea, Type) || !isa(typeb, Type)

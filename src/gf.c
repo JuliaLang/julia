@@ -1946,7 +1946,8 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
 // full is a boolean indicating if that method fully covers the input
 //
 // lim is the max # of methods to return. if there are more, returns jl_false.
-// -1 for no limit.
+// Negative values stand for no limit.
+// Unless lim == -1, remove matches that are unambiguously covered by earler ones
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig)
 {
@@ -3036,7 +3037,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 if (!subt2 && subt)
                     break;
                 if (subt == subt2) {
-                    if (lim >= 0) {
+                    if (lim != -1) {
                         if (subt || !jl_has_empty_intersection(m->sig, m2->sig))
                             if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
                                 break;
@@ -3190,7 +3191,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 }
             }
             // when limited, skip matches that are covered by earlier ones (and aren't perhaps ambiguous with them)
-            if (lim >= 0) {
+            if (lim != -1) {
                 for (i = 0; i < len; i++) {
                     if (skip[i])
                         continue;

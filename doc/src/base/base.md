@@ -27,13 +27,12 @@ Base.exit
 Base.atexit
 Base.isinteractive
 Base.summarysize
-Base.require
-Base.compilecache
 Base.__precompile__
 Base.include
 Base.MainInclude.include
 Base.include_string
 Base.include_dependency
+__init__
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show
@@ -174,6 +173,7 @@ Base.isdispatchtuple
 ```@docs
 Base.ismutable
 Base.isimmutable
+Base.ismutabletype
 Base.isabstracttype
 Base.isprimitivetype
 Base.issingletontype
@@ -420,6 +420,7 @@ Base.nameof(::Module)
 Base.parentmodule
 Base.pathof(::Module)
 Base.pkgdir(::Module)
+Base.pkgversion(::Module)
 Base.moduleroot
 __module__
 __source__
@@ -433,6 +434,15 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+```
+
+## Code loading
+
+```@docs
+Base.identify_package
+Base.locate_package
+Base.require
+Base.compilecache
 ```
 
 ## Internals
