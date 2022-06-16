@@ -187,6 +187,8 @@ end
 @test isempty(collect(drop(0:2:10, 100)))
 @test_throws ArgumentError drop(0:2:8, -1)
 @test length(drop(1:3,typemax(Int))) == 0
+@test length(drop(UInt(1):2, 3)) == 0
+@test length(drop(StepRangeLen(1, 1, UInt(2)), 3)) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
 @test Base.IteratorSize(Iterators.drop(Iterators.filter(i -> i>0, 1:10), 2)) == Base.SizeUnknown()
