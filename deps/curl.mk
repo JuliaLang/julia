@@ -52,12 +52,17 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/sour
 		--without-libidn2 --without-librtmp --without-nss --without-libpsl \
 		--disable-ldap --disable-ldaps --without-zsh-functions-dir --disable-static \
 		--with-libssh2=$(build_prefix) --with-zlib=$(build_prefix) --with-nghttp2=$(build_prefix) \
+		--enable-versioned-symbols \
 		$(CURL_TLS_CONFIGURE_FLAGS) \
 		CFLAGS="$(CFLAGS) $(CURL_CFLAGS)" LDFLAGS="$(LDFLAGS) $(CURL_LDFLAGS)"
 	echo 1 > $@
 
+ifeq ($(OS), WINNT)
+# keep version number
+LIBTOOL_CCLD_VERSIONED := CCLD="$(CC) -no-undefined"
+endif
 $(BUILDDIR)/curl-$(CURL_VER)/build-compiled: $(BUILDDIR)/curl-$(CURL_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON) $(LIBTOOL_CCLD_VERSIONED)
 	echo 1 > $@
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-checked: $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
@@ -68,7 +73,7 @@ endif
 
 $(eval $(call staged-install, \
 	curl,curl-$$(CURL_VER), \
-	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
+	MAKE_INSTALL,$$(LIBTOOL_CCLD_VERSIONED),, \
 	$$(INSTALL_NAME_CMD)libcurl.$$(SHLIB_EXT) $$(build_shlibdir)/libcurl.$$(SHLIB_EXT)))
 
 clean-curl:
