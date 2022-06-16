@@ -1195,7 +1195,7 @@ function sortperm!(ix::AbstractArray{<:Integer}, A::AbstractArray;
     sort!(ix; dims..., alg, order=perm)
 end
 
-
+# sortperm for vectors of few unique integers
 function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     offs = 1 - minval
     n = length(x)
