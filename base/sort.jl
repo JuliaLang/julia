@@ -1070,7 +1070,7 @@ end
     sortperm(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, [dims::Integer])
 
 Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
-If `A` is an `AbstractArray`, then the `dims` keyword argument must be specified. The order is specified
+If `A` has more than one dimension, then the `dims` keyword argument must be specified. The order is specified
 using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
@@ -1142,7 +1142,7 @@ end
 """
     sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
 
-Like [`sortperm`](@ref), but accepts a preallocated index Vector or Array `ix` of the same length and indexing as `ix`.  If `initialized` is `false`
+Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.  If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `LinearIndices(A)`.
 
 # Examples
