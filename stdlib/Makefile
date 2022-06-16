@@ -6,6 +6,7 @@ SRCCACHE := $(abspath $(SRCDIR)/srccache)
 BUILDDIR := .
 
 include $(JULIAHOME)/Make.inc
+include $(JULIAHOME)/stdlib/all_jlls.version
 include $(JULIAHOME)/deps/tools/common.mk
 include $(JULIAHOME)/deps/tools/stdlib-external.mk
 
