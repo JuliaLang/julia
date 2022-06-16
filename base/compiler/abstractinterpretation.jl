@@ -1744,7 +1744,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     return abstract_call_gf_by_type(interp, f, arginfo, atype, sv, max_methods)
 end
 
-function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::PartialOpaque, arginfo::ArgInfo, sv::InferenceState)
+function abstract_call_opaque_closure(interp::AbstractInterpreter,
+    closure::PartialOpaque, arginfo::ArgInfo, sv::InferenceState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
     result = abstract_call_method(interp, closure.source, sig, Core.svec(), false, sv)
     (; rt, edge, effects) = result
@@ -1763,7 +1764,16 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
         end
     end
     info = OpaqueClosureCallInfo(match, const_result)
-    return CallMeta(from_interprocedural!(rt, sv, arginfo, match.spec_types), edge_effects, info)
+    if check # analyze implicit type asserts on argument and return type
+        ftt = closure.typ
+        (aty, rty) = (unwrap_unionall(ftt)::DataType).parameters
+        rty = rewrap_unionall(rty isa TypeVar ? rty.lb : rty, ftt)
+        if !(rt ⊑ rty && tuple_tfunc(arginfo.argtypes[2:end]) ⊑ rewrap_unionall(aty, ftt))
+            effects = Effects(effects; nothrow=TRISTATE_UNKNOWN)
+        end
+    end
+    rt = from_interprocedural!(rt, sv, arginfo, match.spec_types)
+    return CallMeta(rt, effects, info)
 end
 
 function most_general_argtypes(closure::PartialOpaque)
@@ -1785,22 +1795,8 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo,
     if isa(ft, PartialOpaque)
         newargtypes = copy(argtypes)
         newargtypes[1] = ft.env
-        body_call = abstract_call_opaque_closure(interp, ft, ArgInfo(arginfo.fargs, newargtypes), sv)
-        # Analyze implicit type asserts on argument and return type
-        ftt = ft.typ
-        (at, rt) = (unwrap_unionall(ftt)::DataType).parameters
-        if isa(rt, TypeVar)
-            rt = rewrap_unionall(rt.lb, ftt)
-        else
-            rt = rewrap_unionall(rt, ftt)
-        end
-        nothrow = body_call.rt ⊑ rt
-        if nothrow
-            nothrow = tuple_tfunc(newargtypes[2:end]) ⊑ rewrap_unionall(at, ftt)
-        end
-        return CallMeta(body_call.rt, Effects(body_call.effects,
-            nothrow = nothrow ? TRISTATE_UNKNOWN : body_call.effects.nothrow),
-            body_call.info)
+        return abstract_call_opaque_closure(interp,
+            ft, ArgInfo(arginfo.fargs, newargtypes), sv, #=check=#true)
     elseif (uft = unwrap_unionall(widenconst(ft)); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
         return CallMeta(rewrap_unionall((uft::DataType).parameters[2], widenconst(ft)), Effects(), false)
     elseif f === nothing
@@ -2026,7 +2022,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                     argtypes = most_general_argtypes(t)
                     pushfirst!(argtypes, t.env)
                     callinfo = abstract_call_opaque_closure(interp, t,
-                        ArgInfo(nothing, argtypes), sv)
+                        ArgInfo(nothing, argtypes), sv, #=check=#false)
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                 end
             end
