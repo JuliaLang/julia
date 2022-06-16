@@ -1,0 +1,5 @@
+## jll artifact
+GMP_JLL_NAME := GMP
+
+## source build
+GMP_VER := 6.2.1

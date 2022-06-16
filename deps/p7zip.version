@@ -1,0 +1,5 @@
+## jll artifact
+P7ZIP_JLL_NAME := p7zip
+
+## source build
+P7ZIP_VER := 17.04
