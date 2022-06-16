@@ -605,7 +605,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = midpoint(lo, hi)
-        
+
         t = t0 === nothing ? similar(v, m-lo+1) : t0
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
@@ -1560,7 +1560,7 @@ function sort!(v::FPSortable, a::Algorithm, o::DirectOrdering,
         t::Union{FPSortable, Nothing}=nothing)
     fpsort!(v, a, o, t)
 end
-function sort!(v::AbstractVector{T}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable}, 
+function sort!(v::AbstractVector{T}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable},
         t::Union{AbstractVector{T}, Nothing}=nothing) where T <: Union{Signed, Unsigned}
     fpsort!(v, a, o, t)
 end
