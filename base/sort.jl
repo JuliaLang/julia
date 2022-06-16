@@ -1221,7 +1221,6 @@ function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
     return P
 end
 
-
 ## sorting multi-dimensional arrays ##
 
 """
