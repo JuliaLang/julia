@@ -57,11 +57,17 @@ function showvalue(io, e::Tuple{Exception,Any})
 end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
+
+
 function default_logcolor(level::LogLevel)
-    level < Info  ? Base.debug_color() :
-    level < Warn  ? Base.info_color()  :
-    level < Error ? Base.warn_color()  :
-                    Base.error_color()
+    # Log colors occupy the area between the midpoints of adjacent levels
+    # so that Info+1 is the same color as Info-1, is the same color as Info
+    below_midpoint(x, a, b) = x.level < (a.level + b.level)/2
+
+	below_midpoint(level, Debug, Info) ? Base.debug_color() :
+    below_midpoint(level, Info, Warn)  ? Base.info_color()  :
+    below_midpoint(level, Warn, Error) ? Base.warn_color()  :
+                                         Base.error_color()
 end
 
 function default_metafmt(level::LogLevel, _module, group, id, file, line)

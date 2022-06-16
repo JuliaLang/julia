@@ -53,6 +53,10 @@ end
             (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
         @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
             (:cyan,      "Info:",    "")
+        @test Logging.default_metafmt(Logging.Info+1,  Main, :g, :i, "a.jl", 1) ==
+            (:cyan,      "LogLevel(1):",    "")
+        @test Logging.default_metafmt(Logging.Info-1,  Main, :g, :i, "a.jl", 1) ==
+            (:cyan,      "LogLevel(-1):",    "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
             (:yellow,    "Warning:", "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
