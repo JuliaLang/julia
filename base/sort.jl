@@ -1197,7 +1197,7 @@ julia> sortperm!(p, A; dims=2); p
  2  4
 ```
 """
-function sortperm!(ix::AbstractArray{<:Integer}, A::AbstractArray;
+function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
@@ -1345,10 +1345,10 @@ function sort!(A::AbstractArray{T};
                workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
     _sort!(A, Val(dims), alg, ord(lt, by, rev, order), workspace)
 end
-function _sort!(A::AbstractArray, ::Val{K},
+function _sort!(A::AbstractArray{T}, ::Val{K},
                 alg::Algorithm,
                 order::Ordering,
-                workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where {K,T}
+                workspace::Union{AbstractVector{T}, Nothing}) where {K,T}
     nd = ndims(A)
 
     1 <= K <= nd || throw(ArgumentError("dimension out of range"))
