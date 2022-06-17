@@ -21,7 +21,6 @@ LIBGIT2_OPTS += -DBUILD_CLAR=OFF
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 
-# clang on x86_64
 ifneq ($(ARCH),x86_64)
 ifneq ($(USECLANG),1)
 LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-mincoming-stack-boundary=2"
