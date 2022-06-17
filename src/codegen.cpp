@@ -2090,11 +2090,13 @@ static void jl_init_function(Function *F)
     // i686 Windows (which uses a 4-byte-aligned stack)
 #if JL_LLVM_VERSION >= 140000
     AttrBuilder attr(F->getContext());
+    attr.addStackAlignmentAttr(16);
+    F->addFnAttrs(attr);
 #else
     AttrBuilder attr;
-#endif
     attr.addStackAlignmentAttr(16);
     F->addAttributes(AttributeList::FunctionIndex, attr);
+#endif
 #endif
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
     F->setHasUWTable(); // force NeedsWinEH
