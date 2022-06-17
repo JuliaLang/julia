@@ -811,8 +811,8 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
 broadcast(f::Tf, As...) where {Tf} = materialize(broadcasted(f, As...))
 
 # special cases defined for performance
-@inline broadcast(f, x::Number...) = f(x...)
-@inline broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
+broadcast(f, x::Number...) = f(x...)
+broadcast(f, t::NTuple{N,Any}, ts::Vararg{NTuple{N,Any}}) where {N} = map(f, t, ts...)
 
 """
     broadcast!(f, dest, As...)
@@ -870,28 +870,28 @@ end
 
 Take a lazy `Broadcasted` object and compute the result
 """
-@inline materialize(bc::Broadcasted) = copy(instantiate(bc))
+materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x
 
-@inline function materialize!(dest, x)
+function materialize!(dest, x)
     return materialize!(dest, instantiate(Broadcasted(identity, (x,), axes(dest))))
 end
 
-@inline function materialize!(dest, bc::Broadcasted{Style}) where {Style}
+function materialize!(dest, bc::Broadcasted{Style}) where {Style}
     return materialize!(combine_styles(dest, bc), dest, bc)
 end
-@inline function materialize!(::BroadcastStyle, dest, bc::Broadcasted{Style}) where {Style}
+function materialize!(::BroadcastStyle, dest, bc::Broadcasted{Style}) where {Style}
     return copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
 end
 
 ## general `copy` methods
-@inline copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
+copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
 copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
     throw(ArgumentError("broadcasting requires an assigned BroadcastStyle"))
 
 const NonleafHandlingStyles = Union{DefaultArrayStyle,ArrayConflict}
 
-@inline function copy(bc::Broadcasted{Style}) where {Style}
+function copy(bc::Broadcasted{Style}) where {Style}
     ElType = combine_eltypes(bc.f, bc.args)
     if Base.isconcretetype(ElType)
         # We can trust it and defer to the simpler `copyto!`
@@ -923,10 +923,10 @@ end
 ## general `copyto!` methods
 # The most general method falls back to a method that replaces Style->Nothing
 # This permits specialization on typeof(dest) without introducing ambiguities
-@inline copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
+copyto!(dest::AbstractArray, bc::Broadcasted) = copyto!(dest, convert(Broadcasted{Nothing}, bc))
 
 # Performance optimization for the common identity scalar case: dest .= val
-@inline function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
+function copyto!(dest::AbstractArray, bc::Broadcasted{<:AbstractArrayStyle{0}})
     # Typically, we must independently execute bc for every storage location in `dest`, but:
     # IF we're in the common no-op identity case with no nested args (like `dest .= val`),
     if bc.f === identity && bc.args isa Tuple{Any} && isflat(bc)
@@ -958,7 +958,7 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 @inline preprocess_args(dest, args::Tuple{}) = ()
 
 # Specialize this method if all you want to do is specialize on typeof(dest)
-@inline function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
+function copyto!(dest::AbstractArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     # Performance optimization: broadcast!(identity, dest, A) is equivalent to copyto!(dest, A) if indices match
     if bc.f === identity && bc.args isa Tuple{AbstractArray} # only a single input argument to broadcast!
@@ -978,7 +978,7 @@ end
 
 # Performance optimization: for BitArray outputs, we cache the result
 # in a "small" Vector{Bool}, and then copy in chunks into the output
-@inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
+function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
     length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
@@ -1034,7 +1034,7 @@ liftchunks(args::Tuple{<:Bool,Vararg{Any}}) = (ifelse(args[1], typemax(UInt64), 
 ithchunk(i) = ()
 Base.@propagate_inbounds ithchunk(i, c::Vector{UInt64}, args...) = (c[i], ithchunk(i, args...)...)
 Base.@propagate_inbounds ithchunk(i, b::UInt64, args...) = (b, ithchunk(i, args...)...)
-@inline function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
+function chunkedcopyto!(dest::BitArray, bc::Broadcasted)
     isempty(dest) && return dest
     f = flatten(liftfuncs(bc))
     args = liftchunks(f.args)
@@ -1081,7 +1081,7 @@ end
 
 ## Tuple methods
 
-@inline function copy(bc::Broadcasted{Style{Tuple}})
+function copy(bc::Broadcasted{Style{Tuple}})
     dim = axes(bc)
     length(dim) == 1 || throw(DimensionMismatch("tuple only supports one dimension"))
     N = length(dim[1])
@@ -1177,15 +1177,15 @@ struct BitMaskedBitArray{N,M}
     mask::BitArray{M}
     BitMaskedBitArray{N,M}(parent, mask) where {N,M} = new(parent, mask)
 end
-@inline function BitMaskedBitArray(parent::BitArray{N}, mask::BitArray{M}) where {N,M}
+function BitMaskedBitArray(parent::BitArray{N}, mask::BitArray{M}) where {N,M}
     @boundscheck checkbounds(parent, mask)
     BitMaskedBitArray{N,M}(parent, mask)
 end
 Base.@propagate_inbounds dotview(B::BitArray, i::BitArray) = BitMaskedBitArray(B, i)
 Base.show(io::IO, B::BitMaskedBitArray) = foreach(arg->show(io, arg), (typeof(B), (B.parent, B.mask)))
 # Override materialize! to prevent the BitMaskedBitArray from escaping to an overrideable method
-@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
-@inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(SubArray(B.parent, to_indices(B.parent, (B.mask,))), bc)
+materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
+materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(SubArray(B.parent, to_indices(B.parent, (B.mask,))), bc)
 function Base.fill!(B::BitMaskedBitArray, b::Bool)
     Bc = B.parent.chunks
     Ic = B.mask.chunks
@@ -1290,14 +1290,14 @@ macro __dot__(x)
     esc(__dot__(x))
 end
 
-@inline function broadcasted_kwsyntax(f, args...; kwargs...)
+@inline function broadcasted_kwsyntax(f::F, args...; kwargs...) where {F}
     if isempty(kwargs) # some BroadcastStyles dispatch on `f`, so try to preserve its type
         return broadcasted(f, args...)
     else
         return broadcasted((args...) -> f(args...; kwargs...), args...)
     end
 end
-@inline function broadcasted(f, args...)
+@inline function broadcasted(f::F, args...) where {F}
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(args′...), f, args′...)
 end
@@ -1305,18 +1305,18 @@ end
 # the totally generic varargs broadcasted(f, args...) method above loses Type{T}s in
 # mapping broadcastable across the args. These additional methods with explicit
 # arguments ensure we preserve Type{T}s in the first or second argument position.
-@inline function broadcasted(f, arg1, args...)
+@inline function broadcasted(f::F, arg1::T1, args...) where {F, T1}
     arg1′ = broadcastable(arg1)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(arg1′, args′...), f, arg1′, args′...)
 end
-@inline function broadcasted(f, arg1, arg2, args...)
+@inline function broadcasted(f::F, arg1::T1, arg2::T2, args...) where {F, T1, T2}
     arg1′ = broadcastable(arg1)
     arg2′ = broadcastable(arg2)
     args′ = map(broadcastable, args)
     broadcasted(combine_styles(arg1′, arg2′, args′...), f, arg1′, arg2′, args′...)
 end
-@inline broadcasted(::S, f, args...) where S<:BroadcastStyle = Broadcasted{S}(f, args)
+@inline broadcasted(::S, f::F, args...) where {S<:BroadcastStyle, F} = Broadcasted{S}(f, args)
 
 """
     BroadcastFunction{F} <: Function
