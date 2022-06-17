@@ -6,7 +6,17 @@
     test_parse_all_in_path(joinpath(pkgdir, "test"))
 end
 
-base_path = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base") 
+base_path = let
+    p = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base") 
+    if !isdir(p)
+        # For julia 1.9 images.
+        p = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base") 
+        if !isdir(p)
+            error("source for Julia base not found")
+        end
+    end
+    p
+end
 @testset "Parse Base at $base_path" begin
     test_parse_all_in_path(base_path)
 end
