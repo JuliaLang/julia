@@ -2147,12 +2147,15 @@ end # module
 
 Note that the first example here actually executes `foo(1, 1.0)` so can be slower, but is usually more robust
 to changes in the codebase than the latter approach of using `precompile` statements. The latter requires explicitly
-calling `precompile` on all methods, not just the entry method. i.e. `foo(1, 1.0)` will likely call other methods
+calling `precompile` on methods that cannot be inferred. i.e. if `foo(1, 1.0)` calls some methods by runtime dispatch, the dispatched calls must be independently `precompile`d.
 which will also need `precompile` statements. Consequently the latter can be more work to maintain, but can be
 automated via tooling such as the package `SnoopCompile.jl`.
 
 It is therefore recommended, where possible, to find minimal code to execute to get the desired precompilation coverage.
 
+Guarding precompilation code behind this check is also best practice because in some situations, 
+downstream users may not want to use the precompilation caching, which can be disabled globally
+via `--compiled-modules=no`.
 See also [`precompile`](@ref).
 """
 function is_serializing_code()
