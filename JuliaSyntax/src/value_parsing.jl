@@ -210,41 +210,39 @@ end
 # stdlib under the name `Unicode.julia_chartransform`. See
 # https://github.com/JuliaLang/julia/pull/42561
 #
-# To allow use on older Julia versions, we reproduce that logic here.
+# To allow use on older Julia versions and to workaround the bug
+# https://github.com/JuliaLang/julia/issues/45716
+# we reproduce a specialized version of that logic here.
 
 # static wrapper around user callback function
-utf8proc_custom_func(codepoint::UInt32, callback::Any) =
-    UInt32(callback(codepoint))::UInt32
+function utf8proc_custom_func(codepoint::UInt32, ::Ptr{Cvoid})::UInt32
+    (codepoint == 0x025B ? 0x03B5 :
+    codepoint == 0x00B5 ? 0x03BC :
+    codepoint == 0x00B7 ? 0x22C5 :
+    codepoint == 0x0387 ? 0x22C5 :
+    codepoint == 0x2212 ? 0x002D :
+    codepoint)
+end
 
-function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) where T
-    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ref{T}),
+function utf8proc_decompose(str, options, buffer, nwords)
+    ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
                 str, sizeof(str), buffer, nwords, options,
-                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ref{T})), chartransform)
+                @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ptr{Cvoid})), C_NULL)
     ret < 0 && utf8proc_error(ret)
     return ret
 end
 
-function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
-    nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer)
+    nwords = utf8proc_decompose(str, options, C_NULL, 0)
     buffer = Base.StringVector(nwords*4)
-    nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
+    nwords = utf8proc_decompose(str, options, buffer, nwords)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
     nbytes < 0 && utf8proc_error(nbytes)
     return String(resize!(buffer, nbytes))
 end
 
-const _julia_charmap = Dict{UInt32,UInt32}(
-    0x025B => 0x03B5,
-    0x00B5 => 0x03BC,
-    0x00B7 => 0x22C5,
-    0x0387 => 0x22C5,
-    0x2212 => 0x002D,
-)
-
-julia_chartransform(codepoint::UInt32) = get(_julia_charmap, codepoint, codepoint)
-
 function normalize_identifier(str)
     flags = Base.Unicode.UTF8PROC_STABLE | Base.Unicode.UTF8PROC_COMPOSE
-    utf8proc_map(str, flags, julia_chartransform)
+    utf8proc_map(str, flags)
 end
 
