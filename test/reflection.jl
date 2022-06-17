@@ -113,8 +113,14 @@ not_const = 1
 
 @test ismutable(1) == false
 @test ismutable([]) == true
+@test ismutable("foo") == false
+@test ismutable(:symbol) == false
+@test ismutable(Some([])) == false
 @test ismutabletype(Int) == false
 @test ismutabletype(Vector{Any}) == true
+@test ismutabletype(String) == false
+@test ismutabletype(Symbol) == false
+@test ismutabletype(Some{Vector{Any}}) == false
 @test ismutabletype(Union{Int, Vector{Any}}) == false
 
 ## find bindings tests
