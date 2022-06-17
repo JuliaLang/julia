@@ -513,6 +513,16 @@ end
     @test issorted(a)
 end
 
+@testset "sort!(::OffsetVector)" begin
+    for length in vcat(0:5, [10, 300, 500, 1000])
+        for offset in [-100000, -10, -1, 0, 1, 17, 1729]
+            x = OffsetVector(rand(length), offset)
+            sort!(x)
+            @test issorted(x)
+        end
+    end
+end
+
 @testset "sort!(::OffsetMatrix; dims)" begin
     x = OffsetMatrix(rand(5,5), 5, -5)
     sort!(x; dims=1)
@@ -654,17 +664,6 @@ end
     end
 end
 
-@testset "workspace()" begin
-    for v in [[1, 2, 3], [0.0]]
-        for t0 in vcat([nothing], [similar(v,i) for i in 1:5]), len in 0:5
-            t = Base.Sort.workspace(v, t0, len)
-            @test eltype(t) == eltype(v)
-            @test length(t) >= len
-            @test firstindex(t) == 1
-        end
-    end
-end
-
 @testset "sort(x; workspace=w) " begin
     for n in [1,10,100,1000]
         v = rand(n)
@@ -681,7 +680,7 @@ end
     end
 end
 
-
+# This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
                 UInt8, UInt16, UInt32, UInt64, UInt128,
@@ -842,5 +841,6 @@ end
         end
     end
 end
+# The "searchsorted" testset is at the end of the file because it is slow.
 
 end
