@@ -487,6 +487,10 @@ export
 # bitarrays
     falses,
     trues,
+    rshift!,
+    rshift,
+    lshift!,
+    lshift,
 
 # dequeues
     append!,
