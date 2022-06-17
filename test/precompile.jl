@@ -313,7 +313,7 @@ precompile_test_harness(false) do dir
     # the module doesn't reload from the image:
     @test_warn "@ccallable was already defined for this method name" begin
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            ms = Base._require_from_serialized(cachefile)
+            ms = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
             @test isa(ms, Array{Any,1})
         end
     end
@@ -359,12 +359,12 @@ precompile_test_harness(false) do dir
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
                  end for s in
-                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates, :DelimitedFiles,
+                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
                  :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
                  :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
                  :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
-                 :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :SparseArrays, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
         )
@@ -1277,4 +1277,16 @@ end
     end
     @test any(mi -> mi.specTypes.parameters[2] === Any, mis)
     @test all(mi -> isa(mi.cache, Core.CodeInstance), mis)
+end
+
+# Test that the cachepath is available in pkgorigins during the
+# __init__ callback
+precompile_test_harness("__init__ cachepath") do load_path
+    write(joinpath(load_path, "InitCachePath.jl"),
+          """
+          module InitCachePath
+            __init__() = Base.pkgorigins[Base.PkgId(InitCachePath)]
+          end
+          """)
+    @test isa((@eval (using InitCachePath; InitCachePath)), Module)
 end

@@ -69,6 +69,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
+    jl_atomic_store_release(&tn->Typeofwrapper, NULL);
     jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
@@ -1490,7 +1491,7 @@ void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, 
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
+        jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {

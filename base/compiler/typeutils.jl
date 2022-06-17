@@ -291,7 +291,7 @@ function unswitchtupleunion(u::Union)
             return u
         end
     end
-    Tuple{Any[ Union{Any[t.parameters[i] for t in ts]...} for i in 1:n ]...}
+    Tuple{Any[ Union{Any[(t::DataType).parameters[i] for t in ts]...} for i in 1:n ]...}
 end
 
 function unwraptv(@nospecialize t)

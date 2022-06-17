@@ -218,7 +218,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -t, --threads
     code = "print(Threads.nthreads())"
-    cpu_threads = ccall(:jl_cpu_threads, Int32, ())
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
           read(`$exename --threads=auto -e $code`, String) ==
@@ -510,7 +510,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test parse(Int,readchomp(`$exename --math-mode=ieee -E
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
         @test parse(Int,readchomp(`$exename --math-mode=fast -E
-            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_ON
+            "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
     # --worker takes default / custom as argument (default/custom arguments
@@ -531,10 +531,20 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_DEPOT_PATH" => dir) do
             output = "[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile foo -bar --baz`) == output
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
+            @test readchomp(`$exename -- $testfile foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
                 output
             @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+                output
+
+            output = "[\"foo\", \"--\", \"-bar\", \"--baz\"]"
+            @test readchomp(`$exename $testfile foo -- -bar --baz`) == output
+            @test readchomp(`$exename -- $testfile foo -- -bar --baz`) == output
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' foo -- -bar --baz`) ==
+                output
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -- -bar --baz`) ==
+                output
+            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' foo -- -bar --baz`) ==
                 output
 
             output = "String[]\nString[]"
@@ -542,8 +552,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test readchomp(`$exename --startup-file=yes $testfile`) == output
 
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
-                "[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 

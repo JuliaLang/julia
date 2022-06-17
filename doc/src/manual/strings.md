@@ -242,8 +242,9 @@ The former is a single character value of type `Char`, while the latter is a str
 happens to contain only a single character. In Julia these are very different things.
 
 Range indexing makes a copy of the selected part of the original string.
-Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
-for example:
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref).
+More simply, using the [`@views`](@ref) macro on a block of code converts all string slices
+into substrings.  For example:
 
 ```jldoctest
 julia> str = "long string"
@@ -253,6 +254,9 @@ julia> substr = SubString(str, 1, 4)
 "long"
 
 julia> typeof(substr)
+SubString{String}
+
+julia> @views typeof(str[1:4]) # @views converts slices to SubStrings
 SubString{String}
 ```
 

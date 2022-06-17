@@ -34,7 +34,7 @@ The memory consumption estimate is an approximate lower bound on the size of the
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 - `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
 """
-function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
@@ -45,7 +45,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
                 continue
             end
             value = getfield(m2, v)
-            isbuiltin = value === Base || value === Main || value === Core
+            isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
             end
@@ -75,7 +75,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
 
     return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
+varinfo(pat::Regex; kwargs...) = varinfo(Base.active_module(), pat; kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)

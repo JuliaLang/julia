@@ -46,6 +46,58 @@ end
 
 show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
+show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
+
+const ansi_regex = r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+# An iterator similar to `pairs` but skips over "tokens" corresponding to
+# ansi sequences
+struct IgnoreAnsiIterator
+    captures::Base.RegexMatchIterator
+end
+IgnoreAnsiIterator(s::AbstractString) =
+    IgnoreAnsiIterator(eachmatch(ansi_regex, s))
+
+Base.IteratorSize(::Type{IgnoreAnsiIterator}) = Base.SizeUnknown()
+function iterate(I::IgnoreAnsiIterator, (i, m_st)=(1, iterate(I.captures)))
+    # Advance until the next non ansi sequence
+    if m_st !== nothing
+        m, j = m_st
+        if m.offset == i
+            i += sizeof(m.match)
+            return iterate(I, (i, iterate(I.captures, j)))
+        end
+    end
+    ci = iterate(I.captures.string, i)
+    ci === nothing && return nothing
+    i_prev = i
+    (c, i) = ci
+    return (i_prev => c), (i, m_st)
+end
+
+function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
+    truncwidth = textwidth(truncmark)
+    (width <= 0 || width < truncwidth) && return ""
+    wid = truncidx = lastidx = 0
+    ignore_ansi &= match(ansi_regex, str) !== nothing
+    I = ignore_ansi ? IgnoreAnsiIterator(str) : pairs(str)
+    for (_lastidx, c) in I
+        lastidx = _lastidx
+        wid += textwidth(c)
+        if wid >= (width - truncwidth) && truncidx == 0
+            truncidx = lastidx
+        end
+        (wid >= width || c in chars) && break
+    end
+    if lastidx != 0 && str[lastidx] in chars
+        lastidx = prevind(str, lastidx)
+    end
+    truncidx == 0 && (truncidx = lastidx)
+    if lastidx < lastindex(str)
+        return String(SubString(str, 1, truncidx) * truncmark)
+    else
+        return String(str)
+    end
+end
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
     isempty(iter) && get(io, :compact, false) && return show(io, iter)
@@ -70,7 +122,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 
         if limit
             str = sprint(show, v, context=io, sizehint=0)
-            str = _truncate_at_width_or_chars(str, cols, "\r\n")
+            str = _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n")
             print(io, str)
         else
             show(io, v)
@@ -128,7 +180,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         end
 
         if limit
-            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+            key = rpad(_truncate_at_width_or_chars(get(recur_io, :color, false), ks[i], keylen, "\r\n"), keylen)
         else
             key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
@@ -136,7 +188,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         print(io, " => ")
 
         if limit
-            val = _truncate_at_width_or_chars(vs[i], cols - keylen, "\r\n")
+            val = _truncate_at_width_or_chars(get(recur_io, :color, false), vs[i], cols - keylen, "\r\n")
             print(io, val)
         else
             show(recur_io_v, v)
@@ -180,7 +232,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
 
         if limit
             str = sprint(show, v, context=recur_io, sizehint=0)
-            print(io, _truncate_at_width_or_chars(str, cols, "\r\n"))
+            print(io, _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n"))
         else
             show(recur_io, v)
         end
@@ -430,13 +482,18 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
+active_module()::Module = isdefined(Base, :active_repl) && isdefined(Base.active_repl, :mistate) && Base.active_repl.mistate !== nothing ?
+                      Base.active_repl.mistate.active_module :
+                      Main
+
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
     !isdefined(mod, name) && return false
     orig = getfield(mod, name)
     while !(mod === Base || mod === Core)
+        activemod = active_module()
         parent = parentmodule(mod)
-        if mod === Main || mod === parent || parent === Main
+        if mod === activemod || mod === parent || parent === activemod
             return false
         end
         mod = parent
@@ -444,29 +501,30 @@ function is_exported_from_stdlib(name::Symbol, mod::Module)
     return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
 end
 
-function show_function(io::IO, f::Function, compact::Bool)
+function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
     ft = typeof(f)
     mt = ft.name.mt
     if mt === Symbol.name.mt
         # uses shared method table
-        show_default(io, f)
+        fallback(io, f)
     elseif compact
         print(io, mt.name)
     elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
         getfield(mt.module, mt.name) === f
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === Main
+        mod = active_module()
+        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === mod
             show_sym(io, mt.name)
         else
             print(io, mt.module, ".")
             show_sym(io, mt.name)
         end
     else
-        show_default(io, f)
+        fallback(io, f)
     end
 end
 
-show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool)
-print(io::IO, f::Function) = show_function(io, f, true)
+show(io::IO, f::Function) = show_function(io, f, get(io, :compact, false)::Bool, show_default)
+print(io::IO, f::Function) = show_function(io, f, true, show)
 
 function show(io::IO, f::Core.IntrinsicFunction)
     if !(get(io, :compact, false)::Bool)
@@ -648,9 +706,9 @@ end
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
-        # IOContext. If :module is not set, default to Main. nothing can be used
-        # to force printing prefix.
-        from = get(io, :module, Main)
+        # IOContext. If :module is not set, default to Main (or current active module).
+        # nothing can be used to force printing prefix.
+        from = get(io, :module, active_module())
         if (from === nothing || !isvisible(name.name, name.mod, from))
             show(io, name.mod)
             print(io, ".")
@@ -964,9 +1022,9 @@ function show_type_name(io::IO, tn::Core.TypeName)
     quo = false
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
-        # IOContext If :module is not set, default to Main. nothing can be used
-        # to force printing prefix
-        from = get(io, :module, Main)
+        # IOContext If :module is not set, default to Main (or current active module).
+        # nothing can be used to force printing prefix
+        from = get(io, :module, active_module())
         if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from))
             show(io, tn.module)
             print(io, ".")
@@ -990,19 +1048,31 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     istuple = x.name === Tuple.name
     n = length(parameters)
 
-    # Print homogeneous tuples with more than 3 elements compactly as NTuple{N, T}
+    # Print tuple types with homogeneous tails longer than max_n compactly using `NTuple` or `Vararg`
+    max_n = 3
     if istuple
-        if n > 3 && all(@nospecialize(i) -> (parameters[1] === i), parameters)
+        taillen = 1
+        for i in (n-1):-1:1
+            if parameters[i] === parameters[n]
+                taillen += 1
+            else
+                break
+            end
+        end
+        if n == taillen > max_n
             print(io, "NTuple{", n, ", ")
             show(io, parameters[1])
             print(io, "}")
         else
             print(io, "Tuple{")
-            # join(io, params, ", ") params but `show` it
-            first = true
-            for param in parameters
-                first ? (first = false) : print(io, ", ")
-                show(io, param)
+            for i = 1:(taillen > max_n ? n-taillen : n)
+                i > 1 && print(io, ", ")
+                show(io, parameters[i])
+            end
+            if taillen > max_n
+                print(io, ", Vararg{")
+                show(io, parameters[n])
+                print(io, ", ", taillen, "}")
             end
             print(io, "}")
         end
@@ -1477,8 +1547,6 @@ function operator_associativity(s::Symbol)
     end
     return :left
 end
-
-const is_expr = isexpr
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
@@ -2710,9 +2778,9 @@ MyStruct
 ```
 """
 function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
-    # this is typically used interactively, so default to being in Main
-    mod = get(stdout, :module, Main)
-    dump(IOContext(stdout, :limit => true, :module => mod), arg; maxdepth=maxdepth)
+    # this is typically used interactively, so default to being in Main (or current active module)
+    mod = get(stdout, :module, active_module())
+    dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
 
 

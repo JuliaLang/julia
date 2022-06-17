@@ -5,6 +5,7 @@
 
 #include "options.h"
 #include "julia_locks.h"
+#include "julia_threads.h"
 #include "support/utils.h"
 #include "support/hashing.h"
 #include "support/ptrhash.h"
@@ -13,6 +14,7 @@
 #include "support/rle.h"
 #include <uv.h>
 #include <llvm-c/Types.h>
+#include <llvm-c/Orc.h>
 #if !defined(_WIN32)
 #include <unistd.h>
 #else
@@ -133,6 +135,13 @@ JL_DLLEXPORT void jl_set_peek_cond(uintptr_t);
 JL_DLLEXPORT double jl_get_profile_peek_duration(void);
 JL_DLLEXPORT void jl_set_profile_peek_duration(double);
 
+JL_DLLEXPORT void jl_init_profile_lock(void);
+JL_DLLEXPORT uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_lock_profile(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_lock_profile_wr(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT;
+
 // number of cycles since power-on
 static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 {
@@ -170,6 +179,7 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 // Global *atomic* integers controlling *process-wide* measurement of compilation time.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
 
 #define jl_return_address() ((uintptr_t)__builtin_return_address(0))
 
@@ -197,12 +207,12 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
     _Atomic(void*) *dstpa = (_Atomic(void*)*)dstp;
     if (dstp < srcp || dstp > srcp + n) {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
+            jl_atomic_store_release(dstpa + i, jl_atomic_load_relaxed(srcpa + i));
         }
     }
     else {
         for (i = 0; i < n; i++) {
-            jl_atomic_store_relaxed(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
+            jl_atomic_store_release(dstpa + n - i - 1, jl_atomic_load_relaxed(srcpa + n - i - 1));
         }
     }
 }
@@ -464,6 +474,10 @@ void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a) JL_NOTSAFEPOINT;
 void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT;
 void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
+void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
+
+// Set GC memory trigger in bytes for greedy memory collecting
+void jl_gc_set_max_memory(uint64_t max_mem);
 
 JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;
 void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
@@ -567,7 +581,6 @@ JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_value_t *b);
 
 extern uv_loop_t *jl_io_loop;
 void jl_uv_flush(uv_stream_t *stream);
-void jl_uv_call_close_callback(jl_value_t *val);
 
 typedef struct jl_typeenv_t {
     jl_tvar_t *var;
@@ -665,7 +678,7 @@ JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
-int jl_compile_extern_c(LLVMModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
+int jl_compile_extern_c(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source,  jl_value_t **env, size_t nenv);
@@ -826,6 +839,10 @@ typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
 
+#if !defined(_OS_WINDOWS_) && !defined(__APPLE__) && !defined(JL_DISABLE_LIBUNWIND)
+extern pthread_mutex_t in_signal_lock;
+#endif
+
 #if !defined(__clang_gcanalyzer__) && !defined(_OS_DARWIN_)
 static inline void jl_set_gc_and_wait(void)
 {
@@ -840,15 +857,19 @@ static inline void jl_set_gc_and_wait(void)
 #endif
 void jl_gc_set_permalloc_region(void *start, void *end);
 
+typedef struct {
+    LLVMOrcThreadSafeModuleRef TSM;
+    LLVMValueRef F;
+} jl_llvmf_dump_t;
+
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world,
         char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary);
-JL_DLLEXPORT void *jl_get_llvmf_defn(jl_method_instance_t *linfo, LLVMContextRef ctxt, size_t world, char getwrapper, char optimize, const jl_cgparams_t params);
+JL_DLLEXPORT void jl_get_llvmf_defn(jl_llvmf_dump_t* dump, jl_method_instance_t *linfo, size_t world, char getwrapper, char optimize, const jl_cgparams_t params);
 JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
-JL_DLLEXPORT jl_value_t *jl_dump_function_ir(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo);
-JL_DLLEXPORT jl_value_t *jl_dump_function_asm(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
-JL_DLLEXPORT LLVMContextRef jl_get_ee_context(void);
+JL_DLLEXPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
+JL_DLLEXPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 
-void *jl_create_native(jl_array_t *methods, LLVMContextRef llvmctxt, const jl_cgparams_t *cgparams, int policy);
+void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len);
@@ -1113,21 +1134,19 @@ void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_AR
 //--------------------------------------------------
 // congruential random number generator
 // for a small amount of thread-local randomness
-// we could just use libc:`rand()`, but we want to ensure this is fast
-STATIC_INLINE void seed_cong(uint64_t *seed)
-{
-    *seed = rand();
-}
-STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias)
+STATIC_INLINE void unbias_cong(uint64_t max, uint64_t *unbias) JL_NOTSAFEPOINT
 {
     *unbias = UINT64_MAX - ((UINT64_MAX % max) + 1);
 }
-STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed)
+STATIC_INLINE uint64_t cong(uint64_t max, uint64_t unbias, uint64_t *seed) JL_NOTSAFEPOINT
 {
     while ((*seed = 69069 * (*seed) + 362437) > unbias)
         ;
     return *seed % max;
 }
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_init_rand(void);
 
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
@@ -1159,7 +1178,6 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
-int jl_getpid(void) JL_NOTSAFEPOINT;
 
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;

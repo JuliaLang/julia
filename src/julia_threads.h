@@ -16,7 +16,7 @@ extern "C" {
 
 
 JL_DLLEXPORT int16_t jl_threadid(void);
-JL_DLLEXPORT void jl_threading_profile(void);
+JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
@@ -201,11 +201,13 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     int16_t tid;
+    int8_t threadpoolid;
     uint64_t rngseed;
     volatile size_t *safepoint;
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
@@ -277,9 +279,13 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
-} jl_tls_states_t;
 
-typedef jl_tls_states_t *jl_ptls_t;
+    // some hidden state (usually just because we don't have the type's size declaration)
+#ifdef LIBRARY_EXPORTS
+    uv_mutex_t sleep_lock;
+    uv_cond_t wake_signal;
+#endif
+} jl_tls_states_t;
 
 #ifndef LIBRARY_EXPORTS
 // deprecated (only for external consumers)

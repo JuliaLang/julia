@@ -43,12 +43,30 @@ CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_co
 
 strangesin(x) = sin(x)
 @overlay OverlayedMT strangesin(x::Float64) = iszero(x) ? nothing : cos(x)
+
+# inference should use the overlayed method table
 @test Base.return_types((Float64,); interp=MTOverlayInterp()) do x
     strangesin(x)
 end |> only === Union{Float64,Nothing}
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
     Base.@invoke strangesin(x::Float64)
 end |> only === Union{Float64,Nothing}
+
+# effect analysis should figure out that the overlayed method is used
+@test Base.infer_effects((Float64,); interp=MTOverlayInterp()) do x
+    strangesin(x)
+end |> !Core.Compiler.is_nonoverlayed
+@test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
+    Base.@invoke strangesin(x::Float64)
+end |> !Core.Compiler.is_nonoverlayed
+
+# but it should never apply for the native compilation
+@test Base.infer_effects((Float64,)) do x
+    strangesin(x)
+end |> Core.Compiler.is_nonoverlayed
+@test Base.infer_effects((Any,)) do x
+    Base.@invoke strangesin(x::Float64)
+end |> Core.Compiler.is_nonoverlayed
 
 # fallback to the internal method table
 @test Base.return_types((Int,); interp=MTOverlayInterp()) do x

@@ -964,3 +964,35 @@ end
     @eval m f4(a) = return
     @test Base.default_tt(m.f4) == Tuple
 end
+
+Base.@assume_effects :terminates_locally function issue41694(x::Int)
+    res = 1
+    1 < x < 20 || throw("bad")
+    while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end
+maybe_effectful(x::Int) = 42
+maybe_effectful(x::Any) = unknown_operation()
+function f_no_methods end
+
+@testset "infer_effects" begin
+    @test Base.infer_effects(issue41694, (Int,)) |> Core.Compiler.is_terminates
+    @test Base.infer_effects((Int,)) do x
+        issue41694(x)
+    end |> Core.Compiler.is_terminates
+    @test Base.infer_effects(issue41694) |> Core.Compiler.is_terminates # use `default_tt`
+    let effects = Base.infer_effects(maybe_effectful, (Any,)) # union split
+        @test !Core.Compiler.is_consistent(effects)
+        @test !Core.Compiler.is_effect_free(effects)
+        @test !Core.Compiler.is_nothrow(effects)
+        @test !Core.Compiler.is_terminates(effects)
+        @test !Core.Compiler.is_nonoverlayed(effects)
+    end
+    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_nothrow
+    # builtins
+    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
+    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+end

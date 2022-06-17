@@ -42,13 +42,7 @@ namespace jl_intrinsics {
 struct JuliaPassContext {
 
     // Types derived from 'jl_value_t'.
-    llvm::Type *T_jlvalue;
     llvm::PointerType *T_prjlvalue;
-    llvm::PointerType *T_pppjlvalue;
-    llvm::PointerType *T_ppjlvalue;
-    llvm::PointerType *T_pjlvalue;
-    llvm::PointerType *T_pjlvalue_der;
-    llvm::PointerType *T_ppjlvalue_der;
 
     // TBAA metadata nodes.
     llvm::MDNode *tbaa_gcframe;
@@ -64,6 +58,8 @@ struct JuliaPassContext {
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
     llvm::Function *write_barrier_binding_func;
+    llvm::Function *call_func;
+    llvm::Function *call2_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.

@@ -44,7 +44,7 @@ STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching 
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
-STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
+STDLIBS_EXT = Pkg Statistics LibCURL DelimitedFiles Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 

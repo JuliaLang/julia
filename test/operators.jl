@@ -179,6 +179,12 @@ end
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
     @test filter(!islowercase, str) == replace(str, r"[a-z]" => "")
+    @test !!isnan === isnan
+    @test repr(!isnan) == "!isnan"
+    @test repr((-) ∘ sin) == "(-) ∘ sin"
+    @test repr(cos ∘ (sin ∘ tan)) == "cos ∘ (sin ∘ tan)"
+    @test repr(!(cos ∘ !sin)) == "!(cos ∘ !sin)"
+    @test repr(cos ∘ sin ∘ tan) == "cos ∘ sin ∘ tan" == repr((cos ∘ sin) ∘ tan)
 end
 
 # issue #19891

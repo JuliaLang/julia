@@ -882,7 +882,8 @@ julia> findmax(cos, 0:π/2:2π)
 (1.0, 1)
 ```
 """
-findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+findmax(f, domain) = _findmax(f, domain, :)
+_findmax(f, domain, ::Colon) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
 _rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -941,7 +942,8 @@ julia> findmin(cos, 0:π/2:2π)
 ```
 
 """
-findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+findmin(f, domain) = _findmin(f, domain, :)
+_findmin(f, domain, ::Colon) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
 _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -1203,6 +1205,27 @@ function _any(f, itr, ::Colon)
     return anymissing ? missing : false
 end
 
+# Specialized versions of any(f, ::Tuple), avoiding type instabilities for small tuples
+# containing mixed types.
+# We fall back to the for loop implementation all elements have the same type or
+# if the tuple is too large.
+any(f, itr::NTuple) = _any(f, itr, :)  # case of homogeneous tuple
+function any(f, itr::Tuple)            # case of tuple with mixed types
+    length(itr) > 32 && return _any(f, itr, :)
+    _any_tuple(f, false, itr...)
+end
+
+@inline function _any_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _any_tuple(f, anymissing, rest...)
+end
+@inline _any_tuple(f, anymissing) = anymissing ? missing : false
+
 """
     all(p, itr) -> Bool
 
@@ -1252,6 +1275,28 @@ function _all(f, itr, ::Colon)
     end
     return anymissing ? missing : true
 end
+
+# Specialized versions of all(f, ::Tuple), avoiding type instabilities for small tuples
+# containing mixed types. This is similar to any(f, ::Tuple) defined above.
+all(f, itr::NTuple) = _all(f, itr, :)
+function all(f, itr::Tuple)
+    length(itr) > 32 && return _all(f, itr, :)
+    _all_tuple(f, false, itr...)
+end
+
+@inline function _all_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+    elseif v
+        nothing
+    else
+        return false
+    end
+    return _all_tuple(f, anymissing, rest...)
+end
+@inline _all_tuple(f, anymissing) = anymissing ? missing : true
 
 ## count
 

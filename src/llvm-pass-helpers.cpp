@@ -19,9 +19,7 @@
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
-    : T_jlvalue(nullptr), T_prjlvalue(nullptr),
-        T_ppjlvalue(nullptr), T_pjlvalue(nullptr), T_pjlvalue_der(nullptr),
-        T_ppjlvalue_der(nullptr),
+    : T_prjlvalue(nullptr),
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
@@ -29,7 +27,8 @@ JuliaPassContext::JuliaPassContext()
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        write_barrier_binding_func(nullptr), module(nullptr)
+        write_barrier_binding_func(nullptr), call_func(nullptr),
+        call2_func(nullptr), module(nullptr)
 {
 }
 
@@ -53,6 +52,8 @@ void JuliaPassContext::initFunctions(Module &M)
     write_barrier_func = M.getFunction("julia.write_barrier");
     write_barrier_binding_func = M.getFunction("julia.write_barrier_binding");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    call_func = M.getFunction("julia.call");
+    call2_func = M.getFunction("julia.call2");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -64,13 +65,7 @@ void JuliaPassContext::initAll(Module &M)
     auto &ctx = M.getContext();
 
     // Construct derived types.
-    T_jlvalue = StructType::get(ctx);
-    T_pjlvalue = PointerType::get(T_jlvalue, 0);
-    T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-    T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
-    T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
-    T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
-    T_pppjlvalue = PointerType::get(T_ppjlvalue, 0);
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
 llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const

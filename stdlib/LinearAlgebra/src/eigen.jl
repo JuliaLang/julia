@@ -233,12 +233,12 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
-    AA = copy_oftype(A, eigtype(T))
+    AA = copymutable_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
 end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
-    AA = copy_oftype(A, eigtype(T))
+    AA = copymutable_oftype(A, eigtype(T))
     isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
     A = eigen!(AA; permute, scale, sortby)
     values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
@@ -333,7 +333,7 @@ julia> eigvals(diag_matrix)
 ```
 """
 eigvals(A::AbstractMatrix{T}; kws...) where T =
-    eigvals!(copy_oftype(A, eigtype(T)); kws...)
+    eigvals!(copymutable_oftype(A, eigtype(T)); kws...)
 
 """
 For a scalar input, `eigvals` will return a scalar.
@@ -508,7 +508,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    eigen!(copy_oftype(A, S), copy_oftype(B, S); kws...)
+    eigen!(copymutable_oftype(A, S), copymutable_oftype(B, S); kws...)
 end
 
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
@@ -587,7 +587,7 @@ julia> eigvals(A,B)
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    return eigvals!(copy_oftype(A, S), copy_oftype(B, S); kws...)
+    return eigvals!(copymutable_oftype(A, S), copymutable_oftype(B, S); kws...)
 end
 
 """

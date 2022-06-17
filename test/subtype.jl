@@ -1247,7 +1247,7 @@ end
 
 # Issue #19414
 let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
-    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414"
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: can only subtype data types."
 end
 
 # issue #20103, OP and comments
@@ -1976,3 +1976,14 @@ end
 @testintersect(Tuple{Type{Pair{_A, S} where S<:AbstractArray{<:_A, 2}}, Dict} where _A,
                Tuple{Type{Pair{_A, S} where S<:AbstractArray{<:_A, 2}} where _A, Union{Array, Pair}},
                Bottom)
+
+# https://github.com/JuliaLang/julia/issues/44735
+@test_throws TypeError(:typeassert, Type, Vararg{Int}) typeintersect(Vararg{Int}, Int)
+@test_throws TypeError(:typeassert, Type, Vararg{Int}) typeintersect(Int, Vararg{Int})
+@test_throws TypeError(:typeassert, Type, 1) typeintersect(1, Int)
+@test_throws TypeError(:typeassert, Type, 1) typeintersect(Int, 1)
+
+let A = Tuple{typeof(identity), Type{Union{}}},
+    B = Tuple{typeof(identity), typeof(Union{})}
+    @test A == B && (Base.isdispatchtuple(A) == Base.isdispatchtuple(B))
+end

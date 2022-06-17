@@ -226,11 +226,11 @@ function egal_tfunc(@nospecialize(x), @nospecialize(y))
     xx = widenconditional(x)
     yy = widenconditional(y)
     if isa(x, Conditional) && isa(yy, Const)
-        yy.val === false && return Conditional(x.var, x.elsetype, x.vtype)
+        yy.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
         yy.val === true && return x
         return Const(false)
     elseif isa(y, Conditional) && isa(xx, Const)
-        xx.val === false && return Conditional(y.var, y.elsetype, y.vtype)
+        xx.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
         xx.val === true && return y
         return Const(false)
     elseif isa(xx, Const) && isa(yy, Const)
@@ -247,9 +247,12 @@ add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(argtypes::Array{Any, 1})
     length(argtypes) == 2 || return false
-    return hasintersect(widenconst(argtypes[1]), Module) ?
-           argtypes[2] ⊑ Symbol :
-           (argtypes[2] ⊑ Symbol || argtypes[2] ⊑ Int)
+    a1, a2 = argtypes[1], argtypes[2]
+    if hasintersect(widenconst(a1), Module)
+        return a2 ⊑ Symbol
+    else
+        return a2 ⊑ Symbol || a2 ⊑ Int
+    end
 end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
@@ -559,6 +562,7 @@ add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_elt
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, (@nospecialize args...)->Nothing, 0)
+add_tfunc(Core.finalizer, 2, 4, (@nospecialize args...)->Nothing, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
 function typeof_concrete_vararg(t::DataType)
@@ -1041,10 +1045,10 @@ end
 function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, false)
-        nargs > 3 || return CallMeta(Any, false)
+        nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
+        nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, false)
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, false)
+        5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
     end
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
@@ -1067,7 +1071,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         end
         info = callinfo.info
     end
-    return CallMeta(RT, info)
+    return CallMeta(RT, Effects(), info)
 end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
@@ -1546,6 +1550,10 @@ function tuple_tfunc(argtypes::Vector{Any})
             params[i] = typeof(x.val)
         else
             x = isvarargtype(x) ? x : widenconst(x)
+            # since there don't exist any values whose runtime type are `Tuple{Type{...}}`,
+            # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
+            # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
+            # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
             if isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
@@ -1554,6 +1562,10 @@ function tuple_tfunc(argtypes::Vector{Any})
                 else
                     params[i] = Type
                 end
+            elseif iskindtype(x)
+                params[i] = x
+            elseif !isvarargtype(x) && hasintersect(x, Type)
+                params[i] = Union{x, Type}
             else
                 params[i] = x
             end
@@ -1702,6 +1714,8 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return false
     elseif f === getfield
         return getfield_nothrow(argtypes)
+    elseif f === setfield!
+        return setfield!_nothrow(argtypes)
     elseif f === fieldtype
         length(argtypes) == 2 || return false
         return fieldtype_nothrow(argtypes[1], argtypes[2])
@@ -1737,6 +1751,8 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return false
     elseif f === getglobal
         return getglobal_nothrow(argtypes)
+    elseif f === setglobal!
+        return setglobal!_nothrow(argtypes)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return false
         return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
@@ -1789,11 +1805,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
     if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
         # consistent if the argtype is immutable
         if isvarargtype(argtypes[2])
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
         end
         s = widenconst(argtypes[2])
         if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, overlayed=false)
+            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
@@ -1814,7 +1830,8 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         effect_free = true
     elseif f === getglobal && length(argtypes) >= 3
         nothrow = getglobal_nothrow(argtypes[2:end])
-        ipo_consistent = nothrow && isconst((argtypes[2]::Const).val, (argtypes[3]::Const).val)
+        ipo_consistent = nothrow && isconst( # types are already checked in `getglobal_nothrow`
+            (argtypes[2]::Const).val::Module, (argtypes[3]::Const).val::Symbol)
         effect_free = true
     else
         ipo_consistent = contains_is(_CONSISTENT_BUILTINS, f)
@@ -1822,13 +1839,10 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         nothrow = isvarargtype(argtypes[end]) ? false : builtin_nothrow(f, argtypes[2:end], rt)
     end
 
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        #=terminates=#ALWAYS_TRUE,
-        #=overlayed=#false,
-        )
+    return Effects(EFFECTS_TOTAL;
+        consistent = ipo_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        effect_free = effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
 function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
@@ -1994,24 +2008,19 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         return Effects()
     end
 
-    ipo_consistent = !(f === Intrinsics.pointerref || # this one is volatile
-        f === Intrinsics.arraylen || # this one is volatile
+    ipo_consistent = !(
+        f === Intrinsics.pointerref ||      # this one is volatile
+        f === Intrinsics.arraylen ||        # this one is volatile
         f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||  # this one depends on the runtime environment
-        f === Intrinsics.cglobal) # cglobal lookup answer changes at runtime
-
+        f === Intrinsics.have_fma ||        # this one depends on the runtime environment
+        f === Intrinsics.cglobal)           # cglobal lookup answer changes at runtime
     effect_free = !(f === Intrinsics.pointerset)
+    nothrow = !isvarargtype(argtypes[end]) && intrinsic_nothrow(f, argtypes[2:end])
 
-    nothrow = isvarargtype(argtypes[end]) ? false :
-        intrinsic_nothrow(f, argtypes[2:end])
-
-    return Effects(
-        ipo_consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-        effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-        nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-        #=terminates=#ALWAYS_TRUE,
-        #=overlayed=#false,
-        )
+    return Effects(EFFECTS_TOTAL;
+        consistent = ipo_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        effect_free = effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+        nothrow = nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function
@@ -2028,7 +2037,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), false)
+                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, false)
                     end
                     # Run the abstract_call without restricting abstract call
                     # sites. Otherwise, our behavior model of abstract_call
@@ -2037,36 +2046,36 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     sv.restrict_abstract_call_sites = false
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
                     sv.restrict_abstract_call_sites = old_restrict
-                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
+                    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), info)
+                        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
                     end
                     rt = widenconst(rt)
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), info)
+                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
                     elseif !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, info)
+                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
                         (isa(aft, Const) || isconstType(aft))
                         # input arguments were known for certain
                         # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), info)
+                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
                     elseif isType(rt)
-                        return CallMeta(Type{rt}, info)
+                        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
                     else
-                        return CallMeta(Type{<:rt}, info)
+                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
                     end
                 end
             end
         end
     end
-    return CallMeta(Type, false)
+    return CallMeta(Type, EFFECTS_THROWS, false)
 end
 
 # N.B.: typename maps type equivalence classes to a single value
@@ -2089,7 +2098,7 @@ end
 function getglobal_nothrow(argtypes::Vector{Any})
     2 ≤ length(argtypes) ≤ 3 || return false
     if length(argtypes) == 3
-        global_order_nothrow(o, true, false) || return false
+        global_order_nothrow(argtypes[3], #=loading=#true, #=storing=#false) || return false
     end
     M, s = argtypes
     if M isa Const && s isa Const
@@ -2121,6 +2130,26 @@ function setglobal!_tfunc(@nospecialize(M), @nospecialize(s), @nospecialize(v),
 end
 add_tfunc(getglobal, 2, 3, getglobal_tfunc, 1)
 add_tfunc(setglobal!, 3, 4, setglobal!_tfunc, 3)
+function setglobal!_nothrow(argtypes::Vector{Any})
+    3 ≤ length(argtypes) ≤ 4 || return false
+    if length(argtypes) == 4
+        global_order_nothrow(argtypes[4], #=loading=#false, #=storing=#true) || return false
+    end
+    M, s, newty = argtypes
+    if M isa Const && s isa Const
+        M, s = M.val, s.val
+        return global_assignment_nothrow(M, s, newty)
+    end
+    return false
+end
+
+function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
+    if isdefined(M, s) && !isconst(M, s)
+        ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+        return ty === nothing || newty ⊑ ty
+    end
+    return false
+end
 
 function get_binding_type_effect_free(@nospecialize(M), @nospecialize(s))
     if M isa Const && s isa Const

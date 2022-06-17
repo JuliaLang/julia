@@ -26,7 +26,7 @@ GMP_VER := 6.2.1
 GMP_JLL_NAME := GMP
 
 # LibCURL
-CURL_VER := 7.81.0
+CURL_VER := 7.83.1
 CURL_JLL_NAME := LibCURL
 
 # LAPACK, source-only
@@ -66,7 +66,7 @@ MPFR_VER := 4.1.0
 MPFR_JLL_NAME := MPFR
 
 # nghttp2
-NGHTTP2_VER := 1.41.0
+NGHTTP2_VER := 1.47.0
 NGHTTP2_JLL_NAME := nghttp2
 
 # Objconv (we don't ship this, so no need for a fake JLL; therefore we specify the JLL_VER here)
@@ -90,11 +90,11 @@ OPENLIBM_JLL_NAME := OpenLibm
 PATCHELF_VER := 0.13
 
 # p7zip
-P7ZIP_VER := 16.2.0
+P7ZIP_VER := 17.04
 P7ZIP_JLL_NAME := p7zip
 
 # PCRE
-PCRE_VER := 10.36
+PCRE_VER := 10.40
 PCRE_JLL_NAME := PCRE2
 
 # SuiteSparse
@@ -108,7 +108,7 @@ UNWIND_JLL_NAME := LibUnwind
 UNWIND_JLL_VER  := 1.5.0+1
 
 # zlib
-ZLIB_VER := 1.2.11
+ZLIB_VER := 1.2.12
 ZLIB_JLL_NAME := Zlib
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.

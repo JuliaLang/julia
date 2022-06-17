@@ -33,12 +33,46 @@ function tristate_merge(old::TriState, new::TriState)
     return new
 end
 
+"""
+    effects::Effects
+
+Represents computational effects of a method call.
+
+The effects are composed of the following set of different properties:
+- `effects.consistent::TriState`: this method is guaranteed to return or terminate consistently
+- `effect_free::TriState`: this method is free from externally semantically visible side effects
+- `nothrow::TriState`: this method is guaranteed to not throw an exception
+- `terminates::TriState`: this method is guaranteed to terminate
+- `nonoverlayed::Bool`: indicates that any methods that may be called within this method
+  are not defined in an [overlayed method table](@ref OverlayMethodTable)
+- `notaskstate::TriState`: this method does not access any state bound to the current
+  task and may thus be moved to a different task without changing observable
+  behavior. Note that this currently implies that `noyield` as well, since
+  yielding modifies the state of the current task, though this may be split
+  in the future.
+See [`Base.@assume_effects`](@ref) for more detailed explanation on the definitions of these properties.
+
+Along the abstract interpretation, `Effects` at each statement are analyzed locally and
+they are merged into the single global `Effects` that represents the entire effects of
+the analyzed method (see `tristate_merge!`).
+Each effect property is represented as tri-state and managed separately.
+The tri-state consists of `ALWAYS_TRUE`, `TRISTATE_UNKNOWN` and `ALWAYS_FALSE`.
+An effect property is initialized with `ALWAYS_TRUE` and then transitioned towards
+`TRISTATE_UNKNOWN` or `ALWAYS_FALSE`. When we find a statement that has some effect,
+`ALWAYS_TRUE` is propagated if that effect is known to _always_ happen, otherwise
+`TRISTATE_UNKNOWN` is propagated. If a property is known to be `ALWAYS_FALSE`,
+there is no need to do additional analysis as it can not be refined anyway.
+Note that however, within the current data-flow analysis design, it is hard to derive a global
+conclusion from a local analysis on each statement, and as a result, the effect analysis
+usually propagates `TRISTATE_UNKNOWN` currently.
+"""
 struct Effects
     consistent::TriState
     effect_free::TriState
     nothrow::TriState
     terminates::TriState
-    overlayed::Bool
+    nonoverlayed::Bool
+    notaskstate::TriState
     # This effect is currently only tracked in inference and modified
     # :consistent before caching. We may want to track it in the future.
     inbounds_taints_consistency::Bool
@@ -48,55 +82,70 @@ function Effects(
     effect_free::TriState,
     nothrow::TriState,
     terminates::TriState,
-    overlayed::Bool)
+    nonoverlayed::Bool,
+    notaskstate::TriState)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
-        overlayed,
+        nonoverlayed,
+        notaskstate,
         false)
 end
 
-const EFFECTS_TOTAL = Effects(ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, ALWAYS_TRUE, false)
-const EFFECTS_UNKNOWN = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true)
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true, ALWAYS_TRUE)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true, ALWAYS_TRUE)
+const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true, TRISTATE_UNKNOWN)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false, TRISTATE_UNKNOWN) # unknown, really
 
-function Effects(e::Effects = EFFECTS_UNKNOWN;
+function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::TriState = e.consistent,
     effect_free::TriState = e.effect_free,
     nothrow::TriState = e.nothrow,
     terminates::TriState = e.terminates,
-    overlayed::Bool = e.overlayed,
+    nonoverlayed::Bool = e.nonoverlayed,
+    notaskstate::TriState = e.notaskstate,
     inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
-        overlayed,
+        nonoverlayed,
+        notaskstate,
         inbounds_taints_consistency)
 end
 
-is_total_or_error(effects::Effects) =
-    effects.consistent === ALWAYS_TRUE &&
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE
+is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
+is_effect_free(effects::Effects)  = effects.effect_free === ALWAYS_TRUE
+is_nothrow(effects::Effects)      = effects.nothrow === ALWAYS_TRUE
+is_terminates(effects::Effects)   = effects.terminates === ALWAYS_TRUE
+is_notaskstate(effects::Effects)  = effects.notaskstate === ALWAYS_TRUE
+is_nonoverlayed(effects::Effects) = effects.nonoverlayed
+
+# implies :notaskstate, but not explicitly checked here
+is_foldable(effects::Effects) =
+    is_consistent(effects) &&
+    is_effect_free(effects) &&
+    is_terminates(effects)
 
 is_total(effects::Effects) =
-    is_total_or_error(effects) &&
-    effects.nothrow === ALWAYS_TRUE
+    is_foldable(effects) &&
+    is_nothrow(effects)
 
 is_removable_if_unused(effects::Effects) =
-    effects.effect_free === ALWAYS_TRUE &&
-    effects.terminates === ALWAYS_TRUE &&
-    effects.nothrow === ALWAYS_TRUE
+    is_effect_free(effects) &&
+    is_terminates(effects) &&
+    is_nothrow(effects)
 
 function encode_effects(e::Effects)
     return (e.consistent.state << 0) |
            (e.effect_free.state << 2) |
            (e.nothrow.state << 4) |
            (e.terminates.state << 6) |
-           (UInt32(e.overlayed) << 8)
+           (UInt32(e.nonoverlayed) << 8) |
+           (UInt32(e.notaskstate.state) << 9)
 end
 function decode_effects(e::UInt32)
     return Effects(
@@ -105,6 +154,7 @@ function decode_effects(e::UInt32)
         TriState((e >> 4) & 0x03),
         TriState((e >> 6) & 0x03),
         _Bool(   (e >> 8) & 0x01),
+        TriState((e >> 9) & 0x03),
         false)
 end
 
@@ -118,7 +168,9 @@ function tristate_merge(old::Effects, new::Effects)
             old.nothrow, new.nothrow),
         tristate_merge(
             old.terminates, new.terminates),
-        old.overlayed | new.overlayed,
+        old.nonoverlayed & new.nonoverlayed,
+        tristate_merge(
+            old.notaskstate, new.notaskstate),
         old.inbounds_taints_consistency | new.inbounds_taints_consistency)
 end
 
@@ -128,6 +180,7 @@ struct EffectsOverride
     nothrow::Bool
     terminates_globally::Bool
     terminates_locally::Bool
+    notaskstate::Bool
 end
 
 function encode_effects_override(eo::EffectsOverride)
@@ -137,6 +190,7 @@ function encode_effects_override(eo::EffectsOverride)
     eo.nothrow && (e |= 0x04)
     eo.terminates_globally && (e |= 0x08)
     eo.terminates_locally && (e |= 0x10)
+    eo.notaskstate && (e |= 0x20)
     return e
 end
 
@@ -146,7 +200,8 @@ function decode_effects_override(e::UInt8)
         (e & 0x02) != 0x00,
         (e & 0x04) != 0x00,
         (e & 0x08) != 0x00,
-        (e & 0x10) != 0x00)
+        (e & 0x10) != 0x00,
+        (e & 0x20) != 0x00)
 end
 
 """
@@ -168,7 +223,7 @@ mutable struct InferenceResult
                              arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(; overlayed=false), Effects(; overlayed=false), nothing)
+            WorldRange(), Effects(), Effects(), nothing)
     end
 end
 

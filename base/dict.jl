@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
-
-    wid = truncidx = lastidx = 0
-    for (idx, c) in pairs(str)
-        lastidx = idx
-        wid += textwidth(c)
-        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
-        (wid >= width || c in chars) && break
-    end
-
-    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
-    truncidx == 0 && (truncidx = lastidx)
-    if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
-    else
-        return String(str)
-    end
-end
-
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))
@@ -88,7 +67,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
+        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, n, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -223,38 +202,27 @@ end
             keys[index] = k
             vals[index] = v
             count += 1
-
-            if h.age != age0
-                # if `h` is changed by a finalizer, retry
-                return rehash!(h, newsz)
-            end
         end
     end
 
+    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    h.age += 1
     h.slots = slots
     h.keys = keys
     h.vals = vals
     h.count = count
     h.ndel = 0
     h.maxprobe = maxprobe
-    @assert h.age == age0
-
     return h
 end
 
 function sizehint!(d::Dict{T}, newsz) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
-    newsz = min(newsz, max_values(T)::Int)
+    newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
-    newsz = cld(3 * newsz, 2)
-    if newsz <= oldsz
-        # todo: shrink
-        # be careful: rehash!() assumes everything fits. it was only designed
-        # for growing.
-        return d
-    end
-    rehash!(d, newsz)
+    newsz = _tablesz(cld(3 * newsz, 2))
+    return newsz == oldsz ? d : rehash!(d, newsz)
 end
 
 """
@@ -285,7 +253,7 @@ function empty!(h::Dict{K,V}) where V where K
     h.ndel = 0
     h.count = 0
     h.age += 1
-    h.idxfloor = 1
+    h.idxfloor = sz
     return h
 end
 

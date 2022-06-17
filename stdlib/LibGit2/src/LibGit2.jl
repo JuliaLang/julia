@@ -1023,4 +1023,13 @@ function set_ssl_cert_locations(cert_loc)
     throw(Error.GitError(err.class, err.code, chomp(msg)))
 end
 
+"""
+    trace_set(level::Union{Integer,GIT_TRACE_LEVEL})
+
+Sets the system tracing configuration to the specified level.
+"""
+function trace_set(level::Union{Integer,Consts.GIT_TRACE_LEVEL}, cb=trace_cb())
+    @check @ccall "libgit2".git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
+end
+
 end # module

@@ -8,6 +8,10 @@ ifeq ($(USE_SYSTEM_ZLIB),0)
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
+ifeq ($(USE_SYSTEM_LLVM),0)
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: | $(build_prefix)/manifest/llvm
+endif
+
 $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/libunwind/libunwind/releases/download/v$(UNWIND_VER_TAG)/libunwind-$(UNWIND_VER).tar.gz
 
@@ -57,11 +61,11 @@ $(eval $(call staged-install, \
 	MAKE_INSTALL,,,))
 
 clean-unwind:
-	-rm $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
+	-rm -f $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
 
 distclean-unwind:
-	-rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
+	rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
 		$(SRCCACHE)/libunwind-$(UNWIND_VER) \
 		$(BUILDDIR)/libunwind-$(UNWIND_VER)
 
@@ -95,10 +99,18 @@ $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applie
 	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-force-dwarf.patch
 	echo 1 > $@
 
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-revert-monorepo-requirement.patch-applied: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applied
+	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-revert-monorepo-requirement.patch
+	echo 1 > $@
+
+$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-revert-monorepo-requirement.patch-applied
+	cd $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) && patch -p2 -f < $(SRCDIR)/patches/llvm-libunwind-freebsd-libgcc-api-compat.patch
+	echo 1 > $@
+
 checksum-llvmunwind: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-force-dwarf.patch-applied
+$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LLVMUNWIND_OPTS)
@@ -114,12 +126,12 @@ $(eval $(call staged-install, \
 	cp -fR $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER)/include/* $(build_includedir)))
 
 clean-llvmunwind:
-	-rm $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
-	-rm -r $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
+	-rm -f $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
+	rm -rf $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
 	-$(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
 
 distclean-llvmunwind:
-	-rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
+	rm -rf $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz \
 		$(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER) \
 		$(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)
 

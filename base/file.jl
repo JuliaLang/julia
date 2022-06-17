@@ -793,6 +793,8 @@ By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
 you can use `readdir(dir, sort=false)` to opt out of sorting.
 
+See also: [`walkdir`](@ref).
+
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
 
@@ -891,6 +893,8 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+
+See also: [`readdir`](@ref).
 
 # Examples
 ```julia

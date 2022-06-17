@@ -226,6 +226,19 @@ end
     end
 end
 
+@testset "dot product of stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = randn(T, 10)
+        b = view(a, 1:10)
+        c = reshape(b, 5, 2)
+        d = view(c, :, 1:2)
+        r = sum(abs2, a)
+        for x in (a,b,c,d), y in (a,b,c,d)
+            @test dot(x, y) ≈ r
+        end
+    end
+end
+
 @testset "Complex matrix x real MatOrVec etc (issue #29224)" for T in (Float32, Float64)
     A0 = randn(complex(T), 10, 10)
     B0 = randn(T, 10, 10)

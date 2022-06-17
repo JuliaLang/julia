@@ -8,9 +8,9 @@
 //
 // TODO: add half-float support
 
+#include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
-#include "APInt-C.h"
 
 const unsigned int host_char_bit = 8;
 

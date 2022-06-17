@@ -111,8 +111,8 @@
 #    module::Module
 #    method::Symbol
 #    file::Symbol
-#    line::Int
-#    inlined_at::Int
+#    line::Int32
+#    inlined_at::Int32
 #end
 
 #struct GotoNode
@@ -410,7 +410,7 @@ eval(Core, quote
         isa(f, String) && (f = Symbol(f))
         return $(Expr(:new, :LineNumberNode, :l, :f))
     end
-    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
+    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
     GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
@@ -432,9 +432,9 @@ eval(Core, quote
             relocatability)
     end
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    # NOTE the main constructor is defined within `Core.Compiler`
+    _PartialStruct(typ::DataType, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
-    InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 

@@ -7,6 +7,8 @@ isdispatchelem(@nospecialize x) = !isa(x, Type) || Core.Compiler.isdispatchelem(
 using Random, Core.IR
 using InteractiveUtils: code_llvm
 
+include("irutils.jl")
+
 f39082(x::Vararg{T}) where {T <: Number} = x[1]
 let ast = only(code_typed(f39082, Tuple{Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Vararg{Rational}}]
@@ -1348,7 +1350,7 @@ let isa_tfunc = Core.Compiler.isa_tfunc
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test isa_tfunc(c, Const(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
         @test isa_tfunc(c, Const(Real)) === Const(true)
@@ -1399,7 +1401,7 @@ let subtype_tfunc = Core.Compiler.subtype_tfunc
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
@@ -1442,7 +1444,7 @@ let egal_tfunc
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
     @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+    let c = Conditional(0, Const(Union{}), Const(Union{}))
         @test egal_tfunc(c, Const(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
         @test egal_tfunc(c, Const(Real)) === Const(false)
@@ -1453,17 +1455,17 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Union{}, Const(Union{})) # === Const(false)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, c.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, Union{}, c.elsetype)
+    let c = Conditional(0, Union{}, Const(Union{})) # === Const(false)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, Union{}, c.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.var, Union{}, c.vtype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.var, c.vtype, Union{})
+    let c = Conditional(0, Const(Union{}), Union{}) # === Const(true)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, Union{}, c.thentype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.thentype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
@@ -1561,6 +1563,17 @@ end
 @test arraysize_tfunc(Vector, Int) === Int
 @test arraysize_tfunc(Vector, Float64) === Union{}
 @test arraysize_tfunc(String, Int) === Union{}
+
+let tuple_tfunc
+    function tuple_tfunc(@nospecialize xs...)
+        return Core.Compiler.tuple_tfunc(Any[xs...])
+    end
+    @test Core.Compiler.widenconst(tuple_tfunc(Type{Int})) === Tuple{DataType}
+    # https://github.com/JuliaLang/julia/issues/44705
+    @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
+    @test tuple_tfunc(DataType) === Tuple{DataType}
+    @test tuple_tfunc(UnionAll) === Tuple{UnionAll}
+end
 
 function f23024(::Type{T}, ::Int) where T
     1 + 1
@@ -1927,19 +1940,22 @@ function foo25261()
         next = f25261(Core.getfield(next, 2))
     end
 end
-opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
-i = 1
-# Skip to after the branch
-while !isa(opt25261[i], GotoIfNot); global i += 1; end
-foundslot = false
-for expr25261 in opt25261[i:end]
-    if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
-        # This should be the assignment to the SSAValue into the getfield
-        # call - make sure it's a TypedSlot
-        global foundslot = true
+let opt25261 = code_typed(foo25261, Tuple{}, optimize=false)[1].first.code
+    i = 1
+    # Skip to after the branch
+    while !isa(opt25261[i], GotoIfNot)
+        i += 1
     end
+    foundslot = false
+    for expr25261 in opt25261[i:end]
+        if expr25261 isa TypedSlot && expr25261.typ === Tuple{Int, Int}
+            # This should be the assignment to the SSAValue into the getfield
+            # call - make sure it's a TypedSlot
+            foundslot = true
+        end
+    end
+    @test foundslot
 end
-@test foundslot
 
 @testset "inter-procedural conditional constraint propagation" begin
     # simple cases
@@ -2021,17 +2037,14 @@ end
         return nothing
     end == Any[Union{Nothing,Expr}]
 
-    # handle the edge case
-    let ts = @eval Module() begin
-            edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
-            # create cache
-            Base.return_types(edgecase, (Any,))
-            Base.return_types((Any,)) do x
-                edgecase(x) ? x : nothing # ::Any
-            end
+    # handle edge case
+    @test (@eval Module() begin
+        edgecase(_) = $(Core.Compiler.InterConditional(2, Int, Any))
+        Base.return_types(edgecase, (Any,)) # create cache
+        Base.return_types((Any,)) do x
+            edgecase(x)
         end
-        @test ts == Any[Any]
-    end
+    end) == Any[Core.Compiler.InterConditional]
 
     # a tricky case: if constant inference derives `Const` while non-constant inference has
     # derived `InterConditional`, we should not discard that constant information
@@ -2082,7 +2095,7 @@ let M = Module()
             obj = $(Expr(:new, M.BePartialStruct, 42, :cond))
             r1 = getfield(obj, :cond) ? 0 : a # r1::Union{Nothing,Int}, not r1::Int (because PartialStruct doesn't wrap Conditional)
             a = $(gensym(:anyvar))::Any
-            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constrait invalidation here)
+            r2 = getfield(obj, :cond) ? a : nothing # r2::Any, not r2::Const(nothing) (we don't need to worry about constraint invalidation here)
             return r1, r2 # ::Tuple{Union{Nothing,Int},Any}
         end |> only
     end
@@ -2177,6 +2190,14 @@ function conflicting_assignment_conditional()
     return 5
 end
 @test @inferred(conflicting_assignment_conditional()) === 4
+
+# https://github.com/JuliaLang/julia/issues/45499
+@test Base.return_types((Vector{Int},Int,)) do xs, x
+    if (i = findfirst(==(x), xs)) !== nothing
+        return i
+    end
+    return 0
+end |> only === Int
 
 # 26826 constant prop through varargs
 
@@ -2829,7 +2850,7 @@ j30385(T, y) = k30385(f30385(T, y))
 @test @inferred(j30385(:dummy, 1)) == "dummy"
 
 @test Base.return_types(Tuple, (NamedTuple{<:Any,Tuple{Any,Int}},)) == Any[Tuple{Any,Int}]
-@test Base.return_types(Base.splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
+@test Base.return_types(Base.Splat(tuple), (typeof((a=1,)),)) == Any[Tuple{Int}]
 
 # test that return_type_tfunc isn't affected by max_methods differently than return_type
 _rttf_test(::Int8) = 0
@@ -4080,3 +4101,113 @@ end
     Base.Experimental.@force_compile
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
+
+# https://github.com/JuliaLang/julia/issues/44965
+let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
+    @test Core.Compiler.issimplertype(t, t)
+end
+
+# https://github.com/JuliaLang/julia/issues/44763
+global x44763::Int = 0
+increase_x44763!(n) = (global x44763; x44763 += n)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
+@test Base.return_types() do
+    invoke44763(42)
+end |> only === Int
+@test x44763 == 0
+
+# backedge insertion for Any-typed, effect-free frame
+const CONST_DICT = let d = Dict()
+    for c in 'A':'z'
+        push!(d, c => Int(c))
+    end
+    d
+end
+Base.@assume_effects :foldable getcharid(c) = CONST_DICT[c]
+@noinline callf(f, args...) = f(args...)
+function entry_to_be_invalidated(c)
+    return callf(getcharid, c)
+end
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> Core.Compiler.is_foldable
+@test fully_eliminated(; retval=97) do
+    entry_to_be_invalidated('a')
+end
+getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
+@test Base.infer_effects((Char,)) do x
+    entry_to_be_invalidated(x)
+end |> !Core.Compiler.is_foldable
+@test !fully_eliminated() do
+    entry_to_be_invalidated('a')
+end
+
+# control flow backedge should taint `terminates`
+@test Base.infer_effects((Int,)) do n
+    for i = 1:n; end
+end |> !Core.Compiler.is_terminates
+
+# Nothrow for assignment to globals
+global glob_assign_int::Int = 0
+f_glob_assign_int() = global glob_assign_int += 1
+let effects = Base.infer_effects(f_glob_assign_int, ())
+    @test !Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+# Nothrow for setglobal!
+global SETGLOBAL!_NOTHROW::Int = 0
+let effects = Base.infer_effects() do
+        setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
+    end
+    @test Core.Compiler.is_nothrow(effects)
+end
+
+# we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
+# as the cached effects can be easily wrong otherwise
+# since the inference curently doesn't track "world-age" of global variables
+@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
+setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
+let effects = Base.infer_effects() do
+        global_assignment_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        setglobal!_nothrow_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+global UNDEFINEDYET::String = "0"
+let effects = Base.infer_effects() do
+        global_assignment_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+let effects = Base.infer_effects() do
+        setglobal!_nothrow_undefinedyet()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+
+# Nothrow for setfield!
+mutable struct SetfieldNothrow
+    x::Int
+end
+f_setfield_nothrow() = SetfieldNothrow(0).x = 1
+let effects = Base.infer_effects(f_setfield_nothrow, ())
+    # Technically effect free even though we use the heap, since the
+    # object doesn't escape, but the compiler doesn't know that.
+    #@test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_nothrow(effects)
+end
+
+# check the inference convergence with an empty vartable:
+# the inference state for the toplevel chunk below will have an empty vartable,
+# and so we may fail to terminate (or optimize) it if we don't update vartables correctly
+let # NOTE make sure this toplevel chunk doesn't contain any local binding
+    Base.Experimental.@force_compile
+    global xcond::Bool = false
+    while xcond end
+end
+@test !xcond

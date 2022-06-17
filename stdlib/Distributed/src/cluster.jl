@@ -232,7 +232,10 @@ start_worker(cookie::AbstractString=readline(stdin); kwargs...) = start_worker(s
 function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_stdin::Bool=true, stderr_to_stdout::Bool=true)
     init_multi()
 
-    close_stdin && close(stdin) # workers will not use it
+    if close_stdin # workers will not use it
+        redirect_stdin(devnull)
+        close(stdin)
+    end
     stderr_to_stdout && redirect_stderr(stdout)
 
     init_worker(cookie)

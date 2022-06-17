@@ -502,7 +502,7 @@ true
 ```
 """
 hessenberg(A::AbstractMatrix{T}) where T =
-    hessenberg!(copy_oftype(A, eigtype(T)))
+    hessenberg!(copymutable_oftype(A, eigtype(T)))
 
 function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     summary(io, F)
@@ -539,6 +539,9 @@ function getproperty(F::Hessenberg, d::Symbol)
     d === :Q && return HessenbergQ(F)
     return getfield(F, d)
 end
+
+size(Q::HessenbergQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::HessenbergQ) = size(Q, 1), size(Q, 2)
 
 Base.propertynames(F::Hessenberg, private::Bool=false) =
     (:Q, :H, :μ, (private ? (:τ, :factors, :uplo) : ())...)

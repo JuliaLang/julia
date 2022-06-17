@@ -479,6 +479,11 @@ function try_get_type(sym::Expr, fn::Module)
         return try_get_type(Expr(:call, GlobalRef(Base, :getindex), sym.args...), fn)
     elseif sym.head === :. && sym.args[2] isa QuoteNode # second check catches broadcasting
         return try_get_type(Expr(:call, GlobalRef(Core, :getfield), sym.args...), fn)
+    elseif sym.head === :toplevel || sym.head === :block
+        isempty(sym.args) && return (nothing, true)
+        return try_get_type(sym.args[end], fn)
+    elseif sym.head === :escape || sym.head === :var"hygienic-scope"
+        return try_get_type(sym.args[1], fn)
     end
     return (Any, false)
 end
@@ -495,15 +500,22 @@ function get_type(sym::Expr, fn::Module)
         found || return Any, false
     end
     newsym = try
-        Meta.lower(fn, sym)
+        macroexpand(fn, sym; recursive=false)
     catch e
-        e isa LoadError && return Any, false
-        # If e is not a LoadError then Meta.lower crashed in an unexpected way.
-        # Since this is not a specific to the user code but an internal error,
-        # rethrow the error to allow reporting it.
-        rethrow()
+        # user code failed in macroexpand (ignore it)
+        return Any, false
     end
-    return try_get_type(newsym, fn)
+    val, found = try_get_type(newsym, fn)
+    if !found
+        newsym = try
+            Meta.lower(fn, sym)
+        catch e
+            # user code failed in lowering (ignore it)
+            return Any, false
+        end
+        val, found = try_get_type(newsym, fn)
+    end
+    return val, found
 end
 
 function get_type(sym, fn::Module)
@@ -518,14 +530,14 @@ end
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
-function complete_methods(ex_org::Expr, context_module::Module=Main)
+function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
     out = Completion[]
     funct, found = get_type(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return out
 
     args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
     push!(args_ex, Vararg{Any})
-    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_METHOD_COMPLETIONS)
+    complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS)
 
     return out
 end
@@ -614,7 +626,7 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
     m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
         #=ambig=# true, Ref(typemin(UInt)), Ref(typemax(UInt)), Ptr{Int32}(C_NULL))
     if m === false
-        push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods to show )"))
+        push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods, use SHIFT-TAB to show )"))
     end
     m isa Vector || return
     for match in m
@@ -823,9 +835,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
         if isa(ex, Expr)
             if ex.head === :call
-                return complete_methods(ex, context_module), first(frange):method_name_end, false
+                return complete_methods(ex, context_module, shift), first(frange):method_name_end, false
             elseif ex.head === :. && ex.args[2] isa Expr && (ex.args[2]::Expr).head === :tuple
-                return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
+                return complete_methods(ex, context_module, shift), first(frange):(method_name_end - 1), false
             end
         end
     elseif inc_tag === :comment

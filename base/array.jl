@@ -120,7 +120,7 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
-import Core: arraysize, arrayset, arrayref, const_arrayref
+using Core: arraysize, arrayset, const_arrayref
 
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
@@ -142,9 +142,7 @@ julia> a = Base.vect(UInt8(1), 2.5, 1//2)
 """
 function vect(X...)
     T = promote_typeof(X...)
-    #T[ X[i] for i=1:length(X) ]
-    # TODO: this is currently much faster. should figure out why. not clear.
-    return copyto!(Vector{T}(undef, length(X)), X)
+    return T[X...]
 end
 
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
@@ -154,7 +152,7 @@ size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::D
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(T::Type) = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -212,7 +210,6 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-length(a::Array) = arraylen(a)
 elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
@@ -845,8 +842,8 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
-        if el isa T || typeof(el) === T
-            @inbounds dest[i] = el::T
+        if el isa T
+            @inbounds dest[i] = el
             i += 1
         else
             new = setindex_widen_up_to(dest, el, i)
@@ -882,8 +879,8 @@ function grow_to!(dest, itr, st)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        if el isa T || typeof(el) === T
-            push!(dest, el::T)
+        if el isa T
+            push!(dest, el)
         else
             new = push_widen(dest, el)
             return grow_to!(new, itr, st)
@@ -919,10 +916,6 @@ julia> getindex(A, "a")
 ```
 """
 function getindex end
-
-# This is more complicated than it needs to be in order to get Win64 through bootstrap
-@eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
@@ -1760,7 +1753,7 @@ function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
 end
 
 """
-    reverse(v [, start=1 [, stop=length(v) ]] )
+    reverse(v [, start=firstindex(v) [, stop=lastindex(v) ]] )
 
 Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
 for reverse-order iteration without making a copy, and in-place [`reverse!`](@ref).
@@ -1834,7 +1827,7 @@ function reverseind(a::AbstractVector, i::Integer)
 end
 
 """
-    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+    reverse!(v [, start=firstindex(v) [, stop=lastindex(v) ]]) -> v
 
 In-place version of [`reverse`](@ref).
 
@@ -2349,18 +2342,41 @@ function findall(A)
 end
 
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
-function findall(A::AbstractArray{Bool})
-    n = count(A)
+function _findall(f::Function, A::AbstractArray{Bool})
+    n = count(f, A)
     I = Vector{eltype(keys(A))}(undef, n)
-    cnt = 1
-    for (i,a) in pairs(A)
-        if a
-            I[cnt] = i
-            cnt += 1
-        end
-    end
-    I
+    isempty(I) && return I
+    _findall(f, I, A)
 end
+
+function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
+    cnt = 1
+    len = length(I)
+    for (k, v) in pairs(A)
+        @inbounds I[cnt] = k
+        cnt += f(v)
+        cnt > len && return I
+    end
+    # In case of impure f, this line could potentially be hit. In that case,
+    # we can't assume I is the correct length.
+    resize!(I, cnt - 1)
+end
+
+function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
+    i = firstindex(A)
+    cnt = 1
+    len = length(I)
+    while cnt ≤ len
+        @inbounds I[cnt] = i
+        cnt += f(@inbounds A[i])
+        i = nextind(A, i)
+    end
+    cnt - 1 == len ? I : resize!(I, cnt - 1)
+end
+
+findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
+findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
+findall(A::AbstractArray{Bool}) = _findall(identity, A)
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
@@ -2530,7 +2546,7 @@ function filter(f, a::Array{T, N}) where {T, N}
     b = Vector{T}(undef, length(a))
     for ai in a
         @inbounds b[j] = ai
-        j = ifelse(f(ai), j+1, j)
+        j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(b, j-1)
     sizehint!(b, length(b))
@@ -2545,7 +2561,7 @@ function filter(f, a::AbstractArray)
     for idx in eachindex(a)
         @inbounds idxs[j] = idx
         ai = @inbounds a[idx]
-        j = ifelse(f(ai), j+1, j)
+        j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(idxs, j-1)
     res = a[idxs]
@@ -2575,7 +2591,7 @@ function filter!(f, a::AbstractVector)
     j = firstindex(a)
     for ai in a
         @inbounds a[j] = ai
-        j = ifelse(f(ai), nextind(a, j), j)
+        j = ifelse(f(ai)::Bool, nextind(a, j), j)
     end
     j > lastindex(a) && return a
     if a isa Vector

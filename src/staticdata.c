@@ -64,6 +64,7 @@ done by `get_item_for_reloc`.
 #include "julia_internal.h"
 #include "builtin_proto.h"
 #include "processor.h"
+#include "serialize.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
@@ -118,7 +119,6 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_const_type);
         INSERT_TAG(jl_partial_struct_type);
         INSERT_TAG(jl_partial_opaque_type);
-        INSERT_TAG(jl_interconditional_type);
         INSERT_TAG(jl_method_match_type);
         INSERT_TAG(jl_pinode_type);
         INSERT_TAG(jl_phinode_type);
@@ -253,6 +253,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin__typebody);
         INSERT_TAG(jl_builtin_donotdelete);
         INSERT_TAG(jl_builtin_getglobal);
+        INSERT_TAG(jl_builtin_setglobal);
+        // n.b. must update NUM_TAGS when you add something here
 
         // All optional tags must be placed at the end, so that we
         // don't accidentally have a `NULL` in the middle
@@ -311,7 +313,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete,
-    &jl_f_getglobal, &jl_f_setglobal,
+    &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer,
     NULL };
 
 typedef struct {
@@ -361,25 +363,6 @@ typedef enum {
 // this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 // if a larger size is required, will need to add support for writing larger relocations in many cases below
 #define RELOC_TAG_OFFSET 29
-
-
-/* read and write in host byte order */
-
-#define write_uint8(s, n) ios_putc((n), (s))
-#define read_uint8(s) ((uint8_t)ios_getc((s)))
-
-static void write_uint32(ios_t *s, uint32_t i) JL_NOTSAFEPOINT
-{
-    ios_write(s, (char*)&i, 4);
-}
-
-static uint32_t read_uint32(ios_t *s) JL_NOTSAFEPOINT
-{
-    uint32_t x = 0;
-    ios_read(s, (char*)&x, 4);
-    return x;
-}
-
 
 // --- Static Compile ---
 
@@ -584,6 +567,7 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         jl_serialize_value(s, tn->module);
         jl_serialize_value(s, tn->names);
         jl_serialize_value(s, tn->wrapper);
+        jl_serialize_value(s, tn->Typeofwrapper);
         jl_serialize_value_(s, (jl_value_t*)tn->cache, 0);
         jl_serialize_value_(s, (jl_value_t*)tn->linearcache, 0);
         jl_serialize_value(s, tn->mt);

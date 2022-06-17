@@ -27,6 +27,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#if defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
+
+/* See https://github.com/JuliaLang/julia/pull/44587 */
+typedef intptr_t ssize_t;
+#define SSIZE_MAX INTPTR_MAX
+#define _SSIZE_T_
+#define _SSIZE_T_DEFINED
+
+#endif /* defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED) */
+
 #if !defined(_COMPILER_GCC_)
 
 #define strtoull                                            _strtoui64
@@ -116,7 +126,13 @@
 #  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
-#if defined(__GNUC__)
+#ifdef _COMPILER_MICROSOFT_
+# ifdef _P64
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
+# else
+#  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
+# endif
+#elif defined(__GNUC__)
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
 #else
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)

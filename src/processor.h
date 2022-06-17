@@ -1,5 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef JL_PROCESSOR_H
+#define JL_PROCESSOR_H
+
 #include "support/dtypes.h"
 
 #include "julia.h"
@@ -214,4 +217,6 @@ struct jl_target_spec_t {
 extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
 std::string jl_get_cpu_features_llvm(void);
+#endif
+
 #endif

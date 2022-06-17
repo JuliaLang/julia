@@ -368,11 +368,9 @@ descriptor upon completion.
 
 # Examples
 ```jldoctest
-julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!")
-       end;
+julia> write("myfile.txt", "Hello world!");
 
-julia> open(f->read(f, String), "myfile.txt")
+julia> open(io->read(io, String), "myfile.txt")
 "Hello world!"
 
 julia> rm("myfile.txt")
@@ -482,10 +480,7 @@ The text is assumed to be encoded in UTF-8.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readuntil("my_file.txt", 'L')
 "Julia"
@@ -511,10 +506,7 @@ line.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
@@ -562,10 +554,7 @@ arguments and saving the resulting lines as a vector of strings.  See also
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readlines("my_file.txt")
 2-element Vector{String}:
@@ -948,9 +937,7 @@ if there is one. Equivalent to `chomp(read(x, String))`.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readchomp("my_file.txt")
 "JuliaLang is a GitHub organization.\\nIt has many members."
@@ -1034,9 +1021,7 @@ lines, respectively.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\n It has many members.\\n");
 
 julia> for line in eachline("my_file.txt")
            print(line)

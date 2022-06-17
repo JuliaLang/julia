@@ -642,3 +642,11 @@ let c1 = Threads.Condition()
     unlock(c2)
     wait(t)
 end
+
+@testset "LazyString" begin
+    l1 = lazy"a $1 b $2"
+    l2 = deserialize(IOBuffer(sprint(serialize, l1)))
+    @test l2.str === l1.str
+    @test l2 == l1
+    @test l2.parts === ()
+end

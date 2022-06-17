@@ -898,10 +898,6 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
 BINARY:=64
-ifeq ($(OS),Darwin)
-# Apple Chips are all at least A12Z
-MCPU:=apple-m1
-endif
 endif
 
 # Set MARCH-specific flags
@@ -1394,7 +1390,7 @@ clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
 	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
 else
-	-rm -r $$(abspath $(2)/$(3))
+	rm -rf $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
@@ -1402,7 +1398,7 @@ ifeq ($$(BUILD_OS), WINNT)
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
-	@rm -r $$@
+	@rm -rf $$@
 	@cp -R $$(abspath $(1)) $$@.tmp
 	@mv $$@.tmp $$@
 else

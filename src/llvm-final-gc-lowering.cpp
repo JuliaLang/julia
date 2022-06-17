@@ -111,6 +111,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                         getSizeTy(F.getContext())->getPointerTo()),
                 Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
+    auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(F.getContext());
     inst = builder.CreateAlignedStore(
             builder.CreateAlignedLoad(T_ppjlvalue, pgcstack, Align(sizeof(void*))),
             builder.CreatePointerCast(

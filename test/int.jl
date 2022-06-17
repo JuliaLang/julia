@@ -55,37 +55,38 @@ using Random
     end
 end
 @testset "signed and unsigned" begin
-    @test signed(3) == 3
-    @test signed(UInt(3)) == 3
+    @test signed(3) === 3
+    @test signed(UInt(3)) === 3
     @test isa(signed(UInt(3)), Int)
-    @test signed(UInt(0) - 1) == -1
+    @test signed(UInt(0) - 1) === -1
     @test_throws InexactError signed(UInt(-3))
-    @test signed(true) == 1
+    @test signed(true) === 1
     @test unsigned(true) isa Unsigned
-    @test unsigned(true) == unsigned(1)
+    @test unsigned(true) === unsigned(1)
 
-    @test signed(Bool) == Int
-    @test signed(Bool) == typeof(signed(true))
-    @test unsigned(Bool) == UInt
-    @test unsigned(Bool) == typeof(unsigned(true))
+    @test signed(Bool) === Int
+    @test signed(Bool) === typeof(signed(true))
+    @test unsigned(Bool) === UInt
+    @test unsigned(Bool) === typeof(unsigned(true))
 end
 @testset "bswap" begin
+    @test bswap(true) == true
     @test bswap(Int8(3)) == 3
-    @test bswap(UInt8(3)) == 3
+    @test bswap(UInt8(3)) === 0x3
     @test bswap(Int16(3)) == 256*3
     @test bswap(Int16(256)) == 1
     @test bswap(Int16(257)) == 257
     @test bswap(Int32(1)) == 2^(3*8)
     @test bswap(Int32(2)^(3*8)) == 1
-    @test bswap(Int64(1)) == Int64(2)^(7*8)
+    @test bswap(Int64(1)) === Int64(2)^(7*8)
     @test bswap(Int64(2)^(7*8)) == 1
-    @test bswap(Int128(1)) == Int128(2)^(15*8)
-    @test bswap(Int128(2)^(15*8)) == Int128(1)
-    @test bswap(UInt128(2)^(15*8)) == UInt128(1)
+    @test bswap(Int128(1)) === Int128(2)^(15*8)
+    @test bswap(Int128(2)^(15*8)) === Int128(1)
+    @test bswap(UInt128(2)^(15*8)) === UInt128(1)
 end
 @testset "count_zeros" begin
-    @test count_zeros(10) == Sys.WORD_SIZE - 2
-    @test count_zeros(UInt8(10)) == 6
+    @test count_zeros(10) === Sys.WORD_SIZE - 2
+    @test count_zeros(UInt8(10)) === 6
 end
 @testset "Conversions" begin
     @test convert(Signed, UInt128(3)) === Int128(3)
@@ -104,11 +105,11 @@ end
 end
 
 @testset "trunc, floor, ceil" begin
-    @test trunc(3) == 3
-    @test trunc(Integer, 3) == 3
+    @test trunc(3) === 3
+    @test trunc(Integer, 3) === 3
 
-    @test floor(3) == 3
-    @test ceil(3) == 3
+    @test floor(3) === 3
+    @test ceil(3) === 3
 end
 
 @testset "big" begin
@@ -120,10 +121,11 @@ end
 end
 
 @test round(UInt8, 123) == 123
-@test mod(123, UInt8) == 0x7b
+@test mod(123, UInt8) === 0x7b
 
-primitive type MyBitsType <: Integer 8 end
-@test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
+primitive type MyBitsType <: Signed 8 end
+@test_throws ErrorException ~reinterpret(MyBitsType, 0x7b)
+@test signed(MyBitsType) === MyBitsType
 
 UItypes = Base.BitUnsigned_types
 SItypes = Base.BitSigned_types
@@ -211,8 +213,8 @@ end
     end
 
     val2 = 0xabcd
-    @test 0x5e6d == bitrotate(val2, 3)
-    @test 0xb579 == bitrotate(val2, -3)
+    @test 0x5e6d === bitrotate(val2, 3)
+    @test 0xb579 === bitrotate(val2, -3)
 end
 
 @testset "widen/widemul" begin
@@ -240,12 +242,12 @@ end
     @test typeof(widen(Int64(-3))) == Int128
     @test typeof(widen(Int128(-3))) == BigInt
 
-    @test widemul(false, false) == false
-    @test widemul(false, 3) == 0
-    @test widemul(3, true) == widemul(true, 3) == 3
+    @test widemul(false, false) === false
+    @test widemul(false, 3) === 0
+    @test widemul(3, true) === widemul(true, 3) === 3
 
     let i=Int64(2)^63-1, k=widemul(i,i)
-        @test widemul(i,i)==85070591730234615847396907784232501249
+        @test widemul(i,i)===85070591730234615847396907784232501249
         j=div(k,2)
         @test div(k,j)==2
         j=div(k,5)
@@ -351,25 +353,28 @@ end
 @testset "rounding division" begin
     for x = -100:100
         for y = 1:100
-            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+            for rnd in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
                 @test div(x,y,rnd) == round(x/y,rnd)
                 @test div(x,-y,rnd) == round(x/-y,rnd)
             end
+            @test divrem(x,y,RoundFromZero) == (div(x,y,RoundFromZero), rem(x,y,RoundFromZero))
+            @test divrem(x,-y,RoundFromZero) == (div(x,-y,RoundFromZero), rem(x,-y,RoundFromZero))
         end
     end
-    for (a, b, nearest, away, up) in (
-            (3, 2, 2, 2, 2),
-            (5, 3, 2, 2, 2),
-            (-3, 2, -2, -2, -1),
-            (5, 2, 2, 3, 3),
-            (-5, 2, -2, -3, -2),
-            (-5, 3, -2, -2, -2),
-            (5, -3, -2, -2, -2))
+    for (a, b, nearest, away, up, from_zero) in (
+            (3, 2, 2, 2, 2, 2),
+            (5, 3, 2, 2, 2, 2),
+            (-3, 2, -2, -2, -1, -2),
+            (5, 2, 2, 3, 3, 3),
+            (-5, 2, -2, -3, -2, -3),
+            (-5, 3, -2, -2, -2, -2),
+            (5, -3, -2, -2, -2, -2))
         for sign in (+1, -1)
             (a, b) = (a*sign, b*sign)
-            @test div(a, b, RoundNearest) == nearest
-            @test div(a, b, RoundNearestTiesAway) == away
-            @test div(a, b, RoundNearestTiesUp) == up
+            @test div(a, b, RoundNearest) === nearest
+            @test div(a, b, RoundNearestTiesAway) === away
+            @test div(a, b, RoundNearestTiesUp) === up
+            @test div(a, b, RoundFromZero) === from_zero
         end
     end
 
@@ -377,10 +382,10 @@ end
     @test div(-typemax(Int64), typemax(Int64)-1, RoundNearest) == -1
     @test div(typemax(Int64), 2, RoundNearest) == 4611686018427387904
     @test div(-typemax(Int64), 2, RoundNearestTiesUp) == -4611686018427387903
-    @test div(typemax(Int)-2, typemax(Int), RoundNearest) == 1
+    @test div(typemax(Int)-2, typemax(Int), RoundNearest) === 1
 
     # Exhaustively test (U)Int8 to catch any overflow-style issues
-    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp)
+    for r in (RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundFromZero)
         for T in (UInt8, Int8)
             for x in typemin(T):typemax(T)
                 for y in typemin(T):typemax(T)
@@ -407,25 +412,32 @@ end
 end
 
 @testset "min/max of datatype" begin
-    @test typemin(Int8) == Int8(-128)
-    @test typemin(UInt8) == UInt8(0)
-    @test typemin(Int16) == Int16(-32768)
-    @test typemin(UInt16) == UInt16(0)
-    @test typemin(Int32) == Int32(-2147483648)
-    @test typemin(UInt32) == UInt32(0)
-    @test typemin(Int64) == Int64(-9223372036854775808)
-    @test typemin(UInt64) == UInt64(0)
-    @test typemin(Int128) == Int128(-170141183460469231731687303715884105728)
-    @test typemin(UInt128) == UInt128(0)
+    @test typemin(Int8) === Int8(-128)
+    @test typemin(UInt8) === UInt8(0)
+    @test typemin(Int16) === Int16(-32768)
+    @test typemin(UInt16) === UInt16(0)
+    @test typemin(Int32) === Int32(-2147483648)
+    @test typemin(UInt32) === UInt32(0)
+    @test typemin(Int64) === Int64(-9223372036854775808)
+    @test typemin(UInt64) === UInt64(0)
+    @test typemin(Int128) === Int128(-170141183460469231731687303715884105728)
+    @test typemin(UInt128) === UInt128(0)
 
-    @test typemax(Int8) == Int8(127)
-    @test typemax(UInt8) == UInt8(255)
-    @test typemax(Int16) == Int16(32767)
-    @test typemax(UInt16) == UInt16(65535)
-    @test typemax(Int32) == Int32(2147483647)
-    @test typemax(UInt32) == UInt32(4294967295)
-    @test typemax(Int64) == Int64(9223372036854775807)
-    @test typemax(UInt64) == UInt64(0xffffffffffffffff)
-    @test typemax(Int128) == Int128(170141183460469231731687303715884105727)
-    @test typemax(UInt128) == UInt128(0xffffffffffffffffffffffffffffffff)
+    @test typemax(Int8) === Int8(127)
+    @test typemax(UInt8) === UInt8(255)
+    @test typemax(Int16) === Int16(32767)
+    @test typemax(UInt16) === UInt16(65535)
+    @test typemax(Int32) === Int32(2147483647)
+    @test typemax(UInt32) === UInt32(4294967295)
+    @test typemax(Int64) === Int64(9223372036854775807)
+    @test typemax(UInt64) === UInt64(0xffffffffffffffff)
+    @test typemax(Int128) === Int128(170141183460469231731687303715884105727)
+    @test typemax(UInt128) === UInt128(0xffffffffffffffffffffffffffffffff)
+end
+
+@testset "BitIntegerType" begin
+    @test Int isa Base.BitIntegerType
+    @test Base.BitIntegerType === Union{
+        Type{ Int8}, Type{ Int16}, Type{ Int32}, Type{ Int64}, Type{ Int128},
+        Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt128}}
 end

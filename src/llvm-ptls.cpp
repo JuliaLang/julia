@@ -48,7 +48,6 @@ private:
     MDNode *tbaa_const;
     FunctionType *FT_pgcstack_getter;
     PointerType *T_pgcstack_getter;
-    PointerType *T_ppjlvalue;
     PointerType *T_pppjlvalue;
     GlobalVariable *pgcstack_func_slot{nullptr};
     GlobalVariable *pgcstack_key_slot{nullptr};
@@ -266,7 +265,6 @@ bool LowerPTLS::runOnModule(Module &_M, bool *CFGModified)
 #endif
     T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
     T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
-    T_ppjlvalue = JuliaType::get_ppjlvalue_ty(_M.getContext());
     if (imaging_mode) {
         pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
         pgcstack_key_slot = create_aliased_global(getSizeTy(_M.getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)

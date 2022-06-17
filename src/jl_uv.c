@@ -77,14 +77,16 @@ JL_DLLEXPORT void jl_iolock_end(void)
 }
 
 
-void jl_uv_call_close_callback(jl_value_t *val)
+static void jl_uv_call_close_callback(jl_value_t *val)
 {
-    jl_value_t *args[2];
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
     args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
             jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
     args[1] = val;
     assert(args[0]);
     jl_apply(args, 2); // TODO: wrap in try-catch?
+    JL_GC_POP();
 }
 
 static void jl_uv_closeHandle(uv_handle_t *handle)
@@ -105,6 +107,7 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_uv_call_close_callback((jl_value_t*)handle->data);
         ct->world_age = last_age;
+        return;
     }
     if (handle == (uv_handle_t*)&signal_async)
         return;
@@ -125,6 +128,10 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
         free(req);
         return;
     }
+    if (uv_is_closing((uv_handle_t*)stream)) { // avoid double-close on the stream
+        free(req);
+        return;
+    }
     if (status == 0 && uv_is_writable(stream) && stream->write_queue_size != 0) {
         // new data was written, wait for it to flush too
         uv_buf_t buf;
@@ -132,14 +139,12 @@ static void jl_uv_flush_close_callback(uv_write_t *req, int status)
         buf.len = 0;
         req->data = NULL;
         if (uv_write(req, stream, &buf, 1, (uv_write_cb)jl_uv_flush_close_callback) == 0)
-            return;
-    }
-    if (!uv_is_closing((uv_handle_t*)stream)) { // avoid double-close on the stream
-        if (stream->type == UV_TTY)
-            uv_tty_set_mode((uv_tty_t*)stream, UV_TTY_MODE_NORMAL);
-        uv_close((uv_handle_t*)stream, &jl_uv_closeHandle);
+            return; // success
     }
     free(req);
+    if (stream->type == UV_TTY)
+        uv_tty_set_mode((uv_tty_t*)stream, UV_TTY_MODE_NORMAL);
+    uv_close((uv_handle_t*)stream, &jl_uv_closeHandle);
 }
 
 static void uv_flush_callback(uv_write_t *req, int status)
@@ -224,15 +229,15 @@ static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, 
 
 JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
+    JL_UV_LOCK();
     if (handle->type == UV_PROCESS && ((uv_process_t*)handle)->pid != 0) {
         // take ownership of this handle,
         // so we can waitpid for the resource to exit and avoid leaving zombies
         assert(handle->data == NULL); // make sure Julia has forgotten about it already
         ((uv_process_t*)handle)->exit_cb = jl_proc_exit_cleanup_cb;
-        return;
+        uv_unref(handle);
     }
-    JL_UV_LOCK();
-    if (handle->type == UV_FILE) {
+    else if (handle->type == UV_FILE) {
         uv_fs_t req;
         jl_uv_file_t *fd = (jl_uv_file_t*)handle;
         if ((ssize_t)fd->file != -1) {
@@ -240,31 +245,26 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             fd->file = (uv_os_fd_t)(ssize_t)-1;
         }
         jl_uv_closeHandle(handle); // synchronous (ok since the callback is known to not interact with any global state)
-        JL_UV_UNLOCK();
-        return;
     }
-
-    if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
-        uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
-        req->handle = (uv_stream_t*)handle;
-        jl_uv_flush_close_callback(req, 0);
-        JL_UV_UNLOCK();
-        return;
-    }
-
-    // avoid double-closing the stream
-    if (!uv_is_closing(handle)) {
-        uv_close(handle, &jl_uv_closeHandle);
+    else if (!uv_is_closing(handle)) { // avoid double-closing the stream
+        if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP || handle->type == UV_TTY) {
+            // flush the stream write-queue first
+            uv_write_t *req = (uv_write_t*)malloc_s(sizeof(uv_write_t));
+            req->handle = (uv_stream_t*)handle;
+            jl_uv_flush_close_callback(req, 0);
+        }
+        else {
+            uv_close(handle, &jl_uv_closeHandle);
+        }
     }
     JL_UV_UNLOCK();
 }
 
 JL_DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
 {
-    // avoid double-closing the stream
-    if (!uv_is_closing(handle)) {
+    if (!uv_is_closing(handle)) { // avoid double-closing the stream
         JL_UV_LOCK();
-        if (!uv_is_closing(handle)) {
+        if (!uv_is_closing(handle)) { // double-check
             uv_close(handle, &jl_uv_closeHandle);
         }
         JL_UV_UNLOCK();
@@ -481,7 +481,7 @@ JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
     return err;
 }
 
-JL_DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
+static void jl_uv_writecb(uv_write_t *req, int status) JL_NOTSAFEPOINT
 {
     free(req);
     if (status < 0) {
@@ -608,7 +608,7 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
     static char buf[1000];
     buf[0] = '\0';
@@ -638,15 +638,6 @@ JL_DLLEXPORT void jl_exit(int exitcode)
     uv_tty_reset_mode();
     jl_atexit_hook(exitcode);
     exit(exitcode);
-}
-
-JL_DLLEXPORT int jl_getpid(void) JL_NOTSAFEPOINT
-{
-#ifdef _OS_WINDOWS_
-    return GetCurrentProcessId();
-#else
-    return getpid();
-#endif
 }
 
 typedef union {

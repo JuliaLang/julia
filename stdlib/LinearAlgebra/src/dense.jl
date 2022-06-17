@@ -500,7 +500,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
-        retmat = copy_oftype(A, TT)
+        retmat = copymutable_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end
@@ -1449,12 +1449,13 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return similar(A, Tout, (n, m))
     end
     if isdiag(A)
-        ind = diagind(A)
-        dA = view(A, ind)
+        indA = diagind(A)
+        dA = view(A, indA)
         maxabsA = maximum(abs, dA)
         tol = max(rtol * maxabsA, atol)
         B = fill!(similar(A, Tout, (n, m)), 0)
-        B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        indB = diagind(B)
+        B[indB] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
     SVD         = svd(A)

@@ -272,8 +272,7 @@ function showerror(io::IO, ex::MethodError)
         if !isempty(kwargs)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "=")
-                show(IOContext(io, :limit => true), v)
+                print(io, k, "::", typeof(v))
                 i == length(kwargs)::Int || print(io, ", ")
             end
         end
@@ -409,7 +408,11 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
             tv = Any[]
-            sig0 = method.sig
+            if func isa Core.OpaqueClosure
+                sig0 = signature_type(func, typeof(func).parameters[1])
+            else
+                sig0 = method.sig
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 iob = IOContext(iob, :unionall_env => sig0.var)

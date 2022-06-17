@@ -97,9 +97,8 @@ julia> round(357.913; sigdigits=4, base=2)
     Rounding to specified digits in bases other than 2 can be inexact when
     operating on binary floating point numbers. For example, the [`Float64`](@ref)
     value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2.
+    rounded to 1.2. For example:
 
-    # Examples
     ```jldoctest; setup = :(using Printf)
     julia> x = 1.15
     1.15
@@ -234,6 +233,10 @@ end
 # Java-style round
 function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
     copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
+end
+
+function Base.round(x::AbstractFloat, ::typeof(RoundFromZero))
+    signbit(x) ? round(x, RoundDown) : round(x, RoundUp)
 end
 
 # isapprox: approximate equality of numbers

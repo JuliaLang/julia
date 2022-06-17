@@ -275,21 +275,8 @@ end
         end
     end
 
-    try
-        timedwait(failure_cb(1), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
-
-    try
-        timedwait(failure_cb(2), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(1), 0)
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(2), 0)
 
     # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
     # doesn't exceed a maximum duration but that would require guarantees from the OS.

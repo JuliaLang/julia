@@ -92,6 +92,20 @@ let abcd = ABCDconst(1, 2, 3, 4)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
 
+# test `===` handling null pointer in struct #44712
+struct N44712
+    a::Some{Any}
+    b::Int
+    N44712() = new()
+end
+let a  = Int[0, 1], b = Int[0, 2]
+    GC.@preserve a b begin
+        @test unsafe_load(Ptr{N44712}(pointer(a))) !== unsafe_load(Ptr{N44712}(pointer(b)))
+    end
+end
+
+# another possible issue in #44712
+@test (("", 0),) !== (("", 1),)
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
@@ -322,6 +336,15 @@ let ft = Base.datatype_fieldtypes
 end
 #struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
 @test_broken @isdefined S22624
+
+# issue #42297
+mutable struct Node42297{T, V}
+    value::V
+    next::Union{Node42297{T, T}, Node42297{T, Val{T}}, Nothing}
+    Node42297{T}(value) where {T} = new{T, typeof(value)}(value, nothing)
+end
+@test fieldtype(Node42297{Int,Val{Int}}, 1) === Val{Int}
+@test fieldtype(Node42297{Int,Int}, 1) === Int
 
 # issue #3890
 mutable struct A3890{T1}
@@ -7777,3 +7800,11 @@ end
     m.x = 4.
     @test m.x === 4
 end
+
+# #45350 - Codegen for assignment to binding imported from module
+module Foo45350
+    global x45350::Int = 1
+end
+import .Foo45350: x45350
+f45350() = (global x45350 = 2)
+@test_throws ErrorException f45350()

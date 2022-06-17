@@ -103,6 +103,7 @@
     XX(jl_copy_ast) \
     XX(jl_copy_code_info) \
     XX(jl_cpu_threads) \
+    XX(jl_effective_threads) \
     XX(jl_crc32c_sw) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
@@ -200,12 +201,12 @@
     XX(jl_getallocationgranularity) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
-    XX(jl_getpid) \
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
+    XX(jl_get_binding_wr_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
@@ -236,6 +237,7 @@
     XX(jl_get_safe_restore) \
     XX(jl_get_size) \
     XX(jl_get_task_tid) \
+    XX(jl_get_task_threadpoolid) \
     XX(jl_get_tls_world_age) \
     XX(jl_get_UNAME) \
     XX(jl_get_world_counter) \
@@ -410,7 +412,6 @@
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
-    XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \
@@ -422,6 +423,7 @@
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \
+    XX(jl_set_task_threadpoolid) \
     XX(jl_set_typeinf_func) \
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
@@ -461,6 +463,7 @@
     XX(jl_task_stack_buffer) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
+    XX(jl_threadpoolid) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -515,15 +518,13 @@
     XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
-    XX(jl_setjmp)
+    XX(jl_setjmp) \
 
 // use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_extern_c) \
-    YY(jl_get_ee_context) \
-    YY(jl_get_llvm_context) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
@@ -541,8 +542,6 @@
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
-    YY(jl_lock_profile) \
-    YY(jl_unlock_profile) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
@@ -568,3 +567,5 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+
+// end of file

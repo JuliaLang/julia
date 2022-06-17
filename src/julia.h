@@ -56,20 +56,21 @@
 #  define JL_NORETURN __attribute__ ((noreturn))
 #  define JL_CONST_FUNC __attribute__((const))
 #  define JL_USED_FUNC __attribute__((used))
-#  define JL_SECTION(name) __attribute__((section(name)))
-#  define JL_THREAD_LOCAL __thread
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
 #  define JL_USED_FUNC
-#  define JL_THREAD_LOCAL
 #endif
 
 #define container_of(ptr, type, member) \
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
+typedef struct _jl_tls_states_t *jl_ptls_t;
 
+#ifdef LIBRARY_EXPORTS
+#include "uv.h"
+#endif
 #include "julia_atomics.h"
 #include "julia_threads.h"
 #include "julia_assert.h"
@@ -233,6 +234,7 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
+// the following mirrors `struct EffectsOverride` in `base/compiler/types.jl`
 typedef union __jl_purity_overrides_t {
     struct {
         uint8_t ipo_consistent  : 1;
@@ -244,6 +246,7 @@ typedef union __jl_purity_overrides_t {
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
         uint8_t ipo_terminates_locally : 1;
+        uint8_t ipo_notaskstate : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -393,6 +396,8 @@ typedef struct _jl_code_instance_t {
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
+#ifdef JL_USE_ANON_UNIONS_FOR_PURITY_FLAGS
+    // see also encode_effects() and decode_effects() in `base/compiler/types.jl`,
     union {
         uint32_t ipo_purity_bits;
         struct {
@@ -400,7 +405,7 @@ typedef struct _jl_code_instance_t {
             uint8_t ipo_effect_free:2;
             uint8_t ipo_nothrow:2;
             uint8_t ipo_terminates:2;
-            uint8_t ipo_overlayed:1;
+            uint8_t ipo_nonoverlayed:1;
         } ipo_purity_flags;
     };
     union {
@@ -410,9 +415,13 @@ typedef struct _jl_code_instance_t {
             uint8_t effect_free:2;
             uint8_t nothrow:2;
             uint8_t terminates:2;
-            uint8_t overlayed:1;
+            uint8_t nonoverlayed:1;
         } purity_flags;
     };
+#else
+    uint32_t ipo_purity_bits;
+    uint32_t purity_bits;
+#endif
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
@@ -460,6 +469,7 @@ typedef struct {
     // `wrapper` is either the only instantiation of the type (if no parameters)
     // or a UnionAll accepting parameters to make an instantiation.
     jl_value_t *wrapper;
+    _Atomic(jl_value_t*) Typeofwrapper;  // cache for Type{wrapper}
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
     struct _jl_methtable_t *mt;
@@ -678,7 +688,6 @@ extern JL_DLLIMPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_const_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_struct_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
@@ -996,7 +1005,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i, (jl_value_t*)x);
+    jl_atomic_store_release(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i, (jl_value_t*)x);
     if (x) {
         if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);
@@ -1601,16 +1610,16 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int error);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr_or_error(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT);
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
@@ -1635,13 +1644,16 @@ JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_errno(int e) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getpagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
+extern JL_DLLIMPORT int jl_n_threadpools;
 extern JL_DLLIMPORT int jl_n_threads;
+extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries
 JL_DLLEXPORT jl_value_t *jl_environ(int i);
@@ -1715,10 +1727,11 @@ JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_relative_path);
+                                     const char *image_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
+JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 
@@ -1874,10 +1887,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *logstate;
     jl_function_t *start;
-    uint64_t rngState0; // really rngState[4], but more convenient to split
-    uint64_t rngState1;
-    uint64_t rngState2;
-    uint64_t rngState3;
+    uint64_t rngState[4];
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
     _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
@@ -1887,6 +1897,8 @@ typedef struct _jl_task_t {
 // hidden state:
     // id of owning thread - does not need to be defined until the task runs
     _Atomic(int16_t) tid;
+    // threadpool id
+    int8_t threadpoolid;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
@@ -1910,7 +1922,8 @@ typedef struct _jl_task_t {
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t*, jl_value_t*, size_t);
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt);
-JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void);
@@ -2159,7 +2172,7 @@ typedef struct {
 
 #define jl_root_task (jl_current_task->ptls->root_task)
 
-JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
 // TODO: we need to pin the task while using this (set pure bit)
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void) JL_NOTSAFEPOINT;

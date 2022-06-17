@@ -82,7 +82,10 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
         wchar_to_utf8(wmsg, err, 255);
         jl_loader_print_stderr3("Message:", err, "\n");
 #else
-        jl_loader_print_stderr3("Message:", dlerror(), "\n");
+        char *dlerr = dlerror();
+        if (dlerr != NULL) {
+            jl_loader_print_stderr3("Message:", dlerr, "\n");
+        }
 #endif
         exit(1);
     }
@@ -133,7 +136,10 @@ JL_DLLEXPORT const char * jl_get_libdir()
     Dl_info info;
     if (!dladdr(&jl_get_libdir, &info)) {
         jl_loader_print_stderr("ERROR: Unable to dladdr(&jl_get_libdir)!\n");
-        jl_loader_print_stderr3("Message:", dlerror(), "\n");
+        char *dlerr = dlerror();
+        if (dlerr != NULL) {
+            jl_loader_print_stderr3("Message:", dlerr, "\n");
+        }
         exit(1);
     }
     strcpy(lib_dir, info.dli_fname);

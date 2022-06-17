@@ -218,7 +218,7 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@pure function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[an...]
     for n in bn
@@ -229,7 +229,7 @@ end
     (names...,)
 end
 
-@pure function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
     @nospecialize names a b
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
@@ -321,7 +321,7 @@ get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, ke
 tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
 
-@pure function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
     names = Symbol[]
     for n in an
@@ -414,4 +414,10 @@ macro NamedTuple(ex)
     vars = [QuoteNode(e isa Symbol ? e : e.args[1]) for e in decls]
     types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
+end
+
+function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
+    _check_length_split_rest(length(t), n)
+    names_front, names_last_n = split_rest(names, n, st...)
+    return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)
 end

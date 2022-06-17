@@ -24,3 +24,46 @@ end
 macro opaque(ty, ex)
     esc(Expr(:opaque_closure, ty, ex))
 end
+
+# OpaqueClosure construction from pre-inferred CodeInfo/IRCode
+using Core.Compiler: IRCode
+using Core: CodeInfo
+
+function compute_ir_rettype(ir::IRCode)
+    rt = Union{}
+    for i = 1:length(ir.stmts)
+        stmt = ir.stmts[i][:inst]
+        if isa(stmt, Core.Compiler.ReturnNode) && isdefined(stmt, :val)
+            rt = Core.Compiler.tmerge(Core.Compiler.argextype(stmt.val, ir), rt)
+        end
+    end
+    return Core.Compiler.widenconst(rt)
+end
+
+function Core.OpaqueClosure(ir::IRCode, env...;
+        nargs::Int = length(ir.argtypes)-1,
+        isva::Bool = false,
+        rt = compute_ir_rettype(ir))
+    if (isva && nargs > length(ir.argtypes)) || (!isva && nargs != length(ir.argtypes)-1)
+        throw(ArgumentError("invalid argument count"))
+    end
+    src = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    src.slotflags = UInt8[]
+    src.slotnames = fill(:none, nargs+1)
+    src.slottypes = copy(ir.argtypes)
+    Core.Compiler.replace_code_newstyle!(src, ir, nargs+1)
+    Core.Compiler.widen_all_consts!(src)
+    src.inferred = true
+    # NOTE: we need ir.argtypes[1] == typeof(env)
+
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
+          Tuple{ir.argtypes[2:end]...}, Union{}, rt, @__MODULE__, src, 0, nothing, nargs, isva, env)
+end
+
+function Core.OpaqueClosure(src::CodeInfo, env...)
+    M = src.parent.def
+    sig = Base.tuple_type_tail(src.parent.specTypes)
+
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
+          sig, Union{}, src.rettype, @__MODULE__, src, 0, nothing, M.nargs - 1, M.isva, env)
+end

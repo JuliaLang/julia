@@ -442,4 +442,15 @@ end
     @test_logs (:warn, "foo")  @warn "foo" argvals=:((DoNotCare{$(Expr(:escape, :Any))}(),))
 end
 
+@testset "stdlib path" begin
+    logger = TestLogger()
+    with_logger(logger) do
+        @info "foo" _file=joinpath(Sys.BUILD_STDLIB_PATH, "InteractiveUtils", "src", "InteractiveUtils.jl")
+    end
+    logs = logger.logs
+    @test length(logs) == 1
+    record = logs[1]
+    @test isfile(record.file)
+end
+
 end
