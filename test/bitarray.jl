@@ -1787,3 +1787,215 @@ end
         @test all(bitarray[rangein, rangeout] .== true)
     end
 end
+
+function bitonehot(I::Vector{Int}, n::Int)
+    b = falses(n)
+    for i ∈ I
+        b[i] = true
+    end
+    b
+end
+bitonehot(I::Vector{Int}) = bitonehot(I, maximum(I))
+
+@testset "construct BitVector from Unsigned" begin
+    # truncation
+    for u in (0x12, 0x1234, 0x12345678, 0x123456789abcdef, 0x0f1e2d3c4b5a69780123456789abcdef)
+        sz = 8sizeof(u)
+        for n = 0:sz
+            m = sz - n
+            @test BitVector(u, n) == BitVector(u << m >> m, n)
+        end
+    end
+    # (bit)reverse
+    for u in (0x12, 0x1234, 0x12345678, 0x123456789abcdef, 0x0f1e2d3c4b5a69780123456789abcdef)
+        for T in (UInt8, UInt16, UInt32, UInt64)
+            t = u % T
+            b = BitVector(t)
+            rb = reverse(b)
+            @test rb.chunks[1] == bitreverse(t)
+        end
+    end
+    b = BitVector(UInt128(0xf5))
+    rb = reverse(b)
+    @test rb.chunks[1] == 0x0000000000000000
+    @test rb.chunks[2] == bitreverse(UInt128(0xf5)) >> 64 % UInt64
+
+    # there and back again
+    is = [1,5,32]
+    @test bitonehot(is) == BitVector(0x80000011)
+    is = [1,4,6,8]
+    @test bitonehot(is) == BitVector(0xa9)
+
+    # rotation -- somewhat excessive since circshift is already the same as bitrotate.
+    # (it's correct by construction, but a desirable property)
+    for u in (0x12, 0x1234, 0x12345678, 0x123456789abcdef, 0x0f1e2d3c4b5a69780123456789abcdef)
+        b = BitVector(u)
+        sz = 8sizeof(u)
+        for n = -sz:sz
+            @test circshift(b, n) == BitVector(bitrotate(u, n))
+        end
+    end
+
+    # other properties
+    for u in (0xf5, 0xf0, 0x0f, 0x10, 0x01, 0x12, 0x1234, 0x12345678, 0x123456789abcdef, 0x0f1e2d3c4b5a69780123456789abcdef)
+        B = BitVector(u)
+        @test sum(B) == count_ones(u)
+        @test findfirst(B) == trailing_zeros(u) + 1
+        @test findlast(B) == 8sizeof(u) - leading_zeros(u)
+    end
+end
+
+@testset "BitVector l/r-shift[!] tests" begin
+    b = BitVector(0x123456789abcdef)
+    for i = -65:65
+        r = rshift(b, i)
+        @test r.chunks[1] == 0x123456789abcdef >> i
+        l = lshift(b, i)
+        @test l.chunks[1] == 0x123456789abcdef << i
+        # test vs. extant behavior of shift operators
+        @test r == b << i
+        @test l == b >> i
+    end
+    b = BitVector(0x0f1e2d3c4b5a69780123456789abcdef)
+    for i = -129:129
+        r = rshift(b, i)
+        @test r.chunks[1] == 0x0f1e2d3c4b5a69780123456789abcdef >> i % UInt64
+        @test r.chunks[2] == 0x0f1e2d3c4b5a69780123456789abcdef >> i >> 64 % UInt64
+        l = lshift(b, i)
+        @test l.chunks[1] == 0x0f1e2d3c4b5a69780123456789abcdef << i % UInt64
+        @test l.chunks[2] == 0x0f1e2d3c4b5a69780123456789abcdef << i >> 64 % UInt64
+        # test vs. extant behavior of shift operators
+        @test r == b << i
+        @test l == b >> i
+    end
+    # With truncation
+    @test rshift(BitVector(0x123456789abcdef, 20), 10) == BitVector(0xbcdef >> 10, 20)
+    @test lshift(BitVector(0x123456789abcdef, 20), 10) == BitVector(0xbcdef << 10, 20)
+    # Mutation: into self and into another dest
+    b = BitVector(0xffffffffffffffff)
+    @test_throws ArgumentError rshift!(b, falses(3), 2)
+    @test_throws ArgumentError lshift!(b, falses(3), 2)
+    for n in (64, 65, 79, 127, 128, 129, 158, 191, 192, 193, 1023, 1024, 1025)
+        b = trues(n)
+        t = trues(n)
+        c = similar(b)
+        # push bits off one by one
+        for i = n-1:-1:0
+            rshift!(b, 1)
+            rshift!(c, t, n-i)
+            @test sum(b) == i == sum(c)
+        end
+        # place bit at right-most, then walk it to left-most, then back again
+        b .= false
+        b[1] = true
+        for r = (2:1:n, -(n-1):1:-1)
+            for i = r
+                rshift!(b, signbit(i) ? 1 : -1)
+                @test b[abs(i)]
+            end
+        end
+        rshift!(b, t, 0)
+        @test all(b)
+        @test b.chunks !== t.chunks
+        for i in (1, 2, 3, 4, 5, 17, 24, 37, 63, 64)
+            rshift!(b, t, 0)
+            rshift!(b, i)
+            rshift!(c, t, i)
+            @test sum(b) == n - i == sum(c)
+        end
+        for i = n-2:n
+            rshift!(b, t, 0)
+            rshift!(b, i)
+            rshift!(c, t, i)
+            @test sum(b) == n - i == sum(c)
+        end
+        for i = 64:64:n-1
+            rshift!(b, t, 0)
+            rshift!(b, i)
+            rshift!(c, t, i)
+            @test sum(b) == n - i == sum(c)
+            rshift!(b, t, 0)
+            rshift!(b, i - 1)
+            rshift!(c, t, i - 1)
+            @test sum(b) == n - (i - 1) == sum(c)
+            rshift!(b, t, 0)
+            rshift!(b, i + 1)
+            rshift!(c, t, i + 1)
+            @test sum(b) == n - (i + 1) == sum(c)
+        end
+        #
+        b = bitrand(n)
+        t = deepcopy(b)
+        rshift!(b, t, 0)
+        @test b.chunks !== t.chunks
+        for i in (1, 2, 3, 4, 5, 17, 24, 37, 63, 64, n, n + 1)
+            rshift!(b, t, 0)
+            rshift!(b, i)
+            rshift!(c, t, i)
+            @test sum(b) == sum(t[i+1:n]) == sum(c)
+            @test b == rshift(t, i) == rshift(t, i)
+        end
+    end
+    for n in (64, 65, 79, 127, 128, 129, 158, 191, 192, 193, 1023, 1024, 1025)
+        b = trues(n)
+        t = trues(n)
+        c = similar(b)
+        # push bits off one by one
+        for i = n-1:-1:0
+            lshift!(b, 1)
+            lshift!(c, t, n-i)
+            @test sum(b) == i == sum(c)
+        end
+        # place bit at left-most, then walk it to right-most, then back again
+        b .= false
+        b[end] = true
+        for r = (-(n-1):1:-1, 2:1:n)
+            for i = r
+                lshift!(b, signbit(i) ? -1 : 1)
+                @test b[abs(i)]
+            end
+        end
+        lshift!(b, t, 0)
+        @test all(b)
+        @test b.chunks !== t.chunks
+        for i in (1, 2, 3, 4, 5, 17, 24, 37, 63, 64)
+            lshift!(b, t, 0)
+            lshift!(b, i)
+            lshift!(c, t, i)
+            @test sum(b) == n - i == sum(c)
+        end
+        for i = n-2:n
+            lshift!(b, t, 0)
+            lshift!(b, i)
+            lshift!(c, t, i)
+            @test sum(b) == n - i == sum(c)
+        end
+        for i = 64:64:n-1
+            lshift!(b, t, 0)
+            lshift!(b, i)
+            lshift!(c, t, i)
+            @test sum(b) == n - i == sum(c)
+            lshift!(b, t, 0)
+            lshift!(b, i - 1)
+            lshift!(c, t, i - 1)
+            @test sum(b) == n - (i - 1) == sum(c)
+            lshift!(b, t, 0)
+            lshift!(b, i + 1)
+            lshift!(c, t, i + 1)
+            @test sum(b) == n - (i + 1) == sum(c)
+        end
+        #
+        b = bitrand(n)
+        t = deepcopy(b)
+        lshift!(b, t, 0)
+        @test b.chunks !== t.chunks
+        for i in (1, 2, 3, 4, 5, 17, 24, 37, 63, 64, n, n + 1)
+            lshift!(b, t, 0)
+            lshift!(b, i)
+            lshift!(c, t, i)
+            @test sum(b) == sum(t[1:n-i]) == sum(c)
+            @test b == (t >> i)
+            @test b == lshift(t, i) == lshift(t, i)
+        end
+    end
+end
