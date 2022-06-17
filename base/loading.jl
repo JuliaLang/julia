@@ -2147,8 +2147,8 @@ end # module
 
 Note that the first example here actually executes `foo(1, 1.0)` so can be slower, but is usually more robust
 to changes in the codebase than the latter approach of using `precompile` statements. The latter requires explicitly
-calling `precompile` on methods that cannot be inferred. i.e. if `foo(1, 1.0)` calls some methods by runtime dispatch, the dispatched calls must be independently `precompile`d.
-which will also need `precompile` statements. Consequently the latter can be more work to maintain, but can be
+calling `precompile` on methods that cannot be inferred. i.e. if `foo(1, 1.0)` calls some methods by runtime dispatch,
+the dispatched calls must be independently `precompile`d. Consequently the latter can be more work to maintain, but can be
 automated via tooling such as the package `SnoopCompile.jl`.
 
 It is therefore recommended, where possible, to find minimal code to execute to get the desired precompilation coverage.
