@@ -631,8 +631,8 @@ end
 
 # Padding
 struct Padding
-    offset::Int
-    size::Int
+    offset::Int # 0-indexed offset of the next valid byte; sizeof(T) indicates trailing padding
+    size::Int   # bytes of padding before a valid byte
 end
 function intersect(p1::Padding, p2::Padding)
     start = max(p1.offset, p2.offset)
@@ -676,20 +676,24 @@ function iterate(cp::CyclePadding, state::Tuple)
 end
 
 """
-    Compute the location of padding in a type.
+    Compute the location of padding in a type. Recursive for nested types.
 """
-function padding(T)
-    padding = Padding[]
-    last_end::Int = 0
+function padding(T, baseoffset = 0)
+    pads = Padding[]
+    last_end::Int = baseoffset
     for i = 1:fieldcount(T)
-        offset = fieldoffset(T, i)
+        offset = baseoffset + fieldoffset(T, i)
         fT = fieldtype(T, i)
+        append!(pads, padding(fT, offset))
         if offset != last_end
-            push!(padding, Padding(offset, offset-last_end))
+            push!(pads, Padding(offset, offset-last_end))
         end
         last_end = offset + sizeof(fT)
     end
-    padding
+    if 0 < last_end < sizeof(T)
+        push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - last_end))
+    end
+    return pads
 end
 
 function CyclePadding(T::DataType)
@@ -767,32 +771,98 @@ mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIn
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 @pure function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
-    # TODO I believe the semantic is we cannot read the padding bits of the input,
-    # and therefore we should relax this to padding(In) being a subset of padding(Out).
     padding(Out) == padding(In)
 end
 
-@inline function reinterpret(::Type{Out}, x) where {Out}
-    In = typeof(x)
-    if !isbitstype(Out)
-        error("reinterpret target type must be isbits")
-    end
-    if !isbitstype(In)
-        error("reinterpret source type must be isbits")
-    end
+@pure function packedsize(::Type{T}) where T
+    pads = padding(T)
+    return sizeof(T) - (isempty(pads) ? 0 : sum(p.size for p ∈ pads))
+end
 
-    if isprimitivetype(Out) && isprimitivetype(In)
-        return bitcast(Out, x)
-    elseif struct_subpadding(Out, In)
-        in = Ref{In}(x)
-        ptr_in = unsafe_convert(Ptr{In}, in)
-        out = Ref{Out}()
-        ptr_out = unsafe_convert(Ptr{Out}, out)
+@pure ispacked(::Type{T}) where T = packedsize(T) == sizeof(T)
+
+@inline function reinterpret(::Type{Out}, x::In) where {Out, In}
+    isbitstype(Out) || error("reinterpret target type must be isbits")
+    isbitstype(In) || error("reinterpret source type must be isbits")
+    isprimitivetype(Out) && isprimitivetype(In) && return bitcast(Out, x)
+    inpackedsize = packedsize(In)
+    outpackedsize = packedsize(Out)
+    inpackedsize == outpackedsize || throw(PaddingError(Out, In))
+    in = Ref{In}(x)
+    out = Ref{Out}()
+    if struct_subpadding(Out, In)
+        # if packed the same, just copy
         GC.@preserve in out begin
+            ptr_in = unsafe_convert(Ptr{In}, in)
+            ptr_out = unsafe_convert(Ptr{Out}, out)
             _memcpy!(ptr_out, ptr_in, sizeof(Out))
         end
         return out[]
     else
-        throw(PaddingError(Out, In))
+        # mismatched padding
+        function copytopacked(ptr_out, ptr_in)
+            writeoffset = 0
+            for i ∈ 1:fieldcount(In)
+                readoffset = fieldoffset(In, i)
+                fT = fieldtype(In, i)
+                if ispacked(fT)
+                    readsize = sizeof(fT)
+                    _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, readsize)
+                    writeoffset += readsize
+                else # nested padded type
+                    fTpackedsize = packedsize(fT)
+                    fpacked = Ref{NTuple{fTpackedsize, UInt8}}(reinterpret(NTuple{fTpackedsize, UInt8}, getfield(x, i)))
+                     GC.@preserve fpacked begin
+                         ptr_fpacked = unsafe_convert(Ptr{NTuple{fTpackedsize, UInt8}}, fpacked)
+                         _memcpy!(ptr_out + writeoffset, ptr_fpacked, fTpackedsize)
+                     end
+                     writeoffset += fTpackedsize
+                end
+            end
+        end
+        function copyfrompacked(ptr_out, ptr_in)
+            readoffset = 0
+            for i ∈ 1:fieldcount(Out)
+                writeoffset = fieldoffset(Out, i)
+                fT = fieldtype(Out, i)
+                if ispacked(fT)
+                    writesize = sizeof(fT)
+                    _memcpy!(ptr_out + writeoffset, ptr_in + readoffset, writesize)
+                    readoffset += writesize
+                else # nested padded type
+                    fTpackedsize = packedsize(fT)
+                    fpacked = Ref{NTuple{fTpackedsize, UInt8}}()
+                    GC.@preserve fpacked begin
+                        ptr_fpacked = unsafe_convert(Ptr{NTuple{fTpackedsize, UInt8}}, fpacked)
+                        _memcpy!(ptr_fpacked, ptr_in + readoffset, fTpackedsize)
+                    end
+                    funpacked = Ref{fT}(reinterpret(fT, fpacked[]))
+                    GC.@preserve funpacked begin
+                        ptr_funpacked = unsafe_convert(Ptr{fT}, funpacked)
+                        _memcpy!(ptr_out + writeoffset, ptr_funpacked, sizeof(fT))
+                    end
+                    readoffset += fTpackedsize
+                end
+            end
+        end
+
+        GC.@preserve in out begin
+            ptr_in = unsafe_convert(Ptr{In}, in)
+            ptr_out = unsafe_convert(Ptr{Out}, out)
+
+            if fieldcount(In) > 0 && ispacked(Out)
+                copytopacked(ptr_out, ptr_in)
+            elseif fieldcount(Out) > 0 && ispacked(In)
+                copyfrompacked(ptr_out, ptr_in)
+            else
+                packed = Ref{NTuple{inpackedsize, UInt8}}()
+                GC.@preserve packed begin
+                    ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
+                    copytopacked(ptr_packed, ptr_in)
+                    copyfrompacked(ptr_out, ptr_packed)
+                end
+            end
+        end
+        return out[]
     end
 end
