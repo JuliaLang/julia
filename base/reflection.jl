@@ -513,7 +513,8 @@ false
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-@_total_meta function ismutable(@nospecialize(x))
+function ismutable(@nospecialize(x))
+    @_total_meta
     T = typeof(x)
     T !== String && T !== Symbol && T.name.flags & 0x2 == 0x2
 end
