@@ -1143,7 +1143,7 @@ function sortperm(A::AbstractArray;
                   workspace::Union{AbstractVector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
     ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(A, Vector) && eltype(A) <: Integer
+    if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
         n = length(A)
         if n > 1
             min, max = extrema(A)
