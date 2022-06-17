@@ -116,6 +116,7 @@ IndexStyle(::Type{<:BitArray}) = IndexLinear()
 ## aux functions ##
 
 const _msk64 = ~UInt64(0)
+const _msk128 = ~UInt128(0)
 @inline _div64(l) = l >> 6
 @inline _mod64(l) = l & 63
 @inline _blsr(x)= x & (x-1) #zeros the last set bit. Has native instruction on many archs. needed in multidimensional.jl
@@ -712,7 +713,7 @@ function BitVector(x::Unsigned, n::Integer)
     B = BitVector(undef, n)
     Bc = B.chunks
     n != 0 && (Bc[1] = _msk64 >> (64 - n) & x)
-    n > 64 && (Bc[2] = 0x0000000000000000)
+    n > 64 && (Bc[2] = ~_msk64)
     return B
 end
 
@@ -767,7 +768,7 @@ function BitVector(x::UInt128, n::Integer)
     B = BitVector(undef, n)
     if n != 0
         Bc = B.chunks
-        y = 0xffffffffffffffffffffffffffffffff >> (128 - n) & x
+        y = _msk128 >> (128 - n) & x
         Bc[1] = y % UInt64
         n > 64 && (Bc[2] = y >> 64 % UInt64)
     end
