@@ -1,6 +1,7 @@
 ## LLVM ##
 include $(SRCDIR)/llvm-ver.make
 include $(SRCDIR)/llvm-options.mk
+include $(SRCDIR)/llvm.version
 
 ifneq ($(USE_BINARYBUILDER_LLVM), 1)
 LLVM_GIT_URL:=https://github.com/JuliaLang/llvm-project.git
