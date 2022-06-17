@@ -1154,12 +1154,8 @@ function sortperm(A::AbstractArray;
             end
         end
     end
-    perm = Perm(
-        ordr,
-        vec(A)
-    )
-    ix = Base.copymutable(LinearIndices(A))
-    sort!(ix; dims..., alg = alg, order=perm)
+    ix = copymutable(LinearIndices(A))
+    sort!(ix; alg, order = Perm(ordr, vec(A)), workspace, dims...)
 end
 
 
@@ -1213,11 +1209,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     if !initialized
         ix .= LinearIndices(A)
     end
-    perm = Perm(
-        ord(lt, by, rev, order),
-        vec(A)
-    )
-    sort!(ix; dims..., alg, order=perm)
+    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), workspace, dims...)
 end
 
 # sortperm for vectors of few unique integers
