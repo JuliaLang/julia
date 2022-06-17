@@ -494,7 +494,9 @@ Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
-See also [`isbits`](@ref), [`isstructtype`](@ref).
+Note that a value can be immutable, yet still be modified if it contains data that is itself mutable.
+
+See also [`ismutabletype`](@ref), [`isbits`](@ref), [`isstructtype`](@ref).
 
 # Examples
 ```jldoctest
@@ -503,18 +505,26 @@ false
 
 julia> ismutable([1,2])
 true
+
+julia ismutable(Some([1,2]))
+false
 ```
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
 """
-ismutable(@nospecialize(x)) = (@_total_meta; typeof(x).name.flags & 0x2 == 0x2)
+@_total_meta function ismutable(@nospecialize(x))
+    T = typeof(x)
+    T !== String && T !== Symbol && T.name.flags & 0x2 == 0x2
+end
 
 """
     ismutabletype(T) -> Bool
 
 Determine whether type `T` was declared as a mutable type
 (i.e. using `mutable struct` keyword).
+
+See also [`ismutable`](@ref), [`isbitstype`](@ref), [`isstructtype`](@ref).
 
 !!! compat "Julia 1.7"
     This function requires at least Julia 1.7.
@@ -523,7 +533,10 @@ function ismutabletype(@nospecialize t)
     @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
-    return isa(t, DataType) && t.name.flags & 0x2 == 0x2
+    return isa(t, DataType) &&
+    t !== String &&
+    t !== Symbol &&
+    t.name.flags & 0x2 == 0x2
 end
 
 """
