@@ -190,22 +190,7 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 #define should_timeout() 0
 
-static void jl_gc_wait_for_the_world(void)
-{
-    if (jl_n_threads > 1)
-        jl_wake_libuv();
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        // This acquire load pairs with the release stores
-        // in the signal handler of safepoint so we are sure that
-        // all the stores on those threads are visible.
-        // We're currently also using atomic store release in mutator threads
-        // (in jl_gc_state_set), but we may want to use signals to flush the
-        // memory operations on those threads lazily instead.
-        while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
-            jl_cpu_pause(); // yield?
-    }
-}
+void jl_gc_wait_for_the_world(void);
 
 // malloc wrappers, aligned allocation
 
@@ -3258,7 +3243,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
-    gc_final_pause_end(t0, gc_end_time);
+    gc_final_pause_end(gc_start_time, gc_end_time);
     gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
@@ -3762,6 +3747,7 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #endif
     errno = last_errno;
     jl_may_leak(base);
+    assert(align > 0);
     unsigned diff = (offset - base) % align;
     return (void*)(base + diff);
 }

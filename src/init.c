@@ -101,8 +101,14 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     size_t stacksize = rl.rlim_cur;
+// We intentionally leak a stack address here core.StackAddressEscape
+#  ifndef __clang_analyzer__
     *stack_hi = (void*)&stacksize;
     *stack_lo = (void*)((char*)*stack_hi - stacksize);
+#  else
+    *stack_hi = 0;
+    *stack_lo = 0;
+#  endif
 #endif
 }
 
