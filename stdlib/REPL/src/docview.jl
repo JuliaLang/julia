@@ -18,6 +18,11 @@ using InteractiveUtils: subtypes
 using Unicode: normalize
 
 ## Help mode ##
+# Big picture as of 2022-06-18:
+# help?> → helpmode → _helpmode → @repl → repl → _repl → Core.@doc → Core.atdoc → Docs.docm → lookup_doc → doc (→ summarize)
+# In addition to `_repl`, `repl` also calls `repl_search`, `repl_latex` and optionally `repl_corrections`.
+# For data fields, `_repl` calls `fielddoc` instead of `Core.@doc`.
+# Many of the function recurse to handle special cases.
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
 helpmode(io::IO, line::AbstractString, mod::Module=Main) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod))))
@@ -176,10 +181,18 @@ function doc(binding::Binding, sig::Type = Union{})
     if isempty(groups)
         # When no `MultiDoc`s are found that match `binding` then we check whether `binding`
         # is an alias of some other `Binding`. When it is we then re-run `doc` with that
-        # `Binding`, otherwise if it's not an alias then we generate a summary for the
+        # `Binding`, otherwise we check whether it is some ordinary object. If so, we print
+        # its type and re-run `doc` with its type. Otherwise we generate a summary for the
         # `binding` and display that to the user instead.
         alias = aliasof(binding)
-        alias == binding ? summarize(alias, sig) : doc(alias, sig)
+        if alias != binding
+            return doc(alias, sig)
+        elseif isdefined(binding) && !(resolve(binding) isa Union{Type, Module, Function})
+            println("`", binding, "` is of type `", typeof(resolve(binding)), "`\n")
+            return doc(typeof(resolve(binding)), sig)
+        else
+            return summarize(alias, sig)
+        end
     else
         # There was at least one match for `binding` while searching. If there weren't any
         # matches for `sig` then we concatenate *all* the docs from the matching `Binding`s.

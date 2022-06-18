@@ -4,6 +4,13 @@ using Test
 import REPL, REPL.REPLCompletions
 import Markdown
 
+module ExampleStructs
+    """Example docstring A"""
+    struct A end
+    a = A()
+end
+
+@testset "docview" begin
 @testset "symbol completion" begin
     @test startswith(let buf = IOBuffer()
             Core.eval(Main, REPL.helpmode(buf, "α"))
@@ -50,6 +57,7 @@ end
         @test r ∈ REPL.doc_completions(i)
     end
 end
+
 @testset "fuzzy score" begin
     # https://github.com/JunoLab/FuzzyCompletions.jl/issues/7
     # shouldn't throw when there is a space in a middle of query
@@ -64,4 +72,10 @@ end
     R = Complex{<:Integer}
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
+end
+
+@testset "object documentation" begin
+    @test occursin("Example docstring A", sprint(show, ExampleStructs.eval(REPL.helpmode(IOBuffer(), "a"))))
+    @test occursin("Example docstring A", sprint(show, ExampleStructs.eval(REPL.helpmode(IOBuffer(), "A()"))))
+end
 end
