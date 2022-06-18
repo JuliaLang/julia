@@ -2153,7 +2153,7 @@ automated via tooling such as the package `SnoopCompile.jl`.
 
 It is therefore recommended, where possible, to find minimal code to execute to get the desired precompilation coverage.
 
-Guarding precompilation code behind this check is also best practice because in some situations, 
+Guarding precompilation code behind this check is also best practice because in some situations,
 downstream users may not want to use the precompilation caching, which can be disabled globally
 via `--compiled-modules=no`.
 
