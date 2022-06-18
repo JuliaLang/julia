@@ -1,6 +1,5 @@
 ## jll artifact
 UNWIND_JLL_NAME := LibUnwind
-UNWIND_JLL_VER  := 1.5.0+1
 
 ## source build
 UNWIND_VER_TAG := 1.5
