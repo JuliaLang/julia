@@ -1459,17 +1459,21 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
 static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
-    ArrayType *atype = ArrayType::get(Type::getInt32Ty(M.getContext()), 3); // want 4-byte alignment of 12-bytes of data
-    GlobalVariable *gvs[2] = {
-        new GlobalVariable(M, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__UnwindData"),
-        new GlobalVariable(M, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__catchjmp") };
-    gvs[0]->setSection(".text");
-    gvs[1]->setSection(".text");
-    appendToCompilerUsed(M, makeArrayRef((GlobalValue**)gvs, 2));
+    // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
+    // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
+    M.appendModuleInlineAsm("\
+    .section .text                  \n\
+    .type   __UnwindData,@object    \n\
+    .p2align        2, 0x90         \n\
+    __UnwindData:                   \n\
+        .zero   12                  \n\
+        .size   __UnwindData, 12    \n\
+                                    \n\
+        .type   __catchjmp,@object  \n\
+        .p2align        2, 0x90     \n\
+    __catchjmp:                     \n\
+        .zero   12                  \n\
+        .size   __catchjmp, 12");
 #endif
 }
 

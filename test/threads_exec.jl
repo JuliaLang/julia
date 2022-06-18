@@ -549,7 +549,9 @@ function test_load_and_lookup_18020(n)
             ccall(:jl_load_and_lookup,
                   Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
-        catch
+        catch ex
+            ex isa ErrorException || rethrow()
+            startswith(ex.msg, "could not load library") || rethrow()
         end
     end
 end

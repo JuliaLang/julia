@@ -530,14 +530,14 @@ end
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
-function complete_methods(ex_org::Expr, context_module::Module=Main)
+function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
     out = Completion[]
     funct, found = get_type(ex_org.args[1], context_module)::Tuple{Any,Bool}
     !found && return out
 
     args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
     push!(args_ex, Vararg{Any})
-    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_METHOD_COMPLETIONS)
+    complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS)
 
     return out
 end
@@ -626,7 +626,7 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
     m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
         #=ambig=# true, Ref(typemin(UInt)), Ref(typemax(UInt)), Ptr{Int32}(C_NULL))
     if m === false
-        push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods to show )"))
+        push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods, use SHIFT-TAB to show )"))
     end
     m isa Vector || return
     for match in m
@@ -835,9 +835,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
         if isa(ex, Expr)
             if ex.head === :call
-                return complete_methods(ex, context_module), first(frange):method_name_end, false
+                return complete_methods(ex, context_module, shift), first(frange):method_name_end, false
             elseif ex.head === :. && ex.args[2] isa Expr && (ex.args[2]::Expr).head === :tuple
-                return complete_methods(ex, context_module), first(frange):(method_name_end - 1), false
+                return complete_methods(ex, context_module, shift), first(frange):(method_name_end - 1), false
             end
         end
     elseif inc_tag === :comment
