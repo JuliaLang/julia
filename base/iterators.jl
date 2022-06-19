@@ -55,7 +55,10 @@ _min_length(a, b, A, B) = min(length(a),length(b))
 _diff_length(a, b, A, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, B) = length(a) # inherit behaviour, error
-_diff_length(a, b, A, B) = max(length(a)-length(b), 0)
+function _diff_length(a, b, A, B)
+    m, n = length(a), length(b)
+    return m > n ? m - n : zero(n - m)
+end
 
 and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
