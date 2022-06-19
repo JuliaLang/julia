@@ -3293,7 +3293,7 @@ Deprecated or removed
      array interface should define their own `strides` method ([#25321]).
 
   * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated
-    in favor of `parentmodule` ([#TODO]).
+    in favor of `parentmodule` ([#25629]).
 
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
