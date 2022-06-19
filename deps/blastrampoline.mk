@@ -8,7 +8,6 @@ $(eval $(call git-external,blastrampoline,BLASTRAMPOLINE,,,$(BUILDDIR)))
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	$(INSTALL_NAME_CMD)libblastrampoline.$(SHLIB_EXT) $(dir $<)lib/libblastrampoline.$(SHLIB_EXT) || exit 1;
 	echo 1 > $@
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
@@ -16,7 +15,7 @@ $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLI
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
-	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src $(MAKE_COMMON) install
+	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src $(MAKE_COMMON) install DESTDIR="$2"
 endef
 $(eval $(call staged-install, \
 	blastrampoline,$(BLASTRAMPOLINE_SRC_DIR), \
