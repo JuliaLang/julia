@@ -187,7 +187,7 @@ function doc(binding::Binding, sig::Type = Union{})
         alias = aliasof(binding)
         if alias != binding
             return doc(alias, sig)
-        elseif isdefined(binding) && !(resolve(binding) isa Union{Type, Module, Function})
+        elseif defined(binding) && !(resolve(binding) isa Union{Type, Module, Function})
             println("`", binding, "` is of type `", typeof(resolve(binding)), "`\n")
             return doc(typeof(resolve(binding)), sig)
         else
