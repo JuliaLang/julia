@@ -8,6 +8,7 @@ $(eval $(call git-external,blastrampoline,BLASTRAMPOLINE,,,$(BUILDDIR)))
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
+	$(INSTALL_NAME_CMD)libblastrampoline.$(SHLIB_EXT) $(dir $<)lib/libblastrampoline.$(SHLIB_EXT) || exit 1;
 	echo 1 > $@
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
