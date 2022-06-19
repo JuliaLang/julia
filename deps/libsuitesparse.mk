@@ -17,13 +17,18 @@ ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 LIBSUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
 LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu ldl umfpack rbio spqr)
 
-SUITE_SPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(LIBSUITESPARSE_VER)/lib"
+SUITESPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(LIBSUITESPARSE_VER)/lib"
 ifeq ($(OS), Darwin)
-SUITE_SPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
+SUITESPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 endif
-LIBSUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="-L$(build_shlibdir) -lblastrampoline" LAPACK="-L$(build_shlibdir) -lblastrampoline" \
-	  LDFLAGS="$(SUITE_SPARSE_LIB)" CFOPENMP="" CUDA=no CUDA_PATH="" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
+LIBSUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" \
+	  AR="$(AR)" RANLIB="$(RANLIB)" \
+	  BLAS="-L$(build_shlibdir) -lblastrampoline" \
+	  LAPACK="-L$(build_shlibdir) -lblastrampoline" \
+	  LDFLAGS="$(SUITESPARSE_LIB)" CFOPENMP="" CUDA=no CUDA_PATH="" \
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" \
+	  CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" \
+	  SPQR_CONFIG="$(SPQR_CONFIG)"
 ifeq ($(OS),WINNT)
 LIBSUITESPARSE_MFLAGS += UNAME=Windows
 else
