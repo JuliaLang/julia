@@ -536,6 +536,15 @@ end
             x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
             @test !(x in r)
         end
+
+        @test 1e40 ∉ 0:1.0 # Issue #45747
+        @test 1e20 ∉ 0:1e-20:1e-20
+        @test 1e20 ∉ 0:1e-20
+        @test 1.0  ∉ 0:1e-20:1e-20
+        @test 0.5  ∉ 0:1e-20:1e-20
+        @test 1    ∉ 0:1e-20:1e-20
+
+        @test_broken 17.0 ∈ 0:1e40 # Don't support really long ranges
     end
     @testset "in() works across types, including non-numeric types (#21728 and #45646)" begin
         @test 1//1 in 1:3
