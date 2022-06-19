@@ -15,7 +15,7 @@ CSL_JLL_NAME := CompilerSupportLibraries
 
 # Clang (paired with LLVM, only here as a JLL download)
 CLANG_JLL_NAME := Clang
-CLANG_JLL_VER  := 13.0.1+0
+CLANG_JLL_VER  := 14.0.2+1
 
 # DSFMT
 DSFMT_VER := 2.2.4
@@ -26,7 +26,7 @@ GMP_VER := 6.2.1
 GMP_JLL_NAME := GMP
 
 # LibCURL
-CURL_VER := 7.81.0
+CURL_VER := 7.83.1
 CURL_JLL_NAME := LibCURL
 
 # LAPACK, source-only
@@ -44,14 +44,18 @@ LIBUV_VER := 2
 LIBUV_JLL_NAME := LibUV
 
 # LLVM
-LLVM_VER := 13.0.1
-LLVM_ASSERT_JLL_VER := 13.0.1+0
+LLVM_VER := 14.0.2
+LLVM_ASSERT_JLL_VER := 14.0.2+1
 LLVM_JLL_NAME := libLLVM
 
 # LLVM_tools (downloads LLVM_jll to get things like `lit` and `opt`)
 LLVM_TOOLS_JLL_NAME := LLVM
-LLVM_TOOLS_JLL_VER := 13.0.1+0
-LLVM_TOOLS_ASSERT_JLL_VER := 13.0.1+0
+LLVM_TOOLS_JLL_VER := 14.0.2+1
+LLVM_TOOLS_ASSERT_JLL_VER := 14.0.2+1
+
+# LLD
+LLD_JLL_NAME := LLD
+LLD_JLL_VER := 14.0.2+1
 
 # LLVM libunwind
 LLVMUNWIND_VER := 12.0.1
@@ -66,7 +70,7 @@ MPFR_VER := 4.1.0
 MPFR_JLL_NAME := MPFR
 
 # nghttp2
-NGHTTP2_VER := 1.41.0
+NGHTTP2_VER := 1.47.0
 NGHTTP2_JLL_NAME := nghttp2
 
 # Objconv (we don't ship this, so no need for a fake JLL; therefore we specify the JLL_VER here)
@@ -90,11 +94,11 @@ OPENLIBM_JLL_NAME := OpenLibm
 PATCHELF_VER := 0.13
 
 # p7zip
-P7ZIP_VER := 16.2.0
+P7ZIP_VER := 17.04
 P7ZIP_JLL_NAME := p7zip
 
 # PCRE
-PCRE_VER := 10.36
+PCRE_VER := 10.40
 PCRE_JLL_NAME := PCRE2
 
 # SuiteSparse
@@ -108,7 +112,7 @@ UNWIND_JLL_NAME := LibUnwind
 UNWIND_JLL_VER  := 1.5.0+1
 
 # zlib
-ZLIB_VER := 1.2.11
+ZLIB_VER := 1.2.12
 ZLIB_JLL_NAME := Zlib
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.

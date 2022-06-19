@@ -250,6 +250,11 @@ The base Julia installation has in-built support for two types of clusters:
     to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
     should use to connect to this worker.
 
+!!! note
+    While Julia generally strives for backward compatability, distribution of code to worker processes relies on
+    [`Serialization.serialize`](@ref). As pointed out in the corresponding documentation, this can not be guaranteed to work across
+    different Julia versions, so it is advised that all workers on all machines use the same version.
+
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
 

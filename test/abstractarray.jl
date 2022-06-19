@@ -494,9 +494,9 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
 
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
-    @test isassigned(B, j) == true
+    @test isassigned(B, j)
     if T == T24Linear
-        @test isassigned(B, length(B) + 1) == false
+        @test !isassigned(B, length(B) + 1)
     end
 
     # reshape(a::AbstractArray, dims::Dims)
@@ -1469,9 +1469,7 @@ using Base: typed_hvncat
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            # current behavior, not potentially dangerous.
-            # should throw error like above loop
-            @test [v1 ;;; v2 v3] == [v2 v3;;;]
+            @test_throws ArgumentError [v1 ;;; v2 v3]
             @test_throws ArgumentError [v1 ;;; v2]
             @test_throws ArgumentError [v1 v1 ;;; v2 v3]
         end
@@ -1543,6 +1541,8 @@ using Base: typed_hvncat
     # Issue 43933 - semicolon precedence mistake should produce an error
     @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
     @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
+
+    @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
 end
 
 @testset "keepat!" begin
@@ -1567,8 +1567,12 @@ end
 end
 
 @testset "reshape methods for AbstractVectors" begin
-    r = Base.IdentityUnitRange(3:4)
-    @test reshape(r, :) === reshape(r, (:,)) === r
+    for r in Any[1:3, Base.IdentityUnitRange(3:4)]
+        @test reshape(r, :) === reshape(r, (:,)) === r
+    end
+    r = 3:5
+    rr = reshape(r, 1, 3)
+    @test length(rr) == length(r)
 end
 
 @testset "strides for ReshapedArray" begin

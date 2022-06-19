@@ -272,8 +272,7 @@ function showerror(io::IO, ex::MethodError)
         if !isempty(kwargs)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "=")
-                show(IOContext(io, :limit => true), v)
+                print(io, k, "::", typeof(v))
                 i == length(kwargs)::Int || print(io, ", ")
             end
         end

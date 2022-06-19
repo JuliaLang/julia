@@ -387,7 +387,7 @@ julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """
-bswap(x::Union{Int8, UInt8}) = x
+bswap(x::Union{Int8, UInt8, Bool}) = x
 bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 

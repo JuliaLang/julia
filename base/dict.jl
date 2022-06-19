@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
-
-    wid = truncidx = lastidx = 0
-    for (idx, c) in pairs(str)
-        lastidx = idx
-        wid += textwidth(c)
-        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
-        (wid >= width || c in chars) && break
-    end
-
-    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
-    truncidx == 0 && (truncidx = lastidx)
-    if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
-    else
-        return String(str)
-    end
-end
-
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))
@@ -88,7 +67,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, 1, 0)
+        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, n, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -274,7 +253,7 @@ function empty!(h::Dict{K,V}) where V where K
     h.ndel = 0
     h.count = 0
     h.age += 1
-    h.idxfloor = 1
+    h.idxfloor = sz
     return h
 end
 

@@ -1,36 +1,20 @@
 ## p7zip ##
 
 ifneq ($(USE_BINARYBUILDER_P7ZIP),1)
-# Force optimization for P7ZIP flags (Issue #11668)
-$(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://downloads.sourceforge.net/project/p7zip/p7zip/16.02/p7zip_16.02_src_all.tar.bz2
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+$(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz: | $(SRCCACHE)
+	$(JLDOWNLOAD) $@ https://github.com/jinfeihan57/p7zip/archive/refs/tags/v$(P7ZIP_VER).tar.gz
+
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(TAR) --strip-components 1 -jxf $<
+	cd $(dir $@) && $(TAR) --strip-components 1 -zxf $<
 	echo 1 > $@
 
-checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-12-CVE-2016-9296.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
-	cd $(dir $@) && patch -p1 -f < $(SRCDIR)/patches/p7zip-12-CVE-2016-9296.patch
-	echo 1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-13-CVE-2017-17969.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-12-CVE-2016-9296.patch-applied
-	cd $(dir $@) && patch -p1 -f < $(SRCDIR)/patches/p7zip-13-CVE-2017-17969.patch
-	echo 1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-13-CVE-2017-17969.patch-applied
-	cd $(dir $@) && patch -p4 -f < $(SRCDIR)/patches/p7zip-15-Enhanced-encryption-strength.patch
-	echo 1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-Windows_ErrorMsg.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-applied
-	cd $(dir $@) && patch -p0 -f < $(SRCDIR)/patches/p7zip-Windows_ErrorMsg.patch
-	echo 1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-Windows_ErrorMsg.patch-applied
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
 	$(MAKE) -C $(dir $<) $(MAKE_COMMON) CC="$(CC)" CXX="$(CXX)" 7za
 	echo 1 > $@
@@ -49,10 +33,10 @@ clean-p7zip:
 	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) clean
 
 distclean-p7zip:
-	rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2 $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
+	rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
 
 
-get-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+get-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 extract-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER)/source-extracted
 configure-p7zip: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
 compile-p7zip: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled

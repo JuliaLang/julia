@@ -100,7 +100,7 @@ Manual = [
     "manual/faq.md",
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
-    "manual/command-line-options.md",
+    "manual/command-line-interface.md",
 ]
 
 BaseDocs = [
@@ -236,12 +236,6 @@ DocMeta.setdocmeta!(
     SparseArrays,
     :DocTestSetup,
     maybe_revise(:(using SparseArrays, LinearAlgebra));
-    recursive=true, warn=false,
-)
-DocMeta.setdocmeta!(
-    SuiteSparse,
-    :DocTestSetup,
-    maybe_revise(:(using SparseArrays, LinearAlgebra, SuiteSparse));
     recursive=true, warn=false,
 )
 DocMeta.setdocmeta!(

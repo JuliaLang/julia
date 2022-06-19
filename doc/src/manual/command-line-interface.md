@@ -1,4 +1,4 @@
-# [Command-line Options](@id command-line-options)
+# Command-line Interface
 
 ## Using arguments inside scripts
 
@@ -39,6 +39,9 @@ $ julia --color=yes -O -- script.jl arg1 arg2..
 
 See also [Scripting](@ref man-scripting) for more information on writing Julia scripts.
 
+
+## Parallel mode
+
 Julia can be started in parallel mode with either the `-p` or the `--machine-file` options. `-p n`
 will launch an additional `n` worker processes, while `--machine-file file` will launch a worker
 for each line in file `file`. The machines defined in `file` must be accessible via a password-less
@@ -47,6 +50,9 @@ takes the form `[count*][user@]host[:port] [bind_addr[:port]]`. `user` defaults 
 `port` to the standard ssh port. `count` is the number of workers to spawn on the node, and defaults
 to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
 should use to connect to this worker.
+
+
+## Startup file
 
 If you have code that you want executed whenever Julia is run, you can put it in
 `~/.julia/config/startup.jl`:
@@ -63,7 +69,17 @@ Note that although you should have a `~/.julia` directory once you've run Julia 
 first time, you may need to create the `~/.julia/config` folder and the
 `~/.julia/config/startup.jl` file if you use it.
 
-## Command-line switches for Julia
+To have startup code run only in [The Julia REPL] (and not when `julia` is *e.g.* run
+on a script), use [`atreplinit`](@ref) in `startup.jl`:
+
+```julia
+atreplinit() do repl
+    # ...
+end
+```
+
+
+## [Command-line switches for Julia](@id command-line-options)
 
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:

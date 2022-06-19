@@ -1066,8 +1066,8 @@ Unlike the LTS version the a Stable version will not normally receive bugfixes a
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
-The current LTS version of Julia is versioned according to SemVer as v1.0.x;
-this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+The current LTS version of Julia is versioned according to SemVer as v1.6.x;
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
 In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).

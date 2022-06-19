@@ -353,12 +353,17 @@ Return `true` if `path` is a regular file, `false` otherwise.
 julia> isfile(homedir())
 false
 
-julia> f = open("test_file.txt", "w");
+julia> filename = "test_file.txt";
 
-julia> isfile(f)
+julia> write(filename, "Hello world!");
+
+julia> isfile(filename)
 true
 
-julia> close(f); rm("test_file.txt")
+julia> rm(filename);
+
+julia> isfile(filename)
+false
 ```
 
 See also [`isdir`](@ref) and [`ispath`](@ref).

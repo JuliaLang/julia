@@ -211,6 +211,14 @@ end
     @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
     @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
     @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
+
+    # test error path
+    struct MyOtherRational <: Real
+        val::Rational{Int}
+    end
+    @test_throws MethodError gcd(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError lcm(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
 
 @testset "invmod" begin

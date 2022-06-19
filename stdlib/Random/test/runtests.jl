@@ -2,7 +2,6 @@
 
 using Test, SparseArrays
 using Test: guardseed
-using Statistics: mean
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
@@ -988,9 +987,9 @@ end
     # Test that shuffle! is uniformly random on BitArrays
     rng = MersenneTwister(123)
     a = (reshape(1:(4*5), 4, 5) .<= 2) # 4x5 BitMatrix whose first two elements are true, rest are false
-    m = mean(1:50_000) do _
+    m = sum(1:50_000) do _
         shuffle!(rng, a)
-    end # mean result of shuffle!-ing a 50_000 times. If the shuffle! is uniform, then each index has a
+    end/50_000 # mean result of shuffle!-ing a 50_000 times. If the shuffle! is uniform, then each index has a
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106

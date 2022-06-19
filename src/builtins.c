@@ -1563,16 +1563,25 @@ JL_CALLABLE(jl_f__primitivetype)
 
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
-        tt->super != NULL ||
-        tt->name == ((jl_datatype_t*)super)->name ||
-        jl_is_tuple_type(super) ||
-        jl_is_namedtuple_type(super) ||
-        jl_subtype(super, (jl_value_t*)jl_type_type) ||
-        jl_subtype(super, (jl_value_t*)jl_builtin_type)) {
-        jl_errorf("invalid subtyping in definition of %s",
-                  jl_symbol_name(tt->name->name));
-    }
+    const char *error = NULL;
+    if (!jl_is_datatype(super))
+        error = "can only subtype data types";
+    else if (tt->super != NULL)
+        error = "type already has a supertype";
+    else if (tt->name == ((jl_datatype_t*)super)->name)
+        error = "a type cannot subtype itself";
+    else if (jl_is_tuple_type(super))
+        error = "cannot subtype a tuple type";
+    else if (jl_is_namedtuple_type(super))
+        error = "cannot subtype a named tuple type";
+    else if (jl_subtype(super, (jl_value_t*)jl_type_type))
+        error = "cannot add subtypes to Type";
+    else if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
+        error = "cannot add subtypes to Core.Builtin";
+    else if (!jl_is_abstracttype(super))
+        error = "can only subtype abstract types";
+    if (error)
+         jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
     tt->super = (jl_datatype_t*)super;
     jl_gc_wb(tt, tt->super);
 }
@@ -1588,6 +1597,14 @@ JL_CALLABLE(jl_f__setsuper)
 
 JL_CALLABLE(jl_f_donotdelete)
 {
+    return jl_nothing;
+}
+
+JL_CALLABLE(jl_f_finalizer)
+{
+    JL_NARGS(finalizer, 2, 4);
+    jl_task_t *ct = jl_current_task;
+    jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);
     return jl_nothing;
 }
 
@@ -1961,6 +1978,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
+    add_builtin_func("finalizer", jl_f_finalizer);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -1992,7 +2010,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Const", (jl_value_t*)jl_const_type);
     add_builtin("PartialStruct", (jl_value_t*)jl_partial_struct_type);
     add_builtin("PartialOpaque", (jl_value_t*)jl_partial_opaque_type);
-    add_builtin("InterConditional", (jl_value_t*)jl_interconditional_type);
     add_builtin("MethodMatch", (jl_value_t*)jl_method_match_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);

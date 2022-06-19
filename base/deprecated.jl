@@ -54,10 +54,50 @@ will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but 
 define nor deprecate the method `old(x::Float64)`.
 """
 macro deprecate(old, new, export_old=true)
+    function cannot_export_nonsymbol()
+        error(
+            "if the third `export_old` argument is not specified or `true`, the first",
+            " argument must be of form",
+            " (1) `f(...)` where `f` is a symbol,",
+            " (2) `T{...}(...)` where `T` is a symbol, or",
+            " (3) a symbol.",
+        )
+    end
     meta = Expr(:meta, :noinline)
-    if isa(old, Symbol)
-        oldname = Expr(:quote, old)
-        newname = Expr(:quote, new)
+    if isa(old, Expr) && (old.head === :call || old.head === :where)
+        remove_linenums!(new)
+        oldcall = sprint(show_unquoted, old)
+        newcall = sprint(show_unquoted, new)
+        # if old.head is a :where, step down one level to the :call to avoid code duplication below
+        callexpr = old.head === :call ? old : old.args[1]
+        if callexpr.head === :call
+            fnexpr = callexpr.args[1]
+            if fnexpr isa Expr && fnexpr.head === :curly
+                fnexpr = fnexpr.args[1]
+            end
+            if export_old
+                if fnexpr isa Symbol
+                    maybe_export = Expr(:export, esc(fnexpr))
+                else
+                    cannot_export_nonsymbol()
+                end
+            else
+                maybe_export = nothing
+            end
+        else
+            error("invalid usage of @deprecate")
+        end
+        Expr(:toplevel,
+            maybe_export,
+            :($(esc(old)) = begin
+                  $meta
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
+                  $(esc(new))
+              end))
+    else
+        if export_old && !(old isa Symbol)
+            cannot_export_nonsymbol()
+        end
         Expr(:toplevel,
             export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
@@ -65,32 +105,6 @@ macro deprecate(old, new, export_old=true)
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
                   $(esc(new))(args...)
               end))
-    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
-        remove_linenums!(new)
-        oldcall = sprint(show_unquoted, old)
-        newcall = sprint(show_unquoted, new)
-        # if old.head is a :where, step down one level to the :call to avoid code duplication below
-        callexpr = old.head === :call ? old : old.args[1]
-        if callexpr.head === :call
-            if isa(callexpr.args[1], Symbol)
-                oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
-                oldsym = callexpr.args[1].args[1]::Symbol
-            else
-                error("invalid usage of @deprecate")
-            end
-        else
-            error("invalid usage of @deprecate")
-        end
-        Expr(:toplevel,
-        export_old ? Expr(:export, esc(oldsym)) : nothing,
-            :($(esc(old)) = begin
-                  $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
-                  $(esc(new))
-              end))
-    else
-        error("invalid usage of @deprecate")
     end
 end
 
@@ -251,11 +265,11 @@ getindex(match::Core.MethodMatch, field::Int) =
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_total_may_throw_meta
+    @_foldable_meta
     Tuple{S, T.parameters...}
 end
 function parameter_upper_bound(t::UnionAll, idx)
-    @_total_may_throw_meta
+    @_foldable_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 

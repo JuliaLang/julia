@@ -42,7 +42,7 @@ elseif Sys.isapple()
     #    char filename[max_filename_length];
     # };
     # Buffer buf;
-    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    # getattrlist(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isaccessiblefile(path) || return false
         path_basename = String(basename(path))
@@ -302,25 +302,44 @@ function find_package(arg)
     return locate_package(pkg)
 end
 
-## package identity: given a package name and a context, try to return its identity ##
-identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
+"""
+    Base.identify_package(name::String)::Union{PkgId, Nothing}
+    Base.identify_package(where::Union{Module,PkgId}, name::String)::Union{PkgId, Nothing}
 
-# identify_package computes the PkgId for `name` from the context of `where`
-# or return `nothing` if no mapping exists for it
+Identify the package by its name from the current environment stack, returning
+its `PkgId`, or `nothing` if it cannot be found.
+
+If only the `name` argument is provided, it searches each environment in the
+stack and its named direct dependencies.
+
+There `where` argument provides the context from where to search for the
+package: in this case it first checks if the name matches the context itself,
+otherwise it searches all recursive dependencies (from the resolved manifest of
+each environment) until it locates the context `where`, and from there
+identifies the depdencency with with the corresponding name.
+
+```julia-repl
+julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> using LinearAlgebra
+
+julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
+
+````
+"""
+identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
 function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
     where.name === name && return where
     where.uuid === nothing && return identify_package(name) # ignore `where`
     for env in load_path()
-        uuid = manifest_deps_get(env, where, name)
-        uuid === nothing && continue # not found--keep looking
-        uuid.uuid === nothing || return uuid # found in explicit environment--use it
+        pkgid = manifest_deps_get(env, where, name)
+        pkgid === nothing && continue # not found--keep looking
+        pkgid.uuid === nothing || return pkgid # found in explicit environment--use it
         return nothing # found in implicit environment--return "not found"
     end
     return nothing
 end
-
-# identify_package computes the PkgId for `name` from toplevel context
-# by looking through the Project.toml files and directories
 function identify_package(name::String)::Union{Nothing,PkgId}
     for env in load_path()
         uuid = project_deps_get(env, name)
@@ -329,7 +348,20 @@ function identify_package(name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
-## package location: given a package identity, find file to load ##
+"""
+    Base.locate_package(pkg::PkgId)::Union{String, Nothing}
+
+The path to the entry-point file for the package corresponding to the identifier
+`pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
+
+```julia-repl
+julia> pkg = Base.identify_package("Pkg")
+Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
+
+julia> Base.locate_package(pkg)
+"/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
+```
+"""
 function locate_package(pkg::PkgId)::Union{Nothing,String}
     if pkg.uuid === nothing
         for env in load_path()
@@ -387,6 +419,9 @@ or `nothing` if `m` was not imported from a package. Optionally further
 path component strings can be provided to construct a path within the
 package root.
 
+To get the root directory of the package that imported the current module
+the form `pkgdir(@__MODULE__)` can be used.
+
 ```julia-repl
 julia> pkgdir(Foo)
 "/path/to/Foo.jl"
@@ -403,6 +438,29 @@ function pkgdir(m::Module, paths::String...)
     path = pathof(rootmodule)
     path === nothing && return nothing
     return joinpath(dirname(dirname(path)), paths...)
+end
+
+"""
+    pkgversion(m::Module)
+
+Return the version of the package that imported module `m`,
+or `nothing` if `m` was not imported from a package, or imported
+from a package without a version field set.
+
+The version is read from the package's Project.toml during package
+load.
+
+To get the version of the package that imported the current module
+the form `pkgversion(@__MODULE__)` can be used.
+
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9.
+"""
+function pkgversion(m::Module)
+    rootmodule = moduleroot(m)
+    pkg = PkgId(rootmodule)
+    pkgorigin = get(pkgorigins, pkg, nothing)
+    return pkgorigin === nothing ? nothing : pkgorigin.version
 end
 
 ## generic project & manifest API ##
@@ -752,7 +810,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "src", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
@@ -2017,11 +2075,13 @@ get_compiletime_preferences(::Nothing) = String[]
             end
             for chi in includes
                 f, ftime_req = chi.filename, chi.mtime
-                # Issue #13606: compensate for Docker images rounding mtimes
-                # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
-                # The `ftime != 1.0` condition below provides compatibility with Nix mtime.
                 ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, digits=6) && ftime != 1.0
+                is_stale = ( ftime != ftime_req ) &&
+                           ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                           ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
+                           ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
+                           !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
+                if is_stale
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
                 end

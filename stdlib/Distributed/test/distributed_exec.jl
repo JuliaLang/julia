@@ -665,7 +665,8 @@ pmap(_->myid(), 1:nworkers())  # priming run
 wp = WorkerPool(workers())
 @test nworkers() == length(unique(pmap(_->myid(), wp, 1:100)))
 @test nworkers() == length(unique(remotecall_fetch(wp->pmap(_->myid(), wp, 1:100), id_other, wp)))
-
+wp = WorkerPool(2:3)
+@test sort(unique(pmap(_->myid(), wp, 1:100))) == [2,3]
 
 # CachingPool tests
 wp = CachingPool(workers())

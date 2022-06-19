@@ -1,9 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Function multi-versioning
-#define DEBUG_TYPE "julia_multiversioning"
-#undef DEBUG
-
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
@@ -40,6 +37,9 @@
 
 #include "codegen_shared.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "julia_multiversioning"
+#undef DEBUG
 
 using namespace llvm;
 
@@ -1185,7 +1185,7 @@ PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
     auto GetCG = [&]() -> CallGraph & {
         return AM.getResult<CallGraphAnalysis>(M);
     };
-    if (runMultiVersioning(M, GetLI, GetCG, false)) {
+    if (runMultiVersioning(M, GetLI, GetCG, external_use)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<LoopAnalysis>();
         return preserved;

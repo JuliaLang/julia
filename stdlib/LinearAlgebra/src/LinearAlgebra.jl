@@ -48,6 +48,7 @@ export
     LU,
     LDLt,
     NoPivot,
+    RowNonZero,
     QR,
     QRPivoted,
     LQ,
@@ -173,6 +174,7 @@ struct QRIteration <: Algorithm end
 
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
+struct RowNonZero <: PivotingStrategy end
 struct RowMaximum <: PivotingStrategy end
 struct ColumnNorm <: PivotingStrategy end
 
@@ -578,6 +580,10 @@ function __init__()
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS")
+        BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+    end
 end
 
 end # module LinearAlgebra

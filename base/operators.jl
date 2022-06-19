@@ -324,7 +324,7 @@ Because of the behavior of floating-point NaN values, this operator implements
 a partial order.
 
 # Implementation
-New numeric types with a canonical partial order should implement this function for
+New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 
@@ -513,6 +513,8 @@ julia> identity("Well, what did you expect?")
 identity(@nospecialize x) = x
 
 +(x::Number) = x
+-(x) = Int8(-1)*x
+-(x, y) = x + (-y)
 *(x::Number) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
@@ -613,7 +615,9 @@ julia> inv(A) * x
  -7.0
 ```
 """
-\(x,y) = adjoint(adjoint(y)/adjoint(x))
+\(x, y) = inv(x) * y
+
+/(x, y) = x * inv(y)
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -1195,6 +1199,9 @@ i.e. given a function returns a new function that takes one argument and splats
 its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
 passes a tuple as that single argument. Additionally has pretty printing.
+
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
 
 # Example usage:
 ```jldoctest
