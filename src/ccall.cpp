@@ -2052,29 +2052,18 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             ArrayRef<Type *> T_probe_args = makeArrayRef(fargt);
             FunctionType *FT_call_probe = FunctionType::get(T_void, T_probe_args, false);
             PointerType *T_pcall_probe = FT_call_probe->getPointerTo();
-            /*
-            // TODO: jl_create_llvm_module
-            //orc::ThreadSafeModule TSM = orc::ThreadSafeModule(std::make_unique<Module>("probefunc", ctx.builder.getContext()),
-            //                                                  ctx.emission_context.tsctx);
 
             // Generate probe or locate existing
             jl_probe_spec_t *spec = jl_probe_register(symarg.f_name);
 
             Module *probemod = jl_Module;
-            //TSM.withModuleDo([&](Module &probemod) {
-            //    probemod.setTargetTriple(jl_Module->getTargetTriple());
-            //    probemod.setDataLayout(jl_Module->getDataLayout());
-#if JL_LLVM_VERSION >= 130000
-            //    probemod.setStackProtectorGuard(jl_Module->getStackProtectorGuard());
-            //    probemod.setOverrideStackAlignment(jl_Module->getOverrideStackAlignment());
-#endif
-            */
 
             // TODO: always_inline
             llvmf = Function::Create(FT_call_probe, GlobalValue::InternalLinkage,
                                      fn_name_unique, probemod);
             Function *F_llvmf = dyn_cast<Function>(llvmf);
             assert(F_llvmf);
+            F_llvmf->addFnAttr(Attribute::AlwaysInline);
             BasicBlock *probe_entry_bb = BasicBlock::Create(ctx.builder.getContext(), "probe_entry", F_llvmf);
             BasicBlock *sema_loaded_bb = BasicBlock::Create(ctx.builder.getContext(), "semaphore_loaded", F_llvmf);
             BasicBlock *probe_loaded_bb = BasicBlock::Create(ctx.builder.getContext(), "probe_loaded", F_llvmf);
@@ -2082,17 +2071,41 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             IRBuilder<> irbuilder(probe_entry_bb);
 
             // Generate the probe slot
-            jl_value_t *probe_init = jl_eval_string("Base.RefValue{Ptr{Cvoid}}(0)");
-            Value *probegv = literal_pointer_val(ctx, probe_init);
+            //jl_value_t *probe_init;
+            void **probe_init;
+            if (!spec->probe_addr) {
+                //probe_init = jl_eval_string("Base.RefValue{Ptr{Cvoid}}(0)");
+                probe_init = (void **)calloc(1, sizeof(void *));
+                spec->probe_addr = (void *)probe_init;
+            } else {
+                probe_init = (void **)spec->probe_addr;
+            }
+            //Value *probegv = julia_pgv(ctx, probe_name.c_str(), (void *)probe_init);
+            //Value *probegv = literal_pointer_val(ctx, (jl_value_t *)probe_init);
+            Type *T_i64 = getInt64Ty(irbuilder.getContext());
+            Value *probegv = new GlobalVariable(*jl_Module, T_i64, false,
+                                                GlobalVariable::LinkOnceODRLinkage,
+                                                ConstantInt::get(T_i64, (uint64_t)probe_init), probe_name);
             Value *probegv_ptr = irbuilder.CreateBitCast(probegv, T_pcall_probe->getPointerTo());
             LoadInst *probe_val = irbuilder.CreateAlignedLoad(T_pcall_probe, probegv_ptr, Align(sizeof(void*)));
             probe_val->setOrdering(AtomicOrdering::Unordered);
             probe_val->setVolatile(true);
 
             // Generate the semaphore slot
-            Type *T_i64 = getInt64Ty(irbuilder.getContext());
-            jl_value_t *sema_init = jl_eval_string("Base.RefValue{Ptr{Cvoid}}(0)");
-            Value *semagv = literal_pointer_val(ctx, sema_init);
+            //jl_value_t *sema_init;
+            int64_t *sema_init;
+            if (!spec->semaphore_addr) {
+                //sema_init = jl_eval_string("Base.RefValue{UInt64}(0)");
+                sema_init = (int64_t *)calloc(1, sizeof(int64_t));
+                spec->semaphore_addr = (void *)sema_init;
+            } else {
+                sema_init = (int64_t *)spec->semaphore_addr;
+            }
+            //Value *semagv = julia_pgv(ctx, sema_name.c_str(), (void *)sema_init);
+            //Value *semagv = literal_pointer_val(ctx, (jl_value_t *)sema_init);
+            Value *semagv = new GlobalVariable(*jl_Module, T_i64, false,
+                                               GlobalVariable::LinkOnceODRLinkage,
+                                               ConstantInt::get(T_i64, (uint64_t)sema_init), sema_name);
             Value *semagv_ptr = irbuilder.CreateBitCast(semagv, T_i64->getPointerTo());
             LoadInst *sema_val = irbuilder.CreateAlignedLoad(T_i64, semagv_ptr, Align(sizeof(void*)));
             sema_val->setOrdering(AtomicOrdering::Unordered);
@@ -2112,8 +2125,60 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             // Call probe
             irbuilder.SetInsertPoint(probe_loaded_bb);
             assert(!sret);
-            ArrayRef<Value *> probe_args = makeArrayRef(argvals, nccallargs);
+            std::vector<Value *> probe_args;
+            for (unsigned i = 0; i < nccallargs; i++) {
+                probe_args.push_back(&F_llvmf->arg_begin()[i]);
+            }
             irbuilder.CreateCall(FT_call_probe, probe_val, probe_args);
+
+            // Emit STAPSDT note
+            // Ported from UProbes.jl/src/UProbes.jl
+            const char *usdt_provider = "jlprobe";
+            const char *usdt_name = symarg.f_name;
+            char *usdt_argstr = (char *)calloc(256, 1);
+            char *usdt_constr = (char *)calloc(256, 1);
+            int argstr_pos = 0;
+            int constr_pos = 0;
+            for (unsigned int i = 0; i < nccallargs; i++) {
+                // FIXME: Determine type and signedness
+                int issigned = 0;
+                argstr_pos += snprintf(usdt_argstr+argstr_pos, 256-argstr_pos, "%s%ld@$%d%s", issigned ? "-" : "", sizeof(/*T*/int), i, i == nccallargs-1 ? "" : " ");
+                assert(argstr_pos < 256);
+                constr_pos += snprintf(usdt_constr+constr_pos, 256-constr_pos, "nor%s", i == nccallargs-1 ? "" : ",");
+                assert(constr_pos < 256);
+            }
+            const char *note = "990:    nop\n"
+                               "        .pushsection .note.stapsdt,\"?\",\"note\"\n"
+                               "        .balign 4\n"
+                               "        .4byte 992f-991f, 994f-993f, 3\n"
+                               "991:    .asciz \"stapsdt\"\n"
+                               "992:    .balign 4\n"
+                               "993:    .%dbyte 990b\n"
+                               "        .%dbyte _.stapsdt.base\n"
+                               "        .%dbyte %s_%s_semaphore\n"
+                               "        .asciz \"%s\"\n"
+                               "        .asciz \"%s\"\n"
+                               "        .asciz \"%s\"\n"
+                               "994:    .balign 4\n"
+                               "        .popsection\n";
+            char *usdt_note = (char *)malloc(1024);
+            assert(snprintf(usdt_note, 1024, note,
+                            sizeof(void *),
+                            sizeof(void *),
+                            sizeof(void *), usdt_provider, usdt_name,
+                            usdt_provider,
+                            usdt_name,
+                            usdt_argstr) < 1024);
+            //Function *F_note = Function::Create(FT_call_probe, GlobalValue::InternalLinkage, fn_name + "_note", probemod);
+            //BasicBlock *note_entry_bb = BasicBlock::Create(ctx.builder.getContext(), "top", F_note);
+            //IRBuilder<> note_irbuilder(note_entry_bb);
+            auto iasm = InlineAsm::get(FT_call_probe, usdt_note, usdt_constr, true);
+            irbuilder.CreateCall(iasm, probe_args);
+            Value *stapsdt_basegv = new GlobalVariable(*jl_Module, getInt8Ty(irbuilder.getContext()), false,
+                                                       GlobalVariable::LinkOnceODRLinkage,
+                                                       Constant::getNullValue(getInt8Ty(irbuilder.getContext())), "_.stapsdt.base");
+            dyn_cast<GlobalVariable>(stapsdt_basegv)->setSection(".stapsdt.base");
+
             irbuilder.CreateBr(probe_done_bb);
 
             // Decrement semaphore and return
@@ -2121,18 +2186,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             irbuilder.CreateAtomicRMW(AtomicRMWInst::Sub, semagv_ptr, ConstantInt::get(T_i64, 1), Align(sizeof(void*)), AtomicOrdering::AcquireRelease);
             irbuilder.CreateRetVoid();
 
-            // FIXME: Emit STAPSDT note
-
-            // TODO: Remove me
-            F_llvmf->dump();
-
             // Load probe and semaphore addresses into object
-            if (!jl_ExecutionEngine->findUnmangledSymbol(probe_name)) {
-                jl_ExecutionEngine->addGlobalMapping(probe_name, (JITTargetAddress)spec->probe_addr);
-                jl_ExecutionEngine->addGlobalMapping(sema_name, (JITTargetAddress)spec->semaphore_addr);
+            if (!jl_ExecutionEngine->getGlobalValueAddress(probe_name)) {
+                //jl_ExecutionEngine->addGlobalMapping(probe_name, (JITTargetAddress)spec->probe_addr);
+                //jl_ExecutionEngine->addGlobalMapping(sema_name, (JITTargetAddress)spec->semaphore_addr);
             }
-            //ctx.llvmcall_modules.push_back(std::move(TSM));
-            //jl_ExecutionEngine->addModule(std::move(TSM));
         }
     }
     else if (symarg.jl_ptr != NULL) {

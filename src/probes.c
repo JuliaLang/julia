@@ -22,10 +22,10 @@ JL_DLLEXPORT jl_probe_spec_t *jl_probe_register(const char *name) {
             return spec;
         }
     }
-    spec = (jl_probe_spec_t *)malloc(sizeof(jl_probe_spec_t));
+    spec = (jl_probe_spec_t *)calloc(1, sizeof(jl_probe_spec_t));
     spec->name = strdup(name);
-    spec->probe_addr = calloc(1, sizeof(void*));
-    spec->semaphore_addr = calloc(1, sizeof(int64_t));
+    //spec->probe_addr = calloc(1, sizeof(void*));
+    //spec->semaphore_addr = calloc(1, sizeof(int64_t));
     arraylist_push(jl_probes, (void *)spec);
 
     JL_UNLOCK(&jl_probes_mutex);
