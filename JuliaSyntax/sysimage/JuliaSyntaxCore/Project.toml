@@ -1,0 +1,10 @@
+name = "JuliaSyntaxCore"
+uuid = "05e5f68f-ccd0-4d84-a81a-f557a333a331"
+authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1.6"
+
+[deps]
+JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"

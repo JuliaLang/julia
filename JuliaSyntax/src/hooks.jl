@@ -67,12 +67,8 @@ flisp parser for all parsing work.
 That is, JuliaSyntax will be used for `include()` `Meta.parse()`, the REPL, etc.
 """
 function enable_in_core!(enable=true)
-    if enable
-        # TODO: Use invoke_in_world to freeze the world age at the time this was enabled.
-        Base.eval(Core, :(_parse = $core_parser_hook))
-    else
-        Base.eval(Core, :(_parse = Core.Compiler.fl_parse))
-    end
+    parser = enable ? core_parser_hook : Core.Compiler.fl_parse
+    Base.eval(Core, :(_parse = $parser))
     nothing
 end
 
