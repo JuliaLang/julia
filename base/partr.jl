@@ -68,6 +68,8 @@ function multiq_size(tpid::Int8)
     heap_c = UInt32(2)
     heap_p = UInt32(length(tpheaps))
 
+    ccall("multiq_size", probecall, Cvoid, (Int8,), tpid)
+
     if heap_c * nt <= heap_p
         return heap_p
     end
