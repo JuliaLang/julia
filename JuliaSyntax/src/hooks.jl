@@ -25,11 +25,14 @@ function core_parser_hook(code, filename, lineno, offset, options)
         stream = ParseStream(io)
         rule = options === :all ? :toplevel : options
         if rule !== :toplevel
-            # To copy the flisp parser driver, we ignore leading trivia when
-            # parsing statements or atoms
+            # To copy the flisp parser driver, we ignore leading and trailing
+            # trivia when parsing statements or atoms
             bump_trivia(stream)
         end
         JuliaSyntax.parse(stream; rule=rule)
+        if rule !== :toplevel
+            bump_trivia(stream)
+        end
 
         if any_error(stream)
             e = Expr(:error, ParseError(SourceFile(code), stream.diagnostics))
