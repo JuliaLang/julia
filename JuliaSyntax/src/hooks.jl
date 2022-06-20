@@ -1,3 +1,5 @@
+_debug_log = nothing
+
 # Adaptor for the API/ABI expected by the Julia runtime code.
 function core_parser_hook(code, filename, lineno, offset, options)
     try
@@ -8,6 +10,15 @@ function core_parser_hook(code, filename, lineno, offset, options)
             (ptr,len) = code
             code = String(unsafe_wrap(Array, ptr, len))
         end
+        if !isnothing(_debug_log)
+            print(_debug_log, """
+                  #-#-#-------------------------------
+                  # ENTER filename=$filename, lineno=$lineno, offset=$offset, options=$options"
+                  #-#-#-------------------------------
+                  """)
+            write(_debug_log, code)
+        end
+
         io = IOBuffer(code)
         seek(io, offset)
 
@@ -36,6 +47,14 @@ function core_parser_hook(code, filename, lineno, offset, options)
         # the Core hook must return an offset (ie, it's 0-based) so the factors
         # of one cancel here.
         last_offset = last_byte(stream)
+
+        if !isnothing(_debug_log)
+            println(_debug_log, """
+                    #-#-#-
+                    # EXIT last_offset=$last_offset
+                    #-#-#-
+                    """)
+        end
 
         # Rewrap result in an svec for use by the C code
         return Core.svec(ex, last_offset)
@@ -67,6 +86,14 @@ flisp parser for all parsing work.
 That is, JuliaSyntax will be used for `include()` `Meta.parse()`, the REPL, etc.
 """
 function enable_in_core!(enable=true)
+    debug_filename = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing)
+    global _debug_log 
+    if enable && !isnothing(debug_filename)
+        _debug_log = open(debug_filename, "w")
+    elseif !enable && !isnothing(_debug_log)
+        close(_debug_log)
+        _debug_log = nothing
+    end
     parser = enable ? core_parser_hook : Core.Compiler.fl_parse
     Base.eval(Core, :(_parse = $parser))
     nothing
