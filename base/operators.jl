@@ -1017,7 +1017,19 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
+function (c::ComposedFunction)(x...; kw...)
+    fs = unwrap_composed(c)
+    call_composed(fs[1](x...; kw...), tail(fs)...)
+end
+unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.inner)..., unwrap_composed(c.outer)...)
+unwrap_composed(c) = (maybeconstructor(c),)
+call_composed(x, f, fs...) = (@inline; call_composed(f(x), fs...))
+call_composed(x, f) = f(x)
+
+struct Constructor{F} <: Function end
+(::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
+maybeconstructor(::Type{F}) where {F} = Constructor{F}()
+maybeconstructor(f) = f
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)

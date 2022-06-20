@@ -141,27 +141,24 @@ what is returned is `itr′` and
     op′ = (xfₙ ∘ ... ∘ xf₂ ∘ xf₁)(op)
 """
 function _xfadjoint(op, itr)
-    itr′, wraps = _xfadjoint_unwrap(itr)
-    _xfadjoint_wrap(op, wraps...), itr′
+    itr′, wrap = _xfadjoint_unwrap(itr)
+    wrap(op), itr′
 end
 
-_xfadjoint_unwrap(itr) = itr, ()
+_xfadjoint_unwrap(itr) = itr, identity
 function _xfadjoint_unwrap(itr::Generator)
-    itr′, wraps = _xfadjoint_unwrap(itr.iter)
-    itr.f === identity && return itr′, wraps
-    return itr′, (Fix1(MappingRF, itr.f), wraps...)
+    itr′, wrap = _xfadjoint_unwrap(itr.iter)
+    itr.f === identity && return itr′, wrap
+    return itr′, wrap ∘ Fix1(MappingRF, itr.f)
 end
 function _xfadjoint_unwrap(itr::Filter)
-    itr′, wraps = _xfadjoint_unwrap(itr.itr)
-    return itr′, (Fix1(FilteringRF, itr.flt), wraps...)
+    itr′, wrap = _xfadjoint_unwrap(itr.itr)
+    return itr′, wrap ∘ Fix1(FilteringRF, itr.flt)
 end
 function _xfadjoint_unwrap(itr::Flatten)
-    itr′, wraps = _xfadjoint_unwrap(itr.it)
-    return itr′, (FlatteningRF, wraps...)
+    itr′, wrap = _xfadjoint_unwrap(itr.it)
+    return itr′, wrap ∘ FlatteningRF
 end
-
-_xfadjoint_wrap(op, f1, fs...) = _xfadjoint_wrap(f1(op), fs...)
-_xfadjoint_wrap(op) = op
 
 """
     mapfoldl(f, op, itr; [init])
