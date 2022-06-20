@@ -221,7 +221,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     elseif isa(matches, MethodMatches) ? (!matches.fullmatch || any_ambig(matches)) :
             (!all(matches.fullmatches) || any_ambig(matches))
         # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        all_effects = Effects(all_effects; nothrow=TRISTATE_UNKNOWN)
+        all_effects = Effects(all_effects; nothrow=ALWAYS_FALSE)
     end
 
     rettype = from_interprocedural!(rettype, sv, arginfo, conditionals)
@@ -619,7 +619,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
     elseif edgecycle
         # Some sort of recursion was detected. Even if we did not limit types,
         # we cannot guarantee that the call will terminate
-        effects = Effects(effects; terminates=TRISTATE_UNKNOWN)
+        effects = Effects(effects; terminates=ALWAYS_FALSE)
     end
 
     return MethodCallResult(rt, edgecycle, edgelimited, edge, effects)
@@ -1769,7 +1769,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         (aty, rty) = (unwrap_unionall(ftt)::DataType).parameters
         rty = rewrap_unionall(rty isa TypeVar ? rty.lb : rty, ftt)
         if !(rt ⊑ rty && tuple_tfunc(arginfo.argtypes[2:end]) ⊑ rewrap_unionall(aty, ftt))
-            effects = Effects(effects; nothrow=TRISTATE_UNKNOWN)
+            effects = Effects(effects; nothrow=ALWAYS_FALSE)
         end
     end
     rt = from_interprocedural!(rt, sv, arginfo, match.spec_types)
@@ -1953,9 +1953,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 at = tmeet(at, ft)
                 if at === Bottom
                     t = Bottom
-                    tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-                        # consistent = ALWAYS_TRUE, # N.B depends on !ismutabletype(t) above
-                        nothrow = TRISTATE_UNKNOWN))
+                    tristate_merge!(sv, EFFECTS_THROWS)
                     @goto t_computed
                 elseif !isa(at, Const)
                     allconst = false
@@ -1985,7 +1983,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
             consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-            nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
+            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = false # TODO: More precision
@@ -2003,8 +2001,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = ismutabletype(t) ? TRISTATE_UNKNOWN : ALWAYS_TRUE,
-            nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
+            consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
     elseif ehead === :new_opaque_closure
         tristate_merge!(sv, Effects()) # TODO
         t = Union{}
@@ -2040,12 +2038,12 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             effects = v[2]
             effects = decode_effects_override(effects)
             tristate_merge!(sv, Effects(
-                effects.consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-                effects.effect_free ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-                effects.nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-                effects.terminates_globally ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+                effects.consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
+                effects.effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
+                effects.nothrow ? ALWAYS_TRUE : ALWAYS_FALSE,
+                effects.terminates_globally ? ALWAYS_TRUE : ALWAYS_FALSE,
                 #=nonoverlayed=#true,
-                effects.notaskstate ? ALWAYS_TRUE : TRISTATE_UNKNOWN
+                effects.notaskstate ? ALWAYS_TRUE : ALWAYS_FALSE
             ))
         else
             tristate_merge!(sv, EFFECTS_UNKNOWN)
@@ -2127,20 +2125,20 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     ty = abstract_eval_global(M, s)
     isa(ty, Const) && return ty
     if isdefined(M,s)
-        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=TRISTATE_UNKNOWN))
+        tristate_merge!(frame, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
     else
         tristate_merge!(frame, Effects(EFFECTS_TOTAL;
-            consistent=TRISTATE_UNKNOWN,
-            nothrow=TRISTATE_UNKNOWN))
+            consistent=ALWAYS_FALSE,
+            nothrow=ALWAYS_FALSE))
     end
     return ty
 end
 
 function handle_global_assignment!(interp::AbstractInterpreter, frame::InferenceState, lhs::GlobalRef, @nospecialize(newty))
-    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
-    tristate_merge!(frame, Effects(EFFECTS_TOTAL,
-        effect_free=TRISTATE_UNKNOWN,
-        nothrow=nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
+    effect_free = ALWAYS_FALSE
+    nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty) ?
+        ALWAYS_TRUE : ALWAYS_FALSE
+    tristate_merge!(frame, Effects(EFFECTS_TOTAL; effect_free, nothrow))
 end
 
 abstract_eval_ssavalue(s::SSAValue, sv::InferenceState) = abstract_eval_ssavalue(s, sv.ssavaluetypes)
@@ -2230,12 +2228,10 @@ end
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
-        if is_effect_overridden(frame, :terminates_globally)
-            # this frame is known to terminate
-        elseif is_effect_overridden(frame, :terminates_locally)
+        if is_effect_overridden(frame, :terminates_locally)
             # this backedge is known to terminate
         else
-            tristate_merge!(frame, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
+            tristate_merge!(frame, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
         end
     end
     return nothing
