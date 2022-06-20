@@ -791,7 +791,11 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
 end
 
 tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
-tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :orange
+tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :yellow
+tristate_repr(t::TriState) =
+    t === ALWAYS_TRUE ? "ALWAYS_TRUE" :
+    t === ALWAYS_FALSE ? "ALWAYS_FALSE" :
+    t === TRISTATE_UNKNOWN ? "TRISTATE_UNKNOWN" : nothing
 
 function Base.show(io::IO, e::Core.Compiler.Effects)
     print(io, "(")
@@ -806,6 +810,15 @@ function Base.show(io::IO, e::Core.Compiler.Effects)
     printstyled(io, string(tristate_letter(e.notaskstate), 's'); color=tristate_color(e.notaskstate))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
+end
+
+function Base.show(io::IO, t::TriState)
+    s = tristate_repr(t)
+    if s !== nothing
+        printstyled(io, s; color = tristate_color(t))
+    else # unknown state, redirect to the fallback printing
+        Base.@invoke show(io::IO, t::Any)
+    end
 end
 
 @specialize
