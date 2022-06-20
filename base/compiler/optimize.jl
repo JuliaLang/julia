@@ -588,7 +588,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     end
 
     # check if coverage mode is enabled
-    coverage = coverage_enabled(sv.mod)
+    coverage = coverage_enabled(sv.mod) & !sv.inlining.params.disallow_coverage
     if !coverage && JLOptions().code_coverage == 3 # path-specific coverage mode
         for line in linetable
             if is_file_tracked(line.file)

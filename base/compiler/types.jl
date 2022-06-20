@@ -244,6 +244,8 @@ struct OptimizationParams
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
+    disallow_coverage::Bool
+
     trust_inference::Bool
 
     # Duplicating for now because optimizer inlining requires it.
@@ -261,7 +263,8 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
-            trust_inference::Bool = false
+            trust_inference::Bool = false,
+            disallow_coverage::Bool = false,
         )
         return new(
             inlining,
@@ -269,6 +272,7 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            disallow_coverage,
             trust_inference,
             max_methods,
             tuple_splat,

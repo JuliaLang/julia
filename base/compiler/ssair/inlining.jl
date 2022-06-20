@@ -310,8 +310,9 @@ end
 
 function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCode,
                               inlinee::Method,
-                              inlined_at::Int32)
-    coverage = coverage_enabled(inlinee.module)
+                              inlined_at::Int32,
+                              params::OptimizationParams)
+    coverage = coverage_enabled(inlinee.module) & !params.disallow_coverage
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
     topline::Int32 = linetable_offset + Int32(1)
@@ -345,7 +346,8 @@ end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                          linetable::Vector{LineInfoNode}, item::InliningTodo,
-                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}},
+                         params::OptimizationParams)
     # Ok, do the inlining here
     spec = item.spec::ResolvedInliningSpec
     sparam_vals = item.mi.sparam_vals
@@ -353,7 +355,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     inlined_at = compact.result[idx][:line]
     linetable_offset::Int32 = length(linetable)
     topline::Int32 = linetable_offset + Int32(1)
-    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, item.spec.ir, def, inlined_at)
+    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, item.spec.ir, def, inlined_at, params)
     if extra_coverage_line != 0
         insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
@@ -576,7 +578,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             end
         end
         if isa(case, InliningTodo)
-            val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
+            val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs, params)
         elseif isa(case, InvokeCase)
             effect_free = is_removable_if_unused(case.effects)
             val = insert_node_here!(compact,
@@ -674,7 +676,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                     end
                 end
                 if isa(item, InliningTodo)
-                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs, params)
                 elseif isa(item, UnionSplit)
                     compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs, params)
                 end
