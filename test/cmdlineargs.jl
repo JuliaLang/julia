@@ -249,6 +249,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test read(`$exename -p2 -t2 -e $code`, String) == "6"
     end
 
+    # Combining --threads and invalid -C should yield a decent error
+    @test !success(`$exename -t 2 -C invalidtarget`)
+
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
     @test !success(`$exename -p 0`)
