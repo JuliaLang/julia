@@ -122,4 +122,11 @@ using Test
         @test hash(sb1, UInt(5)) === hash(sb2, UInt(5))
         shred!(sb1); shred!(sb2)
     end
+    @testset "NULL initialization" begin
+        null_ptr = Cstring(C_NULL)
+        @test_throws ArgumentError Base.unsafe_SecretBuffer!(null_ptr)
+        null_ptr = Ptr{UInt8}(C_NULL)
+        @test_throws ArgumentError Base.unsafe_SecretBuffer!(null_ptr)
+        @test_throws ArgumentError Base.unsafe_SecretBuffer!(null_ptr, 0)
+    end
 end

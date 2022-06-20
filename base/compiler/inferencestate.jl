@@ -179,7 +179,7 @@ mutable struct InferenceState
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
         inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
-        consistent = inbounds_taints_consistency ? TRISTATE_UNKNOWN : ALWAYS_TRUE
+        consistent = inbounds_taints_consistency ? ALWAYS_FALSE : ALWAYS_TRUE
         ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
 
         params = InferenceParams(interp)

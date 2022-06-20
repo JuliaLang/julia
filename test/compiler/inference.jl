@@ -4202,6 +4202,45 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     @test Core.Compiler.is_nothrow(effects)
 end
 
+# refine :consistent-cy effect inference using the return type information
+@test Base.infer_effects((Any,)) do x
+    taint = Ref{Any}(x) # taints :consistent-cy, but will be adjusted
+    throw(taint)
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    if x < 0
+        taint = Ref(x) # taints :consistent-cy, but will be adjusted
+        throw(DomainError(x, taint))
+    end
+    return nothing
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    if x < 0
+        taint = Ref(x) # taints :consistent-cy, but will be adjusted
+        throw(DomainError(x, taint))
+    end
+    return x == 0 ? nothing : x # should `Union` of isbitstype objects nicely
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Symbol,Any)) do s, x
+    if s === :throw
+        taint = Ref{Any}(":throw option given") # taints :consistent-cy, but will be adjusted
+        throw(taint)
+    end
+    return s # should handle `Symbol` nicely
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    return Ref(x)
+end |> !Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    return x < 0 ? Ref(x) : nothing
+end |> !Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    if x < 0
+        throw(DomainError(x, lazy"$x is negative"))
+    end
+    return nothing
+end |> Core.Compiler.is_foldable
+
 # check the inference convergence with an empty vartable:
 # the inference state for the toplevel chunk below will have an empty vartable,
 # and so we may fail to terminate (or optimize) it if we don't update vartables correctly
