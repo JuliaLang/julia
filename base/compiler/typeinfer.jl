@@ -791,11 +791,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
+    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
+        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState

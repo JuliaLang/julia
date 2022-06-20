@@ -1822,12 +1822,11 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize rt)
             if getfield_nothrow(argtypes[2], argtypes[3], true)
                 nothrow = ALWAYS_TRUE
             else
-                consistent = ALWAYS_FALSE
-                nothrow = TRISTATE_UNKNOWN
+                consistent = nothrow = ALWAYS_FALSE
             end
         else
             nothrow = (!isvarargtype(argtypes[end]) && builtin_nothrow(f, argtypes′, rt)) ?
-                ALWAYS_TRUE : TRISTATE_UNKNOWN
+                ALWAYS_TRUE : ALWAYS_FALSE
         end
         effect_free = ALWAYS_TRUE
     elseif f === getglobal && length(argtypes) >= 3
@@ -1837,16 +1836,15 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize rt)
                 ALWAYS_TRUE : ALWAYS_FALSE
             nothrow = ALWAYS_TRUE
         else
-            consistent = ALWAYS_FALSE
-            nothrow = TRISTATE_UNKNOWN
+            consistent = nothrow = ALWAYS_FALSE
         end
         effect_free = ALWAYS_TRUE
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
         effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)) ?
-            ALWAYS_TRUE : TRISTATE_UNKNOWN
+            ALWAYS_TRUE : ALWAYS_FALSE
         nothrow = (!isvarargtype(argtypes[end]) && builtin_nothrow(f, argtypes′, rt)) ?
-            ALWAYS_TRUE : TRISTATE_UNKNOWN
+            ALWAYS_TRUE : ALWAYS_FALSE
     end
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
@@ -2022,9 +2020,9 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         f === Intrinsics.have_fma ||        # this one depends on the runtime environment
         f === Intrinsics.cglobal            # cglobal lookup answer changes at runtime
         ) ? ALWAYS_TRUE : ALWAYS_FALSE
-    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : TRISTATE_UNKNOWN
+    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
     nothrow = (!isvarargtype(argtypes[end]) && intrinsic_nothrow(f, argtypes[2:end])) ?
-        ALWAYS_TRUE : TRISTATE_UNKNOWN
+        ALWAYS_TRUE : ALWAYS_FALSE
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end

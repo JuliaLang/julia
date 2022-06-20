@@ -1421,10 +1421,8 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         effects = Core.Compiler.EFFECTS_TOTAL
         matches = _methods(f, types, -1, world)::Vector
         if isempty(matches)
-            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
-            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
-            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
-            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
+            # this call is known to throw MethodError
+            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.ALWAYS_FALSE)
         end
         for match in matches
             match = match::Core.MethodMatch
