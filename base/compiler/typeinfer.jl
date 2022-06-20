@@ -840,11 +840,11 @@ ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 struct EdgeCallResult
     rt #::Type
     edge::Union{Nothing,MethodInstance}
-    edge_effects::Effects
+    effects::Effects
     function EdgeCallResult(@nospecialize(rt),
                             edge::Union{Nothing,MethodInstance},
-                            edge_effects::Effects)
-        return new(rt, edge, edge_effects)
+                            effects::Effects)
+        return new(rt, edge, effects)
     end
 end
 
