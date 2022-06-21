@@ -220,6 +220,24 @@ end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
 is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
 
+function InferenceResult(
+    linfo::MethodInstance,
+    arginfo::Union{Nothing,Tuple{ArgInfo,InferenceState}} = nothing)
+    return _InferenceResult(linfo, arginfo)
+end
+
+add_remark!(::AbstractInterpreter, sv::InferenceState, remark) = return
+
+function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::InferenceState)
+    return sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+end
+function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::InferenceState)
+    return rt === Any
+end
+function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::InferenceState)
+    return rt === Any
+end
+
 function any_inbounds(code::Vector{Any})
     for i=1:length(code)
         stmt = code[i]

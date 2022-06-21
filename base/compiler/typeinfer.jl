@@ -321,15 +321,6 @@ function CodeInstance(
         relocatability)
 end
 
-# For the NativeInterpreter, we don't need to do an actual cache query to know
-# if something was already inferred. If we reach this point, but the inference
-# flag has been turned off, then it's in the cache. This is purely a performance
-# optimization.
-already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) =
-    !mi.inInference
-already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
-    false
-
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     def = linfo.def
     toplevel = !isa(def, Method)
