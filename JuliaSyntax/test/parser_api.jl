@@ -1,7 +1,12 @@
 @testset "parser API" begin
     @testset "String and buffer input" begin
         # String
-        @test parse(Expr, "x+y\nz") == (Expr(:toplevel, :(x+y), :z), [], 6)
+        let
+            ex,diag,pos = parse(Expr, "x+y\nz")
+            @test JuliaSyntax.remove_linenums!(ex) == Expr(:toplevel, :(x+y), :z)
+            @test diag == []
+            @test pos == 6
+        end
         @test parse(Expr, "x+y\nz", rule=:statement) == (:(x+y), [], 4)
         @test parse(Expr, "x+y\nz", rule=:atom) == (:x, [], 2)
         @test parse(Expr, "x+y\nz", 5, rule=:atom) == (:z, [], 6)
@@ -56,7 +61,7 @@
     end
 
     @testset "parseall" begin
-        @test parseall(Expr, " x ") == Expr(:toplevel, :x)
+        @test JuliaSyntax.remove_linenums!(parseall(Expr, " x ")) == Expr(:toplevel, :x)
         @test parseall(Expr, " x ", rule=:statement) == :x
         @test parseall(Expr, " x ", rule=:atom) == :x
         # TODO: Fix this situation with trivia here; the brackets are trivia, but
