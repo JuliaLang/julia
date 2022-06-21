@@ -144,6 +144,9 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
                 args[2] = Expr(:block, loc, args[2])
             end
         end
+    elseif headsym == :elseif
+        # Compat wart: add a block for the elseif conditional
+        args[1] = Expr(:block, args[1])
     elseif headsym == :(->)
         if Meta.isexpr(args[2], :block)
             pushfirst!(args[2].args, loc)

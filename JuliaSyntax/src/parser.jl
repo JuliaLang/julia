@@ -1852,7 +1852,7 @@ end
 
 # Parse if-elseif-else-end expressions
 #
-# if a xx elseif b yy else zz end   ==>  (if a (block xx) (elseif (block b) (block yy) (block zz)))
+# if a xx elseif b yy else zz end   ==>  (if a (block xx) (elseif b (block yy) (block zz)))
 function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
     mark = position(ps)
     word = peek(ps)
@@ -1872,23 +1872,19 @@ function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
         # if a xx end   ==>  (if a (block xx))
         parse_cond(ps)
     end
-    if is_elseif
-        # Wart: `elseif` condition is in a block but not `if` condition
-        emit(ps, cond_mark, K"block")
-    end
     # if a \n\n xx \n\n end   ==>  (if a (block xx))
     parse_block(ps)
     bump_trivia(ps)
     k = peek(ps)
     if k == K"elseif"
-        # if a xx elseif b yy end   ==>  (if a (block xx) (elseif (block b) (block yy)))
+        # if a xx elseif b yy end   ==>  (if a (block xx) (elseif b (block yy)))
         parse_if_elseif(ps, true)
     elseif k == K"else"
         emark = position(ps)
         bump(ps, TRIVIA_FLAG)
         if peek(ps) == K"if"
             # Recovery: User wrote `else if` by mistake ?
-            # if a xx else if b yy end  ==>  (if a (block xx) (error-t) (elseif (block b) (block yy)))
+            # if a xx else if b yy end  ==>  (if a (block xx) (error-t) (elseif b (block yy)))
             bump(ps, TRIVIA_FLAG)
             emit(ps, emark, K"error", TRIVIA_FLAG,
                  error="use `elseif` instead of `else if`")
