@@ -123,6 +123,7 @@ something(x::Any, y...) = x
 ############
 
 include("compiler/cicache.jl")
+include("compiler/effects.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
