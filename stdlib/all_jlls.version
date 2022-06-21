@@ -1,6 +1,8 @@
 # -*- mode: make -*-
 ## All `_jll` names and versions
 
+## TODO: Automatic include of all `*.version` makefile
+
 include $(JULIAHOME)/deps/blastrampoline.version
 include $(JULIAHOME)/deps/clang.version
 include $(JULIAHOME)/deps/csl.version
