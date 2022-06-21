@@ -1,4 +1,4 @@
-# -*- mode: make -*-
+# -*- mode: makefile -*-
 ## All `_jll` names and versions
 
 include $(JULIAHOME)/deps/blastrampoline.version
