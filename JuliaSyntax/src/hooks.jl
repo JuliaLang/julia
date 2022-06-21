@@ -35,10 +35,10 @@ function core_parser_hook(code, filename, lineno, offset, options)
         end
 
         if any_error(stream)
-            e = Expr(:error, ParseError(SourceFile(code), stream.diagnostics))
+            e = Expr(:error, ParseError(SourceFile(code, filename=filename), stream.diagnostics))
             ex = options === :all ? Expr(:toplevel, e) : e
         else
-            ex = build_tree(Expr, stream, wrap_toplevel_as_kind=K"None")
+            ex = build_tree(Expr, stream, filename=filename, wrap_toplevel_as_kind=K"None")
             if Meta.isexpr(ex, :None)
                 # The None wrapping is only to give somewhere for trivia to be
                 # attached; unwrap!
