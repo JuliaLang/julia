@@ -56,15 +56,20 @@ Along the abstract interpretation, `Effects` at each statement are analyzed loca
 they are merged into the single global `Effects` that represents the entire effects of
 the analyzed method (see `tristate_merge!`).
 Each effect property is represented as tri-state and managed separately.
-The tri-state consists of `ALWAYS_TRUE`, `TRISTATE_UNKNOWN` and `ALWAYS_FALSE`.
+The tri-state consists of `ALWAYS_TRUE`, `TRISTATE_UNKNOWN` and `ALWAYS_FALSE`, where they
+have the following meanings:
+- `ALWAYS_TRUE`: this method is guaranteed to not have this effect.
+- `ALWAYS_FALSE`: this method may have this effect, and there is no need to do any further
+  analysis w.r.t. this effect property as this conclusion will not be refined anyway.
+- `TRISTATE_UNKNOWN`: this effect property may still be refined to `ALWAYS_TRUE` or
+  `ALWAYS_FALSE`, e.g. using return type information.
+
 An effect property is initialized with `ALWAYS_TRUE` and then transitioned towards
-`TRISTATE_UNKNOWN` or `ALWAYS_FALSE`. When we find a statement that has some effect,
-`ALWAYS_TRUE` is propagated if that effect is known to _always_ happen, otherwise
-`TRISTATE_UNKNOWN` is propagated. If a property is known to be `ALWAYS_FALSE`,
-there is no need to do additional analysis as it can not be refined anyway.
-Note that however, within the current data-flow analysis design, it is hard to derive a global
-conclusion from a local analysis on each statement, and as a result, the effect analysis
-usually propagates `TRISTATE_UNKNOWN` currently.
+`ALWAYS_FALSE`. When we find a statement that has some effect, either of `TRISTATE_UNKNOWN`
+or `ALWAYS_FALSE` is propagated. Note that however, within the current flow-insensitive
+analysis design, it is usually difficult to derive a global conclusion accurately from local
+analysis on each statement, and therefore, the effect analysis usually propagates the
+`ALWAYS_FALSE` state conservatively.
 """
 struct Effects
     consistent::TriState
@@ -94,10 +99,10 @@ function Effects(
         false)
 end
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      ALWAYS_TRUE,      true, ALWAYS_TRUE)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,      ALWAYS_TRUE,      TRISTATE_UNKNOWN, ALWAYS_TRUE,      true, ALWAYS_TRUE)
-const EFFECTS_UNKNOWN  = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, true, TRISTATE_UNKNOWN)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, TRISTATE_UNKNOWN, false, TRISTATE_UNKNOWN) # unknown, really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  true,  ALWAYS_TRUE)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_FALSE, ALWAYS_TRUE,  true,  ALWAYS_TRUE)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, true,  ALWAYS_FALSE)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false, ALWAYS_FALSE) # unknown, really
 
 function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::TriState = e.consistent,

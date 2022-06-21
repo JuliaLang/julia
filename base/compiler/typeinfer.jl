@@ -430,10 +430,18 @@ end
 function adjust_effects(sv::InferenceState)
     ipo_effects = Effects(sv)
 
-    # Always throwing an error counts or never returning both count as consistent,
-    # but we don't currently model idempontency using dataflow, so we don't notice.
-    # Fix that up here to improve precision.
-    if !ipo_effects.inbounds_taints_consistency && sv.bestguess === Union{}
+    # refine :consistent-cy effect using the return type information
+    # TODO this adjustment tries to compromise imprecise :consistent-cy information,
+    # that is currently modeled in a flow-insensitive way: ideally we want to model it
+    # with a proper dataflow analysis instead
+    rt = sv.bestguess
+    if !ipo_effects.inbounds_taints_consistency && rt === Bottom
+        # always throwing an error counts or never returning both count as consistent
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    elseif ipo_effects.consistent === TRISTATE_UNKNOWN && is_consistent_rt(rt)
+        # in a case when the :consistent-cy here is only tainted by mutable allocations
+        # (indicated by `TRISTATE_UNKNOWN`), we may be able to refine it if the return
+        # type guarantees that the allocations are never returned
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
 
@@ -459,6 +467,14 @@ function adjust_effects(sv::InferenceState)
     end
 
     return ipo_effects
+end
+
+is_consistent_rt(@nospecialize rt) = _is_consistent_rt(widenconst(ignorelimited(rt)))
+function _is_consistent_rt(@nospecialize ty)
+    if isa(ty, Union)
+        return _is_consistent_rt(ty.a) && _is_consistent_rt(ty.b)
+    end
+    return ty === Symbol || isbitstype(ty)
 end
 
 # inference completed on `me`
@@ -775,11 +791,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
+    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=TRISTATE_UNKNOWN))
+        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -840,11 +856,11 @@ ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
 struct EdgeCallResult
     rt #::Type
     edge::Union{Nothing,MethodInstance}
-    edge_effects::Effects
+    effects::Effects
     function EdgeCallResult(@nospecialize(rt),
                             edge::Union{Nothing,MethodInstance},
-                            edge_effects::Effects)
-        return new(rt, edge, edge_effects)
+                            effects::Effects)
+        return new(rt, edge, effects)
     end
 end
 
