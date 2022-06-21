@@ -38,7 +38,24 @@ function remove_all_linenums!(ex)
     remove_macro_linenums!(ex)
 end
 
-function parsers_agree_on_file(filename)
+function show_expr_text_diff(showfunc, ex, f_ex; context=2)
+    if Sys.isunix()
+        mktemp() do path1, io1
+            mktemp() do path2, io2
+                showfunc(io1, ex);   close(io1)
+                showfunc(io2, f_ex); close(io2)
+                run(ignorestatus(`diff -U$context --color=always $path1 $path2`))
+            end
+        end
+    else
+        showfunc(stdout, ex)
+        println("------------------------------------")
+        showfunc(stdout, f_ex)
+    end
+end
+
+
+function parsers_agree_on_file(filename; show_diff=false)
     text = try
         read(filename, String)
     catch
@@ -55,6 +72,9 @@ function parsers_agree_on_file(filename)
     end
     try
         ex, diagnostics, _ = parse(Expr, text, filename=filename)
+        if show_diff && ex != fl_ex
+            show_expr_text_diff(show, ex, fl_ex)
+        end
         return !JuliaSyntax.any_error(diagnostics) &&
             JuliaSyntax.remove_linenums!(ex) ==
             JuliaSyntax.remove_linenums!(fl_ex)
@@ -223,19 +243,7 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
         show(stdout, MIME"text/plain"(), f_ex)
 
         printstyled(stdout, "\n\n# Diff of AST dump:\n", color=:red)
-        if Sys.isunix()
-            mktemp() do path1, io1
-                mktemp() do path2, io2
-                    dump(io1, ex);   close(io1)
-                    dump(io2, f_ex); close(io2)
-                    run(ignorestatus(`diff -U10 --color=always $path1 $path2`))
-                end
-            end
-        else
-            dump(ex)
-            println("------------------------------------")
-            dump(f_ex)
-        end
+        show_expr_text_diff(showfunc, ex, f_ex, context=10)
         # return (ex, f_ex)
         # return (code, stream, t, s, ex)
     end
