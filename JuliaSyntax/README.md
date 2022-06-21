@@ -103,6 +103,22 @@ julia> parseall(Expr, "(x + y)*z")
 :($(Expr(:toplevel, :((x + y) * z))))
 ```
 
+# Using JuliaSyntax as the default parser
+
+To use JuliaSyntax as the default Julia parser to `include()` files,
+parse code with `Meta.parse()`, etc, call
+
+```
+julia> JuliaSyntax.enable_in_core!()
+```
+
+This causes some startup latency, so to reduce that you can create a custom
+system image by running the code in `./sysimage/compile.jl` as a Julia script
+(or directly using the shell, on unix). Then use `julia -J $resulting_sysimage`.
+
+Using a custom sysimage has the advantage that package precompilation will also
+go through the JuliaSyntax parser.
+
 # Parser implementation
 
 Our goal is to losslessly represent the source text with a tree; this may be
