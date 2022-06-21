@@ -728,7 +728,7 @@ function _atthreads_with_error(a, err)
     end
     a
 end
-@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+@test_throws CompositeException _atthreads_with_error(zeros(nthreads()), true)
 let a = zeros(nthreads())
     _atthreads_with_error(a, false)
     @test a == [1:nthreads();]
