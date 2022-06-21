@@ -28,7 +28,7 @@ Base.Filesystem.cp
 Base.download
 Base.Filesystem.mv
 Base.Filesystem.rm
-Base.Filesystem.touch
+Base.Filesystem.touch(::AbstractString)
 Base.Filesystem.tempname
 Base.Filesystem.tempdir
 Base.Filesystem.mktemp(::AbstractString)

@@ -483,12 +483,16 @@ repl(io::IO, other; brief::Bool=true) = esc(:(@doc $other))
 repl(x; brief::Bool=true) = repl(stdout, x; brief=brief)
 
 function _repl(x, brief::Bool=true)
-    if isexpr(x, :call)
-        x = x::Expr
+    y = x
+    while isexpr(y, :where)
+        y = y.args[1]
+    end
+    if isexpr(y, :call)
+        y = y::Expr
         # determine the types of the values
         kwargs = nothing
         pargs = Any[]
-        for arg in x.args[2:end]
+        for arg in y.args[2:end]
             if isexpr(arg, :parameters)
                 kwargs = mapany(arg.args) do kwarg
                     if kwarg isa Symbol
@@ -530,9 +534,9 @@ function _repl(x, brief::Bool=true)
             end
         end
         if kwargs === nothing
-            x.args = Any[x.args[1], pargs...]
+            y.args = Any[y.args[1], pargs...]
         else
-            x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
+            y.args = Any[y.args[1], Expr(:parameters, kwargs...), pargs...]
         end
     end
     #docs = lookup_doc(x) # TODO

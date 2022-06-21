@@ -53,23 +53,23 @@ or a series of dimension sizes passed as a variable number of arguments. Most of
 also accept a first input `T`, which is the element type of the array. If the type `T` is
 omitted it will default to [`Float64`](@ref).
 
-| Function                           | Description                                                                                                                                                                                                                                  |
-|:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`Array{T}(undef, dims...)`](@ref)             | an uninitialized dense [`Array`](@ref)                                                                                                                                                                                                              |
-| [`zeros(T, dims...)`](@ref)                    | an `Array` of all zeros                                                                                                                                                                                                                      |
-| [`ones(T, dims...)`](@ref)                     | an `Array` of all ones                                                                                                                                                                                                                       |
-| [`trues(dims...)`](@ref)                       | a [`BitArray`](@ref) with all values `true`                                                                                                                                                                                                  |
-| [`falses(dims...)`](@ref)                      | a `BitArray` with all values `false`                                                                                                                                                                                                         |
-| [`reshape(A, dims...)`](@ref)                  | an array containing the same data as `A`, but with different dimensions                                                                                                                                                                      |
-| [`copy(A)`](@ref)                              | copy `A`                                                                                                                                                                                                                                     |
-| [`deepcopy(A)`](@ref)                          | copy `A`, recursively copying its elements                                                                                                                                                                                                   |
+| Function                                       | Description |
+|:---------------------------------------------- |:----------- |
+| [`Array{T}(undef, dims...)`](@ref Array) | an uninitialized dense [`Array`](@ref) |
+| [`zeros(T, dims...)`](@ref)                    | an `Array` of all zeros |
+| [`ones(T, dims...)`](@ref)                     | an `Array` of all ones |
+| [`trues(dims...)`](@ref)                       | a [`BitArray`](@ref) with all values `true` |
+| [`falses(dims...)`](@ref)                      | a `BitArray` with all values `false` |
+| [`reshape(A, dims...)`](@ref)                  | an array containing the same data as `A`, but with different dimensions |
+| [`copy(A)`](@ref)                              | copy `A` |
+| [`deepcopy(A)`](@ref)                          | copy `A`, recursively copying its elements |
 | [`similar(A, T, dims...)`](@ref)               | an uninitialized array of the same type as `A` (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
-| [`reinterpret(T, A)`](@ref)                    | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
-| [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values. For floating point types `T`, the values lie in the half-open interval ``[0, 1)``.                                                                                                                                       |
-| [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
-| [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref).                                                                                                                                                                                                                   |
+| [`reinterpret(T, A)`](@ref)                    | an array with the same binary data as `A`, but with element type `T` |
+| [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values. For floating point types `T`, the values lie in the half-open interval ``[0, 1)``. |
+| [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values |
+| [`Matrix{T}(I, m, n)`](@ref Matrix)          | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref). |
 | [`range(start, stop, n)`](@ref)                | a range of `n` linearly spaced elements from `start` to `stop` |
-| [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
+| [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x` |
 | [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`. In particular, `fill(x)` constructs a zero-dimensional `Array` containing `x`. |
 
 [^1]: *iid*, independently and identically distributed.

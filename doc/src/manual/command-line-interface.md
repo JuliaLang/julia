@@ -69,7 +69,7 @@ Note that although you should have a `~/.julia` directory once you've run Julia 
 first time, you may need to create the `~/.julia/config` folder and the
 `~/.julia/config/startup.jl` file if you use it.
 
-To have startup code run only in [The Julia REPL] (and not when `julia` is *e.g.* run
+To have startup code run only in [the Julia REPL](@ref The-Julia-REPL) (and not when `julia` is *e.g.* run
 on a script), use [`atreplinit`](@ref) in `startup.jl`:
 
 ```julia
