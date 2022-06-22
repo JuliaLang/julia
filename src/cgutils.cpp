@@ -3732,8 +3732,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                     ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i)))))
                                 ->setOrdering(AtomicOrdering::Unordered);
                 }
-                else if (jl_is_uniontype(jtype)) {
-                    assert(!field_promotable);
+                else if (jl_is_uniontype(jtype) && !field_promotable) {
                     // compute tindex from rhs
                     jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
                     if (rhs_union.typ == jl_bottom_type)
