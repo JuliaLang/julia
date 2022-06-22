@@ -46,11 +46,12 @@ end
 # i.e. must be small with concrete types.
 function is_expected_union(u::Union)
 	Base.unionlen(u) < 4 || return false
-	ua, ub = u.a, u.b
-	if !Base.isdispatchelem(ua) || ua == Core.Box
-	    return false
-	end
-	ub isa Union ? is_expected_union(ub) : Base.isdispatchelem(ub)
+	for x in Base.uniontypes(u)
+	    if !Base.isdispatchelem(ua) || ua == Core.Box
+	        return false
+	    end
+        end
+	return true
 end
 
 """
