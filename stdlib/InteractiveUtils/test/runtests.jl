@@ -52,21 +52,21 @@ tag = "UNION"
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
 for u in Any[
-	Union{Int, UInt},
-	Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
-	Union{Char, UInt8, UInt},
-	Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
-	Union{Missing, Nothing}
+    Union{Int, UInt},
+    Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
+    Union{Char, UInt8, UInt},
+    Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
+    Union{Missing, Nothing}
 ]
-	@test InteractiveUtils.is_expected_union(u)
+    @test InteractiveUtils.is_expected_union(u)
 end
 
 for u in Any[
-	Union{Nothing, Tuple{Vararg{Char}}},
-	Union{Missing, Array},
-	Union{Int, Tuple{Any, Int}}
+    Union{Nothing, Tuple{Vararg{Char}}},
+    Union{Missing, Array},
+    Union{Int, Tuple{Any, Int}}
 ]
-	@test !InteractiveUtils.is_expected_union(u)
+    @test !InteractiveUtils.is_expected_union(u)
 end
 mutable struct Stable{T,N}
     A::Array{T,N}
