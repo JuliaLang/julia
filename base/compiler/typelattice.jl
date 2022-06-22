@@ -397,6 +397,15 @@ function tmeet(@nospecialize(v), @nospecialize(t::Type))
             end
         end
         return tuple_tfunc(new_fields)
+    elseif isa(v, PartialOpaque)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        end
+        ti = typeintersect(widev, t)
+        valid_as_lattice(ti) || return Bottom
+        return PartialOpaque(ti, v.env, v.parent, v.source)
     elseif isa(v, Conditional)
         if !(Bool <: t)
             return Bottom
