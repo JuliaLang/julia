@@ -1231,9 +1231,6 @@ end
 
 reducedim1(R, A) = length(axes1(R)) == 1
 
-
-import Base: promote_op, reduced_indices0, reduced_indices, _findminmax_inittype, check_reducedims, safe_tail, reducedim1, _realtype, axes1, promote_union, isgreater
-
 function findextrema!(f, op_mn, op_mx, Rval_mn, Rind_mn, Rval_mx, Rind_mx, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval_mn) || isempty(Rval_mx) || isempty(A)) && return ((Rval_mn, Rind_mn), (Rval_mx, Rind_mx))
     lsiz_mn = check_reducedims(Rval_mn, A)
