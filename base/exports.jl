@@ -469,7 +469,7 @@ export
     findmin!,
     findmax!,
     findextrema,
-    findextrema!
+    findextrema!,
     findnext,
     findprev,
     match,
