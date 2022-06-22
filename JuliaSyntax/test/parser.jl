@@ -390,14 +390,14 @@ tests = [
         "export (\$f)"  =>  "(export (\$ f))"
     ],
     JuliaSyntax.parse_if_elseif => [
-        "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif (block b) (block yy) (block zz)))"
+        "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif b (block yy) (block zz)))"
         "if end"        =>  "(if (error) (block))"
         "if \n end"     =>  "(if (error) (block))"
         "if a end"      =>  "(if a (block))"
         "if a xx end"   =>  "(if a (block xx))"
         "if a \n\n xx \n\n end"   =>  "(if a (block xx))"
-        "if a xx elseif b yy end"   =>  "(if a (block xx) (elseif (block b) (block yy)))"
-        "if a xx else if b yy end"  =>  "(if a (block xx) (error-t) (elseif (block b) (block yy)))"
+        "if a xx elseif b yy end"   =>  "(if a (block xx) (elseif b (block yy)))"
+        "if a xx else if b yy end"  =>  "(if a (block xx) (error-t) (elseif b (block yy)))"
         "if a xx else yy end"   =>  "(if a (block xx) (block yy))"
     ],
     JuliaSyntax.parse_const_local_global => [

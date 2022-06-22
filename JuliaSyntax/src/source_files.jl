@@ -1,5 +1,5 @@
 """
-    SourceFile(code [, filename])
+    SourceFile(code [; filename=nothing])
 
 A UTF-8 source code string with associated file name and indexing structures.
 """
