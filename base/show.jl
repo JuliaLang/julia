@@ -2783,6 +2783,9 @@ function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
     dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
 
+nocolor(io::IO) = IOContext(io, :color => false)
+alignment_from_show(io::IO, x::Any) =
+    textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
@@ -2800,35 +2803,38 @@ julia> Base.alignment(stdout, 1 + 10im)
 (3, 5)
 ```
 """
-alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
-alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
+alignment(io::IO, x::Any) = (0, alignment_from_show(io, x))
+alignment(io::IO, x::Number) = (alignment_from_show(io, x), 0)
+alignment(io::IO, x::Integer) = (alignment_from_show(io, x), 0)
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = sprint(show, x, context=nocolor(io), sizehint=0)
+    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", s)
+    m === nothing ? (textwidth(s), 0) :
+                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = sprint(show, x, context=nocolor(io), sizehint=0)
+    m = match(r"^(.*[^ef][\+\-])(.*)$", s)
+    m === nothing ? (textwidth(s), 0) :
+                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = sprint(show, x, context=nocolor(io), sizehint=0)
+    m = match(r"^(.*?/)(/.*)$", s)
+    m === nothing ? (textwidth(s), 0) :
+                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 
 function alignment(io::IO, x::Pair)
-    s = sprint(show, x, context=io, sizehint=0)
+    fullwidth = alignment_from_show(io, x)
     if !isdelimited(io, x) # i.e. use "=>" for display
         ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
-        left = length(sprint(show, x.first, context=ctx, sizehint=0))
+        left = alignment_from_show(ctx, x.first)
         left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
         left += !(get(io, :compact, false)::Bool) # spaces are added around "=>"
-        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+        (left+1, fullwidth-left-1) # +1 for the "=" part of "=>"
     else
-        (0, length(s)) # as for x::Any
+        (0, fullwidth) # as for x::Any
     end
 end
 

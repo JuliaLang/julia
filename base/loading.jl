@@ -1402,7 +1402,7 @@ function source_dir()
 end
 
 """
-    Base.include([mapexpr::Function,] [m::Module,] path::AbstractString)
+    Base.include([mapexpr::Function,] m::Module, path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of module `m`.
 Every module (except those defined with [`baremodule`](@ref)) has its own
