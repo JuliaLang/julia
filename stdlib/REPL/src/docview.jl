@@ -153,6 +153,39 @@ end
 
 _trimdocs(md, brief::Bool) = md, false
 
+function lookup_doc(ex)
+    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
+        # handle syntactic operators, e.g. +=, ::, .=
+        ex = ex.head
+    end
+    if haskey(keywords, ex)
+        return parsedoc(keywords[ex])
+    elseif Meta.isexpr(ex, :incomplete)
+        return :($(Markdown.md"No documentation found."))
+    elseif !isa(ex, Expr) && !isa(ex, Symbol)
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    if isa(ex, Symbol) && Base.isoperator(ex)
+        str = string(ex)
+        isdotted = startswith(str, ".")
+        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
+            op = chop(str)
+            eq = isdotted ? ".=" : "="
+            return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
+        elseif isdotted && ex !== :(..)
+            op = str[2:end]
+            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+        end
+    end
+    binding = esc(bindingexpr(namify(ex)))
+    if isexpr(ex, :call) || isexpr(ex, :macrocall)
+        sig = esc(signature(ex))
+        :($(doc)($binding, $sig))
+    else
+        :($(doc)($binding))
+    end
+end
+
 """
     Docs.doc(binding, sig)
 
@@ -217,39 +250,6 @@ end
 doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
-
-function lookup_doc(ex)
-    if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
-        # handle syntactic operators, e.g. +=, ::, .=
-        ex = ex.head
-    end
-    if haskey(keywords, ex)
-        return parsedoc(keywords[ex])
-    elseif Meta.isexpr(ex, :incomplete)
-        return :($(Markdown.md"No documentation found."))
-    elseif !isa(ex, Expr) && !isa(ex, Symbol)
-        return :($(doc)($(typeof)($(esc(ex)))))
-    end
-    if isa(ex, Symbol) && Base.isoperator(ex)
-        str = string(ex)
-        isdotted = startswith(str, ".")
-        if endswith(str, "=") && Base.operator_precedence(ex) == Base.prec_assignment && ex !== :(:=)
-            op = chop(str)
-            eq = isdotted ? ".=" : "="
-            return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
-        elseif isdotted && ex !== :(..)
-            op = str[2:end]
-            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
-        end
-    end
-    binding = esc(bindingexpr(namify(ex)))
-    if isexpr(ex, :call) || isexpr(ex, :macrocall)
-        sig = esc(signature(ex))
-        :($(doc)($binding, $sig))
-    else
-        :($(doc)($binding))
-    end
-end
 
 # Object Summaries.
 # =================
