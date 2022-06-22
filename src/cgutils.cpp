@@ -3788,9 +3788,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     if (field_promotable) {
                         fval_info.V->replaceAllUsesWith(dest);
                         cast<Instruction>(fval_info.V)->eraseFromParent();
-                    }
-                    else {
-                        fval = emit_unbox(ctx, fty, fval_info, jtype, dest, ctx.tbaa().tbaa_stack);
                     } else if (init_as_value) {
                         fval = emit_unbox(ctx, fty, fval_info, jtype);
                     } else {
