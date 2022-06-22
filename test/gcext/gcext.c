@@ -491,7 +491,7 @@ void task_scanner(jl_task_t *task, int root_task)
     jl_active_task_stack(task, &start_stack, &end_stack, &total_start_stack, &total_end_stack);
 
     // this is the live stack of a thread. Is it ours?
-    if (start_stack && task == (jl_task_t *)jl_get_current_task()) {
+    if (start_stack && task == (jl_task_t*)jl_get_current_task()) {
         if (!(lt_ptr(start_stack, &var_on_frame) && lt_ptr(&var_on_frame, end_stack))) {
             // error, current stack frame must be on the live stack.
             jl_error("stack frame not part of the current task");

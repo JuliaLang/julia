@@ -25,6 +25,17 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* The known quadratic behavior of type inference is now fixed and inference uses less memory in general.
+  Certain edge cases with auto-generated long functions (e.g. ModelingToolkit.jl with partial
+  differential equations and large causal models) should see significant compile-time improvements.
+  ([#45276], [#45404])
+* Non-concrete call sites can now be union-split to be inlined or statically-resolved even
+  if there are multiple dispatch candidates. This may improve runtime performance in certain
+  situations where object types are not fully known statically but mostly available at runtime
+  (as like Julia-level type inference implementation itself) by statically resolving
+  `@nospecialize`-d call sites and avoiding excessive compilation. ([#44512])
+* All the previous usages of `@pure`-macro in `Base` has been replaced with the preferred
+  `Base.@assume_effects`-based annotations. ([#44776])
 
 Command-line option changes
 ---------------------------
@@ -56,6 +67,8 @@ New library functions
 * `Iterators.flatmap` was added ([#44792]).
 * New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
   inspecting which function `f` was originally wrapped. ([#42717])
+* New `pkgversion(m::Module)` function to get the version of the package that loaded
+  a given module, similar to `pkgdir(m::Module)`. ([#45607])
 
 Library changes
 ---------------
@@ -103,6 +116,10 @@ Standard library changes
 
 * `Meta-e` now opens the current input in an editor. The content (if modified) will be
   executed upon existing the editor.
+
+* The contextual module which is active at the REPL can be changed (it is `Main` by default),
+  via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
+  the keybinding Alt-m ([#33872]).
 
 #### SparseArrays
 

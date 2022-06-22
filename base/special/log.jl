@@ -92,7 +92,6 @@ const t_log_Float64 = ((0.0,0.0),(0.007782140442941454,-8.865052917267247e-13),
     (0.6853040030982811,6.383161517064652e-13),(0.6892332812385575,2.5144230728376075e-13),
     (0.6931471805601177,-1.7239444525614835e-13))
 
-
 # Float32 lookup table
 # to generate values:
   # N=16
@@ -156,7 +155,12 @@ logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
 logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
 # Procedure 1
-@inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,jp::Int,base=Val(:ℯ))
+# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# because the effect analysis currently can't prove it in the presence of `@inbounds` or
+# `:boundscheck`, but still the access to `t_log_Float64` is really safe here
+Base.@assume_effects :consistent @inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,base=Val(:ℯ))
+    jp = unsafe_trunc(Int,128.0*F)-127
+
     ## Steps 1 and 2
     @inbounds hi,lo = t_log_Float64[jp]
     l_hi = mf* 0.6931471805601177 + hi
@@ -211,8 +215,13 @@ end
     return fma(m_hi, u, fma(m_lo, u, m_hi*fma(fma(-u,f,2(f-u)), g, q)))
 end
 
+# Procedure 1
+# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# because the effect analysis currently can't prove it in the presence of `@inbounds` or
+# `:boundscheck`, but still the access to `t_log_Float32` is really safe here
+Base.@assume_effects :consistent @inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
+    jp = unsafe_trunc(Int,128.0f0*F)-127
 
-@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,jp::Int,base=Val(:ℯ))
     ## Steps 1 and 2
     @inbounds hi = t_log_Float32[jp]
     l = mf*0.6931471805599453 + hi
@@ -232,6 +241,7 @@ end
     Float32(logb(Float32, base)*(l + (u + q)))
 end
 
+# Procedure 2
 @inline function log_proc2(f::Float32,base=Val(:ℯ))
     ## Step 1
     # compute in higher precision
@@ -281,9 +291,8 @@ function _log(x::Float64, base, func)
         mf = Float64(m)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
         f = y-F
-        jp = unsafe_trunc(Int,128.0*F)-127
 
-        return log_proc1(y,mf,F,f,jp,base)
+        return log_proc1(y,mf,F,f,base)
     elseif x == 0.0
         -Inf
     elseif isnan(x)
@@ -317,9 +326,8 @@ function _log(x::Float32, base, func)
         mf = Float32(m)
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
         f = y-F
-        jp = unsafe_trunc(Int,128.0f0*F)-127
 
-        log_proc1(y,mf,F,f,jp,base)
+        log_proc1(y,mf,F,f,base)
     elseif x == 0f0
         -Inf32
     elseif isnan(x)
@@ -352,9 +360,8 @@ function log1p(x::Float64)
         mf = Float64(m)
         F = (y + 3.5184372088832e13) - 3.5184372088832e13 # 0x1p-7*round(0x1p7*y)
         f = (y - F) + c*s #2^m(F+f) = 1+x = z+c
-        jp = unsafe_trunc(Int,128.0*F)-127
 
-        log_proc1(y,mf,F,f,jp)
+        log_proc1(y,mf,F,f)
     elseif x == -1.0
         -Inf
     elseif isnan(x)
@@ -385,9 +392,8 @@ function log1p(x::Float32)
         mf = Float32(m)
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
         f = (y - F) + s*c #2^m(F+f) = 1+x = z+c
-        jp = unsafe_trunc(Int,128.0*F)-127
 
-        log_proc1(y,mf,F,f,jp)
+        log_proc1(y,mf,F,f)
     elseif x == -1f0
         -Inf32
     elseif isnan(x)

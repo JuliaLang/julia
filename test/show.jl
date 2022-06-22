@@ -2360,3 +2360,16 @@ end
     @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
           """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end
+
+# Test that alignment takes into account unicode and computes alignment without
+# color/formatting.
+
+struct ColoredLetter; end
+Base.show(io::IO, ces::ColoredLetter) = Base.printstyled(io, 'A'; color=:red)
+
+struct ⛵; end
+Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
+
+@test Base.alignment(stdout, ⛵()) == (0, 2)
+@test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
+@test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)

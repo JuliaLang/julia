@@ -201,6 +201,7 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -278,9 +279,13 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
-} jl_tls_states_t;
 
-typedef jl_tls_states_t *jl_ptls_t;
+    // some hidden state (usually just because we don't have the type's size declaration)
+#ifdef LIBRARY_EXPORTS
+    uv_mutex_t sleep_lock;
+    uv_cond_t wake_signal;
+#endif
+} jl_tls_states_t;
 
 #ifndef LIBRARY_EXPORTS
 // deprecated (only for external consumers)

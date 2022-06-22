@@ -1,9 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Function multi-versioning
-#define DEBUG_TYPE "julia_multiversioning"
-#undef DEBUG
-
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
@@ -40,6 +37,9 @@
 
 #include "codegen_shared.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "julia_multiversioning"
+#undef DEBUG
 
 using namespace llvm;
 

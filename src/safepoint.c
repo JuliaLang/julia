@@ -43,6 +43,7 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // load/store so that threads waiting for the GC doesn't have to also
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
+uv_cond_t safepoint_cond;
 
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
@@ -87,6 +88,7 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 void jl_safepoint_init(void)
 {
     uv_mutex_init(&safepoint_lock);
+    uv_cond_init(&safepoint_cond);
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
@@ -105,6 +107,31 @@ void jl_safepoint_init(void)
     // The signal page is for the gc safepoint.
     // The page before it is the sigint pending flag.
     jl_safepoint_pages = addr;
+}
+
+void jl_gc_wait_for_the_world(void)
+{
+    assert(jl_n_threads);
+    if (jl_n_threads > 1)
+        jl_wake_libuv();
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        // This acquire load pairs with the release stores
+        // in the signal handler of safepoint so we are sure that
+        // all the stores on those threads are visible.
+        // We're currently also using atomic store release in mutator threads
+        // (in jl_gc_state_set), but we may want to use signals to flush the
+        // memory operations on those threads lazily instead.
+        while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state)) {
+            // Use system mutexes rather than spin locking to minimize wasted CPU time
+            // while we wait for other threads reach a safepoint.
+            // This is particularly important when run under rr.
+            uv_mutex_lock(&safepoint_lock);
+            if (!jl_atomic_load_relaxed(&ptls2->gc_state))
+                uv_cond_wait(&safepoint_cond, &safepoint_lock);
+            uv_mutex_unlock(&safepoint_lock);
+        }
+    }
 }
 
 int jl_safepoint_start_gc(void)
@@ -151,16 +178,24 @@ void jl_safepoint_end_gc(void)
     jl_mach_gc_end();
 #  endif
     uv_mutex_unlock(&safepoint_lock);
+    uv_cond_broadcast(&safepoint_cond);
 }
 
 void jl_safepoint_wait_gc(void)
 {
     // The thread should have set this is already
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) != 0);
+    uv_cond_broadcast(&safepoint_cond);
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
-        jl_cpu_pause(); // yield?
+        // Use system mutexes rather than spin locking to minimize wasted CPU
+        // time on the idle cores while we wait for the GC to finish.
+        // This is particularly important when run under rr.
+        uv_mutex_lock(&safepoint_lock);
+        if (jl_atomic_load_relaxed(&jl_gc_running))
+            uv_cond_wait(&safepoint_cond, &safepoint_lock);
+        uv_mutex_unlock(&safepoint_lock);
     }
 }
 

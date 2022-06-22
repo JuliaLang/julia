@@ -63,9 +63,7 @@ __clear_cache!() = empty!(GLOBAL_CODE_CACHE)
 # imports
 import .CC:
     AbstractInterpreter, NativeInterpreter, WorldView, WorldRange,
-    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache, code_cache,
-    lock_mi_inference, unlock_mi_inference, add_remark!,
-    may_optimize, may_compress, may_discard_trees, verbose_stmt_info
+    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache, code_cache
 # usings
 import Core:
     CodeInstance, MethodInstance, CodeInfo
@@ -98,16 +96,6 @@ end
 CC.InferenceParams(interp::EscapeAnalyzer)    = InferenceParams(interp.native)
 CC.OptimizationParams(interp::EscapeAnalyzer) = OptimizationParams(interp.native)
 CC.get_world_counter(interp::EscapeAnalyzer)  = get_world_counter(interp.native)
-
-CC.lock_mi_inference(::EscapeAnalyzer,   ::MethodInstance) = nothing
-CC.unlock_mi_inference(::EscapeAnalyzer, ::MethodInstance) = nothing
-
-CC.add_remark!(interp::EscapeAnalyzer, sv, s) = add_remark!(interp.native, sv, s)
-
-CC.may_optimize(interp::EscapeAnalyzer)      = may_optimize(interp.native)
-CC.may_compress(interp::EscapeAnalyzer)      = may_compress(interp.native)
-CC.may_discard_trees(interp::EscapeAnalyzer) = may_discard_trees(interp.native)
-CC.verbose_stmt_info(interp::EscapeAnalyzer) = verbose_stmt_info(interp.native)
 
 CC.get_inference_cache(interp::EscapeAnalyzer) = get_inference_cache(interp.native)
 

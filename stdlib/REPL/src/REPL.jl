@@ -133,7 +133,7 @@ const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
-function eval_user_input(@nospecialize(ast), backend::REPLBackend)
+function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     lasterr = nothing
     Base.sigatomic_begin()
     while true
@@ -149,9 +149,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
-                value = Core.eval(Main, ast)
+                value = Core.eval(mod, ast)
                 backend.in_eval = false
-                setglobal!(Main, :ans, value)
+                setglobal!(mod, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -210,11 +210,12 @@ end
 
     Deprecated since sync / async behavior cannot be selected
 """
-function start_repl_backend(repl_channel::Channel{Any}, response_channel::Channel{Any})
+function start_repl_backend(repl_channel::Channel{Any}, response_channel::Channel{Any}
+                            ; get_module::Function = ()->Main)
     # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
     # Assignment will be made twice, but will be immediately available
-    backend.backend_task = @async start_repl_backend(backend)
+    backend.backend_task = @async start_repl_backend(backend; get_module)
     return backend
 end
 
@@ -226,14 +227,14 @@ end
 
     Does not return backend until loop is finished.
 """
-function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
+function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing); get_module::Function = ()->Main)
     backend.backend_task = Base.current_task()
     consumer(backend)
-    repl_backend_loop(backend)
+    repl_backend_loop(backend, get_module)
     return backend
 end
 
-function repl_backend_loop(backend::REPLBackend)
+function repl_backend_loop(backend::REPLBackend, get_module::Function)
     # include looks at this to determine the relative include path
     # nothing means cwd
     while true
@@ -244,7 +245,7 @@ function repl_backend_loop(backend::REPLBackend)
             # exit flag
             break
         end
-        eval_user_input(ast, backend)
+        eval_user_input(ast, backend, get_module())
     end
     return nothing
 end
@@ -258,7 +259,7 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => Main::Module)
+        io = IOContext(io, :limit => true, :module => active_module(d)::Module)
         get(io, :color, false) && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
@@ -274,7 +275,7 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
-        io = IOContext(io, :module => Main::Module)
+        io = IOContext(io, :module => active_module(repl)::Module)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
@@ -335,6 +336,7 @@ struct REPLBackendRef
     response_channel::Channel{Any}
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
+
 function destroy(ref::REPLBackendRef, state::Task)
     if istaskfailed(state)
         close(ref.repl_channel, TaskFailedException(state))
@@ -362,13 +364,14 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
+    get_module = () -> active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         errormonitor(t)
         Base._wait2(t, cleanup)
-        start_repl_backend(backend, consumer)
+        start_repl_backend(backend, consumer; get_module)
     else
-        t = @async start_repl_backend(backend, consumer)
+        t = @async start_repl_backend(backend, consumer; get_module)
         errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
@@ -484,17 +487,33 @@ mutable struct REPLCompletionProvider <: CompletionProvider
     modifiers::LineEdit.Modifiers
 end
 REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
+
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
+active_module(repl::LineEditREPL) = repl.mistate === nothing ? Main : repl.mistate.active_module
+active_module(::AbstractREPL) = Main
+active_module(d::REPLDisplay) = active_module(d.repl)
+
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
+"""
+    activate(mod::Module=Main)
+
+Set `mod` as the default contextual module in the REPL,
+both for evaluating expressions and printing them.
+"""
+function activate(mod::Module=Main)
+    Base.active_repl.mistate.active_module = mod
+    Base.load_InteractiveUtils(mod)
+    nothing
+end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
-function complete_line(c::REPLCompletionProvider, s::PromptState)
+function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, lastindex(partial), Main, c.modifiers.shift)
+    ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift)
     c.modifiers = LineEdit.Modifiers()
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
@@ -906,6 +925,15 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
+function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
+    function ()
+        mod = active_module(repl)
+        prefix = mod == Main ? "" : string('(', mod, ") ")
+        pr = prompt isa String ? prompt : prompt()
+        prefix * pr
+    end
+end
+
 setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
@@ -950,7 +978,7 @@ function setup_interface(
     replc = REPLCompletionProvider()
 
     # Set up the main Julia prompt
-    julia_prompt = Prompt(JULIA_PROMPT;
+    julia_prompt = Prompt(contextual_prompt(repl, JULIA_PROMPT);
         # Copy colors from the prompt object
         prompt_prefix = hascolor ? repl.prompt_color : "",
         prompt_suffix = hascolor ?
@@ -960,15 +988,15 @@ function setup_interface(
         on_enter = return_callback)
 
     # Setup help mode
-    help_mode = Prompt(HELP_PROMPT,
+    help_mode = Prompt(contextual_prompt(repl, "help?> "),
         prompt_prefix = hascolor ? repl.help_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line), repl, julia_prompt,
-                          pass_empty=true, suppress_on_semicolon=false))
+        on_done = respond(line::String->helpmode(outstream(repl), line, repl.mistate.active_module),
+                          repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
     # Set up shell mode
@@ -1025,10 +1053,9 @@ function setup_interface(
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()
 
-    jl_prompt_len = length(JULIA_PROMPT)
-    pkg_prompt_len = length(PKG_PROMPT)
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
+    jl_prompt_regex = r"^(?:\(.+\) )?julia> "
     pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
 
     # Canonicalize user keymap input
@@ -1095,30 +1122,32 @@ function setup_interface(
                         oldpos = nextind(input, oldpos)
                         oldpos >= sizeof(input) && return
                     end
+                    substr = SubString(input, oldpos)
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
-                    if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
+                    if (firstline || isprompt_paste) && startswith(substr, jl_prompt_regex)
+                        detected_jl_prompt = match(jl_prompt_regex, substr).match
                         isprompt_paste = true
-                        oldpos += jl_prompt_len
-                        curr_prompt_len = jl_prompt_len
+                        curr_prompt_len = sizeof(detected_jl_prompt)
+                        oldpos += curr_prompt_len
                         transition(s, julia_prompt)
                         pasting_help = false
                     # Check if input line starts with "pkg> " or "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
-                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), pkg_prompt_regex)
-                        detected_pkg_prompt = match(pkg_prompt_regex, SubString(input, oldpos)).match
+                    elseif (firstline || isprompt_paste) && startswith(substr, pkg_prompt_regex)
+                        detected_pkg_prompt = match(pkg_prompt_regex, substr).match
                         isprompt_paste = true
                         curr_prompt_len = sizeof(detected_pkg_prompt)
                         oldpos += curr_prompt_len
                         Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
                         pasting_help = false
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
-                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), SHELL_PROMPT)
+                    elseif (firstline || isprompt_paste) && startswith(substr, SHELL_PROMPT)
                         isprompt_paste = true
                         oldpos += shell_prompt_len
                         curr_prompt_len = shell_prompt_len
                         transition(s, shell_mode)
                         pasting_help = false
                     # Check if input line starts with "help?> ", remove it if we are in prompt paste mode and switch mode
-                    elseif (firstline || isprompt_paste) && startswith(SubString(input, oldpos), HELP_PROMPT)
+                    elseif (firstline || isprompt_paste) && startswith(substr, HELP_PROMPT)
                         isprompt_paste = true
                         oldpos += help_prompt_len
                         curr_prompt_len = help_prompt_len

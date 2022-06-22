@@ -93,7 +93,7 @@ Julia. However, most users should use the [most recent stable version](https://g
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.7.2
+    git checkout v1.7.3
 
 Now run `make` to build the `julia` executable.
 

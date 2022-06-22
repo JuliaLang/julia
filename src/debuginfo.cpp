@@ -52,12 +52,6 @@ struct debug_link_info {
     uint32_t crc32;
 };
 
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT;
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT;
-
-template <typename T>
-static void jl_profile_atomic(T f);
-
 #if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || (defined(_OS_DARWIN_) && defined(LLVM_SHLIB)))
 extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
@@ -101,16 +95,16 @@ void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t
 
 jl_method_instance_t *JITDebugInfoRegistry::lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
 {
-    jl_lock_profile_impl();
+    jl_lock_profile();
     auto region = linfomap.lower_bound(pointer);
     jl_method_instance_t *linfo = NULL;
     if (region != linfomap.end() && pointer < region->first + region->second.first)
         linfo = region->second.second;
-    jl_unlock_profile_impl();
+    jl_unlock_profile();
     return linfo;
 }
 
-//Protected by debuginfo_asyncsafe
+//Protected by debuginfo_asyncsafe (profile) lock
 JITDebugInfoRegistry::objectmap_t &
 JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
 {
@@ -131,10 +125,7 @@ JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
     return *this->objfilemap;
 }
 
-JITDebugInfoRegistry::JITDebugInfoRegistry() JL_NOTSAFEPOINT {
-    uv_rwlock_init(&debuginfo_asyncsafe);
-    debuginfo_asyncsafe_held.init();
-}
+JITDebugInfoRegistry::JITDebugInfoRegistry() JL_NOTSAFEPOINT { }
 
 struct unw_table_entry
 {
@@ -142,30 +133,13 @@ struct unw_table_entry
     int32_t fde_offset;
 };
 
-extern "C" JL_DLLEXPORT void jl_lock_profile_impl(void) JL_NOTSAFEPOINT
-{
-    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
-    if (held++ == 0)
-        uv_rwlock_rdlock(&getJITDebugRegistry().debuginfo_asyncsafe);
-    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
-}
-
-extern "C" JL_DLLEXPORT void jl_unlock_profile_impl(void) JL_NOTSAFEPOINT
-{
-    uintptr_t held = getJITDebugRegistry().debuginfo_asyncsafe_held;
-    assert(held);
-    if (--held == 0)
-        uv_rwlock_rdunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
-    getJITDebugRegistry().debuginfo_asyncsafe_held = held;
-}
-
 // some actions aren't signal (especially profiler) safe so we acquire a lock
 // around them to establish a mutual exclusion with unwinding from a signal
 template <typename T>
 static void jl_profile_atomic(T f)
 {
-    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    assert(0 == jl_lock_profile_rd_held());
+    jl_lock_profile_wr();
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -176,7 +150,7 @@ static void jl_profile_atomic(T f)
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    jl_unlock_profile_wr();
 }
 
 
@@ -482,10 +456,10 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    assert(0 == jl_lock_profile_rd_held());
+    jl_lock_profile_wr();
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    jl_unlock_profile_wr();
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -508,9 +482,9 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+            jl_lock_profile_wr();
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+            jl_unlock_profile_wr();
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -563,7 +537,7 @@ void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry)
     auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
     if (!libc_register_frame_) {
         libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
-        jl_atomic_store_relaxed(&this->libc_register_frame_, libc_register_frame_);
+        jl_atomic_store_release(&this->libc_register_frame_, libc_register_frame_);
     }
     assert(libc_register_frame_);
     jl_profile_atomic([&]() {
@@ -576,7 +550,7 @@ void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entr
     auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
     if (!libc_deregister_frame_) {
         libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
-        jl_atomic_store_relaxed(&this->libc_deregister_frame_, libc_deregister_frame_);
+        jl_atomic_store_release(&this->libc_deregister_frame_, libc_deregister_frame_);
     }
     assert(libc_deregister_frame_);
     jl_profile_atomic([&]() {
@@ -1197,8 +1171,9 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == getJITDebugRegistry().debuginfo_asyncsafe_held);
-    uv_rwlock_wrlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    assert(0 == jl_lock_profile_rd_held());
+    jl_lock_profile_wr();
+
     if (symsize)
         *symsize = 0;
 
@@ -1214,7 +1189,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         }
         found = 1;
     }
-    uv_rwlock_wrunlock(&getJITDebugRegistry().debuginfo_asyncsafe);
+    jl_unlock_profile_wr();
     return found;
 }
 
@@ -1613,13 +1588,13 @@ extern "C" JL_DLLEXPORT
 uint64_t jl_getUnwindInfo_impl(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
-    jl_lock_profile_impl();
+    jl_lock_profile();
     auto &objmap = getJITDebugRegistry().getObjectMap();
     auto it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
         ipstart = (uint64_t)(uintptr_t)(*it).first;
     }
-    jl_unlock_profile_impl();
+    jl_unlock_profile();
     return ipstart;
 }

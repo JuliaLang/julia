@@ -265,6 +265,88 @@ end
         @test read(io2, typeof(rational2)) == rational2
     end
 end
+@testset "parse" begin
+    # Non-negative Int in which parsing is expected to work
+    @test parse(Rational{Int}, string(10)) == 10 // 1
+    @test parse(Rational{Int}, "100/10" ) == 10 // 1
+    @test parse(Rational{Int}, "100 / 10") == 10 // 1
+    @test parse(Rational{Int}, "0 / 10") == 0 // 1
+    @test parse(Rational{Int}, "100//10" ) == 10 // 1
+    @test parse(Rational{Int}, "100 // 10") == 10 // 1
+    @test parse(Rational{Int}, "0 // 10") == 0 // 1
+
+    # Variations of the separator that should throw errors
+    @test_throws ArgumentError parse(Rational{Int}, "100\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 \\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100\\\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 \\\\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100/ /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 / / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100// /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 // / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100///10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 /// 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100÷10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 ÷ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100 10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100   10")
+
+    # Zero denominator, negative denominator, and double negative
+    @test_throws ArgumentError parse(Rational{Int}, "0//0")
+    @test parse(Rational{Int}, "1000//-100") == -10 // 1
+    @test parse(Rational{Int}, "-1000//-100") == 10 // 1
+
+    # Negative Int tests in which parsing is expected to work
+    @test parse(Rational{Int}, string(-10)) == -10 // 1
+    @test parse(Rational{Int}, "-100/10" ) == -10 // 1
+    @test parse(Rational{Int}, "-100 / 10") == -10 // 1
+    @test parse(Rational{Int}, "-100//10" ) == -10 // 1
+
+    # Variations of the separator that should throw errors (negative version)
+    @test_throws ArgumentError parse(Rational{Int}, "-100\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 \\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100\\\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 \\\\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100/ /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 / / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100// /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 // / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100///10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 /// 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100÷10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 ÷ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100 10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100   10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100 -10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100   -10")
+    @test_throws ArgumentError parse(Rational{Int}, "100 -10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100   -10")
+    try  # issue 44570
+       parse(Rational{BigInt}, "100 10")
+       @test_broken false
+    catch
+       @test_broken true
+    end
+
+    # A few tests for other Integer types
+    @test parse(Rational{Bool}, "true") == true // true
+    @test parse(Rational{UInt8}, "0xff/0xf") == UInt8(17) // UInt8(1)
+    @test parse(Rational{Int8}, "-0x7e/0xf") == Int8(-126) // Int8(15)
+    @test parse(Rational{BigInt}, "$(big(typemax(Int))*16)/8") == (big(typemax(Int))*2) // big(1)
+    # Mixed notations
+    @test parse(Rational{UInt8}, "0x64//28") == UInt8(25) // UInt8(7)
+    @test parse(Rational{UInt8}, "100//0x1c") == UInt8(25) // UInt8(7)
+
+    # Out of the bounds tests
+    # 0x100 is 256, Int test works for both Int32 and Int64
+    # The error must be throw even if the canonicalized fraction fits
+    # (i.e., would be less than typemax after divided by 2 in examples below,
+    # both over typemax values are even).
+    @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x1")
+    @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x2")
+    @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/1")
+    @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/2")
+end # parse
 
 @testset "round" begin
     @test round(11//2) == round(11//2, RoundNearest) == 6//1 # rounds to closest _even_ integer

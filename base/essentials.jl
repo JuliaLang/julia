@@ -209,16 +209,18 @@ macro _total_meta()
         #=:effect_free=#true,
         #=:nothrow=#true,
         #=:terminates_globally=#true,
-        #=:terminates_locally=#false))
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true))
 end
-# can be used in place of `@assume_effects :total_may_throw` (supposed to be used for bootstrapping)
-macro _total_may_throw_meta()
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
         #=:nothrow=#false,
         #=:terminates_globally=#true,
-        #=:terminates_locally=#false))
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -511,7 +513,7 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the size, in bytes, of object `obj` if it is not a `DataType`.
 
-See also [`summarysize`](@ref).
+See also [`Base.summarysize`](@ref).
 
 # Examples
 ```jldoctest
