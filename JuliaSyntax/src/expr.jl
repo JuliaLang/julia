@@ -6,7 +6,7 @@ function is_eventually_call(ex)
                                       is_eventually_call(ex.args[1]))
 end
 
-function _to_expr(node::SyntaxNode, iteration_spec=false)
+function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
     if !haschildren(node)
         if node.val isa Union{Int128,UInt128,BigInt}
             # Ignore the values of large integers and convert them back to
@@ -27,12 +27,32 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
     headsym = !isnothing(headstr) ? Symbol(headstr) :
         error("Can't untokenize head of kind $(kind(node))")
     node_args = children(node)
-    args = Vector{Any}(undef, length(node_args))
+    insert_linenums = (headsym == :block || headsym == :toplevel) && need_linenodes
+    args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
     if headsym == :for && length(node_args) == 2
-        args[1] = _to_expr(node_args[1], true)
-        args[2] = _to_expr(node_args[2], false)
+        # No line numbers in for loop iteration spec
+        args[1] = _to_expr(node_args[1], true, false)
+        args[2] = _to_expr(node_args[2])
+    elseif headsym == :let && length(node_args) == 2
+        # No line numbers in let statement binding list
+        args[1] = _to_expr(node_args[1], false, false)
+        args[2] = _to_expr(node_args[2])
     else
-        map!(_to_expr, args, node_args)
+        if insert_linenums
+            if isempty(node_args)
+                push!(args, source_location(LineNumberNode, node.source, node.position))
+            else
+                for i in 1:length(node_args)
+                    n = node_args[i]
+                    args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
+                    args[2*i] = _to_expr(n)
+                end
+            end
+        else
+            for i in 1:length(node_args)
+                args[i] = _to_expr(node_args[i])
+            end
+        end
     end
     # Julia's standard `Expr` ASTs have children stored in a canonical
     # order which is often not always source order. We permute the children
@@ -136,31 +156,41 @@ function _to_expr(node::SyntaxNode, iteration_spec=false)
     #   Strip string from interpolations in 1.5 and lower to preserve
     #   "hi$("ho")" ==>  (string "hi" "ho")
     elseif headsym == :(=)
-        if is_eventually_call(args[1]) && !iteration_spec
-            if Meta.isexpr(args[2], :block)
-                pushfirst!(args[2].args, loc)
-            else
-                # Add block for short form function locations
-                args[2] = Expr(:block, loc, args[2])
-            end
+        if is_eventually_call(args[1]) && !iteration_spec && !Meta.isexpr(args[2], :block)
+            # Add block for short form function locations
+            args[2] = Expr(:block, loc, args[2])
         end
+    elseif headsym == :elseif
+        # Block for conditional's source location
+        args[1] = Expr(:block, loc, args[1])
     elseif headsym == :(->)
         if Meta.isexpr(args[2], :block)
-            pushfirst!(args[2].args, loc)
+            if node.parent isa SyntaxNode && kind(node.parent) != K"do"
+                pushfirst!(args[2].args, loc)
+            end
         else
             # Add block for source locations
             args[2] = Expr(:block, loc, args[2])
         end
     elseif headsym == :function
-        if length(args) > 1 && Meta.isexpr(args[1], :tuple)
-            # Convert to weird Expr forms for long-form anonymous functions.
-            #
-            # (function (tuple (... xs)) body) ==> (function (... xs) body)
-            if length(args[1].args) == 1 && Meta.isexpr(args[1].args[1], :...)
-                # function (xs...) \n body end
-                args[1] = args[1].args[1]
+        if length(args) > 1
+            if Meta.isexpr(args[1], :tuple)
+                # Convert to weird Expr forms for long-form anonymous functions.
+                #
+                # (function (tuple (... xs)) body) ==> (function (... xs) body)
+                if length(args[1].args) == 1 && Meta.isexpr(args[1].args[1], :...)
+                    # function (xs...) \n body end
+                    args[1] = args[1].args[1]
+                end
             end
+            pushfirst!(args[2].args, loc)
         end
+    elseif headsym == :macro
+        if length(args) > 1
+            pushfirst!(args[2].args, loc)
+        end
+    elseif headsym == :module
+        pushfirst!(args[3].args, loc)
     end
     if headsym == :inert || (headsym == :quote && length(args) == 1 &&
                  !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||

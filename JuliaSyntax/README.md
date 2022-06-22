@@ -127,7 +127,7 @@ tree", but that term has also been used for the parse tree of the full formal
 grammar for a language including any grammar hacks required to solve
 ambiguities, etc. So we avoid this term.)
 
-`JuliaSyntax` uses use a mostly recursive descent parser which closely
+`JuliaSyntax` uses a mostly recursive descent parser which closely
 follows the high level structure of the flisp reference parser. This makes the
 code familiar and reduces porting bugs. It also gives a lot of flexibility for
 designing the diagnostics, tree data structures, compatibility with different
