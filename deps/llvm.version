@@ -1,2 +1,2 @@
-LLVM_BRANCH=julia-14.0.2-1
-LLVM_SHA1=julia-14.0.2-1
+LLVM_BRANCH=julia-14.0.5-0
+LLVM_SHA1=julia-14.0.5-0
