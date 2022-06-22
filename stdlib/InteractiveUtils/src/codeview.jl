@@ -47,10 +47,10 @@ end
 function is_expected_union(u::Union)
 	Base.unionlen(u) < 4 || return false
 	for x in Base.uniontypes(u)
-	    if !Base.isdispatchelem(ua) || ua == Core.Box
+	    if !Base.isdispatchelem(x) || x == Core.Box
 	        return false
-	    end
         end
+    end
 	return true
 end
 
