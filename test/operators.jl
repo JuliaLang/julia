@@ -308,4 +308,7 @@ end
     val = [1,2,3]
     @test Returns(val)(1) === val
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
+    
+    illtype = Vector{Core._typevar(:T, Union{}, Any)}
+    @test Returns(illtype) == Returns{DataType}(illtype)
 end

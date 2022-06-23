@@ -902,6 +902,9 @@ julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 """
 |>(x, f) = f(x)
 
+_stable_typeof(x) = typeof(x)
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+
 """
     f = Returns(value)
 
@@ -928,7 +931,7 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{Core.Typeof(value)}(value)
+    Returns(value) = new{_stable_typeof(value)}(value)
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
@@ -1078,7 +1081,8 @@ struct Fix1{F,T} <: Function
     f::F
     x::T
 
-    Fix1(f, x) = new{Core.Typeof(f),Core.Typeof(x)}(f, x)
+    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -1094,7 +1098,8 @@ struct Fix2{F,T} <: Function
     f::F
     x::T
 
-    Fix2(f, x) = new{Core.Typeof(f),Core.Typeof(x)}(f, x)
+    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)
