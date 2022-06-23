@@ -4255,4 +4255,4 @@ struct Issue45780
     oc::Core.OpaqueClosure{Tuple{}}
 end
 f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
-@test (@inferred @code_typed f45780()) == Val{1}()
+@test (@inferred f45780()) == Val{1}()
