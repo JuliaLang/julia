@@ -9,6 +9,7 @@ using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
+include("writetestset.jl")
 
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -421,6 +422,9 @@ cd(@__DIR__) do
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
+
+    write_testset(o_ts)
+
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
