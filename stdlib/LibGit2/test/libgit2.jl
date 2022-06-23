@@ -49,6 +49,7 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
     out = IOBuffer()
     with_fake_pty() do pts, ptm
         p = run(detach(cmd), pts, pts, pts, wait=false)
+        child_pid = try; getpid(p); catch; missing; end
         Base.close_stdio(pts)
 
         # Kill the process if it takes too long. Typically occurs when process is waiting
@@ -100,10 +101,10 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
         close(ptm)
         if status != :success
             if status == :timeout
-                error("Process timed out possibly waiting for a response. ",
+                error("Process (PID $child_pid) timed out possibly waiting for a response. ",
                       format_output(out))
             else
-                error("Failed process. ", format_output(out), "\n", p)
+                error("Failed process (PID $child_pid). ", format_output(out), "\n", p)
             end
         end
         wait(watcher)
