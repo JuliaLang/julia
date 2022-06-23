@@ -304,6 +304,17 @@ end
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
 
+
+    a = rand(8, 7)
+    @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
+    @test @inferred(insertdims(a, dims=(1, 3)))  == reshape(a, (1, 8, 7, 1))
+    @test @inferred(insertdims(a, dims=(1, 2, 3)))  == reshape(a, (1, 8, 1, 7, 1))
+    @test_throws UndefKeywordError insertdims(a)
+    @test_throws ArgumentError insertdims(a, dims=0)
+    @test_throws ArgumentError insertdims(a, dims=(1, 2, 1))
+    @test_throws ArgumentError insertdims(a, dims=4)
+    @test_throws ArgumentError insertdims(a, dims=6)
+
     sz = (5,8,7)
     A = reshape(1:prod(sz),sz...)
     @test A[2:6] == [2:6;]
