@@ -491,8 +491,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         bb_start_off += length(inst_range)
         local new_preds, new_succs
         let bb = bb, bb_rename = bb_rename, result_order = result_order
-            new_preds = Int[rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds if i != 0]
-            new_succs = Int[rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
+            new_preds = Int[i == 0 ? 0 : rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds]
+            new_succs = Int[             rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end
