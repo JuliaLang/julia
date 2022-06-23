@@ -881,3 +881,32 @@ end
         Tokens.ENDMARKER
     ]
 end
+
+@testset "dotop miscellanea" begin
+    broken_ops = [
+        "a .-> b",
+        ".>: b",
+        ".<: b",
+        "a ||₁ b",
+        "a ||̄ b",
+        "a .||₁ b",
+        "a &&₁ b",
+        "a &&̄ b",
+        "a .&&₁ b",
+    ]
+
+    @test [
+            [Tokenize.untokenize(t, s) for t in Tokenize.tokenize(s)]
+            for s in broken_ops
+        ] == [
+            ["a", " ", ".-", ">", " ", "b", ""],
+            [".>:", " ", "b", ""],
+            [".<:", " ", "b", ""],
+            ["a", " ", "||", "₁", " ", "b", ""],
+            ["a", " ", "||", "̄", " ", "b", ""],
+            ["a", " ", ".||", "₁", " ", "b", ""],
+            ["a", " ", "&&", "₁", " ", "b", ""],
+            ["a", " ", "&&", "̄", " ", "b", ""],
+            ["a", " ", ".&&", "₁", " ", "b", ""],
+        ]
+end
