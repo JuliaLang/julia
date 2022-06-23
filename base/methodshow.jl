@@ -265,8 +265,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
 
-        modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
-        col = get!(() -> popfirst!(modulecolorcycler), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(ms.mt.module))
+        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(ms.mt.module))
 
         printstyled(io, ms.mt.module, color=col)
     elseif '#' in sname
@@ -299,8 +298,6 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             mt.module
         end
 
-    modulecolordict = STACKTRACE_FIXEDCOLORS
-    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
     digit_align_width = length(string(max > 0 ? max : length(ms)))
 
     for meth in ms
@@ -314,7 +311,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
                 nothing
             else
                 m = parentmodule_before_main(meth.module)
-                get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+                get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             end
             show(io, meth; modulecolor)
 

@@ -65,7 +65,8 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 @test length(methods(method_c1)) <= 3 # because of '...' in candidate printing
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m \e[35m$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 

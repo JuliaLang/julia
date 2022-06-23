@@ -405,9 +405,6 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
         end
     end
 
-    modulecolordict = STACKTRACE_FIXEDCOLORS
-    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
-
     for (func, arg_types_param) in funcs
         for method in methods(func)
             buf = IOBuffer()
@@ -546,8 +543,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 println(iob)
 
                 m = parentmodule_before_main(method.module)
-                color = get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+                color = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
                 print_module_path_file(iob, m, string(file), line, color, 1)
+
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
             end
@@ -584,20 +582,17 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
-const STACKTRACE_MODULECOLORS = [:magenta, :cyan, :green, :yellow]
+const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
 function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
-    modulecolordict = STACKTRACE_FIXEDCOLORS
-    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
-
     println(io, "\nStacktrace:")
 
     for (i, (frame, n)) in enumerate(trace)
-        print_stackframe(io, i, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
         if i < num_frames
             println(io)
             print_linebreaks && println(io)
@@ -657,15 +652,12 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     ndigits_max = ndigits(length(t))
 
-    modulecolordict = Dict{Module, Symbol}()
-    modulecolorcycler = Iterators.Stateful(Iterators.cycle(STACKTRACE_MODULECOLORS))
-
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
 
-        print_stackframe(io, frame_counter, frame, n, ndigits_max, modulecolordict, modulecolorcycler)
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
 
         if i < length(displayed_stackframes)
             println(io)
