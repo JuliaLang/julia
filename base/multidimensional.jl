@@ -1880,3 +1880,28 @@ end
 
 getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
 setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
+
+## sortslicesperm
+
+"""
+    sortslicesperm(A; dims, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+
+Return a permutation vector `I` that sorts slices of an array `A`. The required keyword argument `dims` must
+be either an integer or a tuple of integers. It specifies the
+dimension(s) over which the slices are sorted.
+
+E.g., if `A` is a matrix, `dims=1` will sort rows, `dims=2` will sort columns.
+Note that the default comparison function on one dimensional slices sorts
+lexicographically.
+
+For the remaining keyword arguments, see the documentation of [`sort!`](@ref).
+"""
+function sortslicesperm(A::AbstractArray; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
+    _sortslicesperm(A, Val{dims}(); kws...)
+end
+
+function _sortslicesperm(A::AbstractArray, d::Val{dims}; kws...) where dims
+    itspace = compute_itspace(A, d)
+    vecs = map(its->view(A, its...), itspace)
+    p = sortperm(vecs; kws...)
+end
