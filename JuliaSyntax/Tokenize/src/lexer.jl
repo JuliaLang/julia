@@ -678,7 +678,7 @@ function lex_minus(l::Lexer)
         else
             return emit_error(l, Tokens.INVALID_OPERATOR) # "--" is an invalid operator
         end
-    elseif accept(l, '>')
+    elseif !l.dotop && accept(l, '>')
         return emit(l, Tokens.ANON_FUNC)
     elseif accept(l, '=')
         return emit(l, Tokens.MINUS_EQ)
