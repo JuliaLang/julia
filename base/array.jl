@@ -1053,9 +1053,19 @@ function push!(a::Array{T,1}, item) where T
     return a
 end
 
-function push!(a::Array{Any,1}, @nospecialize item)
+# specialize and optimize the single argument case
+function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
-    arrayset(true, a, item, length(a))
+    arrayset(true, a, x, length(a))
+    return a
+end
+function push!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growend!(a, nx)
+    for i = 1:nx
+        arrayset(true, a, x[i], na+i)
+    end
     return a
 end
 
