@@ -29,7 +29,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         val_str = view(source, val_range)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        val = if k in KSet`Integer Float BinInt OctInt HexInt`
+        val = if k in KSet"Integer Float BinInt OctInt HexInt"
             julia_string_to_number(val_str, k)
         elseif k == K"true"
             true
@@ -47,7 +47,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif is_keyword(k)
             # This should only happen for tokens nested inside errors
             Symbol(val_str)
-        elseif k in KSet`String CmdString`
+        elseif k in KSet"String CmdString"
             is_cmd = k == K"CmdString"
             is_raw = has_flags(head(raw), RAW_STRING_FLAG)
             unescape_julia_string(val_str, is_cmd, is_raw)
