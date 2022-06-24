@@ -231,6 +231,8 @@ function optakessuffix(k)
         k == Tokens.CONDITIONAL ||
         k == Tokens.ISSUBTYPE ||
         k == Tokens.ISSUPERTYPE ||
+        k == Tokens.LAZY_AND ||
+        k == Tokens.LAZY_OR ||
         k == Tokens.IN ||
         k == Tokens.ISA ||
         k == Tokens.COLON_EQUALS ||
