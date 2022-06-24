@@ -47,9 +47,25 @@ end
         @test r == [3,1,2]
         @test r === s
     end
-    @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
-    @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
-    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
+    @test_throws ArgumentError sortperm!(view([1, 2, 3, 4], 1:4), [2, 3, 1])
+    @test sortperm(OffsetVector([8.0, -2.0, 0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1, 2], [2.0, 1.0]) == Int32[2, 1]
+    @test_throws ArgumentError sortperm!(Int32[1, 2], [2.0, 1.0]; dims=1)
+    let A = rand(4, 4, 4)
+        for dims = 1:3
+            perm = sortperm(A; dims)
+            sorted = sort(A; dims)
+            @test A[perm] == sorted
+
+            perm_idx = similar(Array{Int}, axes(A))
+            sortperm!(perm_idx, A; dims)
+            @test perm_idx == perm
+        end
+    end
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3);)
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3); dims=3)
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 4), rand(4, 4); dims=1)
+    @test_throws ArgumentError sortperm!(OffsetArray(zeros(Int, 4, 4), -4:-1, 1:4), rand(4, 4); dims=1)
 end
 
 @testset "misc sorting" begin

@@ -1067,7 +1067,7 @@ std::string generate_func_sig(const char *fname)
 {
     assert(rt && !jl_is_abstract_ref_type(rt));
 
-    std::vector<AttrBuilder> paramattrs;
+    std::vector<AttributeSet> paramattrs;
     std::unique_ptr<AbiLayout> abi;
     if (llvmcall)
         abi.reset(new ABI_LLVMLayout());
@@ -1094,7 +1094,7 @@ std::string generate_func_sig(const char *fname)
             retattrs.addStructRetAttr(lrt);
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
-            paramattrs.push_back(std::move(retattrs));
+            paramattrs.push_back(AttributeSet::get(LLVMCtx, retattrs));
             fargt_sig.push_back(PointerType::get(lrt, 0));
             sret = 1;
             prt = lrt;
@@ -1183,25 +1183,18 @@ std::string generate_func_sig(const char *fname)
         fargt.push_back(t);
         fargt_isboxed.push_back(isboxed);
         fargt_sig.push_back(pat);
-#if JL_LLVM_VERSION >= 140000
-        paramattrs.push_back(AttrBuilder(LLVMCtx, AttributeSet::get(LLVMCtx, ab)));
-#else
         paramattrs.push_back(AttributeSet::get(LLVMCtx, ab));
-#endif
     }
 
-    for (size_t i = 0; i < nccallargs + sret; ++i) {
-        const auto &as = paramattrs.at(i);
-        if (!as.hasAttributes())
-            continue;
-        attributes = addAttributesAtIndex(attributes, LLVMCtx, i + 1, as);
-    }
+    AttributeSet FnAttrs;
+    AttributeSet RetAttrs;
     // If return value is boxed it must be non-null.
     if (retboxed)
-        attributes = addRetAttribute(attributes, LLVMCtx, Attribute::NonNull);
-    if (rt == jl_bottom_type) {
-        attributes = addFnAttribute(attributes, LLVMCtx, Attribute::NoReturn);
-    }
+        RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
+    if (rt == jl_bottom_type)
+        FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
+    assert(attributes.isEmpty());
+    attributes = AttributeList::get(LLVMCtx, FnAttrs, RetAttrs, paramattrs);
     return "";
 }
 };
