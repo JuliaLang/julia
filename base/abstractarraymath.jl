@@ -157,13 +157,12 @@ function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) wher
     1 ≤ minimum(dims) || throw(ArgumentError("The smallest entry in dims must be ≥ 1."))
     issorted(dims) || throw(ArgumentError("dims=$(dims) are not sorted"))
 
-    # n is the amount of the dims already inserted
-    ax_n = _foldoneto(((ds, n, dims), _) ->
-                            dims != Tuple(()) && n == first(dims) ?
-                                ((ds..., Base.OneTo(1)), n, tail(dims)) :
-                                ((ds..., axes(A,n)), n+1, dims),
-                         ((), 1, dims), Val(ndims(A) + length(dims)))
-    # we need only the new shape and not n
+    # n is the current index where we maybe insert
+    ax_n = _foldoneto(((ds, n, dims), _) -> 
+                            dims != Tuple(()) && n == first(dims) ? 
+                                ((ds..., Base.OneTo(1)), n, tail(dims)) : 
+                      ((), 1, dims), Val(ndims(A) + length(dims)))
+    # we need only the new shape
     reshape(A, ax_n[1])
 end
 _insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
