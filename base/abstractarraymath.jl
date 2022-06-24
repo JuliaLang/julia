@@ -98,7 +98,7 @@ _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
     insertdims(A; dims)
 
 Return an array with the same data as `A`, but with singleton dimensions specified by
-`dims` inserted. 
+`dims` inserted.
 The dimensions of `A` and `dims` must be contiguous.
 If dimensions occur multiple times in `dims`, several singleton dimensions are inserted.
 
@@ -118,7 +118,7 @@ julia> a = [1 2; 3 4]
 julia> b = insertdims(a, dims=(1,1))
 1×1×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
- 5
+ 1
 
 [:, :, 2, 1] =
  3
@@ -132,7 +132,7 @@ julia> b = insertdims(a, dims=(1,1))
 julia> b = insertdims(a, dims=(1,2))
 1×2×1×2 Array{Int64, 4}:
 [:, :, 1, 1] =
- 5  3
+ 1  3
 
 [:, :, 1, 2] =
  2  4
@@ -158,9 +158,9 @@ function _insertdims(A::AbstractArray{T, N}, dims::Tuple{Vararg{Int64, M}}) wher
     issorted(dims) || throw(ArgumentError("dims=$(dims) are not sorted"))
 
     # n is the amount of the dims already inserted
-    ax_n = _foldoneto(((ds, n, dims), _) -> 
-                            dims != Tuple(()) && n == first(dims) ? 
-                                ((ds..., Base.OneTo(1)), n, tail(dims)) : 
+    ax_n = _foldoneto(((ds, n, dims), _) ->
+                            dims != Tuple(()) && n == first(dims) ?
+                                ((ds..., Base.OneTo(1)), n, tail(dims)) :
                                 ((ds..., axes(A,n)), n+1, dims),
                          ((), 1, dims), Val(ndims(A) + length(dims)))
     # we need only the new shape and not n
