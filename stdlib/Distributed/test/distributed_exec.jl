@@ -1856,6 +1856,26 @@ end end
 
 include("splitrange.jl")
 
+# Clear all workers for timeout tests (issue #45785)
+rmprocs(workers())
+begin
+    # First, assert that we get no messages when we close a cooperative worker
+    w = only(addprocs(1))
+    @test_nowarn begin
+        wait(rmprocs([w]))
+    end
+
+    # Next, ensure we get a log message when a worker does not cleanly exit
+    w = only(addprocs(1))
+    @test_logs (:warn, r"sending SIGTERM") begin
+        remote_do(w) do
+            # Cause the 'exit()' message that `rmprocs()` sends to do nothing
+            Core.eval(Base, :(exit() = nothing))
+        end
+        wait(rmprocs([w]))
+    end
+end
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
