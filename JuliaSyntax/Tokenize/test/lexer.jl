@@ -6,6 +6,8 @@ const T = Tokenize.Tokens
 
 tok(str, i = 1) = collect(tokenize(str))[i]
 
+strtok(str) = untokenize.(collect(tokenize(str)), str)
+
 @testset "tokens" begin
     for s in ["a", IOBuffer("a")]
         l = tokenize(s)
@@ -883,30 +885,13 @@ end
 end
 
 @testset "dotop miscellanea" begin
-    broken_ops = [
-        "a .-> b",
-        ".>: b",
-        ".<: b",
-        "a ||₁ b",
-        "a ||̄ b",
-        "a .||₁ b",
-        "a &&₁ b",
-        "a &&̄ b",
-        "a .&&₁ b",
-    ]
-
-    @test [
-            [Tokenize.untokenize(t, s) for t in Tokenize.tokenize(s)]
-            for s in broken_ops
-        ] == [
-            ["a", " ", ".-", ">", " ", "b", ""],
-            [".>:", " ", "b", ""],
-            [".<:", " ", "b", ""],
-            ["a", " ", "||", "₁", " ", "b", ""],
-            ["a", " ", "||", "̄", " ", "b", ""],
-            ["a", " ", ".||", "₁", " ", "b", ""],
-            ["a", " ", "&&", "₁", " ", "b", ""],
-            ["a", " ", "&&", "̄", " ", "b", ""],
-            ["a", " ", ".&&", "₁", " ", "b", ""],
-        ]
+    @test strtok("a .-> b")  ==  ["a", " ", ".-", ">", " ", "b", ""]
+    @test strtok(".>: b")    ==  [".>:", " ", "b", ""]
+    @test strtok(".<: b")    ==  [".<:", " ", "b", ""]
+    @test strtok("a ||₁ b")  ==  ["a", " ", "||", "₁", " ", "b", ""]
+    @test strtok("a ||̄ b")   ==  ["a", " ", "||", "̄", " ", "b", ""]
+    @test strtok("a .||₁ b") ==  ["a", " ", ".||", "₁", " ", "b", ""]
+    @test strtok("a &&₁ b")  ==  ["a", " ", "&&", "₁", " ", "b", ""]
+    @test strtok("a &&̄ b")   ==  ["a", " ", "&&", "̄", " ", "b", ""]
+    @test strtok("a .&&₁ b") ==  ["a", " ", ".&&", "₁", " ", "b", ""]
 end
