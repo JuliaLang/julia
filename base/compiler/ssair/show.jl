@@ -10,7 +10,7 @@ length(s::String) = Base.length(s)
 end
 
 import Base: show_unquoted
-using Base: printstyled, with_output_color, prec_decl
+using Base: printstyled, with_output_color, prec_decl, @invoke
 
 function Base.show(io::IO, cfg::CFG)
     for (idx, block) in enumerate(cfg.blocks)
@@ -817,7 +817,7 @@ function Base.show(io::IO, t::TriState)
     if s !== nothing
         printstyled(io, s; color = tristate_color(t))
     else # unknown state, redirect to the fallback printing
-        Base.@invoke show(io::IO, t::Any)
+        @invoke show(io::IO, t::Any)
     end
 end
 

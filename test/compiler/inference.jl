@@ -2129,7 +2129,7 @@ end
     # `InterConditional` handling: `abstract_invoke`
     ispositive(a) = isa(a, Int) && a > 0
     @test Base.return_types((Any,)) do a
-        if Base.@invoke ispositive(a::Any)
+        if @invoke ispositive(a::Any)
             return a
         end
         return 0
@@ -2297,7 +2297,7 @@ end
 
     # work with `invoke`
     @test Base.return_types((Any,Any)) do x, y
-        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+        @invoke ifelselike(isa(x, Int), x::Any, y::Int)
     end |> only == Int
 
     # don't be confused with vararg method
@@ -3766,16 +3766,16 @@ end
         f(a::Number, sym::Bool) = sym ? Number : :number
     end
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Any, true::Bool)
+        @invoke f(a::Any, true::Bool)
     end) == Any[Type{Any}]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Number, true::Bool)
+        @invoke f(a::Number, true::Bool)
     end) == Any[Type{Number}]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Any, false::Bool)
+        @invoke f(a::Any, false::Bool)
     end) == Any[Symbol]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Number, false::Bool)
+        @invoke f(a::Number, false::Bool)
     end) == Any[Symbol]
 
     # https://github.com/JuliaLang/julia/issues/41024
@@ -3790,7 +3790,7 @@ end
         abstract type AbstractInterfaceExtended <: AbstractInterface end
         Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
             sym === :y ? getfield(x, sym)::Rational{Int} :
-            return Base.@invoke getproperty(x::AbstractInterface, sym::Symbol)
+            return @invoke getproperty(x::AbstractInterface, sym::Symbol)
     end
     @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
         x.x
@@ -4110,7 +4110,7 @@ end
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
 increase_x44763!(n) = (global x44763; x44763 += n)
-invoke44763(x) = Base.@invoke increase_x44763!(x)
+invoke44763(x) = @invoke increase_x44763!(x)
 @test Base.return_types() do
     invoke44763(42)
 end |> only === Int
