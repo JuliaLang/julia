@@ -96,7 +96,8 @@ Each statement gets analyzed for its total cost in a function called
 as follows:
 ```jldoctest; filter=r"tuple.jl:\d+"
 julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
-map(f, t::Tuple{Any}) in Base at tuple.jl:179
+map(f, t::Tuple{Any})
+     @ Base tuple.jl:273
   0 1 ─ %1  = Base.getfield(_3, 1, true)::Int64
   1 │   %2  = Base.sitofp(Float64, %1)::Float64
   2 │   %3  = Base.lt_float(%2, 0.0)::Bool

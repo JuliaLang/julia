@@ -2943,7 +2943,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else if (fld.constant && fld.typ == (jl_value_t*)jl_long_type) {
             ssize_t i = jl_unbox_long(fld.constant);
-            if (i > 0 && i <= jl_datatype_nfields(uty))
+            if (i > 0 && i <= (ssize_t)jl_datatype_nfields(uty))
                 idx = i - 1;
         }
         if (idx != -1) {
