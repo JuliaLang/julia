@@ -3,8 +3,6 @@
 #include "llvm-version.h"
 #include "passes.h"
 
-#define DEBUG_TYPE "lower_simd_loop"
-
 // This file defines a LLVM pass that:
 // 1. Set's loop information in form of metadata
 // 2. If the metadata contains `julia.simdloop` finds reduction chains and marks
@@ -29,6 +27,8 @@
 #include <llvm/Support/Debug.h>
 
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "lower_simd_loop"
 
 using namespace llvm;
 

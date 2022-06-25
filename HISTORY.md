@@ -3293,7 +3293,7 @@ Deprecated or removed
      array interface should define their own `strides` method ([#25321]).
 
   * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated
-    in favor of `parentmodule` ([#TODO]).
+    in favor of `parentmodule` ([#25629]).
 
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
@@ -3666,6 +3666,7 @@ Command-line option changes
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
+[#25629]: https://github.com/JuliaLang/julia/issues/25629
 [#25631]: https://github.com/JuliaLang/julia/issues/25631
 [#25633]: https://github.com/JuliaLang/julia/issues/25633
 [#25634]: https://github.com/JuliaLang/julia/issues/25634

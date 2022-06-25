@@ -1108,10 +1108,10 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atype, sparams)
+    may_invoke_generator(method, atype, sparams) -> Bool
 
 Computes whether or not we may invoke the generator for the given `method` on
-the given atype and sparams. For correctness, all generated function are
+the given `atype` and `sparams`. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
 functions on concrete types. The one exception to this is that we allow calling
@@ -1122,8 +1122,8 @@ computes whether we are in either of these cases.
 Unlike normal functions, the compilation heuristics still can't generate good dispatch
 in some cases, but this may still allow inference not to fall over in some limited cases.
 """
-function may_invoke_generator(method::MethodInstance)
-    return may_invoke_generator(method.def::Method, method.specTypes, method.sparam_vals)
+function may_invoke_generator(mi::MethodInstance)
+    return may_invoke_generator(mi.def::Method, mi.specTypes, mi.sparam_vals)
 end
 function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
@@ -1421,10 +1421,8 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         effects = Core.Compiler.EFFECTS_TOTAL
         matches = _methods(f, types, -1, world)::Vector
         if isempty(matches)
-            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
-            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
-            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
-            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
+            # this call is known to throw MethodError
+            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.ALWAYS_FALSE)
         end
         for match in matches
             match = match::Core.MethodMatch

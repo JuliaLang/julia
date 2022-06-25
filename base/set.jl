@@ -458,7 +458,7 @@ function _hashed_allunique(C)
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
-            v, s = x
+            v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
         end

@@ -2057,6 +2057,7 @@ extern JL_DLLEXPORT JL_STREAM *JL_STDERR;
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void);
+JL_DLLEXPORT int jl_getch(void);
 
 // showing and std streams
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;

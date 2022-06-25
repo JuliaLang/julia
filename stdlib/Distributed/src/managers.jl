@@ -725,3 +725,26 @@ function kill(manager::SSHManager, pid::Int, config::WorkerConfig)
     cancel_ssh_tunnel(config)
     nothing
 end
+
+function kill(manager::LocalManager, pid::Int, config::WorkerConfig; exit_timeout = 15, term_timeout = 15)
+    # First, try sending `exit()` to the remote over the usual control channels
+    remote_do(exit, pid)
+
+    timer_task = @async begin
+        sleep(exit_timeout)
+
+        # Check to see if our child exited, and if not, send an actual kill signal
+        if !process_exited(config.process)
+            @warn("Failed to gracefully kill worker $(pid), sending SIGTERM")
+            kill(config.process, Base.SIGTERM)
+
+            sleep(term_timeout)
+            if !process_exited(config.process)
+                @warn("Worker $(pid) ignored SIGTERM, sending SIGKILL")
+                kill(config.process, Base.SIGKILL)
+            end
+        end
+    end
+    errormonitor(timer_task)
+    return nothing
+end

@@ -935,7 +935,9 @@ function handle_single_case!(
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)
         if is_removable_if_unused(case.effects)
-            ir[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE
+            ir[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        elseif is_nothrow(case.effects)
+            ir[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
         end
     elseif case === nothing
         # Do, well, nothing
@@ -1138,11 +1140,13 @@ end
 # For primitives, we do that right here. For proper calls, we will
 # discover this when we consult the caches.
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt))
-    if stmt_effect_free(stmt, rt, ir)
-        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
-        return true
+    (total, nothrow) = stmt_effect_flags(stmt, rt, ir)
+    if total
+        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif nothrow
+        ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
     end
-    return false
+    return total
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,

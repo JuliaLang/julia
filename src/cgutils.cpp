@@ -424,21 +424,16 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
-static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *jt)
+static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt)
 {
-#if JL_LLVM_VERSION >= 140000
-    AttrBuilder B(A->getContext());
-#else
-    AttrBuilder B;
-#endif
     B.addAttribute(Attribute::NonNull);
+    B.addAttribute(Attribute::NoUndef);
     // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
     size_t size = dereferenceable_size(jt);
     if (size) {
         B.addDereferenceableAttr(size);
         B.addAlignmentAttr(julia_alignment(jt));
     }
-    A->addAttrs(B);
 }
 
 static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null,
@@ -605,7 +600,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
 {
     assert(jl_is_primitivetype(bt));
     if (bt == (jl_value_t*)jl_bool_type)
-        return getInt8Ty(ctxt);
+        return llvmcall ? getInt1Ty(ctxt) : getInt8Ty(ctxt);
     if (bt == (jl_value_t*)jl_int32_type)
         return getInt32Ty(ctxt);
     if (bt == (jl_value_t*)jl_int64_type)

@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <stdint.h>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
@@ -496,7 +497,7 @@ static auto countBasicBlocks(const Function &F)
 }
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
-    size_t optlevel = ~0ull;
+    size_t optlevel = SIZE_MAX;
     TSM.withModuleDo([&](Module &M) {
         if (jl_generating_output()) {
             optlevel = 0;
@@ -518,7 +519,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
             optlevel = std::min(std::max(optlevel, optlevel_min), this->count);
         }
     });
-    assert(optlevel != ~0ull && "Failed to select a valid optimization level!");
+    assert(optlevel != SIZE_MAX && "Failed to select a valid optimization level!");
     this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
 }
 
@@ -934,7 +935,7 @@ namespace {
                             // Each function is printed as a YAML object with several attributes
                             jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
                             jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                         }
 
                         start_time = jl_hrtime();
@@ -962,7 +963,7 @@ namespace {
                             }
                             jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
                             jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                         }
                     }
                 }
@@ -1459,17 +1460,21 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
 static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
-    ArrayType *atype = ArrayType::get(Type::getInt32Ty(M.getContext()), 3); // want 4-byte alignment of 12-bytes of data
-    GlobalVariable *gvs[2] = {
-        new GlobalVariable(M, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__UnwindData"),
-        new GlobalVariable(M, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__catchjmp") };
-    gvs[0]->setSection(".text");
-    gvs[1]->setSection(".text");
-    appendToCompilerUsed(M, makeArrayRef((GlobalValue**)gvs, 2));
+    // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
+    // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
+    M.appendModuleInlineAsm("\
+    .section .text                  \n\
+    .type   __UnwindData,@object    \n\
+    .p2align        2, 0x90         \n\
+    __UnwindData:                   \n\
+        .zero   12                  \n\
+        .size   __UnwindData, 12    \n\
+                                    \n\
+        .type   __catchjmp,@object  \n\
+        .p2align        2, 0x90     \n\
+    __catchjmp:                     \n\
+        .zero   12                  \n\
+        .size   __catchjmp, 12");
 #endif
 }
 
