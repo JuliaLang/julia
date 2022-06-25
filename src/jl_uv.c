@@ -924,9 +924,9 @@ JL_DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
     // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
     //jl_printf(JL_STDERR,"pipe_name: %s\n", name);
     int n = 0;
-    if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
+    if (!strncmp_fast(name,"\\\\?\\pipe\\msys-",14))
         n = 14;
-    else if (!strncmp(name,"\\\\?\\pipe\\cygwin-",16))
+    else if (!strncmp_fast(name,"\\\\?\\pipe\\cygwin-",16))
         n = 16;
     else
         return 0;

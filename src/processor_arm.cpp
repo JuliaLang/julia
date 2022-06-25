@@ -791,7 +791,7 @@ static inline void get_cpuinfo_sysfs(std::set<CPUID> &res)
     while (auto entry = readdir(dir)) {
         if (entry->d_type != DT_DIR)
             continue;
-        if (strncmp(entry->d_name, "cpu", 3) != 0)
+        if (strncmp_fast(entry->d_name, "cpu", 3) != 0)
             continue;
         std::string stm;
         llvm::raw_string_ostream(stm) << "/sys/devices/system/cpu/" << entry->d_name << "/regs/identification/midr_el1";

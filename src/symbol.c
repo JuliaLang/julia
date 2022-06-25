@@ -58,7 +58,7 @@ static jl_sym_t *symtab_lookup(_Atomic(jl_sym_t*) *ptree, const char *str, size_
     while (node != NULL) {
         intptr_t x = (intptr_t)(h - node->hash);
         if (x == 0) {
-            x = strncmp(str, jl_symbol_name(node), len);
+            x = strncmp_fast(str, jl_symbol_name(node), len);
             if (x == 0 && jl_symbol_name(node)[len] == 0) {
                 if (slot != NULL)
                     *slot = ptree;

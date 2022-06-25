@@ -2203,6 +2203,8 @@ typedef struct {
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 
+extern JL_DLLEXPORT int strncmp_fast( const char *ptr0, const char *ptr1, int len);
+
 #ifdef __cplusplus
 }
 #endif

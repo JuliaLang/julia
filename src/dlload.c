@@ -190,7 +190,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     const char *const atPaths[] = {"@executable_path/", "@loader_path/", "@rpath/"};
     for (i = 0; i < sizeof(atPaths)/sizeof(char*); ++i) {
         size_t atLen = strlen(atPaths[i]);
-        if (nameLen >= atLen && 0 == strncmp(modname, atPaths[i], atLen)) {
+        if (nameLen >= atLen && 0 == strncmp_fast(modname, atPaths[i], atLen)) {
             is_atpath = 1;
         }
     }
@@ -217,7 +217,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     continue;
 
                 // Is this entry supposed to be relative to the bindir?
-                if (len >= 16 && strncmp(dl_path, "@executable_path", 16) == 0) {
+                if (len >= 16 && strncmp_fast(dl_path, "@executable_path", 16) == 0) {
                     snprintf(relocated, PATHBUF, "%s%s", jl_options.julia_bindir, dl_path + 16);
                     len = len - 16 + strlen(jl_options.julia_bindir);
                 } else {

@@ -451,10 +451,10 @@ restart_switch:
             errno = 0;
             jl_options.nthreadpools = 1;
             long nthreads = -1, nthreadsi = 0;
-            if (!strncmp(optarg, "auto", 4)) {
+            if (!strncmp_fast(optarg, "auto", 4)) {
                 jl_options.nthreads = -1;
                 if (optarg[4] == ',') {
-                    if (!strncmp(&optarg[5], "auto", 4))
+                    if (!strncmp_fast(&optarg[5], "auto", 4))
                         nthreadsi = 1;
                     else {
                         errno = 0;
@@ -470,7 +470,7 @@ restart_switch:
                 if (errno != 0 || optarg == endptr || nthreads < 1 || nthreads >= INT16_MAX)
                     jl_errorf("julia: -t,--threads=<n>[,auto|<m>]; n must be an integer >= 1");
                 if (*endptr == ',') {
-                    if (!strncmp(&endptr[1], "auto", 4))
+                    if (!strncmp_fast(&endptr[1], "auto", 4))
                         nthreadsi = 1;
                     else {
                         errno = 0;
@@ -561,7 +561,7 @@ restart_switch:
                         codecov = JL_LOG_ALL;
                     jl_options.output_code_coverage = optarg;
                 }
-                else if (!strncmp(optarg, "@", 1)) {
+                else if (!strncmp_fast(optarg, "@", 1)) {
                     codecov = JL_LOG_PATH;
                     jl_options.tracked_path = optarg + 1; // skip `@`
                 }
@@ -581,7 +581,7 @@ restart_switch:
                     malloclog = JL_LOG_ALL;
                 else if (!strcmp(optarg,"none"))
                     malloclog = JL_LOG_NONE;
-                else if (!strncmp(optarg, "@", 1)) {
+                else if (!strncmp_fast(optarg, "@", 1)) {
                     malloclog = JL_LOG_PATH;
                     jl_options.tracked_path = optarg + 1; // skip `@`
                 }

@@ -2025,7 +2025,7 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
         const char *t = jl_options.trace_compile;
-        if (!strncmp(t, "stderr", 6)) {
+        if (!strncmp_fast(t, "stderr", 6)) {
             s_precompile = JL_STDERR;
         }
         else {

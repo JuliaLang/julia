@@ -381,7 +381,7 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
 {
     for (size_t i = 0; i < nfeatures; i++) {
         auto &feature = features[i];
-        if (strncmp(feature.name, str, len) == 0 && feature.name[len] == 0) {
+        if (strncmp_fast(feature.name, str, len) == 0 && feature.name[len] == 0) {
             return feature.bit;
         }
     }

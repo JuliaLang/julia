@@ -490,7 +490,7 @@ void jl_init_threading(void)
             nthreadsi = jl_options.nthreads_per_pool[1];
     }
     else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
-        if (!strncmp(cp, "auto", 4)) {
+        if (!strncmp_fast(cp, "auto", 4)) {
             nthreads = jl_effective_threads();
             cp += 4;
         }
@@ -503,7 +503,7 @@ void jl_init_threading(void)
         }
         if (*cp == ',') {
             cp++;
-            if (!strncmp(cp, "auto", 4))
+            if (!strncmp_fast(cp, "auto", 4))
                 nthreadsi = 1;
             else {
                 errno = 0;
