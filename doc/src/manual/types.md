@@ -186,7 +186,7 @@ numbers include floating-point types, but also include other types, such as rati
 `AbstractFloat` includes only floating-point representations of real numbers. Integers
 are further subdivided into [`Signed`](@ref) and [`Unsigned`](@ref) varieties.
 
-The `<:` operator in general means "is a subtype of", and, used in declarations like those above, 
+The `<:` operator in general means "is a subtype of", and, used in declarations like those above,
 declares the right-hand type to be an immediate supertype of the newly declared type. It can also
 be used in expressions as a subtype operator which returns `true` when its left operand is a
 subtype of its right operand:
