@@ -3121,7 +3121,7 @@ mktempdir() do dir
             catch
             end
 
-            loopback = ip"127.0.0.1"
+            loopbacks = (ip"127.0.0.1", ip"::1")
             for hostname in hostnames
                 local addr
                 try
@@ -3130,7 +3130,7 @@ mktempdir() do dir
                     continue
                 end
 
-                if addr == loopback
+                if addr ∈ loopbacks
                     common_name = hostname
                     break
                 end
