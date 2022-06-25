@@ -1376,25 +1376,29 @@ let src = code_typed1() do
     @test count(isinvoke(:noinline_finalizer), src.code) == 1
 end
 
-# optimize `push!(::Vector{Any}, x...)`
-let src = code_typed1((Vector{Any}, Any)) do xs, x
-        push!(xs, x)
+# optimize `[push!|pushfirst!](::Vector{Any}, x...)`
+@testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
+    @eval begin
+        let src = code_typed1((Vector{Any}, Any)) do xs, x
+                $f(xs, x)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+            @test count(src.code) do @nospecialize x
+                isa(x, Core.GotoNode) ||
+                isa(x, Core.GotoIfNot) ||
+                iscall((src, getfield))(x)
+            end == 0 # no loop should be involved for the common single arg case
+        end
+        let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
+                $f(xs, x, y)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+        end
+        let xs = Any[]
+            $f(xs, :x, "y", 'z')
+            @test xs[1] === :x
+            @test xs[2] == "y"
+            @test xs[3] === 'z'
+        end
     end
-    @test count(iscall((src, push!)), src.code) == 0
-    @test count(src.code) do @nospecialize x
-        isa(x, Core.GotoNode) ||
-        isa(x, Core.GotoIfNot) ||
-        iscall((src, getfield))(x)
-    end == 0 # no loop should be involved for the common single arg case
-end
-let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
-        push!(xs, x, y)
-    end
-    @test count(iscall((src, push!)), src.code) == 0
-end
-let xs = Any[]
-    push!(xs, :x, "y", 'z')
-    @test xs[1] === :x
-    @test xs[2] == "y"
-    @test xs[3] === 'z'
 end

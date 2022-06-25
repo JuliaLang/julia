@@ -1395,6 +1395,22 @@ function pushfirst!(a::Array{T,1}, item) where T
     return a
 end
 
+# specialize and optimize the single argument case
+function pushfirst!(a::Vector{Any}, @nospecialize x)
+    _growbeg!(a, 1)
+    a[1] = x
+    return a
+end
+function pushfirst!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growbeg!(a, nx)
+    for i = 1:nx
+        a[i] = x[i]
+    end
+    return a
+end
+
 """
     popfirst!(collection) -> item
 
