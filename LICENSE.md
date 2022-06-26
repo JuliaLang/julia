@@ -21,4 +21,4 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-Please see [THIRDPARTY.md](./THIRDPARTY.md) or the [Julia SPDX](./julia.spdx.json) file for license information for other software used in this project.
+[THIRDPARTY.md](./THIRDPARTY.md) and the [Julia SPDX](./julia.spdx.json) file include license information for other software used in this project.
