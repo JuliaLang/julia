@@ -1679,7 +1679,7 @@ JL_NORETURN NOINLINE void gc_assert_datatype_fail(jl_ptls_t ptls, jl_datatype_t 
     jl_gc_debug_print_status();
     jl_(vt);
     jl_gc_debug_critical_error();
-    // gc_mark_loop_unwind(ptls, sp, 0);
+    gc_mark_loop_unwind(ptls, mq, 0);
     abort();
 }
 

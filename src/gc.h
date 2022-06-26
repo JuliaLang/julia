@@ -41,7 +41,6 @@ extern "C" {
 typedef struct {
     uint64_t num;
     uint64_t next;
-
     uint64_t min;
     uint64_t interv;
     uint64_t max;
@@ -510,7 +509,7 @@ extern int gc_verifying;
 #endif
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
-// NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, int pc_offset);
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int pc_offset);
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
