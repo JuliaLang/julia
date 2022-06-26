@@ -1017,7 +1017,13 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
+        @inline function $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true)
+            if size(r) == size(A) 
+                copyto!(r, A)
+                return r
+            end
+            $(fname!)(identity, r, A; init=init)
+        end
 
         $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
         $(_fname)(f, A, dims; kw...) = mapreduce($mapf, $(op), A; dims=dims, kw...)
