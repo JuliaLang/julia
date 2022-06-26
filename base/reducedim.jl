@@ -526,6 +526,9 @@ sum(f, A::AbstractArray; dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+!!! warning
+   Incorrect result may occur when `r` and `A` are (partially) overlapping / alias. 
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -598,6 +601,9 @@ prod(f, A::AbstractArray; dims)
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+!!! warning
+   Incorrect result may occur when `r` and `A` are (partially) overlapping / alias. 
 
 # Examples
 ```jldoctest
@@ -893,6 +899,9 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
+!!! warning
+   Incorrect result may occur when `r` and `A` are (partially) overlapping / alias. 
+
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
@@ -965,6 +974,9 @@ any(::Function, ::AbstractArray; dims)
 
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
+
+!!! warning
+   Incorrect result may occur when `r` and `A` are (partially) overlapping / alias. 
 
 # Examples
 ```jldoctest
