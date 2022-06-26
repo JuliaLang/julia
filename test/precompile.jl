@@ -106,16 +106,18 @@ precompile_test_harness(false) do dir
     write(Foo2_file,
           """
           module $Foo2_module
-              export override
+              export override, overridenc
               override(x::Integer) = 2
               override(x::AbstractFloat) = Float64(override(1))
+              overridenc(x::Integer) = rand()+1
+              overridenc(x::AbstractFloat) = Float64(overridenc(1))
           end
           """)
     write(Foo_file,
           """
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA
-              import $Foo2_module: $Foo2_module, override
+              import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
               module Inner
@@ -221,6 +223,8 @@ precompile_test_harness(false) do dir
 
               g() = override(1.0)
               Test.@test g() === 2.0 # compile this
+              gnc() = overridenc(1.0)
+              Test.@test 1 < gnc() < 5 # compile this
 
               const abigfloat_f() = big"12.34"
               const abigfloat_x = big"43.21"
@@ -257,6 +261,8 @@ precompile_test_harness(false) do dir
     Foo2 = Base.require(Main, Foo2_module)
     @eval $Foo2.override(::Int) = 'a'
     @eval $Foo2.override(::Float32) = 'b'
+    @eval $Foo2.overridenc(::Int) = rand() + 97.0
+    @eval $Foo2.overridenc(::Float32) = rand() + 100.0
 
     Foo = Base.require(Main, Foo_module)
     Base.invokelatest() do # use invokelatest to see the results of loading the compile
@@ -265,9 +271,13 @@ precompile_test_harness(false) do dir
 
         # Issue #21307
         @test Foo.g() === 97.0
+        @test 96 < Foo.gnc() < 99
         @test Foo.override(1.0e0) == Float64('a')
         @test Foo.override(1.0f0) == 'b'
         @test Foo.override(UInt(1)) == 2
+        @test 96 < Foo.overridenc(1.0e0) < 99
+        @test 99 < Foo.overridenc(1.0f0) < 102
+        @test 0 < Foo.overridenc(UInt(1)) < 3
 
         # Issue #15722
         @test Foo.abigfloat_f()::BigFloat == big"12.34"
@@ -873,6 +883,92 @@ precompile_test_harness("code caching") do dir
     @test hasvalid(mi, world)       # was compiled with the new method
 end
 
+precompile_test_harness("invoke") do dir
+    InvokeModule = :Invoke0x030e7e97c2365aad
+    CallerModule = :Caller0x030e7e97c2365aad
+    write(joinpath(dir, "$InvokeModule.jl"),
+          """
+          module $InvokeModule
+              export f, g, h, fnc, gnc, hnc   # nc variants do not infer to a Const
+              # f is for testing invoke that occurs within a dependency
+              f(x::Real) = 0
+              f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
+              fnc(x::Real) = rand()-1
+              fnc(x::Int) = x < 5 ? rand()+1 : invoke(fnc, Tuple{Real}, x)
+              # g is for testing invoke that occurs from a dependent
+              g(x::Real) = 0
+              g(x::Int) = 1
+              gnc(x::Real) = rand()-1
+              gnc(x::Int) = rand()+1
+              # h will be entirely superseded by a new method (full invalidation)
+              h(x::Real) = 0
+              h(x::Int) = x < 5 ? 1 : invoke(h, Tuple{Integer}, x)
+              hnc(x::Real) = rand()-1
+              hnc(x::Int) = x < 5 ? rand()+1 : invoke(hnc, Tuple{Integer}, x)
+          end
+          """)
+          write(joinpath(dir, "$CallerModule.jl"),
+          """
+          module $CallerModule
+              using $InvokeModule
+              # involving external modules
+              callf(x) = f(x)
+              callg(x) = x < 5 ? g(x) : invoke(g, Tuple{Real}, x)
+              callh(x) = h(x)
+              callfnc(x) = fnc(x)
+              callgnc(x) = x < 5 ? gnc(x) : invoke(gnc, Tuple{Real}, x)
+              callhnc(x) = hnc(x)
+
+              # Purely internal
+              internal(x::Real) = 0
+              internal(x::Int) = x < 5 ? 1 : invoke(internal, Tuple{Real}, x)
+              internalnc(x::Real) = rand()-1
+              internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
+
+              # force precompilation
+              begin
+                  Base.Experimental.@force_compile
+                  callf(3)
+                  callg(3)
+                  callh(3)
+                  callfnc(3)
+                  callgnc(3)
+                  callhnc(3)
+                  internal(3)
+                  internalnc(3)
+              end
+
+              # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
+              $InvokeModule.h(x::Integer) = -1
+              $InvokeModule.hnc(x::Integer) = rand() - 20
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(CallerModule)))
+    @eval using $CallerModule
+    M = getfield(@__MODULE__, CallerModule)
+
+    function get_real_method(func)   # return the method func(::Real)
+        for m in methods(func)
+            m.sig.parameters[end] === Real && return m
+        end
+        error("no ::Real method found for $func")
+    end
+
+    for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
+        m = get_real_method(func)
+        mi = m.specializations[1]
+        @test length(mi.backedges) == 2
+        @test mi.backedges[1] === Tuple{typeof(func), Real}
+        @test isa(mi.backedges[2], Core.MethodInstance)
+        @test mi.cache.max_world == typemax(mi.cache.max_world)
+    end
+
+    m = get_real_method(M.h)
+    @test isempty(m.specializations)
+    m = get_real_method(M.hnc)
+    @test isempty(m.specializations)
+end
+
 # test --compiled-modules=no command line option
 precompile_test_harness("--compiled-modules=no") do dir
     Time_module = :Time4b3a94a1a081a8cb
@@ -1069,13 +1165,21 @@ precompile_test_harness("delete_method") do dir
           """
           module $A_module
 
-          export apc, anopc
+          export apc, anopc, apcnc, anopcnc
 
+          # Infer to a const
           apc(::Int, ::Int) = 1
           apc(::Any, ::Any) = 2
 
           anopc(::Int, ::Int) = 1
           anopc(::Any, ::Any) = 2
+
+          # Do not infer to a const
+          apcnc(::Int, ::Int) = rand() - 1
+          apcnc(::Any, ::Any) = rand() + 1
+
+          anopcnc(::Int, ::Int) = rand() - 1
+          anopcnc(::Any, ::Any) = rand() + 1
 
           end
           """)
@@ -1087,19 +1191,26 @@ precompile_test_harness("delete_method") do dir
 
           bpc(x) = apc(x, x)
           bnopc(x) = anopc(x, x)
+          bpcnc(x) = apcnc(x, x)
+          bnopcnc(x) = anopcnc(x, x)
 
           precompile(bpc, (Int,))
           precompile(bpc, (Float64,))
+          precompile(bpcnc, (Int,))
+          precompile(bpcnc, (Float64,))
 
           end
           """)
     A = Base.require(Main, A_module)
-    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
-        Base.delete_method(mths[1])
+    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)), collect(methods(A.apcnc)), collect(methods(A.anopcnc)))
+        idx = findfirst(m -> m.sig.parameters[end] === Int, mths)
+        Base.delete_method(mths[idx])
     end
     B = Base.require(Main, B_module)
-    @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
-    @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
+    for f in (B.bpc, B.bnopc, B.bpcnc, B.bnopcnc)
+        @test Base.invokelatest(f, 1) > 1
+        @test Base.invokelatest(f, 1.0) > 1
+    end
 end
 
 precompile_test_harness("Issues #19030 and #25279") do load_path

@@ -62,6 +62,10 @@ intersect!(et::EdgeTracker, range::WorldRange) =
     et.valid_worlds[] = intersect(et.valid_worlds[], range)
 
 push!(et::EdgeTracker, mi::MethodInstance) = push!(et.edges, mi)
+function add_edge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
+    invokesig === nothing && return push!(et.edges, mi)
+    push!(et.edges, invokesig, mi)
+end
 function push!(et::EdgeTracker, ci::CodeInstance)
     intersect!(et, WorldRange(min_world(li), max_world(li)))
     push!(et, ci.def)

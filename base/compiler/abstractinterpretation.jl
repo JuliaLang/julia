@@ -801,6 +801,13 @@ function collect_const_args(argtypes::Vector{Any})
                 end for i = 2:length(argtypes) ]
 end
 
+function invoke_signature(invokesig::Vector{Any})
+    unwrapconst(x) = isa(x, Const) ? x.val : x
+
+    f, argtyps = unwrapconst(invokesig[2]), unwrapconst(invokesig[3])
+    return Tuple{typeof(f), unwrap_unionall(argtyps).parameters...}
+end
+
 function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
     concrete_eval_eligible(interp, f, result, arginfo, sv) || return nothing
@@ -1631,7 +1638,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, sv)
     (; rt, edge, effects) = result
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
+    edge !== nothing && add_backedge!(edge::MethodInstance, sv, argtypes)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types

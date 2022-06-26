@@ -337,9 +337,10 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     if (!mi->backedges) {
         return 0;
     }
-    size_t i, n = jl_array_len(mi->backedges);
-    for (i = 0; i < n; i++) {
-        jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, i);
+    size_t i = 0, n = jl_array_len(mi->backedges);
+    jl_method_instance_t *be;
+    while (i < n) {
+        i = get_next_backedge(mi->backedges, i, NULL, &be);
         if (has_backedge_to_worklist(be, visited)) {
             bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
             *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
@@ -369,7 +370,8 @@ static size_t queue_external_mis(jl_array_t *list)
                     jl_code_instance_t *ci = mi->cache;
                     int relocatable = 0;
                     while (ci) {
-                        relocatable |= ci->relocatability;
+                        if (ci->max_world == ~(size_t)0)
+                            relocatable |= ci->relocatability;
                         ci = ci->next;
                     }
                     if (relocatable && ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
@@ -947,12 +949,16 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (backedges) {
             // filter backedges to only contain pointers
             // to items that we will actually store (internal >= 2)
-            size_t ins, i, l = jl_array_len(backedges);
-            jl_method_instance_t **b_edges = (jl_method_instance_t**)jl_array_data(backedges);
-            for (ins = i = 0; i < l; i++) {
-                jl_method_instance_t *backedge = b_edges[i];
+            size_t ins = 0, i = 0, l = jl_array_len(backedges);
+            jl_value_t **b_edges = (jl_value_t**)jl_array_data(backedges);
+            jl_value_t *invokeTypes;
+            jl_method_instance_t *backedge;
+            while (i < l) {
+                i = get_next_backedge(backedges, i, &invokeTypes, &backedge);
                 if (module_in_worklist(backedge->def.method->module) || method_instance_in_queue(backedge)) {
-                    b_edges[ins++] = backedge;
+                    if (invokeTypes)
+                        b_edges[ins++] = invokeTypes;
+                    b_edges[ins++] = (jl_value_t*)backedge;
                 }
             }
             if (ins != l)
@@ -1168,7 +1174,9 @@ static void jl_collect_missing_backedges_to_mod(jl_methtable_t *mt)
             jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller);
             if (*edges == HT_NOTFOUND)
                 *edges = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(*edges, missing_callee);
+            // To stay synchronized with the format from MethodInstances (specifically for `invoke`d calls),
+            // we have to push a pair of values. But in this case the callee is unknown, so we leave it NULL.
+            push_backedge(*edges, missing_callee, NULL);
         }
     }
 }
@@ -1178,13 +1186,15 @@ static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
 {
     jl_array_t *backedges = callee->backedges;
     if (backedges) {
-        size_t i, l = jl_array_len(backedges);
-        for (i = 0; i < l; i++) {
-            jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
+        size_t i = 0, l = jl_array_len(backedges);
+        jl_value_t *invokeTypes;
+        jl_method_instance_t *caller;
+        while (i < l) {
+            i = get_next_backedge(backedges, i, &invokeTypes, &caller);
             jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, caller);
             if (*edges == HT_NOTFOUND)
                 *edges = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(*edges, (jl_value_t*)callee);
+            push_backedge(*edges, invokeTypes, callee);
         }
     }
 }
@@ -1268,6 +1278,15 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL
     }
 }
 
+static void register_backedge(htable_t *all_callees, jl_value_t *invokeTypes, jl_value_t *c)
+{
+    if (invokeTypes)
+        ptrhash_put(all_callees, invokeTypes, c);
+    else
+        ptrhash_put(all_callees, c, c);
+
+}
+
 // flatten the backedge map reachable from caller into callees
 static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_callees) JL_GC_DISABLED
 {
@@ -1278,11 +1297,13 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_
                     *callees = *pcallees;
         assert(callees != HT_NOTFOUND);
         *pcallees = (jl_array_t*) HT_NOTFOUND;
-        size_t i, l = jl_array_len(callees);
-        for (i = 0; i < l; i++) {
-            jl_value_t *c = jl_array_ptr_ref(callees, i);
-            ptrhash_put(all_callees, c, c);
-            if (jl_is_method_instance(c)) {
+        size_t i = 0, l = jl_array_len(callees);
+        jl_method_instance_t *c;
+        jl_value_t *invokeTypes;
+        while (i < l) {
+            i = get_next_backedge(callees, i, &invokeTypes, &c);
+            register_backedge(all_callees, invokeTypes, (jl_value_t*)c);
+            if (c && jl_is_method_instance(c)) {
                 jl_collect_backedges_to((jl_method_instance_t*)c, all_callees);
             }
         }
@@ -1297,6 +1318,8 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
     htable_t all_callees;         // MIs called by worklist methods (eff. Set{MethodInstance})
     htable_new(&all_targets, 0);
     htable_new(&all_callees, 0);
+    jl_value_t *invokeTypes;
+    jl_method_instance_t *c;
     size_t i;
     void **table = edges_map.table;    // edges is caller => callees
     size_t table_size = edges_map.size;
@@ -1309,10 +1332,10 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
             continue;
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
         if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller)) {
-            size_t i, l = jl_array_len(callees);
-            for (i = 0; i < l; i++) {
-                jl_value_t *c = jl_array_ptr_ref(callees, i);
-                ptrhash_put(&all_callees, c, c);
+            size_t i = 0, l = jl_array_len(callees);
+            while (i < l) {
+                i = get_next_backedge(callees, i, &invokeTypes, &c);
+                register_backedge(&all_callees, invokeTypes, (jl_value_t*)c);
                 if (jl_is_method_instance(c)) {
                     jl_collect_backedges_to((jl_method_instance_t*)c, &all_callees);
                 }
@@ -1326,10 +1349,9 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
                     jl_value_t *callee = (jl_value_t*)pc[j];
                     void *target = ptrhash_get(&all_targets, (void*)callee);
                     if (target == HT_NOTFOUND) {
-                        jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
                         jl_value_t *sig;
                         if (jl_is_method_instance(callee)) {
-                            sig = callee_mi->specTypes;
+                            sig = ((jl_method_instance_t*)callee)->specTypes;
                         }
                         else {
                             sig = callee;
@@ -2294,7 +2316,7 @@ void remove_code_instance_from_validation(jl_code_instance_t *codeinst)
     ptrhash_remove(&new_code_instance_validate, codeinst);
 }
 
-static void jl_insert_method_instances(jl_array_t *list)
+static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
 {
     size_t i, l = jl_array_len(list);
     // Validate the MethodInstances
@@ -2303,27 +2325,72 @@ static void jl_insert_method_instances(jl_array_t *list)
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (i = 0; i < l; i++) {
         jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        int valid = 1;
         assert(jl_is_method_instance(mi));
         if (jl_is_method(mi->def.method)) {
-            // Is this still the method we'd be calling?
-            jl_methtable_t *mt = jl_method_table_for(mi->specTypes);
-            struct jl_typemap_assoc search = {(jl_value_t*)mi->specTypes, world, NULL, 0, ~(size_t)0};
-            jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
-            if (entry) {
-                jl_value_t *mworld = entry->func.value;
-                if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
-                    jl_array_uint8_set(valids, i, 0);
-                    invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
-                    // The codeinst of this mi haven't yet been removed
-                    jl_code_instance_t *codeinst = mi->cache;
-                    while (codeinst) {
-                        remove_code_instance_from_validation(codeinst);
-                        codeinst = codeinst->next;
+            jl_method_t *m = mi->def.method;
+            if (m->deleted_world != ~(size_t)0) {
+                // The method we depended on has been deleted, invalidate
+                valid = 0;
+            } else {
+                // Is this still the method we'd be calling?
+                jl_methtable_t *mt = jl_method_table_for(mi->specTypes);
+                struct jl_typemap_assoc search = {(jl_value_t*)mi->specTypes, world, NULL, 0, ~(size_t)0};
+                jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
+                if (entry) {
+                    jl_value_t *mworld = entry->func.value;
+                    if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
+                        // There's still a chance this is valid, if any caller made this via `invoke` and the invoke-signature is still valid
+                        assert(mi->backedges);   // should not be NULL if it's on `list`
+                        jl_value_t *invokeTypes;
+                        jl_method_instance_t *caller;
+                        size_t jins = 0, j0, j = 0, nbe = jl_array_len(mi->backedges);
+                        while (j < nbe) {
+                            j0 = j;
+                            j = get_next_backedge(mi->backedges, j, &invokeTypes, &caller);
+                            if (invokeTypes) {
+                                struct jl_typemap_assoc search = {invokeTypes, world, NULL, 0, ~(size_t)0};
+                                entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
+                                if (entry) {
+                                    jl_value_t *imworld = entry->func.value;
+                                    if (jl_is_method(imworld) && mi->def.method == (jl_method_t*)imworld) {
+                                        // this one is OK
+                                        // in case we deleted some earlier ones, move this earlier
+                                        for (; j0 < j; jins++, j0++) {
+                                            jl_array_ptr_set(mi->backedges, jins, jl_array_ptr_ref(mi->backedges, j0));
+                                        }
+                                        continue;
+                                    }
+                                }
+                            }
+                            invalidate_backedges(&remove_code_instance_from_validation, caller, world, "jl_insert_method_instance");
+                            // The codeinst of this mi haven't yet been removed
+                            jl_code_instance_t *codeinst = caller->cache;
+                            while (codeinst) {
+                                remove_code_instance_from_validation(codeinst);
+                                codeinst = codeinst->next;
+                            }
+                        }
+                        jl_array_del_end(mi->backedges, j - jins);
+                        if (jins == 0) {
+                            m = (jl_method_t*)mworld;
+                            valid = 0;
+                        }
                     }
-                    if (_jl_debug_method_invalidation) {
-                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, mworld);
-                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, jl_cstr_to_string("jl_method_table_insert")); // GC disabled
-                    }
+                }
+            }
+            if (!valid) {
+                // None of the callers were valid, so invalidate `mi` too
+                jl_array_uint8_set(valids, i, 0);
+                invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
+                jl_code_instance_t *codeinst = mi->cache;
+                while (codeinst) {
+                    remove_code_instance_from_validation(codeinst);
+                    codeinst = codeinst->next;
+                }
+                if (_jl_debug_method_invalidation) {
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)m);
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, jl_cstr_to_string("jl_method_table_insert")); // GC disabled
                 }
             }
         }
@@ -2342,36 +2409,42 @@ static void jl_insert_method_instances(jl_array_t *list)
         if (milive != mi) {
             // A previously-loaded module compiled this method, so the one we deserialized will be dropped.
             // But make sure the backedges are copied over.
+            jl_value_t *invokeTypes;
+            jl_method_instance_t *be, *belive;
             if (mi->backedges) {
                 if (!milive->backedges) {
                     // Copy all the backedges (after looking up the live ones)
-                    size_t j, n = jl_array_len(mi->backedges);
+                    size_t j = 0, jlive = 0, n = jl_array_len(mi->backedges);
                     milive->backedges = jl_alloc_vec_any(n);
                     jl_gc_wb(milive, milive->backedges);
-                    for (j = 0; j < n; j++) {
-                        jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, j);
-                        jl_method_instance_t *belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
+                    while (j < n) {
+                        j = get_next_backedge(mi->backedges, j, &invokeTypes, &be);
+                        belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
                         if (belive == HT_NOTFOUND)
                             belive = be;
-                        jl_array_ptr_set(milive->backedges, j, belive);
+                        jlive = set_next_backedge(milive->backedges, jlive, invokeTypes, belive);
                     }
                 } else {
                     // Copy the missing backedges (this is an O(N^2) algorithm, but many methods have few MethodInstances)
-                    size_t j, k, n = jl_array_len(mi->backedges), nlive = jl_array_len(milive->backedges);
-                    for (j = 0; j < n; j++) {
-                        jl_method_instance_t *be = (jl_method_instance_t*)jl_array_ptr_ref(mi->backedges, j);
-                        jl_method_instance_t *belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
+                    size_t j = 0, k, n = jl_array_len(mi->backedges), nlive = jl_array_len(milive->backedges);
+                    jl_value_t *invokeTypes2;
+                    jl_method_instance_t *belive2;
+                    while (j < n) {
+                        j = get_next_backedge(mi->backedges, j, &invokeTypes, &be);
+                        belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
                         if (belive == HT_NOTFOUND)
                             belive = be;
                         int found = 0;
-                        for (k = 0; k < nlive; k++) {
-                            if (belive == (jl_method_instance_t*)jl_array_ptr_ref(milive->backedges, k)) {
+                        k = 0;
+                        while (k < nlive) {
+                            k = get_next_backedge(milive->backedges, k, &invokeTypes2, &belive2);
+                            if (belive == belive2 && invokeTypes == invokeTypes2) {
                                 found = 1;
                                 break;
                             }
                         }
                         if (!found)
-                            jl_array_ptr_1d_push(milive->backedges, (jl_value_t*)belive);
+                            push_backedge(milive->backedges, invokeTypes, belive);
                     }
                 }
             }
@@ -2482,7 +2555,7 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
                 int32_t idx = idxs[j];
                 jl_value_t *callee = jl_array_ptr_ref(targets, idx * 2);
                 if (jl_is_method_instance(callee)) {
-                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, caller);
+                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, NULL, caller);
                 }
                 else {
                     jl_methtable_t *mt = jl_method_table_for(callee);

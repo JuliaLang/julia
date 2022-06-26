@@ -223,6 +223,65 @@ Check if `method` is declared as `Base.@constprop :none`.
 """
 is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 
+#############
+# backedges #
+#############
+
+"""
+    BackedgeIterator(mi::MethodInstance)
+    BackedgeIterator(backedges::Vector{Any})
+
+Return an iterator over a list of backedges, which may be extracted
+from `mi`. Iteration returns `(sig, caller)` elements, which will be one of
+the following:
+
+- `(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `(specsig, mt::MethodTable)`: an abstract call
+
+# Examples
+
+```julia
+julia> callme(x) = x+1
+callme (generic function with 1 method)
+
+julia> callyou(x) = callme(x)
+callyou (generic function with 1 method)
+
+julia> callyou(2.0)
+3.0
+
+julia> mi = first(which(callme, (Any,)).specializations)
+MethodInstance for callme(::Float64)
+
+julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi)
+           println(sig)
+           println(caller)
+       end
+nothing
+callyou(Float64) from callyou(Any)
+```
+"""
+struct BackedgeIterator
+    backedges::Vector{Any}
+end
+
+const empty_backedge_iter = BackedgeIterator(Any[])
+
+function BackedgeIterator(mi::MethodInstance)
+    isdefined(mi, :backedges) || return empty_backedge_iter
+    return BackedgeIterator(mi.backedges)
+end
+
+function iterate(iter::BackedgeIterator, i::Int=1)
+    backedges = iter.backedges
+    i > length(backedges) && return nothing
+    item = backedges[i]
+    isa(item, MethodInstance) && return (nothing, item), i+1           # regular dispatch
+    isa(item, Core.MethodTable) && return (backedges[i+1], item), i+2  # abstract dispatch
+    return (item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+end
+
 #########
 # types #
 #########

@@ -479,11 +479,14 @@ function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, curr
 end
 
 # temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(li::MethodInstance, caller::InferenceState)
+function add_backedge!(li::MethodInstance, caller::InferenceState, invokesig::Union{Nothing,Vector{Any}}=nothing)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     edges = caller.stmt_edges[caller.currpc]
     if edges === nothing
         edges = caller.stmt_edges[caller.currpc] = []
+    end
+    if invokesig !== nothing
+        push!(edges, invoke_signature(invokesig))
     end
     push!(edges, li)
     return nothing
