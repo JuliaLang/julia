@@ -4250,3 +4250,9 @@ let # NOTE make sure this toplevel chunk doesn't contain any local binding
     while xcond end
 end
 @test !xcond
+
+struct Issue45780
+    oc::Core.OpaqueClosure{Tuple{}}
+end
+f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
+@test (@inferred f45780()) == Val{1}()

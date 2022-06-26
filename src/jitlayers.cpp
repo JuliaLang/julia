@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <stdint.h>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
@@ -496,7 +497,7 @@ static auto countBasicBlocks(const Function &F)
 }
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
-    size_t optlevel = ~0ull;
+    size_t optlevel = SIZE_MAX;
     TSM.withModuleDo([&](Module &M) {
         if (jl_generating_output()) {
             optlevel = 0;
@@ -518,7 +519,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
             optlevel = std::min(std::max(optlevel, optlevel_min), this->count);
         }
     });
-    assert(optlevel != ~0ull && "Failed to select a valid optimization level!");
+    assert(optlevel != SIZE_MAX && "Failed to select a valid optimization level!");
     this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
 }
 
@@ -934,7 +935,7 @@ namespace {
                             // Each function is printed as a YAML object with several attributes
                             jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
                             jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                         }
 
                         start_time = jl_hrtime();
@@ -962,7 +963,7 @@ namespace {
                             }
                             jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
                             jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                         }
                     }
                 }

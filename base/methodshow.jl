@@ -59,8 +59,7 @@ function arg_decl_parts(m::Method, html=false)
         push!(tv, sig.var)
         sig = sig.body
     end
-    file = m.file
-    line = m.line
+    file, line = updated_methodloc(m)
     argnames = method_argnames(m)
     if length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
@@ -206,34 +205,45 @@ function sym_to_string(sym)
     end
 end
 
-function show(io::IO, m::Method)
+function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width = -1)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
-        return
+        print(io, m.name, "(...)")
+        file = "none"
+        line = 0
+    else
+        print(io, decls[1][2], "(")
+
+        # arguments
+        for (i,d) in enumerate(decls[2:end])
+            printstyled(io, d[1], color=:light_black)
+            if !isempty(d[2])
+                print(io, "::")
+                print_type_bicolor(io, d[2], color=:bold, inner_color=:normal)
+            end
+            i < length(decls)-1 && print(io, ", ")
+        end
+
+        kwargs = kwarg_decl(m)
+        if !isempty(kwargs)
+            print(io, "; ")
+            for kw in kwargs
+                skw = sym_to_string(kw)
+                print(io, skw)
+                if kw != last(kwargs)
+                    print(io, ", ")
+                end
+            end
+        end
+        print(io, ")")
+        show_method_params(io, tv)
     end
-    print(io, decls[1][2], "(")
-    join(
-        io,
-        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
-        ", ",
-        ", ",
-    )
-    kwargs = kwarg_decl(m)
-    if !isempty(kwargs)
-        print(io, "; ")
-        join(io, map(sym_to_string, kwargs), ", ", ", ")
-    end
-    print(io, ")")
-    show_method_params(io, tv)
-    print(io, " in ", m.module)
-    if line > 0
-        file, line = updated_methodloc(m)
-        print(io, " at ", file, ":", line)
-    end
-    nothing
+
+    # module & file, re-using function from errorshow.jl
+    println(io)
+    print_module_path_file(io, m.module, string(file), line, modulecolor, digit_align_width+4)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -253,7 +263,11 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
                     "builtin function"
                : # else
                     "generic function")
-        print(io, " for ", what, " ", namedisplay)
+        print(io, " for ", what, " ", namedisplay, " from ")
+
+        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(ms.mt.module))
+
+        printstyled(io, ms.mt.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
     elseif mt === _TYPE_NAME.mt
@@ -261,8 +275,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     else
         print(io, " for callable object")
     end
-    n > 0 && print(io, ":")
-    nothing
+    !iszero(n) && print(io, ":")
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
@@ -279,12 +292,29 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    modul = if mt === _TYPE_NAME.mt # type constructor
+            which(ms.ms[1].module, ms.ms[1].name)
+        else
+            mt.module
+        end
+
+    digit_align_width = length(string(max > 0 ? max : length(ms)))
+
     for meth in ms
         if max == -1 || n < max
             n += 1
             println(io)
-            print(io, "[$n] ")
-            show(io, meth)
+
+            print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
+
+            modulecolor = if meth.module == modul
+                nothing
+            else
+                m = parentmodule_before_main(meth.module)
+                get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            end
+            show(io, meth; modulecolor)
+
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
                 push!(last_shown_line_infos, (string(file), line))
@@ -374,7 +404,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     join(
         io,
         String[
-            isempty(d[2]) ? d[1] : string(d[1], "::<b>", d[2], "</b>") for d in decls[2:end]
+            isempty(d[2]) ? string(d[1]) : string(d[1], "::<b>", d[2] , "</b>") for d in decls[2:end]
         ],
         ", ",
         ", ",
