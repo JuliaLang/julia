@@ -913,6 +913,19 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
+# Display a hint in case the user tries to use the + operator on strings
+# (probably attempting concatenation)
+function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f == +) && all(i -> i <: AbstractString, arg_types)
+        print(io, "\nString concatenation is performed with ")
+        printstyled(io, "*", color=:cyan)
+        print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
+    end
+end
+
+Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
+
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
 getindex(s::ExceptionStack, i::Int) = s.stack[i]
