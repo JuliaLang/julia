@@ -88,6 +88,18 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     )
 end
 
+@testset "test in-place reductions with alias" begin
+    a = rand(3)
+    b = copy(a)
+    @test sum!(a, a) == b
+    @test prod!(a, a) == b
+
+    c = rand(Bool, 5)
+    d = copy(c)
+    @test all!(c, c) == d
+    @test any!(c, c) == d
+end
+
 # Combining dims and init
 A = Array{Int}(undef, 0, 3)
 @test_throws "reducing over an empty collection is not allowed" maximum(A; dims=1)
