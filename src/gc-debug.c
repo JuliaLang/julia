@@ -1286,7 +1286,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
     for (; start < end; start++) {
         jl_value_t *obj = *start;
         jl_taggedvalue_t *o = jl_astaggedvalue(o);
-        jl_safe_printf("Queued object: %p :: (tag: %zu) (bits: %zu)\n", obj, (uintptr_t)o->header, 
+        jl_safe_printf("Queued object: %p :: (header: %zu) (bits: %zu)\n", obj, (uintptr_t)o->header, 
                         ((uintptr_t)o->header & 3));
         jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
     }
