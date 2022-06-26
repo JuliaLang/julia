@@ -273,33 +273,48 @@ end
     end
 end
 
+struct WithIteratorsKeys{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+Base.size(a::WithIteratorsKeys) = size(a.data)
+Base.getindex(a::WithIteratorsKeys, inds...) = a.data[inds...]
+struct IteratorsKeys{T,A<:AbstractArray{T}}
+    iter::A
+    IteratorsKeys(iter) = new{eltype(iter),typeof(iter)}(iter)
+end
+Base.iterate(a::IteratorsKeys, state...) = Base.iterate(a.iter, state...)
+Base.keys(a::WithIteratorsKeys) = IteratorsKeys(keys(a.data))
+Base.eltype(::IteratorsKeys{T}) where {T} = T
+
 # findmin/findmax function arguments: output type inference
 @testset "findmin/findmax output type inference" begin
-    A = ["1" "22"; "333" "4444"]
-    for (tup, rval, rind) in [((1,), [1 2], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
-                              ((2,), reshape([1, 3], 2, 1), reshape([CartesianIndex(1, 1), CartesianIndex(2, 1)], 2, 1)),
-                              ((1,2), fill(1,1,1), fill(CartesianIndex(1,1),1,1))]
-        rval′, rind′ = findmin(length, A, dims=tup)
-        @test (rval, rind) == (rval′, rind′)
-        @test typeof(rval′) == Matrix{Int}
-    end
-    for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
-                              ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
-                              ((1,2), fill(4,1,1), fill(CartesianIndex(2,2),1,1))]
-        rval′, rind′ = findmax(length, A, dims=tup)
-        @test (rval, rind) == (rval′, rind′)
-        @test typeof(rval) == Matrix{Int}
-    end
-    B = [1.5 1.0; 5.5 6.0]
-    for (tup, rval, rind) in [((1,), [3//2 1//1], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
-                              ((2,), reshape([1//1, 11//2], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 1)], 2, 1)),
-                              ((1,2), fill(1//1,1,1), fill(CartesianIndex(1,2),1,1))]
-        rval′, rind′ = findmin(Rational, B, dims=tup)
-        @test (rval, rind) == (rval′, rind′)
-        @test typeof(rval) == Matrix{Rational{Int}}
-        rval′, rind′ = findmin(Rational ∘ abs ∘ complex, B, dims=tup)
-        @test (rval, rind) == (rval′, rind′)
-        @test typeof(rval) == Matrix{Rational{Int}}
+    for wrapper in (identity, WithIteratorsKeys)
+        A = wrapper(["1" "22"; "333" "4444"])
+        for (tup, rval, rind) in [((1,), [1 2], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
+                                ((2,), reshape([1, 3], 2, 1), reshape([CartesianIndex(1, 1), CartesianIndex(2, 1)], 2, 1)),
+                                ((1,2), fill(1,1,1), fill(CartesianIndex(1,1),1,1))]
+            rval′, rind′ = @inferred findmin(length, A, dims=tup)
+            @test (rval, rind) == (rval′, rind′)
+            @test typeof(rval′) == Matrix{Int}
+        end
+        for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
+                                ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
+                                ((1,2), fill(4,1,1), fill(CartesianIndex(2,2),1,1))]
+            rval′, rind′ = @inferred findmax(length, A, dims=tup)
+            @test (rval, rind) == (rval′, rind′)
+            @test typeof(rval) == Matrix{Int}
+        end
+        B = wrapper([1.5 1.0; 5.5 6.0])
+        for (tup, rval, rind) in [((1,), [3//2 1//1], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
+                                ((2,), reshape([1//1, 11//2], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 1)], 2, 1)),
+                                ((1,2), fill(1//1,1,1), fill(CartesianIndex(1,2),1,1))]
+            rval′, rind′ = @inferred findmin(Rational, B, dims=tup)
+            @test (rval, rind) == (rval′, rind′)
+            @test typeof(rval) == Matrix{Rational{Int}}
+            rval′, rind′ = @inferred findmin(Rational ∘ abs ∘ complex, B, dims=tup)
+            @test (rval, rind) == (rval′, rind′)
+            @test typeof(rval) == Matrix{Rational{Int}}
+        end
     end
 end
 

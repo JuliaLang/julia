@@ -839,3 +839,11 @@ end
     # this is fixed in #40038, so the evaluation of its CartesianIndices should work
     @test CartesianIndices(A) == CartesianIndices(B)
 end
+
+# issue #38660
+@testset "`findmin/max` for OffsetArray" begin
+    ov = OffsetVector([-1, 1], 0:1)
+    @test @inferred(findmin(ov; dims = 1)) .|> first == (-1, 0)
+    ov = OffsetVector([-1, 1], -1:0)
+    @test @inferred(findmax(ov; dims = 1)) .|> first == (1, 0)
+end
