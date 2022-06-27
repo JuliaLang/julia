@@ -992,7 +992,7 @@ Base.@constprop :aggressive function conditional_escape!(cnd, x)
     return nothing
 end
 @test fully_eliminated((String,)) do x
-    Base.@invoke conditional_escape!(false::Any, x::Any)
+    @invoke conditional_escape!(false::Any, x::Any)
 end
 
 @testset "strides for ReshapedArray (PR#44027)" begin
@@ -1066,12 +1066,12 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(nothing::Any)
+        @invoke FooTheRef(nothing::Any)
     end
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(0::Any)
+        @invoke FooTheRef(0::Any)
     end
     @test count(isnew, src.code) == 1
 end
@@ -1084,11 +1084,11 @@ end
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(nothing::Any)
+    @invoke FooTheRef(nothing::Any)
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(0::Any)
+    @invoke FooTheRef(0::Any)
     nothing
 end
 

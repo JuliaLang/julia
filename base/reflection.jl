@@ -1855,30 +1855,45 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 """
     @invoke f(arg::T, ...; kwargs...)
 
-Provides a convenient way to call [`invoke`](@ref);
-`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
-When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
-`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+Provides a convenient way to call [`invoke`](@ref) by expanding
+`@invoke f(arg1::T1, arg2::T2; kwargs...)` to `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
+When an argument's type annotation is omitted, it's replaced with `Core.Typeof` that argument.
+To invoke a method where an argument is untyped or explicitly typed as `Any`, annotate the
+argument with `::Any`.
+
+# Examples
+
+```jldoctest
+julia> @macroexpand @invoke f(x::T, y)
+:(Core.invoke(f, Tuple{T, Core.Typeof(y)}, x, y))
+
+julia> @invoke 420::Integer % Unsigned
+0x00000000000001a4
+```
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
+
+!!! compat "Julia 1.9"
+    This macro is exported as of Julia 1.9.
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
-    newargs, newargtypes = Any[], Any[]
-    for i = 1:length(args)
-        x = args[i]
-        if isexpr(x, :(::))
-            a = x.args[1]
-            t = x.args[2]
+    types = Expr(:curly, :Tuple)
+    out = Expr(:call, GlobalRef(Core, :invoke))
+    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
+    push!(out.args, f)
+    push!(out.args, types)
+    for arg in args
+        if isexpr(arg, :(::))
+            push!(out.args, arg.args[1])
+            push!(types.args, arg.args[2])
         else
-            a = x
-            t = GlobalRef(Core, :Any)
+            push!(out.args, arg)
+            push!(types.args, Expr(:call, GlobalRef(Core, :Typeof), arg))
         end
-        push!(newargs, a)
-        push!(newargtypes, t)
     end
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(newargtypes...)}, $(newargs...); $(kwargs...))))
+    return esc(out)
 end
 
 """

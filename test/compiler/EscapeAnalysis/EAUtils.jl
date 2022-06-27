@@ -156,7 +156,7 @@ function CC.cache_result!(interp::EscapeAnalyzer, caller::InferenceResult)
     if haskey(interp.cache, caller)
         GLOBAL_ESCAPE_CACHE[caller.linfo] = interp.cache[caller]
     end
-    return Base.@invoke CC.cache_result!(interp::AbstractInterpreter, caller::InferenceResult)
+    return @invoke CC.cache_result!(interp::AbstractInterpreter, caller::InferenceResult)
 end
 
 const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,EscapeCache}()
@@ -276,7 +276,7 @@ end
 function Base.show(io::IO, x::EscapeInfo)
     name, color = get_name_color(x)
     if isnothing(name)
-        Base.@invoke show(io::IO, x::Any)
+        @invoke show(io::IO, x::Any)
     else
         printstyled(io, name; color)
     end
