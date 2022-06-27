@@ -190,7 +190,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext64->__ss.__lr = 0;
 #endif
 #else
-#warning "julia: throw-in-context not supported on this platform"
+#pragma message("julia: throw-in-context not supported on this platform")
     // TODO Add support for PowerPC(64)?
     sigset_t sset;
     sigemptyset(&sset);
@@ -298,7 +298,7 @@ int is_write_fault(void *context) {
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
 #else
-#warning Implement this query for consistent PROT_NONE handling
+#pragma message("Implement this query for consistent PROT_NONE handling")
 int is_write_fault(void *context) {
     return 0;
 }
