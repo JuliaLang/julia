@@ -1053,9 +1053,19 @@ function push!(a::Array{T,1}, item) where T
     return a
 end
 
-function push!(a::Array{Any,1}, @nospecialize item)
+# specialize and optimize the single argument case
+function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
-    arrayset(true, a, item, length(a))
+    arrayset(true, a, x, length(a))
+    return a
+end
+function push!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growend!(a, nx)
+    for i = 1:nx
+        arrayset(true, a, x[i], na+i)
+    end
     return a
 end
 
@@ -1382,6 +1392,22 @@ function pushfirst!(a::Array{T,1}, item) where T
     item = convert(T, item)
     _growbeg!(a, 1)
     a[1] = item
+    return a
+end
+
+# specialize and optimize the single argument case
+function pushfirst!(a::Vector{Any}, @nospecialize x)
+    _growbeg!(a, 1)
+    a[1] = x
+    return a
+end
+function pushfirst!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growbeg!(a, nx)
+    for i = 1:nx
+        a[i] = x[i]
+    end
     return a
 end
 
