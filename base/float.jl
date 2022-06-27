@@ -165,36 +165,44 @@ promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
 function Float64(x::UInt128)
-    A = 4.503599627370496e15 # Float64(UInt128(1) << 52)
-    B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
-    C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
-    D = 3.402823669209385e38 # Float64(typemax(UInt128))
-    if x < UInt128(1) << 104 # Can fit all info in two 52 bit mantissas
-        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A
-        h = reinterpret(Float64, reinterpret(UInt64, B) | ((x >> 52) % UInt64)) - B
-        l + h
-    else # Squish lowest bits to fit all info into two 52 bit mantissas, possible since lowest bits only affect rounding
-        l = reinterpret(Float64, reinterpret(UInt64, C) | ((x >> 24) % UInt64) & significand_mask(Float64) | (x % UInt64) & 0xffffff) - C
-        h = reinterpret(Float64, reinterpret(UInt64, D) | ((x >> 76) % UInt64)) - D
-        l + h
+    if x < UInt128(1) << 104 # Can fit in two 52 bits mantissa
+        low_exp = 4.503599627370496e15 # 2.0^52
+        high_exp = 2.028240960365167e31 # 2.0^104
+        low_bits = (x % UInt64) & Base.significand_mask(Float64)
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((x >> 52) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        low_value + high_value
+    else # Large enough that low bits only affect rounding, pack them tight
+        low_exp = 7.555786372591432e22 # 2.0^76
+        high_exp = 3.402823669209385e38 # 2.0^128
+        low_bits = ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((x >> 76) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        low_value + high_value
     end
 end
 
 function Float64(x::Int128)
     sign_bit = ((x >> 127) % UInt64) << 63
     ux = unsigned(abs(x))
-    A = 4.503599627370496e15 # Float64(UInt128(1) << 52)
-    B = 2.028240960365167e31 # Float64(UInt128(1) << 104)
-    C = 7.555786372591432e22 # Float64(UInt128(1) << 76)
-    D = 3.402823669209385e38 # Float64(typemax(UInt128))
-    if ux < UInt128(1) << 104
-        l = reinterpret(Float64, reinterpret(UInt64, A) | (x % UInt64) & significand_mask(Float64)) - A
-        h = reinterpret(Float64, reinterpret(UInt64, B) | ((ux >> 52) % UInt64)) - B
-        reinterpret(Float64, sign_bit | reinterpret(UInt64, l + h))
-    else
-        l = reinterpret(Float64, reinterpret(UInt64, C) | ((ux >> 24) % UInt64) & significand_mask(Float64) | (x % UInt64) & 0xffffff) - C
-        h = reinterpret(Float64, reinterpret(UInt64, D) | ((ux >> 76) % UInt64)) - D
-        reinterpret(Float64, sign_bit | reinterpret(UInt64, l + h))
+    if ux < UInt128(1) << 104 # Can fit in two 52 bits mantissa
+        low_exp = 4.503599627370496e15 # 2.0^52
+        high_exp = 2.028240960365167e31 # 2.0^104
+        low_bits = (ux % UInt64) & Base.significand_mask(Float64)
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((ux >> 52) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
+    else # Large enough that low bits only affect rounding, pack them tight
+        low_exp = 7.555786372591432e22 # 2.0^76
+        high_exp = 3.402823669209385e38 # 2.0^128
+        low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((ux >> 76) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
     end
 end
 
