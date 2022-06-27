@@ -1209,11 +1209,11 @@ end
 
 import Base.Docs: @var, Binding, defined
 
-let x = Binding(Base, Symbol("@time"))
+let x = Binding(Base, Symbol("@inline"))
     @test defined(x) == true
-    @test @var(@time) == x
-    @test @var(Base.@time) == x
-    @test @var(Base.Iterators.@time) == x
+    @test @var(@inline) == x
+    @test @var(Base.@inline) == x
+    @test @var(Base.Iterators.@inline) == x
 end
 
 let x = Binding(Iterators, :enumerate)
