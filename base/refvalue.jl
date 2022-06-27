@@ -40,14 +40,15 @@ function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefValue{T})
         p = pointer_from_objref(b)
     elseif isconcretetype(T) && ismutabletype(T)
         p = pointer_from_objref(b.x)
-    elseif !isassigned(b)
-        throw(Core.UndefRefError())
     else
         # If the slot is not leaf type, it could be either immutable or not.
         # If it is actually an immutable, then we can't take it's pointer directly
         # Instead, explicitly load the pointer from the `RefValue`,
         # which also ensures this returns same pointer as the one rooted in the `RefValue` object.
-        p = pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), 1, Core.sizeof(Ptr{Cvoid}))
+        p = atomic_pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), :monotonic)
+    end
+    if p == C_NULL
+        throw(UndefRefError())
     end
     return p
 end
