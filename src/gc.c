@@ -892,6 +892,20 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
         jl_gc_queue_root(v);
 }
 
+void gc_set_recruit(jl_ptls_t ptls, void *addr)
+{
+    jl_fence();
+    jl_atomic_store_release(&jl_gc_recruiting_location, addr);
+    if (jl_n_threads > 1)
+        jl_wake_libuv();
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_wakeup_thread(i);
+    }
+}
+
+
 static inline void maybe_collect(jl_ptls_t ptls)
 {
     if (jl_atomic_load_relaxed(&ptls->gc_num.allocd) >= 0 || jl_gc_debug_check_other()) {
@@ -1594,6 +1608,15 @@ static void gc_sweep_pool(int sweep_full)
     }
 
     gc_time_pool_end(sweep_full);
+}
+
+static void gc_sweep_pool_parallel(jl_ptls_t ptls) {
+    if (jl_threadid() == 0) {
+        gc_sweep_pool(1);
+    } else {
+        jl_safe_printf("Thread %d got to gc_sweep_pool_parallel\n",
+                       jl_threadid());
+    }
 }
 
 static void gc_sweep_perm_alloc(void)
@@ -3211,7 +3234,15 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_sweep_other(ptls, sweep_full);
     gc_scrub();
     gc_verify_tags();
-    gc_sweep_pool(sweep_full);
+    if (sweep_full) {
+        gc_set_recruit(ptls,
+                       (void *) gc_sweep_pool_parallel);
+        gc_sweep_pool_parallel(ptls);
+        jl_atomic_store_release(&jl_gc_recruiting_location,
+                                NULL);
+    } else {
+        gc_sweep_pool(sweep_full);
+    }
     if (sweep_full)
         gc_sweep_perm_alloc();
     JL_PROBE_GC_SWEEP_END();
@@ -3310,7 +3341,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 {
     JL_PROBE_GC_BEGIN(collection);
-
+    jl_safe_printf("Thread %d entering jl_gc_collect\n", jl_threadid());
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (jl_atomic_load_relaxed(&jl_gc_disable_counter)) {
@@ -3364,6 +3395,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
+
     // no-op for non-threading
     jl_safepoint_end_gc();
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
@@ -3386,6 +3418,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp)
