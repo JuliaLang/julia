@@ -165,17 +165,17 @@ promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
 function Float64(x::UInt128)
-    if x < UInt128(1) << 104 # Can fit in two 52 bits mantissa
-        low_exp = 4.503599627370496e15 # 2.0^52
-        high_exp = 2.028240960365167e31 # 2.0^104
+    if x < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+        low_exp = 0x1p52
+        high_exp = 0x1p104
         low_bits = (x % UInt64) & Base.significand_mask(Float64)
         low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
         high_bits = ((x >> 52) % UInt64)
         high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
         low_value + high_value
-    else # Large enough that low bits only affect rounding, pack them tight
-        low_exp = 7.555786372591432e22 # 2.0^76
-        high_exp = 3.402823669209385e38 # 2.0^128
+    else # Large enough that low bits only affect rounding, pack low bits
+        low_exp = 0x1p76
+        high_exp = 0x1p128
         low_bits = ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF
         low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
         high_bits = ((x >> 76) % UInt64)
@@ -187,17 +187,17 @@ end
 function Float64(x::Int128)
     sign_bit = ((x >> 127) % UInt64) << 63
     ux = unsigned(abs(x))
-    if ux < UInt128(1) << 104 # Can fit in two 52 bits mantissa
-        low_exp = 4.503599627370496e15 # 2.0^52
-        high_exp = 2.028240960365167e31 # 2.0^104
+    if ux < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+        low_exp = 0x1p52
+        high_exp = 0x1p104
         low_bits = (ux % UInt64) & Base.significand_mask(Float64)
         low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
         high_bits = ((ux >> 52) % UInt64)
         high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
         reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
-    else # Large enough that low bits only affect rounding, pack them tight
-        low_exp = 7.555786372591432e22 # 2.0^76
-        high_exp = 3.402823669209385e38 # 2.0^128
+    else # Large enough that low bits only affect rounding, pack low bits
+        low_exp = 0x1p76
+        high_exp = 0x1p128
         low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
         low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
         high_bits = ((ux >> 76) % UInt64)
