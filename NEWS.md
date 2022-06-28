@@ -21,6 +21,9 @@ Language changes
   binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
   left- and right-division fall back to multiplication with the inverse from left and right,
   respectively, as stated in the docstring. ([#44564])
+* The `@invoke` macro introduced in 1.7 is now exported. Additionally, it now uses `Core.Typeof(x)`
+  rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
+  as arguments are handled correctly. ([#45807])
 
 Compiler/Runtime improvements
 -----------------------------

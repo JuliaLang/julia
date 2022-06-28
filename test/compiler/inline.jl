@@ -992,7 +992,7 @@ Base.@constprop :aggressive function conditional_escape!(cnd, x)
     return nothing
 end
 @test fully_eliminated((String,)) do x
-    Base.@invoke conditional_escape!(false::Any, x::Any)
+    @invoke conditional_escape!(false::Any, x::Any)
 end
 
 @testset "strides for ReshapedArray (PR#44027)" begin
@@ -1066,12 +1066,12 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(nothing::Any)
+        @invoke FooTheRef(nothing::Any)
     end
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(0::Any)
+        @invoke FooTheRef(0::Any)
     end
     @test count(isnew, src.code) == 1
 end
@@ -1084,11 +1084,11 @@ end
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(nothing::Any)
+    @invoke FooTheRef(nothing::Any)
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(0::Any)
+    @invoke FooTheRef(0::Any)
     nothing
 end
 
@@ -1374,4 +1374,31 @@ let src = code_typed1() do
     end
     @test count(isnew, src.code) == 1
     @test count(isinvoke(:noinline_finalizer), src.code) == 1
+end
+
+# optimize `[push!|pushfirst!](::Vector{Any}, x...)`
+@testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
+    @eval begin
+        let src = code_typed1((Vector{Any}, Any)) do xs, x
+                $f(xs, x)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+            @test count(src.code) do @nospecialize x
+                isa(x, Core.GotoNode) ||
+                isa(x, Core.GotoIfNot) ||
+                iscall((src, getfield))(x)
+            end == 0 # no loop should be involved for the common single arg case
+        end
+        let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
+                $f(xs, x, y)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+        end
+        let xs = Any[]
+            $f(xs, :x, "y", 'z')
+            @test xs[1] === :x
+            @test xs[2] == "y"
+            @test xs[3] === 'z'
+        end
+    end
 end
