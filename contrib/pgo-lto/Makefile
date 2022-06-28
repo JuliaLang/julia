@@ -19,12 +19,12 @@ LLVM_OBJCOPY:=$(STAGE0_TOOLS)llvm-objcopy
 # significantly
 COUNTERS_PER_SITE:=6
 
-AFTER_STAGE1_MESSAGE:=Run \`make clean-profiles\` to start with a clean slate. $\
-    Then run Julia to collect realistic profile data, for example: \`julia -O3 -e $\
-    'using Pkg; Pkg.add("LoopVectorization"); Pkg.test("LoopVectorization")'\`. This $\
+AFTER_STAGE1_MESSAGE:='Run `make clean-profiles` to start with a clean slate. $\
+    Then run Julia to collect realistic profile data, for example: `$(STAGE1_BUILD)/julia -O3 -e $\
+    '\''using Pkg; Pkg.add("LoopVectorization"); Pkg.test("LoopVectorization")'\''`. This $\
 	should produce about 15MB of data in $(PROFILE_DIR). Note that running extensive $\
 	scripts may result in counter overflows, which can be detected by running $\
-	\`make top\`. Afterwards run \`make stage2\`.
+	`make top`. Afterwards run `make stage2`.'
 
 TOOLCHAIN_FLAGS = $\
 	"CC=$(STAGE0_TOOLS)clang" $\
@@ -54,7 +54,7 @@ stage1: PGO_LDFLAGS:=-fuse-ld=lld -flto=thin -fprofile-generate=$(PROFILE_DIR)
 stage1: export USE_BINARYBUILDER_LLVM=0
 stage1: | $(STAGE1_BUILD)
 	$(MAKE) -C $(STAGE1_BUILD) $(TOOLCHAIN_FLAGS) && touch $@
-	@echo "$(AFTER_STAGE1_MESSAGE)"
+	@echo $(AFTER_STAGE1_MESSAGE)
 
 stage2: PGO_CFLAGS:=-fprofile-use=$(PROFILE_FILE)
 stage2: PGO_CXXFLAGS:=-fprofile-use=$(PROFILE_FILE)
