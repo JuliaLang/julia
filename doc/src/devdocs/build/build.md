@@ -303,3 +303,40 @@ From this point, you should
 (Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
 
 Then add all the [build dependencies](@ref build-tools), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
+
+
+## Update the version number of a dependency
+
+There are two types of builds
+1. Build everything (`deps/` and `src/`) from source code.
+    (Add `USE_BINARYBUILDER=0` to `Make.user`, see [Building Julia](#building-julia))
+2. Build from source (`src/`) with pre-compiled dependencies (default)
+
+When you want to update the version number of a dependency in `deps/`, 
+you need to check the following places:
+
+Version number:
+- source build: `deps/$(libName).version`: `LIBNAME_VER`, `LIBNAME_BRANCH`, `LIBNAME_SHA1`
+- pre-compiled: `deps/$(libName).version`: `LIBNAME_JLL_VER` *OR* `stdlib/$(LIBNAME_JLL_NAME)_jll\Project.toml`: `version`
+
+Checksum:
+- `deps/checksums/$(libName)`
+    It may be **a single file** without a suffix, or **a folder** containing two files (`md5` and `sha512`)
+
+Makefile & Patches:
+- `deps/$(libName).mk`
+- `deps/patches/$(libName)-*.patch`
+
+### Example: `OpenLibm`
+
+1. Update Version numbers in `deps/openlibm.version`
+    - `OPENLIBM_VER := 0.X.Y`
+    - `OPENLIBM_BRANCH = v0.X.Y`
+    - `OPENLIBM_SHA1 = new-sha1-hash`
+2. Update Version number in `stdlib/OpenLibm_jll/Project.toml`
+    - `version = "0.X.Y+0"`
+3. Update checksum in `deps/checksums/openlibm`
+4. Check if the patch files `deps/patches/openlibm-*.patch` exist
+    - if patches don't exist, skip.
+    - if patches exist, check if they have been merged into the new version and need to be removed.  
+        When deleting a patch, remember to modify the corresponding Makefile file (`deps/openlibm.mk`).
