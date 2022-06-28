@@ -1,4 +1,6 @@
 ## UNWIND ##
+include $(SRCDIR)/unwind.version
+include $(SRCDIR)/llvmunwind.version
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz
