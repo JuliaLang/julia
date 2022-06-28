@@ -467,7 +467,10 @@ first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[begin:min(begin + n - 1, end)]
+    stop = firstindex(v) + n - 1,
+    stop < firstindex(v) && (stop = lastindex(v))
+    stop =  min(stop, lastindex(v))
+    @inbounds v[begin:stop]
 end
 
 """
