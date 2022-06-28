@@ -942,14 +942,14 @@ end
     # Now let's try it with `Broadcasted`:
     bcraw = Broadcast.broadcasted(identity, xs)
     bc = Broadcast.instantiate(bcraw)
-    # If `Broadcasted` has `IndexLinear` style, it should hit the
-    # `reduce` branch:
-    @test IndexStyle(bc) == IndexLinear()
+    # `Broadcasted` should behave like a `AbstractArray` with the same `IndexStyle`
+    # `IndexLinear` branch:
+    @test IndexStyle(bc) == IndexStyle(xs) == IndexLinear()
     @test reduce(paren, bc) == reduce(paren, xs)
-    # If `Broadcasted` does not have `IndexLinear` style, it should
-    # hit the `foldl` branch:
-    @test IndexStyle(bcraw) == IndexCartesian()
-    @test reduce(paren, bcraw) == foldl(paren, xs)
+    # `IndexCartesian` branch:
+    xscart = view(xs, collect(eachindex(xs)))
+    @test IndexStyle(bcraw) == IndexStyle(xscart) == IndexCartesian()
+    @test reduce(paren, bcraw) == reduce(paren, xscart)
 
     # issue #41055
     bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))

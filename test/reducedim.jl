@@ -613,9 +613,9 @@ end
         end
     end
 end
-@test_broken minimum([missing;BigInt(1)], dims = 1)
-@test_broken maximum([missing;BigInt(1)], dims = 1)
-@test_broken extrema([missing;BigInt(1)], dims = 1)
+@test_broken minimum([missing;BigInt(1)], dims = 1)[1] === missing
+@test_broken maximum([missing;BigInt(1)], dims = 1)[1] === missing
+@test_broken extrema([missing;BigInt(1)], dims = 1)[1] === (missing, missing)
 
 # issue #26709
 @testset "dimensional reduce with custom non-bitstype types" begin

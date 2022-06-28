@@ -1880,3 +1880,50 @@ end
 
 getindex(b::Ref, ::CartesianIndex{0}) = getindex(b)
 setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
+
+# `mapreduce` for `IndexCartesian`
+@inline function _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted)
+    ndims(A) == 1 && return _mapreduce(f, op, IndexLinear(), A)
+    length(A) <= 16 && return mapfoldl(f, op, A)
+    inds = CartesianIndices(A)
+    return mapreduce_impl(f, op, A, first(inds), last(inds))
+end
+
+function mapreduce_impl(f, op,
+    A::AbstractArrayOrBroadcasted,
+    fi::CartesianIndex{N},
+    li::CartesianIndex{N},
+    blksize::Int=pairwise_blocksize(f, op)) where {N}
+    iter = fi:li
+    @inbounds if length(iter) <= blksize
+        A1 = A[fi]
+        temp = iterate(iter, fi)
+        temp === nothing && return mapreduce_first(f, op, A1)
+        I, state = temp
+        v = op(f(A1), f(A[I]))
+        if size(iter, 1) <= 16
+            for I in Iterators.rest(iter, state)
+                v = op(v, f(A[I]))
+            end
+        else
+            J1 = CartesianIndex(tail(I.I))
+            ax1, out = iter.indices[1], CartesianIndices(tail(iter.indices))
+            @simd for i in I[1]+1:last(ax1)
+                v = op(v, f(A[i, J1]))
+            end
+            for J in Iterators.rest(out, J1)
+                @simd for i in ax1
+                    v = op(v, f(A[i, J]))
+                end
+            end
+        end
+        return v
+    else
+        # pairwise portion
+        n = findlast(i -> li[i] != fi[i], 1:N)::Int
+        mid = fi[n] + (li[n] - fi[n] + 1) >> 1
+        v1 = @noinline mapreduce_impl(f, op, A, fi, setindex(li, mid - 1, n), blksize)
+        v2 = @noinline mapreduce_impl(f, op, A, setindex(fi, mid, n), li, blksize)
+        return op(v1, v2)
+    end
+end
