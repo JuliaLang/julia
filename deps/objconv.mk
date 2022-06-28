@@ -1,4 +1,5 @@
 ## objconv ##
+include $(SRCDIR)/objconv.version
 
 ifneq ($(USE_BINARYBUILDER_OBJCONV),1)
 

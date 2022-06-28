@@ -579,7 +579,7 @@ file, ln = functionloc(versioninfo, Tuple{})
     @test e isa MethodError
     m = @which versioninfo()
     s = sprint(showerror, e)
-    m = match(Regex("at (.*?):$(m.line)"), s)
+    m = match(Regex("@ .+ (.*?):$(m.line)"), s)
     @test isfile(expanduser(m.captures[1]))
 
     g() = x

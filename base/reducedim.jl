@@ -372,7 +372,7 @@ _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
-    reduce(f, A; dims=:, [init])
+    reduce(f, A::AbstractArray; dims=:, [init])
 
 Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
 dimensions to reduce, and the keyword argument `init` is the initial value to use in the

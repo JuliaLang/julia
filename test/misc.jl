@@ -896,7 +896,7 @@ end
     # test against `invoke` doc example
     let
         f(x::Real) = x^2
-        f(x::Integer) = 1 + Base.@invoke f(x::Real)
+        f(x::Integer) = 1 + @invoke f(x::Real)
         @test f(2) == 5
     end
 
@@ -908,17 +908,22 @@ end
         _f2(_) = Real
         @test f1(1) === Integer
         @test f2(1) === Integer
-        @test Base.@invoke(f1(1::Real)) === Real
-        @test Base.@invoke(f2(1::Real)) === Integer
+        @test @invoke(f1(1::Real)) === Real
+        @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Any`
+    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
     let
         f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
-        @test Base.@invoke(f(1::Any)) === Any
-        @test Base.@invoke(f(1)) === Any
+        @test @invoke(f(1::Any)) === Any
+        @test @invoke(f(1)) === Integer
+
+        😎(x, y) = 1
+        😎(x, ::Type{Int}) = 2
+        # Without `Core.Typeof`, the first method would be called
+        @test @invoke(😎(1, Int)) == 2
     end
 
     # handle keyword arguments correctly
@@ -927,8 +932,7 @@ end
         f(::Integer; kwargs...) = error("don't call me")
 
         @test_throws Exception f(1; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1::Any; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1; kw1 = 1, kw2 = 2)
+        @test 3 == @invoke f(1::Any; kw1 = 1, kw2 = 2)
     end
 end
 

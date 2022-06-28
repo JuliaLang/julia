@@ -41,6 +41,8 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
+extern uv_mutex_t safepoint_lock;
+extern uv_cond_t safepoint_cond;
 void jl_mach_gc_end(void)
 {
     // Requires the safepoint lock to be held

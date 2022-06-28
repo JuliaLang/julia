@@ -43,6 +43,7 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // load/store so that threads waiting for the GC doesn't have to also
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
+uv_cond_t safepoint_cond;
 
 _Atomic(void *) jl_gc_recruiting_location = NULL;
 
@@ -89,6 +90,7 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 void jl_safepoint_init(void)
 {
     uv_mutex_init(&safepoint_lock);
+    uv_cond_init(&safepoint_cond);
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
@@ -153,6 +155,7 @@ void jl_safepoint_end_gc(void)
     jl_mach_gc_end();
 #  endif
     uv_mutex_unlock(&safepoint_lock);
+    uv_cond_broadcast(&safepoint_cond);
 }
 
 void jl_safepoint_wait_gc(void)
@@ -161,9 +164,7 @@ void jl_safepoint_wait_gc(void)
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) != 0); 
     /* // Use normal volatile load in the loop for speed until GC finishes. */
     /* // Then use an acquire load to make sure the GC result is visible on this thread. */
-    /* while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) { */
-    /*     jl_cpu_pause(); // yield? */
-    /* } */
+  
     jl_safe_printf("jl_safepoint_wait_gc thread = %d\n", jl_threadid());
     jl_ptls_t ptls = jl_current_task->ptls;
     while (jl_atomic_load_relaxed(&jl_gc_running) ||

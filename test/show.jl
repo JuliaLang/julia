@@ -1891,16 +1891,16 @@ function _methodsstr(@nospecialize f)
 end
 
 @testset "show function methods" begin
-    @test occursin("methods for generic function \"sin\":\n", _methodsstr(sin))
+    @test occursin("methods for generic function \"sin\" from Base:\n", _methodsstr(sin))
 end
 @testset "show macro methods" begin
-    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":\n")
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\" from Base:\n")
 end
 @testset "show constructor methods" begin
     @test occursin(" methods for type constructor:\n", _methodsstr(Vector))
 end
 @testset "show builtin methods" begin
-    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\":\n")
+    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\" from Core:\n")
 end
 @testset "show callable object methods" begin
     @test occursin("methods for callable object:\n", _methodsstr(:))
@@ -2360,3 +2360,16 @@ end
     @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
           """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
 end
+
+# Test that alignment takes into account unicode and computes alignment without
+# color/formatting.
+
+struct ColoredLetter; end
+Base.show(io::IO, ces::ColoredLetter) = Base.printstyled(io, 'A'; color=:red)
+
+struct ⛵; end
+Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
+
+@test Base.alignment(stdout, ⛵()) == (0, 2)
+@test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
+@test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)

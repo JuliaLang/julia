@@ -448,6 +448,7 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
         return Bool
     end
+
     # type-lattice for Const and PartialStruct wrappers
     if ((isa(typea, PartialStruct) || isa(typea, Const)) &&
         (isa(typeb, PartialStruct) || isa(typeb, Const)))
