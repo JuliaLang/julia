@@ -167,7 +167,8 @@ function dummy_uuid(project_file::String)
     end
     project_path = try
         realpath(project_file)
-    catch
+    catch ex
+        ex isa IOError || rethrow()
         project_file
     end
     uuid = uuid5(ns_dummy_uuid, project_path)
@@ -367,15 +368,15 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
         for env in load_path()
             # look for the toplevel pkg `pkg.name` in this entry
             found = project_deps_get(env, pkg.name)
-            found === nothing && continue
-            if pkg == found
-                # pkg.name is present in this directory or project file,
-                # return the path the entry point for the code, if it could be found
-                # otherwise, signal failure
-                return implicit_manifest_uuid_path(env, pkg)
+            if found !== nothing
+                @assert found.name == pkg.name
+                if found.uuid === nothing
+                    # pkg.name is present in this directory or project file,
+                    # return the path the entry point for the code, if it could be found
+                    # otherwise, signal failure
+                    return implicit_manifest_uuid_path(env, pkg)
+                end
             end
-            @assert found.uuid !== nothing
-            return locate_package(found) # restart search now that we know the uuid for pkg
         end
     else
         for env in load_path()
@@ -848,6 +849,7 @@ end
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
 function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any})
+    assert_havelock(require_lock)
     sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
     if isa(sv, Exception)
         return sv
@@ -881,6 +883,7 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
 end
 
 function run_package_callbacks(modkey::PkgId)
+    assert_havelock(require_lock)
     unlock(require_lock)
     try
         for callback in package_callbacks
@@ -897,34 +900,51 @@ function run_package_callbacks(modkey::PkgId)
 end
 
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64, modpath::Union{Nothing, String}, depth::Int = 0)
+    assert_havelock(require_lock)
+    local loaded = nothing
     if root_module_exists(modkey)
         M = root_module(modkey)
         if PkgId(M) == modkey && module_build_id(M) === build_id
-            return M
+            loaded = M
         end
     else
-        if modpath === nothing
-            modpath = locate_package(modkey)
-            modpath === nothing && return nothing
+        loading = get(package_locks, modkey, false)
+        if loading !== false
+            # load already in progress for this module
+            return wait(loading)
         end
-        mod = _require_search_from_serialized(modkey, String(modpath), depth)
-        get!(PkgOrigin, pkgorigins, modkey).path = modpath
-        if !isa(mod, Bool)
-            run_package_callbacks(modkey)
-            for M in mod::Vector{Any}
-                M = M::Module
-                if PkgId(M) == modkey && module_build_id(M) === build_id
-                    return M
+        package_locks[modkey] = Threads.Condition(require_lock)
+        try
+            if modpath === nothing
+                modpath = locate_package(modkey)
+                modpath === nothing && return nothing
+            end
+            mod = _require_search_from_serialized(modkey, String(modpath), depth)
+            get!(PkgOrigin, pkgorigins, modkey).path = modpath
+            if !isa(mod, Bool)
+                for M in mod::Vector{Any}
+                    M = M::Module
+                    if PkgId(M) == modkey && module_build_id(M) === build_id
+                        loaded = M
+                        break
+                    end
                 end
             end
+        finally
+            loading = pop!(package_locks, modkey)
+            notify(loading, loaded, all=true)
+        end
+        if loaded !== nothing
+            run_package_callbacks(modkey)
         end
     end
-    return nothing
+    return loaded
 end
 
 function _require_from_serialized(pkg::PkgId, path::String)
     # loads a precompile cache file, ignoring stale_cachfile tests
     # load all of the dependent modules first
+    assert_havelock(require_lock)
     local depmodnames
     io = open(path, "r")
     try
@@ -953,6 +973,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, depth::Int = 0)
+    assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
     try
     if timing_imports
@@ -969,7 +990,8 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         staledeps = staledeps::Vector{Any}
         try
             touch(path_to_try) # update timestamp of precompilation file
-        catch # file might be read-only and then we fail to update timestamp, which is fine
+        catch ex # file might be read-only and then we fail to update timestamp, which is fine
+            ex isa IOError || rethrow()
         end
         # finish loading module graph into staledeps
         for i in 1:length(staledeps)
@@ -987,6 +1009,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
         if staledeps === true
             continue
         end
+        #@debug "Loading cache file $path for $pkg at $sourcepath"
         restored = _include_from_serialized(pkg, path_to_try, staledeps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
@@ -1165,18 +1188,19 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
 function _require_prelocked(uuidkey::PkgId)
-    just_loaded_pkg = false
+    assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
-        _require(uuidkey)
+        newm = _require(uuidkey)
+        if newm === nothing
+            error("package `$(uuidkey.name)` did not define the expected \
+                  module `$(uuidkey.name)`, check for typos in package module name")
+        end
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
-        just_loaded_pkg = true
+    else
+        newm = root_module(uuidkey)
     end
-    if just_loaded_pkg && !root_module_exists(uuidkey)
-        error("package `$(uuidkey.name)` did not define the expected \
-              module `$(uuidkey.name)`, check for typos in package module name")
-    end
-    return root_module(uuidkey)
+    return newm
 end
 
 const loaded_modules = Dict{PkgId,Module}()
@@ -1249,18 +1273,19 @@ function set_pkgorigin_version_path(pkg, path)
     pkgorigin.path = path
 end
 
-# Returns `nothing` or the name of the newly-created cachefile
+# Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId)
+    assert_havelock(require_lock)
     # handle recursive calls to require
     loading = get(package_locks, pkg, false)
     if loading !== false
         # load already in progress for this module
-        wait(loading)
-        return
+        return wait(loading)
     end
     package_locks[pkg] = Threads.Condition(require_lock)
 
     last = toplevel_load[]
+    loaded = nothing
     try
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
@@ -1277,7 +1302,7 @@ function _require(pkg::PkgId)
         if JLOptions().use_compiled_modules != 0
             m = _require_search_from_serialized(pkg, path)
             if !isa(m, Bool)
-                return
+                return m
             end
         end
 
@@ -1312,7 +1337,7 @@ function _require(pkg::PkgId)
                     if isa(m, Exception)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     else
-                        return
+                        return m
                     end
                 end
             end
@@ -1329,7 +1354,7 @@ function _require(pkg::PkgId)
         unlock(require_lock)
         try
             include(__toplevel__, path)
-            return
+            loaded = get(loaded_modules, key, nothing)
         finally
             lock(require_lock)
             if uuid !== old_uuid
@@ -1339,9 +1364,9 @@ function _require(pkg::PkgId)
     finally
         toplevel_load[] = last
         loading = pop!(package_locks, pkg)
-        notify(loading, all=true)
+        notify(loading, loaded, all=true)
     end
-    nothing
+    return loaded
 end
 
 # relative-path load
