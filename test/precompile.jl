@@ -313,8 +313,8 @@ precompile_test_harness(false) do dir
     # the module doesn't reload from the image:
     @test_warn "@ccallable was already defined for this method name" begin
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            ms = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
-            @test isa(ms, Array{Any,1})
+            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
+            @test isa(m, Module)
         end
     end
 
