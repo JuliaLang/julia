@@ -167,7 +167,7 @@ Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
-uses are listed in [`deps/$(LibName).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
+uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
 - **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
@@ -312,20 +312,29 @@ There are two types of builds
     (Add `USE_BINARYBUILDER=0` to `Make.user`, see [Building Julia](#building-julia))
 2. Build from source (`src/`) with pre-compiled dependencies (default)
 
-When you want to update the version number of a dependency in `deps/`, 
-you need to check the following places:
+When you want to update the version number of a dependency in `deps/`,
+you may want to use the following checklist:
 
-Version number:
-- source build: `deps/$(libName).version`: `LIBNAME_VER`, `LIBNAME_BRANCH`, `LIBNAME_SHA1`
-- pre-compiled: `deps/$(libName).version`: `LIBNAME_JLL_VER` *OR* `stdlib/$(LIBNAME_JLL_NAME)_jll\Project.toml`: `version`
+```md
+### Check list
+
+Version numbers:
+- [ ] `deps/$(libname).version`: `LIBNAME_VER`, `LIBNAME_BRANCH`, `LIBNAME_SHA1` and `LIBNAME_JLL_VER`
+- [ ] `stdlib/$(LIBNAME_JLL_NAME)_jll/Project.toml`: `version`
 
 Checksum:
-- `deps/checksums/$(libName)`
-    It may be **a single file** without a suffix, or **a folder** containing two files (`md5` and `sha512`)
+- [ ] `deps/checksums/$(libname)`
+- [ ] `deps/checksums/$(LIBNAME_JLL_NAME)-*/`: `md5` and `sha512`
 
-Makefile & Patches:
-- `deps/$(libName).mk`
-- `deps/patches/$(libName)-*.patch`
+Patches:
+- [ ] `deps/$(libname).mk`
+- [ ] `deps/patches/$(libname)-*.patch`
+```
+
+Note:
+- For specific dependencies, some items in the checklist may not exist.
+- For checksum file, it may be **a single file** without a suffix, or **a folder** containing two files.
+
 
 ### Example: `OpenLibm`
 
