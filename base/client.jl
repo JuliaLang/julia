@@ -370,6 +370,31 @@ function __atreplinit(repl)
 end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
+"""
+    @ismain
+
+Check if the current file is the file passed to Julia from command line.
+
+Evaluates to `true` when placed in the `PROGRAM_FILE`, and `false` when placed
+in any other file. Is `false` when evaluated by `julia -e`.
+
+This macro can be used to check if the script should behave like an executable
+script, e.g. invoking command-line parsing.
+
+# Examples
+```
+if @ismain
+    args = parse_arguments(ARGS)
+    [...]
+```
+
+See also: [`PROGRAM_FILE`](@ref), [`@__FILE__`](@ref)
+"""
+macro ismain()
+    file = __source__.file
+    file === nothing ? false : String(file) == abspath(PROGRAM_FILE)
+end
+
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
     if !isdefined(mod, :InteractiveUtils)

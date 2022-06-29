@@ -91,8 +91,17 @@ obj3 = MyModule.someotherfunction(obj2, c)
 ### How do I check if the current file is being run as the main script?
 
 When a file is run as the main script using `julia file.jl` one might want to activate extra
-functionality like command line argument handling. A way to determine that a file is run in
-this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
+functionality like command line argument handling. The preferred way to handle this is to
+use the macro `@ismain`, as so:
+```julia
+function main()
+    [...]
+end
+
+if @ismain
+    main()
+end
+```
 
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 

@@ -428,6 +428,7 @@ Base.@__MODULE__
 Base.@__FILE__
 Base.@__DIR__
 Base.@__LINE__
+Base.@ismain
 Base.fullname
 Base.names
 Base.nameof(::Function)
