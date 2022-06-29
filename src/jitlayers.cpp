@@ -807,7 +807,7 @@ public:
         PassConfig.PostAllocationPasses.push_back([&Info, this](jitlink::LinkGraph &G) -> Error {
             std::lock_guard<std::mutex> lock(PluginMutex);
             for (const jitlink::Section &Sec : G.sections()) {
-#ifdef _OS_DARWIN_
+#if defined(_OS_DARWIN_)
                 // Canonical JITLink section names have the segment name included, e.g.
                 // "__TEXT,__text" or "__DWARF,__debug_str". There are some special internal
                 // sections without a comma separator, which we can just ignore.
