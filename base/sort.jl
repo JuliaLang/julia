@@ -735,7 +735,7 @@ end
 
 # For AbstractVector{Bool}, counting sort is always best.
 # This is an implementation of counting sort specialized for Bools.
-# Accepts unused workspace to avoid method ambiguity.
+# Accepts unused buffer to avoid method ambiguity.
 function sort!(v::AbstractVector{B}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering,
         t::Union{AbstractVector{B}, Nothing}=nothing) where {B <: Bool}
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
@@ -856,15 +856,15 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
         u[i] -= u_min
     end
 
-    if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned workspace
+    if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned buffer
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, t))
         uint_unmap!(v, u2, lo, hi, o, u_min)
-    elseif t !== nothing && (applicable(resize!, t) || length(t) >= hi-lo+1) # Viable workspace
+    elseif t !== nothing && (applicable(resize!, t) || length(t) >= hi-lo+1) # Viable buffer
         length(t) >= hi-lo+1 || resize!(t, hi-lo+1)
         t1 = axes(t, 1) isa OneTo ? t : view(t, firstindex(t):lastindex(t))
         u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, reinterpret(U, t1))
         uint_unmap!(view(v, lo:hi), u2, 1, hi-lo+1, o, u_min)
-    else # No viable workspace
+    else # No viable buffer
         u2 = radix_sort!(u, lo, hi, bits, similar(u))
         uint_unmap!(v, u2, lo, hi, o, u_min)
     end
@@ -933,8 +933,8 @@ function sort!(v::AbstractVector{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               workspace::Union{AbstractVector{T}, Nothing}=nothing) where T
-    sort!(v, alg, ord(lt,by,rev,order), workspace)
+               buffer::Union{AbstractVector{T}, Nothing}=nothing) where T
+    sort!(v, alg, ord(lt,by,rev,order), buffer)
 end
 
 # sort! for vectors of few unique integers
@@ -1073,7 +1073,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           order::Ordering=Forward,
                           initialized::Bool=false)
     if axes(ix,1) != axes(v,1)
-        throw(ArgumentError("The index vector is used as a workspace and must have the " *
+        throw(ArgumentError("The index vector is used as a buffer and must have the " *
                             "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
     end
     if !initialized
@@ -1140,7 +1140,7 @@ function sortperm(A::AbstractArray;
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward,
-                  workspace::Union{AbstractVector{<:Integer}, Nothing}=nothing,
+                  buffer::Union{AbstractVector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
@@ -1155,7 +1155,7 @@ function sortperm(A::AbstractArray;
         end
     end
     ix = copymutable(LinearIndices(A))
-    sort!(ix; alg, order = Perm(ordr, vec(A)), workspace, dims...)
+    sort!(ix; alg, order = Perm(ordr, vec(A)), buffer, dims...)
 end
 
 
@@ -1201,7 +1201,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false,
-                   workspace::Union{AbstractVector{T}, Nothing}=nothing,
+                   buffer::Union{AbstractVector{T}, Nothing}=nothing,
                    dims...) where T <: Integer #to optionally specify dims argument
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
@@ -1209,7 +1209,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     if !initialized
         ix .= LinearIndices(A)
     end
-    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), workspace, dims...)
+    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), buffer, dims...)
 end
 
 # sortperm for vectors of few unique integers
@@ -1274,7 +1274,7 @@ function sort(A::AbstractArray{T};
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+              buffer::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
     dim = dims
     order = ord(lt,by,rev,order)
     n = length(axes(A, dim))
@@ -1282,11 +1282,11 @@ function sort(A::AbstractArray{T};
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
-        sort_chunks!(Av, n, alg, order, workspace)
+        sort_chunks!(Av, n, alg, order, buffer)
         permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
-        sort_chunks!(Av, n, alg, order, workspace)
+        sort_chunks!(Av, n, alg, order, buffer)
         reshape(Av, axes(A))
     end
 end
@@ -1335,13 +1335,13 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
-    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), workspace)
+               buffer::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), buffer)
 end
 function _sort!(A::AbstractArray{T}, ::Val{K},
                 alg::Algorithm,
                 order::Ordering,
-                workspace::Union{AbstractVector{T}, Nothing}) where {K,T}
+                buffer::Union{AbstractVector{T}, Nothing}) where {K,T}
     nd = ndims(A)
 
     1 <= K <= nd || throw(ArgumentError("dimension out of range"))
@@ -1349,7 +1349,7 @@ function _sort!(A::AbstractArray{T}, ::Val{K},
     remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
         Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
-        sort!(Av, alg, order, workspace)
+        sort!(Av, alg, order, buffer)
     end
     A
 end
