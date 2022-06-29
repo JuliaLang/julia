@@ -894,8 +894,8 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64)
             try
                 modpath = locate_package(modkey)
                 modpath === nothing && return nothing
+                set_pkgorigin_version_path(modkey, String(modpath))
                 loaded = _require_search_from_serialized(modkey, String(modpath), build_id)
-                get!(PkgOrigin, pkgorigins, modkey).path = modpath
             finally
                 loading = pop!(package_locks, modkey)
                 notify(loading, loaded, all=true)
@@ -913,7 +913,7 @@ end
 
 # loads a precompile cache file, ignoring stale_cachefile tests
 # assuming all depmods are already loaded and everything is valid
-function _tryrequire_from_serialized(modkey::PkgId, path::String, depmods::Vector{Any})
+function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::String, depmods::Vector{Any})
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
@@ -934,6 +934,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, depmods::Vecto
             end
             package_locks[modkey] = Threads.Condition(require_lock)
             try
+                set_pkgorigin_version_path(modkey, sourcepath)
                 loaded = _include_from_serialized(modkey, path, depmods)
             finally
                 loading = pop!(package_locks, modkey)
@@ -1001,7 +1002,7 @@ end
                     continue
                 end
                 modstaledeps = modstaledeps::Vector{Any}
-                staledeps[i] = (modkey, modpath_to_try, modstaledeps)
+                staledeps[i] = (modpath, modkey, modpath_to_try, modstaledeps)
                 modfound = true
                 break
             end
@@ -1023,8 +1024,8 @@ end
         for i in 1:length(staledeps)
             dep = staledeps[i]
             dep isa Module && continue
-            modkey, modpath_to_try, modstaledeps = dep::Tuple{PkgId, String, Vector{Any}}
-            dep = _tryrequire_from_serialized(modkey, modpath_to_try, modstaledeps)
+            modpath, modkey, modpath_to_try, modstaledeps = dep::Tuple{String, PkgId, String, Vector{Any}}
+            dep = _tryrequire_from_serialized(modkey, modpath_to_try, modpath, modstaledeps)
             if !isa(dep, Module)
                 @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modpath." exception=dep
                 staledeps = true
@@ -1266,7 +1267,9 @@ function unreference_module(key::PkgId)
     end
 end
 
-function set_pkgorigin_version_path(pkg, path)
+# whoever takes the package_locks[pkg] must call this function immediately
+function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
+    assert_havelock(require_lock)
     pkgorigin = get!(PkgOrigin, pkgorigins, pkg)
     if path !== nothing
         project_file = locate_project_file(joinpath(dirname(path), ".."))
@@ -1279,6 +1282,7 @@ function set_pkgorigin_version_path(pkg, path)
         end
     end
     pkgorigin.path = path
+    nothing
 end
 
 # Returns `nothing` or the new(ish) module
@@ -1298,13 +1302,13 @@ function _require(pkg::PkgId)
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
         path = locate_package(pkg)
-        set_pkgorigin_version_path(pkg, path)
         if path === nothing
             throw(ArgumentError("""
                 Package $pkg is required but does not seem to be installed:
                  - Run `Pkg.instantiate()` to install all recorded dependencies.
                 """))
         end
+        set_pkgorigin_version_path(pkg, path)
 
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
@@ -1378,6 +1382,7 @@ end
 
 function _require_from_serialized(uuidkey::PkgId, path::String)
     @lock require_lock begin
+    set_pkgorigin_version_path(uuidkey, nothing)
     newm = _tryrequire_from_serialized(uuidkey, path)
     newm isa Module || throw(newm)
     # After successfully loading, notify downstream consumers
@@ -2102,7 +2107,6 @@ end
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
                     return true # Won't be able to fulfill dependency
                 end
-                set_pkgorigin_version_path(req_key, path)
                 depmods[i] = (path, req_key, req_build_id)
             end
         end
