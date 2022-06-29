@@ -41,14 +41,22 @@
 // However, JITLink is a relatively young library and lags behind in platform
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64.
-// #define JL_FORCE_JITLINK
-
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK)
-# if JL_LLVM_VERSION < 130000
-#  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
-# endif
+// for Mac/aarch64 and Linux/aarch64.
+#if defined(JL_FORCE_JITLINK)
 # define JL_USE_JITLINK
+#else
+# if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+#  if JL_LLVM_VERSION < 130000
+#   pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
+#  endif
+#  define JL_USE_JITLINK
+# endif
+# if defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+#  if JL_LLVM_VERSION < 150000
+#   pragma message("On aarch64-gnu-linux, LLVM version >= 15 is required for JITLink; fallback suffers from occasional segfaults")
+#  endif
+#  define JL_USE_JITLINK
+# endif
 #endif
 
 #ifdef JL_USE_JITLINK
