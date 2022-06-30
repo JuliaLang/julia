@@ -1892,10 +1892,12 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     elseif !(first(liv) ≤ n ≤ last(liv))
         throw(BoundsError(v, n))
     end
-    r = n
-    @inbounds for i in s:midpoint(s, n-1)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
+    if n > s # non-empty
+        r = n
+        @inbounds for i in s:midpoint(s, n-1)
+            v[i], v[r] = v[r], v[i]
+            r -= 1
+        end
     end
     return v
 end

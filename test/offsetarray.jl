@@ -421,6 +421,11 @@ cv = copy(v)
         vo2 = OffsetArray([1:n;], offset)
         @test reverse!(vo) == OffsetArray(n:-1:1, offset)
         @test reverse!(vo) == vo2
+        @test_throws BoundsError reverse!(vo, firstindex(vo)-1, firstindex(vo))
+        @test reverse!(vo, firstindex(vo), firstindex(vo)-1) == vo2
+        @test reverse!(vo, firstindex(vo), firstindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)+1) == vo2 # overflow in stop
         @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
         @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
     end
