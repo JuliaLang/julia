@@ -1852,6 +1852,11 @@ function reverseind(a::AbstractVector, i::Integer)
     first(li) + last(li) - i
 end
 
+# This implementation of `midpoint` is performance-optimized but safe
+# only if `lo <= hi`.
+midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
+
 """
     reverse!(v [, start=firstindex(v) [, stop=lastindex(v) ]]) -> v
 
@@ -1888,7 +1893,7 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
         throw(BoundsError(v, n))
     end
     r = n
-    @inbounds for i in s:div(s+n-1, 2)
+    @inbounds for i in s:midpoint(s, n-1)
         v[i], v[r] = v[r], v[i]
         r -= 1
     end

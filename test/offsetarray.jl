@@ -414,6 +414,18 @@ rv = reverse(v)
 cv = copy(v)
 @test reverse!(cv) == rv
 
+@testset "reverse! (issue #45870)" begin
+    @testset for n in [4,5]
+        offset = typemax(Int)-n
+        vo = OffsetArray([1:n;], offset)
+        vo2 = OffsetArray([1:n;], offset)
+        @test reverse!(vo) == OffsetArray(n:-1:1, offset)
+        @test reverse!(vo) == vo2
+        @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
+        @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
+    end
+end
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A) == 16
 @test lastindex(A, 1) == 1
