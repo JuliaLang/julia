@@ -487,6 +487,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
 
         mask = bitrand(shape)
         @testset "test logical indexing" begin
+            let
+                masks1 = (mask,)
+                @test only(@inferred(to_indices(A, masks1))) isa Base.LogicalIndex{Int}
+                if IndexStyle(B) isa IndexCartesian
+                    @test only(@inferred(to_indices(B, masks1))) === Base.LogicalIndex(mask)
+                end
+            end
             @test B[mask] == A[mask] == B[findall(mask)] == A[findall(mask)] == LinearIndices(mask)[findall(mask)]
             @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[findall(mask)]
             mask1 = bitrand(size(A, 1))
@@ -496,10 +503,15 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
 
             if ndims(B) > 1
+                slice = ntuple(Returns(:), ndims(B)-1)
                 maskfront = bitrand(shape[1:end-1])
-                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
-                @test B[maskfront,1] == Bslice[maskfront]
+                Bslicefront = B[slice..., 1]
+                @test B[maskfront, 1] == Bslicefront[maskfront]
                 @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+                maskend = bitrand(shape[2:end])
+                Bsliceend = B[1, slice...]
+                @test B[1 ,maskend] == Bsliceend[maskend]
+                @test size(B[1:1, maskend]) == (1, sum(maskend))
             end
         end
     end
