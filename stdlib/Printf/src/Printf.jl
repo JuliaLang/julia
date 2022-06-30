@@ -863,7 +863,7 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 ```
 
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
-See also [`@sprintf`](@ref).
+See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
 
 # Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,

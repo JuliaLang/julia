@@ -19,9 +19,9 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         @noinline
         throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
     end
-    function throwsingleton(S::Type, T::Type, kind)
+    function throwsingleton(S::Type, T::Type)
         @noinline
-        throw(ArgumentError("cannot reinterpret $kind `$(S)` array to `$(T)` which is a singleton type"))
+        throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` which is a singleton type"))
     end
 
     global reinterpret
@@ -44,7 +44,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
             ax1 = axes(a)[1]
             dim = length(ax1)
             if issingletontype(T)
-                dim == 0 || throwsingleton(S, T, "a non-empty")
+                issingletontype(S) || throwsingleton(S, T)
             else
                 rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
             end
@@ -75,7 +75,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)
-            issingletontype(T) && throwsingleton(S, T, "with reshape a")
+            issingletontype(T) && throwsingleton(S, T)
             rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
             N = ndims(a) + 1
         else

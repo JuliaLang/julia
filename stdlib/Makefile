@@ -6,7 +6,7 @@ SRCCACHE := $(abspath $(SRCDIR)/srccache)
 BUILDDIR := .
 
 include $(JULIAHOME)/Make.inc
-include $(JULIAHOME)/deps/Versions.make
+include $(JULIAHOME)/stdlib/all_jlls.version
 include $(JULIAHOME)/deps/tools/common.mk
 include $(JULIAHOME)/deps/tools/stdlib-external.mk
 
@@ -19,7 +19,7 @@ JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
        BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
        LLVMUNWIND CSL UNWIND
 
-# Initialize this with JLLs that aren't in deps/Versions.make
+# Initialize this with JLLs that aren't in "deps/$(LibName).version"
 JLL_NAMES := MozillaCACerts_jll
 get-MozillaCACerts_jll:
 install-MozillaCACerts_jll:
@@ -44,7 +44,7 @@ STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching 
           SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
-STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
+STDLIBS_EXT = Pkg Statistics LibCURL DelimitedFiles Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 

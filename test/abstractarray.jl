@@ -1469,9 +1469,7 @@ using Base: typed_hvncat
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            # current behavior, not potentially dangerous.
-            # should throw error like above loop
-            @test [v1 ;;; v2 v3] == [v2 v3;;;]
+            @test_throws ArgumentError [v1 ;;; v2 v3]
             @test_throws ArgumentError [v1 ;;; v2]
             @test_throws ArgumentError [v1 v1 ;;; v2 v3]
         end
@@ -1543,6 +1541,8 @@ using Base: typed_hvncat
     # Issue 43933 - semicolon precedence mistake should produce an error
     @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
     @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
+
+    @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
 end
 
 @testset "keepat!" begin
@@ -1567,8 +1567,12 @@ end
 end
 
 @testset "reshape methods for AbstractVectors" begin
-    r = Base.IdentityUnitRange(3:4)
-    @test reshape(r, :) === reshape(r, (:,)) === r
+    for r in Any[1:3, Base.IdentityUnitRange(3:4)]
+        @test reshape(r, :) === reshape(r, (:,)) === r
+    end
+    r = 3:5
+    rr = reshape(r, 1, 3)
+    @test length(rr) == length(r)
 end
 
 @testset "strides for ReshapedArray" begin
@@ -1603,10 +1607,13 @@ end
 end
 
 @testset "to_indices inference (issue #42001 #44059)" begin
-    @test (@inferred to_indices([], ntuple(Returns(CartesianIndex(1)), 32))) == ntuple(Returns(1), 32)
-    @test (@inferred to_indices([], ntuple(Returns(CartesianIndices(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
-    @test (@inferred to_indices([], (CartesianIndex(),1,CartesianIndex(1,1,1)))) == ntuple(Returns(1), 4)
-    A = randn(2,2,2,2,2,2);
-    i = CartesianIndex((1,1))
+    CIdx = CartesianIndex
+    CIdc = CartesianIndices
+    @test (@inferred to_indices([], ntuple(Returns(CIdx(1)), 32))) == ntuple(Returns(1), 32)
+    @test (@inferred to_indices([], ntuple(Returns(CIdc(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
+    @test (@inferred to_indices([], (CIdx(), 1, CIdx(1,1,1)))) == ntuple(Returns(1), 4)
+    A = randn(2, 2, 2, 2, 2, 2);
+    i = CIdx((1, 1))
     @test (@inferred A[i,i,i]) === A[1]
+    @test (@inferred to_indices([], (1, CIdx(1, 1), 1, CIdx(1, 1), 1, CIdx(1, 1), 1))) == ntuple(Returns(1), 10)
 end

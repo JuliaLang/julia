@@ -239,12 +239,6 @@ DocMeta.setdocmeta!(
     recursive=true, warn=false,
 )
 DocMeta.setdocmeta!(
-    SuiteSparse,
-    :DocTestSetup,
-    maybe_revise(:(using SparseArrays, LinearAlgebra, SuiteSparse));
-    recursive=true, warn=false,
-)
-DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,
     maybe_revise(:(using UUIDs, Random));

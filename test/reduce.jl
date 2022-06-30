@@ -671,9 +671,22 @@ end
 # issue #38627
 @testset "overflow in mapreduce" begin
     # at len = 16 and len = 1025 there is a change in codepath
-    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+    for len in [1, 15, 16, 1024, 1025, 2048, 2049]
         oa = OffsetArray(repeat([1], len), typemax(Int)-len)
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+# issue #45748
+@testset "foldl's stability for nested Iterators" begin
+    a = Iterators.flatten((1:3, 1:3))
+    b = (2i for i in a if i > 0)
+    c = Base.Generator(Float64, b)
+    d = (sin(i) for i in c if i > 0)
+    @test @inferred(sum(d)) == sum(collect(d))
+    @test @inferred(extrema(d)) == extrema(collect(d))
+    @test @inferred(maximum(c)) == maximum(collect(c))
+    @test @inferred(prod(b)) == prod(collect(b))
+    @test @inferred(minimum(a)) == minimum(collect(a))
 end

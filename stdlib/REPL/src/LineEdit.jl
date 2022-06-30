@@ -63,6 +63,7 @@ show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), 
 
 mutable struct MIState
     interface::ModalInterface
+    active_module::Module
     current_mode::TextInterface
     aborted::Bool
     mode_state::IdDict{TextInterface,ModeState}
@@ -74,7 +75,7 @@ mutable struct MIState
     current_action::Symbol
 end
 
-MIState(i, c, a, m) = MIState(i, c, a, m, String[], 0, Char[], 0, :none, :none)
+MIState(i, mod, c, a, m) = MIState(i, mod, c, a, m, String[], 0, Char[], 0, :none, :none)
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -176,6 +177,10 @@ struct EmptyHistoryProvider <: HistoryProvider end
 reset_state(::EmptyHistoryProvider) = nothing
 
 complete_line(c::EmptyCompletionProvider, s) = String[], "", true
+
+# complete_line can be specialized for only two arguments, when the active module
+# doesn't matter (e.g. Pkg does this)
+complete_line(c::CompletionProvider, s, ::Module) = complete_line(c, s)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -343,7 +348,7 @@ end
 # Prompt Completions
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
-    if complete_line(state(s), s.key_repeats)
+    if complete_line(state(s), s.key_repeats, s.active_module)
         return refresh_line(s)
     else
         beep(s)
@@ -351,8 +356,8 @@ function complete_line(s::MIState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int)
-    completions, partial, should_complete = complete_line(s.p.complete, s)::Tuple{Vector{String},String,Bool}
+function complete_line(s::PromptState, repeats::Int, mod::Module)
+    completions, partial, should_complete = complete_line(s.p.complete, s, mod)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -1087,8 +1092,9 @@ function edit_transpose_chars(s::MIState)
 end
 
 function edit_transpose_chars(buf::IOBuffer)
-    position(buf) == 0 && return false
+    # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
     eof(buf) && char_move_left(buf)
+    position(buf) == 0 && return false
     char_move_left(buf)
     pos = position(buf)
     a, b = read(buf, Char), read(buf, Char)
@@ -1314,7 +1320,7 @@ function guess_current_mode_name(s)
 end
 
 # edit current input in editor
-function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, line))
+function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(filename, line, column))
     mode_name = guess_current_mode_name(s)
     filename = tempname()
     if mode_name == :julia
@@ -1325,9 +1331,26 @@ function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, l
     buf = buffer(s)
     pos = position(buf)
     str = String(take!(buf))
-    line = 1 + count(==(_newline), view(str, 1:pos))
+    lines = readlines(IOBuffer(str); keep=true)
+
+    # Compute line
+    line_start_offset = 0
+    line = 1
+    while line < length(lines) && line_start_offset + sizeof(lines[line]) <= pos
+        line_start_offset += sizeof(lines[line])
+        line += 1
+    end
+
+    # Compute column
+    col = 0
+    off = line_start_offset
+    while off <= pos
+        off = nextind(str, off)
+        col += 1
+    end
+
     write(filename, str)
-    f(filename, line)
+    f(filename, line, col)
     str_mod = readchomp(filename)
     rm(filename)
     if str != str_mod # something was changed, run the input
@@ -1338,6 +1361,49 @@ function edit_input(s, f = (filename, line) -> InteractiveUtils.edit(filename, l
         write(buf, str)
         seek(buf, pos) # restore state from before edit
         refresh_line(s)
+    end
+end
+
+# return the identifier under the cursor, possibly with other words concatenated
+# to it with dots (e.g. "A.B.C" in "X; A.B.C*3", if the cursor is between "A" and "C")
+function current_word_with_dots(buf::IOBuffer)
+    pos = position(buf)
+    while true
+        char_move_word_right(buf)
+        if eof(buf) || peek(buf, Char) != '.'
+            break
+        end
+    end
+    pend = position(buf)
+    while true
+        char_move_word_left(buf)
+        p = position(buf)
+        p == 0 && break
+        seek(buf, p-1)
+        if peek(buf, Char) != '.'
+            seek(buf, p)
+            break
+        end
+    end
+    pbegin = position(buf)
+    word = pend > pbegin ?
+        String(buf.data[pbegin+1:pend]) :
+        ""
+    seek(buf, pos)
+    word
+end
+
+current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
+
+function activate_module(s::MIState)
+    word = current_word_with_dots(s);
+    isempty(word) && return beep(s)
+    try
+        mod = Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
+        REPL.activate(mod)
+        edit_clear(s)
+    catch
+        beep(s)
     end
 end
 
@@ -1962,8 +2028,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s)
+function complete_line(s::SearchState, repeats, mod::Module)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
@@ -2383,6 +2449,7 @@ AnyDict(
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
     "\ee" => (s::MIState,o...) -> edit_input(s),
+    "\em" => (s::MIState, o...) -> activate_module(s)
 )
 
 const history_keymap = AnyDict(
@@ -2419,6 +2486,7 @@ const prefix_history_keymap = merge!(
         end,
         # match escape sequences for pass through
         "^x*" => "*",
+        "\em*" => "*",
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
@@ -2537,7 +2605,7 @@ init_state(terminal, prompt::Prompt) =
                 #=indent(spaces)=# -1, Threads.SpinLock(), 0.0, -Inf, nothing)
 
 function init_state(terminal, m::ModalInterface)
-    s = MIState(m, m.modes[1], false, IdDict{Any,Any}())
+    s = MIState(m, Main, m.modes[1], false, IdDict{Any,Any}())
     for mode in m.modes
         s.mode_state[mode] = init_state(terminal, mode)
     end

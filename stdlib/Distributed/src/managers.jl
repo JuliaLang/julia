@@ -107,7 +107,9 @@ addprocs([
   processes. Default is `false`.
 
 * `exename`: name of the `julia` executable. Defaults to `"\$(Sys.BINDIR)/julia"` or
-  `"\$(Sys.BINDIR)/julia-debug"` as the case may be.
+  `"\$(Sys.BINDIR)/julia-debug"` as the case may be. It is recommended that a common Julia
+  version is used on all remote machines because serialization and code distribution might
+  fail otherwise.
 
 * `exeflags`: additional flags passed to the worker processes.
 
@@ -722,4 +724,27 @@ function kill(manager::SSHManager, pid::Int, config::WorkerConfig)
     remote_do(exit, pid)
     cancel_ssh_tunnel(config)
     nothing
+end
+
+function kill(manager::LocalManager, pid::Int, config::WorkerConfig; exit_timeout = 15, term_timeout = 15)
+    # First, try sending `exit()` to the remote over the usual control channels
+    remote_do(exit, pid)
+
+    timer_task = @async begin
+        sleep(exit_timeout)
+
+        # Check to see if our child exited, and if not, send an actual kill signal
+        if !process_exited(config.process)
+            @warn("Failed to gracefully kill worker $(pid), sending SIGTERM")
+            kill(config.process, Base.SIGTERM)
+
+            sleep(term_timeout)
+            if !process_exited(config.process)
+                @warn("Worker $(pid) ignored SIGTERM, sending SIGKILL")
+                kill(config.process, Base.SIGKILL)
+            end
+        end
+    end
+    errormonitor(timer_task)
+    return nothing
 end

@@ -97,6 +97,7 @@ void jl_write_compiler_output(void)
                            jl_options.outputo,
                            jl_options.outputasm,
                            (const char*)s->buf, (size_t)s->size);
+            jl_postoutput_hook();
         }
     }
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {

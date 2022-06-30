@@ -14,8 +14,6 @@
 
 #include "llvm-version.h"
 
-#define DEBUG_TYPE "demote_float16"
-
 #include "support/dtypes.h"
 #include "passes.h"
 
@@ -27,6 +25,8 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
+
+#define DEBUG_TYPE "demote_float16"
 
 using namespace llvm;
 
@@ -147,7 +147,7 @@ static bool demoteFloat16(Function &F)
     if (erase.size() > 0) {
         for (auto V : erase)
             V->eraseFromParent();
-        assert(!verifyFunction(F));
+        assert(!verifyFunction(F, &errs()));
         return true;
     }
     else

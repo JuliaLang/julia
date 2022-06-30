@@ -1,0 +1,31 @@
+# -*- mode: makefile -*-
+## All `_jll` names and versions
+
+## TODO: Automatic include of all `*.version` makefile
+
+include $(JULIAHOME)/deps/blastrampoline.version
+include $(JULIAHOME)/deps/clang.version
+include $(JULIAHOME)/deps/csl.version
+include $(JULIAHOME)/deps/curl.version
+include $(JULIAHOME)/deps/dsfmt.version
+include $(JULIAHOME)/deps/gmp.version
+include $(JULIAHOME)/deps/libgit2.version
+include $(JULIAHOME)/deps/libssh2.version
+include $(JULIAHOME)/deps/libsuitesparse.version
+include $(JULIAHOME)/deps/libuv.version
+# include $(JULIAHOME)/deps/libwhich.version  # no _jll pkg
+include $(JULIAHOME)/deps/llvm.version
+include $(JULIAHOME)/deps/llvm-tools.version
+include $(JULIAHOME)/deps/llvmunwind.version
+include $(JULIAHOME)/deps/mbedtls.version
+include $(JULIAHOME)/deps/mpfr.version
+include $(JULIAHOME)/deps/nghttp2.version
+include $(JULIAHOME)/deps/objconv.version
+include $(JULIAHOME)/deps/openblas.version
+include $(JULIAHOME)/deps/openlibm.version
+include $(JULIAHOME)/deps/p7zip.version
+# include $(JULIAHOME)/deps/patchelf.version  # no _jll pkg
+include $(JULIAHOME)/deps/pcre.version
+include $(JULIAHOME)/deps/unwind.version
+# include $(JULIAHOME)/deps/utf8proc.version  # no _jll pkg
+include $(JULIAHOME)/deps/zlib.version

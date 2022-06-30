@@ -351,6 +351,11 @@ function wait(t::Task)
     nothing
 end
 
+"""
+    fetch(x::Any)
+
+Return `x`.
+"""
 fetch(@nospecialize x) = x
 
 """

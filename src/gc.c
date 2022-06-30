@@ -481,14 +481,16 @@ static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
 void jl_gc_run_all_finalizers(jl_task_t *ct)
 {
     schedule_all_finalizers(&finalizer_list_marked);
+    // This could be run before we had a chance to setup all threads
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        schedule_all_finalizers(&ptls2->finalizers);
+        if (ptls2)
+            schedule_all_finalizers(&ptls2->finalizers);
     }
     run_finalizers(ct);
 }
 
-static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
+void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 {
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
     arraylist_t *a = &ptls->finalizers;
@@ -518,7 +520,7 @@ static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
-    gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT
@@ -527,7 +529,7 @@ JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_funct
         jl_gc_add_ptr_finalizer(ptls, v, jl_unbox_voidpointer(f));
     }
     else {
-        gc_add_finalizer_(ptls, v, f);
+        jl_gc_add_finalizer_(ptls, v, f);
     }
 }
 
@@ -589,17 +591,19 @@ static int64_t last_gc_total_bytes = 0;
 // max_total_memory is a suggestion.  We try very hard to stay
 // under this limit, but we will go above it rather than halting.
 #ifdef _P64
+typedef uint64_t memsize_t;
 #define default_collect_interval (5600*1024*sizeof(void*))
 static size_t max_collect_interval = 1250000000UL;
 // Eventually we can expose this to the user/ci.
-static uint64_t max_total_memory = (uint64_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
+memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
+typedef uint32_t memsize_t;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t max_collect_interval =  500000000UL;
 // Work really hard to stay within 2GB
 // Alternative is to risk running out of address space
 // on 32 bit architectures.
-static uint32_t max_total_memory = (uint32_t) 2 * 1024 * 1024 * 1024;
+memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
 #endif
 
 // global variables for GC stats
@@ -2961,6 +2965,13 @@ JL_DLLEXPORT jl_gc_num_t jl_gc_num(void)
     return num;
 }
 
+JL_DLLEXPORT void jl_gc_reset_stats(void)
+{
+    gc_num.max_pause = 0;
+    gc_num.max_memory = 0;
+    gc_num.max_time_to_safepoint = 0;
+}
+
 // TODO: these were supposed to be thread local
 JL_DLLEXPORT int64_t jl_gc_diff_total_bytes(void) JL_NOTSAFEPOINT
 {
@@ -3057,9 +3068,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_mark_sp_t sp;
     gc_mark_sp_init(gc_cache, &sp);
 
-    uint64_t t0 = jl_hrtime();
+    uint64_t gc_start_time = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     JL_PROBE_GC_MARK_BEGIN();
+    uint64_t start_mark_time = jl_hrtime();
 
     // 1. fix GC bits of objects in the remset.
     for (int t_i = 0; t_i < jl_n_threads; t_i++)
@@ -3088,7 +3100,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
-    gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes);
+    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
+    uint64_t end_mark_time = jl_hrtime();
+    uint64_t mark_time = end_mark_time - start_mark_time;
+    gc_num.mark_time = mark_time;
+    gc_num.total_mark_time += mark_time;
     int64_t actual_allocd = gc_num.since_sweep;
     // marking is over
 
@@ -3168,6 +3184,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         }
     }
 
+
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
     // we either free some space or get an OOM error.
@@ -3189,6 +3206,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
     scanned_bytes = 0;
     // 5. start sweeping
+    uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
     sweep_weak_refs();
     sweep_stack_pools();
@@ -3200,6 +3218,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     if (sweep_full)
         gc_sweep_perm_alloc();
     JL_PROBE_GC_SWEEP_END();
+
+    uint64_t gc_end_time = jl_hrtime();
+    uint64_t pause = gc_end_time - gc_start_time;
+    uint64_t sweep_time = gc_end_time - start_sweep_time;
+    gc_num.total_sweep_time += sweep_time;
+    gc_num.sweep_time = sweep_time;
+
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
@@ -3232,13 +3257,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 #endif
 
-    uint64_t gc_end_t = jl_hrtime();
-    uint64_t pause = gc_end_t - t0;
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
-    gc_final_pause_end(t0, gc_end_t);
-    gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,
+    gc_final_pause_end(gc_start_time, gc_end_time);
+    gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     uint64_t max_memory = last_live_bytes + gc_num.allocd;
@@ -3258,7 +3281,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
       if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
 
-    // We need this for 32 bit but will be useful to set limits on 64 bit
     if (gc_num.interval + live_bytes > max_total_memory) {
         if (live_bytes < max_total_memory) {
             gc_num.interval = max_total_memory - live_bytes;
@@ -3269,7 +3291,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
        }
     }
 
-    gc_time_summary(sweep_full, t_start, gc_end_t, gc_num.freed, live_bytes, gc_num.interval, pause);
+    gc_time_summary(sweep_full, t_start, gc_end_time, gc_num.freed,
+                    live_bytes, gc_num.interval, pause,
+                    gc_num.time_to_safepoint,
+                    gc_num.mark_time, gc_num.sweep_time);
 
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
@@ -3303,6 +3328,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     jl_atomic_store_release(&ptls->gc_state, JL_GC_STATE_WAITING);
     // `jl_safepoint_start_gc()` makes sure only one thread can
     // run the GC.
+    uint64_t t0 = jl_hrtime();
     if (!jl_safepoint_start_gc()) {
         // Multithread only. See assertion in `safepoint.c`
         jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
@@ -3319,6 +3345,12 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
     JL_PROBE_GC_STOP_THE_WORLD();
+
+    uint64_t t1 = jl_hrtime();
+    uint64_t duration = t1 - t0;
+    if (duration > gc_num.max_time_to_safepoint)
+        gc_num.max_time_to_safepoint = duration;
+    gc_num.time_to_safepoint = duration;
 
     gc_invoke_callbacks(jl_gc_cb_pre_gc_t,
         gc_cblist_pre_gc, (collection));
@@ -3432,18 +3464,33 @@ void jl_gc_init(void)
     gc_num.max_memory = 0;
 
 #ifdef _P64
-    // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
+    // on a big memory machine, set max_collect_interval to totalmem / nthreads / 2
     uint64_t total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    size_t maxmem = total_mem / jl_cpu_threads() / 2;
+    size_t maxmem = total_mem / jl_n_threads / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif
+
+    // We allocate with abandon until we get close to the free memory on the machine.
+    uint64_t free_mem = uv_get_free_memory();
+    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
+
+    if (high_water_mark < max_total_memory)
+       max_total_memory = high_water_mark;
+
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
     t_start = jl_hrtime();
+}
+
+void jl_gc_set_max_memory(uint64_t max_mem) {
+    if (max_mem > 0
+        && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
+        max_total_memory = max_mem;
+    }
 }
 
 // callback for passing OOM errors from gmp
@@ -3717,6 +3764,7 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #endif
     errno = last_errno;
     jl_may_leak(base);
+    assert(align > 0);
     unsigned diff = (offset - base) % align;
     return (void*)(base + diff);
 }

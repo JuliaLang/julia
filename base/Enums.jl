@@ -36,7 +36,7 @@ Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 function Base.show(io::IO, x::Enum)
     sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
-        from = get(io, :module, Main)
+        from = get(io, :module, Base.active_module())
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
             show(io, def)
@@ -206,6 +206,9 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        let enum_hash = hash($(esc(typename)))
+            Base.hash(x::$(esc(typename)), h::UInt) = hash(enum_hash, hash(Integer(x), h))
+        end
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts
         end

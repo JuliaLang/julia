@@ -375,6 +375,16 @@ let buf = IOBuffer()
     @test content(buf) == "βγαεδ"
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "βγαδε"
+
+    seek(buf, 0)
+    @inferred(LineEdit.edit_clear(buf))
+    edit_insert(buf, "a")
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    seekend(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    @test position(buf) == 0
 end
 
 @testset "edit_word_transpose" begin

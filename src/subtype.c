@@ -1542,8 +1542,15 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         *subtype = 1;
         return 1;
     }
-    if (jl_is_unionall(x))
-        x = jl_unwrap_unionall(x);
+    while (jl_is_unionall(x)) {
+        if (!jl_is_unionall(y)) {
+            if (obvious_subtype(jl_unwrap_unionall(x), y, y0, subtype) && !*subtype)
+                return 1;
+            return 0;
+        }
+        x = ((jl_unionall_t*)x)->body;
+        y = ((jl_unionall_t*)y)->body;
+    }
     if (jl_is_unionall(y))
         y = jl_unwrap_unionall(y);
     if (x == (jl_value_t*)jl_typeofbottom_type->super)
