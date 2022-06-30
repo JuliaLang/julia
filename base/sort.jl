@@ -535,7 +535,7 @@ end
 #
 # This method is redefined to rand(lo:hi) in Random.jl
 # We can't use rand here because it is not available in Core.Compiler and
-# because rand is defined in the stdlib Random.jl after sorting it used in Base.
+# because rand is defined in the stdlib Random.jl after sorting is used in Base.
 select_pivot(lo::Integer, hi::Integer) = midpoint(lo, hi)
 
 # select a pivot, partition v[lo:hi] according
@@ -572,7 +572,8 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v:
     pivot, lo-trues
 end
 
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort, o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
+               o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false)
     while lo < hi && hi - lo > SMALL_THRESHOLD
         pivot, j = swap ? partition!(v, lo, hi, o, t, rev) : partition!(t, lo, hi, o, v, rev)
         @inbounds v[j] = pivot
@@ -717,7 +718,7 @@ end
 # This is an implementation of counting sort specialized for Bools.
 # Accepts unused buffer to avoid method ambiguity.
 function sort!(v::AbstractVector{B}, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering,
-        t::Union{AbstractVector{B}, Nothing}=nothing) where {B <: Bool}
+               t::Union{AbstractVector{B}, Nothing}=nothing) where {B <: Bool}
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
     @inbounds for i in lo:hi
@@ -742,7 +743,7 @@ function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     mn, mx
 end
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering,
-        t::Union{AbstractVector{T}, Nothing}=nothing) where T
+               t::Union{AbstractVector{T}, Nothing}=nothing) where T
     # if the sorting task is not UIntMappable, then we can't radix sort or sort_int_range!
     # so we skip straight to the fallback algorithm which is comparison based.
     U = UIntMappable(eltype(v), o)
@@ -857,12 +858,12 @@ defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
 defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 function sort!(v::AbstractVector{T}, alg::Algorithm,
-        order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
+               order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
     sort!(v, firstindex(v), lastindex(v), alg, order, t)
 end
 
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, alg::Algorithm,
-        order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
+               order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
     sort!(v, lo, hi, alg, order)
 end
 
@@ -1546,7 +1547,7 @@ issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
-        t::Union{AbstractVector{T}, Nothing}=nothing) where T
+                 t::Union{AbstractVector{T}, Nothing}=nothing) where T
     # fpsort!'s optimizations speed up comparisons, of which there are O(nlogn).
     # The overhead is O(n). For n < 10, it's not worth it.
     length(v) < 10 && return sort!(v, firstindex(v), lastindex(v), SMALL_ALGORITHM, o, t)
@@ -1564,12 +1565,13 @@ function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
     return v
 end
 
+
 function sort!(v::FPSortable, a::Algorithm, o::DirectOrdering,
-        t::Union{FPSortable, Nothing}=nothing)
+               t::Union{FPSortable, Nothing}=nothing)
     fpsort!(v, a, o, t)
 end
 function sort!(v::AbstractVector{T}, a::Algorithm, o::Perm{<:DirectOrdering,<:FPSortable},
-        t::Union{AbstractVector{T}, Nothing}=nothing) where T <: Union{Signed, Unsigned}
+               t::Union{AbstractVector{T}, Nothing}=nothing) where T <: Union{Signed, Unsigned}
     fpsort!(v, a, o, t)
 end
 
