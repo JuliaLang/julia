@@ -986,19 +986,28 @@ end
 @test_nowarn Core.eval(Main, :(import ....Main))
 
 # issue #27239
+using Base.BinaryPlatforms: HostPlatform, libc
 @testset "strftime tests issue #27239" begin
-    # change to non-Unicode Korean
+    # change to non-Unicode Korean to test that it is properly transcoded into valid UTF-8
     korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-    timestrs = String[]
-    withlocales(korloc) do
-        # system dependent formats
-        push!(timestrs, Libc.strftime(0.0))
-        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
+    at_least_one_locale_found = false
+    withlocales(korloc) do locale
+        at_least_one_locale_found = true
+        # Test both the default format and a custom formatting string
+        for s in (Libc.strftime(0.0), Libc.strftime("%a %A %b %B %p %Z", 0))
+            # Ensure that we always get valid UTF-8 back
+            @test isvalid(s)
+
+            # On `musl` it is impossible for `setlocale` to fail, it just falls back to
+            # the default system locale, which on our buildbots is en_US.UTF-8.  We'll
+            # assert that what we get does _not_ start with `Thu`, as that's what all
+            # en_US.UTF-8 encodings would start with.
+            # X-ref: https://musl.openwall.narkive.com/kO1vpTWJ/setlocale-behavior-with-missing-locales
+            @test !startswith(s, "Thu") broken=(libc(HostPlatform()) == "musl")
+        end
     end
-    # tests
-    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
-    for s in timestrs
-        @test isvalid(s)
+    if !at_least_one_locale_found
+        @warn "skipping stftime tests: no locale found for testing"
     end
 end
 
