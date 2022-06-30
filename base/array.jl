@@ -1885,14 +1885,13 @@ julia> A
 """
 function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     s, n = Int(start), Int(stop)
-    liv = LinearIndices(v)
-    if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
-        throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
-        throw(BoundsError(v, n))
-    end
-    if n > s # non-empty
+    if n > s # non-empty and non-trivial
+        liv = LinearIndices(v)
+        if !(first(liv) ≤ s ≤ last(liv))
+            throw(BoundsError(v, s))
+        elseif !(first(liv) ≤ n ≤ last(liv))
+            throw(BoundsError(v, n))
+        end
         r = n
         @inbounds for i in s:midpoint(s, n-1)
             v[i], v[r] = v[r], v[i]
