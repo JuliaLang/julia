@@ -1135,7 +1135,11 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
-            @warn "Replacing module `$(key.name)`"
+            if (0 != ccall(:jl_generating_output, Cint, ())) && (JLOptions().incremental != 0)
+                error("Replacing module `$(key.name)`")
+            else
+                @warn "Replacing module `$(key.name)`"
+            end
         end
     end
     loaded_modules[key] = m
