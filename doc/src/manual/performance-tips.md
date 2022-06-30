@@ -1050,8 +1050,8 @@ That is, `fdot(x)` is ten times faster and allocates 1/6 the
 memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
 a new temporary array and executes in a separate loop. In this example
 `f.(x)` is as fast as `fdot(x)` but in many contexts it is more
-convenient to just sprinkle some dots in your expressions rather than
-defining a separate function for each vectorized operation.
+convenient to sprinkle some dots in your expressions than to
+define a separate function for each vectorized operation.
 
 ## [Consider using views for slices](@id man-performance-views)
 
