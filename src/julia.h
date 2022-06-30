@@ -359,7 +359,7 @@ struct _jl_method_instance_t {
         jl_method_t *method; // method this is specialized from
     } def; // pointer back to the context for this code
     jl_value_t *specTypes;  // argument types this was specialized for
-    jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
+    jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->slot_syms
     jl_value_t *uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which contain a call into this method-instance
     jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations

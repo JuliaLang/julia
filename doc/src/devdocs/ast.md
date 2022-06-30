@@ -608,7 +608,7 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
+    The values of the static parameters in `specTypes` indexed by `def.method->slot_syms`. For the
     `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
     runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
     indexable.
