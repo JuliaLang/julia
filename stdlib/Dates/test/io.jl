@@ -548,7 +548,7 @@ end
             @test Time("$t12", "$HH:MMp") == t
         end
         local tmstruct, strftime
-        withlocales(["C"]) do
+        withlocales(["C"]) do locale
             # test am/pm comparison handling
             tmstruct = Libc.strptime("%I:%M%p", t12)
             strftime = Libc.strftime("%I:%M%p", tmstruct)

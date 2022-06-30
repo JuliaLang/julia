@@ -250,7 +250,7 @@ function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
     is.flag[idx] = newval[:flag]
     return is
 end
-function setindex!(is::InstructionStream, newval::AnySSAValue, idx::Int)
+function setindex!(is::InstructionStream, newval::Union{AnySSAValue, Nothing}, idx::Int)
     is.inst[idx] = newval
     return is
 end
@@ -343,7 +343,7 @@ function getindex(x::IRCode, s::SSAValue)
     end
 end
 
-function setindex!(x::IRCode, repl::Union{Instruction, AnySSAValue}, s::SSAValue)
+function setindex!(x::IRCode, repl::Union{Instruction, Nothing, AnySSAValue}, s::SSAValue)
     if s.id <= length(x.stmts)
         x.stmts[s.id] = repl
     else
@@ -509,8 +509,11 @@ function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::
     node[:line] = something(inst.line, ir.stmts[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
-        if stmt_effect_free(inst.stmt, inst.type, ir)
-            flag |= IR_FLAG_EFFECT_FREE
+        (effect_free_and_nothrow, nothrow) = stmt_effect_flags(inst.stmt, inst.type, ir)
+        if effect_free_and_nothrow
+            flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        elseif nothrow
+            flag |= IR_FLAG_NOTHROW
         end
     end
     node[:inst], node[:type], node[:flag] = inst.stmt, inst.type, flag
@@ -830,8 +833,13 @@ function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, re
         resize!(compact, result_idx)
     end
     flag = inst.flag
-    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact)
-        flag |= IR_FLAG_EFFECT_FREE
+    if !inst.effect_free_computed
+        (effect_free_and_nothrow, nothrow) = stmt_effect_flags(inst.stmt, inst.type, compact)
+        if effect_free_and_nothrow
+            flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        elseif nothrow
+            flag |= IR_FLAG_NOTHROW
+        end
     end
     node = compact.result[result_idx]
     node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, inst.line, flag

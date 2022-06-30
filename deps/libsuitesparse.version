@@ -1,0 +1,5 @@
+## jll artifact
+LIBSUITESPARSE_JLL_NAME := SuiteSparse
+
+## source build
+LIBSUITESPARSE_VER := 5.10.1
