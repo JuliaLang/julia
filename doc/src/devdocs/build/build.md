@@ -144,7 +144,7 @@ Notes for various architectures:
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 7.1) or **[Clang][clang]** (>= 5.0, >= 9.3 for Apple Clang) — compiling and linking C, C++.
+- **[gcc & g++][gcc]** (>= 5.1) or **[Clang][clang]** (>= 3.5, >= 6.0 for Apple Clang) — compiling and linking C, C++.
 - **[libatomic][gcc]**          — provided by **[gcc]** and needed to support atomic operations.
 - **[python]** (>=2.7)          — needed to build LLVM.
 - **[gfortran]**                — compiling and linking Fortran libraries.
