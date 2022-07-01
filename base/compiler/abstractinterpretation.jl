@@ -1867,6 +1867,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         t = Any
         if 1 <= n <= length(sv.sptypes)
             t = sv.sptypes[n]
+            sv.spbound[n] = true
         end
         return t
     elseif e.head === :boundscheck
@@ -2086,9 +2087,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
             if 1 <= n <= length(sv.sptypes)
-                spty = sv.sptypes[n]
-                if isa(spty, Const)
+                if isa(sv.sptypes[n], Const)
                     t = Const(true)
+                    sv.spbound[n] = true
                 end
             end
         end

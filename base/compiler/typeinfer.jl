@@ -1037,6 +1037,16 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_end, Cvoid, ())
+    for (sparam, bound) in zip(mi.sparam_vals, frame.spbound)
+        if sparam isa TypeVar && has_free_typevars(sparam) && !bound
+            println(
+                stderr,
+                "WARNING: [", mi.def.file, ':', mi.def.line, "] in method ",
+                mi.def.name, ", static parameter ", sparam.name, " is unbound",
+            )
+        end
+    end
+
     frame.src.inferred || return nothing
     return frame.src
 end

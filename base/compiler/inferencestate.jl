@@ -86,6 +86,7 @@ mutable struct InferenceState
     world::UInt
     mod::Module
     sptypes::Vector{Any}
+    spbound::Vector{Bool}  # bound static parameter
     slottypes::Vector{Any}
     src::CodeInfo
     cfg::CFG
@@ -188,7 +189,7 @@ mutable struct InferenceState
         cached = cache === :global
 
         frame = new(
-            linfo, world, mod, sptypes, slottypes, src, cfg,
+            linfo, world, mod, sptypes, fill(false, length(sptypes)), slottypes, src, cfg,
             currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
