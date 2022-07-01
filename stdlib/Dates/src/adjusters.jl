@@ -1,26 +1,26 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### truncation
-Base.trunc(dt::Date, p::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
-Base.trunc(dt::Date, p::Type{Quarter}) = firstdayofquarter(dt)
-Base.trunc(dt::Date, p::Type{Month}) = firstdayofmonth(dt)
-Base.trunc(dt::Date, p::Type{Day}) = dt
+Base.trunc(dt::Date, ::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
+Base.trunc(dt::Date, ::Type{Quarter}) = firstdayofquarter(dt)
+Base.trunc(dt::Date, ::Type{Month}) = firstdayofmonth(dt)
+Base.trunc(dt::Date, ::Type{Day}) = dt
 
-Base.trunc(dt::DateTime, p::Type{Year}) = DateTime(trunc(Date(dt), Year))
-Base.trunc(dt::DateTime, p::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
-Base.trunc(dt::DateTime, p::Type{Month}) = DateTime(trunc(Date(dt), Month))
-Base.trunc(dt::DateTime, p::Type{Day}) = DateTime(Date(dt))
-Base.trunc(dt::DateTime, p::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
+Base.trunc(dt::DateTime, ::Type{Year}) = DateTime(trunc(Date(dt), Year))
+Base.trunc(dt::DateTime, ::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
+Base.trunc(dt::DateTime, ::Type{Month}) = DateTime(trunc(Date(dt), Month))
+Base.trunc(dt::DateTime, ::Type{Day}) = DateTime(Date(dt))
+Base.trunc(dt::DateTime, ::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
+Base.trunc(dt::DateTime, ::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
+Base.trunc(dt::DateTime, ::Type{Second}) = dt - Millisecond(dt)
+Base.trunc(dt::DateTime, ::Type{Millisecond}) = dt
 
-Base.trunc(t::Time, p::Type{Hour}) = Time(Hour(t))
-Base.trunc(t::Time, p::Type{Minute}) = Time(Hour(t), Minute(t))
-Base.trunc(t::Time, p::Type{Second}) = Time(Hour(t), Minute(t), Second(t))
-Base.trunc(t::Time, p::Type{Millisecond}) = t - Microsecond(t) - Nanosecond(t)
-Base.trunc(t::Time, p::Type{Microsecond}) = t - Nanosecond(t)
-Base.trunc(t::Time, p::Type{Nanosecond})  = t
+Base.trunc(t::Time, ::Type{Hour}) = Time(Hour(t))
+Base.trunc(t::Time, ::Type{Minute}) = Time(Hour(t), Minute(t))
+Base.trunc(t::Time, ::Type{Second}) = Time(Hour(t), Minute(t), Second(t))
+Base.trunc(t::Time, ::Type{Millisecond}) = t - Microsecond(t) - Nanosecond(t)
+Base.trunc(t::Time, ::Type{Microsecond}) = t - Nanosecond(t)
+Base.trunc(t::Time, ::Type{Nanosecond})  = t
 
 """
     trunc(dt::TimeType, ::Type{Period}) -> TimeType
@@ -47,8 +47,6 @@ julia> Dates.firstdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-01T00:00:00
 ```
 """
-function firstdayofweek end
-
 firstdayofweek(dt::Date) = Date(UTD(value(dt) - dayofweek(dt) + 1))
 firstdayofweek(dt::DateTime) = DateTime(firstdayofweek(Date(dt)))
 
@@ -63,8 +61,6 @@ julia> Dates.lastdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-07T00:00:00
 ```
 """
-function lastdayofweek end
-
 lastdayofweek(dt::Date) = Date(UTD(value(dt) + (7 - dayofweek(dt))))
 lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 
@@ -79,8 +75,6 @@ julia> Dates.firstdayofmonth(DateTime("1996-05-20"))
 1996-05-01T00:00:00
 ```
 """
-function firstdayofmonth end
-
 firstdayofmonth(dt::Date) = Date(UTD(value(dt) - day(dt) + 1))
 firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
 
@@ -95,8 +89,6 @@ julia> Dates.lastdayofmonth(DateTime("1996-05-20"))
 1996-05-31T00:00:00
 ```
 """
-function lastdayofmonth end
-
 function lastdayofmonth(dt::Date)
     y, m, d = yearmonthday(dt)
     return Date(UTD(value(dt) + daysinmonth(y, m) - d))
@@ -114,8 +106,6 @@ julia> Dates.firstdayofyear(DateTime("1996-05-20"))
 1996-01-01T00:00:00
 ```
 """
-function firstdayofyear end
-
 firstdayofyear(dt::Date) = Date(UTD(value(dt) - dayofyear(dt) + 1))
 firstdayofyear(dt::DateTime) = DateTime(firstdayofyear(Date(dt)))
 
@@ -130,8 +120,6 @@ julia> Dates.lastdayofyear(DateTime("1996-05-20"))
 1996-12-31T00:00:00
 ```
 """
-function lastdayofyear end
-
 function lastdayofyear(dt::Date)
     y, m, d = yearmonthday(dt)
     return Date(UTD(value(dt) + daysinyear(y) - dayofyear(y, m, d)))
@@ -152,8 +140,6 @@ julia> Dates.firstdayofquarter(DateTime("1996-08-20"))
 1996-07-01T00:00:00
 ```
 """
-function firstdayofquarter end
-
 function firstdayofquarter(dt::Date)
     y,m = yearmonth(dt)
     mm = m < 4 ? 1 : m < 7 ? 4 : m < 10 ? 7 : 10
@@ -175,8 +161,6 @@ julia> Dates.lastdayofquarter(DateTime("1996-08-20"))
 1996-09-30T00:00:00
 ```
 """
-function lastdayofquarter end
-
 function lastdayofquarter(dt::Date)
     y,m = yearmonth(dt)
     mm, d = m < 4 ? (3, 31) : m < 7 ? (6, 30) : m < 10 ? (9, 30) : (12, 31)
