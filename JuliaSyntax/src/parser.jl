@@ -2982,14 +2982,7 @@ function parse_brackets(after_parse::Function,
                 # (x \n\n for a in as)  ==>  (generator x (= a as))
                 parse_generator(ps, mark)
             else
-                if is_closing_token(ps, k)
-                    k_str = untokenize(k, unique=false)
-                    emit_diagnostic(ps, error="unexpected `$k_str` in bracketed list")
-                else
-                    ck_str = untokenize(closing_kind)
-                    emit_diagnostic(ps, error="missing comma or $ck_str in bracketed list")
-                end
-                # Recovery done after loop
+                # Error - recovery done when consuming closing_kind
                 break
             end
         end
