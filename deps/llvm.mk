@@ -1,4 +1,5 @@
 ## LLVM ##
+include $(SRCDIR)/llvm.version
 include $(SRCDIR)/llvm-ver.make
 include $(SRCDIR)/llvm-options.mk
 

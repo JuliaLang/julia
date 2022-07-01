@@ -1,0 +1,5 @@
+## jll artifact
+CURL_JLL_NAME := LibCURL
+
+## source build
+CURL_VER := 7.83.1

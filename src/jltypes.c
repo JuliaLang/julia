@@ -2576,6 +2576,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_svec2(jl_datatype_type, jl_array_any_type),
                                        jl_emptysvec, 0, 0, 2);
 
+    jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
+                                          jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
+                                          jl_svec(3, jl_long_type, jl_any_type, jl_any_type),
+                                          jl_emptysvec, 0, 0, 3);
+
     jl_method_match_type = jl_new_datatype(jl_symbol("MethodMatch"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(4, "spec_types", "sparams", "method", "fully_covers"),
                                        jl_svec(4, jl_type_type, jl_simplevector_type, jl_method_type, jl_bool_type),

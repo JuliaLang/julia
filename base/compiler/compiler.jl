@@ -38,6 +38,13 @@ include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
+ntuple(f, ::Val{0}) = ()
+ntuple(f, ::Val{1}) = (@inline; (f(1),))
+ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@inline; (f(1), f(2), f(3)))
+ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
+ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
+
 # core operations & types
 function return_type end # promotion.jl expects this to exist
 is_return_type(@Core.nospecialize(f)) = f === return_type
@@ -91,13 +98,6 @@ include("iterators.jl")
 using .Iterators: zip, enumerate
 using .Iterators: Flatten, Filter, product  # for generators
 include("namedtuple.jl")
-
-ntuple(f, ::Val{0}) = ()
-ntuple(f, ::Val{1}) = (@inline; (f(1),))
-ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))
-ntuple(f, ::Val{3}) = (@inline; (f(1), f(2), f(3)))
-ntuple(f, ::Val{n}) where {n} = ntuple(f, n::Int)
-ntuple(f, n) = (Any[f(i) for i = 1:n]...,)
 
 # core docsystem
 include("docs/core.jl")

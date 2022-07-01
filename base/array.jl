@@ -1053,9 +1053,19 @@ function push!(a::Array{T,1}, item) where T
     return a
 end
 
-function push!(a::Array{Any,1}, @nospecialize item)
+# specialize and optimize the single argument case
+function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
-    arrayset(true, a, item, length(a))
+    arrayset(true, a, x, length(a))
+    return a
+end
+function push!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growend!(a, nx)
+    for i = 1:nx
+        arrayset(true, a, x[i], na+i)
+    end
     return a
 end
 
@@ -1382,6 +1392,22 @@ function pushfirst!(a::Array{T,1}, item) where T
     item = convert(T, item)
     _growbeg!(a, 1)
     a[1] = item
+    return a
+end
+
+# specialize and optimize the single argument case
+function pushfirst!(a::Vector{Any}, @nospecialize x)
+    _growbeg!(a, 1)
+    a[1] = x
+    return a
+end
+function pushfirst!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growbeg!(a, nx)
+    for i = 1:nx
+        a[i] = x[i]
+    end
     return a
 end
 
@@ -1826,6 +1852,11 @@ function reverseind(a::AbstractVector, i::Integer)
     first(li) + last(li) - i
 end
 
+# This implementation of `midpoint` is performance-optimized but safe
+# only if `lo <= hi`.
+midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
+
 """
     reverse!(v [, start=firstindex(v) [, stop=lastindex(v) ]]) -> v
 
@@ -1854,17 +1885,18 @@ julia> A
 """
 function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     s, n = Int(start), Int(stop)
-    liv = LinearIndices(v)
-    if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
-        throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
-        throw(BoundsError(v, n))
-    end
-    r = n
-    @inbounds for i in s:div(s+n-1, 2)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
+    if n > s # non-empty and non-trivial
+        liv = LinearIndices(v)
+        if !(first(liv) ≤ s ≤ last(liv))
+            throw(BoundsError(v, s))
+        elseif !(first(liv) ≤ n ≤ last(liv))
+            throw(BoundsError(v, n))
+        end
+        r = n
+        @inbounds for i in s:midpoint(s, n-1)
+            v[i], v[r] = v[r], v[i]
+            r -= 1
+        end
     end
     return v
 end

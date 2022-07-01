@@ -374,7 +374,7 @@ function url(m::Method)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
                 LibGit2.with(LibGit2.GitConfig(repo)) do cfg
                     u = LibGit2.get(cfg, "remote.origin.url", "")
-                    u = match(LibGit2.GITHUB_REGEX,u).captures[1]
+                    u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
                     commit = string(LibGit2.head_oid(repo))
                     root = LibGit2.path(repo)
                     if startswith(file, root) || startswith(realpath(file), root)

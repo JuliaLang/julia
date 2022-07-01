@@ -482,9 +482,11 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
-active_module()::Module = isdefined(Base, :active_repl) && isdefined(Base.active_repl, :mistate) && Base.active_repl.mistate !== nothing ?
-                      Base.active_repl.mistate.active_module :
-                      Main
+function active_module()
+    isassigned(REPL_MODULE_REF) || return Main
+    REPL = REPL_MODULE_REF[]
+    return REPL.active_module()::Module
+end
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
