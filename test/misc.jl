@@ -163,40 +163,63 @@ end
     n = 100
     s = Base.Semaphore(sem_size)
 
-    # explicit acquire-release form
-    clock = Threads.Atomic{Int}(1)
-    occupied = Threads.Atomic{Int}(0)
-    history = fill!(Vector{Int}(undef, 2n), -1)
-    @sync for _ in 1:n
-        @async begin
-            Base.acquire(s)
-            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
-            sleep(rand(0:0.01:0.1))
-            history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
-            Base.release(s)
-        end
-    end
-    @test all(<=(sem_size), history)
-    @test all(>=(0), history)
-    @test history[end] == 0
-
-    # do-block syntax
-    clock = Threads.Atomic{Int}(1)
-    occupied = Threads.Atomic{Int}(0)
-    history = fill!(Vector{Int}(undef, 2n), -1)
-    @sync for _ in 1:n
-        @async begin
-            @test Base.acquire(s) do
+    @testset "Semaphore ($lockf, $unlockf)" for (lockf, unlockf) in [(Base.acquire, Base.release), (lock, unlock)]
+        # explicit acquire-release form
+        clock = Threads.Atomic{Int}(1)
+        occupied = Threads.Atomic{Int}(0)
+        history = fill!(Vector{Int}(undef, 2n), -1)
+        @sync for _ in 1:n
+            @async begin
+                lockf(s)
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
-                return :resultvalue
-            end == :resultvalue
+                unlockf(s)
+            end
         end
+        @test all(<=(sem_size), history)
+        @test all(>=(0), history)
+        @test history[end] == 0
+
+        # do-block syntax
+        clock = Threads.Atomic{Int}(1)
+        occupied = Threads.Atomic{Int}(0)
+        history = fill!(Vector{Int}(undef, 2n), -1)
+        @sync for _ in 1:n
+            @async begin
+                @test lockf(s) do
+                    history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                    sleep(rand(0:0.01:0.1))
+                    history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                    return :resultvalue
+                end == :resultvalue
+            end
+        end
+        @test all(<=(sem_size), history)
+        @test all(>=(0), history)
+        @test history[end] == 0
     end
-    @test all(<=(sem_size), history)
-    @test all(>=(0), history)
-    @test history[end] == 0
+
+    # trylock
+    for i = 1:sem_size
+        @test trylock(s)
+    end
+    @test !trylock(s)
+    @test trylock(s) do
+        error("unreachable")
+    end === false
+    @test unlock(s) === nothing
+    let success = Ref(false)
+        @test trylock(s) do
+            success[] = true
+            return :resultvalue
+        end === :resultvalue
+        @test success[]
+    end
+    @test trylock(s)
+    for i = 1:sem_size
+        @test unlock(s) === nothing
+    end
 end
 
 # task switching
