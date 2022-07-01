@@ -224,7 +224,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} in")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N}\n")
 
 mutable struct TLayout
     x::Int8
@@ -425,7 +425,7 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     mmime = repr("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for fieldtype(...)"
-    @test mrepr == mmime == "fieldtype(...) in Core"
+    @test mrepr == mmime == "fieldtype(...)\n     @ Core none:0"
 end
 
 

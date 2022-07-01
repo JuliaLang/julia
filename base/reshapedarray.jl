@@ -205,6 +205,7 @@ function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
 end
 
 size(A::ReshapedArray) = A.dims
+length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent

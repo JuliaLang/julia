@@ -211,12 +211,18 @@ function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wr
     return str
 end
 
+struct LLVMFDump
+    tsm::Ptr{Cvoid} # opaque
+    f::Ptr{Cvoid} # opaque
+end
+
 function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, true, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, true, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_asm, Ref{String},
-                (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                llvmf, false, syntax, debuginfo, binary)
+                (Ptr{LLVMFDump}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                llvmf_dump, false, syntax, debuginfo, binary)
     return str
 end
 
@@ -225,11 +231,12 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, optimize, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
-                (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
-                llvmf, strip_ir_metadata, dump_module, debuginfo)
+                (Ptr{LLVMFDump}, Bool, Bool, Ptr{UInt8}),
+                llvmf_dump, strip_ir_metadata, dump_module, debuginfo)
     return str
 end
 

@@ -276,9 +276,6 @@ end
 @test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
 # issue #24558
-@test_throws ParseError Meta.parse("'\\xff'")
-@test_throws ParseError Meta.parse("'\\x80'")
-@test_throws ParseError Meta.parse("'ab'")
 @test '\u2200' == "\u2200"[1]
 
 @test_throws ParseError Meta.parse("f(2x for x=1:10, y")
@@ -317,19 +314,16 @@ let p = 15
     @test 2p+1 == 31  # not a hex float literal
 end
 
-function test_parseerror(str, msg)
-    try
-        Meta.parse(str)
-        @test false
-    catch e
-        @test isa(e,ParseError) && e.msg == msg
-    end
+macro test_parseerror(str, msg)
+    ex = :(@test_throws ParseError($(esc(msg))) Meta.parse($(esc(str))))
+    ex.args[2] = __source__
+    return ex
 end
-test_parseerror("0x", "invalid numeric constant \"0x\"")
-test_parseerror("0b", "invalid numeric constant \"0b\"")
-test_parseerror("0o", "invalid numeric constant \"0o\"")
-test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
-test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
+@test_parseerror("0x", "invalid numeric constant \"0x\"")
+@test_parseerror("0b", "invalid numeric constant \"0b\"")
+@test_parseerror("0o", "invalid numeric constant \"0o\"")
+@test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
+@test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 
 # issue #15798
 @test Meta.lower(Main, Base.parse_input_line("""
@@ -345,8 +339,8 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
            """)::Expr) == 23341
 
 # issue #15763
-test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
-test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
+@test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+@test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
@@ -2059,8 +2053,8 @@ end == 1
 # issue #29982
 @test Meta.parse("'a'") == 'a'
 @test Meta.parse("'\U0061'") == 'a'
-test_parseerror("''", "invalid empty character literal")
-test_parseerror("'abc'", "character literal contains multiple characters")
+@test_parseerror("''", "invalid empty character literal")
+@test_parseerror("'abc'", "character literal contains multiple characters")
 
 # optional soft scope: #28789, #33864
 
@@ -3379,3 +3373,25 @@ f45162(f) = f(x=1)
 @test Meta.lower(@__MODULE__, :(global const x::Int)) == Expr(:error, "expected assignment after \"const\"")
 @test Meta.lower(@__MODULE__, :(const global x)) == Expr(:error, "expected assignment after \"const\"")
 @test Meta.lower(@__MODULE__, :(const global x::Int)) == Expr(:error, "expected assignment after \"const\"")
+
+@testset "issue 25072" begin
+    @test '\xc0\x80' == reinterpret(Char, 0xc0800000)
+    @test '\x80' == reinterpret(Char, 0x80000000)
+    @test '\xff' == reinterpret(Char, 0xff000000)
+    @test_parseerror "'\\xff\\xff\\xff\\xff'" "character literal contains multiple characters" # == reinterpret(Char, 0xffffffff)
+    @test '\uffff' == Char(0xffff)
+    @test '\U00002014' == Char(0x2014)
+    @test '\100' == reinterpret(Char, UInt32(0o100) << 24)
+    @test_parseerror "'\\100\\42'" "character literal contains multiple characters" # == reinterpret(Char, (UInt32(0o100) << 24) | (UInt32(0o42) << 16))
+    @test_parseerror "''" "invalid empty character literal"
+    @test_parseerror "'\\xff\\xff\\xff\\xff\\xff'" "character literal contains multiple characters"
+    @test_parseerror "'abcd'" "character literal contains multiple characters"
+    @test_parseerror "'\\uff\\xff'" "character literal contains multiple characters"
+    @test_parseerror "'\\xff\\uff'" "character literal contains multiple characters"
+    @test_parseerror "'\\xffa'" "character literal contains multiple characters"
+    @test_parseerror "'\\uffffa'" "character literal contains multiple characters"
+    @test_parseerror "'\\U00002014a'" "character literal contains multiple characters"
+    @test_parseerror "'\\1000'" "character literal contains multiple characters"
+    @test Meta.isexpr(Meta.parse("'a"), :incomplete)
+    @test ''' == "'"[1]
+end

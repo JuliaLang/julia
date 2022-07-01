@@ -137,7 +137,7 @@ end
         mktempdir() do tempdir
             with_artifacts_directory(tempdir) do
                 ex = @test_throws ErrorException artifact"HelloWorldC"
-                @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not installed correctly. ")
+                @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not found ")
                 ex = @test_throws ErrorException artifact"socrates"
                 @test startswith(ex.value.msg, "Artifact \"socrates\" is a lazy artifact; ")
 

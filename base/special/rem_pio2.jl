@@ -125,7 +125,10 @@ function fromfraction(f::Int128)
     return (z1,z2)
 end
 
-function paynehanek(x::Float64)
+# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# because the effect analysis currently can't prove it in the presence of `@inbounds` or
+# `:boundscheck`, but still the accesses to `INV_2PI` are really safe here
+Base.@assume_effects :consistent function paynehanek(x::Float64)
     # 1. Convert to form
     #
     #    x = X * 2^k,

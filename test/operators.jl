@@ -175,6 +175,15 @@ Base.promote_rule(::Type{T19714}, ::Type{Int}) = T19714
 
 end
 
+@testset "Nested ComposedFunction's stability" begin
+    f(x) = (1, 1, x...)
+    g = (f ∘ (f ∘ f)) ∘ (f ∘ f ∘ f)
+    @test (@inferred (g∘g)(1)) == ntuple(Returns(1), 25)
+    @test (@inferred g(1)) == ntuple(Returns(1), 13)
+    h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
+    @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
+end
+
 @testset "function negation" begin
     str = randstring(20)
     @test filter(!isuppercase, str) == replace(str, r"[A-Z]" => "")
@@ -308,4 +317,7 @@ end
     val = [1,2,3]
     @test Returns(val)(1) === val
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
+
+    illtype = Vector{Core._typevar(:T, Union{}, Any)}
+    @test Returns(illtype) == Returns{DataType}(illtype)
 end
