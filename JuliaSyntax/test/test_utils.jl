@@ -250,3 +250,7 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
     nothing
 end
 
+function show_green_tree(code; version::VersionNumber=v"1.6")
+    t = JuliaSyntax.parseall(GreenNode, code, version=version)
+    sprint(show, MIME"text/plain"(), t, code)
+end
