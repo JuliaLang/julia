@@ -2128,20 +2128,16 @@ static void jl_init_function(Function *F)
 
 static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig)
 {
-    size_t nreq = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
-    int va = 0;
-    if (nreq > 0 && lam->def.method->isva) {
-        nreq--;
-        va = 1;
-    }
     jl_value_t *sig = lam->specTypes;
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
         if ((size_t)jl_subtype_env_size(lam->def.method->sig) != jl_svec_len(lam->sparam_vals))
             needsparams = true;
         for (size_t i = 0; i < jl_svec_len(lam->sparam_vals); ++i) {
-            if (jl_is_typevar(jl_svecref(lam->sparam_vals, i)))
+            if (jl_is_typevar(jl_svecref(lam->sparam_vals, i))) {
                 needsparams = true;
+                break;
+            }
         }
     }
     if (needsparams)
@@ -2152,7 +2148,9 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
         return std::make_pair(false, false);
     if (jl_nparams(sig) == 0)
         return std::make_pair(false, false);
-    if (va) {
+
+    size_t nreq = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
+    if (nreq > 0 && lam->def.method->isva) {
         if (jl_is_vararg(jl_tparam(sig, jl_nparams(sig) - 1)))
             return std::make_pair(false, false);
     }
@@ -6643,7 +6641,7 @@ static jl_llvm_functions_t
     if (jl_is_method(lam->def.method)) {
         ctx.nargs = nreq = lam->def.method->nargs;
         ctx.is_opaque_closure = lam->def.method->is_for_opaque_closure;
-        if ((nreq > 0 && jl_is_method(lam->def.value) && lam->def.method->isva)) {
+        if (nreq > 0 && jl_is_method(lam->def.value) && lam->def.method->isva) {
             assert(nreq > 0);
             nreq--;
             va = 1;

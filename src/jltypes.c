@@ -39,7 +39,7 @@ static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
 
 static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
 {
-    if (jl_typeis(v, jl_tvar_type))
+    if (jl_is_typevar(v))
         return !typeenv_has(env, (jl_tvar_t*)v);
     if (jl_is_uniontype(v))
         return layout_uses_free_typevars(((jl_uniontype_t*)v)->a, env) ||
@@ -84,7 +84,7 @@ static int layout_uses_free_typevars(jl_value_t *v, jl_typeenv_t *env)
 
 static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
-    if (jl_typeis(v, jl_tvar_type)) {
+    if (jl_is_typevar(v)) {
         return !typeenv_has(env, (jl_tvar_t*)v);
     }
     if (jl_is_uniontype(v))
@@ -125,7 +125,7 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT
 
 static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out)
 {
-    if (jl_typeis(v, jl_tvar_type)) {
+    if (jl_is_typevar(v)) {
         if (!typeenv_has(env, (jl_tvar_t*)v))
             jl_array_ptr_1d_push(out, v);
     }
@@ -170,7 +170,7 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 // test whether a type has vars bound by the given environment
 static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
-    if (jl_typeis(v, jl_tvar_type))
+    if (jl_is_typevar(v))
         return typeenv_has(env, (jl_tvar_t*)v);
     if (jl_is_uniontype(v))
         return jl_has_bound_typevars(((jl_uniontype_t*)v)->a, env) ||
