@@ -83,6 +83,9 @@ returning [`missing`](@ref) if one of the arguments is `missing`.
 The infix operation `a ⊼ b` is a synonym for `nand(a,b)`, and
 `⊼` can be typed by tab-completing `\\nand` or `\\barwedge` in the Julia REPL.
 
+!!! compat "Julia 1.7"
+    Support for `nand` and `nor` requires at least Julia 1.7.
+
 # Examples
 ```jldoctest
 julia> nand(true, false)
@@ -116,6 +119,9 @@ returning [`missing`](@ref) if one of the arguments is `missing`.
 
 The infix operation `a ⊽ b` is a synonym for `nor(a,b)`, and
 `⊽` can be typed by tab-completing `\\nor` or `\\barvee` in the Julia REPL.
+
+!!! compat "Julia 1.7"
+    Support for `nand` and `nor` requires at least Julia 1.7.
 
 # Examples
 ```jldoctest
