@@ -1186,7 +1186,6 @@ function parse_unary_call(ps::ParseState)
         parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
             is_call[] = had_commas || had_splat || initial_semi
             is_block[] = !is_call[] && num_semis > 0
-            bump_closing_token(ps, K")")
             return (needs_parameters=is_call[],
                     eq_is_kw_before_semi=is_call[],
                     eq_is_kw_after_semi=is_call[])
@@ -2009,8 +2008,7 @@ function parse_function(ps::ParseState)
             # producing less consistent syntax for anonymous functions.
             is_anon_func_ = Ref(is_anon_func)
             parse_brackets(ps, K")") do _, _, _, _
-                bump_closing_token(ps, K")")
-                is_anon_func_[] = peek(ps) != K"("
+                is_anon_func_[] = peek(ps, 2) != K"("
                 return (needs_parameters     = is_anon_func_[],
                         eq_is_kw_before_semi = is_anon_func_[],
                         eq_is_kw_after_semi  = is_anon_func_[])
@@ -2491,7 +2489,6 @@ function parse_call_arglist(ps::ParseState, closer, is_macrocall)
     ps = ParseState(ps, for_generator=true)
 
     parse_brackets(ps, closer) do _, _, _, _
-        bump_closing_token(ps, closer)
         return (needs_parameters=true,
                 eq_is_kw_before_semi=!is_macrocall,
                 eq_is_kw_after_semi=true)
@@ -2510,7 +2507,6 @@ function parse_vect(ps::ParseState, closer)
     # [x=1, y=2]    ==>  (vect (= x 1) (= y 2))
     # [x=1, ; y=2]  ==>  (vect (= x 1) (parameters (= y 2)))
     parse_brackets(ps, closer) do _, _, _, _
-        bump_closing_token(ps, closer)
         return (needs_parameters=true,
                 eq_is_kw_before_semi=false,
                 eq_is_kw_after_semi=false)
@@ -2868,7 +2864,6 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             is_tuple[] = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0))
             is_block[] = num_semis > 0
-            bump_closing_token(ps, K")")
             return (needs_parameters=is_tuple[],
                     eq_is_kw_before_semi=false,
                     eq_is_kw_after_semi=is_tuple[])
@@ -3023,6 +3018,7 @@ function parse_brackets(after_parse::Function,
     end
     release_positions(ps.stream, params_marks)
     release_positions(ps.stream, eq_positions)
+    bump_closing_token(ps, closing_kind)
 end
 
 is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))
