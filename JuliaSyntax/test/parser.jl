@@ -791,6 +791,20 @@ broken_tests = [
     end
 end
 
+@testset "Trivia attachment" begin
+    @test show_green_tree("f(a;b)") == """
+         1:6      │[toplevel]
+         1:6      │  [call]
+         1:1      │    Identifier           ✔   "f"
+         2:2      │    (                        "("
+         3:3      │    Identifier           ✔   "a"
+         4:5      │    [parameters]
+         4:4      │      ;                      ";"
+         5:5      │      Identifier         ✔   "b"
+         6:6      │    )                        ")"
+    """
+end
+
 @testset "Unicode normalization in tree conversion" begin
     # ɛµ normalizes to εμ
     @test test_parse(JuliaSyntax.parse_eq, "\u025B\u00B5()") == "(call \u03B5\u03BC)"
