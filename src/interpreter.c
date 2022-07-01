@@ -328,10 +328,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return eval_methoddef(ex, s);
     }
     else if (head == jl_foreigncall_sym) {
-        jl_error("`ccall` requires the compiler");
+        jl_error("`ccall` requires the compiler. julia codegen library might have failed to load.");
     }
     else if (head == jl_cfunction_sym) {
-        jl_error("`cfunction` requires the compiler");
+        jl_error("`cfunction` requires the compiler. julia codegen library might have failed to load.");
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
