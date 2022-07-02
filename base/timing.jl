@@ -266,22 +266,12 @@ macro time(ex)
 end
 macro time(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local res = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
         has_msg && print(_msg, ": ")
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
-        val
+        time_print(res.time*1e9, res.gcstats.allocd, res.gcstats.total_time, gc_alloc_count(res.gcstats), res.compiletime*1e9, res.recompiletime*1e9, true, !has_msg)
+        res.value
     end
 end
 
@@ -350,20 +340,12 @@ macro timev(ex)
 end
 macro timev(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        res = @timed $(esc(ex))
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
         has_msg && print(_msg, ": ")
-        timev_print(elapsedtime, diff, compile_elapsedtimes, !has_msg)
-        val
+        timev_print(res.time*1e9, res.gcstats, (res.compiletime*1e9, res.recompiletime*1e9), !has_msg)
+        res.value
     end
 end
 
@@ -456,7 +438,7 @@ julia> stats.gctime
 0.0055765
 
 julia> propertynames(stats.gcstats)
-(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
+(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep, :compiletime, :recompiletime)
 
 julia> stats.gcstats.total_time
 5576500
@@ -464,15 +446,26 @@ julia> stats.gcstats.total_time
 
 !!! compat "Julia 1.5"
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
+
+!!! compat "Julia 1.9"
+    The properties `compiletime` and `recompiletime` were added in Julia 1.9.
 """
 macro timed(ex)
     quote
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
-        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
+        cumulative_compile_timing(true)
+        local comp_start, recomp_start = cumulative_compile_time_ns()
+        local value = @__tryfinally($(esc(ex)), begin
+            elapsedtime = time_ns() - elapsedtime
+            cumulative_compile_timing(false)
+            comp_stop, recomp_stop = cumulative_compile_time_ns()
+        end)
+        local compiletime = (comp_stop - comp_start)/1e9
+        local recompiletime = (recomp_stop - recomp_start)/1e9
+        local gcstats = GC_Diff(gc_num(), stats)
+        (;value, time=elapsedtime/1e9, bytes=gcstats.allocd, gctime=gcstats.total_time/1e9, 
+         gcstats, compiletime,recompiletime)
     end
 end
