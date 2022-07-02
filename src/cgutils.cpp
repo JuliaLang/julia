@@ -3681,7 +3681,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (fval_info.typ == jl_bottom_type)
                     return jl_cgval_t();
                 // TODO: Use (post-)domination instead.
-                bool field_promotable = !init_as_value && fval_info.promotion_ssa != -1 &&
+                bool field_promotable = !jl_is_uniontype(jtype) && !init_as_value && fval_info.promotion_ssa != -1 &&
                     fval_info.promotion_point && fval_info.promotion_point->getParent() == ctx.builder.GetInsertBlock();
                 if (field_promotable) {
                     savedIP = ctx.builder.saveIP();
@@ -3727,7 +3727,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                                     ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i)))))
                                 ->setOrdering(AtomicOrdering::Unordered);
                 }
-                else if (jl_is_uniontype(jtype) && !field_promotable) {
+                else if (jl_is_uniontype(jtype)) {
                     // compute tindex from rhs
                     jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
                     if (rhs_union.typ == jl_bottom_type)
