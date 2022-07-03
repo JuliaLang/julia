@@ -1992,10 +1992,11 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // Enqueue and mark all outgoing references from `new_obj` which have not been marked
 // yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
 // objects which have been enqueued into the `remset`
-NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, void *new_obj, int meta_updated)
+NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, void *_new_obj, int meta_updated)
 {
+    jl_value_t *new_obj = (jl_value_t *)_new_obj;
     #ifdef OPT_SINGLE_OUTREF
-    mark_obj : {
+	mark_obj : {
     #endif
         jl_gc_markqueue_t *mq = &ptls->mark_queue;
     #ifdef JL_DEBUG_BUILD
