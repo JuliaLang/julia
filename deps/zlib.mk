@@ -20,7 +20,7 @@ $(eval $(call staged-install, \
 
 clean-zlib:
 	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled $(build_libdir)/libz.a* $(build_libdir)/libz.so* $(build_includedir)/zlib.h $(build_includedir)/zconf.h
-	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) distclean $(ZLIB_FLAGS)
+	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) clean
 
 get-zlib: $(ZLIB_SRC_FILE)
 extract-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/source-extracted
