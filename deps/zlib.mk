@@ -23,12 +23,12 @@ $(eval $(call staged-install, \
 	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $(build_shlibdir)/libz.$(SHLIB_EXT)))
 
 clean-zlib:
-	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled $(build_libdir)/libz.a* $(build_libdir)/libz.so* $(build_includedir)/zlib.h $(build_includedir)/zconf.h
+	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) clean
 
 get-zlib: $(ZLIB_SRC_FILE)
 extract-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/source-extracted
-configure-zlib: extract-zlib
+configure-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
 compile-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
 fastcheck-zlib: check-zlib
 check-zlib: compile-zlib
