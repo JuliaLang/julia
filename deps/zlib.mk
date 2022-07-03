@@ -4,9 +4,13 @@ ZLIB_GIT_URL := https://github.com/madler/zlib.git
 ZLIB_TAR_URL = https://api.github.com/repos/madler/zlib/tarball/$1
 $(eval $(call git-external,zlib,ZLIB,,,$(SRCCACHE)))
 
+# use `-DUNIX=true` to ensure that it is always named `libz`
+ZLIB_BUILD_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUNIX=true
+ZLIB_BUILD_OPTS += -DCMAKE_POSITION_INDEPENDENT_CODE=ON 
+
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(CMAKE) -DCMAKE_INSTALL_PREFIX=$(abspath $(build_prefix)) -DCMAKE_BUILD_TYPE=Release -DUNIX=true $(dir $<)
+	cd $(dir $@) && $(CMAKE) $(ZLIB_BUILD_OPTS) $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
