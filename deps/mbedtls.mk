@@ -1,4 +1,5 @@
 ## mbedtls
+include $(SRCDIR)/mbedtls.version
 
 ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
 MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)

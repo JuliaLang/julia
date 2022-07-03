@@ -69,12 +69,13 @@ function threading_run(fun, static)
         tasks[i] = t
         schedule(t)
     end
-    try
-        for i = 1:n
-            wait(tasks[i])
-        end
-    finally
-        ccall(:jl_exit_threaded_region, Cvoid, ())
+    for i = 1:n
+        Base._wait(tasks[i])
+    end
+    ccall(:jl_exit_threaded_region, Cvoid, ())
+    failed_tasks = filter(istaskfailed, tasks)
+    if !isempty(failed_tasks)
+        throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
 end
 

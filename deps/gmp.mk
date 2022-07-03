@@ -1,4 +1,5 @@
 ## GMP ##
+include $(SRCDIR)/gmp.version
 
 ifeq ($(SANITIZE),1)
 GMP_CONFIGURE_OPTS += --disable-assembly

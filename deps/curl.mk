@@ -1,4 +1,5 @@
 ## CURL ##
+include $(SRCDIR)/curl.version
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/libssh2

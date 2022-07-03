@@ -37,7 +37,7 @@ endif
 endif # OS == WINNT
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
@@ -52,9 +52,12 @@ $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-a
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-win32-ownership.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)

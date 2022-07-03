@@ -756,8 +756,8 @@ end
 /(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
 /(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
-*(A::AbstractTriangular, D::Diagonal) = Base.@invoke *(A::AbstractMatrix, D::Diagonal)
-*(D::Diagonal, A::AbstractTriangular) = Base.@invoke *(D::Diagonal, A::AbstractMatrix)
+*(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
+*(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
 
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 

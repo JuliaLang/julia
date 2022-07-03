@@ -9,6 +9,11 @@ include("testenv.jl")
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
 @test isa(convert(Char, 65), Char)
 
+truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
+@test truncbool(0x01) == 0x01
+@test truncbool(0x02) == 0x00
+@test truncbool(0x03) == 0x01
+
 # runtime intrinsics
 @testset "runtime intrinsics" begin
     @test Core.Intrinsics.add_int(1, 1) == 2

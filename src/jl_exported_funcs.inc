@@ -199,6 +199,7 @@
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
     XX(jl_getallocationgranularity) \
+    XX(jl_getch) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \

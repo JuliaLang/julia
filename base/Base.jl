@@ -124,6 +124,10 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 include("refpointer.jl")
+
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 include("checked.jl")
 using .Checked
 

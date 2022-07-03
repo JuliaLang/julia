@@ -4,6 +4,7 @@
 
 StepRange{<:Dates.DatePeriod,<:Real}(start, step, stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
+Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 
 # Given a start and end date, how many steps/periods are in between
 guess(a::DateTime, b::DateTime, c) = floor(Int64, (Int128(value(b)) - Int128(value(a))) / toms(c))

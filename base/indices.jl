@@ -320,6 +320,26 @@ which they index. To support those cases, `to_indices(A, I)` calls
 `to_indices(A, axes(A), I)`, which then recursively walks through both the
 given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
+
+# Examples
+```jldoctest
+julia> A = zeros(1,2,3,4);
+
+julia> to_indices(A, (1,1,2,2))
+(1, 1, 2, 2)
+
+julia> to_indices(A, (1,1,2,20)) # no bounds checking
+(1, 1, 2, 20)
+
+julia> to_indices(A, (CartesianIndex((1,)), 2, CartesianIndex((3,4)))) # exotic index
+(1, 2, 3, 4)
+
+julia> to_indices(A, ([1,1], 1:2, 3, 4))
+([1, 1], 1:2, 3, 4)
+
+julia> to_indices(A, (1,2)) # no shape checking
+(1, 2)
+```
 """
 to_indices(A, I::Tuple) = (@inline; to_indices(A, axes(A), I))
 to_indices(A, I::Tuple{Any}) = (@inline; to_indices(A, (eachindex(IndexLinear(), A),), I))
@@ -329,11 +349,15 @@ to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
-    (@inline; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
+function to_indices(A, inds, I::Tuple{Any, Vararg{Any}})
+    @inline
+    head = _to_indices1(A, inds, I[1])
+    rest = to_indices(A, _cutdim(inds, I[1]), tail(I))
+    (head..., rest...)
+end
 
-_maybetail(::Tuple{}) = ()
-_maybetail(t::Tuple) = tail(t)
+_to_indices1(A, inds, I1) = (to_index(A, I1),)
+_cutdim(inds, I1) = safe_tail(inds)
 
 """
     Slice(indices)
