@@ -326,6 +326,8 @@ let itr
     @test collect(itr) == Int[] # Stateful do not preserve shape
     itr = (i-1 for i in Base.Stateful(zeros(Int, 0, 0)))
     @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = Iterators.Stateful(Iterators.Stateful(1:1))
+    @test collect(itr) == [1]
 end
 
 # with 1D inputs
