@@ -1996,7 +1996,7 @@ NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, void *_new_obj, int meta_updated)
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
     #ifdef OPT_SINGLE_OUTREF
-	mark_obj : {
+    mark_obj : {
     #endif
         jl_gc_markqueue_t *mq = &ptls->mark_queue;
     #ifdef JL_DEBUG_BUILD
