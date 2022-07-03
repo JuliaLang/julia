@@ -68,7 +68,7 @@ New library functions
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)`. ([#45607])
-* The new `Base.@ismain` macro checks if it is being expanded in the same file as
+* The new `Base.@isscript` macro checks if it is being expanded in the same file as
   `PROGRAM_FILE`, i.e. if the file is run as a script from command line.
   It is preferred in place of the idiom `abspath(PROGRAM_FILE) == @__FILE__`.
 

@@ -371,7 +371,7 @@ end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 """
-    @ismain
+    @isscript
 
 Check if the current file is the file passed to Julia from command line.
 
@@ -383,14 +383,14 @@ script, e.g. invoking command-line parsing.
 
 # Examples
 ```
-if @ismain
+if @isscript
     args = parse_arguments(ARGS)
     [...]
 ```
 
 See also: [`PROGRAM_FILE`](@ref), [`@__FILE__`](@ref)
 """
-macro ismain()
+macro isscript()
     file = __source__.file
     file === nothing ? false : String(file) == abspath(PROGRAM_FILE)
 end

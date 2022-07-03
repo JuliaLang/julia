@@ -92,13 +92,13 @@ obj3 = MyModule.someotherfunction(obj2, c)
 
 When a file is run as the main script using `julia file.jl` one might want to activate extra
 functionality like command line argument handling. The preferred way to handle this is to
-use the macro `@ismain`, as so:
+use the macro `@isscript`, as so:
 ```julia
 function main()
     [...]
 end
 
-if @ismain
+if @isscript
     main()
 end
 ```

@@ -1051,4 +1051,4 @@ export
     @view,
     @views,
     @static,
-    @ismain
+    @isscript
