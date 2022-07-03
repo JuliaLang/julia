@@ -93,7 +93,7 @@ static void NOINLINE gc_markqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 }
 
 // Push a work item to the queue
-STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq, 
+STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq,
                                      jl_value_t *obj) JL_NOTSAFEPOINT
 {
     if (__unlikely(mq->current == mq->end))
