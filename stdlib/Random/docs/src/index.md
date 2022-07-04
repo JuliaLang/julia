@@ -168,9 +168,9 @@ julia> rand(Die, 3)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
+ Die(9)
  Die(19)
- Die(7)
- Die(17)
+ Die(15)
 ```
 
 #### A simple sampler without pre-computed data
