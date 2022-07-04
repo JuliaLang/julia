@@ -51,7 +51,7 @@ function _slice_check_dims(N, dim, dims...)
     _slice_check_dims(N,dims...)
 end
 
-@inline function _eachslice(A::AbstractArray{T,N}, dims::NTuple{M,Integer}, drop::Bool) where {T,N,M}
+@constprop :aggressive function _eachslice(A::AbstractArray{T,N}, dims::NTuple{M,Integer}, drop::Bool) where {T,N,M}
     _slice_check_dims(N,dims...)
     if drop
         # if N = 4, dims = (3,1) then
