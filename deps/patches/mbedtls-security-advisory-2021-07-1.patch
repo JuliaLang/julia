@@ -1,0 +1,301 @@
+commit 0d11b3b4a56ba3055f2c977375f9149c6da9b823
+Author: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+Date:   Tue Mar 9 11:22:20 2021 +0100
+
+    Use constant-time look-up for modular exponentiation
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+    
+    Avoid using == for sensitive comparisons
+    
+    mbedtls_mpi_cf_bool_eq() is a verbatim copy of mbedtls_ssl_cf_bool_eq()
+    
+    Deduplication will be part of a future task.
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+    
+    Use bit operations for mpi_safe_cond_assign()
+    
+    - copied limbs
+    - sign
+    - cleared limbs
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+    
+    Use bit operations for mpi_safe_cond_swap()
+    
+    Unrelated to RSA (only used in ECP), but while improving one
+    mbedtls_safe_cond_xxx function, let's improve the other as well.
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+    
+    Avoid UB caused by conversion to int
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+    
+    Simplify sign selection
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+    
+    Silence MSVC type conversion warnings
+    
+    Signed-off-by: Manuel Pégourié-Gonnard <manuel.pegourie-gonnard@arm.com>
+
+diff --git a/library/bignum.c b/library/bignum.c
+index 9325632b4..f8754284d 100644
+--- a/library/bignum.c
++++ b/library/bignum.c
+@@ -237,6 +237,36 @@ void mbedtls_mpi_swap( mbedtls_mpi *X, mbedtls_mpi *Y )
+     memcpy(  Y, &T, sizeof( mbedtls_mpi ) );
+ }
+ 
++/**
++ * Select between two sign values in constant-time.
++ *
++ * This is functionally equivalent to second ? a : b but uses only bit
++ * operations in order to avoid branches.
++ *
++ * \param[in] a         The first sign; must be either +1 or -1.
++ * \param[in] b         The second sign; must be either +1 or -1.
++ * \param[in] second    Must be either 1 (return b) or 0 (return a).
++ *
++ * \return The selected sign value.
++ */
++static int mpi_safe_cond_select_sign( int a, int b, unsigned char second )
++{
++    /* In order to avoid questions about what we can reasonnably assume about
++     * the representations of signed integers, move everything to unsigned
++     * by taking advantage of the fact that a and b are either +1 or -1. */
++    unsigned ua = a + 1;
++    unsigned ub = b + 1;
++
++    /* second was 0 or 1, mask is 0 or 2 as are ua and ub */
++    const unsigned mask = second << 1;
++
++    /* select ua or ub */
++    unsigned ur = ( ua & ~mask ) | ( ub & mask );
++
++    /* ur is now 0 or 2, convert back to -1 or +1 */
++    return( (int) ur - 1 );
++}
++
+ /*
+  * Conditionally assign dest = src, without leaking information
+  * about whether the assignment was made or not.
+@@ -249,8 +279,23 @@ static void mpi_safe_cond_assign( size_t n,
+                                   unsigned char assign )
+ {
+     size_t i;
++
++    /* MSVC has a warning about unary minus on unsigned integer types,
++     * but this is well-defined and precisely what we want to do here. */
++#if defined(_MSC_VER)
++#pragma warning( push )
++#pragma warning( disable : 4146 )
++#endif
++
++    /* all-bits 1 if assign is 1, all-bits 0 if assign is 0 */
++    const mbedtls_mpi_uint mask = -assign;
++
++#if defined(_MSC_VER)
++#pragma warning( pop )
++#endif
++
+     for( i = 0; i < n; i++ )
+-        dest[i] = dest[i] * ( 1 - assign ) + src[i] * assign;
++        dest[i] = ( src[i] & mask ) | ( dest[i] & ~mask );
+ }
+ 
+ /*
+@@ -262,20 +307,34 @@ int mbedtls_mpi_safe_cond_assign( mbedtls_mpi *X, const mbedtls_mpi *Y, unsigned
+ {
+     int ret = 0;
+     size_t i;
++    mbedtls_mpi_uint limb_mask;
+     MPI_VALIDATE_RET( X != NULL );
+     MPI_VALIDATE_RET( Y != NULL );
+ 
++    /* MSVC has a warning about unary minus on unsigned integer types,
++     * but this is well-defined and precisely what we want to do here. */
++#if defined(_MSC_VER)
++#pragma warning( push )
++#pragma warning( disable : 4146 )
++#endif
++
+     /* make sure assign is 0 or 1 in a time-constant manner */
+     assign = (assign | (unsigned char)-assign) >> 7;
++    /* all-bits 1 if assign is 1, all-bits 0 if assign is 0 */
++    limb_mask = -assign;
++
++#if defined(_MSC_VER)
++#pragma warning( pop )
++#endif
+ 
+     MBEDTLS_MPI_CHK( mbedtls_mpi_grow( X, Y->n ) );
+ 
+-    X->s = X->s * ( 1 - assign ) + Y->s * assign;
++    X->s = mpi_safe_cond_select_sign( X->s, Y->s, assign );
+ 
+     mpi_safe_cond_assign( Y->n, X->p, Y->p, assign );
+ 
+     for( i = Y->n; i < X->n; i++ )
+-        X->p[i] *= ( 1 - assign );
++        X->p[i] &= ~limb_mask;
+ 
+ cleanup:
+     return( ret );
+@@ -291,6 +350,7 @@ int mbedtls_mpi_safe_cond_swap( mbedtls_mpi *X, mbedtls_mpi *Y, unsigned char sw
+ {
+     int ret, s;
+     size_t i;
++    mbedtls_mpi_uint limb_mask;
+     mbedtls_mpi_uint tmp;
+     MPI_VALIDATE_RET( X != NULL );
+     MPI_VALIDATE_RET( Y != NULL );
+@@ -298,22 +358,35 @@ int mbedtls_mpi_safe_cond_swap( mbedtls_mpi *X, mbedtls_mpi *Y, unsigned char sw
+     if( X == Y )
+         return( 0 );
+ 
++    /* MSVC has a warning about unary minus on unsigned integer types,
++     * but this is well-defined and precisely what we want to do here. */
++#if defined(_MSC_VER)
++#pragma warning( push )
++#pragma warning( disable : 4146 )
++#endif
++
+     /* make sure swap is 0 or 1 in a time-constant manner */
+     swap = (swap | (unsigned char)-swap) >> 7;
++    /* all-bits 1 if swap is 1, all-bits 0 if swap is 0 */
++    limb_mask = -swap;
++
++#if defined(_MSC_VER)
++#pragma warning( pop )
++#endif
+ 
+     MBEDTLS_MPI_CHK( mbedtls_mpi_grow( X, Y->n ) );
+     MBEDTLS_MPI_CHK( mbedtls_mpi_grow( Y, X->n ) );
+ 
+     s = X->s;
+-    X->s = X->s * ( 1 - swap ) + Y->s * swap;
+-    Y->s = Y->s * ( 1 - swap ) +    s * swap;
++    X->s = mpi_safe_cond_select_sign( X->s, Y->s, swap );
++    Y->s = mpi_safe_cond_select_sign( Y->s, s, swap );
+ 
+ 
+     for( i = 0; i < X->n; i++ )
+     {
+         tmp = X->p[i];
+-        X->p[i] = X->p[i] * ( 1 - swap ) + Y->p[i] * swap;
+-        Y->p[i] = Y->p[i] * ( 1 - swap ) +     tmp * swap;
++        X->p[i] = ( X->p[i] & ~limb_mask ) | ( Y->p[i] & limb_mask );
++        Y->p[i] = ( Y->p[i] & ~limb_mask ) | (     tmp & limb_mask );
+     }
+ 
+ cleanup:
+@@ -2089,6 +2162,71 @@ static void mpi_montred( mbedtls_mpi *A, const mbedtls_mpi *N,
+     mpi_montmul( A, &U, N, mm, T );
+ }
+ 
++/*
++ * Constant-flow boolean "equal" comparison:
++ * return x == y
++ *
++ * This function can be used to write constant-time code by replacing branches
++ * with bit operations - it can be used in conjunction with
++ * mbedtls_ssl_cf_mask_from_bit().
++ *
++ * This function is implemented without using comparison operators, as those
++ * might be translated to branches by some compilers on some platforms.
++ */
++static size_t mbedtls_mpi_cf_bool_eq( size_t x, size_t y )
++{
++    /* diff = 0 if x == y, non-zero otherwise */
++    const size_t diff = x ^ y;
++
++    /* MSVC has a warning about unary minus on unsigned integer types,
++     * but this is well-defined and precisely what we want to do here. */
++#if defined(_MSC_VER)
++#pragma warning( push )
++#pragma warning( disable : 4146 )
++#endif
++
++    /* diff_msb's most significant bit is equal to x != y */
++    const size_t diff_msb = ( diff | -diff );
++
++#if defined(_MSC_VER)
++#pragma warning( pop )
++#endif
++
++    /* diff1 = (x != y) ? 1 : 0 */
++    const size_t diff1 = diff_msb >> ( sizeof( diff_msb ) * 8 - 1 );
++
++    return( 1 ^ diff1 );
++}
++
++/**
++ * Select an MPI from a table without leaking the index.
++ *
++ * This is functionally equivalent to mbedtls_mpi_copy(R, T[idx]) except it
++ * reads the entire table in order to avoid leaking the value of idx to an
++ * attacker able to observe memory access patterns.
++ *
++ * \param[out] R        Where to write the selected MPI.
++ * \param[in] T         The table to read from.
++ * \param[in] T_size    The number of elements in the table.
++ * \param[in] idx       The index of the element to select;
++ *                      this must satisfy 0 <= idx < T_size.
++ *
++ * \return \c 0 on success, or a negative error code.
++ */
++static int mpi_select( mbedtls_mpi *R, const mbedtls_mpi *T, size_t T_size, size_t idx )
++{
++    int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
++
++    for( size_t i = 0; i < T_size; i++ )
++    {
++        MBEDTLS_MPI_CHK( mbedtls_mpi_safe_cond_assign( R, &T[i],
++                        (unsigned char) mbedtls_mpi_cf_bool_eq( i, idx ) ) );
++    }
++
++cleanup:
++    return( ret );
++}
++
+ /*
+  * Sliding-window exponentiation: X = A^E mod N  (HAC 14.85)
+  */
+@@ -2101,7 +2239,7 @@ int mbedtls_mpi_exp_mod( mbedtls_mpi *X, const mbedtls_mpi *A,
+     size_t i, j, nblimbs;
+     size_t bufsize, nbits;
+     mbedtls_mpi_uint ei, mm, state;
+-    mbedtls_mpi RR, T, W[ 2 << MBEDTLS_MPI_WINDOW_SIZE ], Apos;
++    mbedtls_mpi RR, T, W[ 1 << MBEDTLS_MPI_WINDOW_SIZE ], WW, Apos;
+     int neg;
+ 
+     MPI_VALIDATE_RET( X != NULL );
+@@ -2121,6 +2259,7 @@ int mbedtls_mpi_exp_mod( mbedtls_mpi *X, const mbedtls_mpi *A,
+     mpi_montg_init( &mm, N );
+     mbedtls_mpi_init( &RR ); mbedtls_mpi_init( &T );
+     mbedtls_mpi_init( &Apos );
++    mbedtls_mpi_init( &WW );
+     memset( W, 0, sizeof( W ) );
+ 
+     i = mbedtls_mpi_bitlen( E );
+@@ -2261,7 +2400,8 @@ int mbedtls_mpi_exp_mod( mbedtls_mpi *X, const mbedtls_mpi *A,
+             /*
+              * X = X * W[wbits] R^-1 mod N
+              */
+-            mpi_montmul( X, &W[wbits], N, mm, &T );
++            MBEDTLS_MPI_CHK( mpi_select( &WW, W, (size_t) 1 << wsize, wbits ) );
++            mpi_montmul( X, &WW, N, mm, &T );
+ 
+             state--;
+             nbits = 0;
+@@ -2299,6 +2439,7 @@ cleanup:
+         mbedtls_mpi_free( &W[i] );
+ 
+     mbedtls_mpi_free( &W[1] ); mbedtls_mpi_free( &T ); mbedtls_mpi_free( &Apos );
++    mbedtls_mpi_free( &WW );
+ 
+     if( _RR == NULL || _RR->p == NULL )
+         mbedtls_mpi_free( &RR );
