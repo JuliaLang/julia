@@ -1231,7 +1231,7 @@ end
 
 reducedim1(R, A) = length(axes1(R)) == 1
 
-function findextrema!(f, op_mn, op_mx, Rval_mn, Rind_mn, Rval_mx, Rind_mx, A::AbstractArray{T,N}) where {T,N}
+function _findextrema!(f, op_mn, op_mx, Rval_mn, Rind_mn, Rval_mx, Rind_mx, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval_mn) || isempty(Rval_mx) || isempty(A)) && return ((Rval_mn, Rind_mn), (Rval_mx, Rind_mx))
     lsiz_mn = check_reducedims(Rval_mn, A)
     lsiz_mx = check_reducedims(Rval_mx, A)
@@ -1306,7 +1306,7 @@ but computed in a single pass.
 function findextrema!(rval_mn::AbstractArray, rind_mn::AbstractArray, rval_mx::AbstractArray, rind_mx::AbstractArray, A::AbstractArray; init::Bool=true)
     init && !isempty(A) && (fill!(rval_mn, first(A)); fill!(rval_mx, first(A)))
     Ti = eltype(keys(A))
-    findextrema!(identity, isgreater, isless, rval_mn, fill!(rind_mn,zero(Ti)), rval_mx, fill!(rind_mx,zero(Ti)), A)
+    _findextrema!(identity, isgreater, isless, rval_mn, fill!(rind_mn,zero(Ti)), rval_mx, fill!(rind_mx,zero(Ti)), A)
 end
 
 """
@@ -1370,8 +1370,8 @@ function _findextrema(f, A, region)
         fA = f(first(A))
         Tr = _findminmax_inittype(f, A)
         Ti = eltype(keys(A))
-        findextrema!(f, isgreater, isless, fill!(similar(A, Tr, ri), fA), zeros(Ti, ri),
-                     fill!(similar(A, Tr, ri), fA), zeros(Ti, ri), A)
+        _findextrema!(f, isgreater, isless, fill!(similar(A, Tr, ri), fA), zeros(Ti, ri),
+                      fill!(similar(A, Tr, ri), fA), zeros(Ti, ri), A)
     end
 end
 

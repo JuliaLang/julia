@@ -1012,8 +1012,7 @@ julia> findextrema(cos, 0:π/2:2π)
 """
 findextrema(f, domain) = _findextrema(f, domain, :)
 _findextrema(f, domain, ::Colon) = mapfoldl(((k, v),) -> (fv = f(v); ((fv, k), (fv, k))), _rf_findextrema, pairs(domain))
-_rf_findextrema((((fm₁, im₁), (fx₁, ix₁))), (((fm₂, im₂), (fx₂, ix₂)))) =
-    (isgreater(fm₁, fm₂) ? (fm₂, im₂) : (fm₁, im₁)), (isless(fx₁, fx₂) ? (fx₂, ix₂) : (fx₁, ix₁))
+_rf_findextrema((a, b), (c, d)) = _rf_findmin(a, c), _rf_findmax(b, d)
 
 """
     findextrema(itr) -> ((mn, index_mn), (mx, index_mx))
