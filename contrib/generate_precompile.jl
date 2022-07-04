@@ -19,6 +19,12 @@ CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
+task = current_task()
+task.rngState0 = 0xb97cb0d700798446
+task.rngState1 = 0xfee2eb4d95cae2c1
+task.rngState2 = 0xa19fbca182930be0
+task.rngState3 = 0xc48c471658f3422e
+
 hardcoded_precompile_statements = """
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
