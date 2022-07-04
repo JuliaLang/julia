@@ -2619,24 +2619,55 @@ With keyword `dims::Integer`, instead the `i`th element of `iter` becomes the sl
 [`selectdim`](@ref)`(result, dims, i)`, so that `size(result, dims) == length(iter)`.
 In this case `stack` reverses the action of [`eachslice`](@ref) with the same `dims`.
 
-Functions [`vcat`](@ref) and [`hvcat`](@ref) also combine arrays, but work
-mostly by extending their existing dimensions, rather than placing the arrays
-along new dimensions.
+The various [`cat`](@ref) functions also combine arrays. However, these all
+extend the arrays' existing (possibly trivial) dimensions, rather than placing
+the arrays along new dimensions.
+They also accept arrays as separate arguments, rather than a single collection.
 
 !!! compat "Julia 1.9"
     This function requires at least Julia 1.9.
 
 # Examples
 ```jldoctest
-julia> stack((1:2, 3:4, 5.0:6.0))
-2×3 Matrix{Float64}:
- 1.0  3.0  5.0
- 2.0  4.0  6.0
+julia> vecs = (1:2, [30, 40], Float32[500, 600]);
 
-julia> A = rand(5, 7, 11);  summary(A)
-"5×7×11 Array{Float64, 3}"
+julia> mat = stack(vecs)
+2×3 Matrix{Float32}:
+ 1.0  30.0  500.0
+ 2.0  40.0  600.0
 
-julia> E = eachslice(A, dims=2);
+julia> mat == hcat(vecs...) == reduce(hcat, collect(vecs))
+true
+
+julia> vec(mat) == vcat(vecs...) == reduce(vcat, collect(vecs))
+true
+
+julia> stack(zip(1:4, 10:99))  # accepts any iterators of iterators
+2×4 Matrix{Int64}:
+  1   2   3   4
+ 10  11  12  13
+
+julia> vec(ans) == collect(Iterators.flatten(zip(1:4, 10:99)))
+true
+
+julia> stack(vecs; dims=1)  # unlike any cat function, 1st axis of vecs[1] is 2nd axis of result
+3×2 Matrix{Float32}:
+   1.0    2.0
+  30.0   40.0
+ 500.0  600.0
+
+julia> x = rand(3,4);
+
+julia> x == stack(eachcol(x)) == stack(eachrow(x), dims=1)  # inverse of eachslice
+true
+```
+
+Higher-dimensional examples:
+
+```jldoctest
+julia> A = rand(5, 7, 11);
+
+julia> E = eachslice(A, dims=2);  # a vector of matrices
 
 julia> (element = size(first(E)), container = size(E))
 (element = (5, 11), container = (7,))
@@ -2647,7 +2678,7 @@ julia> stack(E) |> size
 julia> stack(E) == stack(E; dims=3) == cat(E...; dims=3)
 true
 
-julia> stack(E; dims=2) == A  # inverse of eachslice
+julia> A == stack(E; dims=2)
 true
 
 julia> M = (fill(10i+j, 2, 3) for i in 1:5, j in 1:7);
@@ -2689,13 +2720,12 @@ julia> stack(c -> (c, c-32), "julia")
 julia> Iterators.flatmap(c -> (c, '_'), "julia") |> collect |> String
 "j_u_l_i_a_"
 
-julia> stack(eachcol([1 2 3; 4 5 6]), eachrow([1 -1; 10 -10; 100 -100]); dims=1) do col, row
-         vcat(col .* row, 0, col ./ row)
+julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
+         vcat(row, row .* n, row ./ n)
        end
-3×5 Matrix{Float64}:
-   1.0    -4.0  0.0  1.0   -4.0
-  20.0   -50.0  0.0  0.2   -0.5
- 300.0  -600.0  0.0  0.03  -0.06
+2×9 Matrix{Float64}:
+ 1.0  2.0  3.0   10.0   20.0   30.0  0.1   0.2   0.3
+ 4.0  5.0  6.0  400.0  500.0  600.0  0.04  0.05  0.06
 ```
 """
 stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
