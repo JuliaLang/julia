@@ -1357,20 +1357,29 @@ julia> sum(a) # Sum the remaining elements
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
-    taken::Int
+    # Number of remaining elements, or nothing if not known or infinite
+    remaining::Union{Int, Nothing}
     @inline function Stateful{<:Any, Any}(itr::T) where {T}
-        new{T, Any}(itr, iterate(itr), 0)
+        itl = iterlength(itr)
+        new{T, Any}(itr, iterate(itr), itl)
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        return new{T, VS}(itr, iterate(itr)::VS, 0)
+        itl = iterlength(itr)
+        return new{T, VS}(itr, iterate(itr)::VS, itl)
     end
+end
+
+function iterlength(it)::Union{Int, Nothing}
+    itz = IteratorSize(it)
+    (itz isa HasLength || itz isa HasShape) ? Int(length(it)) : nothing
 end
 
 function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
     s.itr = itr
+    itl = iterlength(itr)
     setfield!(s, :nextvalstate, iterate(itr))
-    s.taken = 0
+    s.remaining = itl
     s
 end
 
@@ -1404,7 +1413,10 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
     else
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
-        s.taken += 1
+        rem = s.remaining
+        if rem !== nothing
+            s.remaining = rem - 1
+        end
         return val
     end
 end
@@ -1417,7 +1429,16 @@ end
 IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
 eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
 IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
-length(s::Stateful) = length(s.itr) - s.taken
+
+function length(s::Stateful)
+    rem = s.remaining
+    # If rem is actually remaining length, return it.
+    # else, rem is number of consumed elements.
+    if rem > 0
+        rem
+    else
+        length(s.itr) - (one(rem) - rem)
+    end
 end
 
 """
