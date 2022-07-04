@@ -843,7 +843,7 @@ end
         v, s = iterate(z)
         @test Base.isdone(z, s)
     end
-    # Stateful wrapping mutable iterators of known length (#43245) 
+    # Stateful wrapping mutable iterators of known length (#43245)
     @test length(Iterators.Stateful(Iterators.Stateful(1:5))) == 5
 end
 
