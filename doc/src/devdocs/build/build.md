@@ -169,7 +169,7 @@ repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
 uses are listed in [`deps/$(LibName).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM]** (14.0 + [patches](https://github.com/JuliaLang/llvm-project)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.

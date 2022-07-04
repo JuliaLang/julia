@@ -11,7 +11,8 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
-    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val
+    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
+    midpoint
 
 using .Base: >>>, !==
 
@@ -164,11 +165,6 @@ same thing as `partialsort!` but leaving `v` unmodified.
 """
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
-
-# This implementation of `midpoint` is performance-optimized but safe
-# only if `lo <= hi`.
-midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
-midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
