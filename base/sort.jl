@@ -5,6 +5,7 @@ module Sort
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base.Order
+
 using .Base: length, first, last, axes, firstindex, lastindex, eltype,
     similar, iterate, keytype, copymutable, fill, eachindex, zip,
     copyto!, reverse!, resize!, require_one_based_indexing,
@@ -12,7 +13,8 @@ using .Base: length, first, last, axes, firstindex, lastindex, eltype,
     identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
     reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned, Val,
     Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
-    (:), >, <, <=, >=, ==, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor
+    (:), >, <, <=, >=, ==, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor,
+    midpoint
 
 import .Base:
     sort,
@@ -163,11 +165,6 @@ same thing as `partialsort!` but leaving `v` unmodified.
 """
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
-
-# This implementation of `midpoint` is performance-optimized but safe
-# only if `lo <= hi`.
-midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
-midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
