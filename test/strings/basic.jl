@@ -681,7 +681,7 @@ mutable struct CharStr <: AbstractString
     CharStr(x) = new(collect(x))
 end
 Base.iterate(x::CharStr) = iterate(x.chars)
-Base.ncodeunits(x::CharStr) = length(x.chars)
+Base.length(x::CharStr) = length(x.chars)
 Base.iterate(x::CharStr, i::Int) = iterate(x.chars, i)
 Base.lastindex(x::CharStr) = lastindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
