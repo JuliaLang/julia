@@ -1234,7 +1234,6 @@ reducedim1(R, A) = length(axes1(R)) == 1
 function _findextrema!(f, op_mn, op_mx, Rval_mn, Rind_mn, Rval_mx, Rind_mx, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval_mn) || isempty(Rval_mx) || isempty(A)) && return ((Rval_mn, Rind_mn), (Rval_mx, Rind_mx))
     lsiz_mn = check_reducedims(Rval_mn, A)
-    lsiz_mx = check_reducedims(Rval_mx, A)
     for i = 1:N
         axes(Rval_mn, i) == axes(Rind_mn, i) == axes(Rval_mx, i) == axes(Rind_mx, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
     end
