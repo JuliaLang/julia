@@ -67,23 +67,18 @@ $(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-e
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled: $(BUILDDIR)/gmp-$(GMP_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/gmp-$(GMP_VER)/build-checked: $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check
+	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 
-define GMP_INSTALL
-	mkdir -p $2/$(build_shlibdir) $2/$(build_includedir)
-	$(INSTALL_M) $1/.libs/libgmp*$(SHLIB_EXT)* $2/$(build_shlibdir)
-	$(INSTALL_F) $1/gmp.h $2/$(build_includedir)
-endef
 $(eval $(call staged-install, \
 	gmp,gmp-$(GMP_VER), \
-	GMP_INSTALL,,, \
+	MAKE_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
 
 clean-gmp:
