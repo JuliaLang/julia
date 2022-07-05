@@ -103,7 +103,7 @@ STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_
 }
 
 // Pop from the mark queue
-STATIC_INLINEjl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
+STATIC_INLINE jl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
 {
     if (mq->current == mq->start)
         return NULL;
