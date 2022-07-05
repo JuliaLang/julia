@@ -198,93 +198,93 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
-    // jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    // do {
-    //     jl_gc_mark_sp_t sp;
-    //     gc_mark_sp_init(gc_cache, &sp);
-    //     arraylist_push(&lostval_parents_done, lostval);
-    //     jl_safe_printf("Now looking for %p =======\n", lostval);
-    //     clear_mark(GC_CLEAN);
-    //     gc_mark_queue_all_roots(ptls, &sp);
-    //     gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
-    //     for (int i = 0;i < jl_n_threads;i++) {
-    //         jl_ptls_t ptls2 = jl_all_tls_states[i];
-    //         gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
-    //     }
-    //     gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-    //     gc_mark_loop(ptls, sp);
-    //     if (lostval_parents.len == 0) {
-    //         jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
-    //         break;
-    //     }
-    //     jl_value_t *lostval_parent = NULL;
-    //     for(int i = 0; i < lostval_parents.len; i++) {
-    //         lostval_parent = (jl_value_t*)lostval_parents.items[i];
-    //         int clean_len = bits_save[GC_CLEAN].len;
-    //         for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
-    //             void *p = bits_save[j >= clean_len ? GC_OLD : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
-    //             if (jl_valueof(p) == lostval_parent) {
-    //                 lostval = lostval_parent;
-    //                 lostval_parent = NULL;
-    //                 break;
-    //             }
-    //         }
-    //         if (lostval_parent != NULL) break;
-    //     }
-    //     if (lostval_parent == NULL) { // all parents of lostval were also scheduled for deletion
-    //         lostval = (jl_value_t*)arraylist_pop(&lostval_parents);
-    //     }
-    //     else {
-    //         jl_safe_printf("Missing write barrier found !\n");
-    //         jl_safe_printf("%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
-    //         jl_safe_printf("(details above)\n");
-    //         lostval = NULL;
-    //     }
-    //     restore();
-    // } while(lostval != NULL);
+    do {
+        jl_gc_markqueue_t mq;
+        mq.current = mq.start = (ptls->mark_queue).start;
+        mq.end = (ptls->mark_queue).end;
+        arraylist_push(&lostval_parents_done, lostval);
+        jl_safe_printf("Now looking for %p =======\n", lostval);
+        clear_mark(GC_CLEAN);
+        gc_mark_queue_all_roots(ptls, &mq);
+        gc_mark_queue_finlist(&mq, &to_finalize, 0);
+        for (int i = 0;i < jl_n_threads;i++) {
+            jl_ptls_t ptls2 = jl_all_tls_states[i];
+            gc_mark_queue_finlist(&mq, &ptls2->finalizers, 0);
+        }
+        gc_mark_queue_finlist(&mq, &finalizer_list_marked, 0);
+        _gc_mark_loop(ptls, &mq);
+        if (lostval_parents.len == 0) {
+            jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
+            break;
+        }
+        jl_value_t *lostval_parent = NULL;
+        for(int i = 0; i < lostval_parents.len; i++) {
+            lostval_parent = (jl_value_t*)lostval_parents.items[i];
+            int clean_len = bits_save[GC_CLEAN].len;
+            for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
+                void *p = bits_save[j >= clean_len ? GC_OLD : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
+                if (jl_valueof(p) == lostval_parent) {
+                    lostval = lostval_parent;
+                    lostval_parent = NULL;
+                    break;
+                }
+            }
+            if (lostval_parent != NULL) break;
+        }
+        if (lostval_parent == NULL) { // all parents of lostval were also scheduled for deletion
+            lostval = (jl_value_t*)arraylist_pop(&lostval_parents);
+        }
+        else {
+            jl_safe_printf("Missing write barrier found !\n");
+            jl_safe_printf("%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
+            jl_safe_printf("(details above)\n");
+            lostval = NULL;
+        }
+        restore();
+    } while(lostval != NULL);
 }
 
 void gc_verify(jl_ptls_t ptls)
 {
-    // jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    // jl_gc_mark_sp_t sp;
-    // gc_mark_sp_init(gc_cache, &sp);
-    // lostval = NULL;
-    // lostval_parents.len = 0;
-    // lostval_parents_done.len = 0;
-    // clear_mark(GC_CLEAN);
-    // gc_verifying = 1;
-    // gc_mark_queue_all_roots(ptls, &sp);
-    // gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
-    // for (int i = 0;i < jl_n_threads;i++) {
-    //     jl_ptls_t ptls2 = jl_all_tls_states[i];
-    //     gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
-    // }
-    // gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-    // gc_mark_loop(ptls, sp);
-    // int clean_len = bits_save[GC_CLEAN].len;
-    // for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
-    //     jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
-    //     if (gc_marked(v->bits.gc)) {
-    //         jl_safe_printf("Error. Early free of %p type :", v);
-    //         jl_(jl_typeof(jl_valueof(v)));
-    //         jl_safe_printf("val : ");
-    //         jl_(jl_valueof(v));
-    //         jl_safe_printf("Let's try to backtrack the missing write barrier :\n");
-    //         lostval = jl_valueof(v);
-    //         break;
-    //     }
-    // }
-    // if (lostval == NULL) {
-    //     gc_verifying = 0;
-    //     restore();  // we did not miss anything
-    //     return;
-    // }
-    // restore();
-    // gc_verify_track(ptls);
-    // jl_gc_debug_print_status();
-    // jl_gc_debug_critical_error();
-    // abort();
+    jl_gc_markqueue_t mq;
+    mq.current = mq.start = (ptls->mark_queue).start;
+    mq.end = (ptls->mark_queue).end;
+    lostval = NULL;
+    lostval_parents.len = 0;
+    lostval_parents_done.len = 0;
+    clear_mark(GC_CLEAN);
+    gc_verifying = 1;
+    gc_mark_queue_all_roots(ptls, &mq);
+    gc_mark_queue_finlist(&mq, &to_finalize, 0);
+    for (int i = 0;i < jl_n_threads;i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        gc_mark_queue_finlist(&mq, &ptls2->finalizers, 0);
+    }
+    gc_mark_queue_finlist(&mq, &finalizer_list_marked, 0);
+    _gc_mark_loop(ptls, &mq);
+    int clean_len = bits_save[GC_CLEAN].len;
+    for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
+        jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
+        if (gc_marked(v->bits.gc)) {
+            jl_safe_printf("Error. Early free of %p type :", v);
+            jl_(jl_typeof(jl_valueof(v)));
+            jl_safe_printf("val : ");
+            jl_(jl_valueof(v));
+            jl_safe_printf("Let's try to backtrack the missing write barrier :\n");
+            lostval = jl_valueof(v);
+            break;
+        }
+    }
+    if (lostval == NULL) {
+        gc_verifying = 0;
+        restore();  // we did not miss anything
+        return;
+    }
+    restore();
+    gc_verify_track(ptls);
+    jl_gc_debug_print_status();
+    jl_gc_debug_critical_error();
+    abort();
 }
 #endif
 
