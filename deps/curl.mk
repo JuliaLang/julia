@@ -65,7 +65,7 @@ $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/sour
 	echo 1 > $@
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-compiled: $(BUILDDIR)/curl-$(CURL_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON)
 	echo 1 > $@
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-checked: $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
@@ -76,7 +76,7 @@ endif
 
 $(eval $(call staged-install, \
 	curl,curl-$$(CURL_VER), \
-	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
+	MAKE_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libcurl.$$(SHLIB_EXT) $$(build_shlibdir)/libcurl.$$(SHLIB_EXT)))
 
 clean-curl:
