@@ -53,14 +53,10 @@ $(SRCCACHE)/gmp-$(GMP_VER)/gmp-CVE-2021-43618.patch-applied: $(SRCCACHE)/gmp-$(G
 		patch -p1 < $(SRCDIR)/patches/gmp-CVE-2021-43618.patch
 	echo 1 > $@
 
-$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: \
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-HG-changeset.patch-applied \
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-exception.patch-applied \
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp_alloc_overflow_func.patch-applied \
-	$(SRCCACHE)/gmp-$(GMP_VER)/gmp-CVE-2021-43618.patch-applied
+$(SRCCACHE)/gmp-$(GMP_VER)/source-patched: $(SRCCACHE)/gmp-$(GMP_VER)/gmp-CVE-2021-43618.patch-applied
 	echo 1 > $@
 
-$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-extracted $(SRCCACHE)/gmp-$(GMP_VER)/source-patched
+$(BUILDDIR)/gmp-$(GMP_VER)/build-configured: $(SRCCACHE)/gmp-$(GMP_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(GMP_CONFIGURE_OPTS)
@@ -100,4 +96,5 @@ check-gmp: $(BUILDDIR)/gmp-$(GMP_VER)/build-checked
 else # USE_BINARYBUILDER_GMP
 
 $(eval $(call bb-install,gmp,GMP,false,true))
+
 endif
