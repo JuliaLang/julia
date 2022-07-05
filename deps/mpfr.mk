@@ -7,17 +7,17 @@ endif
 
 ifneq ($(USE_BINARYBUILDER_MPFR),1)
 
-MPFR_OPTS := $(CONFIGURE_COMMON)
-MPFR_OPTS += --enable-thread-safe --enable-shared-cache --disable-float128 --disable-decimal-float
-MPFR_OPTS += --enable-shared --disable-static
+MPFR_CONFIGURE_OPTS := $(CONFIGURE_COMMON)
+MPFR_CONFIGURE_OPTS += --enable-thread-safe --enable-shared-cache --disable-float128 --disable-decimal-float
+MPFR_CONFIGURE_OPTS += --enable-shared --disable-static
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS += --with-gmp=$(abspath $(build_includedir))
+MPFR_CONFIGURE_OPTS += --with-gmp=$(abspath $(build_includedir))
 endif
 
 ifeq ($(SANITIZE),1)
 # Force generic C build
-MPFR_OPTS += --host=none-unknown-linux
+MPFR_CONFIGURE_OPTS += --host=none-unknown-linux
 endif
 
 
@@ -36,7 +36,7 @@ checksum-mpfr: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(MPFR_OPTS)
+	$(dir $<)/configure $(MPFR_CONFIGURE_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured
