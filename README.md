@@ -67,7 +67,7 @@ If you would rather not compile the latest Julia from source,
 platform-specific tarballs with pre-compiled binaries are also
 [available for download](https://julialang.org/downloads/). The
 downloads page also provides details on the
-[different tiers of support](https://julialang.org/downloads/#support-tiers)
+[different tiers of support](https://julialang.org/downloads/#supported_platforms)
 for OS and platform combinations.
 
 If everything works correctly, you will see a Julia banner and an
