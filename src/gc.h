@@ -82,19 +82,19 @@ typedef struct {
 } jl_gc_num_t;
 
 // Double the mark queue
-static void NOINLINE gc_markqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+static NOINLINE void gc_markqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_value_t **old_start = mq->start;
     size_t old_queue_size = (mq->end - mq->start);
     size_t offset = (mq->current - old_start);
-    mq->start = (jl_value_t**)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t*));
+    mq->start =
+        (jl_value_t **)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t *));
     mq->current = (mq->start + offset);
     mq->end = (mq->start + 2 * old_queue_size);
 }
 
 // Push a work item to the queue
-STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq,
-                                     jl_value_t *obj) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
     if (__unlikely(mq->current == mq->end))
         gc_markqueue_resize(mq);
@@ -103,7 +103,7 @@ STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq,
 }
 
 // Pop from the mark queue
-STATIC_INLINE jl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
+STATIC_INLINEjl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
 {
     if (mq->current == mq->start)
         return NULL;
