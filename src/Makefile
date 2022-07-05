@@ -88,7 +88,7 @@ SRCS += $(RUNTIME_SRCS)
 # headers are used for dependency tracking, while public headers will be part of the dist
 UV_HEADERS :=
 HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_internal.h options.h timing.h)
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_gcext.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h tls.h locks.h atomics.h julia_gcext.h jloptions.h)
 ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
 UV_HEADERS += uv/*.h
@@ -118,6 +118,7 @@ endif
 CLANG_LDFLAGS := $(LLVM_LDFLAGS)
 ifeq ($(OS), Darwin)
 CLANG_LDFLAGS += -Wl,-undefined,dynamic_lookup
+OSLIBS += $(SRCDIR)/mach_dyld_atfork.tbd
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)

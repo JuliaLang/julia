@@ -380,6 +380,7 @@
     XX(jl_init_restored_modules) \
     XX(jl_init__threading) \
     XX(jl_init_with_image__threading) \
+    XX(jl_init_options) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \

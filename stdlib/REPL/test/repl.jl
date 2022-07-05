@@ -264,7 +264,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         Base.print_shell_escaped(stdin_write, Base.julia_cmd().exec..., special=Base.shell_special)
-        write(stdin_write, """ -e "println(\\"HI\\")\" """)
+        write(stdin_write, """ -e "println(\\"HI\\")\"""")
         readuntil(stdout_read, ")\"")
         proc_stdout_read, proc_stdout = redirect_stdout()
         get_stdout = @async read(proc_stdout_read, String)

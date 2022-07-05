@@ -1806,7 +1806,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         for (i = 0; i < n; i++)
             env[i].val = jl_svecref(ndt->parameters, i);
 
-        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, &top, 1);
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1);
         jl_gc_wb(ndt, ndt->super);
     }
 
@@ -1816,7 +1816,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
-            ndt->types = inst_ftypes(t->types, env, &top);
+            ndt->types = inst_ftypes(t->types, &env[n - 1], &top);
             jl_gc_wb(ndt, ndt->types);
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);

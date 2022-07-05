@@ -294,7 +294,14 @@ function round(::Type{T}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
     end
     return unsafe_trunc(T, res)
 end
-round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) = _unchecked_cast(BigInt, x, r)
+
+function round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
+    clear_flags()
+    res = _unchecked_cast(BigInt, x, r)
+    had_range_exception() && throw(InexactError(:round, BigInt, x))
+    return res
+end
+
 round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} =
     invoke(round, Tuple{Type{<:Union{Signed, Unsigned}}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
 round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =

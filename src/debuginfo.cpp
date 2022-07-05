@@ -48,21 +48,34 @@ typedef object::SymbolRef SymRef;
 // while holding this lock.
 // Certain functions in this file might be called from an unmanaged thread
 // and cannot have any interaction with the julia runtime
-static uv_rwlock_t threadsafe;
+// They also may be re-entrant, and operating while threads are paused, so we
+// separately manage the re-entrant count behavior for safety across platforms
+// Note that we cannot safely upgrade read->write
+static uv_rwlock_t debuginfo_asyncsafe;
+static pthread_key_t debuginfo_asyncsafe_held;
 
 extern "C" void jl_init_debuginfo(void)
 {
-    uv_rwlock_init(&threadsafe);
+    uv_rwlock_init(&debuginfo_asyncsafe);
+    if (pthread_key_create(&debuginfo_asyncsafe_held, NULL))
+        jl_error("fatal: pthread_key_create failed");
 }
 
 extern "C" void jl_lock_profile(void)
 {
-    uv_rwlock_rdlock(&threadsafe);
+    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+    if (held++ == 0)
+        uv_rwlock_rdlock(&debuginfo_asyncsafe);
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 }
 
 extern "C" void jl_unlock_profile(void)
 {
-    uv_rwlock_rdunlock(&threadsafe);
+    uintptr_t held = (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+    assert(held);
+    if (--held == 0)
+        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 }
 
 // some actions aren't signal (especially profiler) safe so we acquire a lock
@@ -70,7 +83,8 @@ extern "C" void jl_unlock_profile(void)
 template <typename T>
 static void jl_profile_atomic(T f)
 {
-    uv_rwlock_wrlock(&threadsafe);
+    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    uv_rwlock_wrlock(&debuginfo_asyncsafe);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -81,7 +95,7 @@ static void jl_profile_atomic(T f)
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    uv_rwlock_wrunlock(&threadsafe);
+    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
 }
 
 
@@ -197,12 +211,12 @@ public:
 
     jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT
     {
-        uv_rwlock_rdlock(&threadsafe);
+        jl_lock_profile();
         auto region = linfomap.lower_bound(pointer);
         jl_method_instance_t *linfo = NULL;
         if (region != linfomap.end() && pointer < region->first + region->second.first)
             linfo = region->second.second;
-        uv_rwlock_rdunlock(&threadsafe);
+        jl_unlock_profile();
         return linfo;
     }
 
@@ -525,9 +539,10 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    uv_rwlock_wrlock(&threadsafe);
+    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    uv_rwlock_wrlock(&debuginfo_asyncsafe);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-    uv_rwlock_wrunlock(&threadsafe);
+    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
@@ -550,9 +565,9 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            uv_rwlock_wrlock(&threadsafe);
+            uv_rwlock_wrlock(&debuginfo_asyncsafe);
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
-            uv_rwlock_wrunlock(&threadsafe);
+            uv_rwlock_wrunlock(&debuginfo_asyncsafe);
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1208,7 +1223,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    uv_rwlock_wrlock(&threadsafe);
+    assert(0 == (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held));
+    uv_rwlock_wrlock(&debuginfo_asyncsafe);
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.lower_bound(fptr);
 
@@ -1224,7 +1240,7 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         }
         found = 1;
     }
-    uv_rwlock_wrunlock(&threadsafe);
+    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
     return found;
 }
 
@@ -1669,13 +1685,13 @@ extern "C"
 uint64_t jl_getUnwindInfo(uint64_t dwAddr)
 {
     // Might be called from unmanaged thread
-    uv_rwlock_rdlock(&threadsafe);
+    jl_lock_profile();
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
     uint64_t ipstart = 0; // ip of the start of the section (if found)
     if (it != objmap.end() && dwAddr < it->first + it->second.SectionSize) {
         ipstart = (uint64_t)(uintptr_t)(*it).first;
     }
-    uv_rwlock_rdunlock(&threadsafe);
+    jl_unlock_profile();
     return ipstart;
 }

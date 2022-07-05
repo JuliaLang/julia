@@ -39,8 +39,29 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied: $(SRCCACHE)/$(MBE
 		patch -p1 -f < $(SRCDIR)/patches/mbedtls-cmake-findpy.patch
 	echo 1 > $@
 
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-07-1.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied
+	# Apply backported set of patches for MbedTLS security issue first fixed in 2.27.0
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls-security-advisory-2021-07-1.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-07-2.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-07-1.patch-applied
+	# Apply backported set of patches for MbedTLS security issue first fixed in 2.27.0
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls-security-advisory-2021-07-2.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-12.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-07-2.patch-applied
+	# Apply backported set of patches for MbedTLS security issue first fixed in 2.28.0
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls-security-advisory-2021-12.patch
+	echo 1 > $@
+
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: \
-	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied
+	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied \
+	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-07-1.patch-applied \
+	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-07-2.patch-applied \
+	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-security-advisory-2021-12.patch-applied
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)

@@ -177,6 +177,10 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     for (unsigned int symbol_idx=0; jl_exported_func_names[symbol_idx] != NULL; ++symbol_idx) {
         (*jl_exported_func_addrs[symbol_idx]) = lookup_symbol(libjulia_internal, jl_exported_func_names[symbol_idx]);
     }
+
+    // jl_options must be initialized very early, in case an embedder sets some
+    // values there before calling jl_init
+    ((void (*)(void))jl_init_options_addr)();
 }
 
 // Load libjulia and run the REPL with the given arguments (in UTF-8 format)

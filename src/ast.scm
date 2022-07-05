@@ -73,13 +73,15 @@
         ((char? e) (string "'" e "'"))
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
-         (string (deparse (cadr e)) '|.|
-                 (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                        (deparse-colon-dot (cadr (caddr e))))
-                       ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
-                        (deparse-colon-dot (cadr (cadr (caddr e)))))
-                       (else
-                        (string #\( (deparse (caddr e)) #\))))))
+         (if (length= e 2)
+             (string "(." (deparse (cadr e)) ")")
+             (string (deparse (cadr e)) '|.|
+                     (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
+                            (deparse-colon-dot (cadr (caddr e))))
+                           ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
+                            (deparse-colon-dot (cadr (cadr (caddr e)))))
+                           (else
+                            (string #\( (deparse (caddr e)) #\)))))))
         ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|) (eq? (car e) '-->))
@@ -419,7 +421,7 @@
   (if (dotop-named? e)
       (error (string "invalid function name \"" (deparse e) "\""))
       (if (pair? e)
-          (if (eq? (car e) '|.|)
+          (if (and (eq? (car e) '|.|) (length= e 3))
               (check-dotop (caddr e))
               (if (quoted? e)
                   (check-dotop (cadr e))))))

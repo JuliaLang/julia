@@ -22,7 +22,7 @@ DSFMT_VER := 2.2.4
 DSFMT_JLL_NAME := dSFMT
 
 # GMP
-GMP_VER := 6.2.0
+GMP_VER := 6.2.1
 GMP_JLL_NAME := GMP
 
 # LibCURL
@@ -87,11 +87,11 @@ OSXUNWIND_JLL_VER  := 0.0.6+1
 PATCHELF_VER := 0.9
 
 # p7zip
-P7ZIP_VER := 16.2.0
+P7ZIP_VER := 17.04
 P7ZIP_JLL_NAME := p7zip
 
 # PCRE
-PCRE_VER := 10.36
+PCRE_VER := 10.40
 PCRE_JLL_NAME := PCRE2
 
 # SuiteSparse
@@ -104,7 +104,7 @@ UNWIND_JLL_NAME := LibUnwind
 UNWIND_JLL_VER  := 1.3.2+6
 
 # zlib
-ZLIB_VER := 1.2.11
+ZLIB_VER := 1.2.12
 ZLIB_JLL_NAME := Zlib
 
 # Specify the version of the Mozilla CA Certificate Store to obtain.

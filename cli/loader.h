@@ -21,6 +21,8 @@
 #define realloc loader_realloc
 #endif
 
+#include <stdint.h>
+
 #ifdef _OS_WINDOWS_
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -105,3 +107,5 @@ int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
 int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
 void setup_stdio(void);
 #endif
+
+#include "../src/jloptions.h"

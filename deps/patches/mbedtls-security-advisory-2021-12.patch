@@ -1,0 +1,25 @@
+commit 6f0354fb7d3d04be928704eb2802fd5ba83213de
+Author: 吴敬辉 <11137405@vivo.com>
+Date:   Mon Nov 29 10:46:35 2021 +0800
+
+    [session] fix a session copy bug
+    fix a possible double reference on 'ticket'
+    when peer_cert/peer_cert_digest calloc failed.
+    
+    Signed-off-by: 吴敬辉 <11137405@vivo.com>
+
+diff --git a/library/ssl_tls.c b/library/ssl_tls.c
+index 7062d53b7..49cdbae66 100644
+--- a/library/ssl_tls.c
++++ b/library/ssl_tls.c
+@@ -187,6 +187,10 @@ int mbedtls_ssl_session_copy( mbedtls_ssl_session *dst,
+     mbedtls_ssl_session_free( dst );
+     memcpy( dst, src, sizeof( mbedtls_ssl_session ) );
+ 
++#if defined(MBEDTLS_SSL_SESSION_TICKETS) && defined(MBEDTLS_SSL_CLI_C)
++    dst->ticket = NULL;
++#endif
++
+ #if defined(MBEDTLS_X509_CRT_PARSE_C)
+ 
+ #if defined(MBEDTLS_SSL_KEEP_PEER_CERTIFICATE)
