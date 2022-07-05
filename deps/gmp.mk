@@ -73,10 +73,17 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+# Windows doesn't like soft link, use hard link
+ifeq ($(OS), WINNT)
+WIN_ADD_HARD_LINK_CMD := cp -f --link $(build_bindir)/libgmp-*.dll $(build_bindir)/libgmp.dll
+else
+WIN_ADD_HARD_LINK_CMD := true -ignore
+endif
 $(eval $(call staged-install, \
 	gmp,gmp-$(GMP_VER), \
 	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
+	$$(WIN_ADD_HARD_LINK_CMD) && \
+		$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
 
 clean-gmp:
 	-rm -f $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled
