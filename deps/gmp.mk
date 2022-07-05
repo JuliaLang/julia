@@ -9,6 +9,8 @@ ifeq ($(BUILD_OS),WINNT)
 GMP_CONFIGURE_OPTS += --srcdir="$(subst \,/,$(call mingw_to_dos,$(SRCCACHE)/gmp-$(GMP_VER)))"
 endif
 
+GMP_CONFIGURE_OPTS += CC_FOR_BUILD=$(HOSTCC)
+
 ifneq ($(USE_BINARYBUILDER_GMP),1)
 
 $(SRCCACHE)/gmp-$(GMP_VER).tar.bz2: | $(SRCCACHE)

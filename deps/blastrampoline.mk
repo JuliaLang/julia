@@ -6,16 +6,24 @@ BLASTRAMPOLINE_GIT_URL := https://github.com/JuliaLinearAlgebra/libblastrampolin
 BLASTRAMPOLINE_TAR_URL = https://api.github.com/repos/JuliaLinearAlgebra/libblastrampoline/tarball/$1
 $(eval $(call git-external,blastrampoline,BLASTRAMPOLINE,,,$(BUILDDIR)))
 
+BLASTRAMPOLINE_BUILD_OPTS := $(MAKE_COMMON) CC="$(CC)" CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+BLASTRAMPOLINE_BUILD_OPTS += ARCH="$(ARCH)" OS="$(OS)"
+
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	echo 1 > $@
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
-	cd $(dir $@)/src && $(MAKE) $(MAKE_COMMON)
+	cd $(dir $@)/src && $(MAKE) $(BLASTRAMPOLINE_BUILD_OPTS)
+ifeq ($(OS), WINNT)
+	# Windows doesn't like soft link, use hard link
+	cd $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src/build/ && \
+		cp -f --dereference --link libblastrampoline.dll libblastrampoline.dll
+endif
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
-	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src $(MAKE_COMMON) install DESTDIR="$2"
+	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src install $(BLASTRAMPOLINE_BUILD_OPTS) DESTDIR="$2"
 endef
 $(eval $(call staged-install, \
 	blastrampoline,$(BLASTRAMPOLINE_SRC_DIR), \

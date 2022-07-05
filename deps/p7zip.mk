@@ -6,6 +6,12 @@ ifneq ($(USE_BINARYBUILDER_P7ZIP),1)
 $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/jinfeihan57/p7zip/archive/refs/tags/v$(P7ZIP_VER).tar.gz
 
+P7ZIP_BUILD_OPTS := $(MAKE_COMMON)
+# Build with cygwin, not use cross build.
+ifeq (,$(findstring CYGWIN,$(BUILD_OS)))
+P7ZIP_BUILD_OPTS += CC="$(CC)" CXX="$(CXX)"
+endif
+
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
@@ -17,7 +23,7 @@ checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(MAKE_COMMON) CC="$(CC)" CXX="$(CXX)" 7za
+	$(MAKE) -C $(dir $<) $(P7ZIP_BUILD_OPTS) 7za
 	echo 1 > $@
 
 define P7ZIP_INSTALL

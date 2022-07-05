@@ -13,21 +13,28 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
+# no test
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF
+
+# Special windows flags
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
+
 ifneq ($(ARCH),x86_64)
 ifneq ($(USECLANG),1)
 LIBGIT2_OPTS += -DCMAKE_C_FLAGS="-mincoming-stack-boundary=2"
 endif
 endif
+
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
-LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+# build on *nix or cygwin
+LIBGIT2_OPTS += -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST)/sys-root/mingw/ -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
-endif
+endif # OS == WINNT
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
@@ -59,7 +66,7 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
