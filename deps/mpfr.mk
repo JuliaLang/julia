@@ -12,7 +12,7 @@ MPFR_CONFIGURE_OPTS += --enable-thread-safe --enable-shared-cache --disable-floa
 MPFR_CONFIGURE_OPTS += --enable-shared --disable-static
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_CONFIGURE_OPTS += --with-gmp=$(abspath $(build_includedir))
+MPFR_CONFIGURE_OPTS += --with-gmp=$(abspath $(build_prefix))
 endif
 
 ifeq ($(SANITIZE),1)
