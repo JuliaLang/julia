@@ -1932,9 +1932,8 @@ void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t
 }
 
 // Mark finalizer list (or list of objects following same format)
-void gc_mark_finlist(jl_ptls_t ptls, arraylist_t *list, size_t start) JL_NOTSAFEPOINT
+void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT
 {
-    jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t len = list->len;
     if (len <= start)
@@ -2575,9 +2574,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_mark_finlist(ptls, &ptls2->finalizers, 0);
+        gc_mark_finlist(&ptls->mark_queue, &ptls2->finalizers, 0);
     }
-    gc_mark_finlist(ptls, &finalizer_list_marked, orig_marked_len);
+    gc_mark_finlist(&ptls->mark_queue, &finalizer_list_marked, orig_marked_len);
     // "Flush" the mark stack before flipping the reset_age bit
     // so that the objects are not incorrectly reset.
     gc_mark_loop(ptls);
@@ -2588,7 +2587,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // `to_finalize` list. These objects are only reachable from this list
     // and should not be referenced by any old objects so this won't break
     // the GC invariant.
-    gc_mark_finlist(ptls, &to_finalize, 0);
+    gc_mark_finlist(&ptls->mark_queue, &to_finalize, 0);
     gc_mark_loop(ptls);
     mark_reset_age = 0;
     gc_settime_postmark_end();
