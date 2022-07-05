@@ -1617,11 +1617,3 @@ end
     @test (@inferred A[i,i,i]) === A[1]
     @test (@inferred to_indices([], (1, CIdx(1, 1), 1, CIdx(1, 1), 1, CIdx(1, 1), 1))) == ntuple(Returns(1), 10)
 end
-
-@testset "eachslice inference" begin
-    a = [1 2; 3 4]
-    f1(a) = eachslice(a, dims=1)
-    @test (@inferred f1(a)) == eachrow(a)
-    f2(a) = eachslice(a, dims=2)
-    @test (@inferred f2(a)) == eachcol(a)
-end
