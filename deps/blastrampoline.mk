@@ -32,6 +32,11 @@ $(eval $(call staged-install, \
 	$$(BLASTRAMPOLINE_OBJ_TARGET), \
 	$$(INSTALL_NAME_CMD)libblastrampoline.$$(SHLIB_EXT) $$(build_shlibdir)/libblastrampoline.$$(SHLIB_EXT)))
 
+clean-blastrampoline:
+	-$(MAKE) -C $(BLASTRAMPOLINE_BUILD_ROOT) clean
+	-$(RM) $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled \
+		$(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
+
 get-blastrampoline: $(BLASTRAMPOLINE_SRC_FILE)
 extract-blastrampoline: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/source-extracted
 configure-blastrampoline: extract-blastrampoline
