@@ -1652,14 +1652,10 @@ end
     end
     @test mod(Int64(2), typemax(Int64)) == 2  # issue #3046
     @testset "issue #45875" begin
-        @test cld(+1.1, 0.1) == +12.0
-        @test fld(+1.1, 0.1) == +11.0
-        @test cld(-1.1, 0.1) == -11.0
-        @test fld(-1.1, 0.1) == -12.0
-        @test div(+1.1, 0.1, RoundDown) == +11.0
-        @test div(+1.1, 0.1, RoundUp) == +12.0
-        @test div(-1.1, 0.1, RoundDown) == -12.0
-        @test div(-1.1, 0.1, RoundUp) == -11.0
+        @test cld(+1.1, 0.1) == div(+1.1, 0.1, RoundUp)   ==  ceil(big(+1.1)/big(0.1)) == +12.0
+        @test fld(+1.1, 0.1) == div(+1.1, 0.1, RoundDown) == floor(big(+1.1)/big(0.1)) == +11.0
+        @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
+        @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
     end
 end
 @testset "return types" begin
