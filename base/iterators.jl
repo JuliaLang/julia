@@ -1377,7 +1377,7 @@ end
 
 function iterlength(it)::Signed
     if IteratorSize(it) isa Union{HasShape, HasLength}
-        signed(length(it))
+       return length(it)
     else
         -1
     end
