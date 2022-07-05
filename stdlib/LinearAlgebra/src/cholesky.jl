@@ -168,7 +168,7 @@ CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::AbstractVector{<:
     CholeskyPivoted{T,typeof(A),typeof(piv)}(A, uplo, piv, rank, tol, info)
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix},
-           CholeskyPivoted{T,S,typeof(piv)}(factors, uplo, piv, rank, tol, info))
+           CholeskyPivoted{T,S,typeof(piv)}(factors, uplo, piv, rank, tol, info), false)
 
 
 # iteration for destructuring into components

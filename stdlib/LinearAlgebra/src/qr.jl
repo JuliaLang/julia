@@ -49,7 +49,7 @@ QR{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
     QR(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(QR{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
-           QR{T,S,typeof(τ)}(factors, τ))
+           QR{T,S,typeof(τ)}(factors, τ), false)
 
 # iteration for destructuring into components
 Base.iterate(S::QR) = (S.Q, Val(:R))
@@ -126,7 +126,7 @@ QRCompactWY{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S} =
     QRCompactWY(convert(AbstractMatrix{S}, factors), convert(AbstractMatrix{S}, T))
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(QRCompactWY{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M},
-           QRCompactWY{S,M,typeof(T)}(factors, T))
+           QRCompactWY{S,M,typeof(T)}(factors, T), false)
 
 # iteration for destructuring into components
 Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
@@ -219,7 +219,7 @@ QRPivoted{T}(factors::AbstractMatrix, τ::AbstractVector,
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(QRPivoted{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T},
                           jpvt::AbstractVector{<:Integer}) where {T,S},
-           QRPivoted{T,S,typeof(τ),typeof(jpvt)}(factors, τ, jpvt))
+           QRPivoted{T,S,typeof(τ),typeof(jpvt)}(factors, τ, jpvt), false)
 
 # iteration for destructuring into components
 Base.iterate(S::QRPivoted) = (S.Q, Val(:R))
@@ -541,7 +541,7 @@ QRPackedQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
     QRPackedQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(QRPackedQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
-           QRPackedQ{T,S,typeof(τ)}(factors, τ))
+           QRPackedQ{T,S,typeof(τ)}(factors, τ), false)
 
 """
     QRCompactWYQ <: AbstractMatrix
@@ -564,7 +564,7 @@ QRCompactWYQ{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S} =
     QRCompactWYQ(convert(AbstractMatrix{S}, factors), convert(AbstractMatrix{S}, T))
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(QRCompactWYQ{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M},
-           QRCompactWYQ{S,M,typeof(T)}(factors, T))
+           QRCompactWYQ{S,M,typeof(T)}(factors, T), false)
 
 QRPackedQ{T}(Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::QRPackedQ{T}) where {T} = Q
