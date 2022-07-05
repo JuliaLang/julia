@@ -1354,7 +1354,7 @@ julia> sum(a) # Sum the remaining elements
 7
 ```
 """
-mutable struct Stateful{T, VS}
+mutable struct Stateful{T, VS, N<:Integer}
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
