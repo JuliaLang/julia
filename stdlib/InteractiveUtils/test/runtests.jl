@@ -383,6 +383,13 @@ a14637 = A14637(0)
 @test (@code_typed max.(Ref(true).x))[2] == Bool
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
+# Issue # 45889
+@test !isempty(@code_typed 3 .+ 6)
+@test !isempty(@code_typed 3 .+ 6 .+ 7)
+@test !isempty(@code_typed optimize=false (.- [3,4]))
+@test !isempty(@code_typed optimize=false (6 .- [3,4]))
+@test !isempty(@code_typed optimize=false (.- 0.5))
+
 # Issue #36261
 @test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
 f36261(x,y) = 3x + 4y
