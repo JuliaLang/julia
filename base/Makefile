@@ -45,10 +45,11 @@ ifeq ($(XC_HOST),)
 else
 	@echo "const MACHINE = \"$(XC_HOST)\"" >> $@
 endif
-ifeq ($(USE_SYSTEM_LIBM),0)
-	@echo "const libm_name = \"$(LIBMNAME).$(SHLIB_EXT)\"" >> $@
+	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
+ifeq ($(USE_SYSTEM_LIBM),1)
+	@echo "const libm_file = \"$(LIBMNAME).$(SHLIB_EXT).$(LIBM_VERSION)\"" >> $@
 else
-	@echo "const libm_name = \"$(LIBMNAME).$(SHLIB_EXT).$(LIBM_VERSION)\"" >> $@
+	@echo "const libm_file = \"$(LIBMNAME).$(SHLIB_EXT)\"" >> $@
 endif
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
