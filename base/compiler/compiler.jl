@@ -103,12 +103,14 @@ include("indices.jl")
 include("array.jl")
 include("abstractarray.jl")
 
+
 # core structures
-include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
+include("composedfunction.jl")
+include("bitarray.jl")
 include("abstractset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate

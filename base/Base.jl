@@ -150,6 +150,8 @@ include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
 
+include("composedfunction.jl")
+
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators

@@ -31,6 +31,7 @@ COMPILER_SRCS := $(addprefix $(BASE_DIR)/base/, \
 		bitset.jl \
 		bool.jl \
 		ctypes.jl \
+		composedfunction.jl \
 		error.jl \
 		essentials.jl \
 		expr.jl \
