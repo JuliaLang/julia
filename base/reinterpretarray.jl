@@ -152,23 +152,15 @@ strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = siz
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
-function strides(a::ReshapedReinterpretArray)
-    ap = parent(a)
-    els, elp = elsize(a), elsize(ap)
-    stp = strides(ap)
-    els == elp && return stp
-    els < elp && return (1, _checked_strides(stp, els, elp)...)
+function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a))
+    stp = strides(parent(a))
+    els, elp = sizeof(T), sizeof(S)
+    els == elp && return stp # 0dim parent is also handled here.
+    IsReshaped && els < elp && return (1, _checked_strides(stp, els, elp)...)
     stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return _checked_strides(tail(stp), els, elp)
-end
-
-function strides(a::NonReshapedReinterpretArray)
-    ap = parent(a)
-    els, elp = elsize(a), elsize(ap)
-    stp = strides(ap)
-    els == elp && return stp
-    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return (1, _checked_strides(tail(stp), els, elp)...)
+    st′ = _checked_strides(tail(stp), els, elp)
+    return IsReshaped ? st′ : (1, st′...)
 end
 
 @inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
