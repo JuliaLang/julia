@@ -41,7 +41,7 @@ CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
 	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
-	--with-libssh2=${prefix} --with-zlib=${prefix} --with-nghttp2=${prefix}
+	--with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
