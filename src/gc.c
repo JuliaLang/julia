@@ -2931,7 +2931,6 @@ void jl_gc_init(void)
 
     if (high_water_mark < max_total_memory)
        max_total_memory = high_water_mark;
-    
     t_start = jl_hrtime();
 }
 
