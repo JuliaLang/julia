@@ -1650,8 +1650,13 @@ end
         @test rem(prevfloat(1.0),1.0) == prevfloat(1.0)
         @test mod(prevfloat(1.0),1.0) == prevfloat(1.0)
     end
-    # issue #3046
-    @test mod(Int64(2),typemax(Int64)) == 2
+    @test mod(Int64(2), typemax(Int64)) == 2  # issue #3046
+    @testset "issue #45875" begin
+        @test cld(+1.1, 0.1) == div(+1.1, 0.1, RoundUp)   ==  ceil(big(+1.1)/big(0.1)) == +12.0
+        @test fld(+1.1, 0.1) == div(+1.1, 0.1, RoundDown) == floor(big(+1.1)/big(0.1)) == +11.0
+        @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
+        @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
+    end
 end
 @testset "return types" begin
     for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -2550,13 +2555,12 @@ end
         @test isnan(rem(T(1), T(0), mode))
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
-        # FIXME: The broken case erroneously returns -Inf
-        @test rem(T(4), floatmin(T) * 2, mode) == 0 broken=(T == BigFloat && mode in (RoundUp,RoundFromZero))
+        @test rem(T(4), floatmin(T) * 2, mode) == 0
     end
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),     0.0)
-    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),       0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundFromZero), 0.0)
 end
 
