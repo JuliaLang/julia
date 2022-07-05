@@ -180,7 +180,7 @@ end
 
 function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
     ast.head === :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head in [:using, :import]
+    if ast.head === :using || ast.head === :import
         for arg in ast.args
             arg = arg::Expr
             arg1 = first(arg.args)
