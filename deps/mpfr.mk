@@ -40,18 +40,18 @@ $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured: $(SRCCACHE)/mpfr-$(MPFR_VER)/sour
 	echo 1 > $@
 
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(LIBTOOL_CCLD)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-checked: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
+	$(MAKE) -C $(dir $@) check $(MPFR_CHECK_MFLAGS)
 endif
 	echo 1 > $@
 
 $(eval $(call staged-install, \
 	mpfr,mpfr-$(MPFR_VER), \
-	MAKE_INSTALL,$$(LIBTOOL_CCLD),, \
+	MAKE_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libmpfr.$$(SHLIB_EXT) $$(build_shlibdir)/libmpfr.$$(SHLIB_EXT)))
 
 clean-mpfr:
