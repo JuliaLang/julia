@@ -686,10 +686,10 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     }
 
     jl_init_runtime_ccall();
-    jl_gc_init();
     jl_init_tasks();
     jl_init_threading();
 
+    jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
