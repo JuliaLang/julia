@@ -23,6 +23,7 @@ endif
 
 $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://www.mpfr.org/mpfr-$(MPFR_VER)/$(notdir $@)
+
 $(SRCCACHE)/mpfr-$(MPFR_VER)/source-extracted: $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
@@ -45,7 +46,7 @@ $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-
 
 $(BUILDDIR)/mpfr-$(MPFR_VER)/build-checked: $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) check $(MPFR_CHECK_MFLAGS)
+	$(MAKE) -C $(dir $@) check
 endif
 	echo 1 > $@
 
