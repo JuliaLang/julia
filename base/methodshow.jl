@@ -292,7 +292,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
-    modul = if mt === _TYPE_NAME.mt # type constructor
+    modul = if mt === _TYPE_NAME.mt && length(ms) > 0 # type constructor
             which(ms.ms[1].module, ms.ms[1].name)
         else
             mt.module

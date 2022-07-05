@@ -775,6 +775,13 @@ let repr = sprint(show, "text/plain", methods(triangular_methodshow))
     @test occursin("where {T2<:Integer, T1<:T2}", repr)
 end
 
+struct S45879{P} end
+let ms = methods(S45879)
+    @test ms isa Base.MethodList
+    @test length(ms) == 0
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+end
+
 if isempty(Base.GIT_VERSION_INFO.commit)
     @test occursin("https://github.com/JuliaLang/julia/tree/v$VERSION/base/special/trig.jl#L", Base.url(which(sin, (Float64,))))
 else
