@@ -1353,26 +1353,34 @@ julia> peek(a)
 julia> sum(a) # Sum the remaining elements
 7
 ```
-""" mutable struct Stateful{T, VS}
+"""
+mutable struct Stateful{T, VS}
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
-    # Number of remaining elements, or nothing if not known or infinite
-    remaining::Union{Int, Nothing}
+
+    # Number of remaining elements, if itr is HasLength or HasShape.
+    # if not, store -1 - number_of_consumed_elements.
+    # This allows us to defer calculating length until asked for.
+    # See PR #45924
+    remaining::N
     @inline function Stateful{<:Any, Any}(itr::T) where {T}
         itl = iterlength(itr)
-        new{T, Any}(itr, iterate(itr), itl)
+        new{T, Any, typeof(itl)}(itr, iterate(itr), itl)
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
         itl = iterlength(itr)
-        return new{T, VS}(itr, iterate(itr)::VS, itl)
+        return new{T, VS, typeof(itl)}(itr, iterate(itr)::VS, itl)
     end
 end
 
-function iterlength(it)::Union{Int, Nothing}
-    itz = IteratorSize(it)
-    (itz isa HasLength || itz isa HasShape) ? Int(length(it)) : nothing
+function iterlength(it)::Signed
+    if IteratorSize(it) isa Union{HasShape, HasLength}
+        signed(length(it))
+    else
+        -1
+    end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
@@ -1414,9 +1422,8 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         rem = s.remaining
-        if rem !== nothing
-            s.remaining = rem - 1
-        end
+        @assert !iszero(rem)
+        s.remaining = rem - one(rem)
         return val
     end
 end
