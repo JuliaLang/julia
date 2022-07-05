@@ -206,12 +206,12 @@ static void gc_verify_track(jl_ptls_t ptls)
         jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
         gc_mark_queue_all_roots(ptls, &mq);
-        gc_mark_queue_finlist(&mq, &to_finalize, 0);
+        gc_mark_finlist(&mq, &to_finalize, 0);
         for (int i = 0;i < jl_n_threads;i++) {
             jl_ptls_t ptls2 = jl_all_tls_states[i];
-            gc_mark_queue_finlist(&mq, &ptls2->finalizers, 0);
+            gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
-        gc_mark_queue_finlist(&mq, &finalizer_list_marked, 0);
+        gc_mark_finlist(&mq, &finalizer_list_marked, 0);
         _gc_mark_loop(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
@@ -255,12 +255,12 @@ void gc_verify(jl_ptls_t ptls)
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
     gc_mark_queue_all_roots(ptls, &mq);
-    gc_mark_queue_finlist(&mq, &to_finalize, 0);
+    gc_mark_finlist(&mq, &to_finalize, 0);
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_mark_queue_finlist(&mq, &ptls2->finalizers, 0);
+        gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
-    gc_mark_queue_finlist(&mq, &finalizer_list_marked, 0);
+    gc_mark_finlist(&mq, &finalizer_list_marked, 0);
     _gc_mark_loop(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
@@ -537,7 +537,6 @@ void gc_scrub_record_task(jl_task_t *t)
 
 static void gc_scrub_range(char *low, char *high)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     if (jl_setjmp(buf, 0)) {

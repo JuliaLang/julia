@@ -378,8 +378,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_queue_finlist(jl_gc_markqueue_t *mq,
-                           arraylist_t *list, size_t start);
+void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
+                     size_t start);
 void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop(jl_ptls_t ptls);
 void sweep_stack_pools(void);
