@@ -1642,7 +1642,7 @@ function bodyfunction(basemethod::Method)
     f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
-        if isa(callexpr, Expr) && callexpr.head == :call
+        if isa(callexpr, Expr) && callexpr.head === :call
             fsym = callexpr.args[1]
             if isa(fsym, Symbol)
                 f = getfield(fmod, fsym)

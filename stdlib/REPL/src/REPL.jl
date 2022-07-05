@@ -179,7 +179,7 @@ function check_for_missing_packages_and_run_hooks(ast)
 end
 
 function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
-    ast.head == :quote && return mods # don't search if it's not going to be run during this eval
+    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head in [:using, :import]
         for arg in ast.args
             arg = arg::Expr

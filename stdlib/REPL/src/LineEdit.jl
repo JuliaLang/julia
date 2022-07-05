@@ -1323,9 +1323,9 @@ end
 function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(filename, line, column))
     mode_name = guess_current_mode_name(s)
     filename = tempname()
-    if mode_name == :julia
+    if mode_name === :julia
         filename *= ".jl"
-    elseif mode_name == :shell
+    elseif mode_name === :shell
         filename *= ".sh"
     end
     buf = buffer(s)
