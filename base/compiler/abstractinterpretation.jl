@@ -799,8 +799,7 @@ function const_prop_enabled(interp::AbstractInterpreter, sv::InferenceState, mat
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return false
     end
-    method = match.method
-    if method.constprop == 0x02
+    if is_no_constprop(match.method)
         add_remark!(interp, sv, "[constprop] Disabled by method parameter")
         return false
     end
@@ -1003,7 +1002,7 @@ function is_all_overridden((; fargs, argtypes)::ArgInfo, sv::InferenceState)
 end
 
 function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
-    return method.constprop == 0x01 ||
+    return is_aggressive_constprop(method) ||
            InferenceParams(interp).aggressive_constant_propagation ||
            istopfunction(f, :getproperty) ||
            istopfunction(f, :setproperty!)
