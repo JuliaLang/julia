@@ -33,6 +33,16 @@ $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 
+## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
+# Disable....almost everything
+CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
+	--without-ssl --without-gnutls --without-libidn2 --without-librtmp \
+	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
+	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static
+# A few things we actually enable
+CURL_CONFIGURE_FLAGS += --enable-versioned-symbols \
+	--with-libssh2=${prefix} --with-zlib=${prefix} --with-nghttp2=${prefix}
+
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
 #   On MacOS, we use SecureTransport
@@ -44,16 +54,12 @@ CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
 endif
+CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
-		--without-ssl --without-gnutls --without-gssapi --disable-ares \
-		--without-libidn2 --without-librtmp --without-nss --without-libpsl \
-		--disable-ldap --disable-ldaps --without-zsh-functions-dir --disable-static \
-		--with-libssh2=$(build_prefix) --with-zlib=$(build_prefix) --with-nghttp2=$(build_prefix) \
-		$(CURL_TLS_CONFIGURE_FLAGS) \
+	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \
 		CFLAGS="$(CFLAGS) $(CURL_CFLAGS)" LDFLAGS="$(LDFLAGS) $(CURL_LDFLAGS)"
 	echo 1 > $@
 
