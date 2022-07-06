@@ -11,7 +11,7 @@ fabs(x::Complex) = abs(real(x)) + abs(imag(x))
 function pack(A, uplo)
     AP = eltype(A)[]
     n = size(A, 1)
-    for j in 1:n, i in (uplo==:L ? (j:n) : (1:j))
+    for j in 1:n, i in (uplo === :L ? (j:n) : (1:j))
         push!(AP, A[i,j])
     end
     return AP

@@ -603,7 +603,7 @@ let q1 = Meta.parse(repr(:("$(a)b"))),
     @test q1.args[1].args == [:a, "b"]
 
     @test isa(q2, Expr)
-    @test q2.args[1].head == :string
+    @test q2.args[1].head === :string
     @test q2.args[1].args == [:ab,]
 end
 
