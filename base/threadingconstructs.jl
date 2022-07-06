@@ -26,9 +26,9 @@ function nthreads end
 
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 function nthreads(pool::Symbol)
-    if pool == :default
+    if pool === :default
         tpid = Int8(0)
-    elseif pool == :interactive
+    elseif pool === :interactive
         tpid = Int8(1)
     else
         error("invalid threadpool specified")

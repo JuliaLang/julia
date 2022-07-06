@@ -481,7 +481,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
-                if terminator.head == :enter
+                if terminator.head === :enter
                     terminator.args[1] = bb_rename[terminator.args[1]]
                 end
             end
