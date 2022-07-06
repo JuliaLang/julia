@@ -90,6 +90,11 @@ void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
     return;
 }
 
+void lowerDebugLevel(Function &intr, Function &caller, CallInst *I) {
+    I->replaceAllUsesWith(ConstantInt::get(I->getType(), jl_options.debug_level));
+    return;
+}
+
 bool lowerCPUFeatures(Module &M)
 {
     SmallVector<Instruction*,6> Materialized;
@@ -102,6 +107,13 @@ bool lowerCPUFeatures(Module &M)
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
                 lowerHaveFMA(F, *I->getParent()->getParent(), I);
+                Materialized.push_back(I);
+            }
+        } else if (FN == "julia.debug_level") {
+            for (Use &U: F.uses()) {
+                User *RU = U.getUser();
+                CallInst *I = cast<CallInst>(RU);
+                lowerDebugLevel(F, *I->getParent()->getParent(), I);
                 Materialized.push_back(I);
             }
         }
