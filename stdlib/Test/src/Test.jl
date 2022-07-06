@@ -682,6 +682,9 @@ a matching function,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
 
+!!! compat "Julia 1.8"
+    The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
+
 # Examples
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
@@ -1611,7 +1614,8 @@ Int64
 
 julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
-  from f(a) in Main at none:1
+  from f(a)
+     @ Main none:1
 Arguments
   #self#::Core.Const(f)
   a::Int64

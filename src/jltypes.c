@@ -420,10 +420,8 @@ static int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 
 // sort singletons first, then DataTypes, then UnionAlls,
 // ties broken alphabetically including module name & type parameters
-static int union_sort_cmp(const void *ap, const void *bp) JL_NOTSAFEPOINT
+static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
-    jl_value_t *a = *(jl_value_t**)ap;
-    jl_value_t *b = *(jl_value_t**)bp;
     if (a == NULL)
         return b == NULL ? 0 : 1;
     if (b == NULL)
@@ -458,16 +456,33 @@ static int union_sort_cmp(const void *ap, const void *bp) JL_NOTSAFEPOINT
     }
 }
 
+static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
+{
+    size_t i, j;
+    for (i = 1; i < len; i++) {
+        jl_value_t *x = a[i];
+        for (j = i; j > 0; j--) {
+            jl_value_t *y = a[j - 1];
+            if (!(union_sort_cmp(x, y) < 0))
+                break;
+            a[j] = y;
+        }
+        a[j] = x;
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 {
-    if (n == 0) return (jl_value_t*)jl_bottom_type;
+    if (n == 0)
+        return (jl_value_t*)jl_bottom_type;
     size_t i;
-    for(i=0; i < n; i++) {
+    for (i = 0; i < n; i++) {
         jl_value_t *pi = ts[i];
         if (!(jl_is_type(pi) || jl_is_typevar(pi)))
             jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
-    if (n == 1) return ts[0];
+    if (n == 1)
+        return ts[0];
 
     size_t nt = count_union_components(ts, n);
     jl_value_t **temp;
@@ -476,9 +491,9 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     flatten_type_union(ts, n, temp, &count);
     assert(count == nt);
     size_t j;
-    for(i=0; i < nt; i++) {
-        int has_free = temp[i]!=NULL && jl_has_free_typevars(temp[i]);
-        for(j=0; j < nt; j++) {
+    for (i = 0; i < nt; i++) {
+        int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        for (j = 0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == jl_bottom_type ||
                     temp[j] == (jl_value_t*)jl_any_type ||
@@ -490,7 +505,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
             }
         }
     }
-    qsort(temp, nt, sizeof(jl_value_t*), union_sort_cmp);
+    isort_union(temp, nt);
     jl_value_t **ptu = &temp[nt];
     *ptu = jl_bottom_type;
     int k;
@@ -2575,6 +2590,11 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_perm_symsvec(2, "typ", "fields"),
                                        jl_svec2(jl_datatype_type, jl_array_any_type),
                                        jl_emptysvec, 0, 0, 2);
+
+    jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
+                                          jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
+                                          jl_svec(3, jl_long_type, jl_any_type, jl_any_type),
+                                          jl_emptysvec, 0, 0, 3);
 
     jl_method_match_type = jl_new_datatype(jl_symbol("MethodMatch"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(4, "spec_types", "sparams", "method", "fully_covers"),

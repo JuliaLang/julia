@@ -257,7 +257,7 @@ graphical interface.
 """
 function getpass end
 
-if Sys.iswindows()
+_getch() = UInt8(ccall(:jl_getch, Cint, ()))
 function getpass(input::TTY, output::IO, prompt::AbstractString)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
     print(output, prompt, ": ")
@@ -265,11 +265,11 @@ function getpass(input::TTY, output::IO, prompt::AbstractString)
     s = SecretBuffer()
     plen = 0
     while true
-        c = UInt8(ccall(:_getch, Cint, ()))
-        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
+        c = _getch()
+        if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
             break # EOF or return
         elseif c == 0x00 || c == 0xe0
-            ccall(:_getch, Cint, ()) # ignore function/arrow keys
+            _getch() # ignore function/arrow keys
         elseif c == UInt8('\b') && plen > 0
             plen -= 1 # delete last character on backspace
         elseif !iscntrl(Char(c)) && plen < 128
@@ -277,13 +277,6 @@ function getpass(input::TTY, output::IO, prompt::AbstractString)
         end
     end
     return seekstart(s)
-end
-else
-function getpass(input::TTY, output::IO, prompt::AbstractString)
-    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
-    msg = string(prompt, ": ")
-    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
-end
 end
 
 # allow new getpass methods to be defined if stdin has been

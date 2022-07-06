@@ -392,22 +392,6 @@ function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, 
     steprangelen_hp(T, (ref_n, den), (step_n, den), nb, len, imin)
 end
 
-function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::AbstractFloat)
-    len = len + 0 # promote with Int
-    T = promote_type(typeof(a), typeof(st), typeof(divisor))
-    m = maxintfloat(T, Int)
-    if abs(a) <= m && abs(st) <= m && abs(divisor) <= m
-        ia, ist, idivisor = round(Int, a), round(Int, st), round(Int, divisor)
-        if ia == a && ist == st && idivisor == divisor
-            # We can return the high-precision range
-            return floatrange(T, ia, ist, len, idivisor)
-        end
-    end
-    # Fallback (misses the opportunity to set offset different from 1,
-    # but otherwise this is still high-precision)
-    steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), len, oneunit(len))
-end
-
 function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,

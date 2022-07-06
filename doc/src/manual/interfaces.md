@@ -85,20 +85,14 @@ julia> for item in Squares(7)
 ```
 
 We can use many of the builtin methods that work with iterables,
-like [`in`](@ref), or [`mean`](@ref) and [`std`](@ref) from the
-`Statistics` standard library module:
+like [`in`](@ref) or [`sum`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
-julia> using Statistics
-
-julia> mean(Squares(100))
-3383.5
-
-julia> std(Squares(100))
-3024.355854282583
+julia> sum(Squares(100))
+338350
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable

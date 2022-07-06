@@ -1,0 +1,4 @@
+## jll artifact
+# Clang (paired with LLVM, only here as a JLL download)
+CLANG_JLL_NAME := Clang
+CLANG_JLL_VER  := 14.0.5+1

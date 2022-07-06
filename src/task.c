@@ -650,7 +650,6 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL) // During startup
         jl_no_exc_handler(e);
-    JL_GC_PROMISE_ROOTED(ct);
     record_backtrace(ct->ptls, 1);
     throw_internal(ct, e);
 }
@@ -830,6 +829,7 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
     return pgcstack == NULL ? NULL : container_of(pgcstack, jl_task_t, gcstack);
 }
 
+
 #ifdef JL_HAVE_ASYNCIFY
 JL_DLLEXPORT jl_ucontext_t *task_ctx_ptr(jl_task_t *t)
 {
@@ -899,7 +899,6 @@ CFI_NORETURN
     sanitizer_finish_switch_fiber();
 #ifdef __clang_gcanalyzer__
     jl_task_t *ct = jl_get_current_task();
-    JL_GC_PROMISE_ROOTED(ct);
 #else
     jl_task_t *ct = jl_current_task;
 #endif
@@ -1396,6 +1395,10 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
 #endif
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_thread_signal_handler(ptls);
+
     return ct;
 }
 
