@@ -19,6 +19,8 @@ function runtests(name, path, isolate=true; seed=nothing)
             wait(@spawnat 1 print_testworker_started(name, id))
         end
         res_and_time_data = @timed @testset "$name" begin
+            # segfault immediately
+            ccall(:raise, Cint, (Cint,), 11)
             # Random.seed!(nothing) will fail
             seed != nothing && Random.seed!(seed)
             Base.include(m, "$path.jl")
