@@ -1515,6 +1515,10 @@ function tuple_tfunc(argtypes::Vector{Any})
             params[i] = typeof(x.val)
         else
             x = isvarargtype(x) ? x : widenconst(x)
+            # since there don't exist any values whose runtime type are `Tuple{Type{...}}`,
+            # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
+            # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
+            # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
             if isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
@@ -1523,6 +1527,10 @@ function tuple_tfunc(argtypes::Vector{Any})
                 else
                     params[i] = Type
                 end
+            elseif iskindtype(x)
+                params[i] = x
+            elseif !isvarargtype(x) && hasintersect(x, Type)
+                params[i] = Union{x, Type}
             else
                 params[i] = x
             end

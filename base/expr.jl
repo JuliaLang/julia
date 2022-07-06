@@ -381,6 +381,9 @@ end
 `@assume_effects` overrides the compiler's effect modeling for the given method.
 `ex` must be a method definition or `@ccall` expression.
 
+!!! compat "Julia 1.8"
+    Using `Base.@assume_effects` requires Julia version 1.8.
+
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
            # this :terminates_locally allows `pow` to be constant-folded
@@ -402,7 +405,7 @@ julia> code_typed() do
 1 ─     return 479001600
 ) => Int64
 
-julia> Base.@assume_effects :total_may_throw @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
+julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
 Vector{Int64} (alias for Array{Int64, 1})
 ```
 
@@ -423,12 +426,15 @@ The following `setting`s are supported.
 - `:nothrow`
 - `:terminates_globally`
 - `:terminates_locally`
+- `:foldable`
 - `:total`
 
----
-# `:consistent`
+# Extended help
 
-The `:consistent` setting asserts that for egal inputs:
+---
+## `:consistent`
+
+The `:consistent` setting asserts that for egal (`===`) inputs:
 - The manner of termination (return value, exception, non-termination) will always be the same.
 - If the method returns, the results will always be egal.
 
@@ -461,7 +467,7 @@ The `:consistent` setting asserts that for egal inputs:
     itself is not required to meet the egality requirement specified above.
 
 ---
-# `:effect_free`
+## `:effect_free`
 
 The `:effect_free` setting asserts that the method is free of externally semantically
 visible side effects. The following is an incomplete list of externally semantically
@@ -491,7 +497,7 @@ were not executed.
     valid for all world ages and limit use of this assertion accordingly.
 
 ---
-# `:nothrow`
+## `:nothrow`
 
 The `:nothrow` settings asserts that this method does not terminate abnormally
 (i.e. will either always return a value or never return).
@@ -505,7 +511,7 @@ The `:nothrow` settings asserts that this method does not terminate abnormally
     `MethodErrors` and similar exceptions count as abnormal termination.
 
 ---
-# `:terminates_globally`
+## `:terminates_globally`
 
 The `:terminates_globally` settings asserts that this method will eventually terminate
 (either normally or abnormally), i.e. does not loop indefinitely.
@@ -520,7 +526,7 @@ The `:terminates_globally` settings asserts that this method will eventually ter
     on a method that *technically*, but not *practically*, terminates.
 
 ---
-# `:terminates_locally`
+## `:terminates_locally`
 
 The `:terminates_locally` setting is like `:terminates_globally`, except that it only
 applies to syntactic control flow *within* the annotated method. It is thus
@@ -531,59 +537,79 @@ non-termination if the method calls some other method that does not terminate.
     `:terminates_globally` implies `:terminates_locally`.
 
 ---
-# `:total`
+## `:foldable`
 
-This `setting` combines the following other assertions:
+This setting is a convenient shortcut for the set of effects that the compiler
+requires to be guaranteed to constant fold a call at compile time. It is
+currently equivalent to the following `setting`s:
+
+- `:consistent`
+- `:effect_free`
+- `:terminates_globally`
+
+!!! note
+    This list in particular does not include `:nothrow`. The compiler will still
+    attempt constant propagation and note any thrown error at compile time. Note
+    however, that by the `:consistent`-cy requirements, any such annotated call
+    must consistently throw given the same argument values.
+
+---
+## `:total`
+
+This `setting` is the maximum possible set of effects. It currently implies
+the following other `setting`s:
 - `:consistent`
 - `:effect_free`
 - `:nothrow`
 - `:terminates_globally`
-and is a convenient shortcut.
+
+!!! warning
+    `:total` is a very strong assertion and will likely gain additional semantics
+    in future versions of Julia (e.g. if additional effects are added and included
+    in the definition of `:total`). As a result, it should be used with care.
+    Whenever possible, prefer to use the minimum possible set of specific effect
+    assertions required for a particular application. In cases where a large
+    number of effect overrides apply to a set of functions, a custom macro is
+    recommended over the use of `:total`.
 
 ---
-# `:total_may_throw`
+## Negated effects
 
-This `setting` combines the following other assertions:
-- `:consistent`
-- `:effect_free`
-- `:terminates_globally`
-and is a convenient shortcut.
+Effect names may be prefixed by `!` to indicate that the effect should be removed
+from an earlier meta effect. For example, `:total !:nothrow` indicates that while
+the call is generally total, it may however throw.
 
-!!! note
-    This setting is particularly useful since it allows the compiler to evaluate a call of
-    the applied method when all the call arguments are fully known to be constant, no matter
-    if the call results in an error or not.
+---
+## Comparison to `@pure`
 
-    `@assume_effects :total_may_throw` is similar to [`@pure`](@ref) with the primary
-    distinction that the `:consistent`-cy requirement applies world-age wise rather
-    than globally as described above. However, in particular, a method annotated
-    `@pure` should always be `:total` or `:total_may_throw`.
-    Another advantage is that effects introduced by `@assume_effects` are propagated to
-    callers interprocedurally while a purity defined by `@pure` is not.
+`@assume_effects :foldable` is similar to [`@pure`](@ref) with the primary
+distinction that the `:consistent`-cy requirement applies world-age wise rather
+than globally as described above. However, in particular, a method annotated
+`@pure` should always be at least `:foldable`.
+Another advantage is that effects introduced by `@assume_effects` are propagated to
+callers interprocedurally while a purity defined by `@pure` is not.
 """
 macro assume_effects(args...)
     (consistent, effect_free, nothrow, terminates_globally, terminates_locally) =
         (false, false, false, false, false, false)
-    for setting in args[1:end-1]
-        if isa(setting, QuoteNode)
-            setting = setting.value
-        end
+    for org_setting in args[1:end-1]
+        (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
-            consistent = true
+            consistent = val
         elseif setting === :effect_free
-            effect_free = true
+            effect_free = val
         elseif setting === :nothrow
-            nothrow = true
+            nothrow = val
         elseif setting === :terminates_globally
-            terminates_globally = true
+            terminates_globally = val
         elseif setting === :terminates_locally
-            terminates_locally = true
+            terminates_locally = val
+        elseif setting === :foldable
+            consistent = effect_free = terminates_globally = val
         elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = true
-        elseif setting === :total_may_throw
-            consistent = effect_free = terminates_globally = true
+            consistent = effect_free = nothrow = terminates_globally = val
         else
-            throw(ArgumentError("@assume_effects $setting not supported"))
+            throw(ArgumentError("@assume_effects $org_setting not supported"))
         end
     end
     ex = args[end]
@@ -596,6 +622,16 @@ macro assume_effects(args...)
         return esc(ex)
     end
     return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally))
+end
+
+function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
+    if isexpr(setting, :call) && setting.args[1] === :(!)
+        return compute_assumed_setting(setting.args[2], !val)
+    elseif isa(setting, QuoteNode)
+        return compute_assumed_setting(setting.value, val)
+    else
+        return (setting, val)
+    end
 end
 
 """

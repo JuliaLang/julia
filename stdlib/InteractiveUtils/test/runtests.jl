@@ -641,7 +641,7 @@ end
                 buf = read(fname)
                 rm(fname)
 
-                @test occursin("ms  Foo3242\n", String(buf))
+                @test occursin("ms  Foo3242", String(buf))
 
             finally
                 filter!((≠)(dir), LOAD_PATH)

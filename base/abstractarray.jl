@@ -2478,7 +2478,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     # discover dimensions
     nd = max(N, cat_ndims(as[1]))
-    outdims = zeros(Int, nd)
+    outdims = fill(-1, nd)
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
     shapepos = ones(Int, nd)
@@ -2503,7 +2503,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
 
             isendblock = blockcounts[d] == shapev[d][shapepos[d]]
             if isendblock
-                if outdims[d] == 0
+                if outdims[d] == -1
                     outdims[d] = currentdims[d]
                 elseif outdims[d] != currentdims[d]
                     throw(ArgumentError("argument $i has a mismatched number of elements along axis $ad; \

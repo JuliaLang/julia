@@ -1257,11 +1257,7 @@ function handle_const_call!(
             result = results[j]
             if isa(result, ConstResult)
                 case = const_result_item(result, state)
-                if case === nothing
-                    fully_covered = false
-                else
-                    push!(cases, InliningCase(result.mi.specTypes, case))
-                end
+                push!(cases, InliningCase(result.mi.specTypes, case))
             elseif isa(result, InferenceResult)
                 fully_covered &= handle_inf_result!(result, argtypes, flag, state, cases)
             else
@@ -1314,7 +1310,9 @@ end
 
 function const_result_item(result::ConstResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        return compileable_specialization(state.et, result.mi, result.effects)
+        case = compileable_specialization(state.et, result.mi, result.effects)
+        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
+        return case
     end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
