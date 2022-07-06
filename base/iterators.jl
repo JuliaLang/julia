@@ -1380,6 +1380,7 @@ else
     end
 end
 
+Stateful(x::Stateful) = x
 convert(::Type{Stateful}, itr) = Stateful(itr)
 
 @inline isdone(s::Stateful, st=nothing) = s.nextvalstate === nothing
