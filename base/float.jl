@@ -393,8 +393,6 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 
 rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
 
-cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
-
 function mod(x::T, y::T) where T<:AbstractFloat
     r = rem(x,y)
     if r == 0

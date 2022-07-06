@@ -295,14 +295,51 @@ unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 
-_checkcontiguous(::Type{Bool}, A::AbstractArray) = size_to_strides(1, size(A)...) == strides(A)
-_checkcontiguous(::Type{Bool}, A::Array) = true
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
+# `strides(A::DenseArray)` calls `size_to_strides` by default.
+# Thus it's OK to assume all `DenseArray`s are contiguously stored.
+_checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
 
 function strides(a::ReshapedArray)
-    # We can handle non-contiguous parent if it's a StridedVector
-    ndims(parent(a)) == 1 && return size_to_strides(only(strides(parent(a))), size(a)...)
-    _checkcontiguous(Bool, a) || throw(ArgumentError("Parent must be contiguous."))
-    size_to_strides(1, size(a)...)
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    apsz::Dims = size(a.parent)
+    apst::Dims = strides(a.parent)
+    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
+    n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
+    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+end
+
+function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    reshaped == msz && return ()
+    throw(ArgumentError("Input is not strided."))
+end
+function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+    st = reshaped * mst
+    reshaped = reshaped * sz[1]
+    if length(sz) > 1 && reshaped == msz && sz[2] != 1
+        msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
+        reshaped = 1
+    end
+    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    return (st, sts...)
+end
+
+merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
+merge_adjacent_dim(apsz::Dims{1}, apst::Dims{1}) = apsz[1], apst[1], 1
+function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
+    sz, st = apsz[n], apst[n]
+    while n < N
+        szₙ, stₙ = apsz[n+1], apst[n+1]
+        if sz == 1
+            sz, st = szₙ, stₙ
+        elseif stₙ == st * sz || szₙ == 1
+            sz *= szₙ
+        else
+            break
+        end
+        n += 1
+    end
+    return sz, st, n
 end
