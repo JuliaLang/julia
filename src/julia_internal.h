@@ -1291,6 +1291,8 @@ JL_DLLEXPORT jl_array_t *jl_array_copy(jl_array_t *ary);
 JL_DLLEXPORT uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_set_next_task(jl_task_t *task) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT int jl_debug_level(void);
+
 // -- synchronization utilities -- //
 
 extern jl_mutex_t typecache_lock;

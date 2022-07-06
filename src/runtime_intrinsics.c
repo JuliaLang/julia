@@ -1460,3 +1460,8 @@ JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
     // TODO: run-time feature check?
     return jl_false;
 }
+
+JL_DLLEXPORT int jl_debug_level()
+{
+    return jl_options.debug_level;
+}

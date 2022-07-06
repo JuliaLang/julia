@@ -112,6 +112,7 @@
     XX(jl_declare_constant) \
     XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
+    XX(jl_debug_level) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
     XX(jl_dlsym) \

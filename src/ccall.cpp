@@ -1871,6 +1871,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
         }
     }
+    else if (is_libjulia_func(jl_debug_level)) {
+        assert(lrt == getInt32Ty(ctx.builder.getContext()));
+        assert(!isVa && !llvmcall && nccallargs == 0);
+        JL_GC_POP();
+        auto level = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), jl_options.debug_level);
+        return mark_or_box_ccall_result(ctx, level, retboxed, rt, unionall, static_rt);
+    }
 
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,
