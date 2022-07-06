@@ -794,7 +794,7 @@ end
 # Issue #13905.
 let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
     err::UndefVarError
-    @test err.var == Symbol("@x")
+    @test err.var === Symbol("@x")
  end
 
 
@@ -1302,9 +1302,9 @@ dynamic_test.x = "test 2"
 function striptrimdocs(expr)
     if Meta.isexpr(expr, :call)
         fex = expr.args[1]
-        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
+        if Meta.isexpr(fex, :.) && fex.args[1] === :REPL
             fmex = fex.args[2]
-            if isa(fmex, QuoteNode) && fmex.value == :trimdocs
+            if isa(fmex, QuoteNode) && fmex.value === :trimdocs
                 expr = expr.args[2]
             end
         end
@@ -1316,28 +1316,28 @@ let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
     @test dt1.args[1].head === :macrocall
-    @test dt1.args[1].args[1] == Symbol("@doc")
+    @test dt1.args[1].args[1] === Symbol("@doc")
     @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
     @test dt2.args[1].head === :macrocall
-    @test dt2.args[1].args[1] == Symbol("@doc")
+    @test dt2.args[1].args[1] === Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
     @test dt3.args[1].head === :macrocall
-    @test dt3.args[1].args[1] == Symbol("@doc")
-    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+    @test dt3.args[1].args[1] === Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head === :(::) # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
     @test dt4.args[1].head === :macrocall
-    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[1] === Symbol("@doc")
     @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
 end
 

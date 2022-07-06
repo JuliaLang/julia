@@ -680,7 +680,7 @@ end
     getbt() = backtrace()
     bt = getbt()
     Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func == :getbt ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        modify((sf, n)) = sf.func === :getbt ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
         map!(modify, list, list)
     end
     io = IOBuffer()

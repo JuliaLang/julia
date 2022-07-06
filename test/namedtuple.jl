@@ -257,10 +257,10 @@ abstr_nt_22194_3()
 @test findall(isequal(1), (a=1, b=1)) == [:a, :b]
 @test isempty(findall(isequal(1), NamedTuple()))
 @test isempty(findall(isequal(1), (a=2, b=3)))
-@test findfirst(isequal(1), (a=1, b=2)) == :a
-@test findlast(isequal(1), (a=1, b=2)) == :a
-@test findfirst(isequal(1), (a=1, b=1)) == :a
-@test findlast(isequal(1), (a=1, b=1)) == :b
+@test findfirst(isequal(1), (a=1, b=2)) === :a
+@test findlast(isequal(1), (a=1, b=2)) === :a
+@test findfirst(isequal(1), (a=1, b=1)) === :a
+@test findlast(isequal(1), (a=1, b=1)) === :b
 @test findfirst(isequal(1), ()) === nothing
 @test findlast(isequal(1), ()) === nothing
 @test findfirst(isequal(1), (a=2, b=3)) === nothing

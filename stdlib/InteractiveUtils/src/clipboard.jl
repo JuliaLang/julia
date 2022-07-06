@@ -90,7 +90,7 @@ elseif Sys.iswindows()
                 end
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end
-            cause == :success || Base.windowserror(cause, errno)
+            cause === :success || Base.windowserror(cause, errno)
             nothing
         end
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
@@ -110,7 +110,7 @@ elseif Sys.iswindows()
     clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
         function cleanup(cause)
-            errno = cause == :success ? UInt32(0) : Libc.GetLastError()
+            errno = cause === :success ? UInt32(0) : Libc.GetLastError()
             if cause !== :OpenClipboard
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end

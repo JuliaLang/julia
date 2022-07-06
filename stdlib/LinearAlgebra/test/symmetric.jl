@@ -574,13 +574,13 @@ end
         # Hermitian
         A = Hermitian(fill(1.0+0im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
         @test_throws ArgumentError fill!(A, 2+im)
 
         # Symmetric
         A = Symmetric(fill(1.0+im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
     end
 end
 

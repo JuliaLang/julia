@@ -245,7 +245,7 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test (@which vcat(1...)).name == :vcat
+@test (@which vcat(1...)).name === :vcat
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
@@ -373,7 +373,7 @@ struct A14637
     x
 end
 a14637 = A14637(0)
-@test (@which a14637.x).name == :getproperty
+@test (@which a14637.x).name === :getproperty
 @test (@functionloc a14637.x)[2] isa Integer
 
 # Issue #28615
@@ -615,7 +615,7 @@ end
     export B41010
 
     ms = methodswith(A41010, @__MODULE__) |> collect
-    @test ms[1].name == :B41010
+    @test ms[1].name === :B41010
 end
 
 # macro options should accept both literals and variables

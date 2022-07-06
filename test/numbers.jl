@@ -2820,7 +2820,7 @@ end
 @testset "constructor inferability for BigFloat" begin
     T = BigFloat
     @test_broken all(R -> R<:T, Base.return_types(T))
-    @test all(m -> m.file == Symbol("deprecated.jl"),
+    @test all(m -> m.file === Symbol("deprecated.jl"),
         collect(methods(T))[findall(R -> !(R<:T), Base.return_types(T))])
 end
 

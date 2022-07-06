@@ -1817,10 +1817,10 @@ function f24852_kernel_cinfo(fsig::Type)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
     if startswith(String(match.method.name), "f24852")
         for a in code_info.code
-            if a isa Expr && a.head == :(=)
+            if Meta.isexpr(a, :(=))
                 a = a.args[2]
             end
-            if a isa Expr && length(a.args) === 3 && a.head === :call
+            if Meta.isexpr(a, :call) && length(a.args) === 3
                 pushfirst!(a.args, Core.SlotNumber(1))
             end
         end
@@ -2801,7 +2801,7 @@ foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
 bar_inlining_apply() = Core._apply_iterate(iterate, Core._apply_iterate, (iterate,), (foo_inlining_apply,), ((1,),))
 let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
-    @test ci.code[1].head == :foreigncall
+    @test ci.code[1].head === :foreigncall
 end
 
 # Test that inference can infer .instance of types
