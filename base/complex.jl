@@ -601,8 +601,9 @@ function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 function cispi(z::Complex)
-    sipi, copi = sincospi(z)
-    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
+    v = exp(-pi*imag(z))
+    s, c = sincospi(real(z))
+    Complex(v * c, v * s)
 end
 
 """
