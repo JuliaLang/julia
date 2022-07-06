@@ -89,6 +89,11 @@ linalg_tests = tests[linalg_test_ids]
 deleteat!(tests, linalg_test_ids)
 prepend!(tests, linalg_tests)
 
+
+# Only run 3 tests
+tests = tests[1:3]
+
+
 import LinearAlgebra
 cd(@__DIR__) do
     # `net_on` implies that we have access to the loopback interface which is
