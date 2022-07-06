@@ -20,10 +20,10 @@ UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
 task = current_task()
-task.rngState0 = 0xb97cb0d700798446
-task.rngState1 = 0xfee2eb4d95cae2c1
-task.rngState2 = 0xa19fbca182930be0
-task.rngState3 = 0xc48c471658f3422e
+task.rngState0 = 0x33680cab0d0d3ae2
+task.rngState1 = 0x13d8eff5fab25661
+task.rngState2 = 0x631fbafa04b7fcf5
+task.rngState3 = 0xa4239a7dbd0a1a97
 
 hardcoded_precompile_statements = """
 # used by Revise.jl
