@@ -500,12 +500,12 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
         j = i
         x = v[i]
         while j > lo
-            if lt(o, x, v[j-1])
-                v[j] = v[j-1]
-                j -= 1
-                continue
+            y = v[j-1]
+            if !lt(o, x, y)
+                break
             end
-            break
+            v[j] = y
+            j -= 1
         end
         v[j] = x
     end
