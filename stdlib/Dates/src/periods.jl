@@ -250,16 +250,16 @@ Reduces the `CompoundPeriod` into its canonical form by applying the following r
 
 # Examples
 ```jldoctest
-julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13)))
+julia> canonicalize(Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13)))
 1 day, 1 hour
 
-julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1)))
+julia> canonicalize(Dates.CompoundPeriod(Dates.Hour(-1), Dates.Minute(1)))
 -59 minutes
 
-julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2)))
+julia> canonicalize(Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2)))
 1 month, -2 weeks
 
-julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
+julia> canonicalize(Dates.CompoundPeriod(Dates.Minute(50000)))
 4 weeks, 6 days, 17 hours, 20 minutes
 ```
 """
