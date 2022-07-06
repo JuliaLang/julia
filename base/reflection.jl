@@ -99,8 +99,22 @@ since it is not idiomatic to explicitly export names from `Main`.
 
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
-names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+function names(m::Module; all::Bool = false, imported::Bool = false)
+    # As of #45222, quicksort uses random pivot selection which mutates global rng state.
+    # This hack suppresses global rng mutation that Documenter.jl does not anticipate.
+    # TODO fix this downstream at https://github.com/JuliaDocs/Documenter.jl/issues/####
+    preserve_rng() do
+        sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+    end
+end
+
+function preserve_rng(f)
+    t = current_task()
+    x = t.rngState0, t.rngState1, t.rngState2, t.rngState3
+    out = f()
+    t.rngState0, t.rngState1, t.rngState2, t.rngState3 = x
+    out
+end
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
