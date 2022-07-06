@@ -601,7 +601,7 @@ function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 function cispi(z::Complex)
-    v = exp(-pi*imag(z))
+    v = exp(-(pi*imag(z)))
     s, c = sincospi(real(z))
     Complex(v * c, v * s)
 end
