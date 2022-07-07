@@ -1331,7 +1331,7 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head != :call)
+    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head !== :call)
 
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end

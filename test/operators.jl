@@ -44,11 +44,11 @@ end
 
     p = 1=>:foo
     @test first(p) == 1
-    @test last(p)  == :foo
-    @test first(reverse(p)) == :foo
+    @test last(p)  === :foo
+    @test first(reverse(p)) === :foo
     @test last(reverse(p))  == 1
     @test lastindex(p) == 2
-    @test p[lastindex(p)] == p[end] == p[2] == :foo
+    @test p[lastindex(p)] == p[end] == p[2] === :foo
 end
 
 # Infix `isa`

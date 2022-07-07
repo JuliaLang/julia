@@ -924,7 +924,7 @@ function trypoptask(W::StickyWorkqueue)
             # can't throw here, because it's probably not the fault of the caller to wait
             # and don't want to use print() here, because that may try to incur a task switch
             ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
             continue
         end
         return t
