@@ -315,9 +315,9 @@ see [`QR`](@ref).
 ```jldoctest
 julia> A = [0 1; 1 0];
 
-julia> B = LinearAlgebra.UpperTriangular([1 2; 0 3]);
+julia> B = UpperTriangular([1 2; 0 3]);
 
-julia> LinearAlgebra.rmul!(A, B);
+julia> rmul!(A, B);
 
 julia> A
 2×2 Matrix{Int64}:
@@ -348,9 +348,9 @@ see [`QR`](@ref).
 ```jldoctest
 julia> B = [0 1; 1 0];
 
-julia> A = LinearAlgebra.UpperTriangular([1 2; 0 3]);
+julia> A = UpperTriangular([1 2; 0 3]);
 
-julia> LinearAlgebra.lmul!(A, B);
+julia> lmul!(A, B);
 
 julia> B
 2×2 Matrix{Int64}:

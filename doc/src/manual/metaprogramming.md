@@ -116,7 +116,7 @@ The [`Symbol`](@ref) constructor takes any number of arguments and creates a new
 their string representations together:
 
 ```jldoctest
-julia> :foo == Symbol("foo")
+julia> :foo === Symbol("foo")
 true
 
 julia> Symbol("func",10)

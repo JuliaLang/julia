@@ -819,14 +819,14 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         end
 
         #Latex symbols can be completed for strings
-        (success || inc_tag==:cmd) && return sort!(paths, by=p->p.path), r, success
+        (success || inc_tag === :cmd) && return sort!(paths, by=p->p.path), r, success
     end
 
     ok, ret = bslash_completions(string, pos)
     ok && return ret
 
     # Make sure that only bslash_completions is working on strings
-    inc_tag==:string && return Completion[], 0:-1, false
+    inc_tag === :string && return Completion[], 0:-1, false
     if inc_tag === :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         # strip preceding ! operator
