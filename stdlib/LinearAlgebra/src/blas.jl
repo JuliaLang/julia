@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
 """
 Interface to BLAS subroutines.
 """
@@ -1509,11 +1508,27 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
-            if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
-            end
-            if size(B,2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+            M, N = size(B)
+            if side == 'L'
+                if j != m
+                    throw(DimensionMismatch("A has first dimension $j but needs to match first dimension of C, $m"))
+                end
+                if N != n
+                    throw(DimensionMismatch("B has second dimension $N but needs to match second dimension of C, $n"))
+                end
+                if j != M
+                    throw(DimensionMismatch("A has second dimension $j but needs to match first dimension of B, $M"))
+                end
+            else
+                if j != n
+                    throw(DimensionMismatch("B has second dimension $j but needs to match second dimension of C, $n"))
+                end
+                if N != j
+                    throw(DimensionMismatch("A has second dimension $N but needs to match first dimension of B, $j"))
+                end
+                if M != m
+                    throw(DimensionMismatch("A has first dimension $M but needs to match first dimension of C, $m"))
+                end
             end
             chkstride1(A)
             chkstride1(B)
@@ -1582,11 +1597,27 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
-            if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch("A has size $(size(A)), C has size ($m,$n)"))
-            end
-            if size(B,2) != n
-                throw(DimensionMismatch("B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+            M, N = size(B)
+            if side == 'L'
+                if j != m
+                    throw(DimensionMismatch("A has first dimension $j but needs to match first dimension of C, $m"))
+                end
+                if N != n
+                    throw(DimensionMismatch("B has second dimension $N but needs to match second dimension of C, $n"))
+                end
+                if j != M
+                    throw(DimensionMismatch("A has second dimension $j but needs to match first dimension of B, $M"))
+                end
+            else
+                if j != n
+                    throw(DimensionMismatch("B has second dimension $j but needs to match second dimension of C, $n"))
+                end
+                if N != j
+                    throw(DimensionMismatch("A has second dimension $N but needs to match first dimension of B, $j"))
+                end
+                if M != m
+                    throw(DimensionMismatch("A has first dimension $M but needs to match first dimension of C, $m"))
+                end
             end
             chkstride1(A)
             chkstride1(B)
