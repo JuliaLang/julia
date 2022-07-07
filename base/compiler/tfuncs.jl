@@ -803,7 +803,7 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     elseif isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
         if !boundscheck && s.name.n_uninitialized == 0
@@ -1020,7 +1020,7 @@ function setfield!_nothrow(s00, name, v)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
         ismutabletype(s) || return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false

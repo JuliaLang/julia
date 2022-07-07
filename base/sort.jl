@@ -515,8 +515,12 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
     @inbounds for i = lo+1:hi
         j = i
         x = v[i]
-        while j > lo && lt(o, x, v[j-1])
-            v[j] = v[j-1]
+        while j > lo
+            y = v[j-1]
+            if !lt(o, x, y)
+                break
+            end
+            v[j] = y
             j -= 1
         end
         v[j] = x

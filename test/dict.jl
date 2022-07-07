@@ -196,7 +196,7 @@ end
     bestkey(d, key) = key
     bestkey(d::AbstractDict{K,V}, key) where {K<:AbstractString,V} = string(key)
     bar(x) = bestkey(x, :y)
-    @test bar(Dict(:x => [1,2,5])) == :y
+    @test bar(Dict(:x => [1,2,5])) === :y
     @test bar(Dict("x" => [1,2,5])) == "y"
 end
 
@@ -1150,7 +1150,7 @@ end
     @test isempty(findall(isequal(1), Dict()))
     @test isempty(findall(isequal(1), Dict(:a=>2, :b=>3)))
 
-    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) == :a
+    @test findfirst(isequal(1), Dict(:a=>1, :b=>2)) === :a
     @test findfirst(isequal(1), Dict(:a=>1, :b=>1, :c=>3)) in (:a, :b)
     @test findfirst(isequal(1), Dict()) === nothing
     @test findfirst(isequal(1), Dict(:a=>2, :b=>3)) === nothing
