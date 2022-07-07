@@ -126,12 +126,12 @@ Random.seed!(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(0 => dv, (uplo == :U ? 1 : -1) => ev)
+            @test Array(T) == diagm(0 => dv, (uplo === :U ? 1 : -1) => ev)
             @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
-            @test Array(real(T)) == real(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
-            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
+            @test Array(real(T)) == real(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
+            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
         end
 
         @testset for func in (conj, transpose, adjoint)
@@ -356,7 +356,7 @@ Random.seed!(1)
 
         @testset "diag" begin
             @test (@inferred diag(T))::typeof(dv) == dv
-            @test (@inferred diag(T, uplo == :U ? 1 : -1))::typeof(dv) == ev
+            @test (@inferred diag(T, uplo === :U ? 1 : -1))::typeof(dv) == ev
             @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
             @test_throws ArgumentError diag(T, -n - 1)
             @test_throws ArgumentError diag(T,  n + 1)
@@ -364,7 +364,7 @@ Random.seed!(1)
             gdv, gev = GenericArray(dv), GenericArray(ev)
             G = Bidiagonal(gdv, gev, uplo)
             @test (@inferred diag(G))::typeof(gdv) == gdv
-            @test (@inferred diag(G, uplo == :U ? 1 : -1))::typeof(gdv) == gev
+            @test (@inferred diag(G, uplo === :U ? 1 : -1))::typeof(gdv) == gev
             @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(zeros(elty, n-2))
         end
 
@@ -372,9 +372,9 @@ Random.seed!(1)
             if relty <: AbstractFloat
                 d1, v1 = eigen(T)
                 d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull), sortby=nothing)
-                @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
+                @test (uplo === :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
-                    test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
+                    test_approx_eq_modphase(v1, uplo === :U ? v2 : v2[:,n:-1:1])
                 end
             end
         end

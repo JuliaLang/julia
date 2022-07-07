@@ -191,7 +191,7 @@ end
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
                 return :resultvalue
-            end == :resultvalue
+            end === :resultvalue
         end
     end
     @test all(<=(sem_size), history)

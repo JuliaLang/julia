@@ -147,7 +147,7 @@ module TestModSub9475
     let
         @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
         @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
-        @test Base.nameof(@__MODULE__) == :TestModSub9475
+        @test Base.nameof(@__MODULE__) === :TestModSub9475
         @test Base.fullname(@__MODULE__) == (curmod_name..., :TestMod7648, :TestModSub9475)
         @test Base.parentmodule(@__MODULE__) == TestMod7648
     end
@@ -158,7 +158,7 @@ using .TestModSub9475
 let
     @test Base.binding_module(@__MODULE__, :d7648) == @__MODULE__
     @test Base.binding_module(@__MODULE__, :a9475) == TestModSub9475
-    @test Base.nameof(@__MODULE__) == :TestMod7648
+    @test Base.nameof(@__MODULE__) === :TestMod7648
     @test Base.parentmodule(@__MODULE__) == curmod
 end
 end # module TestMod7648
@@ -183,14 +183,14 @@ let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
-    @test nameof(foo7648) == :foo7648
+    @test nameof(foo7648) === :foo7648
     @test parentmodule(foo7648, (Any,)) == TestMod7648
     @test parentmodule(foo7648) == TestMod7648
     @test parentmodule(foo7648_nomethods) == TestMod7648
     @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
     @test parentmodule(foo9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
-    @test nameof(Foo7648) == :Foo7648
+    @test nameof(Foo7648) === :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == which(foo7648, (Int,))
     @test TestMod7648 == which(@__MODULE__, :foo7648)
@@ -724,7 +724,7 @@ Base.delete_method(m)
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction
 fookw(y::Int) = 2
-@test fookw("string") == :up
+@test fookw("string") === :up
 @test fookw(1) == 2
 m = collect(methods(fookw))[2]
 Base.delete_method(m)

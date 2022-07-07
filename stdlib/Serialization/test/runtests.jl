@@ -325,8 +325,8 @@ main_ex = quote
         local g2 = deserialize(ds)
         Base.invokelatest() do
             $Test.@test g2 !== g
-            $Test.@test g2() == :magic_token_anon_fun_test
-            $Test.@test g2() == :magic_token_anon_fun_test
+            $Test.@test g2() === :magic_token_anon_fun_test
+            $Test.@test g2() === :magic_token_anon_fun_test
             $Test.@test deserialize(ds) === g2
         end
 
@@ -354,7 +354,7 @@ create_serialization_stream() do s # user-defined type array
     seek(s, 0)
     r = deserialize(s)
     @test r.storage[:v] == 2
-    @test r.state == :done
+    @test r.state === :done
     @test r.exception === nothing
 end
 
@@ -366,7 +366,7 @@ create_serialization_stream() do s # user-defined type array
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.state == :failed
+    @test r.state === :failed
 end
 
 # corner case: undefined inside immutable struct
