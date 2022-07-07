@@ -748,4 +748,3 @@ struct MaybeTuple45476
 end
 
 @test MaybeTuple45476((0,)).val[1] == 0f0
-
