@@ -597,7 +597,7 @@ function make_typealias(@nospecialize(x::Type))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
-        for name in names(mod)
+        for name in unsorted_names(mod)
             if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getfield(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
@@ -801,7 +801,7 @@ function make_typealiases(@nospecialize(x::Type))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
-        for name in names(mod)
+        for name in unsorted_names(mod)
             if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getfield(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)

@@ -100,11 +100,9 @@ since it is not idiomatic to explicitly export names from `Main`.
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
-    # As of #45222, the default sorting algorithm for symbols mutates global rng state.
-    # Documenter.jl does not anticipate rng mutation here so we use MergeSort instead.
-    # TODO: fix this downstream at https://github.com/JuliaDocs/Documenter.jl/issues/####
-    # and return to using the default sorting algorithm
-    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported); alg=MergeSort)
+    sort!(unsorted_names(m; all, imported))
+unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
