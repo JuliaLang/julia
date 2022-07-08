@@ -262,7 +262,7 @@ function _getch()
     @static if Sys.iswindows()
         return UInt8(ccall(:_getch, Cint, ()))
     else
-        return only(read(stdin, 1))
+        return read(stdin, UInt8)
     end
 end
 
