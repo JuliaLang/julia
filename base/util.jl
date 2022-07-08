@@ -273,14 +273,14 @@ make_termios() = zeros(UInt8, termios_size)
 # glibc Linux, musl Linux, macOS, FreeBSD
 @enum TCSETATTR_FLAGS TCSANOW=0 TCSADRAIN=1 TCSAFLUSH=2
 
-function tcgetattr(fd, termios)
-    ret = ccall(:tcgetattr, Cint, (Cint, Ptr{Cvoid}), Cint(fd), termios)
+function tcgetattr(fd::RawFD, termios)
+    ret = ccall(:tcgetattr, Cint, (Cint, Ptr{Cvoid}), fd, termios)
     if ret != 0
         throw(IOError("tcgetattr failed", ret))
     end
 end
-function tcsetattr(fd, termios, mode::TCSETATTR_FLAGS = TCSADRAIN)
-    ret = ccall(:tcsetattr, Cint, (Cint, Cint, Ptr{Cvoid}), Cint(fd), Cint(mode), termios)
+function tcsetattr(fd::RawFD, termios, mode::TCSETATTR_FLAGS = TCSADRAIN)
+    ret = ccall(:tcsetattr, Cint, (Cint, Cint, Ptr{Cvoid}), fd, Cint(mode), termios)
     if ret != 0
         throw(IOError("tcsetattr failed", ret))
     end
@@ -289,7 +289,7 @@ cfmakeraw(termios) = ccall(:cfmakeraw, Cvoid, (Ptr{Cvoid},), termios)
 
 function with_raw_tty(f::Function, input::TTY)
     input === stdin || throw(ArgumentError("with_raw_tty only works for stdin"))
-    fd = 0
+    fd = RawFD(0)
 
     # If we're on windows, we do nothing, as we have access to `_getch()` quite easily
     @static if Sys.iswindows()
@@ -301,7 +301,7 @@ function with_raw_tty(f::Function, input::TTY)
     tcgetattr(fd, old_termios)
     try
         # Set a new, raw, terminal mode
-        new_termios = make_termios()
+        new_termios = copy(old_termios)
         cfmakeraw(new_termios)
         tcsetattr(fd, new_termios)
 
