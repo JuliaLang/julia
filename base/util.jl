@@ -293,8 +293,7 @@ function with_raw_tty(f::Function, input::TTY)
 
     # If we're on windows, we do nothing, as we have access to `_getch()` quite easily
     @static if Sys.iswindows()
-        f()
-        return
+        return f()
     end
 
     # Get the current terminal mode
