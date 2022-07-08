@@ -424,19 +424,21 @@ function sync_end(c::Channel{Any})
     # Capture all waitable objects scheduled after the end of `@sync` and
     # include them in the exception. This way, the user can check what was
     # scheduled by examining at the exception object.
-    local racy
-    for r in c
-        if !@isdefined(racy)
-            racy = []
+    if isready(c)
+        local racy
+        for r in c
+            if !@isdefined(racy)
+                racy = []
+            end
+            push!(racy, r)
         end
-        push!(racy, r)
-    end
-    if @isdefined(racy)
-        if !@isdefined(c_ex)
-            c_ex = CompositeException()
+        if @isdefined(racy)
+            if !@isdefined(c_ex)
+                c_ex = CompositeException()
+            end
+            # Since this is a clear programming error, show this exception first:
+            pushfirst!(c_ex, ScheduledAfterSyncException(racy))
         end
-        # Since this is a clear programming error, show this exception first:
-        pushfirst!(c_ex, ScheduledAfterSyncException(racy))
     end
 
     if @isdefined(c_ex)
