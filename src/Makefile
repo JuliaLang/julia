@@ -115,6 +115,11 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 
+# llvm-config --cxxflags does not return -DNDEBUG
+ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),OFF)
+LLVM_CXXFLAGS += -DNDEBUG
+endif
+
 ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)

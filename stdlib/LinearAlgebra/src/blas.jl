@@ -169,18 +169,19 @@ end
 # Level 1
 # A help function to pick the pointer and inc for 1d like inputs.
 @inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
-    isdense(x) && return pointer(x), 1 # simpify runtime check when possibe
-    ndims(x) == 1 || strides(x) == Base.size_to_strides(stride(x, 1), size(x)...) ||
-        throw(ArgumentError("only support vector like inputs"))
-    st = stride(x, 1)
+    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simpify runtime check when possibe
+    st, ptr = checkedstride(x), pointer(x)
     isnothing(stride0check) || (st == 0 && throw(stride0check))
-    ptr = st > 0 ? pointer(x) : pointer(x, lastindex(x))
+    ptr += min(st, 0) * sizeof(eltype(x)) * (length(x) - 1)
     ptr, st
 end
-isdense(x) = x isa DenseArray
-isdense(x::Base.FastContiguousSubArray) = isdense(parent(x))
-isdense(x::Base.ReshapedArray) = isdense(parent(x))
-isdense(x::Base.ReinterpretArray) = isdense(parent(x))
+function checkedstride(x::AbstractArray)
+    szs::Dims = size(x)
+    sts::Dims = strides(x)
+    _, st, n = Base.merge_adjacent_dim(szs, sts)
+    n === ndims(x) && return st
+    throw(ArgumentError("only support vector like inputs"))
+end
 ## copy
 
 """
@@ -1565,11 +1566,27 @@ for (mfname, elty) in ((:dsymm_,:Float64),
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
-            if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch(lazy"A has size $(size(A)), C has size ($m,$n)"))
-            end
-            if size(B,2) != n
-                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+            M, N = size(B)
+            if side == 'L'
+                if j != m
+                    throw(DimensionMismatch(lazy"A has first dimension $j but needs to match first dimension of C, $m"))
+                end
+                if N != n
+                    throw(DimensionMismatch(lazy"B has second dimension $N but needs to match second dimension of C, $n"))
+                end
+                if j != M
+                    throw(DimensionMismatch(lazy"A has second dimension $j but needs to match first dimension of B, $M"))
+                end
+            else
+                if j != n
+                    throw(DimensionMismatch(lazy"B has second dimension $j but needs to match second dimension of C, $n"))
+                end
+                if N != j
+                    throw(DimensionMismatch(lazy"A has second dimension $N but needs to match first dimension of B, $j"))
+                end
+                if M != m
+                    throw(DimensionMismatch(lazy"A has first dimension $M but needs to match first dimension of C, $m"))
+                end
             end
             chkstride1(A)
             chkstride1(B)
@@ -1639,11 +1656,27 @@ for (mfname, elty) in ((:zhemm_,:ComplexF64),
             require_one_based_indexing(A, B, C)
             m, n = size(C)
             j = checksquare(A)
-            if j != (side == 'L' ? m : n)
-                throw(DimensionMismatch(lazy"A has size $(size(A)), C has size ($m,$n)"))
-            end
-            if size(B,2) != n
-                throw(DimensionMismatch(lazy"B has second dimension $(size(B,2)) but needs to match second dimension of C, $n"))
+            M, N = size(B)
+            if side == 'L'
+                if j != m
+                    throw(DimensionMismatch(lazy"A has first dimension $j but needs to match first dimension of C, $m"))
+                end
+                if N != n
+                    throw(DimensionMismatch(lazy"B has second dimension $N but needs to match second dimension of C, $n"))
+                end
+                if j != M
+                    throw(DimensionMismatch(lazy"A has second dimension $j but needs to match first dimension of B, $M"))
+                end
+            else
+                if j != n
+                    throw(DimensionMismatch(lazy"B has second dimension $j but needs to match second dimension of C, $n"))
+                end
+                if N != j
+                    throw(DimensionMismatch(lazy"A has second dimension $N but needs to match first dimension of B, $j"))
+                end
+                if M != m
+                    throw(DimensionMismatch(lazy"A has first dimension $M but needs to match first dimension of C, $m"))
+                end
             end
             chkstride1(A)
             chkstride1(B)
