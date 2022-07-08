@@ -1017,7 +1017,7 @@ end
     end
 
     fibs = Iterators.Unfold(Int64.((1,1))) do (a,b) a, (b, a+b) end
-    fibO1(n::Int64)::Float64 = (MathConstants.φ^n - (1-MathConstants.φ)^n) / √5
+    fibO1(n) = (MathConstants.φ^n - (1-MathConstants.φ)^n) / √5
     @test 93 == Iterators.take(Iterators.map(
         !isapprox,
         fibs,
