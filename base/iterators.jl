@@ -1488,6 +1488,9 @@ The optional parameter `eltype` can specify the type of the generated values.
 
 See also: [`iterate`](@ref)
 
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
+
 # Examples
 
 ```jldoctest
