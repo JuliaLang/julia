@@ -199,7 +199,6 @@
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
     XX(jl_getallocationgranularity) \
-    XX(jl_getch) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \
@@ -462,6 +461,7 @@
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
     XX(jl_task_stack_buffer) \
+    XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
