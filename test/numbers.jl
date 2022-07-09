@@ -95,34 +95,68 @@ end
     @test max(1) === 1
     @test minmax(1) === (1, 1)
     @test minmax(5, 3) == (3, 5)
-    @test minmax(3., 5.) == (3., 5.)
-    @test minmax(5., 3.) == (3., 5.)
-    @test minmax(3., NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, 3) ≣ (NaN, NaN)
-    @test minmax(Inf, NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, Inf) ≣ (NaN, NaN)
-    @test minmax(-Inf, NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, -Inf) ≣ (NaN, NaN)
-    @test minmax(NaN, NaN) ≣ (NaN, NaN)
-    @test min(-0.0,0.0) === min(0.0,-0.0)
-    @test max(-0.0,0.0) === max(0.0,-0.0)
-    @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
-    @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
-    @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
-    @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
-    @test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
-    @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
-    @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
-    @test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
-    @test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
-    @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
-    @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
-    @test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
-    @test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
-    @test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
-    @test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
-    @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
-    @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
+    Top(T, op, x, y) = op(T.(x), T.(y))
+    Top(T, op) = (x, y) -> Top(T, op, x, y)
+    _compare(x, y) = x == y
+    for T in (Float16, Float32, Float64, BigFloat)
+        minmax = Top(T,Base.minmax)
+        min = Top(T,Base.min)
+        max = Top(T,Base.max)
+        (==) = Top(T,_compare)
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equalvient
+        @test minmax(3., 5.) == (3., 5.)
+        @test minmax(5., 3.) == (3., 5.)
+        @test minmax(3., NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, 3) ≣ (NaN, NaN)
+        @test minmax(Inf, NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, Inf) ≣ (NaN, NaN)
+        @test minmax(-Inf, NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, -Inf) ≣ (NaN, NaN)
+        @test minmax(NaN, NaN) ≣ (NaN, NaN)
+        @test min(-0.0,0.0) === min(0.0,-0.0)
+        @test max(-0.0,0.0) === max(0.0,-0.0)
+        @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
+        @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
+        @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
+        @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
+        @test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
+        @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
+        @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
+        @test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
+        @test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
+        @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
+        @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
+        @test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
+        @test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+        @test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+        @test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+        @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+        @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
+    end
+end
+@testset "Base._extrema_rf for float" begin
+    for T in (Float16, Float32, Float64, BigFloat)
+        ordered = T[-Inf, -5, -0.0, 0.0, 3, Inf]
+        unorded = T[NaN, -NaN]
+        for i1 in 1:6, i2 in 1:6, j1 in 1:6, j2 in 1:6
+            x = ordered[i1], ordered[i2]
+            y = ordered[j1], ordered[j2]
+            z = ordered[min(i1,j1)], ordered[max(i2,j2)]
+            @test Base._extrema_rf(x, y) === z
+        end
+        for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
+            x = unorded[i] , unorded[i]
+            y = ordered[j1], ordered[j2]
+            @test Base._extrema_rf(x, y) === x
+            @test Base._extrema_rf(y, x) === x
+        end
+        for i in 1:2, j in 1:2 # unordered test (2 NaNs)
+            x = unorded[i], unorded[i]
+            y = unorded[j], unorded[j]
+            z = Base._extrema_rf(x, y)
+            @test z === x || z === y
+        end
+    end
 end
 @testset "fma" begin
     let x = Int64(7)^7
