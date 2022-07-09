@@ -928,3 +928,8 @@ for (expr, errmsg) in
     end
     @test contains(sprint(showerror, err), errmsg)
 end
+
+let err_str
+    err_str = @except_str "a" + "b" MethodError
+    @test occursin("String concatenation is performed with *", err_str)
+end
