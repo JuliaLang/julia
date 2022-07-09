@@ -2,32 +2,33 @@
 
 ## Standard Numeric Types
 
+
 ```
-Number
+Number  (Abstract Type)
 ├─ Complex
-└─ Real
-   ├─ AbstractFloat
+└─ Real  (Abstract Type)
+   ├─ AbstractFloat  (Abstract Type)
    │  ├─ Float16
    │  ├─ Float32
    │  ├─ Float64
    │  └─ BigFloat
-   ├─ Integer
+   ├─ Integer  (Abstract Type)
    │  ├─ Bool
-   │  ├─ Signed
+   │  ├─ Signed  (Abstract Type)
    │  │  ├─ Int8
    │  │  ├─ Int16
    │  │  ├─ Int32
    │  │  ├─ Int64
    │  │  ├─ Int128
    │  │  └─ BigInt
-   │  └─ Unsigned
+   │  └─ Unsigned  (Abstract Type)
    │     ├─ UInt8
    │     ├─ UInt16
    │     ├─ UInt32
    │     ├─ UInt64
    │     └─ UInt128
    ├─ Rational
-   └─ AbstractIrrational
+   └─ AbstractIrrational  (Abstract Type)
       └─ Irrational
 ```
 
