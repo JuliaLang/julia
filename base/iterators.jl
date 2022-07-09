@@ -31,7 +31,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, unfold
 
 if Base !== Core.Compiler
 export partition
@@ -1479,10 +1479,12 @@ only(x::NamedTuple) = throw(
 """
     unfold(f, initialstate, [eltype])
 
-Iterable object with transitions defined by the function `f(state)`. The function takes the
-current state at each iteration and follows the same rules as `iterate`. It must return
-either `(newvalue, newstate)` or `nothing`, in which case the sequence ends. The optional
-parameter `eltype` can specify the type of the generated values.
+Iterable object that generates values from an initial state and a transition
+function `f(state)`. The function must follow the same rules as `iterate`.
+It returns either `(newvalue, newstate)` or `nothing`, in which case the
+sequence ends.
+
+The optional parameter `eltype` can specify the type of the generated values.
 
 See also: [`iterate`](@ref)
 
