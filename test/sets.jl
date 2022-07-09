@@ -115,7 +115,7 @@ end
     @test in(2,s)
     @test length(s) == 2
     @test_throws KeyError pop!(s,1)
-    @test pop!(s,1,:foo) == :foo
+    @test pop!(s,1,:foo) === :foo
     @test length(delete!(s,2)) == 1
     @test !in(1,s)
     @test !in(2,s)

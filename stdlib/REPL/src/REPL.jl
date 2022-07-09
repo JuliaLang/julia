@@ -179,8 +179,8 @@ function check_for_missing_packages_and_run_hooks(ast)
 end
 
 function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
-    ast.head == :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head in [:using, :import]
+    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
+    if ast.head === :using || ast.head === :import
         for arg in ast.args
             arg = arg::Expr
             arg1 = first(arg.args)
@@ -491,11 +491,16 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-active_module(repl::LineEditREPL) = repl.mistate === nothing ? Main : repl.mistate.active_module
+function active_module() # this method is also called from Base
+    isdefined(Base, :active_repl) || return Main
+    return active_module(Base.active_repl::AbstractREPL)
+end
+active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
+
 """
     activate(mod::Module=Main)
 
@@ -503,9 +508,11 @@ Set `mod` as the default contextual module in the REPL,
 both for evaluating expressions and printing them.
 """
 function activate(mod::Module=Main)
-    Base.active_repl.mistate.active_module = mod
+    mistate = (Base.active_repl::LineEditREPL).mistate
+    mistate === nothing && return nothing
+    mistate.active_module = mod
     Base.load_InteractiveUtils(mod)
-    nothing
+    return nothing
 end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])

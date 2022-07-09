@@ -713,9 +713,9 @@ struct A44921{T}
     x::T
 end
 function f44921(a)
-    if a == :x
+    if a === :x
         A44921(_f) # _f purposefully undefined
-    elseif a == :p
+    elseif a === :p
         g44921(a)
     end
 end
