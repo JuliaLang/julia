@@ -529,6 +529,7 @@ the input argument belongs on (`side`). The possibilities are:
 
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.rot!
 LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
@@ -542,6 +543,7 @@ LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax
 LinearAlgebra.BLAS.ger!
 LinearAlgebra.BLAS.syr!
+LinearAlgebra.BLAS.spr!
 LinearAlgebra.BLAS.syrk!
 LinearAlgebra.BLAS.syrk
 LinearAlgebra.BLAS.syr2k!
@@ -568,12 +570,14 @@ LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv!
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.spmv!
 LinearAlgebra.BLAS.hemm!
 LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemv!
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hpmv!
 LinearAlgebra.BLAS.trmm!
 LinearAlgebra.BLAS.trmm
 LinearAlgebra.BLAS.trsm!
