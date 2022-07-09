@@ -363,6 +363,9 @@ using .Sort
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
 
+# funcs
+include("funcfuncs.jl")
+
 # Fast math
 include("fastmath.jl")
 using .FastMath
