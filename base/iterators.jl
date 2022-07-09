@@ -1520,8 +1520,11 @@ julia> [count(Returns(true), frac(-0.835-0.2321im, (k+j*im)/6)) for j in -4:4, k
   1   2   2   2   2   3   3   4   8  41   5   3   3   3   2   2   2
 ```
 """
-function unfold(f, initialstate, eltype::Type{Eltype}=Type{nothing}) where {Eltype}
+function unfold(f, initialstate, eltype::Type{Eltype}) where {Eltype}
     Iterators.rest(Unfold{Eltype}(f), initialstate)
+end
+function unfold(f, initialstate)
+    Iterators.rest(Unfold{nothing}(f), initialstate)
 end
 struct Unfold{Eltype, FuncType}
     f::FuncType
