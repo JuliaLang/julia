@@ -73,7 +73,7 @@ New library functions
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)`. ([#45607])
 * `Iterators.unfold` creates an iterator from a transition function and an initial state
-  ([#44873]).
+  ([#44873], [#43203]).
 
 Library changes
 ---------------
