@@ -987,9 +987,9 @@ end
 end
 
 @testset "Unfold" begin
-    @test isempty(Iterators.Unfold(identity, nothing))
+    @test isempty(Iterators.unfold(identity, nothing))
 
-    unfold61 = Iterators.Unfold(1) do x
+    unfold61 = Iterators.unfold(1) do x
          if x < 2^26
             return x, x+x
          else
@@ -1001,12 +1001,12 @@ end
     end
 
     aa, bb = eachcol(randn(11,2))
-    vals = map(aa, bb) do a, b iterate(Iterators.Unfold(a) do x x, b end) end
+    vals = map(aa, bb) do a, b iterate(Iterators.unfold(a) do x x, b end) end
     @test all(zip(aa, bb) .== vals)
 
     struct init_sentinel end
     @testset "Unfold replicates `iterate` calls" for myitr in [1:2:4, (-5:5)*π, (), (1,2), randn(5)]
-        myUnfold = Iterators.Unfold(init_sentinel()) do state
+        myUnfold = Iterators.unfold(init_sentinel()) do state
             if state isa init_sentinel
                 return iterate(myitr)
             else
@@ -1016,7 +1016,7 @@ end
         @test Iterators.map(==, myUnfold, myitr) |> all
     end
 
-    fibs = Iterators.Unfold(Int64.((1,1))) do (a,b) a, (b, a+b) end
+    fibs = Iterators.unfold(Int64.((1,1))) do (a,b) a, (b, a+b) end
     fibO1(n) = (MathConstants.φ^n - (1-MathConstants.φ)^n) / √5
     @test 93 == Iterators.take(Iterators.map(
         !isapprox,
