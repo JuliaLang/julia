@@ -2,7 +2,8 @@
 
 ## Standard Numeric Types
 
-
+A type tree for all subtypes of `Number`.
+Abstract types have been marked, the rest are concrete types.
 ```
 Number  (Abstract Type)
 ├─ Complex
