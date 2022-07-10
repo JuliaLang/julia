@@ -2884,7 +2884,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->nbig_obj = 0;
 
     // Initialize GC mark-queue
-    size_t init_size = 1024;
+    size_t init_size = (1 << 17);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     mq->current = mq->start = (jl_value_t**)malloc_s(init_size * sizeof(jl_value_t*));
     mq->end = mq->start + init_size;
