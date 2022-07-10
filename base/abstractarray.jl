@@ -3097,6 +3097,63 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
 """
 map(f, iters...) = collect(Generator(f, iters...))
 
+"""
+    flatten(A)
+
+Takes a collection of collections and produce an array with the concatenation of all internal elements.
+
+See also [`Iterators.flatten`](@ref)
+
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
+
+# Examples
+```jldoctest
+julia> flatten([1:2,1:3,2:4])
+9-element Vector{Int64}:
+ 1
+ 2
+ 1
+ 2
+ 3
+ 2
+ 3
+ 4
+```
+"""
+flatten(A) = collect(Iterators.flatten(A))
+
+"""
+    flatten(f, c...)
+
+Equivalent to `flatten(map(f, c...))`.
+
+See also [`Iterators.flatten`](@ref), [`map`](@ref)
+
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
+
+# Examples
+```jldoctest
+julia> flatten(n -> -n:2:n, 1:3)
+9-element Vector{Int64}:
+ -1
+  1
+ -2
+  0
+  2
+ -3
+ -1
+  1
+  3
+```
+
+# Extended help
+
+This version of the `flatten` method essentialy implements what's called `flatmap` or `bind` in other languages.
+"""
+flatten(f, A...) = collect(Iterators.flatten(f, A...))
+
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
 push!(A, a, b) = push!(push!(A, a), b)

@@ -67,7 +67,8 @@ Build system changes
 New library functions
 ---------------------
 
-* `Iterators.flatmap` was added ([#44792]).
+* `flatten(f, c...)` was added ([#44792], ), which implements `flatmap` both as iterators and
+  producing arrays.
 * New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
