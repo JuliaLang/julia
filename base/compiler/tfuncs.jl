@@ -803,7 +803,7 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     elseif isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
         if !boundscheck && s.name.n_uninitialized == 0
@@ -1020,7 +1020,7 @@ function setfield!_nothrow(s00, name, v)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
         ismutabletype(s) || return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
@@ -1757,6 +1757,10 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         length(argtypes) == 2 || return false
         return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
     elseif f === donotdelete
+        return true
+    elseif f === Core.finalizer
+        2 <= length(argtypes) <= 4 || return false
+        # Core.finalizer does no error checking - that's done in Base.finalizer
         return true
     end
     return false

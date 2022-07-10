@@ -1,4 +1,6 @@
 ## UNWIND ##
+include $(SRCDIR)/unwind.version
+include $(SRCDIR)/llvmunwind.version
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
 LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz
@@ -40,7 +42,11 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied: $(SRCCA
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-dwarf-table.patch
 	echo 1 > $@
 
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-non-empty-structs.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-dwarf-table.patch-applied
+	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-non-empty-structs.patch
+	echo 1 > $@
+
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-non-empty-structs.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo

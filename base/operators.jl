@@ -902,6 +902,9 @@ julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 """
 |>(x, f) = f(x)
 
+_stable_typeof(x) = typeof(x)
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+
 """
     f = Returns(value)
 
@@ -928,7 +931,7 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{Core.Typeof(value)}(value)
+    Returns(value) = new{_stable_typeof(value)}(value)
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
@@ -1014,7 +1017,19 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
+function (c::ComposedFunction)(x...; kw...)
+    fs = unwrap_composed(c)
+    call_composed(fs[1](x...; kw...), tail(fs)...)
+end
+unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.inner)..., unwrap_composed(c.outer)...)
+unwrap_composed(c) = (maybeconstructor(c),)
+call_composed(x, f, fs...) = (@inline; call_composed(f(x), fs...))
+call_composed(x, f) = f(x)
+
+struct Constructor{F} <: Function end
+(::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
+maybeconstructor(::Type{F}) where {F} = Constructor{F}()
+maybeconstructor(f) = f
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
@@ -1078,8 +1093,8 @@ struct Fix1{F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -1095,8 +1110,8 @@ struct Fix2{F,T} <: Function
     f::F
     x::T
 
-    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)

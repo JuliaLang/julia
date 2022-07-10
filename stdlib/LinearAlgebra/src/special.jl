@@ -82,7 +82,7 @@ convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
 #     f(x::S, y::T) where {S,T} = x+y
 #     f(y::T, x::S) where {S,T} = f(x, y)
 macro commutative(myexpr)
-    @assert myexpr.head===:(=) || myexpr.head===:function # Make sure it is a function definition
+    @assert Base.is_function_def(myexpr) # Make sure it is a function definition
     y = copy(myexpr.args[1].args[2:end])
     reverse!(y)
     reversed_call = Expr(:(=), Expr(:call,myexpr.args[1].args[1],y...), myexpr.args[1])

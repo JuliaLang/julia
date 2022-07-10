@@ -32,12 +32,12 @@ Test that a factorization of a matrix succeeded.
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 true
 
 julia> F = lu([1 0; 0 0]; check = false);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 false
 ```
 """

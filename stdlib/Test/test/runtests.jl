@@ -409,19 +409,19 @@ end
                 @test true
                 @test false
                 @test 1 == 1
-                @test 2 == :foo
+                @test 2 === :foo
                 @test 3 == 3
                 @testset "d" begin
                     @test 4 == 4
                 end
                 @testset begin
-                    @test :blank != :notblank
+                    @test :blank !== :notblank
                 end
             end
             @testset "inner1" begin
                 @test 1 == 1
                 @test 2 == 2
-                @test 3 == :bar
+                @test 3 === :bar
                 @test 4 == 4
                 @test_throws ErrorException 1+1
                 @test_throws ErrorException error()
@@ -1387,12 +1387,12 @@ Test.finish(ts::PassInformationTestSet) = ts
     end
     test_line_number = (@__LINE__) - 3
     test_throws_line_number =  (@__LINE__) - 3
-    @test ts.results[1].test_type == :test
+    @test ts.results[1].test_type === :test
     @test ts.results[1].orig_expr == :(1 == 1)
     @test ts.results[1].data == Expr(:comparison, 1, :(==), 1)
     @test ts.results[1].value == true
     @test ts.results[1].source == LineNumberNode(test_line_number, @__FILE__)
-    @test ts.results[2].test_type == :test_throws
+    @test ts.results[2].test_type === :test_throws
     @test ts.results[2].orig_expr == :(throw(ErrorException("Msg")))
     @test ts.results[2].data == ErrorException
     @test ts.results[2].value == ErrorException("Msg")

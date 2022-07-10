@@ -8,7 +8,6 @@ BUILDDIR := scratch
 else
 BUILDDIR := .
 endif
-include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk

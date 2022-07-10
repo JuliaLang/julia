@@ -688,6 +688,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_argument_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_const_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_struct_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_partial_opaque_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_interconditional_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_match_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_simplevector_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_typename_t *jl_tuple_typename JL_GLOBALLY_ROOTED;
@@ -2057,7 +2058,7 @@ extern JL_DLLEXPORT JL_STREAM *JL_STDERR;
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void);
-JL_DLLEXPORT int jl_getch(void);
+JL_DLLEXPORT int jl_termios_size(void);
 
 // showing and std streams
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;

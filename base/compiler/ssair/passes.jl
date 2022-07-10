@@ -604,11 +604,14 @@ function get(x::LazyDomtree)
 end
 
 function perform_lifting!(compact::IncrementalCompact,
-    visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
-    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val),
-    lazydomtree::Union{LazyDomtree,Nothing})
-    reverse_mapping = IdDict{AnySSAValue, Int}(ssa => id for (id, ssa) in enumerate(visited_phinodes))
+        visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
+        lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
+        @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val),
+        lazydomtree::Union{LazyDomtree,Nothing})
+    reverse_mapping = IdDict{AnySSAValue, Int}()
+    for id in 1:length(visited_phinodes)
+        reverse_mapping[visited_phinodes[id]] = id
+    end
 
     # Check if all the lifted leaves are the same
     local the_leaf
@@ -645,25 +648,28 @@ function perform_lifting!(compact::IncrementalCompact,
     end
 
     # Insert PhiNodes
-    lifted_phis = LiftedPhi[]
-    for item in visited_phinodes
+    nphis = length(visited_phinodes)
+    lifted_phis = Vector{LiftedPhi}(undef, nphis)
+    for i = 1:nphis
+        item = visited_phinodes[i]
         # FIXME this cache is broken somehow
         # ckey = Pair{AnySSAValue, Any}(item, cache_key)
         # cached = ckey in keys(lifting_cache)
         cached = false
         if cached
             ssa = lifting_cache[ckey]
-            push!(lifted_phis, LiftedPhi(ssa, compact[ssa][:inst]::PhiNode, false))
+            lifted_phis[i] = LiftedPhi(ssa, compact[ssa][:inst]::PhiNode, false)
             continue
         end
         n = PhiNode()
         ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
         # lifting_cache[ckey] = ssa
-        push!(lifted_phis, LiftedPhi(ssa, n, true))
+        lifted_phis[i] = LiftedPhi(ssa, n, true)
     end
 
     # Fix up arguments
-    for (old_node_ssa, lf) in zip(visited_phinodes, lifted_phis)
+    for i = 1:nphis
+        (old_node_ssa, lf) = visited_phinodes[i], lifted_phis[i]
         old_node = compact[old_node_ssa][:inst]::PhiNode
         new_node = lf.node
         lf.need_argupdate || continue
@@ -1189,7 +1195,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                             if preserve_uses === nothing
                                 preserve_uses = IdDict{Int, Vector{Any}}()
                             end
-                            push!(get!(()->Any[], preserve_uses, use.idx), newval)
+                            push!(get!(Vector{Any}, preserve_uses, use.idx), newval)
                         end
                     else
                         @assert false "sroa_mutables!: unexpected use"

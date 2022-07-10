@@ -85,7 +85,6 @@ static int jl_mach_gc_wait(jl_ptls_t ptls2,
     arraylist_push(&suspended_threads, (void*)item);
     thread_suspend(thread);
     uv_mutex_unlock(&safepoint_lock);
-    uv_cond_broadcast(&safepoint_cond);
     return 1;
 }
 

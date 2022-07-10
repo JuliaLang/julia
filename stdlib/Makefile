@@ -6,9 +6,12 @@ SRCCACHE := $(abspath $(SRCDIR)/srccache)
 BUILDDIR := .
 
 include $(JULIAHOME)/Make.inc
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/deps/tools/common.mk
 include $(JULIAHOME)/deps/tools/stdlib-external.mk
+# include all `*.version` files, import `LIBNAME_JLL_NAME` and `LIBNAME_JLL_VER`
+# Note: Some deps do not have a `_jll` pkg: [libwhich, patchelf, utf8proc]
+include $(JULIAHOME)/deps/*.version
+
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 
@@ -19,7 +22,7 @@ JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
        BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
        LLVMUNWIND CSL UNWIND
 
-# Initialize this with JLLs that aren't in deps/Versions.make
+# Initialize this with JLLs that aren't in "deps/$(LibName).version"
 JLL_NAMES := MozillaCACerts_jll
 get-MozillaCACerts_jll:
 install-MozillaCACerts_jll:

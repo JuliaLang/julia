@@ -1238,8 +1238,9 @@ static uint64_t getLoadValueAlign(LoadInst *LI)
 static bool LooksLikeFrameRef(Value *V) {
     if (isSpecialPtr(V->getType()))
         return false;
-    if (isa<GetElementPtrInst>(V))
-        return LooksLikeFrameRef(cast<GetElementPtrInst>(V)->getOperand(0));
+    V = V->stripInBoundsOffsets();
+    if (isSpecialPtr(V->getType()))
+        return false;
     return isa<Argument>(V);
 }
 
@@ -2429,18 +2430,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     ReplacementArgs.erase(ReplacementArgs.begin());
                     ReplacementArgs.push_back(front);
                 }
-                FunctionType *FTy;
-                if  (callee == call_func) // jl_fptr_args
-                    FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32}, false);
-                else // callee == call2_func // jl_invoke
-                    FTy = FunctionType::get(T_prjlvalue, {T_prjlvalue, T_pprjlvalue, T_int32, T_prjlvalue}, false);
-                Value *newFptr = Builder.CreateBitCast(new_callee, FTy->getPointerTo());
-                CallInst *NewCall = CallInst::Create(FTy, newFptr, ReplacementArgs, "", CI);
+                FunctionType *FTy = callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) : JuliaType::get_jlfunc_ty(CI->getContext());
+                CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
-                auto old_attrs = CI->getAttributes();
-                NewCall->setAttributes(AttributeList::get(CI->getContext(),
-                                                          getFnAttrs(old_attrs),
-                                                          getRetAttrs(old_attrs), {}));
+                auto callattrs = CI->getAttributes();
+                callattrs = AttributeList::get(CI->getContext(), getFnAttrs(callattrs), getRetAttrs(callattrs), {});
+                if (auto new_callee = CI->getCalledFunction()) // get the parameter attributes from the function target (if possible)
+                    callattrs = AttributeList::get(CI->getContext(), {callattrs, new_callee->getAttributes()});
+                NewCall->setAttributes(callattrs);
                 NewCall->takeName(CI);
                 NewCall->copyMetadata(*CI);
                 CI->replaceAllUsesWith(NewCall);
