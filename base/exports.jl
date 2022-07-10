@@ -519,6 +519,7 @@ export
     lastindex,
     filter!,
     filter,
+    flatten,
     foldl,
     foldr,
     foreach,
