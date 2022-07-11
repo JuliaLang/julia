@@ -2269,6 +2269,14 @@ end
     @test S32K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
     @test size(S32K) == (1,2,2,1)
     @test S32K[1,2,1,1] == M[:,2,1,:]
+
+    @testset "eachslice inference (#45923)" begin
+        a = [1 2; 3 4]
+        f1(a) = eachslice(a, dims=1)
+        @test (@inferred f1(a)) == eachrow(a)
+        f2(a) = eachslice(a, dims=2)
+        @test (@inferred f2(a)) == eachcol(a)
+    end
 end
 
 ###

@@ -96,6 +96,7 @@ Base.unique!
 Base.allunique
 Base.allequal
 Base.reduce(::Any, ::Any)
+Base.reduce(::Any, ::AbstractArray)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum

@@ -649,7 +649,7 @@ macro assume_effects(args...)
     end
     ex = args[end]
     isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
-    if ex.head === :macrocall && ex.args[1] == Symbol("@ccall")
+    if ex.head === :macrocall && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
             consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate

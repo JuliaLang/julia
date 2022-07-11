@@ -1016,6 +1016,46 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
 // root blocks
 
+// This section handles method roots. Roots are GC-preserved items needed to
+// represent lowered, type-inferred, and/or compiled code. These items are
+// stored in a flat list (`m.roots`), and during serialization and
+// deserialization of code we replace C-pointers to these items with a
+// relocatable reference. We use a bipartite reference, `(key, index)` pair,
+// where `key` identifies the module that added the root and `index` numbers
+// just those roots with the same `key`.
+//
+// During precompilation (serialization), we save roots that were added to
+// methods that are tagged with this package's module-key, even for "external"
+// methods not owned by a module currently being precompiled. During
+// deserialization, we load the new roots and append them to the method. When
+// code is deserialized (see ircode.c), we replace the bipartite reference with
+// the pointer to the memory address in the current session. The bipartite
+// reference allows us to cache both roots and references in precompilation .ji
+// files using a naming scheme that is independent of which packages are loaded
+// in arbitrary order.
+//
+// To track the module-of-origin for each root, methods also have a
+// `root_blocks` field that uses run-length encoding (RLE) storing `key` and the
+// (absolute) integer index within `roots` at which a block of roots with that
+// key begins. This makes it possible to look up an individual `(key, index)`
+// pair fairly efficiently. A given `key` may possess more than one block; the
+// `index` continues to increment regardless of block boundaries.
+//
+// Roots with `key = 0` are considered to be of unknown origin, and
+// CodeInstances referencing such roots will remain unserializable unless all
+// such roots were added at the time of system image creation. To track this
+// additional data, we use two fields:
+//
+// - methods have an `nroots_sysimg` field to count the number of roots defined
+//   at the time of writing the system image (such occur first in the list of
+//   roots). These are the cases with `key = 0` that do not prevent
+//   serialization.
+// - CodeInstances have a `relocatability` field which when 1 indicates that
+//   every root is "safe," meaning it was either added at sysimg creation or is
+//   tagged with a non-zero `key`. Even a single unsafe root will cause this to
+//   have value 0.
+
+// Get the key of the current (final) block of roots
 static uint64_t current_root_id(jl_array_t *root_blocks)
 {
     if (!root_blocks)
@@ -1028,6 +1068,7 @@ static uint64_t current_root_id(jl_array_t *root_blocks)
     return blocks[nx2-2];
 }
 
+// Add a new block of `len` roots with key `modid` (module id)
 static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 {
     assert(jl_is_array(root_blocks));
@@ -1038,6 +1079,7 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
     blocks[nx2-1] = len;
 }
 
+// Allocate storage for roots
 static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
@@ -1050,6 +1092,7 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
     }
 }
 
+// Add a single root with owner `mod` to a method
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
 {
     JL_GC_PUSH2(&m, &root);
@@ -1066,6 +1109,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     JL_GC_POP();
 }
 
+// Add a list of roots with key `modid` to a method
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
 {
     JL_GC_PUSH2(&m, &roots);
@@ -1105,6 +1149,7 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
     return jl_array_ptr_ref(m->roots, i);
 }
 
+// Count the number of roots added by module with id `key`
 int nroots_with_key(jl_method_t *m, uint64_t key)
 {
     size_t nroots = 0;

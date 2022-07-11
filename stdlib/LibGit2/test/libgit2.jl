@@ -98,8 +98,8 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
 
         status = fetch(timer)
         close(ptm)
-        if status != :success
-            if status == :timeout
+        if status !== :success
+            if status === :timeout
                 error("Process timed out possibly waiting for a response. ",
                       format_output(out))
             else

@@ -47,9 +47,25 @@ end
         @test r == [3,1,2]
         @test r === s
     end
-    @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
-    @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
-    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
+    @test_throws ArgumentError sortperm!(view([1, 2, 3, 4], 1:4), [2, 3, 1])
+    @test sortperm(OffsetVector([8.0, -2.0, 0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1, 2], [2.0, 1.0]) == Int32[2, 1]
+    @test_throws ArgumentError sortperm!(Int32[1, 2], [2.0, 1.0]; dims=1)
+    let A = rand(4, 4, 4)
+        for dims = 1:3
+            perm = sortperm(A; dims)
+            sorted = sort(A; dims)
+            @test A[perm] == sorted
+
+            perm_idx = similar(Array{Int}, axes(A))
+            sortperm!(perm_idx, A; dims)
+            @test perm_idx == perm
+        end
+    end
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3);)
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3); dims=3)
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 4), rand(4, 4); dims=1)
+    @test_throws ArgumentError sortperm!(OffsetArray(zeros(Int, 4, 4), -4:-1, 1:4), rand(4, 4); dims=1)
 end
 
 @testset "misc sorting" begin
@@ -664,19 +680,19 @@ end
     end
 end
 
-@testset "sort(x; workspace=w) " begin
+@testset "sort(x; buffer)" begin
     for n in [1,10,100,1000]
         v = rand(n)
-        w = [0.0]
-        @test sort(v) == sort(v; workspace=w)
-        @test sort!(copy(v)) == sort!(copy(v); workspace=w)
-        @test sortperm(v) == sortperm(v; workspace=[4])
-        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; workspace=[4])
+        buffer = [0.0]
+        @test sort(v) == sort(v; buffer)
+        @test sort!(copy(v)) == sort!(copy(v); buffer)
+        @test sortperm(v) == sortperm(v; buffer=[4])
+        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; buffer=[4])
 
         n > 100 && continue
         M = rand(n, n)
-        @test sort(M; dims=2) == sort(M; dims=2, workspace=w)
-        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, workspace=w)
+        @test sort(M; dims=2) == sort(M; dims=2, buffer)
+        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
     end
 end
 

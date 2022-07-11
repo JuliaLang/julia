@@ -617,7 +617,7 @@ end
 @testset "properties" begin
     ttest = (:a, :b, :c)
     @test propertynames(ttest) == (1, 2, 3)
-    @test getproperty(ttest, 2) == :b
+    @test getproperty(ttest, 2) === :b
     @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
     @test_throws ErrorException setproperty!(ttest, 1, :d)
 end

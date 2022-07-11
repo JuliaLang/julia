@@ -4,7 +4,7 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct are defined in Core, to allow them to be used
+# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
 #
 # # The type of a value might be constant
@@ -65,16 +65,15 @@ This is separate from `Conditional` to catch logic errors: the lattice element n
 while processing a call, then `Conditional` everywhere else. Thus `InterConditional` does not appear in
 `CompilerTypes`—these type's usages are disjoint—though we define the lattice for `InterConditional`.
 """
-struct InterConditional
-    slot::Int
-    thentype
-    elsetype
-    function InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype))
-        assert_nested_slotwrapper(thentype)
-        assert_nested_slotwrapper(elsetype)
-        return new(slot, thentype, elsetype)
-    end
-end
+:(InterConditional)
+import Core: InterConditional
+# struct InterConditional
+#     slot::Int
+#     thentype
+#     elsetype
+#     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) =
+#         new(slot, thentype, elsetype)
+# end
 InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
 
@@ -397,6 +396,15 @@ function tmeet(@nospecialize(v), @nospecialize(t::Type))
             end
         end
         return tuple_tfunc(new_fields)
+    elseif isa(v, PartialOpaque)
+        has_free_typevars(t) && return v
+        widev = widenconst(v)
+        if widev <: t
+            return v
+        end
+        ti = typeintersect(widev, t)
+        valid_as_lattice(ti) || return Bottom
+        return PartialOpaque(ti, v.env, v.parent, v.source)
     elseif isa(v, Conditional)
         if !(Bool <: t)
             return Bottom

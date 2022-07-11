@@ -53,22 +53,35 @@ namespace JuliaType {
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
-        std::vector<llvm::Type*> ftargs(0);
-        ftargs.push_back(T_prjlvalue);  // function
-        ftargs.push_back(T_pprjlvalue); // args[]
-        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
-        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C)}, // nargs
+            false);
+    }
+
+    static inline auto get_jlfunc2_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C),
+                T_prjlvalue,  // linfo
+                }, // nargs
+            false);
     }
 
     static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
-        std::vector<llvm::Type*> ftargs(0);
-        ftargs.push_back(T_prjlvalue);  // function
-        ftargs.push_back(T_pprjlvalue); // args[]
-        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
-        ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
-        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C),
+                T_pprjlvalue,  // linfo->sparam_vals
+                }, // nargs
+            false);
     }
 
     static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {

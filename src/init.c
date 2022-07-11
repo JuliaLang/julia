@@ -72,7 +72,12 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
         *stack_hi = (void*)&stacksize;
+#pragma GCC diagnostic pop
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
@@ -104,7 +109,12 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 // We intentionally leak a stack address here core.StackAddressEscape
 #  ifndef __clang_analyzer__
     *stack_hi = (void*)&stacksize;
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     *stack_lo = (void*)((char*)*stack_hi - stacksize);
+#pragma GCC diagnostic pop
 #  else
     *stack_hi = 0;
     *stack_lo = 0;
@@ -722,8 +732,13 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+#pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
     _finish_julia_init(rel, ptls, ct);
 }

@@ -38,7 +38,14 @@ static const int16_t sleeping = 1;
 // * Enqueuer:
 //   * 2: `jl_atomic_load_relaxed(&ptls->sleep_check_state)` in `jl_wakeup_thread` returns `not_sleeping`
 // i.e., the dequeuer misses the enqueue and enqueuer misses the sleep state transition.
-
+// [^store_buffering_2]: and also
+// * Enqueuer:
+//   * 1a: `jl_atomic_store_relaxed(jl_uv_n_waiters, 1)` in `JL_UV_LOCK`
+//   * 1b: "cheap read" of `handle->pending` in `uv_async_send` (via `JL_UV_LOCK`) loads `0`
+// * Dequeuer:
+//   * 2a: store `2` to `handle->pending` in `uv_async_send` (via `JL_UV_LOCK` in `jl_task_get_next`)
+//   * 2b: `jl_atomic_load_relaxed(jl_uv_n_waiters)` in `jl_task_get_next` returns `0`
+// i.e., the dequeuer misses the `n_waiters` is set and enqueuer misses the `uv_stop` flag (in `signal_async`) transition to cleared
 
 JULIA_DEBUG_SLEEPWAKE(
 uint64_t wakeup_enter;
@@ -276,7 +283,7 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     // by the thread itself. As a result, if this returns false, it will
     // continue returning false. If it returns true, we know the total
     // modification order of the fences.
-    jl_fence(); // [^store_buffering_1]
+    jl_fence(); // [^store_buffering_1] [^store_buffering_2]
     return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 

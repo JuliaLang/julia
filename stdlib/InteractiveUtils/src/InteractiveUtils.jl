@@ -60,11 +60,11 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
             end
         end
     end
-    let (col, rev) = if sortby == :name
+    let (col, rev) = if sortby === :name
             1, false
-        elseif sortby == :size
+        elseif sortby === :size
             4, true
-        elseif sortby == :summary
+        elseif sortby === :summary
             3, false
         else
             @assert "unreachable"

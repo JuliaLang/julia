@@ -1817,10 +1817,10 @@ function f24852_kernel_cinfo(fsig::Type)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
     if startswith(String(match.method.name), "f24852")
         for a in code_info.code
-            if a isa Expr && a.head == :(=)
+            if Meta.isexpr(a, :(=))
                 a = a.args[2]
             end
-            if a isa Expr && length(a.args) === 3 && a.head === :call
+            if Meta.isexpr(a, :call) && length(a.args) === 3
                 pushfirst!(a.args, Core.SlotNumber(1))
             end
         end
@@ -2129,7 +2129,7 @@ end
     # `InterConditional` handling: `abstract_invoke`
     ispositive(a) = isa(a, Int) && a > 0
     @test Base.return_types((Any,)) do a
-        if Base.@invoke ispositive(a::Any)
+        if @invoke ispositive(a::Any)
             return a
         end
         return 0
@@ -2297,7 +2297,7 @@ end
 
     # work with `invoke`
     @test Base.return_types((Any,Any)) do x, y
-        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+        @invoke ifelselike(isa(x, Int), x::Any, y::Int)
     end |> only == Int
 
     # don't be confused with vararg method
@@ -2801,7 +2801,7 @@ foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
 bar_inlining_apply() = Core._apply_iterate(iterate, Core._apply_iterate, (iterate,), (foo_inlining_apply,), ((1,),))
 let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
-    @test ci.code[1].head == :foreigncall
+    @test ci.code[1].head === :foreigncall
 end
 
 # Test that inference can infer .instance of types
@@ -3766,16 +3766,16 @@ end
         f(a::Number, sym::Bool) = sym ? Number : :number
     end
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Any, true::Bool)
+        @invoke f(a::Any, true::Bool)
     end) == Any[Type{Any}]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Number, true::Bool)
+        @invoke f(a::Number, true::Bool)
     end) == Any[Type{Number}]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Any, false::Bool)
+        @invoke f(a::Any, false::Bool)
     end) == Any[Symbol]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Number, false::Bool)
+        @invoke f(a::Number, false::Bool)
     end) == Any[Symbol]
 
     # https://github.com/JuliaLang/julia/issues/41024
@@ -3790,7 +3790,7 @@ end
         abstract type AbstractInterfaceExtended <: AbstractInterface end
         Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
             sym === :y ? getfield(x, sym)::Rational{Int} :
-            return Base.@invoke getproperty(x::AbstractInterface, sym::Symbol)
+            return @invoke getproperty(x::AbstractInterface, sym::Symbol)
     end
     @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
         x.x
@@ -4110,7 +4110,7 @@ end
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
 increase_x44763!(n) = (global x44763; x44763 += n)
-invoke44763(x) = Base.@invoke increase_x44763!(x)
+invoke44763(x) = @invoke increase_x44763!(x)
 @test Base.return_types() do
     invoke44763(42)
 end |> only === Int
@@ -4202,6 +4202,45 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     @test Core.Compiler.is_nothrow(effects)
 end
 
+# refine :consistent-cy effect inference using the return type information
+@test Base.infer_effects((Any,)) do x
+    taint = Ref{Any}(x) # taints :consistent-cy, but will be adjusted
+    throw(taint)
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    if x < 0
+        taint = Ref(x) # taints :consistent-cy, but will be adjusted
+        throw(DomainError(x, taint))
+    end
+    return nothing
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    if x < 0
+        taint = Ref(x) # taints :consistent-cy, but will be adjusted
+        throw(DomainError(x, taint))
+    end
+    return x == 0 ? nothing : x # should `Union` of isbitstype objects nicely
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Symbol,Any)) do s, x
+    if s === :throw
+        taint = Ref{Any}(":throw option given") # taints :consistent-cy, but will be adjusted
+        throw(taint)
+    end
+    return s # should handle `Symbol` nicely
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    return Ref(x)
+end |> !Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    return x < 0 ? Ref(x) : nothing
+end |> !Core.Compiler.is_consistent
+@test Base.infer_effects((Int,)) do x
+    if x < 0
+        throw(DomainError(x, lazy"$x is negative"))
+    end
+    return nothing
+end |> Core.Compiler.is_foldable
+
 # check the inference convergence with an empty vartable:
 # the inference state for the toplevel chunk below will have an empty vartable,
 # and so we may fail to terminate (or optimize) it if we don't update vartables correctly
@@ -4211,3 +4250,9 @@ let # NOTE make sure this toplevel chunk doesn't contain any local binding
     while xcond end
 end
 @test !xcond
+
+struct Issue45780
+    oc::Core.OpaqueClosure{Tuple{}}
+end
+f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
+@test (@inferred f45780()) == Val{1}()

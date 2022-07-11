@@ -1,4 +1,5 @@
 ## DSFMT ##
+include $(SRCDIR)/dsfmt.version
 
 ifneq ($(USE_BINARYBUILDER_DSFMT),1)
 

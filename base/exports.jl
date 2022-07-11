@@ -1047,4 +1047,5 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+    @invoke
