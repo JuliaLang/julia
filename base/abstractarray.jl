@@ -2810,7 +2810,7 @@ awfulstack(array_of_arrays) = awfulstack_(array_of_arrays)
 """
     awfulstack(f, c...)
 
-Equivalent to awfulstact(map(f, c...)). Implements flatmap behavior.
+Equivalent to awfulstack(map(f, c...)). Implements flatmap behavior.
 
 # Example
 ```jldoctest
