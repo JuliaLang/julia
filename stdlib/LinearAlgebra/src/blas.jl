@@ -1126,6 +1126,9 @@ The scalar inputs `α` and `β` must be real.
 The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
 
 Return the updated `y`.
+
+!!! compat "Julia 1.5"
+    `spmv!` requires at least Julia 1.5.
 """
 spmv!
 
