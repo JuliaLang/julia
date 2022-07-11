@@ -1018,14 +1018,7 @@ struct ComposedFunction{O,I} <: Function
 end
 
 (c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
-eval(quote
-    # @assume_effects :terminates_globally, but @assume_effects cannot be used
-    # Core.Compiler, hence the Expr(:meta, ...)
-    function unwrap_composed(c::ComposedFunction)
-        $(Expr(:meta, Expr(:purity, false, false, false, true, false, false)))
-        return (unwrap_composed(c.outer)..., unwrap_composed(c.inner)...)
-    end
-end)
+unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.outer)..., unwrap_composed(c.inner)...)
 unwrap_composed(c) = (maybeconstructor(c),)
 call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
 call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
