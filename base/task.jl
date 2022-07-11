@@ -450,9 +450,22 @@ const sync_varname = gensym(:sync)
 """
     @sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref), [`@spawnat`](@ref) and [`@distributed`](@ref)
 are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
+a [`CompositeException`](@ref).
+
+# Examples
+```julia-repl
+julia> Threads.nthreads()
+4
+
+julia> @sync begin
+           Threads.@spawn println("Thread-id $(Threads.threadid()), task 1")
+           Threads.@spawn println("Thread-id $(Threads.threadid()), task 2")
+       end;
+Thread-id 3, task 1
+Thread-id 1, task 2
+```
 """
 macro sync(block)
     var = esc(sync_varname)
@@ -543,6 +556,24 @@ end
     errormonitor(t::Task)
 
 Print an error log to `stderr` if task `t` fails.
+
+# Examples
+```julia-repl
+julia> a4() = error("task failed");
+
+julia> b = Task(a4);
+
+julia> errormonitor(b);
+
+julia> schedule(b);
+
+Unhandled Task ERROR: task failed
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] a4()
+   @ Main ./REPL[1]:1
+```
 """
 function errormonitor(t::Task)
     t2 = Task() do

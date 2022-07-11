@@ -385,6 +385,7 @@ end
 `@assume_effects` overrides the compiler's effect modeling for the given method.
 `ex` must be a method definition or `@ccall` expression.
 
+# Examples
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
            # this :terminates_locally allows `pow` to be constant-folded
@@ -783,7 +784,7 @@ the global scope or depending on mutable elements.
 
 See [Metaprogramming](@ref) for further details.
 
-## Example:
+# Examples
 ```jldoctest
 julia> @generated function bar(x)
            if x <: Integer
@@ -857,6 +858,7 @@ This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -956,6 +958,7 @@ This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1002,6 +1005,7 @@ This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` ca
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
