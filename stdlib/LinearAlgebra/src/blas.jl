@@ -61,10 +61,6 @@ export
     # xSYR2
     # xSPR2
 # Level 3
-    herk!,
-    herk,
-    her2k!,
-    her2k,
     gemm!,
     gemm,
     symm!,
@@ -73,8 +69,12 @@ export
     hemm,
     syrk!,
     syrk,
+    herk!,
+    herk,
     syr2k!,
     syr2k,
+    her2k!,
+    her2k,
     trmm!,
     trmm,
     trsm!,
