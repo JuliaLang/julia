@@ -9,6 +9,8 @@ import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
 
 export
+# Note: `xFUNC_NAME` is a placeholder for not exported BLAS fucntions
+#   ref: http://www.netlib.org/blas/blasqr.pdf
 # Level 1
     # xROTG
     # xROTMG
