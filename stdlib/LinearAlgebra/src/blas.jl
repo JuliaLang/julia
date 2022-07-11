@@ -10,16 +10,22 @@ using Base: require_one_based_indexing, USE_BLAS64
 
 export
 # Level 1
-    asum,
-    axpy!,
-    axpby!,
-    blascopy!,
-    dotc,
-    dotu,
+    # xROTG
+    # xROTMG
     rot!,
+    # xROTM
+    # xSWAP
     scal!,
     scal,
+    blascopy!,
+    axpy!,
+    axpby!,
+    # xDOT
+    dotc,
+    dotu,
+    # xxDOT
     nrm2,
+    asum,
     iamax,
 # Level 2
     gbmv!,
