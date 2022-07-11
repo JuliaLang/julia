@@ -988,8 +988,8 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
     isa(arg, PartialOpaque) && return true
     isa(arg, Const) || return true
     val = arg.val
-    # don't consider mutable values or Strings useful constants
-    return isa(val, Symbol) || isa(val, Type) || (!isa(val, String) && !ismutable(val))
+    # don't consider mutable values useful constants
+    return isa(val, Symbol) || isa(val, Type) || !ismutable(val)
 end
 
 function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
@@ -1370,7 +1370,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
                 end
                 cti = Any[Vararg{argt}]
             end
-            if _any(t -> t === Bottom, cti)
+            if any(@nospecialize(t) -> t === Bottom, cti)
                 continue
             end
             for j = 1:length(ctypes)
@@ -2056,6 +2056,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         for i = 3:length(e.args)
             if abstract_eval_value(interp, e.args[i], vtypes, sv) === Bottom
                 t = Bottom
+                tristate_merge!(sv, EFFECTS_THROWS)
+                @goto t_computed
             end
         end
         cconv = e.args[5]
