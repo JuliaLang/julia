@@ -450,7 +450,7 @@ const sync_varname = gensym(:sync)
 """
     @sync
 
-Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref), [`@spawnat`](@ref) and [`@distributed`](@ref)
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn), `@spawnat` and `@distributed`
 are complete. All exceptions thrown by enclosed async operations are collected and thrown as
 a [`CompositeException`](@ref).
 
@@ -559,14 +559,7 @@ Print an error log to `stderr` if task `t` fails.
 
 # Examples
 ```julia-repl
-julia> a4() = error("task failed");
-
-julia> b = Task(a4);
-
-julia> errormonitor(b);
-
-julia> schedule(b);
-
+julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
 Unhandled Task ERROR: task failed
 Stacktrace:
  [1] error(s::String)
