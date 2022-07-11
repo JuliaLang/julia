@@ -527,67 +527,105 @@ the input argument belongs on (`side`). The possibilities are:
 | `'N'`       | The diagonal values of the matrix `X` will be read.       |
 | `'U'`       | The diagonal of the matrix `X` is assumed to be all ones. |
 
+
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.set_num_threads
+LinearAlgebra.BLAS.get_num_threads
+```
+
+### Level 1 BLAS functions
+
+```@docs
+# xROTG
+# xROTMG
 LinearAlgebra.BLAS.rot!
+# xROTM
+# xSWAP
+LinearAlgebra.BLAS.scal!
+LinearAlgebra.BLAS.scal
+LinearAlgebra.BLAS.blascopy!
+LinearAlgebra.BLAS.axpy!
+LinearAlgebra.BLAS.axpby!
 LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
-LinearAlgebra.BLAS.blascopy!
+# xxDOT
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
-LinearAlgebra.BLAS.axpy!
-LinearAlgebra.BLAS.axpby!
-LinearAlgebra.BLAS.scal!
-LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax
-LinearAlgebra.BLAS.ger!
-LinearAlgebra.BLAS.syr!
-LinearAlgebra.BLAS.spr!
-LinearAlgebra.BLAS.syrk!
-LinearAlgebra.BLAS.syrk
-LinearAlgebra.BLAS.syr2k!
-LinearAlgebra.BLAS.syr2k
-LinearAlgebra.BLAS.her!
-LinearAlgebra.BLAS.herk!
-LinearAlgebra.BLAS.herk
-LinearAlgebra.BLAS.her2k!
-LinearAlgebra.BLAS.her2k
-LinearAlgebra.BLAS.gbmv!
-LinearAlgebra.BLAS.gbmv
-LinearAlgebra.BLAS.sbmv!
-LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.gemm!
-LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)
+```
+
+### Level 2 BLAS functions
+
+**return a vector**
+```@docs
 LinearAlgebra.BLAS.gemv!
 LinearAlgebra.BLAS.gemv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.gemv(::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symm!
-LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symv!
-LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.spmv!
-LinearAlgebra.BLAS.hemm!
-LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.gbmv!
+LinearAlgebra.BLAS.gbmv
 LinearAlgebra.BLAS.hemv!
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any)
+# hbmv!, hbmv
 LinearAlgebra.BLAS.hpmv!
+LinearAlgebra.BLAS.symv!
+LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.sbmv!
+LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.spmv!
+LinearAlgebra.BLAS.trmv!
+LinearAlgebra.BLAS.trmv
+# xTBMV
+# xTPMV
+LinearAlgebra.BLAS.trsv!
+LinearAlgebra.BLAS.trsv
+# xTBSV
+# xTPSV
+```
+
+**return a matrix**
+```@docs
+LinearAlgebra.BLAS.ger!
+# xGERU
+# xGERC
+LinearAlgebra.BLAS.her!
+# xHPR
+# xHER2
+# xHPR2
+LinearAlgebra.BLAS.syr!
+LinearAlgebra.BLAS.spr!
+# xSYR2
+# xSPR2
+```
+
+### Level 3 BLAS functions
+
+```@docs
+LinearAlgebra.BLAS.gemm!
+LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.symm!
+LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm!
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.syrk!
+LinearAlgebra.BLAS.syrk
+LinearAlgebra.BLAS.herk!
+LinearAlgebra.BLAS.herk
+LinearAlgebra.BLAS.syr2k!
+LinearAlgebra.BLAS.syr2k
+LinearAlgebra.BLAS.her2k!
+LinearAlgebra.BLAS.her2k
 LinearAlgebra.BLAS.trmm!
 LinearAlgebra.BLAS.trmm
 LinearAlgebra.BLAS.trsm!
 LinearAlgebra.BLAS.trsm
-LinearAlgebra.BLAS.trmv!
-LinearAlgebra.BLAS.trmv
-LinearAlgebra.BLAS.trsv!
-LinearAlgebra.BLAS.trsv
-LinearAlgebra.BLAS.set_num_threads
-LinearAlgebra.BLAS.get_num_threads
 ```
 
 ## LAPACK functions
