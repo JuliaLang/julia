@@ -204,7 +204,8 @@ Message `text` is optionally displayed upon assertion failure.
     An assert might be disabled at various optimization levels.
     Assert should therefore only be used as a debugging tool
     and not used for authentication verification (e.g., verifying passwords).
-    The return of `@assert` must not trusted for the correct behavior of a function.
+    The user must not rely on the return value of `@assert` for the correct behavior 
+    of a function, nor should side effects needed for the correct behavior of assert.
 
 
 # Examples
