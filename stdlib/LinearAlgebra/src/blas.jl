@@ -28,26 +28,38 @@ export
     asum,
     iamax,
 # Level 2
-    gbmv!,
-    gbmv,
     gemv!,
     gemv,
+    gbmv!,
+    gbmv,
     hemv!,
     hemv,
+    # xHBMV
     hpmv!,
+    symv!,
+    symv,
     sbmv!,
     sbmv,
     spmv!,
-    spr!,
-    symv!,
-    symv,
-    trsv!,
-    trsv,
     trmv!,
     trmv,
+    # xTBMV
+    # xTPMV
+    trsv!,
+    trsv,
+    # xTBSV
+    # xTPSV
     ger!,
-    syr!,
+    # xGERU
+    # xGERC
     her!,
+    # xHPR
+    # xHER2
+    # xHPR2
+    syr!,
+    spr!,
+    # xSYR2
+    # xSPR2
 # Level 3
     herk!,
     herk,
