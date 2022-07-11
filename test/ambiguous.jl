@@ -100,10 +100,6 @@ ambig(x::Union{Char, Int16}) = 's'
 const allowed_undefineds = Set([
     GlobalRef(Base, :active_repl),
     GlobalRef(Base, :active_repl_backend),
-    GlobalRef(Base.Filesystem, :JL_O_TEMPORARY),
-    GlobalRef(Base.Filesystem, :JL_O_SHORT_LIVED),
-    GlobalRef(Base.Filesystem, :JL_O_SEQUENTIAL),
-    GlobalRef(Base.Filesystem, :JL_O_RANDOM),
 ])
 
 let Distributed = get(Base.loaded_modules,
@@ -167,7 +163,7 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
-    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds)))
+    let ambig = Set(detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds))
         good = true
         for (sig1, sig2) in ambig
             @test sig1 === sig2 # print this ambiguity
@@ -178,6 +174,9 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 
     # some ambiguities involving Union{} type parameters are expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
+        m1 = which(Core.Compiler.convert, Tuple{Type{<:Core.IntrinsicFunction}, Any})
+        m2 = which(Core.Compiler.convert, Tuple{Type{<:Nothing}, Any})
+        pop!(ambig, (m1, m2))
         @test !isempty(ambig)
     end
 
