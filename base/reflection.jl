@@ -332,7 +332,7 @@ end
 
 Get a hash value for `x` based on object identity.
 
-If `x === y` then `objectid(x) == objectid(y)`, and ususally when `x !== y`, `objectid(x) != objectid(y)`.
+If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
