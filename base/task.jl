@@ -562,10 +562,7 @@ Print an error log to `stderr` if task `t` fails.
 julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
 Unhandled Task ERROR: task failed
 Stacktrace:
- [1] error(s::String)
-   @ Base ./error.jl:35
- [2] a4()
-   @ Main ./REPL[1]:1
+[...]
 ```
 """
 function errormonitor(t::Task)
