@@ -214,17 +214,19 @@ function doc(binding::Binding, sig::Type = Union{})
     if isempty(groups)
         # When no `MultiDoc`s are found that match `binding` then we check whether `binding`
         # is an alias of some other `Binding`. When it is we then re-run `doc` with that
-        # `Binding`, otherwise we check whether it is some ordinary object. If so, we print
-        # its type and re-run `doc` with its type. Otherwise we generate a summary for the
-        # `binding` and display that to the user instead.
+        # `Binding`, otherwise we generate a summary for it. This only works for types, functions,
+        # and modules. In the other cases, we re-run `doc` for the type of the `binding`.
         alias = aliasof(binding)
         if alias != binding
             return doc(alias, sig)
-        elseif defined(binding) && !(resolve(binding) isa Union{Type, Module, Function})
-            println("`", binding, "` is of type `", typeof(resolve(binding)), "`\n")
-            return doc(typeof(resolve(binding)), sig)
+        elseif (summary = summarize(alias, sig)) !== nothing
+            return summary
         else
-            return summarize(alias, sig)
+            doc_of_type = doc(typeof(resolve(binding)), sig)
+            heading = Markdown.parse("`$(binding)` is of type `$(typeof(resolve(binding)))`")
+            result = catdoc(heading, doc_of_type)
+            result.meta = doc_of_type.meta
+            return result
         end
     else
         # There was at least one match for `binding` while searching. If there weren't any
@@ -254,12 +256,13 @@ doc(object, sig...)              = doc(object, Tuple{sig...})
 # Object Summaries.
 # =================
 
+# summarize Functions, Types and Modules. For everything else return nothing.
 function summarize(binding::Binding, sig)
     io = IOBuffer()
     if defined(binding)
         binding_res = resolve(binding)
         !isa(binding_res, Module) && println(io, "No documentation found.\n")
-        summarize(io, binding_res, binding)
+        summarize(io, binding_res, binding) === nothing && return nothing
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
@@ -371,11 +374,7 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     end
 end
 
-function summarize(io::IO, @nospecialize(T), binding::Binding)
-    T = typeof(T)
-    println(io, "`", binding, "` is of type `", T, "`.\n")
-    summarize(io, T, binding)
-end
+summarize(io::IO, @nospecialize(T), binding::Binding) = nothing
 
 # repl search and completions for help
 

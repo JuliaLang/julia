@@ -75,7 +75,13 @@ end
 end
 
 @testset "object documentation" begin
-    @test occursin("Example docstring A", sprint(show, ExampleStructs.eval(REPL.helpmode(IOBuffer(), "a"))))
+    @test sprint(show, ExampleStructs.eval(REPL.helpmode(IOBuffer(), "a"))) == """
+    `Main.DocviewTest.ExampleStructs.a` is of type `Main.DocviewTest.ExampleStructs.A`
+
+    ---
+
+    Example docstring A
+    """
     @test occursin("Example docstring A", sprint(show, ExampleStructs.eval(REPL.helpmode(IOBuffer(), "A()"))))
 end
 end
