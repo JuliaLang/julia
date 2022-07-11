@@ -1194,6 +1194,9 @@ The scalar input `α` must be real.
 
 The array inputs `x` and `AP` must all be of `Float32` or `Float64` type.
 Return the updated `AP`.
+
+!!! compat "Julia 1.8"
+    `spr!` requires at least Julia 1.8.
 """
 spr!
 
