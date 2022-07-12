@@ -1886,15 +1886,105 @@ setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
 """
     sortslicesperm(A; dims, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Return a permutation vector `I` that sorts slices of an array `A`. The required keyword argument `dims` must
-be either an integer or a tuple of integers. It specifies the
-dimension(s) over which the slices are sorted.
+Return a permutation vector `I` that sorts slices of an array `A`. The
+required keyword argument `dims` must be either an integer or a tuple
+of integers. It specifies the dimension(s) over which the slices are sorted.
 
 E.g., if `A` is a matrix, `dims=1` will sort rows, `dims=2` will sort columns.
 Note that the default comparison function on one dimensional slices sorts
 lexicographically.
 
 For the remaining keyword arguments, see the documentation of [`sort!`](@ref).
+
+#Examples
+```jldoctest
+julia> sortslicesperm([7 3 5; -1 6 4; 9 -2 8], dims=1) # Sort rows
+3-element Vector{Int64}:
+ 2
+ 1
+ 3
+
+julia> sortslicesperm([7 3 5; -1 6 4; 9 -2 8], dims=1, lt=(x,y)->isless(x[2],y[2]))
+3-element Vector{Int64}:
+ 3
+ 1
+ 2
+
+julia> sortslicesperm([7 3 5; -1 6 4; 9 -2 8], dims=1, rev=true)
+3-element Vector{Int64}:
+ 3
+ 1
+ 2
+
+julia> sortslicesperm([7 3 5; 6 -1 -4; 9 -2 8], dims=2) # Sort columns
+3-element Vector{Int64}:
+ 2
+ 3
+ 1
+
+julia> sortslicesperm([7 3 5; 6 -1 -4; 9 -2 8], dims=2, alg=InsertionSort, lt=(x,y)->isless(x[2],y[2]))
+3-element Vector{Int64}:
+ 3
+ 2
+ 1
+
+julia> sortslicesperm([7 3 5; 6 -1 -4; 9 -2 8], dims=2, rev=true)
+3-element Vector{Int64}:
+ 1
+ 3
+ 2
+```
+
+#Higher dimensions
+
+`sortslicesperm` extends naturally to higher dimensions. E.g., if `A` is a
+a 2x2x2 array, `sortslicesperm(A, dims=3)` will return the vector that will sort
+slices within the 3rd dimension, passing the 2x2 slices `A[:, :, 1]` and
+`A[:, :, 2]` to the comparison function. Note that while there is no default
+order on higher-dimensional slices, you may use the `by` or `lt` keyword
+argument to specify such an order.
+
+If `dims` is a tuple, the order of the dimensions in `dims` is
+relevant and specifies the linear order of the slices. E.g., if `A` is three
+dimensional and `dims` is `(1, 2)`, the orderings of the first two dimensions
+are re-arranged such that the slices (of the remaining third dimension) are sorted.
+If `dims` is `(2, 1)` instead, the same slices will be taken,
+but the result order will be row-major instead.
+
+# Higher dimensional examples
+```
+julia> A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 2))
+2×2×2 Array{Any, 3}:
+[:, :, 1] =
+ 4  3
+ 2  1
+
+[:, :, 2] =
+ 'A'  'B'
+ 'C'  'D'
+
+julia> sortslicesperm(A, dims=(1,2))
+4-element Vector{Int64}:
+ 4
+ 2
+ 3
+ 1
+
+julia> sortslicesperm(A, dims=(2,1))
+4-element Vector{Int64}:
+ 4
+ 3
+ 2
+ 1
+
+julia> sortslicesperm(reshape([5; 4; 3; 2; 1], (1,1,5)), dims=3, by=x->x[1,1])
+5-element Vector{Int64}:
+ 5
+ 4
+ 3
+ 2
+ 1
+```
 """
 function sortslicesperm(A::AbstractArray; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
     _sortslicesperm(A, Val{dims}(); kws...)
