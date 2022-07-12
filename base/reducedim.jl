@@ -269,7 +269,6 @@ Extract first entry of slices of array A into existing array R.
 copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 
 function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
-    lsiz = check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
     map!(f, R, view(A, t...))
 end
@@ -1120,7 +1119,6 @@ function _findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}, keys::AbstractAr
             for i in axes(A, 1)
                 tmpAv = f(A[i,IA])
                 tmpRv = Rval[i,IR]
-                tmpRi = Rind[i,IR]
                 if op(tmpRv, tmpAv)
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = keys[i,IA]
