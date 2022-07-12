@@ -1353,7 +1353,8 @@ Both these implementations, although different, do essentially the same thing: a
 over the dimensions of the array, collecting the offset in each dimension into the final index.
 
 However, all the information we need for the loop is embedded in the type information of the arguments.
-Thus, we can utilize generated functions to move the iteration to compile-time; in compiler parlance,
+This allows the compiler to move the iteration to compile time and eliminate the runtime loops
+altogether. We can utilize generated functions to achieve a simmilar effect; in compiler parlance,
 we use generated functions to manually unroll the loop. The body becomes almost identical, but
 instead of calculating the linear index, we build up an *expression* that calculates the index:
 
