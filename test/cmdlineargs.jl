@@ -579,11 +579,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         write(a, """
             println(@__FILE__)
             println(PROGRAM_FILE)
+            println(@isscript)
             include(\"$(escape_string(b))\")
             """)
         write(b, """
             println(@__FILE__)
             println(PROGRAM_FILE)
+            println(@isscript)
             """)
         mkpath(dirname(c))
         cp(b, c)
@@ -592,24 +594,24 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
         withenv("JULIA_DEPOT_PATH" => dir) do
             @test readsplit(`$exename $a`) ==
-                [a, a,
-                 b, a]
+                [a, a, "true",
+                 b, a, "false"]
             @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
-                [b, ""]
+                [b, "", "false"]
             @test readsplit(`$exename -L $b $a`) ==
-                [b, a,
-                 a, a,
-                 b, a]
+                [b, a, "false",
+                 a, a, "true",
+                 b, a, "false"]
             @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
-                [c, ""]
+                [c, "", "false"]
             @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
-                [c, "",
-                 b, ""]
+                [c, "", "false",
+                 b, "", "false"]
             @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
-                [c, a,
-                 b, a,
-                 a, a,
-                 b, a]
+                [c, a, "false",
+                 b, a, "false",
+                 a, a, "true",
+                 b, a, "false"]
         end
     end
 
