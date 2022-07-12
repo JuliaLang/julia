@@ -149,7 +149,7 @@
     @test startswith("abc", r"A"i)
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
-    #test with substring
+    # test with substring
     @test endswith((@views "abc"[2:3]), r"C"i)
 
     @testset "multiplication & exponentiation" begin
