@@ -235,7 +235,7 @@ IteratorSize(::Type{<:SkipMissing}) = SizeUnknown()
 IteratorEltype(::Type{SkipMissing{T}}) where {T} = IteratorEltype(T)
 eltype(::Type{SkipMissing{T}}) where {T} = nonmissingtype(eltype(T))
 
-length(s::SkipMissing) = count(!ismissing, s.x)
+length(s::SkipMissing{T}) where T <: AbstractArray = count(!ismissing, s.x)
 
 function iterate(itr::SkipMissing, state...)
     y = iterate(itr.x, state...)
