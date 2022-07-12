@@ -262,7 +262,8 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         binding_res = resolve(binding)
         !isa(binding_res, Module) && println(io, "No documentation found.\n")
-        summarize(io, binding_res, binding) === nothing && return nothing
+        io = summarize!(io, binding_res, binding)
+        io === nothing && return nothing
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
@@ -276,13 +277,14 @@ function summarize(binding::Binding, sig)
     return md
 end
 
-function summarize(io::IO, λ::Function, binding::Binding)
+function summarize!(io::IO, λ::Function, binding::Binding)
     kind = startswith(string(binding.var), '@') ? "macro" : "`Function`"
     println(io, "`", binding, "` is a ", kind, ".")
     println(io, "```\n", methods(λ), "\n```")
+    io
 end
 
-function summarize(io::IO, TT::Type, binding::Binding)
+function summarize!(io::IO, TT::Type, binding::Binding)
     println(io, "# Summary")
     T = Base.unwrap_unionall(TT)
     if T isa DataType
@@ -329,6 +331,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
     else # unreachable?
         println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
     end
+    io
 end
 
 function find_readme(m::Module)::Union{String, Nothing}
@@ -347,7 +350,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     end
     return nothing
 end
-function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
+function summarize!(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     readme_path = find_readme(m)
     if isnothing(readme_path)
         println(io, "No docstring or readme file found for module `$m`.\n")
@@ -372,9 +375,10 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
         end
         length(readme_lines) > nlines && println(io, "\n[output truncated to first $nlines lines]")
     end
+    io
 end
 
-summarize(io::IO, @nospecialize(T), binding::Binding) = nothing
+summarize!(io::IO, @nospecialize(T), binding::Binding) = nothing
 
 # repl search and completions for help
 
