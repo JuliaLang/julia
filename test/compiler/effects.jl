@@ -6,6 +6,21 @@ include("irutils.jl")
     for i = 1:n; end
 end |> !Core.Compiler.is_terminates
 
+# interprocedural-recursion should taint `terminates` **appropriately**
+function sumrecur(a, x)
+    isempty(a) && return x
+    return sumrecur(Base.tail(a), x + first(a))
+end
+@test Base.infer_effects(sumrecur, (Tuple{Int,Int,Int},Int)) |> Core.Compiler.is_terminates
+@test Base.infer_effects(sumrecur, (Tuple{Int,Int,Int,Vararg{Int}},Int)) |> !Core.Compiler.is_terminates
+
+# https://github.com/JuliaLang/julia/issues/45781
+@test Base.infer_effects((Float32,)) do a
+    out1 = promote_type(Irrational{:π}, Bool)
+    out2 = sin(a)
+    out1, out2
+end |> Core.Compiler.is_terminates
+
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
