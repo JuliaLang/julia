@@ -2868,18 +2868,18 @@ julia> Base.lolstack(a, ndim=2)
  1  3  5
  2  4  6
 """
-lolstack(array_of_arrays; ndim) = lolstack_(ndim, array_of_arrays)
+lolstack(array_of_arrays; ndim) = lolstack_(array_of_arrays, ndim=ndim)
 lolstack(array_of_arrays::Vector{N}) where {N} = lolstack(array_of_arrays, ndim=1)
 lolstack(array_of_arrays::Vector{Vector{N}}) where {N} = lolstack(array_of_arrays, ndim=2)
 lolstack(array_of_arrays::Vector{Vector{Vector{N}}}) where {N} = lolstack(array_of_arrays, ndim=3)
 lolstack(array_of_arrays::Vector{Vector{Vector{Vector{N}}}}) where {N} = lolstack(array_of_arrays, ndim=4)
 lolstack(array_of_arrays::Vector{Vector{Vector{Vector{Vector{N}}}}}) where {N} = lolstack(array_of_arrays, ndim=5)
-lolstack(f, c...) = lolstack(map(f, c...))
-function lolstack_(ndim, aoa)
+lolstack(f, c...) = lolstack(Iterators.map(f, c...))
+function lolstack_(aoa; ndim=ndim)
     if ndim == 1
         aoa
     else
-        hvncat(ndim, lolstack_.(ndim-1, aoa)...)
+        reduce((a,b)->hvncat(ndim, a, b), lolstack_.(aoa, ndim=ndim-1))
     end
 end
 
