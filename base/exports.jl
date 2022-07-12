@@ -446,6 +446,7 @@ export
     sortslices,
     dropdims,
     awfulstack,
+    lolstack,
     step,
     stride,
     strides,

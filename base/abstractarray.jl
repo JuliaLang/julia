@@ -2841,13 +2841,13 @@ end
 catdim_(dims) = (a,b) -> cat(a,b,dims=dims)
 
 """
-    lolstack(list_of_lists; ndim=n)
+    lolstack(list_of_lists, [ndim=n])
 
 Assembles a tensor of order `ndim` from a nested array-of-arrays. Vector sizes must match.
 
 # Examples
 ```jldoctest
-julia> lolstack([[[1,2],[3,4]], [[5,6],[7,8]]], ndim=3)
+julia> lolstack([[[1,2],[3,4]], [[5,6],[7,8]]])
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -2857,19 +2857,24 @@ julia> lolstack([[[1,2],[3,4]], [[5,6],[7,8]]], ndim=3)
  5  7
  6  8
 
-julia> a = eachcol(reshape(1:6,2,:)) |> collect
-3-element Vector{SubArray{Int64, 1, Base.ReshapedArray{Int64, 2, UnitRange{Int64}, Tuple{}}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
+julia> a = eachcol(reshape(1:6,2,:))
+3-element ColumnSlices{Base.ReshapedArray{Int64, 2, UnitRange{Int64}, Tuple{}}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Base.ReshapedArray{Int64, 2, UnitRange{Int64}, Tuple{}}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 2]
  [3, 4]
  [5, 6]
 
-julia> lolstack(a, ndim=2)
+julia> Base.lolstack(a, ndim=2)
 2×3 Matrix{Int64}:
  1  3  5
  2  4  6
 """
 lolstack(array_of_arrays; ndim) = lolstack_(ndim, array_of_arrays)
-lolstack(f, c...) = lolstack_(2, map(f, c...))
+lolstack(array_of_arrays::Vector{N}) where {N} = lolstack(array_of_arrays, ndim=1)
+lolstack(array_of_arrays::Vector{Vector{N}}) where {N} = lolstack(array_of_arrays, ndim=2)
+lolstack(array_of_arrays::Vector{Vector{Vector{N}}}) where {N} = lolstack(array_of_arrays, ndim=3)
+lolstack(array_of_arrays::Vector{Vector{Vector{Vector{N}}}}) where {N} = lolstack(array_of_arrays, ndim=4)
+lolstack(array_of_arrays::Vector{Vector{Vector{Vector{Vector{N}}}}}) where {N} = lolstack(array_of_arrays, ndim=5)
+lolstack(f, c...) = lolstack(map(f, c...))
 function lolstack_(ndim, aoa)
     if ndim == 1
         aoa
