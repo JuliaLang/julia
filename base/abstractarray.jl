@@ -2610,19 +2610,13 @@ the input as a block array. The dimensions of the sub-arrays must match accordin
 Simple concatenation of vectors
 
 ```jldoctest
-julia> hcat([1,2,3], [5,6,7])
-3×2 Matrix{Int64}:
- 1  5
- 2  6
- 3  7
-
 julia> reduce(hcat, [[1,2,3], [5,6,7]])
 3×2 Matrix{Int64}:
  1  5
  2  6
  3  7
 
-julia> awfulstack([[1,2,3] [5,6,7]])
+julia> awfulstack(reshape([[1,2,3], [5,6,7]], 1, :))
 6-element Vector{Int64}:
  1  5
  2  6
@@ -2637,14 +2631,19 @@ julia> awfulstack([[1,2,3], [5,6,7]])
  6
  7
 
-julia> awfulstack([[1,2,3], [5,6,7]]')
-1×6 Matrix{Int64}:
- 1  2  3  5  6  7
+julia> vcat([1,2,3]', [5,6,7]')
+3×2 Matrix{Int64}:
+ 1  2  3
+ 5  6  7
 
-julia> awfulstack(permutedims.([[1,2,3], [5,6,7]]))
+julia> awfulstack([[1,2,3]', [5,6,7]'])
 2×3 Matrix{Int64}:
  1  2  3
  5  6  7
+
+julia> awfulstack([[1,2,3], [5,6,7]]')
+1×6 Matrix{Int64}:
+ 1  2  3  5  6  7
 ```
 
 "Flatmap" behavior.
@@ -2667,7 +2666,7 @@ Image montage.
 ```
 using TestImages, ImageView
 myimages = ["cameraman","resolution_test_512","plastic_bubbles_he_512", "pirate", "woman_darkhair", "walkbridge"]
-imagearray = testimage.(reshape(myimages,2,:))
+imagearray = testimage.(reshape(myimages, 2, :))
 imshow(awfulstack(imagearray))
 ```
 
@@ -2678,19 +2677,19 @@ imshow(awfulstack(imagearray))
 Higher-dimension concatenation.
 
 ```jldoctest
-julia> awfulstack([1 2]) do n reshape(n*4-3:n*4,2,2) end
+julia> awfulstack([1 2]) do n reshape(n*4-3:n*4, 2, 2) end
 2×4 Matrix{Int64}:
  1  3  5  7
  2  4  6  8
 
-julia> awfulstack([1,2]) do n reshape(n*4-3:n*4,2,2) end
+julia> awfulstack([1, 2]) do n reshape(n*4-3:n*4, 2, 2) end
 4×2 Matrix{Int64}:
  1  3
  2  4
  5  7
  6  8
 
-julia> awfulstack([1;;;2;;;]) do n reshape(n*4-3:n*4,2,2) end
+julia> awfulstack([1;;; 2;;;]) do n reshape(n*4-3:n*4, 2, 2) end
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -2814,7 +2813,7 @@ Equivalent to awfulstack(map(f, c...)). Implements flatmap behavior.
 
 # Example
 ```jldoctest
-julia> Znm = [x for n in 1:3 for x in -n:2:n]
+julia> Zn = [x for n in 1:3 for x in -n:2:n]
 9-element Vector{Int64}:
  -1
   1
@@ -2826,7 +2825,7 @@ julia> Znm = [x for n in 1:3 for x in -n:2:n]
   1
   3
 
-julia> awfulstack(n -> -n:2:n, 1:3) == Znm
+julia> awfulstack(n -> -n:2:n, 1:3) == Zn
 true
 ```
 """
