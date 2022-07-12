@@ -451,6 +451,9 @@ end
 
         nomiss = rand(1:10, 10)
         @test (length∘skipmissing)(nomiss) == 10
+
+        itr = Iterators.Stateful([missing, 1, missing, 1])
+        @test_throws MethodError (length∘skipmissing)(itr)
     end
 
     @testset "indexing" begin
