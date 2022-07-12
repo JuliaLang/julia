@@ -125,7 +125,13 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
     pre = _before_colon(dims...)
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
-    sz, remainder = divrem(length(A), prod(pre)*prod(post))
+    sz, remainder = if _all_zero(size(A)...) && (_any_zero(pre...) || _any_zero(post...))
+        (0, 0)
+    elseif _any_zero(size(A)...) && (_any_zero(pre...) || _any_zero(post...))
+        divrem(prod(_remove_zeros(size(A)...)), prod(_remove_zeros(pre...))*prod(_remove_zeros(post...)))
+    else
+        divrem(length(A), prod(pre)*prod(post))
+    end
     remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
@@ -136,6 +142,16 @@ end
 @inline _before_colon(dim::Colon, tail...) = ()
 @inline _after_colon(dim::Any, tail...) =  _after_colon(tail...)
 @inline _after_colon(dim::Colon, tail...) = tail
+@inline _any_zero() = false
+@inline _any_zero(head::Any, tail...) = iszero(head) || _any_zero(tail...)
+@inline _all_zero() = false
+@inline _all_zero(head::Any, tail...) = iszero(head) && _any_zero(tail...)
+@inline _remove_zeros(dim::Any, tail...) = if iszero(dim)
+    _remove_zeros(tail...)
+else
+    (dim, _remove_zeros(tail...)...)
+end
+@inline _remove_zeros() = ()
 
 reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
 function reshape(parent::AbstractArray, ndims::Val{N}) where N
