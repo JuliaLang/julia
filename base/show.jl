@@ -1197,7 +1197,7 @@ function sourceinfo_slotnames(src::CodeInfo)
     names = Dict{String,Int}()
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
-        if slotnames[i] == :var"#unused#"
+        if slotnames[i] === :var"#unused#"
             printnames[i] = "_"
             continue
         end
@@ -1561,8 +1561,6 @@ unquoted(ex::Expr)       = ex.args[1]
 
 function printstyled end
 function with_output_color end
-
-is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
     printstyled(io, str; color=col, bold=true) :
@@ -2021,7 +2019,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
         funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
-        show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
+        show_call(head === :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2

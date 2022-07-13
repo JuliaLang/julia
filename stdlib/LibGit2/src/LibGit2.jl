@@ -87,7 +87,7 @@ is in the repository.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
 
@@ -230,7 +230,7 @@ Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
 

@@ -58,7 +58,7 @@ LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
     LQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(LQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
-           LQ{T,S,typeof(τ)}(factors, τ))
+           LQ{T,S,typeof(τ)}(factors, τ), false)
 
 # iteration for destructuring into components
 Base.iterate(S::LQ) = (S.L, Val(:Q))

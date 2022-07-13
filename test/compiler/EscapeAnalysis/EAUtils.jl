@@ -51,7 +51,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
     interp = EscapeAnalyzer(interp, tt, optimize)
     results = Base.code_typed_by_type(tt; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
-    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo===:source)
+    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo === :source)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
