@@ -151,14 +151,14 @@ end
     @profile busywait(1, 20)
     _, fdict0 = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func == :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
         map!(modify, list, list)
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
     function getline(sfs)
         for sf in sfs
-            sf.func == :busywait && return sf.line
+            sf.func === :busywait && return sf.line
         end
         nothing
     end
@@ -263,7 +263,7 @@ end
     Profile.tree!(root, backtraces, lidict, #= C =# true, :off)
     @test length(root.down) == 2
     for k in keys(root.down)
-        @test k.file == :file1
+        @test k.file === :file1
         @test k.line ∈ (1, 2)
     end
     node = root.down[stackframe(:f1, :file1, 2)]

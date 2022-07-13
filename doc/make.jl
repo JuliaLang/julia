@@ -336,6 +336,8 @@ end
 
 # Define our own DeployConfig
 struct BuildBotConfig <: Documenter.DeployConfig end
+Documenter.authentication_method(::BuildBotConfig) = Documenter.HTTPS
+Documenter.authenticated_repo_url(::BuildBotConfig) = "https://github.com/JuliaLang/docs.julialang.org.git"
 function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs...)
     haskey(ENV, "DOCUMENTER_KEY") || return Documenter.DeployDecision(; all_ok=false)
     if Base.GIT_VERSION_INFO.tagged_commit
@@ -381,4 +383,5 @@ deploydocs(
     dirname = "en",
     devurl = devurl,
     versions = Versions(["v#.#", devurl => devurl]),
+    archive = get(ENV, "DOCUMENTER_ARCHIVE", nothing),
 )

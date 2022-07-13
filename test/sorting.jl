@@ -680,19 +680,19 @@ end
     end
 end
 
-@testset "sort(x; workspace=w) " begin
+@testset "sort(x; buffer)" begin
     for n in [1,10,100,1000]
         v = rand(n)
-        w = [0.0]
-        @test sort(v) == sort(v; workspace=w)
-        @test sort!(copy(v)) == sort!(copy(v); workspace=w)
-        @test sortperm(v) == sortperm(v; workspace=[4])
-        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; workspace=[4])
+        buffer = [0.0]
+        @test sort(v) == sort(v; buffer)
+        @test sort!(copy(v)) == sort!(copy(v); buffer)
+        @test sortperm(v) == sortperm(v; buffer=[4])
+        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; buffer=[4])
 
         n > 100 && continue
         M = rand(n, n)
-        @test sort(M; dims=2) == sort(M; dims=2, workspace=w)
-        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, workspace=w)
+        @test sort(M; dims=2) == sort(M; dims=2, buffer)
+        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
     end
 end
 
