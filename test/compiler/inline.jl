@@ -1402,3 +1402,49 @@ end
         end
     end
 end
+
+# https://github.com/JuliaLang/julia/issues/45050
+@testset "propagate :meta annotations to keyword sorter methods" begin
+    # @inline, @noinline, @constprop
+    let @inline f(::Any; x::Int=1) = 2x
+        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
+        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+    end
+    let @noinline f(::Any; x::Int=1) = 2x
+        @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
+        @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+    end
+    let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+    end
+    let Base.@constprop :none f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.is_no_constprop(only(methods(f)))
+        @test Core.Compiler.is_no_constprop(only(methods(Core.kwfunc(f))))
+    end
+    # @nospecialize
+    let f(@nospecialize(A::Any); x::Int=1) = 2x
+        @test only(methods(f)).nospecialize == 1
+        @test only(methods(Core.kwfunc(f))).nospecialize == 4
+    end
+    let f(::Any; x::Int=1) = (@nospecialize; 2x)
+        @test only(methods(f)).nospecialize == -1
+        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+    end
+    # Base.@assume_effects
+    let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+    end
+    # propagate multiple metadata also
+    let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
+        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
+        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
+        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+        @test only(methods(f)).nospecialize == -1
+        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+    end
+end
