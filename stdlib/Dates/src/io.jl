@@ -358,7 +358,7 @@ string:
 
 | Code       | Matches   | Comment                                                       |
 |:-----------|:----------|:--------------------------------------------------------------|
-| `Y`        | 1996, 96  | Returns year of 1996, 0096.                                   |
+| `Y`        | 1996, 96  | Returns year of 1996, 0096                                    |
 | `y`        | 1996, 96  | Same as `Y` on `parse` but discards excess digits on `format` |
 | `m`        | 1, 01     | Matches 1 or 2-digit months                                   |
 | `u`        | Jan       | Matches abbreviated months according to the `locale` keyword  |
