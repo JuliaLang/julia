@@ -3,10 +3,10 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 """
-    typejoin(T, S)
+    typejoin(T, S, ...)
 
-Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
-they both inherit.
+Return the closest common ancestor of types `T` and `S`, i.e. the narrowest type from which
+they both inherit. Recurses on additional varargs.
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
