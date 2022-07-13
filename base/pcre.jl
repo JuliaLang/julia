@@ -195,6 +195,10 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
+const NO_MATCH = 0
+const PARTIAL_MATCH = 1
+const FULL_MATCH = 2
+
 function exec(re, subject, offset, options, match_data)
     if !(subject isa Union{String,SubString{String}})
         subject = String(subject)
@@ -204,7 +208,13 @@ function exec(re, subject, offset, options, match_data)
                re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
-    return rc >= 0
+    if rc == -2
+        PARTIAL_MATCH
+    elseif rc == -1
+        NO_MATCH
+    else
+        FULL_MATCH
+    end
 end
 
 function exec_r(re, subject, offset, options)

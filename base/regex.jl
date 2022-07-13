@@ -60,6 +60,7 @@ function Regex(pattern::AbstractString, flags::AbstractString)
     end
     Regex(pattern, options, DEFAULT_MATCH_OPTS)
 end
+
 Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_MATCH_OPTS)
 
 function compile(regex::Regex)
@@ -185,6 +186,7 @@ struct RegexMatch <: AbstractMatch
     offset::Int
     offsets::Vector{Int}
     regex::Regex
+    partial::Bool # true if the match is partial (enabled with PARTIAL_HARD or PARTIAL_SOFT)
 end
 
 """
@@ -256,12 +258,12 @@ eltype(m::RegexMatch) = eltype(m.captures)
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
-    return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
+    return PCRE.NO_MATCH != PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
 function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
     compile(r)
-    return PCRE.exec_r(r.regex, s, offset, r.match_options)
+    return PCRE.NO_MATCH != PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
 
 """
@@ -288,12 +290,12 @@ true
 """
 function startswith(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
+    return PCRE.NO_MATCH != PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
 function startswith(s::SubString{String}, r::Regex)
     compile(r)
-    return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
+    return PCRE.NO_MATCH != PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
 
 """
@@ -320,12 +322,12 @@ true
 """
 function endswith(s::AbstractString, r::Regex)
     compile(r)
-    return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
+    return PCRE.NO_MATCH != PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
 function endswith(s::SubString{String}, r::Regex)
     compile(r)
-    return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
+    return PCRE.NO_MATCH != PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
 function chopprefix(s::AbstractString, prefix::Regex)
@@ -347,8 +349,8 @@ end
 
 Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
 object containing the match, or nothing if the match failed. The matching substring can be
-retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
-`m.captures` The optional `idx` argument specifies an index at which to start the search.
+retrieved by accessing re`m.match` and the captured sequences can be retrieved by accessing
+`m.captures`. The optional `idx` argument specifies an index at which to start the search.
 
 # Examples
 ```jldoctest
@@ -376,18 +378,20 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     compile(re)
     opts = re.match_options | add_opts
     matched, data = PCRE.exec_r_data(re.regex, str, idx-1, opts)
-    if !matched
+
+    if matched == PCRE.NO_MATCH
         PCRE.free_match_data(data)
         return nothing
     end
-    n = div(PCRE.ovec_length(data), 2) - 1
+    # when the match is partial, only the first pair of offsets (for the partial match) is stored in data
+    n = matched == PCRE.PARTIAL_MATCH ? 0 : div(PCRE.ovec_length(data), 2) - 1
     p = PCRE.ovec_ptr(data)
     mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
     cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
     off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
-    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re)
+    result = RegexMatch(mat, cap, unsafe_load(p,1)+1, off, re, matched == PCRE.PARTIAL_MATCH)
     PCRE.free_match_data(data)
     return result
 end
@@ -413,7 +417,7 @@ function _findnext_re(re::Regex, str::Union{String,SubString}, idx::Integer, mat
         matched = PCRE.exec(re.regex, str, idx-1, opts, match_data)
         data = match_data
     end
-    if matched
+    if matched != PCRE.NO_MATCH
         p = PCRE.ovec_ptr(data)
         ans = (Int(unsafe_load(p,1))+1):prevind(str,Int(unsafe_load(p,2))+1)
     else

@@ -206,4 +206,36 @@
 
     # test that we can get the error message of negative error codes
     @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
+
+    @testset "partial matches" begin
+        for partial in [Base.PCRE.PARTIAL_SOFT, Base.PCRE.PARTIAL_HARD, UInt32(0)]
+            r = Regex("ab+", Base.DEFAULT_COMPILER_OPTS, Base.DEFAULT_MATCH_OPTS | partial)
+            @test occursin(r, "ab")
+            m = match(r, "ab")
+            @test m.partial == (partial == Base.PCRE.PARTIAL_HARD)
+            @test m.match == "ab"
+
+            m = match(r, "a")
+            if partial == 0
+                @test m === nothing
+            else
+                @test m.partial
+            end
+
+            em = collect(eachmatch(r, "abqab"))
+            @test em[1].partial == false
+            @test em[2].partial == (partial == Base.PCRE.PARTIAL_HARD)
+
+            em = collect(eachmatch(r, "abqa"))
+            @test em[1].partial == false
+            if partial == 0
+                @test length(em) == 1
+            else
+                @test em[2].partial
+            end
+
+            @test findnext(r, "abqab", 1) == 1:2
+            @test findnext(r, "abqab", 3) == 4:5
+        end
+    end
 end
