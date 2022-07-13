@@ -1322,14 +1322,14 @@ One can put the argument types in a tuple to get the corresponding `code_ircode`
 ```jldoctest
 julia> Base.code_ircode(+, (Float64, Int64))
 1-element Vector{Any}:
- 388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
+ 401 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
     │   %2 = Base.add_float(_2, %1)::Float64
     └──      return %2
      => Float64
 
 julia> Base.code_ircode(+, (Float64, Int64); optimize_until = "compact 1")
 1-element Vector{Any}:
- 388 1 ─ %1 = Base.promote(_2, _3)::Tuple{Float64, Float64}
+ 401 1 ─ %1 = Base.promote(_2, _3)::Tuple{Float64, Float64}
     │   %2 = Core._apply_iterate(Base.iterate, Base.:+, %1)::Float64
     └──      return %2
      => Float64
