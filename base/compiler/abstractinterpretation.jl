@@ -496,13 +496,13 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
         return MethodCallResult(Any, false, false, nothing, Effects())
     end
-    topmost = nothing
+
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
     # Returns the topmost occurrence of that repeated edge.
-    edgecycle = false
-    edgelimited = false
+    edgecycle = edgelimited = false
+    topmost = nothing
 
     for infstate in InfStackUnwind(sv)
         if method === infstate.linfo.def

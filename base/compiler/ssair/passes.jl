@@ -916,14 +916,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
 
         # Insert the undef check if necessary
-        if any_undef
-            if val === nothing
-                insert_node!(compact, SSAValue(idx),
-                    non_effect_free(NewInstruction(Expr(:throw_undef_if_not, Symbol("##getfield##"), false), Nothing)))
-            else
-                # val must be defined
-            end
+        if any_undef && val === nothing
+            insert_node!(compact, SSAValue(idx), non_effect_free(NewInstruction(
+                Expr(:throw_undef_if_not, Symbol("##getfield##"), false), Nothing)))
         else
+            # val must be defined
             @assert val !== nothing
         end
 
