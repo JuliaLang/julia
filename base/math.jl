@@ -309,6 +309,8 @@ end
 
 Convert `x` from radians to degrees.
 
+See also [`deg2rad`](@ref).
+
 # Examples
 ```jldoctest
 julia> rad2deg(pi)
@@ -322,7 +324,7 @@ rad2deg(z::AbstractFloat) = z * (180 / oftype(z, pi))
 
 Convert `x` from degrees to radians.
 
-See also: [`rad2deg`](@ref), [`sind`](@ref).
+See also [`rad2deg`](@ref), [`sind`](@ref), [`pi`](@ref).
 
 # Examples
 ```jldoctest
@@ -404,6 +406,28 @@ cosh(x::Number)
     tanh(x)
 
 Compute hyperbolic tangent of `x`.
+
+See also [`tan`](@ref), [`atanh`](@ref).
+
+# Examples
+
+```jldoctest
+julia> tanh.(-3:3f0)  # Here 3f0 isa Float32
+7-element Vector{Float32}:
+ -0.9950548
+ -0.9640276
+ -0.7615942
+  0.0
+  0.7615942
+  0.9640276
+  0.9950548
+
+julia> tan.(im .* (1:3))
+3-element Vector{ComplexF64}:
+ 0.0 + 0.7615941559557649im
+ 0.0 + 0.9640275800758169im
+ 0.0 + 0.9950547536867306im
+```
 """
 tanh(x::Number)
 
@@ -420,6 +444,21 @@ For two arguments, this is the angle in radians between the positive *x*-axis an
 point (*x*, *y*), returning a value in the interval ``[-\\pi, \\pi]``. This corresponds to a
 standard [`atan2`](https://en.wikipedia.org/wiki/Atan2) function. Note that by convention
 `atan(0.0,x)` is defined as ``\\pi`` and `atan(-0.0,x)` is defined as ``-\\pi`` when `x < 0`.
+
+See also [`atand`](@ref) for degrees.
+
+# Examples
+
+```jldoctest
+julia> rad2deg(atan(-1/√3))
+-30.000000000000004
+
+julia> rad2deg(atan(-1, √3))
+-30.000000000000004
+
+julia> rad2deg(atan(1, -√3))
+150.0
+```
 """
 atan(x::Number)
 
@@ -442,7 +481,29 @@ asinh(x::Number)
 
 Compute sine of `x`, where `x` is in radians.
 
-See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref).
+See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asin`](@ref).
+
+# Examples
+```jldoctest
+julia> round.(sin.(range(0, 2pi, length=9)'), digits=3)
+1×9 Matrix{Float64}:
+ 0.0  0.707  1.0  0.707  0.0  -0.707  -1.0  -0.707  -0.0
+
+julia> sind(45)
+0.7071067811865476
+
+julia> sinpi(1/4)
+0.7071067811865476
+
+julia> round.(sincos(pi/6), digits=3)
+(0.5, 0.866)
+
+julia> round(cis(pi/6), digits=3)
+0.866 + 0.5im
+
+julia> round(exp(im*pi/6), digits=3)
+0.866 + 0.5im
+```
 """
 sin(x::Number)
 
@@ -466,6 +527,17 @@ tan(x::Number)
     asin(x)
 
 Compute the inverse sine of `x`, where the output is in radians.
+
+See also [`asind`](@ref) for output in degrees.
+
+# Examples
+```jldoctest
+julia> asin.((0, 1/2, 1))
+(0.0, 0.5235987755982989, 1.5707963267948966)
+
+julia> asind.((0, 1/2, 1))
+(0.0, 30.000000000000004, 90.0)
+```
 """
 asin(x::Number)
 
@@ -496,7 +568,7 @@ atanh(x::Number)
 Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
-See also [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
+See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -509,6 +581,12 @@ log will only return a complex result if called with a complex argument. Try log
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
+
+julia> log.(exp.(-1:1))
+3-element Vector{Float64}:
+ -1.0
+  0.0
+  1.0
 ```
 """
 log(x::Number)
@@ -535,6 +613,12 @@ log2 will only return a complex result if called with a complex argument. Try lo
 Stacktrace:
  [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
+
+julia> log2.(2.0 .^ (-1:1))
+3-element Vector{Float64}:
+ -1.0
+  0.0
+  1.0
 ```
 """
 log2(x)
