@@ -132,7 +132,7 @@ reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(
     else
         divrem(length(A), prod(pre)*prod(post))
     end
-    remainder == 0 || throw2(A, dims)
+    length(A) == 0 || remainder == 0 || throw2(A, dims)
     (pre..., Int(sz), post...)
 end
 @inline _any_colon() = false
