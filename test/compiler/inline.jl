@@ -1300,10 +1300,68 @@ mutable struct DoAllocNoEscape
         end
     end
 end
-
 let src = code_typed1() do
         for i = 1:1000
             DoAllocNoEscape()
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that a case when `Core.finalizer` is registered interprocedurally,
+# but still eligible for SROA after inlining
+mutable struct DoAllocNoEscapeInter end
+
+let src = code_typed1() do
+        for i = 1:1000
+            obj = DoAllocNoEscapeInter()
+            finalizer(obj) do this
+                nothrow_side_effect(nothing)
+            end
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+function register_finalizer!(obj)
+    finalizer(obj) do this
+        nothrow_side_effect(nothing)
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            obj = DoAllocNoEscapeInter()
+            register_finalizer!(obj)
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+function genfinalizer(val)
+    return function (this)
+        nothrow_side_effect(val)
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            obj = DoAllocNoEscapeInter()
+            finalizer(genfinalizer(nothing), obj)
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that we can inline a finalizer that just returns a constant value
+mutable struct DoAllocConst
+    function DoAllocConst()
+        finalizer(new()) do this
+            return nothing
+        end
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocConst()
         end
     end
     @test count(isnew, src.code) == 0
@@ -1334,7 +1392,6 @@ end
 @test f_finalizer_throws()
 
 # Test finalizers with static parameters
-global last_finalizer_type::Type = Any
 mutable struct DoAllocNoEscapeSparam{T}
     x::T
     function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
@@ -1346,7 +1403,6 @@ mutable struct DoAllocNoEscapeSparam{T}
     end
 end
 DoAllocNoEscapeSparam(x::T) where {T} = DoAllocNoEscapeSparam{T}(x)
-
 let src = code_typed1(Tuple{Any}) do x
         for i = 1:1000
             DoAllocNoEscapeSparam(x)
@@ -1366,7 +1422,6 @@ mutable struct DoAllocNoEscapeNoInline
         finalizer(noinline_finalizer, new())
     end
 end
-
 let src = code_typed1() do
         for i = 1:1000
             DoAllocNoEscapeNoInline()
@@ -1374,6 +1429,28 @@ let src = code_typed1() do
     end
     @test count(isnew, src.code) == 1
     @test count(isinvoke(:noinline_finalizer), src.code) == 1
+end
+
+# Test that we resolve a `finalizer` call that we don't handle currently
+mutable struct DoAllocNoEscapeBranch
+    val::Int
+    function DoAllocNoEscapeBranch(val::Int)
+        finalizer(new(val)) do this
+            if this.val > 500
+                nothrow_side_effect(this.val)
+            else
+                nothrow_side_effect(nothing)
+            end
+        end
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeBranch(i)
+        end
+    end
+    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test !any(isinvoke(:finalizer), src.code)
 end
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
