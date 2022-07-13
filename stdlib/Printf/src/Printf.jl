@@ -626,11 +626,22 @@ end
 function fix_dec end
 function ini_dec end
 
+"maximal exponent for `Float64`s: `ceil(Int, log10(prevfloat(typemax(Float64))))`"
+max_integer_part_width() = 309
+
+"number of significant decimals for `Float64`s + 1: `ceil(Int, log10(1 / eps(Float64))) + 1`"
+max_fractional_part_width() = 17
+
+"hash | sign +/- | decimal dot | exponent e/E | exponent sign"
+max_fmt_chars_width() = 5
+
 # generic fallback
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
-    buf2 = Base.StringVector(309 + 17 + 5)
+    buf2 = Base.StringVector(
+        max_integer_part_width() + max_fractional_part_width() + max_fmt_chars_width()
+    )
     ise = T <: Union{Val{'e'}, Val{'E'}}
     isg = T <: Union{Val{'g'}, Val{'G'}}
     isf = T <: Val{'f'}
@@ -815,13 +826,16 @@ end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
-    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+    return max(
+        f.width,
+        f.precision + ndigits(x2, base=base(T), pad=1) + max_fmt_chars_width()
+    )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, 0 + 309 + 17 + f.hash + 5)
+    max(f.width, f.hash + max_integer_part_width() + 0 + max_fmt_chars_width())
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.precision + 309 + 17 + f.hash + 5)
+    max(f.width, f.hash + max_integer_part_width() + f.precision + max_fmt_chars_width())
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
