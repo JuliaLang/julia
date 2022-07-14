@@ -39,55 +39,6 @@ extern void _dyld_atfork_parent(void) __attribute__((weak_import));
 
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
-// low 16 bits are the thread id, the next 8 bits are the original gc_state
-static arraylist_t suspended_threads;
-extern uv_mutex_t safepoint_lock;
-extern uv_cond_t safepoint_cond;
-void jl_mach_gc_end(void)
-{
-    // Requires the safepoint lock to be held
-    for (size_t i = 0; i < suspended_threads.len; i++) {
-        uintptr_t item = (uintptr_t)suspended_threads.items[i];
-        int16_t tid = (int16_t)item;
-        int8_t gc_state = (int8_t)(item >> 8);
-        jl_ptls_t ptls2 = jl_all_tls_states[tid];
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
-    }
-    suspended_threads.len = 0;
-}
-
-// Suspend the thread and return `1` if the GC is running.
-// Otherwise return `0`
-static int jl_mach_gc_wait(jl_ptls_t ptls2,
-                           mach_port_t thread, int16_t tid)
-{
-    uv_mutex_lock(&safepoint_lock);
-    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
-        // relaxed, since gets set to zero only while the safepoint_lock was held
-        // this means we can tell if GC is done before we got the message or
-        // the safepoint was enabled for SIGINT.
-        uv_mutex_unlock(&safepoint_lock);
-        return 0;
-    }
-    // Otherwise, set the gc state of the thread, suspend and record it
-    // TODO: TSAN will complain that it never saw the faulting task do an
-    // atomic release (it was in the kernel). And our attempt here does
-    // nothing, since we are a different thread, and it is not transitive).
-    //
-    // This also means we are not making this thread available for GC work.
-    // Eventually, we should probably release this signal to the original
-    // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
-    // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-    int8_t gc_state = ptls2->gc_state;
-    jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
-    arraylist_push(&suspended_threads, (void*)item);
-    thread_suspend(thread);
-    uv_mutex_unlock(&safepoint_lock);
-    return 1;
-}
-
 static mach_port_t segv_port = 0;
 
 #define STR(x) #x
@@ -118,8 +69,6 @@ static void allocate_mach_handler()
     // (this is quite thread-unsafe)
     if (_keymgr_set_lockmode_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST, NM_ALLOW_RECURSION))
         jl_error("_keymgr_set_lockmode_processwide_ptr failed");
-
-    arraylist_new(&suspended_threads, jl_n_threads);
     pthread_t thread;
     pthread_attr_t attr;
     kern_return_t ret;
@@ -235,10 +184,24 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
+    jl_task_t *ct = jl_get_current_task();
     if (jl_get_safe_restore()) { // restarting jl_ or jl_unwind_stepn
         jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
+    }
+    else if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
+        jl_set_gc_and_wait();
+        // Do not raise sigint on worker thread
+        if (jl_atomic_load_relaxed(&ct->tid) != 0)
+            return;
+        if (ct->ptls->defer_signal) {
+            jl_safepoint_defer_sigint();
+        }
+        else if (jl_safepoint_consume_sigint()) {
+            jl_clear_force_sigint();
+            jl_throw_in_ctx(ct, jl_interrupt_exception, sig, context);
+        }
     }
     else {
         sigdie_handler(sig, info, context);
@@ -290,10 +253,13 @@ kern_return_t catch_mach_exception_raise(
     uint64_t fault_addr = exc_state.__far;
 #endif
     if (jl_addr_is_safepoint(fault_addr)) {
-        if (jl_mach_gc_wait(ptls2, thread, tid))
+        if (jl_atomic_load_acquire(&jl_gc_running)) {
+            // Fallback to POSIX signals and handle GC thread recruitment there
+            return KERN_FAILURE;
+        }
+        if (ptls2->tid != 0) {
             return KERN_SUCCESS;
-        if (ptls2->tid != 0)
-            return KERN_SUCCESS;
+        }
         if (ptls2->defer_signal) {
             jl_safepoint_defer_sigint();
         }

@@ -2651,6 +2651,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_finlist(&ptls->mark_queue, &finalizer_list_marked, orig_marked_len);
     gc_mark_finlist(&ptls->mark_queue, &to_finalize, 0);
     gc_mark_loop(ptls);
+    jl_spinmaster_wait_pmark();
+
     gc_settime_postmark_end();
 
     // Flush everything in mark cache

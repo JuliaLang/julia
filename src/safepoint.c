@@ -217,7 +217,7 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls)
             if (!jl_spinmaster_all_workers_done(ptls)) {
                 int64_t work = jl_spinmaster_count_work(ptls);
                 // If there is enough work, recruit workers and also become a worker,
-                // relinquishing the spin master status
+                // relinquishing the spin-master status
                 if (work > 1) {
                     jl_spinmaster_recruit_workers(ptls, work - 1);
                     jl_mutex_unlock_nogc(&safepoint_master_lock);
@@ -245,12 +245,12 @@ void jl_spinmaster_wait_pmark(void)
         if (!uv_cond_timedwait(&ptls->gc_wake_signal,
                                &ptls->gc_sleep_lock, timeout_ns)) {
             // Stopped waiting because we got a notification
-            // from spin master: try to get recruited
+            // from spin-master: try to get recruited
             gc_mark_loop(ptls);
         }
         uv_mutex_unlock(&ptls->gc_sleep_lock);
         // Otherwise, just go to the top of the loop and try
-        // to become a spin master
+        // to become a spin-master
     }
 }
 
