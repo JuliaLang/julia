@@ -359,7 +359,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n"
 end
 
 @testset "throwto" begin

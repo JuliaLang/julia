@@ -77,18 +77,50 @@ end
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
+struct InvalidFormatStringError <: Exception
+    message::String
+    format::String
+    start_color::Int
+    end_color::Int
+end
+
+function Base.showerror(io::IO, err::InvalidFormatStringError)
+    io_has_color = get(io, :color, false)
+
+    println(io, "InvalidFormatStringError: ", err.message)
+    print(io, "    \"", @view(err.format[begin:prevind(err.format, err.start_color)]))
+    invalid_text = @view err.format[err.start_color:err.end_color]
+
+    printstyled(io, invalid_text, color=:red)
+
+    # +1 is okay, since all format characters are single bytes
+    println(io, @view(err.format[err.end_color+1:end]), "\"")
+
+    arrow_error = '-'^(length(invalid_text)-1)
+    arrow = "    " * ' '^err.start_color * arrow_error * "^\n"
+    if io_has_color
+        printstyled(io, arrow, color=:red)
+    else
+        print(io, arrow)
+    end
+end
+
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(ArgumentError("empty format string"))
+    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
     b = 0x00
+    local last_percent_pos
+
+    # skip ahead to first format specifier
     while pos <= len
         b = bytes[pos]
         pos += 1
         if b == UInt8('%')
-            pos > len && throw(ArgumentError("invalid format string: '$f'"))
+            last_percent_pos = pos-1
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, last_percent_pos))
             if bytes[pos] == UInt8('%')
                 # escaped '%'
                 b = bytes[pos]
@@ -120,7 +152,7 @@ function Format(f::AbstractString)
             else
                 break
             end
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
         end
@@ -139,7 +171,7 @@ function Format(f::AbstractString)
         precision = 0
         parsedprecdigits = false
         if b == UInt8('.')
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            pos > len && throw(InvalidFormatStringError("Precision specifier is missing precision", f, last_percent_pos, pos-1))
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
@@ -155,19 +187,21 @@ function Format(f::AbstractString)
         # parse length modifier (ignored)
         if b == UInt8('h') || b == UInt8('l')
             prev = b
+            pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
             if b == prev
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
                 b = bytes[pos]
                 pos += 1
             end
-        elseif b in b"Ljqtz"
+        elseif b in b"Ljqtz" # q was a synonym for ll above, see `man 3 printf`. Not to be used.
+            pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
         end
         # parse type
-        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
+        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
             zero = false
@@ -184,7 +218,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == UInt8('%')
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                last_percent_pos = pos-1
+                pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, last_percent_pos))
                 if bytes[pos] == UInt8('%')
                     # escaped '%'
                     b = bytes[pos]
@@ -394,6 +429,10 @@ _snprintf(ptr, siz, str, arg) =
     @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
                                    arg::Ref{BigFloat})::Cint
 
+# Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
+# 8KiB seems like a reasonable default. Larger BigFloat representations should probably
+# use a custom printing routine. Printing values with results larger than this ourselves
+# seems like a dangerous thing to do.
 const __BIG_FLOAT_MAX__ = 8192
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
@@ -405,17 +444,15 @@ const __BIG_FLOAT_MAX__ = 8192
             GC.@preserve buf begin
                 siz = length(buf) - pos + 1
                 str = string(spec; modifier="R")
-                len = _snprintf(pointer(buf, pos), siz, str, x)
-                if len > siz
-                    maxout = max(__BIG_FLOAT_MAX__,
-                                 ceil(Int, precision(x) * log(2) / log(10)) + 25)
-                    len > maxout &&
-                        error("Over $maxout bytes $len needed to output BigFloat $x")
-                    resize!(buf, len + 1)
-                    len = _snprintf(pointer(buf, pos), len + 1, str, x)
+                required_length = _snprintf(pointer(buf, pos), siz, str, x)
+                if required_length > siz
+                    required_length > __BIG_FLOAT_MAX__ &&
+                        throw(ArgumentError("The given BigFloat requires $required_length bytes to be printed, which is more than the maximum of $__BIG_FLOAT_MAX__ bytes supported."))
+                    resize!(buf, required_length + 1)
+                    required_length = _snprintf(pointer(buf, pos), required_length + 1, str, x)
                 end
-                len > 0 || throw(ArgumentError("invalid printf formatting $str for BigFloat"))
-                return pos + len
+                required_length > 0 || throw(ArgumentError("The given BigFloat would produce less than the maximum allowed number of bytes $__BIG_FLOAT_MAX__, but still couldn't be printed fully for an unknown reason."))
+                return pos + required_length
             end
         end
         x = Float64(x)
@@ -805,7 +842,7 @@ plength(::Spec{PositionCounter}, x) = 0
 end
 
 @noinline argmismatch(a, b) =
-    throw(ArgumentError("mismatch between # of format specifiers and provided args: $a != $b"))
+    throw(ArgumentError("Number of format specifiers and number of provided args differ: $a != $b"))
 
 """
     Printf.format(f::Printf.Format, args...) => String
@@ -892,8 +929,10 @@ macro printf(io_or_fmt, args...)
         return esc(:($Printf.format(stdout, $fmt, $(args...))))
     else
         io = io_or_fmt
-        isempty(args) && throw(ArgumentError("must provide required format string"))
-        fmt = Format(args[1])
+        isempty(args) && throw(ArgumentError("No format string provided to `@printf` - use like `@printf [io] <format string> [<args...>]."))
+        fmt_str = first(args)
+        fmt_str isa String || throw(ArgumentError("First argument to `@printf` after `io` must be a format string"))
+        fmt = Format(fmt_str)
         return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
     end
 end
@@ -910,6 +949,7 @@ julia> @sprintf "this is a %s %15.1f" "test" 34.567
 ```
 """
 macro sprintf(fmt, args...)
+    fmt isa String || throw(ArgumentError("First argument to `@sprintf` must be a format string."))
     f = Format(fmt)
     return esc(:($Printf.format($f, $(args...))))
 end

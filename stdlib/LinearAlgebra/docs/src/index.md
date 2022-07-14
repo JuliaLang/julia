@@ -492,7 +492,8 @@ linear algebra routines it is useful to call the BLAS functions directly.
 
 `LinearAlgebra.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
-four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `ComplexF64`, and `ComplexF32` arrays.
+four methods defined, for [`Float32`](@ref), [`Float64`](@ref), [`ComplexF32`](@ref Complex),
+and [`ComplexF64`](@ref Complex) arrays.
 
 ### [BLAS character arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
@@ -528,6 +529,7 @@ the input argument belongs on (`side`). The possibilities are:
 
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.rot!
 LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
@@ -541,6 +543,7 @@ LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax
 LinearAlgebra.BLAS.ger!
 LinearAlgebra.BLAS.syr!
+LinearAlgebra.BLAS.spr!
 LinearAlgebra.BLAS.syrk!
 LinearAlgebra.BLAS.syrk
 LinearAlgebra.BLAS.syr2k!
@@ -567,12 +570,14 @@ LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv!
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.spmv!
 LinearAlgebra.BLAS.hemm!
 LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemv!
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hpmv!
 LinearAlgebra.BLAS.trmm!
 LinearAlgebra.BLAS.trmm
 LinearAlgebra.BLAS.trsm!

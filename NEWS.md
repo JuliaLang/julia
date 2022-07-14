@@ -111,6 +111,9 @@ Standard library changes
 
 #### Printf
 
+* Error messages for bad format strings have been improved, to make it clearer what & where in the
+  format string is wrong. ([#45366])
+
 #### Random
 
 * `randn` and `randexp` now work for any `AbstractFloat` type defining `rand` ([#44714]).

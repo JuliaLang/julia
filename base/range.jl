@@ -467,6 +467,9 @@ value `r[1]`, but alternatively you can supply it as the value of
 `r[offset]` for some other index `1 <= offset <= len`. In conjunction
 with `TwicePrecision` this can be used to implement ranges that are
 free of roundoff error.
+
+!!! compat "Julia 1.7"
+    The 4th type parameter `L` requires at least Julia 1.7.
 """
 struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)

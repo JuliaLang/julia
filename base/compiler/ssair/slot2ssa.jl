@@ -330,7 +330,7 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
     phiblocks
 end
 
-function rename_incoming_edge(old_edge, old_to, result_order, bb_rename)
+function rename_incoming_edge(old_edge::Int, old_to::Int, result_order::Vector{Int}, bb_rename::Vector{Int})
     new_edge_from = bb_rename[old_edge]
     if old_edge == old_to - 1
         # Could have been a crit edge break
@@ -341,7 +341,7 @@ function rename_incoming_edge(old_edge, old_to, result_order, bb_rename)
     new_edge_from
 end
 
-function rename_outgoing_edge(old_to, old_from, result_order, bb_rename)
+function rename_outgoing_edge(old_to::Int, old_from::Int, result_order::Vector{Int}, bb_rename::Vector{Int})
     new_edge_to = bb_rename[old_to]
     if old_from == old_to - 1
         # Could have been a crit edge break
@@ -352,12 +352,12 @@ function rename_outgoing_edge(old_to, old_from, result_order, bb_rename)
     new_edge_to
 end
 
-function rename_phinode_edges(node, bb, result_order, bb_rename)
+function rename_phinode_edges(node::PhiNode, bb::Int, result_order::Vector{Int}, bb_rename::Vector{Int})
     new_values = Any[]
     new_edges = Int32[]
     for (idx, edge) in pairs(node.edges)
         edge = Int(edge)
-        (edge == 0 || haskey(bb_rename, edge)) || continue
+        (edge == 0 || bb_rename[edge] != 0) || continue
         new_edge_from = edge == 0 ? 0 : rename_incoming_edge(edge, bb, result_order, bb_rename)
         push!(new_edges, new_edge_from)
         if isassigned(node.values, idx)
@@ -380,47 +380,42 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
     # First compute the new order of basic blocks
     result_order = Int[]
     stack = Int[]
+    bb_rename = zeros(Int, length(ir.cfg.blocks))
     node = 1
     ncritbreaks = 0
     nnewfallthroughs = 0
     while node !== -1
         push!(result_order, node)
+        bb_rename[node] = length(result_order)
         cs = domtree.nodes[node].children
         terminator = ir.stmts[last(ir.cfg.blocks[node].stmts)][:inst]
-        iscondbr = isa(terminator, GotoIfNot)
-        let old_node = node + 1
-            if length(cs) >= 1
-                # Adding the nodes in reverse sorted order attempts to retain
-                # the original source order of the nodes as much as possible.
-                # This is not required for correctness, but is easier on the humans
-                if old_node in cs
-                    # Schedule the fall through node first,
-                    # so we can retain the fall through
-                    append!(stack, reverse(sort(filter(x -> (x != old_node), cs))))
-                    node = node + 1
-                else
-                    append!(stack, reverse(sort(cs)))
-                    node = pop!(stack)
-                end
+        next_node = node + 1
+        node = -1
+        # Adding the nodes in reverse sorted order attempts to retain
+        # the original source order of the nodes as much as possible.
+        # This is not required for correctness, but is easier on the humans
+        for child in Iterators.Reverse(cs)
+            if child == next_node
+                # Schedule the fall through node first,
+                # so we can retain the fall through
+                node = next_node
             else
-                if isempty(stack)
-                    node = -1
-                else
-                    node = pop!(stack)
-                end
+                push!(stack, child)
             end
-            if node != old_node && !isa(terminator, Union{GotoNode, ReturnNode})
-                if isa(terminator, GotoIfNot)
-                    # Need to break the critical edge
-                    ncritbreaks += 1
-                    push!(result_order, 0)
-                else
-                    nnewfallthroughs += 1
-                end
+        end
+        if node == -1 && !isempty(stack)
+            node = pop!(stack)
+        end
+        if node != next_node && !isa(terminator, Union{GotoNode, ReturnNode})
+            if isa(terminator, GotoIfNot)
+                # Need to break the critical edge
+                ncritbreaks += 1
+                push!(result_order, 0)
+            else
+                nnewfallthroughs += 1
             end
         end
     end
-    bb_rename = IdDict{Int,Int}(i=>x for (x, i) in pairs(result_order) if i !== 0)
     new_bbs = Vector{BasicBlock}(undef, length(result_order))
     nstmts = 0
     for i in result_order
@@ -481,7 +476,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             result[inst_range[end]][:inst] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, Expr)
-                if terminator.head == :enter
+                if terminator.head === :enter
                     terminator.args[1] = bb_rename[terminator.args[1]]
                 end
             end
@@ -496,8 +491,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         bb_start_off += length(inst_range)
         local new_preds, new_succs
         let bb = bb, bb_rename = bb_rename, result_order = result_order
-            new_preds = Int[rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds if haskey(bb_rename, i)]
-            new_succs = Int[rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs if haskey(bb_rename, i)]
+            new_preds = Int[i == 0 ? 0 : rename_incoming_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].preds]
+            new_succs = Int[             rename_outgoing_edge(i, bb, result_order, bb_rename) for i in ir.cfg.blocks[bb].succs]
         end
         new_bbs[new_bb] = BasicBlock(inst_range, new_preds, new_succs)
     end
