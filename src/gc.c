@@ -27,6 +27,8 @@ static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 
+_Atomic(int32_t) nworkers_marking = 0;
+
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
         for (jl_gc_callback_list_t *cb = list; \
@@ -595,14 +597,6 @@ static size_t max_collect_interval =  500000000UL;
 memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
 #endif
 
-// global variables for GC stats
-
-// Resetting the object to a young object, this is used when marking the
-// finalizer list to collect them the next time because the object is very
-// likely dead. This also won't break the GC invariance since these objects
-// are not reachable from anywhere else.
-static int mark_reset_age = 0;
-
 /*
  * The state transition looks like :
  *
@@ -725,17 +719,10 @@ STATIC_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_
     uintptr_t tag = o->header;
     if (gc_marked(tag))
         return 0;
-    if (mark_reset_age) {
-        // Reset the object as if it was just allocated
-        mark_mode = GC_MARKED;
-        tag = gc_set_bits(tag, mark_mode);
-    }
-    else {
-        if (gc_old(tag))
-            mark_mode = GC_OLD_MARKED;
-        tag = tag | mark_mode;
-        assert((tag & 0x3) == mark_mode);
-    }
+    if (gc_old(tag))
+        mark_mode = GC_OLD_MARKED;
+    tag = tag | mark_mode;
+    assert((tag & 0x3) == mark_mode);
     tag = jl_atomic_exchange_relaxed((_Atomic(uintptr_t)*)&o->header, tag);
     verify_val(jl_valueof(o));
     return !gc_marked(tag);
@@ -754,14 +741,6 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
     }
     else {
         ptls->gc_cache.scanned_bytes += hdr->sz & ~3;
-        // We can't easily tell if the object is old or being promoted
-        // from the gc bits but if the `age` is `0` then the object
-        // must be already on a young list.
-        if (mark_reset_age && hdr->age) {
-            // Reset the object as if it was just allocated
-            hdr->age = 0;
-            gc_queue_big_marked(ptls, hdr, 1);
-        }
     }
     objprofile_count(jl_typeof(jl_valueof(o)),
                      mark_mode == GC_OLD_MARKED, hdr->sz & ~3);
@@ -784,13 +763,6 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
     }
     else {
         ptls->gc_cache.scanned_bytes += page->osize;
-        if (mark_reset_age) {
-            page->has_young = 1;
-            char *page_begin = gc_page_data(o) + GC_PAGE_OFFSET;
-            int obj_id = (((char*)o) - page_begin) / page->osize;
-            uint8_t *ages = page->ages + obj_id / 8;
-            jl_atomic_fetch_and_relaxed((_Atomic(uint8_t)*)ages, ~(1 << (obj_id % 8)));
-        }
     }
     objprofile_count(jl_typeof(jl_valueof(o)),
                      mark_mode == GC_OLD_MARKED, page->osize);
@@ -818,7 +790,7 @@ STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
 STATIC_INLINE void gc_setmark_buf_(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz) JL_NOTSAFEPOINT
 {
     jl_taggedvalue_t *buf = jl_astaggedvalue(o);
-    uint8_t bits = (gc_old(buf->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;;
+    uint8_t bits = gc_old(buf->header) ? GC_OLD_MARKED : GC_MARKED;;
     // If the object is larger than the max pool size it can't be a pool object.
     // This should be accurate most of the time but there might be corner cases
     // where the size estimate is a little off so we do a pool lookup to make
@@ -1704,6 +1676,57 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
     }
 }
 
+// Steal gc work item enqueued in `mq`
+jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq)
+{
+    return (jl_value_t *)ws_queue_steal_from(&mq->q);
+}
+
+// Resize array reference in `mq`
+void gc_markqueue_resize(jl_gc_markqueue_t *mq)
+{
+    ws_queue_resize(&mq->q);
+}
+
+// Push gc work item `v` into `mq`
+void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v)
+{
+    ws_queue_t *q = &mq->q;
+    if (jl_n_threads == 1) {
+        size_t b = jl_atomic_load_relaxed(&q->bottom);
+        ws_array_t *a = jl_atomic_load_relaxed(&q->array);
+        if (b >= a->capacity) {
+            gc_markqueue_resize(mq);
+            a = jl_atomic_load_relaxed(&q->array);
+        }
+        a->buffer[b] = v;
+        jl_atomic_store_relaxed(&q->bottom, b + 1);
+    }
+    else {
+       ws_queue_push(q, v);
+    }
+}
+
+// Pop gc work item from `mq`
+void *gc_markqueue_pop(jl_gc_markqueue_t *mq)
+{
+    ws_queue_t *q = &mq->q;
+    void *v = NULL;
+    if (jl_n_threads == 1) {
+        size_t b = jl_atomic_load_relaxed(&q->bottom);
+        if (b > 0) {
+            ws_array_t *a = jl_atomic_load_relaxed(&q->array);
+            b--;
+            v = a->buffer[b];
+            jl_atomic_store_relaxed(&q->bottom, b);
+        }
+    }
+    else {
+        v = ws_queue_pop(&mq->q);
+    }
+    return v;
+}
+
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
 void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
                            uintptr_t *nptr) JL_NOTSAFEPOINT
@@ -1970,6 +1993,18 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
+// Wake-up workers to partake in parallel marking
+STATIC_INLINE void gc_wake_workers(jl_ptls_t ptls)
+{
+    jl_fence();
+    if (jl_n_threads > 1)
+        jl_wake_libuv();
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i != ptls->tid)
+            uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
+    }
+}
+
 #define OPT_SINGLE_OUTREF
 
 #define gc_mark_single_outref(new_obj, obj_parent, obj_begin, nptr) \
@@ -2000,7 +2035,7 @@ mark_obj : {
 #endif
     jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
     jl_datatype_t *vt = (jl_datatype_t *)(o->header & ~(uintptr_t)0xf);
-    uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
+    uint8_t bits = gc_old(o->header) ? GC_OLD_MARKED : GC_MARKED;
     int update_meta = __likely(!meta_updated && !gc_verifying);
     int foreign_alloc = 0;
     if (update_meta && (void *)o >= sysimg_base && (void *)o < sysimg_end) {
@@ -2267,17 +2302,37 @@ mark_obj : {
 #endif
 }
 
-// Used in gc-debug
-void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+// Used in `gc-debug`
+void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-    while (1) {
-        void *new_obj = (void *)gc_markqueue_pop(&ptls->mark_queue);
-        // No more objects to mark
-        if (!new_obj) {
-            // TODO: work-stealing comes here...
-            return;
-        }
+    void *new_obj;
+    pop : {
+        new_obj = gc_markqueue_pop(&ptls->mark_queue);
+        // Couldn't get object from own queue: try to
+        // steal from someone else
+        if (!new_obj)
+            goto steal;
+    }
+    mark : {
         gc_mark_outrefs(ptls, mq, new_obj, 0);
+        goto pop;
+    }
+    steal : {
+        // Steal from a random victim
+        for (int i = 0; i < 2 * jl_n_threads; i++) {
+            uint32_t v = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
+            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[v]->mark_queue;
+            new_obj = gc_markqueue_steal_from(mq2);
+            if (new_obj)
+                goto mark;
+        }
+        // Check if there is no work in victims' queues
+        for (int i = 0; i < jl_n_threads; i++) {
+            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[i]->mark_queue;
+            new_obj = gc_markqueue_steal_from(mq2);
+            if (new_obj)
+                goto mark;
+        }
     }
 }
 
@@ -2285,9 +2340,24 @@ void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // is used to keep track of processed items. Maintaning this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
 // makes it easier to implement parallel marking via work-stealing
-JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls)
+void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
+    jl_atomic_fetch_add(&nworkers_marking, 1);
+    uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
     _gc_mark_loop(ptls, &ptls->mark_queue);
+    jl_atomic_store_release(&ptls->gc_state, state0);
+    jl_atomic_fetch_add(&nworkers_marking, -1);
+}
+
+// Mark-loop wrapper. Call workers for parallel marking and mark
+STATIC_INLINE void gc_mark_loop_master(jl_ptls_t ptls)
+{
+    jl_atomic_fetch_add(&nworkers_marking, 1);
+    uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
+    gc_wake_workers(ptls);
+    _gc_mark_loop(ptls, &ptls->mark_queue);
+    jl_atomic_store_release(&ptls->gc_state, state0);
+    jl_atomic_fetch_add(&nworkers_marking, -1);
 }
 
 static void gc_premark(jl_ptls_t ptls2)
@@ -2548,7 +2618,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
             gc_cblist_root_scanner, (collection));
     }
-    gc_mark_loop(ptls);
+    gc_mark_loop_master(ptls);
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
@@ -2579,19 +2649,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_mark_finlist(&ptls->mark_queue, &ptls2->finalizers, 0);
     }
     gc_mark_finlist(&ptls->mark_queue, &finalizer_list_marked, orig_marked_len);
-    // "Flush" the mark stack before flipping the reset_age bit
-    // so that the objects are not incorrectly reset.
-    gc_mark_loop(ptls);
-    // Conservative marking relies on age to tell allocated objects
-    // and freelist entries apart.
-    mark_reset_age = !jl_gc_conservative_gc_support_enabled();
-    // Reset the age and old bit for any unmarked objects referenced by the
-    // `to_finalize` list. These objects are only reachable from this list
-    // and should not be referenced by any old objects so this won't break
-    // the GC invariant.
     gc_mark_finlist(&ptls->mark_queue, &to_finalize, 0);
     gc_mark_loop(ptls);
-    mark_reset_age = 0;
     gc_settime_postmark_end();
 
     // Flush everything in mark cache
@@ -2602,7 +2661,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     int64_t estimate_freed = live_sz_ub - live_sz_est;
 
     gc_verify(ptls);
-
     gc_stats_all_pool();
     gc_stats_big_obj();
     objprofile_printall();
@@ -2610,6 +2668,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_num.total_allocd += gc_num.since_sweep;
     if (!prev_sweep_full)
         promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
+
     // 5. next collection decision
     int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
     int nptr = 0;
@@ -2634,7 +2693,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             gc_num.interval = max_collect_interval;
         }
     }
-
 
     // If the live data outgrows the suggested max_total_memory
     // we keep going with minimum intervals and full gcs until
@@ -2885,11 +2943,14 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
 
-    // Initialize GC mark-queue
+    // Work-stealing queue
     size_t init_size = (1 << 17);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
-    mq->current = mq->start = (jl_value_t**)malloc_s(init_size * sizeof(jl_value_t*));
-    mq->end = mq->start + init_size;
+    ws_queue_t *q = &mq->q;
+    ws_array_t *wsa = create_ws_array(init_size);
+    jl_atomic_store_relaxed(&q->array, wsa);
+    jl_atomic_store_relaxed(&q->top, 0);
+    jl_atomic_store_relaxed(&q->bottom, 0);
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     assert(gc_num.interval == default_collect_interval);

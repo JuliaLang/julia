@@ -5,6 +5,7 @@
 #define JL_THREADS_H
 
 #include "julia_atomics.h"
+#include "wsqueue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
@@ -168,14 +169,8 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
-// Cache of thread local change to global metadata during GC
-// This is sync'd after marking.
-typedef union _jl_gc_mark_data jl_gc_mark_data_t;
-
 typedef struct {
-    struct _jl_value_t **start;
-    struct _jl_value_t **current;
-    struct _jl_value_t **end;
+    ws_queue_t q;
 } jl_gc_markqueue_t;
 
 typedef struct {
@@ -212,6 +207,9 @@ typedef struct _jl_tls_states_t {
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
     //              finish.
 #define JL_GC_STATE_SAFE 2
+    // gc_state = 2 means the thread is running unmanaged code that can be
+    //              execute at the same time with the GC.
+#define JL_GC_STATE_PARALLEL 3
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
     _Atomic(int8_t) gc_state; // read from foreign threads
