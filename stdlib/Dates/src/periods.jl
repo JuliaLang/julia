@@ -17,8 +17,6 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     accessor_str = lowercase(period_str)
     # Convenience method for show()
     @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
-    # periodisless
-    @eval periodisless(x::$period, y::$period) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
     @eval $period(x::AbstractString) = $period(Base.parse(Int64, x))
     # The period type is printed when output, thus it already implies its own typeinfo
@@ -105,43 +103,6 @@ Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b));
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 Base.sign(x::Period) = sign(value(x))
 
-periodisless(::Period,::Year)        = true
-periodisless(::Period,::Quarter)     = true
-periodisless(::Year,::Quarter)       = false
-periodisless(::Period,::Month)       = true
-periodisless(::Year,::Month)         = false
-periodisless(::Quarter,::Month)      = false
-periodisless(::Period,::Week)        = true
-periodisless(::Year,::Week)          = false
-periodisless(::Quarter,::Week)       = false
-periodisless(::Month,::Week)         = false
-periodisless(::Period,::Day)         = true
-periodisless(::Year,::Day)           = false
-periodisless(::Quarter,::Day)        = false
-periodisless(::Month,::Day)          = false
-periodisless(::Week,::Day)           = false
-periodisless(::Period,::Hour)        = false
-periodisless(::Minute,::Hour)        = true
-periodisless(::Second,::Hour)        = true
-periodisless(::Millisecond,::Hour)   = true
-periodisless(::Microsecond,::Hour)   = true
-periodisless(::Nanosecond,::Hour)    = true
-periodisless(::Period,::Minute)      = false
-periodisless(::Second,::Minute)      = true
-periodisless(::Millisecond,::Minute) = true
-periodisless(::Microsecond,::Minute) = true
-periodisless(::Nanosecond,::Minute)  = true
-periodisless(::Period,::Second)      = false
-periodisless(::Millisecond,::Second) = true
-periodisless(::Microsecond,::Second) = true
-periodisless(::Nanosecond,::Second)  = true
-periodisless(::Period,::Millisecond) = false
-periodisless(::Microsecond,::Millisecond) = true
-periodisless(::Nanosecond,::Millisecond)  = true
-periodisless(::Period,::Microsecond)      = false
-periodisless(::Nanosecond,::Microsecond)  = true
-periodisless(::Period,::Nanosecond)       = false
-
 # return (next coarser period, conversion factor):
 coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
 coarserperiod(::Type{Nanosecond})  = (Microsecond, 1000)
@@ -170,7 +131,7 @@ struct CompoundPeriod <: AbstractTime
     function CompoundPeriod(p::Vector{Period})
         n = length(p)
         if n > 1
-            sort!(p, rev=true, lt=periodisless)
+            sort!(p, rev = true, by = days ∘ oneunit)
             # canonicalize p by merging equal period types and removing zeros
             i = j = 1
             while j <= n
