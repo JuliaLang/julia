@@ -120,7 +120,7 @@ are included in the [build documentation](https://github.com/JuliaLang/julia/blo
 
 ### Uninstalling Julia
 
-By defaut, Julia does not install anything outside the directory it was cloned
+By default, Julia does not install anything outside the directory it was cloned
 into and `~/.julia`. Julia and the vast majority of Julia packages can be
 completely uninstalled by deleting these two directories.
 
