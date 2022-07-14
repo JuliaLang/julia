@@ -168,14 +168,43 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
-// Cache of thread local change to global metadata during GC
-// This is sync'd after marking.
-typedef union _jl_gc_mark_data jl_gc_mark_data_t;
+// #define PREFETCH_MARK
+
+#ifndef PREFETCH_MARK
+#define DFS_MARK
+#endif
+
+#ifdef PREFETCH_MARK
+
+typedef struct {
+    struct _jl_value_t **start;
+    size_t top;
+    size_t bottom;
+    size_t size;
+} jl_gc_prefetch_buf_t;
 
 typedef struct {
     struct _jl_value_t **start;
     struct _jl_value_t **current;
     struct _jl_value_t **end;
+} jl_gc_markstack_t;
+
+#endif
+
+typedef struct {
+#if defined(PREFETCH_MARK)
+    jl_gc_prefetch_buf_t prefetch_buf;
+    jl_gc_markstack_t mark_stack;
+#elif defined(DFS_MARK)
+    struct _jl_value_t **start;
+    struct _jl_value_t **current;
+    struct _jl_value_t **end;
+#else
+    struct _jl_value_t **start;
+    size_t top;
+    size_t bottom;
+    size_t capacity;
+#endif
 } jl_gc_markqueue_t;
 
 typedef struct {
