@@ -132,7 +132,7 @@ f25130()
 testlogs = testlogger.logs
 @test length(testlogs) == 2
 @test testlogs[1].id != testlogs[2].id
-@test testlogs[1].kwargs[:caller].func == Symbol("top-level scope")
+@test testlogs[1].kwargs[:caller].func === Symbol("top-level scope")
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 

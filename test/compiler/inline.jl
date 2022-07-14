@@ -128,8 +128,8 @@ end
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
     exf19122 = @macroexpand(@inline f19122()::Bool = true)
     exg19122 = @macroexpand(@noinline g19122()::Bool = true)
-    @test exf19122.args[2].args[1].args[1] == :inline
-    @test exg19122.args[2].args[1].args[1] == :noinline
+    @test exf19122.args[2].args[1].args[1] === :inline
+    @test exg19122.args[2].args[1].args[1] === :noinline
 
     @inline f19122()::Bool = true
     @noinline g19122()::Bool = true
@@ -992,7 +992,7 @@ Base.@constprop :aggressive function conditional_escape!(cnd, x)
     return nothing
 end
 @test fully_eliminated((String,)) do x
-    Base.@invoke conditional_escape!(false::Any, x::Any)
+    @invoke conditional_escape!(false::Any, x::Any)
 end
 
 @testset "strides for ReshapedArray (PR#44027)" begin
@@ -1066,12 +1066,12 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(nothing::Any)
+        @invoke FooTheRef(nothing::Any)
     end
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(0::Any)
+        @invoke FooTheRef(0::Any)
     end
     @test count(isnew, src.code) == 1
 end
@@ -1084,11 +1084,11 @@ end
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(nothing::Any)
+    @invoke FooTheRef(nothing::Any)
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(0::Any)
+    @invoke FooTheRef(0::Any)
     nothing
 end
 
@@ -1287,4 +1287,118 @@ let src = code_typed1(Tuple{Int}) do x
         return 1
     end
     @test count(x -> isa(x, Core.GlobalRef) && x.name === :nothing, src.code) == 0
+end
+
+# Test that we can inline a finalizer for a struct that does not otherwise escape
+@noinline nothrow_side_effect(x) =
+    @Base.assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
+
+mutable struct DoAllocNoEscape
+    function DoAllocNoEscape()
+        finalizer(new()) do this
+            nothrow_side_effect(nothing)
+        end
+    end
+end
+
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscape()
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that finalizer elision doesn't cause a throw to be inlined into a function
+# that shouldn't have it
+const finalizer_should_throw = Ref{Bool}(true)
+mutable struct DoAllocFinalizerThrows
+    function DoAllocFinalizerThrows()
+        finalizer(new()) do this
+            finalizer_should_throw[] && error("Unexpected finalizer throw")
+        end
+    end
+end
+
+function f_finalizer_throws()
+    prev = GC.enable(false)
+    for i = 1:100
+        DoAllocFinalizerThrows()
+    end
+    finalizer_should_throw[] = false
+    GC.enable(prev)
+    GC.gc()
+    return true
+end
+
+@test f_finalizer_throws()
+
+# Test finalizers with static parameters
+global last_finalizer_type::Type = Any
+mutable struct DoAllocNoEscapeSparam{T}
+    x::T
+    function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
+        nothrow_side_effect(nothing)
+        nothrow_side_effect(T)
+    end
+    function DoAllocNoEscapeSparam{T}(x::T) where {T}
+        finalizer(finalizer_sparam, new{T}(x))
+    end
+end
+DoAllocNoEscapeSparam(x::T) where {T} = DoAllocNoEscapeSparam{T}(x)
+
+let src = code_typed1(Tuple{Any}) do x
+        for i = 1:1000
+            DoAllocNoEscapeSparam(x)
+        end
+    end
+    # This requires more inlining enhancments. For now just make sure this
+    # doesn't error.
+    @test count(isnew, src.code) in (0, 1) # == 0
+end
+
+# Test noinline finalizer
+@noinline function noinline_finalizer(d)
+    nothrow_side_effect(nothing)
+end
+mutable struct DoAllocNoEscapeNoInline
+    function DoAllocNoEscapeNoInline()
+        finalizer(noinline_finalizer, new())
+    end
+end
+
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeNoInline()
+        end
+    end
+    @test count(isnew, src.code) == 1
+    @test count(isinvoke(:noinline_finalizer), src.code) == 1
+end
+
+# optimize `[push!|pushfirst!](::Vector{Any}, x...)`
+@testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
+    @eval begin
+        let src = code_typed1((Vector{Any}, Any)) do xs, x
+                $f(xs, x)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+            @test count(src.code) do @nospecialize x
+                isa(x, Core.GotoNode) ||
+                isa(x, Core.GotoIfNot) ||
+                iscall((src, getfield))(x)
+            end == 0 # no loop should be involved for the common single arg case
+        end
+        let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
+                $f(xs, x, y)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+        end
+        let xs = Any[]
+            $f(xs, :x, "y", 'z')
+            @test xs[1] === :x
+            @test xs[2] == "y"
+            @test xs[3] === 'z'
+        end
+    end
 end

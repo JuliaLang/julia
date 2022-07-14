@@ -85,20 +85,14 @@ julia> for item in Squares(7)
 ```
 
 We can use many of the builtin methods that work with iterables,
-like [`in`](@ref), or [`mean`](@ref) and [`std`](@ref) from the
-`Statistics` standard library module:
+like [`in`](@ref) or [`sum`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
-julia> using Statistics
-
-julia> mean(Squares(100))
-3383.5
-
-julia> std(Squares(100))
-3024.355854282583
+julia> sum(Squares(100))
+338350
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable
@@ -791,9 +785,9 @@ defined to add new functionality:
 julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
 
 julia> function Base.getproperty(p::Point, s::Symbol)
-           if s == :x
+           if s === :x
                return getfield(p, :r) * cos(getfield(p, :ϕ))
-           elseif s == :y
+           elseif s === :y
                return getfield(p, :r) * sin(getfield(p, :ϕ))
            else
                # This allows accessing fields with p.r and p.ϕ
@@ -802,12 +796,12 @@ julia> function Base.getproperty(p::Point, s::Symbol)
        end
 
 julia> function Base.setproperty!(p::Point, s::Symbol, f)
-           if s == :x
+           if s === :x
                y = p.y
                setfield!(p, :r, sqrt(f^2 + y^2))
                setfield!(p, :ϕ, atan(y, f))
                return f
-           elseif s == :y
+           elseif s === :y
                x = p.x
                setfield!(p, :r, sqrt(x^2 + f^2))
                setfield!(p, :ϕ, atan(f, x))

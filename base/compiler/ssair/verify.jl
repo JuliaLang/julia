@@ -11,7 +11,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int)
+function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
@@ -47,8 +47,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             # a real call - it's interpreted in global scope by codegen. However,
             # we do need to keep this a real use, because it could also be a pointer.
         elseif op.head !== :boundscheck
-            @verify_error "Expr not allowed in value position"
-            error("")
+            if !allow_frontend_forms || op.head !== :opaque_closure_method
+                @verify_error "Expr not allowed in value position"
+                error("")
+            end
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         #@Base.show ir
@@ -70,7 +72,7 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode, print::Bool=true)
+function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false)
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -189,7 +191,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                         #error("")
                     end
                 end
-                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print, false, i)
+                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print, false, i, allow_frontend_forms)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -238,7 +240,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
             n = 1
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx, print, isforeigncall, n)
+                check_op(ir, domtree, op, bb, idx, print, isforeigncall, n, allow_frontend_forms)
                 n += 1
             end
         end

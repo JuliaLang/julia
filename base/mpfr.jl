@@ -16,7 +16,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose
+        isone, big, _string_n, decompose, minmax
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -697,20 +697,21 @@ function log1p(x::BigFloat)
     return z
 end
 
-function max(x::BigFloat, y::BigFloat)
-    isnan(x) && return x
-    isnan(y) && return y
-    z = BigFloat()
-    ccall((:mpfr_max, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, x, y, ROUNDING_MODE[])
-    return z
+# For `min`/`max`, general fallback for `AbstractFloat` is good enough.
+# Only implement `minmax` and `_extrema_rf` to avoid repeated calls.
+function minmax(x::BigFloat, y::BigFloat)
+    isnan(x) && return x, x
+    isnan(y) && return y, y
+    Base.Math._isless(x, y) ? (x, y) : (y, x)
 end
 
-function min(x::BigFloat, y::BigFloat)
-    isnan(x) && return x
-    isnan(y) && return y
-    z = BigFloat()
-    ccall((:mpfr_min, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, x, y, ROUNDING_MODE[])
-    return z
+function Base._extrema_rf(x::NTuple{2,BigFloat}, y::NTuple{2,BigFloat})
+    (x1, x2), (y1, y2) = x, y
+    isnan(x1) && return x
+    isnan(y1) && return y
+    z1 = Base.Math._isless(x1, y1) ? x1 : y1
+    z2 = Base.Math._isless(x2, y2) ? y2 : x2
+    z1, z2
 end
 
 function modf(x::BigFloat)

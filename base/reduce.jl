@@ -140,17 +140,25 @@ what is returned is `itr′` and
 
     op′ = (xfₙ ∘ ... ∘ xf₂ ∘ xf₁)(op)
 """
-_xfadjoint(op, itr) = (op, itr)
-_xfadjoint(op, itr::Generator) =
-    if itr.f === identity
-        _xfadjoint(op, itr.iter)
-    else
-        _xfadjoint(MappingRF(itr.f, op), itr.iter)
-    end
-_xfadjoint(op, itr::Filter) =
-    _xfadjoint(FilteringRF(itr.flt, op), itr.itr)
-_xfadjoint(op, itr::Flatten) =
-    _xfadjoint(FlatteningRF(op), itr.it)
+function _xfadjoint(op, itr)
+    itr′, wrap = _xfadjoint_unwrap(itr)
+    wrap(op), itr′
+end
+
+_xfadjoint_unwrap(itr) = itr, identity
+function _xfadjoint_unwrap(itr::Generator)
+    itr′, wrap = _xfadjoint_unwrap(itr.iter)
+    itr.f === identity && return itr′, wrap
+    return itr′, wrap ∘ Fix1(MappingRF, itr.f)
+end
+function _xfadjoint_unwrap(itr::Filter)
+    itr′, wrap = _xfadjoint_unwrap(itr.itr)
+    return itr′, wrap ∘ Fix1(FilteringRF, itr.flt)
+end
+function _xfadjoint_unwrap(itr::Flatten)
+    itr′, wrap = _xfadjoint_unwrap(itr.it)
+    return itr′, wrap ∘ FlatteningRF
+end
 
 """
     mapfoldl(f, op, itr; [init])
@@ -847,8 +855,15 @@ end
 ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
-# TODO: optimize for inputs <: AbstractFloat
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
+# optimization for IEEEFloat
+function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
+    (x1, x2), (y1, y2) = x, y
+    anynan = isnan(x1)|isnan(y1)
+    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
+    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1, z2
+end
 
 ## findmax, findmin, argmax & argmin
 

@@ -67,7 +67,7 @@ If you would rather not compile the latest Julia from source,
 platform-specific tarballs with pre-compiled binaries are also
 [available for download](https://julialang.org/downloads/). The
 downloads page also provides details on the
-[different tiers of support](https://julialang.org/downloads/#support-tiers)
+[different tiers of support](https://julialang.org/downloads/#supported_platforms)
 for OS and platform combinations.
 
 If everything works correctly, you will see a Julia banner and an
@@ -93,7 +93,7 @@ Julia. However, most users should use the [most recent stable version](https://g
 of Julia. You can get this version by changing to the Julia directory
 and running:
 
-    git checkout v1.7.2
+    git checkout v1.7.3
 
 Now run `make` to build the `julia` executable.
 

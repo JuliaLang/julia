@@ -170,7 +170,7 @@ using the operating system's underlying `getnameinfo` implementation.
 
 # Examples
 ```julia-repl
-julia> getnameinfo(Sockets.IPv4("8.8.8.8"))
+julia> getnameinfo(IPv4("8.8.8.8"))
 "google-public-dns-a.google.com"
 ```
 """

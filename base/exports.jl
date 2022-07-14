@@ -790,6 +790,7 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgversion,
     names,
     which,
     @isdefined,
@@ -1046,4 +1047,5 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+    @invoke

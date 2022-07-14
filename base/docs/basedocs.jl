@@ -106,10 +106,10 @@ kw"module"
 """
     __init__
 
-`__init__()` function in your module would executes immediately *after* the module is loaded at
-runtime for the first time (i.e., it is only called once and only after all statements in the
-module have been executed). Because it is called *after* fully importing the module, `__init__`
-functions of submodules will be executed *first*. Two typical uses of `__init__` are calling
+The `__init__()` function in a module executes immediately *after* the module is loaded at
+runtime for the first time. It is called once, after all other statements in the module
+have been executed. Because it is called after fully importing the module, `__init__`
+functions of submodules will be executed first. Two typical uses of `__init__` are calling
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
@@ -2882,7 +2882,7 @@ Base.getproperty
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
-and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
+and the syntax `@atomic a.b = c` calls `setproperty!(a, :b, c, :sequentially_consistent)`.
 
 !!! compat "Julia 1.8"
     `setproperty!` on modules requires at least Julia 1.8.

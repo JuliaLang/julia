@@ -81,9 +81,9 @@ static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_atomic_store_relaxed(&tab[empty_slot], key);
+            jl_atomic_store_release(&tab[empty_slot], key);
             jl_gc_wb(a, key);
-            jl_atomic_store_relaxed(&tab[empty_slot + 1], val);
+            jl_atomic_store_release(&tab[empty_slot + 1], val);
             jl_gc_wb(a, val);
             return 1;
         }

@@ -66,14 +66,6 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void jl_lock_profile_fallback(void)
-{
-}
-
-JL_DLLEXPORT void jl_unlock_profile_fallback(void)
-{
-}
-
 JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmctxt, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)

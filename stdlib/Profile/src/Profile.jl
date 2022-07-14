@@ -242,7 +242,7 @@ function print(io::IO,
         tasks::Union{UInt,AbstractVector{UInt}} = typemin(UInt):typemax(UInt))
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
-    if groupby == :none
+    if groupby === :none
         print(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
@@ -285,7 +285,7 @@ function print(io::IO,
                     end
                 end
             end
-        elseif groupby == :task
+        elseif groupby === :task
             threads = 1:typemax(Int)
             for taskid in intersect(get_task_ids(data), tasks)
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
@@ -293,7 +293,7 @@ function print(io::IO,
                 nosamples && (any_nosamples = true)
                 println(io)
             end
-        elseif groupby == :thread
+        elseif groupby === :thread
             tasks = 1:typemax(UInt)
             for threadid in intersect(get_thread_ids(data), threads)
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
@@ -504,7 +504,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                 end
             end
             return path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
+        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base", path))
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
             return joinpath("@Base", normpath(path))

@@ -44,7 +44,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         end
         if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
             codemacro = startswith(string(fcn), "code_")
-            if codemacro && ex0.args[2] isa Expr
+            if codemacro && (ex0.head === :call || ex0.args[2] isa Expr)
                 # Manually wrap a dot call in a function
                 args = Any[]
                 ex, i = recursive_dotcalls!(copy(ex0), args)

@@ -631,7 +631,19 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     //       to merge allocations and sometimes eliminate them,
     //       since AllocOpt does not handle PhiNodes.
     //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
+    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true);
+    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true)
+        //These mess with loop rotation, so only do them after that
+        .hoistCommonInsts(true)
+        // Causes an SRET assertion error in late-gc-lowering
+        // .sinkCommonInsts(true)
+        ;
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -646,7 +658,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             if (opt_level == 1)
                 PM->add(createInstSimplifyLegacyPass());
         }
-        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -676,7 +688,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
                 PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -697,7 +709,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -711,7 +723,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
@@ -781,14 +793,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
     }
     PM->add(createDeadStoreEliminationPass());
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
+    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
+
+    // More dead allocation (store) deletion before loop optimization
+    // consider removing this:
+    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
+    PM->add(createAllocOptPass());
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
@@ -796,12 +809,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Cleanup after LV pass
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        SimplifyCFGOptions()
-            .forwardSwitchCondToPhi(true)
-            .convertSwitchToLookupTable(true)
-            .needCanonicalLoops(false)
-            .hoistCommonInsts(true)
-            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+        aggressiveSimplifyCFGOptions
     ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
@@ -812,7 +820,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (lower_intrinsics) {
         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
         // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        // pass pipeline being re-executed. Prevent this by inserting a barrier.
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));

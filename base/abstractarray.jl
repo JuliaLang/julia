@@ -1076,7 +1076,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             # Dual-iterator implementation
             ret = iterate(iterdest)
             @inbounds for a in src
-                idx, state = ret
+                idx, state = ret::NTuple{2,Any}
                 dest[idx] = a
                 ret = iterate(iterdest, state)
             end

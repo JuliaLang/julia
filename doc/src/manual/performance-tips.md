@@ -1048,11 +1048,10 @@ julia> @time f.(x);
 
 That is, `fdot(x)` is ten times faster and allocates 1/6 the
 memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
-a new temporary array and executes in a separate loop. (Of course,
-if you just do `f.(x)` then it is as fast as `fdot(x)` in this
-example, but in many contexts it is more convenient to just sprinkle
-some dots in your expressions rather than defining a separate function
-for each vectorized operation.)
+a new temporary array and executes in a separate loop. In this example
+`f.(x)` is as fast as `fdot(x)` but in many contexts it is more
+convenient to sprinkle some dots in your expressions than to
+define a separate function for each vectorized operation.
 
 ## [Consider using views for slices](@id man-performance-views)
 
@@ -1095,42 +1094,41 @@ of the `fview` version of the function.
 
 Arrays are stored contiguously in memory, lending themselves to CPU vectorization
 and fewer memory accesses due to caching. These are the same reasons that it is recommended
-to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
-can drastically slow down computations on arrays because of non-sequential memory access.
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous
+views can drastically slow down computations on arrays because of non-sequential memory access.
 
-Copying irregularly-accessed data into a contiguous array before operating on it can result
-in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
-800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
-plain arrays speeds up the multiplication even with the cost of the copying operation.
+Copying irregularly-accessed data into a contiguous array before repeated access it can result
+in a large speedup, such as in the example below. Here, a matrix is being accessed at
+randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
+multiplication even with the added cost of copying and allocation.
 
 ```julia-repl
 julia> using Random
 
-julia> x = randn(1_000_000);
+julia> A = randn(3000, 3000);
 
-julia> inds = shuffle(1:1_000_000)[1:800000];
+julia> x = randn(2000);
 
-julia> A = randn(50, 1_000_000);
+julia> inds = shuffle(1:3000)[1:2000];
 
-julia> xtmp = zeros(800_000);
-
-julia> Atmp = zeros(50, 800_000);
-
-julia> @time sum(view(A, :, inds) * view(x, inds))
-  0.412156 seconds (14 allocations: 960 bytes)
--4256.759568345458
-
-julia> @time begin
-           copyto!(xtmp, view(x, inds))
-           copyto!(Atmp, view(A, :, inds))
-           sum(Atmp * xtmp)
+julia> function iterated_neural_network(A, x, depth)
+           for _ in 1:depth
+               x .= max.(0, A * x)
+           end
+           argmax(x)
        end
-  0.285923 seconds (14 allocations: 960 bytes)
--4256.759568345134
+
+julia> @time iterated_neural_network(view(A, inds, inds), x, 10)
+  0.324903 seconds (12 allocations: 157.562 KiB)
+1569
+
+julia> @time iterated_neural_network(A[inds, inds], x, 10)
+  0.054576 seconds (13 allocations: 30.671 MiB, 13.33% gc time)
+1569
 ```
 
-Provided there is enough memory for the copies, the cost of copying the view to an array is
-far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
+Provided there is enough memory, the cost of copying the view to an array is outweighed
+by the speed boost from doing the repeated matrix multiplications on a contiguous array.
 
 ## Consider StaticArrays.jl for small fixed-size vector/matrix operations
 

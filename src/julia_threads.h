@@ -5,6 +5,7 @@
 #define JL_THREADS_H
 
 #include "julia_atomics.h"
+#include "wsqueue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
@@ -168,16 +169,9 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
-// Cache of thread local change to global metadata during GC
-// This is sync'd after marking.
-typedef union _jl_gc_mark_data jl_gc_mark_data_t;
-
 typedef struct {
-    void **pc; // Current stack address for the pc (up growing)
-    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
-    void **pc_start; // Cached value of `gc_cache->pc_stack`
-    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
-} jl_gc_mark_sp_t;
+    ws_queue_t q;
+} jl_gc_markqueue_t;
 
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
@@ -195,12 +189,10 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
-    void **pc_stack;
-    void **pc_stack_end;
-    jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
@@ -215,6 +207,9 @@ typedef struct _jl_tls_states_t {
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
     //              finish.
 #define JL_GC_STATE_SAFE 2
+    // gc_state = 2 means the thread is running unmanaged code that can be
+    //              execute at the same time with the GC.
+#define JL_GC_STATE_PARALLEL 3
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
     _Atomic(int8_t) gc_state; // read from foreign threads
@@ -262,9 +257,9 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
-    jl_gc_mark_sp_t gc_mark_sp;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
@@ -278,9 +273,15 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
-} jl_tls_states_t;
 
-typedef jl_tls_states_t *jl_ptls_t;
+    // some hidden state (usually just because we don't have the type's size declaration)
+#ifdef LIBRARY_EXPORTS
+    uv_mutex_t sleep_lock;
+    uv_mutex_t gc_sleep_lock;
+    uv_cond_t wake_signal;
+    uv_cond_t gc_wake_signal;
+#endif
+} jl_tls_states_t;
 
 #ifndef LIBRARY_EXPORTS
 // deprecated (only for external consumers)
@@ -357,7 +358,6 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
-JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
