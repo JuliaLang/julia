@@ -131,7 +131,13 @@ struct CompoundPeriod <: AbstractTime
     function CompoundPeriod(p::Vector{Period})
         n = length(p)
         if n > 1
-            # Sort by type, not value, so that we can merge equal types
+            # We sort periods in decreasing order (rev = true) according to the length of
+            # the period's type (by = days ∘ oneunit). We sort by type, not value, so that
+            # we can merge equal types.
+            #
+            # This works by computing how many days are in a single period, and then sorting
+            # by that. For example, (days ∘ oneunit)(Week(10)) = days(oneunit(Week(10))) =
+            # days(Week(1)) = 7, which is less than (days ∘ oneunit)(Month(-2)) = 30.436875
             sort!(p, rev = true, by = days ∘ oneunit)
             # canonicalize p by merging equal period types and removing zeros
             i = j = 1
