@@ -969,6 +969,9 @@ The scalar inputs `α` and `β` must be complex or real numbers.
 The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
 
 Return the updated `y`.
+
+!!! compat "Julia 1.5"
+    `hpmv!` requires at least Julia 1.5.
 """
 hpmv!
 
@@ -1126,6 +1129,9 @@ The scalar inputs `α` and `β` must be real.
 The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
 
 Return the updated `y`.
+
+!!! compat "Julia 1.5"
+    `spmv!` requires at least Julia 1.5.
 """
 spmv!
 
@@ -1194,6 +1200,9 @@ The scalar input `α` must be real.
 
 The array inputs `x` and `AP` must all be of `Float32` or `Float64` type.
 Return the updated `AP`.
+
+!!! compat "Julia 1.8"
+    `spr!` requires at least Julia 1.8.
 """
 spr!
 

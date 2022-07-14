@@ -414,8 +414,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
         if !isempty(prev)
             letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
-
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
 
@@ -434,8 +432,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
-
         push!(tokens, DatePart{letter}(width, false))
     end
 

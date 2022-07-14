@@ -330,7 +330,9 @@ end
 """
     objectid(x) -> UInt
 
-Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
+Get a hash value for `x` based on object identity.
+
+If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
@@ -1317,7 +1319,7 @@ internals.
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
-```jldoctest
+```julia
 julia> Base.code_ircode(+, (Float64, Int64))
 1-element Vector{Any}:
  388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64

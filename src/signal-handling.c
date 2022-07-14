@@ -411,7 +411,7 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
-        jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+        jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {

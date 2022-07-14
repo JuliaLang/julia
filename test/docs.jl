@@ -12,26 +12,19 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
-    #if s1 != s2 # for debugging
-    #    e1 = eachline(IOBuffer(s1))
-    #    e2 = eachline(IOBuffer(s2))
-    #    for (l1, l2) in zip(e1, e2)
-    #        l1 == l2 || println(l1, "\n", l2, "\n")
-    #    end
-    #    for l1 in e1
-    #        println(l1, "\n[missing]\n")
-    #    end
-    #    for l2 in e2
-    #        println("[missing]\n", l2, "\n")
-    #    end
-    #end
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
     return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
@@ -177,7 +170,7 @@ t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
 
 # Docstrings to parametric methods after definition using where syntax (#32960):
 tw(x::T) where T = nothing
@@ -357,7 +350,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -655,7 +648,7 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found.
 
@@ -723,7 +716,7 @@ f12593_2() = 1
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
-                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}); debug=false)
 
 # test that macro documentation works
 @test (@repl :@assert) !== nothing
@@ -1441,25 +1434,34 @@ end
 struct t_docs_abc end
 @test "t_docs_abc" in accessible(@__MODULE__)
 
-# Call overloading issue #20087
+# Call overloading issues #20087 and #44889
 """
 Docs for `MyFunc` struct.
 """
-mutable struct MyFunc
-    x
-end
+mutable struct MyFunc x end
+"""
+Docs for `MyParametricFunc{T}` struct.
+"""
+struct MyParametricFunc{T} end
 
 """
 Docs for calling `f::MyFunc`.
 """
-function (f::MyFunc)(x)
-    f.x = x
-    return f
-end
+(f::MyFunc)(x) = f
 
-@test docstrings_equal(@doc(MyFunc(2)),
+"""
+Docs for calling `f::MyParametricFunc{T}`.
+"""
+(f::MyParametricFunc{T})(x) where T = f
+
+@test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
+""")
+
+@test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
+doc"""
+Docs for calling `f::MyParametricFunc{T}`.
 """)
 
 struct A_20087 end
