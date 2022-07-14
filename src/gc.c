@@ -2652,6 +2652,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_finlist(&ptls->mark_queue, &finalizer_list_marked, orig_marked_len);
     gc_mark_finlist(&ptls->mark_queue, &to_finalize, 0);
     gc_mark_loop(ptls);
+
+    // Other workers may still be marking, so put
+    // this barrier to ensure we don't sweep prematurely
     jl_spinmaster_wait_pmark();
 
     gc_settime_postmark_end();
@@ -2717,6 +2720,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         promoted_bytes = 0;
     }
     scanned_bytes = 0;
+    
     // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
@@ -2786,11 +2790,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     live_bytes += -gc_num.freed + gc_num.since_sweep;
 
     if (collection == JL_GC_AUTO) {
-      // If the current interval is larger than half the live data decrease the interval
-      int64_t half = live_bytes/2;
-      if (gc_num.interval > half) gc_num.interval = half;
-      // But never go below default
-      if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
+        // If the current interval is larger than half the live data decrease the interval
+        int64_t half = live_bytes/2;
+        if (gc_num.interval > half) gc_num.interval = half;
+        // But never go below default
+        if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
 
     if (gc_num.interval + live_bytes > max_total_memory) {
