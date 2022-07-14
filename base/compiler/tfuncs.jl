@@ -738,7 +738,7 @@ end
 
 function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Type{Bool}}
     if length(argtypes) == 2
-        boundscheck = Bool
+        return true
     elseif length(argtypes) == 3
         boundscheck = argtypes[3]
         if boundscheck === Const(:not_atomic) # TODO: this is assuming not atomic
