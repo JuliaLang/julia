@@ -131,6 +131,7 @@ struct CompoundPeriod <: AbstractTime
     function CompoundPeriod(p::Vector{Period})
         n = length(p)
         if n > 1
+            # Sort by type, not value, so that we can merge equal types
             sort!(p, rev = true, by = days ∘ oneunit)
             # canonicalize p by merging equal period types and removing zeros
             i = j = 1
