@@ -277,7 +277,9 @@ typedef struct _jl_tls_states_t {
     // some hidden state (usually just because we don't have the type's size declaration)
 #ifdef LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;
+    uv_mutex_t gc_sleep_lock;
     uv_cond_t wake_signal;
+    uv_cond_t gc_wake_signal;
 #endif
 } jl_tls_states_t;
 
