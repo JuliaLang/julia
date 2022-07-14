@@ -521,3 +521,10 @@ function print_callstack(sv::InferenceState)
 end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+
+function narguments(sv::InferenceState)
+    def = sv.linfo.def
+    isva = isa(def, Method) && def.isva
+    nargs = length(sv.result.argtypes) - isva
+    return nargs
+end
