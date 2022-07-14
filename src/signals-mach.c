@@ -186,7 +186,6 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     assert(sig == SIGSEGV || sig == SIGBUS);
     jl_task_t *ct = jl_get_current_task();
     if (jl_get_safe_restore()) { // restarting jl_ or jl_unwind_stepn
-        jl_task_t *ct = jl_get_current_task();
         jl_ptls_t ptls = ct == NULL ? NULL : ct->ptls;
         jl_call_in_state(ptls, (host_thread_state_t*)jl_to_bt_context(context), &jl_sig_throw);
     }

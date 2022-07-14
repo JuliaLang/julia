@@ -406,7 +406,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                // TODO: help with gc work here, if applicable
+                jl_safepoint_wait_gc();
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);

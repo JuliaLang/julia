@@ -1993,18 +1993,6 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
-// Wake-up workers to partake in parallel marking
-STATIC_INLINE void gc_wake_workers(jl_ptls_t ptls)
-{
-    jl_fence();
-    if (jl_n_threads > 1)
-        jl_wake_libuv();
-    for (int i = 0; i < jl_n_threads; i++) {
-        if (i != ptls->tid)
-            uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
-    }
-}
-
 #define OPT_SINGLE_OUTREF
 
 #define gc_mark_single_outref(new_obj, obj_parent, obj_begin, nptr) \
@@ -2300,6 +2288,19 @@ mark_obj : {
 #ifdef OPT_SINGLE_OUTREF
 }
 #endif
+}
+
+
+// Wake-up workers to partake in parallel marking
+void gc_wake_workers(jl_ptls_t ptls)
+{
+    jl_fence();
+    if (jl_n_threads > 1)
+        jl_wake_libuv();
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i != ptls->tid)
+            uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
+    }
 }
 
 // Used in `gc-debug`
