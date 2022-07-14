@@ -937,10 +937,12 @@ Constant *CloneCtx::emit_offset_table(const std::vector<T*> &vars, StringRef nam
     for (uint32_t i = 1; i < nvars; i++)
         offsets[i + 1] = get_ptrdiff32(vars[i], vbase);
     ArrayType *vars_type = ArrayType::get(T_int32, nvars + 1);
-    add_comdat(new GlobalVariable(M, vars_type, true,
+    GlobalVariable *GV = new GlobalVariable(M, vars_type, true,
                                   GlobalVariable::ExternalLinkage,
                                   ConstantArray::get(vars_type, offsets),
-                                  name + "_offsets"));
+                                  name + "_offsets");
+    GV->setSection(JL_SYSIMG_LINK_SECTION);
+    add_comdat(GV);
     return vbase;
 }
 

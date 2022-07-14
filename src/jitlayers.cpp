@@ -54,6 +54,18 @@ using namespace llvm;
 
 #define DEBUG_TYPE "jitlayers"
 
+extern "C" JL_DLLEXPORT
+void jl_init_sysimage_chaining_impl(void *sysimg_base, const char *fname)
+{
+    auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
+    if (!errorobj) {
+        jl_error("Failed to load sysimg symbol table");
+    }
+
+    auto *theobj = errorobj->getBinary();
+    jl_ExecutionEngine->addSysimgSymbolsByName(sysimg_base, theobj);
+}
+
 // Snooping on which functions are being compiled, and how long it takes
 extern "C" JL_DLLEXPORT
 void jl_dump_compiles_impl(void *s)
@@ -139,6 +151,9 @@ static jl_callptr_t _jl_compile_codeinst(
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
             NewGlobals[global.second->getName()] = global.first;
+            if (global.second->getName().empty()){
+                jl_error("JIT Here is a problem - empty name ! (add_gv)");
+            }
         }
         for (auto &def : emitted) {
             orc::ThreadSafeModule &TSM = std::get<0>(def.second);
@@ -1140,7 +1155,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
                         SectionMemoryManager::getSymbolAddressInProcess(
                             getMangledName(F->getName())))) {
                     llvm::errs() << "FATAL ERROR: "
-                                << "Symbol \"" << F->getName().str() << "\""
+                                << "Symbol \"" << F->getName().str() << "\" "
                                 << "not found";
                     abort();
                 }
@@ -1192,11 +1207,18 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
     return cantFail(addr.getAddress());
 }
 
-StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
+StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst, bool create)
 {
     std::lock_guard<std::mutex> lock(RLST_mutex);
-    std::string *fname = &ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
-    if (fname->empty()) {
+    void *addres = (void*)(uintptr_t)Addr;
+    if (!create){ // do not create the local symbol
+        if(ReverseLocalSymbolTable.find(addres) != ReverseLocalSymbolTable.end()){
+            return ReverseLocalSymbolTable[addres];
+        }
+        return StringRef("");
+    }
+    std::string *fname = &ReverseLocalSymbolTable[addres];
+    if (fname->empty()) { // create the local symbol
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
@@ -1219,6 +1241,43 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
         addGlobalMapping(*fname, Addr);
     }
     return *fname;
+}
+
+StringRef JuliaOJIT::getGlobalAtAddress(uint64_t Addr)
+{
+    auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
+    assert(!fname.empty());
+    if(fname.empty()){
+        for(auto & gv : ReverseLocalSymbolTable){
+            jl_safe_printf("%p", gv.first);
+            jl_safe_printf(" %s\n", gv.second.c_str());
+        }
+        jl_safe_printf("Name is empty %d\n", fname.empty());
+        jl_errorf("Name %s", fname.c_str());
+    }
+    return fname;
+}
+
+void JuliaOJIT::addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile)
+{
+    for (auto symbol : ofile->symbols()) {
+        if (symbol.getType().get() != llvm::object::SymbolRef::ST_Function &&
+            symbol.getType().get() != llvm::object::SymbolRef::ST_Data) {
+            continue;
+        }
+        if (symbol.getFlags().get() & llvm::object::SymbolRef::SF_Undefined) {
+            continue;
+        }
+        void *Addr = (void*)((char*)sysimg_base + symbol.getAddress().get());
+        std::string &fname = ReverseLocalSymbolTable[Addr];
+        if (fname.empty()) {
+            StringRef symname = symbol.getName().get();
+            jl_sym_t *symsym = jl_symbol_n(symname.data(), symname.size());
+            fname = jl_symbol_name(symsym);
+            assert(!fname.empty());
+            addGlobalMapping(fname, (uintptr_t)Addr);
+        }
+    }
 }
 
 

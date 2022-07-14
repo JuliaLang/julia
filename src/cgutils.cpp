@@ -119,6 +119,7 @@ static Value *stringConstPtr(
     StringRef ctxt(txt.c_str(), txt.size() + 1);
     Constant *Data = ConstantDataArray::get(irbuilder.getContext(), arrayRefFromStringRef(ctxt));
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str", *M);
+    gv->setLinkage(GlobalVariable::PrivateLinkage);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
     return irbuilder.CreateInBoundsGEP(gv->getValueType(), gv, Args);
@@ -301,16 +302,26 @@ static Value *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     if (!gv) {
         raw_string_ostream(gvname) << cname << ctx.global_targets.size();
         localname = StringRef(gvname);
+        gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
+                                false, GlobalVariable::InternalLinkage,
+                                NULL, localname);
     }
     else {
         localname = gv->getName();
-        if (gv->getParent() != M)
+        if (gv->getParent() != M) {
+            GlobalVariable *oldgv = gv;
             gv = cast_or_null<GlobalVariable>(M->getNamedValue(localname));
+            if (!gv) {
+                gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
+                                        false, oldgv->getLinkage(),
+                                        NULL, localname);
+                if (oldgv->isExternallyInitialized()) {
+                    gv->setExternallyInitialized(true);
+                }
+            }
+        }
     }
-    if (gv == nullptr)
-        gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
-                                false, GlobalVariable::PrivateLinkage,
-                                NULL, localname);
+    assert(gv != nullptr);
     // LLVM passes sometimes strip metadata when moving load around
     // since the load at the new location satisfy the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
@@ -390,7 +401,7 @@ static Value *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         return julia_pgv(ctx, "jl_sym#", addr, NULL, p);
     }
     // something else gets just a generic name
-    return julia_pgv(ctx, "jl_global#", p);
+    return julia_pgv(ctx, "jl_global#abc#", p);
 }
 
 static size_t dereferenceable_size(jl_value_t *jt)

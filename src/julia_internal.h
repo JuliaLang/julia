@@ -775,6 +775,9 @@ void jl_init_thread_heap(jl_ptls_t ptls);
 void jl_init_int32_int64_cache(void);
 JL_DLLEXPORT void jl_init_options(void);
 
+void jl_init_sysimage_chaining(void *sysimg_base, const char *fname);
+void JL_DLLEXPORT jl_foreach_sysimg_gvar_slot(void (*fptr)(void *, void *, jl_value_t **), void *ctx1, void *ctx2);
+
 void jl_teardown_codegen(void);
 
 void jl_set_base_ctx(char *__stk);
@@ -895,6 +898,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins);
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
+JL_DLLEXPORT void jl_precompiles_for_sysimage(uint8_t enamble);
 
 uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
@@ -1545,6 +1549,12 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 
 float __gnu_h2f_ieee(uint16_t param) JL_NOTSAFEPOINT;
 uint16_t __gnu_f2h_ieee(float param) JL_NOTSAFEPOINT;
+
+#ifdef _OS_DARWIN_
+#define JL_SYSIMG_LINK_SECTION "__DATA,__jl_sysimg_link"
+#else
+#define JL_SYSIMG_LINK_SECTION ".data.jl.sysimg_link"
+#endif
 
 #ifdef __cplusplus
 }

@@ -371,6 +371,7 @@
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
+    XX(jl_precompiles_for_sysimage) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
@@ -552,6 +553,7 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
+    YY(jl_init_sysimage_chaining) \
     YY(jl_add_optimization_passes) \
     YY(LLVMExtraAddLowerSimdLoopPass) \
     YY(LLVMExtraAddFinalLowerGCPass) \

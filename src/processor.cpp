@@ -623,20 +623,28 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 template<typename F>
 static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
+    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, nullptr, 0, nullptr, nullptr};
+
+    int32_t *offsets;
+    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 0);
+
+    if (!offsets) {
+        // If multiversioning didn't run, just load the fvars directly.
+        jl_dlsym(hdl, "jl_sysimg_fvars", (void**)&res.values, 1);
+        return res;
+    }
+
+    uint32_t nfunc = offsets[0];
+    res.offsets = offsets + 1;
 
     // .data base
     char *data_base;
     jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 1);
+
     // .text base
     char *text_base;
     jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 1);
     res.base = text_base;
-
-    int32_t *offsets;
-    jl_dlsym(hdl, "jl_sysimg_fvars_offsets", (void**)&offsets, 1);
-    uint32_t nfunc = offsets[0];
-    res.offsets = offsets + 1;
 
     void *ids;
     jl_dlsym(hdl, "jl_dispatch_target_ids", &ids, 1);

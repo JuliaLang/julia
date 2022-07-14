@@ -427,7 +427,9 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
             break;
         case opt_sysimage_native_code:
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg,"chained"))
+                jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
+            else if (!strcmp(optarg,"yes"))
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
             else if (!strcmp(optarg,"no"))
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;

@@ -59,6 +59,7 @@ using namespace llvm;
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+#include "codegen_shared.h"
 
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
@@ -145,10 +146,11 @@ static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars
         addrs[i] = ConstantExpr::getBitCast(var, T_psize);
     }
     ArrayType *vars_type = ArrayType::get(T_psize, nvars);
-    new GlobalVariable(mod, vars_type, true,
+    GlobalVariable *GV = new GlobalVariable(mod, vars_type, true,
                        GlobalVariable::ExternalLinkage,
                        ConstantArray::get(vars_type, addrs),
                        name);
+    GV->setSection(JL_SYSIMG_LINK_SECTION);
 }
 
 static bool is_safe_char(unsigned char c)
@@ -240,6 +242,32 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     *ci_out = codeinst;
 }
 
+StringRef lookup_sysimage_fname(void *ptr, jl_code_instance_t *codeinst)
+{
+    if (ptr == (void*)&jl_fptr_args_addr) {
+        return "jl_fptr_args";
+    } else if (ptr == (void*)&jl_fptr_sparam_addr) {
+        return "jl_fptr_sparam";
+    } else if (ptr == (void*)&jl_fptr_const_return_addr) {
+        return "jl_fptr_const_return";
+    }
+    return jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)ptr, codeinst, false);
+}
+
+static void add_gv(void *ctx, void *mod, jl_value_t **gv_slot)
+{
+    jl_codegen_params_t *params = (jl_codegen_params_t*)ctx;
+    Module *M = (Module *)mod;
+    GlobalVariable* &lgv = params->globals[*gv_slot];
+    if (!lgv){
+        lgv = new GlobalVariable(*M,
+            JuliaType::get_pjlvalue_ty(M->getContext()),
+            false, GlobalVariable::PrivateLinkage,
+            NULL, jl_ExecutionEngine->getGlobalAtAddress((uintptr_t)gv_slot));
+        lgv->setExternallyInitialized(true);
+    }
+}
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -275,6 +303,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
     params.imaging = imaging;
 
+    bool sysimg_chained = jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
+    if (sysimg_chained) {
+        jl_foreach_sysimg_gvar_slot(add_gv, (void*)&params, (void*)clone.getModuleUnlocked());
+    }
+
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
     for (int worlds = 0; worlds < 2; worlds++) {
@@ -303,10 +336,33 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = NULL;
                 jl_ci_cache_lookup(*cgparams, mi, params.world, &codeinst, &src);
-                if (src && !emitted.count(codeinst)) {
+                // determines if the instance should be compiled
+                bool compile = true;
+                uint8_t precompile = jl_atomic_load_relaxed(&codeinst->precompile);
+                if (codeinst && (precompile & 2)) {
+                    // This condition (precompile & 2) provides a speed-up
+                    // Skip things already in the sysimage, we'll pick it up from there.
+                    jl_llvm_functions_t fnames = {
+                        lookup_sysimage_fname((void*)(codeinst->invoke.load()), codeinst).str(),
+                        lookup_sysimage_fname(codeinst->specptr.fptr, codeinst).str(),
+                    };
+                    if (!fnames.functionObject.empty() && !fnames.specFunctionObject.empty()){
+                        orc::ThreadSafeModule no_module;
+                        if (emitted.find(codeinst) == emitted.end()){
+                            emitted[codeinst] = {std::move(no_module), std::move(fnames)};
+                        }
+                        compile = false;
+                    }
+                }
+                if (sysimg_chained && !(precompile & 4)){
+                    // not tagged for being compiled to sysimage
+                    compile = false;
+                }
+                if (compile && src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
-                    orc::ThreadSafeModule result_m = jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                    orc::ThreadSafeModule result_m = jl_create_llvm_module(
+                            name_from_method_instance(codeinst->def),
                             params.tsctx, params.imaging,
                             clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
@@ -333,11 +389,30 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
     for (auto &def : emitted) {
-        jl_merge_module(clone, std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
         jl_llvm_functions_t decls = std::get<1>(def.second);
         StringRef func = decls.functionObject;
         StringRef cfunc = decls.specFunctionObject;
+        if (std::get<0>(def.second))
+            jl_merge_module(clone, std::move(std::get<0>(def.second)));
+        else {
+            // TODO: Probably wait until all other modules were merged
+            // TODO: These signatures aren't actually right, but it's not worth
+            // trying to compute signatures for these. Maybe declare them as
+            // void* global variables instead and have jl_merge_module know
+            // how to merge them if it comes to it?
+            auto &context = clone.getModuleUnlocked()->getContext();
+            FunctionType *jl_func_sig = JuliaType::get_jlfunc_ty(context);
+
+            Function::Create(jl_func_sig,
+                GlobalVariable::ExternalLinkage,
+                func, clone.getModuleUnlocked());
+            if (!cfunc.empty()) {
+                Function::Create(jl_func_sig,
+                    GlobalVariable::ExternalLinkage,
+                    cfunc, clone.getModuleUnlocked());
+            }
+        }
         uint32_t func_id = 0;
         uint32_t cfunc_id = 0;
         if (func == "jl_fptr_args") {
@@ -345,6 +420,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         }
         else if (func == "jl_fptr_sparam") {
             func_id = -2;
+        }
+        else if (func == "jl_fptr_const_return") {
+            func_id = -3;
         }
         else {
             //Safe b/c context is locked by params
@@ -365,10 +443,12 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     // now get references to the globals in the merged module
     // and set them to be internalized and initialized at startup
     for (auto &global : gvars) {
-        //Safe b/c context is locked by params
-        GlobalVariable *G = cast<GlobalVariable>(clone.getModuleUnlocked()->getNamedValue(global));
-        G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
-        G->setLinkage(GlobalVariable::InternalLinkage);
+        auto gv = clone.getModuleUnlocked()->getNamedValue(global);
+        GlobalVariable *G = cast<GlobalVariable>(gv);
+        if (!G->isExternallyInitialized())
+            G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
+        G->setLinkage(GlobalVariable::ExternalLinkage);
+        G->setVisibility(GlobalVariable::HiddenVisibility);
         data->jl_sysimg_gvars.push_back(G);
     }
 
@@ -389,7 +469,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         //Safe b/c context is locked by params
         for (GlobalObject &G : clone.getModuleUnlocked()->global_objects()) {
             if (!G.isDeclaration()) {
-                G.setLinkage(Function::InternalLinkage);
+                if (G.getLinkage() != GlobalVariable::PrivateLinkage) {
+                    G.setLinkage(Function::ExternalLinkage);
+                    G.setVisibility(GlobalVariable::HiddenVisibility);
+                }
                 makeSafeName(G);
                 addComdat(&G);
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -496,6 +579,8 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
+    bool sysimg_chained = jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
+
     legacy::PassManager preopt, postopt;
 
     if (unopt_bc_fname)
@@ -515,7 +600,7 @@ void jl_dump_native_impl(void *native_code,
     legacy::PassManager optimizer;
     if (bc_fname || obj_fname || asm_fname) {
         addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true, false, sysimg_chained);
         addMachinePasses(&optimizer, jl_options.opt_level);
     }
 
@@ -538,12 +623,15 @@ void jl_dump_native_impl(void *native_code,
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
         GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(dataM);
-        addComdat(new GlobalVariable(*dataM,
+        GlobalVariable *jlRTLD_DEFAULT_var_pointer =
+            new GlobalVariable(*dataM,
                                      jlRTLD_DEFAULT_var->getType(),
                                      true,
                                      GlobalVariable::ExternalLinkage,
                                      jlRTLD_DEFAULT_var,
-                                     "jl_RTLD_DEFAULT_handle_pointer"));
+                                     "jl_RTLD_DEFAULT_handle_pointer");
+        jlRTLD_DEFAULT_var_pointer->setSection(JL_SYSIMG_LINK_SECTION);
+        addComdat(jlRTLD_DEFAULT_var_pointer);
     }
 
     // do the actual work
@@ -622,7 +710,7 @@ void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                            bool lower_intrinsics, bool dump_native,
-                           bool external_use)
+                           bool external_use, bool chained)
 {
     // Note: LLVM 12 disabled the hoisting of common instruction
     //       before loop vectorization (https://reviews.llvm.org/D84108).
@@ -682,7 +770,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             PM->add(createRemoveNIPass());
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
-        if (dump_native) {
+        if (dump_native && !chained) {
             PM->add(createMultiVersioningPass(external_use));
             PM->add(createCPUFeaturesPass());
             // minimal clean-up to get rid of CPU feature checks
@@ -724,7 +812,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
-    if (dump_native)
+    if (dump_native && !chained)
         PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());

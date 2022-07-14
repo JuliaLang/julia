@@ -135,14 +135,23 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
 
 GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
 {
-    // Create a static global variable and points a global alias to it so that
-    // the address is visible externally but LLVM can still assume that the
-    // address of this variable doesn't need dynamic relocation
-    // (can be accessed with a single PC-rel load).
-    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::InternalLinkage,
+#ifndef _OS_DARWIN_
+    // ELF linkers are picky about DSO-local references. Trick them by adding
+    // an extra global with the same address, but different linkage. This
+    // allows LLVM to use a PIC-rel reference, while still making the symbol
+    // available for dlsym.
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::WeakODRLinkage,
                                  Constant::getNullValue(T), name + ".real");
-    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::ExternalLinkage,
+    GV->setVisibility(GlobalVariable::HiddenVisibility);
+    GV->setDSOLocal(true);
+    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::WeakODRLinkage,
                                    name, GV, M));
+#else
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::CommonLinkage,
+                                 Constant::getNullValue(T), name);
+    GV->setVisibility(GlobalVariable::DefaultVisibility);
+    GV->setDSOLocal(true);
+#endif
     return GV;
 }
 
@@ -267,7 +276,7 @@ bool LowerPTLS::runOnModule(Module &_M, bool *CFGModified)
     if (imaging_mode) {
         pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
         pgcstack_key_slot = create_aliased_global(getSizeTy(_M.getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-        pgcstack_offset = create_aliased_global(getSizeTy(_M.getContext()), "jl_tls_offset");
+        pgcstack_offset = create_aliased_global(getSizeTy(_M.getContext()), "jl_sysimg_tls_offset");
     }
 
     for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {

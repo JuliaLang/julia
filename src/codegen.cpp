@@ -1535,11 +1535,16 @@ static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 
 static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_context, Constant *val, StringRef name, Module &M)
 {
+    bool sysimg_chained = jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
     GlobalVariable *&gv = emission_context.mergedConstants[val];
     StringRef localname;
     std::string ssno;
     if (gv == nullptr) {
         raw_string_ostream(ssno) << name << emission_context.mergedConstants.size();
+        if (sysimg_chained){
+            // modify the name for sysimage to prevent collisions
+            raw_string_ostream(ssno) << "chained";
+        }
         localname = StringRef(ssno);
     }
     else {
@@ -1663,7 +1668,9 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
 {
     Value *loc;
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
-        loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
+        GlobalVariable *gv = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), "_j_const", *jl_Module);
+        gv->setLinkage(GlobalVariable::PrivateLinkage);
+        loc = gv;
     }
     else {
         loc = emit_static_alloca(ctx, v->getType());

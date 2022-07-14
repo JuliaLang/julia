@@ -214,6 +214,13 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
     return sf->func.value;
 }
 
+uint8_t precompiles_for_sysimage = 0;
+
+JL_DLLEXPORT void jl_precompiles_for_sysimage(uint8_t enable)
+{
+    precompiles_for_sysimage = enable;
+}
+
 // ----- MethodInstance specialization instantiation ----- //
 
 JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
@@ -2136,7 +2143,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     else {
         record_precompile_statement(mi);
     }
-    jl_atomic_store_relaxed(&codeinst->precompile, 1);
+    uint8_t precompile = precompiles_for_sysimage ? 5 : 1;
+    jl_atomic_store_relaxed(&codeinst->precompile, precompile);
     return codeinst;
 }
 
@@ -2264,7 +2272,8 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
     if (codeinst != jl_nothing) {
         if (jl_atomic_load_relaxed(&((jl_code_instance_t*)codeinst)->invoke) == jl_fptr_const_return)
             return; // probably not a good idea to generate code
-        jl_atomic_store_relaxed(&((jl_code_instance_t*)codeinst)->precompile, 1);
+        uint8_t precompile = precompiles_for_sysimage ? 5 : 1;
+        jl_atomic_store_relaxed(&((jl_code_instance_t*)codeinst)->precompile, precompile);
     }
 }
 

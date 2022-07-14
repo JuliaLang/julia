@@ -141,6 +141,9 @@ typedef struct _jl_sysimg_fptrs_t {
     // function pointer offsets
     const int32_t *offsets;
 
+    // If saved as values rather than offsets, look here
+    const uintptr_t *values;
+
     // Following fields contains the information about the selected target.
     // All of these fields are 0 if the selected targets have all the functions cloned.
     // Instead the offsets are stored in `noffsets` and `offsets`.

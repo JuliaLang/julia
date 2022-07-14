@@ -68,6 +68,10 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 
 JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmctxt, const jl_cgparams_t *cgparams, int _policy) UNAVAILABLE
 
+JL_DLLEXPORT void jl_init_sysimage_chaining_fallback(void *sysimg_base, const char *fname)
+{
+}
+
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
 {
 }
