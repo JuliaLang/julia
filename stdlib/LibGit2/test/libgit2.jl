@@ -3186,9 +3186,9 @@ mktempdir() do dir
                     err = open(errfile, "r") do f
                         deserialize(f)
                     end
-                    @test err.code == LibGit2.Error.ECERTIFICATE
+                    @test err.code == LibGit2.Error.ERROR
                     @test startswith(lowercase(err.msg),
-                                     lowercase("The SSL certificate is invalid"))
+                                     lowercase("user rejected certificate for localhost"))
 
                     rm(errfile)
 
