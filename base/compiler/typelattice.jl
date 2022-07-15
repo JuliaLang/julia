@@ -688,16 +688,18 @@ end
 
 Widens extended lattice element `x` to native `Type` representation.
 """
-widenconst(::AnyConditional) = Bool
-widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
-widenconst(::PartialTypeVar) = TypeVar
-widenconst(t::PartialStruct) = t.typ
-widenconst(t::PartialOpaque) = t.typ
-@nospecializeinfer widenconst(@nospecialize t::Type) = t
-widenconst(::TypeVar) = error("unhandled TypeVar")
-widenconst(::TypeofVararg) = error("unhandled Vararg")
-widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+widenconst(@nospecialize x) = _widenconst(x)::Type
+
+_widenconst(::AnyConditional) = Bool
+_widenconst(a::AnyMustAlias) = _widenconst(widenmustalias(a))
+_widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+_widenconst(::PartialTypeVar) = TypeVar
+_widenconst(t::PartialStruct) = t.typ
+_widenconst(t::PartialOpaque) = t.typ
+@nospecializeinfer _widenconst(@nospecialize t::Type) = t
+_widenconst(::TypeVar) = error("unhandled TypeVar")
+_widenconst(::TypeofVararg) = error("unhandled Vararg")
+_widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 
 ####################
 # state management #

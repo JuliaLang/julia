@@ -2146,9 +2146,11 @@ end
     t = (argt_exact ? Core.OpaqueClosure{argt, T} : Core.OpaqueClosure{<:argt, T}) where T
     t = lbt == ubt ? t{ubt} : (t{T} where lbt <: T <: ubt)
 
-    (isa(source, Const) && isa(source.val, Method)) || return t
+    isa(source, Const) || return t
+    source = source.val
+    isa(source, Method) || return t
 
-    return PartialOpaque(t, tuple_tfunc(𝕃, env), linfo, source.val)
+    return PartialOpaque(t, tuple_tfunc(𝕃, env), linfo, source)
 end
 
 # whether getindex for the elements can potentially throw UndefRef

@@ -469,7 +469,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, EnterNode)
-                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
+                new_catch_dest = terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest]
+                result[inst_range[end]][:stmt] = EnterNode(terminator, new_catch_dest)
             end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node

@@ -448,6 +448,14 @@ let effects = Base.infer_effects() do
 end
 @test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
 
+@test !Core.Compiler.setglobal!_nothrow(Core.Const(@__MODULE__), Core.Const(1), Core.Const(2)) # this query itself shouldn't throw
+invalid_setglobal!_nothrow() = setglobal!(@__MODULE__, 1, 2)
+let effects = Base.infer_effects() do
+        invalid_setglobal!_nothrow()
+    end
+    @test !Core.Compiler.is_nothrow(effects)
+end
+
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
     x::Int

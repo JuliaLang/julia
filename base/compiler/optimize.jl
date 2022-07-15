@@ -294,13 +294,14 @@ end
 Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
 """
 function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+    ⊑ = partialorder(𝕃ₒ)
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
     isa(stmt, ReturnNode) && return (true, false, true)
     isa(stmt, EnterNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
-    isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
+    isa(stmt, GotoIfNot) && return (true, false, argextype(stmt.cond, src) ⊑ Bool)
     if isa(stmt, GlobalRef)
         nothrow = isdefined(stmt.mod, stmt.name)
         consistent = nothrow && isconst(stmt.mod, stmt.name)
@@ -353,11 +354,11 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ, true)
             isexact || return (false, false, false)
-            ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
+            typ ⊑ Tuple || return (false, false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
             source = argextype(args[4], src)
-            if !(⊑(𝕃ₒ, rt_lb, Type) && ⊑(𝕃ₒ, rt_ub, Type) && ⊑(𝕃ₒ, source, Method))
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && source ⊑ Method)
                 return (false, false, false)
             end
             return (false, true, true)
