@@ -165,13 +165,21 @@ end
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """
-    @irrational sym val def
-    @irrational(sym, val, def)
+    @irrational sym [val] def
 
-Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
-and arbitrary-precision definition in terms of `BigFloat`s given by the expression `def`.
+Define a new `Irrational` value, `sym`, with arbitrary-precision definition in terms
+of `BigFloat`s given by the expression `def`. 
+    
+Optionally provide a pre-computed `Float64` value `val` which must equal `Float64(def)`.
+`val` will be computed automatically if omitted.
 """
 macro irrational(sym, val, def)
+    irrational(sym, val, def)
+end
+macro irrational(sym, def)
+    irrational(sym, Float64(eval(def)), def)
+end
+function irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
