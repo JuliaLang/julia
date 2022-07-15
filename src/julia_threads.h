@@ -170,7 +170,14 @@ typedef struct {
 } jl_thread_heap_t;
 
 typedef struct {
+// Debugging infrastructure is limited to single threaded GC
+#ifdef GC_VERIFY
+    struct _jl_value_t **start;
+    struct _jl_value_t **current;
+    struct _jl_value_t **end;
+#else
     ws_queue_t q;
+#endif
 } jl_gc_markqueue_t;
 
 typedef struct {

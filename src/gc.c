@@ -1266,7 +1266,7 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 int64_t lazy_freed_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, 
+static jl_taggedvalue_t **gc_sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg,
                                         jl_taggedvalue_t **pfl, int sweep_full, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
@@ -1681,21 +1681,40 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 }
 
 // Steal gc work item enqueued in `mq`
-static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq)
+static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
+#ifdef GC_VERIFY
+    return NULL;
+#else
     return (jl_value_t *)ws_queue_steal_from(&mq->q);
+#endif
 }
 
 // Push gc work item `v` into `mq`
-static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v)
+static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 {
+#ifdef GC_VERIFY
+    if (__unlikely(mq->current == mq->end))
+        gc_markqueue_resize(mq);
+    *mq->current = obj;
+    mq->current++;
+#else
     ws_queue_push(&mq->q, v);
+#endif
 }
 
 // Pop gc work item from `mq`
-static void *gc_markqueue_pop(jl_gc_markqueue_t *mq)
+static void *gc_markqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
+#ifdef GC_VERIFY
+    if (mq->current == mq->start)
+        return NULL;
+    mq->current--;
+    jl_value_t *obj = *mq->current;
+    return obj;
+#else
     return ws_queue_pop(&mq->q);
+#endif
 }
 
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
@@ -1713,7 +1732,7 @@ static void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
 }
 
 // Mark object with 8bit field descriptors
-static void gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_t *obj8_begin, 
+static void gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_t *obj8_begin,
                          uint8_t *obj8_end, uintptr_t nptr) JL_NOTSAFEPOINT
 {
     (void)jl_assume(obj8_begin < obj8_end);
@@ -2222,7 +2241,7 @@ static void gc_wake_workers(jl_ptls_t ptls)
 }
 
 // Used in `gc-debug`
-void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 {
     void *new_obj;
     pop : {
@@ -2259,7 +2278,7 @@ void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 // is used to keep track of processed items. Maintaning this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
 // makes it easier to implement parallel marking via work-stealing
-void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT
+void gc_mark_loop(jl_ptls_t ptls)
 {
     jl_atomic_fetch_add(&nworkers_marking, 1);
     uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
@@ -2538,15 +2557,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             gc_cblist_root_scanner, (collection));
     }
     gc_mark_loop_master(ptls);
-    gc_num.since_sweep += gc_num.allocd;
-    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
-    gc_settime_premark_end();
-    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
-    uint64_t end_mark_time = jl_hrtime();
-    uint64_t mark_time = end_mark_time - start_mark_time;
-    gc_num.mark_time = mark_time;
-    gc_num.total_mark_time += mark_time;
-    int64_t actual_allocd = gc_num.since_sweep;
     // main mark-loop is over
 
     // 4. check for objects to finalize
@@ -2572,7 +2582,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_loop(ptls);
     // Other workers may still be marking, so put
     // this barrier to ensure we don't sweep prematurely
-    jl_spinmaster_wait_pmark();
+	jl_spinmaster_wait_pmark();
+
+	gc_num.since_sweep += gc_num.allocd;
+    JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
+    gc_settime_premark_end();
+    gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
+    uint64_t end_mark_time = jl_hrtime();
+    uint64_t mark_time = end_mark_time - start_mark_time;
+    gc_num.mark_time = mark_time;
+    gc_num.total_mark_time += mark_time;
+    int64_t actual_allocd = gc_num.since_sweep;
 
     gc_settime_postmark_end();
 
@@ -2637,7 +2657,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         promoted_bytes = 0;
     }
     scanned_bytes = 0;
-    
+
     // 6. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
