@@ -59,7 +59,7 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeCont
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis);
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, 
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true,
     bool dump_native=false, bool external_use=false, bool chained=false);
 void addMachinePasses(legacy::PassManagerBase *PM, int optlevel);
 void jl_finalize_module(orc::ThreadSafeModule  m);
@@ -379,10 +379,10 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst, bool create = true);
-    
+
     StringRef getGlobalAtAddress(uint64_t Addr);
     void addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile);
-    
+
     auto getContext() {
         return *ContextPool;
     }

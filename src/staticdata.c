@@ -399,7 +399,7 @@ static void jl_load_sysimg_so(void)
     int sysimg_chained = jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
     const char *fname = NULL;
     // in --build mode only use sysimg data, not precompiled native code
-    if (sysimg_chained || 
+    if (sysimg_chained ||
         (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES)) {
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 0);
         if (sysimg_gvars_offsets) {

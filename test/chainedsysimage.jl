@@ -26,7 +26,7 @@ using Test, Libdl
             @test success(`llvm-objcopy --remove-section .data.jl.sysimg_link text-old.o`)
 
             source_txt = """
-Base.__init_build(); 
+Base.__init_build();
 module PrecompileStagingArea;
     using Printf
 end;
