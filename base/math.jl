@@ -42,7 +42,7 @@ end
 
 # non-type specific math functions
 
-@inline function two_mul(x::Float64, y::Float64)
+@assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
         xy = x*y
         return xy, fma(x, y, -xy)
@@ -50,7 +50,7 @@ end
     return Base.twomul(x,y)
 end
 
-@inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
+@assume_effects :consistent @inline function two_mul(x::T, y::T) where T<: Union{Float16, Float32}
     if Core.Intrinsics.have_fma(T)
         xy = x*y
         return xy, fma(x, y, -xy)

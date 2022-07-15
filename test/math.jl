@@ -1421,3 +1421,7 @@ end
 # the compiler ever gets good enough to figure
 # that out by itself, move this to inference).
 @test code_typed(x->Val{x^0.0}(), Tuple{Float64})[1][2] == Val{1.0}
+
+for T in (Float32, Float64)
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+end
