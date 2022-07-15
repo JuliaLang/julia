@@ -344,7 +344,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                     // Skip things already in the sysimage, we'll pick it up from there.
                     jl_llvm_functions_t fnames = {
                         lookup_sysimage_fname((void*)(jl_atomic_load_relaxed(&codeinst->invoke)), codeinst).str(),
-                        lookup_sysimage_fname(codeinst->specptr.fptr, codeinst).str(),
+                        lookup_sysimage_fname(jl_atomic_load_relaxed(&codeinst->specptr.fptr), codeinst).str(),
                     };
                     if (!fnames.functionObject.empty() && !fnames.specFunctionObject.empty()){
                         orc::ThreadSafeModule no_module;
