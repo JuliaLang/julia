@@ -1683,19 +1683,38 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 // Steal gc work item enqueued in `mq`
 static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq)
 {
+#ifdef GC_VERIFY
+    return NULL;
+#else
     return (jl_value_t *)ws_queue_steal_from(&mq->q);
+#endif
 }
 
 // Push gc work item `v` into `mq`
 static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v)
 {
+#ifdef GC_VERIFY
+    if (__unlikely(mq->current == mq->end))
+        gc_markqueue_resize(mq);
+    *mq->current = obj;
+    mq->current++;
+#else
     ws_queue_push(&mq->q, v);
+#endif
 }
 
 // Pop gc work item from `mq`
 static void *gc_markqueue_pop(jl_gc_markqueue_t *mq)
 {
+#ifdef GC_VERIFY
+    if (mq->current == mq->start)
+        return NULL;
+    mq->current--;
+    jl_value_t *obj = *mq->current;
+    return obj;
+#else
     return ws_queue_pop(&mq->q);
+#endif
 }
 
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
