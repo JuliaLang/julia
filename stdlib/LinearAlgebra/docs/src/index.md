@@ -540,8 +540,8 @@ and the complexity of the operation.
 
 ### Level 1 BLAS functions
 
-The level 1 BLAS functions was first proposed in [(Lawson, 1979)][Lawson-1979] and
-defines the operations between scalars and vectors.
+The level 1 BLAS functions were first proposed in [(Lawson, 1979)][Lawson-1979] and
+define operations between scalars and vectors.
 
 [Lawson-1979]: https://dl.acm.org/doi/10.1145/355841.355847
 
