@@ -711,7 +711,7 @@ end
 with_artifacts_directory(f::Function, artifacts_dir::AbstractString) =
     with_artifacts_directory(f, String(artifacts_dir)::String)
 query_override(pkg::Base.UUID, artifact_name::AbstractString; overrides::Dict=load_overrides()) =
-    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}(overrides)))
+    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}, overrides))
 unpack_platform(entry::Dict, name::AbstractString, artifacts_toml::AbstractString) =
     unpack_platform(convert(Dict{String, Any}, entry), String(name)::String, String(artifacts_toml)::String)
 load_artifacts_toml(artifacts_toml::AbstractString; kwargs...) =
