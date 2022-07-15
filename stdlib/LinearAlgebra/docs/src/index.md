@@ -567,8 +567,8 @@ LinearAlgebra.BLAS.iamax
 
 ### Level 2 BLAS functions
 
-The level 2 BLAS functions was published in [(Dongarra, 1988)][Dongarra-1988],
-defines the matrix-vector operations.
+The level 2 BLAS functions were published in [(Dongarra, 1988)][Dongarra-1988],
+and define matrix-vector operations.
 
 [Dongarra-1988]: https://dl.acm.org/doi/10.1145/42288.42291
 
@@ -618,8 +618,8 @@ LinearAlgebra.BLAS.spr!
 
 ### Level 3 BLAS functions
 
-The level 3 BLAS functions was published in [(Dongarra, 1990)][Dongarra-1990],
-defines the matrix-matrix operations.
+The level 3 BLAS functions were published in [(Dongarra, 1990)][Dongarra-1990],
+and define matrix-matrix operations.
 
 [Dongarra-1990]: https://dl.acm.org/doi/10.1145/77626.79170
 
