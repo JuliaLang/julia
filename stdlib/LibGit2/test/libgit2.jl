@@ -3121,7 +3121,7 @@ mktempdir() do dir
             catch
             end
 
-            loopback = ip"127.0.0.1"
+            loopbacks = (ip"127.0.0.1", ip"::1")
             for hostname in hostnames
                 local addr
                 try
@@ -3130,7 +3130,7 @@ mktempdir() do dir
                     continue
                 end
 
-                if addr == loopback
+                if addr ∈ loopbacks
                     common_name = hostname
                     break
                 end
@@ -3186,9 +3186,9 @@ mktempdir() do dir
                     err = open(errfile, "r") do f
                         deserialize(f)
                     end
-                    @test err.code == LibGit2.Error.ECERTIFICATE
+                    @test err.code == LibGit2.Error.ERROR
                     @test startswith(lowercase(err.msg),
-                                     lowercase("The SSL certificate is invalid"))
+                                     lowercase("user rejected certificate for localhost"))
 
                     rm(errfile)
 
