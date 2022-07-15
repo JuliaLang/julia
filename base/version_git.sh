@@ -45,7 +45,7 @@ fi
 # Our CI system checks commits out as a detached head, and so we must
 # use the provided branch name, as we cannot autodetect this commit as
 # the tip of any such branch.
-if [ -b "${BUILDKITE_BRANCH}" ]; then
+if [ -n "${BUILDKITE_BRANCH}" ]; then
     branch="${BUILDKITE_BRANCH}"
 else
     branch=$(git rev-parse --abbrev-ref HEAD)
