@@ -5,6 +5,7 @@
 #define JL_THREADS_H
 
 #include "julia_atomics.h"
+#include "options.h"
 #include "wsqueue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
