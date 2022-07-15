@@ -1681,7 +1681,7 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 }
 
 // Steal gc work item enqueued in `mq`
-static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq)
+static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
 #ifdef GC_VERIFY
     return NULL;
@@ -1691,7 +1691,7 @@ static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq)
 }
 
 // Push gc work item `v` into `mq`
-static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v)
+static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 {
 #ifdef GC_VERIFY
     if (__unlikely(mq->current == mq->end))
@@ -1704,7 +1704,7 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v)
 }
 
 // Pop gc work item from `mq`
-static void *gc_markqueue_pop(jl_gc_markqueue_t *mq)
+static void *gc_markqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
 #ifdef GC_VERIFY
     if (mq->current == mq->start)
@@ -2241,7 +2241,7 @@ static void gc_wake_workers(jl_ptls_t ptls)
 }
 
 // Used in `gc-debug`
-void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 {
     void *new_obj;
     pop : {
@@ -2278,7 +2278,7 @@ void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 // is used to keep track of processed items. Maintaning this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
 // makes it easier to implement parallel marking via work-stealing
-void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT
+void gc_mark_loop(jl_ptls_t ptls)
 {
     jl_atomic_fetch_add(&nworkers_marking, 1);
     uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
