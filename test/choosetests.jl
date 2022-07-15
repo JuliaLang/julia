@@ -7,7 +7,7 @@ const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), 
 
 const TESTNAMES = [
         "subarray", "core", "compiler", "worlds", "atomics",
-        "keywordargs", "numbers", "subtype", "chainedsysimage"
+        "keywordargs", "numbers", "subtype", "chainedsysimage",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
