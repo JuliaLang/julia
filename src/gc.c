@@ -1698,7 +1698,7 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
         jl_safe_printf("Queue overflow\n");
         abort();
     }
-    *mq->current = obj;
+    *mq->current = v;
     mq->current++;
 #else
     // Queue overflow
@@ -2896,11 +2896,17 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     // Work-stealing queue
     size_t init_size = (1 << 20);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
+#ifndef GC_VERIFY
     ws_queue_t *q = &mq->q;
     ws_array_t *wsa = create_ws_array(init_size);
     jl_atomic_store_relaxed(&q->array, wsa);
     jl_atomic_store_relaxed(&q->top, 0);
     jl_atomic_store_relaxed(&q->bottom, 0);
+#else
+	mq->start = (jl_value_t **)malloc_s(init_size * sizeof(jl_value_t *));
+    mq->current = mq->start;
+    mq->end = mq->start + init_size;
+#endif
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     assert(gc_num.interval == default_collect_interval);

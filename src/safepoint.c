@@ -2,6 +2,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "options.h"
 #include "threading.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
@@ -167,6 +168,7 @@ int jl_spinmaster_all_workers_done(jl_ptls_t ptls) JL_NOTSAFEPOINT
     return (jl_atomic_load_acquire(&nworkers_marking) == 0);
 }
 
+#ifndef GC_VERIFY
 int64_t jl_spinmaster_count_work(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     int64_t work = 0;
@@ -204,6 +206,7 @@ void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers) JL_NOTSAFEPO
         }
     }
 }
+#endif
 
 int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
@@ -211,6 +214,7 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
     if (jl_spinmaster_all_workers_done(ptls)) {
         return 1;
     }
+#ifndef GC_VERIFY
     if (jl_mutex_trylock_nogc(&safepoint_master_lock)) {
         spin : {
             // Check if all threads have finished marking
@@ -232,6 +236,7 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
         jl_mutex_unlock_nogc(&safepoint_master_lock);
         return 1;
     }
+#endif
     return 0;
 }
 
