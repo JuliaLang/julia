@@ -1449,3 +1449,25 @@ end
     f44336()
     @test (@allocated f44336()) == 0
 end
+
+# test constant-foldability
+for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
+           # TODO? :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+           # TODO? :exp, :exp2, :exp10, :expm1
+           )
+    for T in (Float32, Float64)
+        f = getfield(@__MODULE__, fn)
+        eff = Base.infer_effects(f, (T,))
+        if Core.Compiler.is_foldable(eff)
+            @test true
+        else
+            # XXX only print bad effects – especially `[sin|cos|tan](::Float32)` are analyzed
+            # as non-foldable sometimes but non-deterministically somehow, we need to dig
+            # into what's leading to the bad analysis with Cthulhu on each platform
+            @warn "bad effects found for $f(::$T)" eff
+        end
+    end
+end
+for T in (Float32, Float64)
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+end

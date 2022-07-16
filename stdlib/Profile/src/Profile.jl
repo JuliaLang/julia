@@ -220,7 +220,7 @@ The keyword arguments can be any combination of:
     `:flatc` does the same but also includes collapsing of C frames (may do odd things around `jl_apply`).
 
  - `threads::Union{Int,AbstractVector{Int}}` -- Specify which threads to include snapshots from in the report. Note that
-    this does not control which threads samples are collected on.
+    this does not control which threads samples are collected on (which may also have been collected on another machine).
 
  - `tasks::Union{Int,AbstractVector{Int}}` -- Specify which tasks to include snapshots from in the report. Note that this
     does not control which tasks samples are collected within.
@@ -238,11 +238,11 @@ function print(io::IO,
         sortedby::Symbol = :filefuncline,
         groupby::Union{Symbol,AbstractVector{Symbol}} = :none,
         recur::Symbol = :off,
-        threads::Union{Int,AbstractVector{Int}} = 1:Threads.nthreads(),
+        threads::Union{Int,AbstractVector{Int}} = 1:typemax(Int),
         tasks::Union{UInt,AbstractVector{UInt}} = typemin(UInt):typemax(UInt))
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
-    if groupby == :none
+    if groupby === :none
         print(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
@@ -285,7 +285,7 @@ function print(io::IO,
                     end
                 end
             end
-        elseif groupby == :task
+        elseif groupby === :task
             threads = 1:typemax(Int)
             for taskid in intersect(get_task_ids(data), tasks)
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
@@ -293,7 +293,7 @@ function print(io::IO,
                 nosamples && (any_nosamples = true)
                 println(io)
             end
-        elseif groupby == :thread
+        elseif groupby === :thread
             tasks = 1:typemax(UInt)
             for threadid in intersect(get_thread_ids(data), threads)
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
@@ -504,7 +504,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                 end
             end
             return path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
+        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base", path))
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
             return joinpath("@Base", normpath(path))

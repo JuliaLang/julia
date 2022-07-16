@@ -1,2 +1,7 @@
+## jll artifact
+ZLIB_JLL_NAME := Zlib
+
+## source build
+ZLIB_VER := 1.2.12
 ZLIB_BRANCH=v1.2.12
 ZLIB_SHA1=21767c654d31d2dccdde4330529775c6c5fd5389

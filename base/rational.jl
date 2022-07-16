@@ -95,6 +95,20 @@ end
 function write(s::IO, z::Rational)
     write(s,numerator(z),denominator(z))
 end
+function parse(::Type{Rational{T}}, s::AbstractString) where T<:Integer
+    ss = split(s, '/'; limit = 2)
+    if isone(length(ss))
+        return Rational{T}(parse(T, s))
+    end
+    @inbounds ns, ds = ss[1], ss[2]
+    if startswith(ds, '/')
+        ds = chop(ds; head = 1, tail = 0)
+    end
+    n = parse(T, ns)
+    d = parse(T, ds)
+    return n//d
+end
+
 
 function Rational{T}(x::Rational) where T<:Integer
     unsafe_rational(T, convert(T, x.num), convert(T, x.den))

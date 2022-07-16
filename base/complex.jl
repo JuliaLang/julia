@@ -591,7 +591,7 @@ julia> cispi(10000)
 1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
-0.030556854645952924 + 0.030556854645952924im
+0.030556854645954562 + 0.030556854645954562im
 ```
 
 !!! compat "Julia 1.6"
@@ -601,8 +601,9 @@ function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 function cispi(z::Complex)
-    sipi, copi = sincospi(z)
-    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
+    v = exp(-(pi*imag(z)))
+    s, c = sincospi(real(z))
+    Complex(v * c, v * s)
 end
 
 """

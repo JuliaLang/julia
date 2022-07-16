@@ -51,6 +51,23 @@ tag = "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
+for u in Any[
+    Union{Int, UInt},
+    Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
+    Union{Char, UInt8, UInt},
+    Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
+    Union{Missing, Nothing}
+]
+    @test InteractiveUtils.is_expected_union(u)
+end
+
+for u in Any[
+    Union{Nothing, Tuple{Vararg{Char}}},
+    Union{Missing, Array},
+    Union{Int, Tuple{Any, Int}}
+]
+    @test !InteractiveUtils.is_expected_union(u)
+end
 mutable struct Stable{T,N}
     A::Array{T,N}
 end
@@ -245,7 +262,7 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test (@which vcat(1...)).name == :vcat
+@test (@which vcat(1...)).name === :vcat
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
@@ -373,7 +390,7 @@ struct A14637
     x
 end
 a14637 = A14637(0)
-@test (@which a14637.x).name == :getproperty
+@test (@which a14637.x).name === :getproperty
 @test (@functionloc a14637.x)[2] isa Integer
 
 # Issue #28615
@@ -382,6 +399,13 @@ a14637 = A14637(0)
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+
+# Issue # 45889
+@test !isempty(@code_typed 3 .+ 6)
+@test !isempty(@code_typed 3 .+ 6 .+ 7)
+@test !isempty(@code_typed optimize=false (.- [3,4]))
+@test !isempty(@code_typed optimize=false (6 .- [3,4]))
+@test !isempty(@code_typed optimize=false (.- 0.5))
 
 # Issue #36261
 @test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
@@ -579,7 +603,7 @@ file, ln = functionloc(versioninfo, Tuple{})
     @test e isa MethodError
     m = @which versioninfo()
     s = sprint(showerror, e)
-    m = match(Regex("at (.*?):$(m.line)"), s)
+    m = match(Regex("@ .+ (.*?):$(m.line)"), s)
     @test isfile(expanduser(m.captures[1]))
 
     g() = x
@@ -608,7 +632,7 @@ end
     export B41010
 
     ms = methodswith(A41010, @__MODULE__) |> collect
-    @test ms[1].name == :B41010
+    @test ms[1].name === :B41010
 end
 
 # macro options should accept both literals and variables

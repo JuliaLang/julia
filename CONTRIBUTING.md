@@ -249,6 +249,24 @@ system image before running the corresponding test. This can be useful as a shor
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
 
+### Contributing to the standard library
+
+The standard library (stdlib) packages are baked into the Julia system image.
+When running the ordinary test workflow on the stdlib packages, the system image
+version overrides the version you are developing.
+To test stdlib packages, you can do the following steps:
+
+1. Edit the UUID field of the `Project.toml` in the stdlib package
+2. Change the current directory to the directory of the stdlib you are developing
+3. Start julia with `julia --project=.`
+4. You can now test the package by running `pkg> test` in Pkg mode.
+
+Because you changed the UUID, the package manager treats the stdlib package as
+different from the one in the system image, and the system image version will
+not override the package.
+
+Be sure to change the UUID value back before making the pull request.
+
 ### Contributing to patch releases
 
 The process of creating a patch release is roughly as follows:
@@ -327,7 +345,6 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
  - If you see any unrelated changes to submodules like `deps/libuv`, `deps/openlibm`, etc., try running `git submodule update` first.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
- - GitHub does not send notifications when you push a new commit to a pull request, so please add a comment to the pull request thread to let reviewers know when you've made changes.
  - When linking to specific lines of code in discussion of an issue or pull request, hit the `y` key while viewing code on GitHub to reload the page with a URL that includes the specific version that you're viewing. That way any lines of code that you refer to will still make sense in the future, even if the content of the file changes.
  - Whitespace can be automatically removed from existing commits with `git rebase`.
    - To remove whitespace for the previous commit, run
