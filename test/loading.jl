@@ -945,10 +945,10 @@ end
 
         # This SHA does not exist in the depot.
         write(joinpath(tmp, "Env1", "Manifest.toml"), """
-        [[Baz]]
-        uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
-        git-tree-sha1 = "5f2f6e72d001b014b48b26ec462f3714c342e167"
-        """)
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "5f2f6e72d001b014b48b26ec462f3714c342e167"
+            """)
 
 
         old_load_path = copy(LOAD_PATH)
@@ -957,15 +957,18 @@ end
             empty!(LOAD_PATH)
             push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
             
-            push!(LOAD_PATH, joinpath(tmp, "Env1"), joinpath(tmp, "Global"))
+            push!(LOAD_PATH, joinpath(tmp, "Global"))
 
             pkg = Base.identify_package("Baz")
             # Package in manifest in current env not present in depot
+            @test Base.locate_package(pkg) !== nothing
+
+            pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
+
             @test Base.locate_package(pkg) === nothing
 
             write(joinpath(tmp, "Env1", "Manifest.toml"), """
             """)
-
             # Package in current env not present in manifest
             pkg, env = Base.identify_package_env("Baz")
             @test Base.locate_package(pkg, env) === nothing
