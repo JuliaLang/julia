@@ -348,9 +348,9 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
-                     size_t start);
-void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_loop(jl_ptls_t ptls);
+                     size_t start) JL_NOTSAFEPOINT;
+void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;
+void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);
 
@@ -479,7 +479,8 @@ extern int gc_verifying;
 #endif
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int pc_offset);
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq,
+				  int pc_offset) JL_NOTSAFEPOINT;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

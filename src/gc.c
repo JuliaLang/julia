@@ -1695,7 +1695,7 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 {
 #ifdef GC_VERIFY
     if (__unlikely(mq->current == mq->end))
-        gc_markqueue_resize(mq);
+        jl_safe_printf("Queue overflow\n");
     *mq->current = obj;
     mq->current++;
 #else
@@ -1987,7 +1987,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
 // objects which have been enqueued into the `remset`
 NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj,
-                              int meta_updated)
+                              int meta_updated) JL_NOTSAFEPOINT
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
 #ifdef JL_DEBUG_BUILD

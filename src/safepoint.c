@@ -49,7 +49,7 @@ jl_mutex_t safepoint_master_lock;
 const uint64_t timeout_ns = 1e3;
 
 extern _Atomic(int32_t) nworkers_marking;
-extern void gc_mark_loop(jl_ptls_t ptls);
+extern void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
@@ -131,7 +131,7 @@ int jl_safepoint_start_gc(void)
     uint32_t running = 0;
     if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
         uv_mutex_unlock(&safepoint_lock);
-        jl_safepoint_wait_gc();
+        jl_spinmaster_wait_gc();
         return 0;
     }
     jl_safepoint_enable(1);
@@ -162,12 +162,12 @@ void jl_safepoint_end_gc(void)
 // `Understanding and Improving JVM GC Work Stealing at the
 // Data Center Scale`
 
-int jl_spinmaster_all_workers_done(jl_ptls_t ptls)
+int jl_spinmaster_all_workers_done(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     return (jl_atomic_load_acquire(&nworkers_marking) == 0);
 }
 
-int64_t jl_spinmaster_count_work(jl_ptls_t ptls)
+int64_t jl_spinmaster_count_work(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     int64_t work = 0;
     for (int i = 0; i < jl_n_threads; i++) {
@@ -183,7 +183,7 @@ int64_t jl_spinmaster_count_work(jl_ptls_t ptls)
     return work;
 }
 
-void jl_spinmaster_notify_all(jl_ptls_t ptls)
+void jl_spinmaster_notify_all(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < jl_n_threads; i++) {
         if (i == ptls->tid)
@@ -192,7 +192,7 @@ void jl_spinmaster_notify_all(jl_ptls_t ptls)
     }
 }
 
-void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers)
+void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < jl_n_threads && nworkers > 0; i++) {
         if (i == ptls->tid)
@@ -205,7 +205,7 @@ void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers)
     }
 }
 
-int jl_spinmaster_end_marking(jl_ptls_t ptls)
+int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     // Fast path for mark-loop termination
     if (jl_spinmaster_all_workers_done(ptls)) {
@@ -235,7 +235,7 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls)
     return 0;
 }
 
-void jl_spinmaster_wait_pmark(void)
+void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     // There are still workers in the mark-loop: go through
@@ -254,7 +254,7 @@ void jl_spinmaster_wait_pmark(void)
     }
 }
 
-void jl_spinmaster_wait_sweeping(void)
+void jl_spinmaster_wait_sweeping(void) JL_NOTSAFEPOINT
 {
     // Use system mutexes rather than spin locking to minimize wasted CPU
     // time on the idle cores while we wait for the GC to finish.
@@ -265,7 +265,7 @@ void jl_spinmaster_wait_sweeping(void)
     uv_mutex_unlock(&safepoint_lock);
 }
 
-void jl_safepoint_wait_gc(void)
+void jl_spinmaster_wait_gc(void) JL_NOTSAFEPOINT
 {
     while (jl_atomic_load_relaxed(&jl_gc_running) ||
            jl_atomic_load_acquire(&jl_gc_running)) {

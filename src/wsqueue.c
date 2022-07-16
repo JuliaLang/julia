@@ -23,7 +23,8 @@ void ws_queue_push(ws_queue_t *q, void *v)
     ws_array_t *a = jl_atomic_load_relaxed(&q->array);
     if (__unlikely(b - t > a->capacity - 1)) {
         // Queue is full: resize it
-        a = ws_queue_resize(q);
+        jl_safe_printf("Queue overflow\n");
+	abort();
     }
     jl_atomic_store_relaxed((_Atomic(void *) *)&a->buffer[b % a->capacity], v);
     jl_fence_release();

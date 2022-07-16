@@ -498,8 +498,8 @@ STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOT
     }
 }
 
-void jl_gc_debug_print_status(void);
-JL_DLLEXPORT void jl_gc_debug_critical_error(void);
+void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT;
 void jl_print_gc_stats(JL_STREAM *s);
 void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
@@ -806,18 +806,18 @@ void jl_safepoint_init(void);
 // it should also wait for the mutator threads to hit a safepoint **AFTER**
 // this function returns
 int jl_safepoint_start_gc(void);
-// Wait for parallel marking to finish
-void jl_spinmaster_wait_pmark(void);
 // Can only be called by the thread that have got a `1` return value from
 // `jl_safepoint_start_gc()`. This disables the safepoint (for GC,
 // the `mprotect` may not be removed if there's pending SIGINT) and wake
 // up waiting threads if there's any.
 // The caller should restore `gc_state` **AFTER** calling this function.
 void jl_safepoint_end_gc(void);
+// Wait for parallel marking to finish
+void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT;
 // Wait for the GC to finish
 // This function does **NOT** modify the `gc_state` to inform the GC thread
 // The caller should set it **BEFORE** calling this function.
-void jl_safepoint_wait_gc(void);
+void jl_spinmaster_wait_gc(void) JL_NOTSAFEPOINT;
 
 // Set pending sigint and enable the mechanisms to deliver the sigint.
 void jl_safepoint_enable_sigint(void);
@@ -853,7 +853,7 @@ static inline void jl_set_gc_and_wait(void)
     // should store to it.
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
-    jl_safepoint_wait_gc();
+    jl_spinmaster_wait_gc();
     jl_atomic_store_release(&ct->ptls->gc_state, state);
 }
 #endif
@@ -1065,7 +1065,7 @@ size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_cont
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
 void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct);
-JL_DLLEXPORT void jl_raise_debugger(void);
+JL_DLLEXPORT void jl_raise_debugger(void) JL_NOTSAFEPOINT;
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
 void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT;
