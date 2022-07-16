@@ -49,7 +49,11 @@ void *ws_queue_pop(ws_queue_t *q)
     int64_t b = jl_atomic_load_relaxed(&q->bottom) - 1;
     ws_array_t *a = jl_atomic_load_relaxed(&q->array);
     jl_atomic_store_relaxed(&q->bottom, b);
+#if defined(_CPU_X86_64_)
+    __asm__ volatile ("lock orq $0, (%rsp)");
+#else
     jl_fence();
+#endif
     int64_t t = jl_atomic_load_relaxed(&q->top);
     void *v;
     if (__likely(t <= b)) {
@@ -70,7 +74,11 @@ void *ws_queue_pop(ws_queue_t *q)
 void *ws_queue_steal_from(ws_queue_t *q)
 {
     int64_t t = jl_atomic_load_acquire(&q->top);
+#if defined(_CPU_X86_64_)
+    __asm__ volatile ("lock orq $0, (%rsp)");
+#else
     jl_fence();
+#endif
     int64_t b = jl_atomic_load_acquire(&q->bottom);
     void *v = NULL;
     if (t < b) {
