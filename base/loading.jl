@@ -381,12 +381,14 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
     else
         for env in load_path()
             path = manifest_uuid_path(env, pkg)
+            # missing is used as a sentinel to stop looking further down in envs
+            path === missing && return nothing
             path === nothing || return entry_path(path, pkg.name)
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
         path = manifest_uuid_path(Sys.STDLIB, pkg)
-        path === nothing || return entry_path(path, pkg.name)
+        path isa String && return entry_path(path, pkg.name)
     end
     return nothing
 end
@@ -539,7 +541,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
     return nothing
 end
 
-function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
+function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missing}
     project_file = env_project_file(env)
     if project_file isa String
         proj = project_file_name_uuid(project_file, pkg.name)
@@ -730,7 +732,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
 end
 
 # find `uuid` stanza, return the corresponding path
-function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{Nothing,String}
+function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{Nothing,String,Missing}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
@@ -765,7 +767,8 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
             ispath(path) && return abspath(path)
         end
     end
-    return nothing
+    # no depot contains the package, return missing to stop looking
+    return missing
 end
 
 ## implicit project & manifest API ##
