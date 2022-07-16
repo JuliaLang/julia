@@ -333,7 +333,8 @@ end
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
+    rattypes = [Rational{T} for T ∈ (Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128)]
+    types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes..., rattypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
     collections = [BitSet(rand(1:100, 20))          => Int,
@@ -401,7 +402,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
-            X = T == Bool ? T[0,1] : T[0,1,2]
+            X = T == Bool || T == Rational{Bool} ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
                       GenericArray{T}(undef, 5),
@@ -432,6 +433,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
         @test_throws MethodError r(Int)
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)
+        @test_throws MethodError r(Rational{Int})
         @test_throws MethodError r(String)
         @test_throws MethodError r(AbstractFloat)
 

@@ -159,6 +159,32 @@ rand_generic(r::AbstractRNG, ::Type{Int64})  = rand(r, UInt64) % Int64
 rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
     complex(rand(r, T), rand(r, T))
 
+### random rational numbers
+
+# uniform on the closed interval [0,1]
+# one can proceed safely as the checks in unsafe_rational are guaranteed
+# by construction; all one needs to do is find the numerator and denominator,
+# then form the struct. Otherwise, generic fallback.
+rand(r::AbstractRNG, ::SamplerType{Rational{T}}) where {T<:Integer} =
+    rand(r, T) // typemax(T)
+
+rand(r::AbstractRNG, ::SamplerType{Rational{Bool}}) = unsafe_rational(rand(r, Bool), true)
+
+function rand(r::AbstractRNG, ::SamplerType{Rational{T}}) where {T<:Unsigned}
+    num, den = divgcd(rand(r, T), typemax(T))
+    unsafe_rational(num, den)
+end
+
+function rand(r::AbstractRNG, ::SamplerType{Rational{T}}) where {T<:Union{Int8,Int16,Int32,Int64}}
+    num, den = divgcd(rand(r, UInt64) >>> (65 - 8*sizeof(T)) % T, typemax(T))
+    unsafe_rational(num, den)
+end
+
+function rand(r::AbstractRNG, ::SamplerType{Rational{Int128}})
+    num, den = divgcd(rand(r, UInt128) >>> 1 % Int128, typemax(Int128))
+    unsafe_rational(num, den)
+end
+
 ### random characters
 
 # returns a random valid Unicode scalar value (i.e. 0 - 0xd7ff, 0xe000 - # 0x10ffff)
