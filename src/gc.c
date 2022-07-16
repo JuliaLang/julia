@@ -2582,9 +2582,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_loop(ptls);
     // Other workers may still be marking, so put
     // this barrier to ensure we don't sweep prematurely
-	jl_spinmaster_wait_pmark();
+    jl_spinmaster_wait_pmark();
 
-	gc_num.since_sweep += gc_num.allocd;
+    gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
     gc_settime_premark_end();
     gc_time_mark_pause(gc_start_time, scanned_bytes, perm_scanned_bytes);
