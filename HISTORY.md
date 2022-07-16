@@ -115,7 +115,8 @@ Standard library changes
 
 #### InteractiveUtils
 
-* New macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612]).
+* New macro `@time_imports` for reporting any time spent importing packages and their dependencies, highlighting
+  compilation and recompilation time as percentages per import ([#41612],[#45064]).
 
 #### LinearAlgebra
 
