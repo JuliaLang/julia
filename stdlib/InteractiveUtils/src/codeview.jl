@@ -32,7 +32,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     str = "::$ty"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Union && Base.is_expected_union(ty)
+    elseif ty isa Union && is_expected_union(ty)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
     elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
         Base.emphasize(io, str)
@@ -40,6 +40,18 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
     nothing
+end
+
+# True if one can be pretty certain that the compiler handles this union well,
+# i.e. must be small with concrete types.
+function is_expected_union(u::Union)
+    Base.unionlen(u) < 4 || return false
+    for x in Base.uniontypes(u)
+        if !Base.isdispatchelem(x) || x == Core.Box
+            return false
+        end
+    end
+    return true
 end
 
 """
@@ -144,6 +156,13 @@ code_warntype(@nospecialize(f), @nospecialize(t=Base.default_tt(f)); kwargs...) 
 
 import Base.CodegenParams
 
+const GENERIC_SIG_WARNING = "; WARNING: This code may not match what actually runs.\n"
+const OC_MISMATCH_WARNING =
+"""
+; WARNING: The pre-inferred opaque closure is not callable with the given arguments
+;          and will error on dispatch with this signature.
+"""
+
 # Printing code representations in IR and assembly
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
@@ -153,10 +172,28 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    warning = ""
     # get the MethodInstance for the method match
-    world = Base.get_world_counter()
-    match = Base._which(signature_type(f, t), world)
-    linfo = Core.Compiler.specialize_method(match)
+    if !isa(f, Core.OpaqueClosure)
+        world = Base.get_world_counter()
+        match = Base._which(signature_type(f, t), world)
+        linfo = Core.Compiler.specialize_method(match)
+        # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
+        isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
+    else
+        world = UInt64(f.world)
+        if Core.Compiler.is_source_inferred(f.source.source)
+            # OC was constructed from inferred source. There's only one
+            # specialization and we can't infer anything more precise either.
+            world = f.source.primary_world
+            linfo = f.source.specializations[1]
+            Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
+        else
+            linfo = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
+            actual = isdispatchtuple(linfo.specTypes)
+            isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
+        end
+    end
     # get the code for it
     if debuginfo === :default
         debuginfo = :source
@@ -175,8 +212,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     else
         str = _dump_function_linfo_llvm(linfo, world, wrapper, strip_ir_metadata, dump_module, optimize, debuginfo, params)
     end
-    # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
-    isdispatchtuple(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    str = warning * str
     return str
 end
 
@@ -187,12 +223,18 @@ function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wr
     return str
 end
 
+struct LLVMFDump
+    tsm::Ptr{Cvoid} # opaque
+    f::Ptr{Cvoid} # opaque
+end
+
 function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, true, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, true, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_asm, Ref{String},
-                (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                llvmf, false, syntax, debuginfo, binary)
+                (Ptr{LLVMFDump}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                llvmf_dump, false, syntax, debuginfo, binary)
     return str
 end
 
@@ -201,11 +243,12 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, optimize, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
-                (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
-                llvmf, strip_ir_metadata, dump_module, debuginfo)
+                (Ptr{LLVMFDump}, Bool, Bool, Ptr{UInt8}),
+                llvmf_dump, strip_ir_metadata, dump_module, debuginfo)
     return str
 end
 

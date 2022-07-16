@@ -418,9 +418,15 @@ let src = get_llvm(f33829, Tuple{Float64}, true, true)
     @test !occursin(r"call [^(]*\{}", src)
 end
 
+# Base.vect prior to PR 41696
+function oldvect(X...)
+    T = Base.promote_typeof(X...)
+    return copyto!(Vector{T}(undef, length(X)), X)
+end
+
 let io = IOBuffer()
     # Test for the f(args...) = g(args...) generic codegen optimization
-    code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
+    code_llvm(io, oldvect, Tuple{Vararg{Union{Float64, Int64}}})
     @test !occursin("__apply", String(take!(io)))
 end
 
@@ -490,8 +496,9 @@ function f37262(x)
 end
 @testset "#37262" begin
     str = "store volatile { i8, {}*, {}*, {}*, {}* } zeroinitializer, { i8, {}*, {}*, {}*, {}* }* %phic"
+    str_opaque = "store volatile { i8, ptr, ptr, ptr, ptr } zeroinitializer, ptr %phic"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
-    @test contains(llvmstr, str) || llvmstr
+    @test (contains(llvmstr, str) || contains(llvmstr, str_opaque)) || llvmstr
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
 
@@ -706,9 +713,9 @@ struct A44921{T}
     x::T
 end
 function f44921(a)
-    if a == :x
+    if a === :x
         A44921(_f) # _f purposefully undefined
-    elseif a == :p
+    elseif a === :p
         g44921(a)
     end
 end

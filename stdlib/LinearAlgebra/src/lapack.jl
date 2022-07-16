@@ -5455,7 +5455,7 @@ for (bdsdc, elty) in
             elseif compq == 'P'
                 @warn "COMPQ='P' is not tested"
                 #TODO turn this into an actual LAPACK call
-                #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
+                #smlsiz=ilaenv(9, $elty === :Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
                 smlsiz=100 #For now, completely overkill
                 ldq = n*(11+2*smlsiz+8*round(Int,log((n/(smlsiz+1)))/log(2)))
                 ldiq = n*(3+3*round(Int,log(n/(smlsiz+1))/log(2)))

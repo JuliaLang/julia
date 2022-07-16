@@ -117,7 +117,7 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
-        return reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&data->M);
+        return wrap(&data->M);
     else
         return NULL;
 }
@@ -264,7 +264,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         ctx = jl_ExecutionEngine->acquireContext();
         backing = jl_create_llvm_module("text", ctx, imaging);
     }
-    orc::ThreadSafeModule &clone = llvmmod ? *reinterpret_cast<orc::ThreadSafeModule*>(llvmmod) : backing;
+    orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
     auto ctxt = clone.getContext();
     jl_codegen_params_t params(ctxt);
     params.params = cgparams;
@@ -291,7 +291,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(wrap(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -480,8 +480,6 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
-    legacy::PassManager PM;
-    addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -498,20 +496,28 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
+    legacy::PassManager preopt, postopt;
+
     if (unopt_bc_fname)
-        PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname) {
-        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, jl_options.opt_level);
-    }
+        preopt.add(createBitcodeWriterPass(unopt_bc_OS));
+
+    //Is this necessary for TM?
+    // addTargetPasses(&postopt, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (bc_fname)
-        PM.add(createBitcodeWriterPass(bc_OS));
+        postopt.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
+
+    legacy::PassManager optimizer;
+    if (bc_fname || obj_fname || asm_fname) {
+        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+        addMachinePasses(&optimizer, jl_options.opt_level);
+    }
 
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
@@ -542,7 +548,9 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        PM.run(M);
+        preopt.run(M);
+        optimizer.run(M);
+        postopt.run(M);
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -623,7 +631,19 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     //       to merge allocations and sometimes eliminate them,
     //       since AllocOpt does not handle PhiNodes.
     //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
+    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true);
+    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true)
+        //These mess with loop rotation, so only do them after that
+        .hoistCommonInsts(true)
+        // Causes an SRET assertion error in late-gc-lowering
+        // .sinkCommonInsts(true)
+        ;
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -638,7 +658,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             if (opt_level == 1)
                 PM->add(createInstSimplifyLegacyPass());
         }
-        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -668,7 +688,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
                 PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -689,7 +709,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -703,7 +723,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
@@ -773,14 +793,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
     }
     PM->add(createDeadStoreEliminationPass());
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
+    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
+
+    // More dead allocation (store) deletion before loop optimization
+    // consider removing this:
+    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
+    PM->add(createAllocOptPass());
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
@@ -788,12 +809,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Cleanup after LV pass
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        SimplifyCFGOptions()
-            .forwardSwitchCondToPhi(true)
-            .convertSwitchToLookupTable(true)
-            .needCanonicalLoops(false)
-            .hoistCommonInsts(true)
-            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+        aggressiveSimplifyCFGOptions
     ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
@@ -804,7 +820,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (lower_intrinsics) {
         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
         // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        // pass pipeline being re-executed. Prevent this by inserting a barrier.
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
@@ -982,44 +998,43 @@ llvmGetPassPluginInfo() {
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
         // not a generic function
-        return NULL;
-    }
-
-    static legacy::PassManager *PM;
-    if (!PM) {
-        PM = new legacy::PassManager();
-        addTargetPasses(PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
-        addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_options.opt_level);
+        dump->F = NULL;
+        return;
     }
 
     // get the source code for this function
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH2(&src, &jlrettype);
-    jl_value_t *ci = jl_rettype_inferred(mi, world, world);
-    if (ci != jl_nothing) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)codeinst->inferred;
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
-        jlrettype = codeinst->rettype;
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
-        if (src)
-            jlrettype = src->rettype;
-        else if (jl_is_method(mi->def.method)) {
-            src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
-            if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+        src = (jl_code_info_t*)mi->def.method->source;
+        if (src && !jl_is_code_info(src))
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    } else {
+        jl_value_t *ci = jl_rettype_inferred(mi, world, world);
+        if (ci != jl_nothing) {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+            src = (jl_code_info_t*)codeinst->inferred;
+            if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+            jlrettype = codeinst->rettype;
         }
-        // TODO: use mi->uninferred
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            src = jl_type_infer(mi, world, 0);
+            if (src)
+                jlrettype = src->rettype;
+            else if (jl_is_method(mi->def.method)) {
+                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            }
+            // TODO: use mi->uninferred
+        }
     }
 
     // emit this function into a new llvm module
@@ -1044,9 +1059,14 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             // and will better match what's actually in sysimg.
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
-            if (optimize)
+            if (optimize) {
+                legacy::PassManager PM;
+                addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
+                addOptimizationPasses(&PM, jl_options.opt_level);
+                addMachinePasses(&PM, jl_options.opt_level);
                 //Safe b/c context lock is held by output
-                PM->run(*m.getModuleUnlocked());
+                PM.run(*m.getModuleUnlocked());
+            }
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;
@@ -1060,8 +1080,11 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
-        if (F)
-            return new jl_llvmf_dump_t{std::move(m), F};
+        if (F) {
+            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(m)));
+            dump->F = wrap(F);
+            return;
+        }
     }
 
     const char *mname = name_from_method_instance(mi);

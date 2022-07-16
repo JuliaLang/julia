@@ -17,6 +17,7 @@ size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
 checknonsingular(info, ::RowMaximum) = info == 0 || throw(SingularException(info))
+checknonsingular(info, ::RowNonZero) = info == 0 || throw(SingularException(info))
 checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
 checknonsingular(info) = checknonsingular(info, RowMaximum())
 
@@ -31,12 +32,12 @@ Test that a factorization of a matrix succeeded.
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 true
 
 julia> F = lu([1 0; 0 0]; check = false);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 false
 ```
 """

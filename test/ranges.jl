@@ -874,7 +874,6 @@ end
 @testset "Inexact errors on 32 bit architectures. #22613" begin
     @test first(range(log(0.2), stop=log(10.0), length=10)) == log(0.2)
     @test last(range(log(0.2), stop=log(10.0), length=10)) == log(10.0)
-    @test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 end
 
 @testset "ranges with very small endpoints for type $T" for T = (Float32, Float64)
@@ -2029,6 +2028,11 @@ end
     @test r == Int8[-1, 1, 3]
     @test eltype(r) === Int8
     @test typeof(step(r)) === Int8
+end
+
+@testset "length(StepRange()) type stability" begin
+    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0)))
+    typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin

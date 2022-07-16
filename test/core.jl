@@ -2838,10 +2838,10 @@ let f
     end
 end
 for m in methods(f10373)
-    @test m.name == :f10373
+    @test m.name === :f10373
 end
 for m in methods(g10373)
-    @test m.name == :g10373
+    @test m.name === :g10373
 end
 
 # issue #7221
@@ -3607,7 +3607,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3617,7 +3617,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -4229,7 +4229,7 @@ end
 let ex = quote
              $(if true; :(test); end)
          end
-    @test ex.args[2] == :test
+    @test ex.args[2] === :test
 end
 
 # issue #15180
@@ -7799,4 +7799,16 @@ end
     @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
     m.x = 4.
     @test m.x === 4
+end
+
+# #45350 - Codegen for assignment to binding imported from module
+module Foo45350
+    global x45350::Int = 1
+end
+import .Foo45350: x45350
+f45350() = (global x45350 = 2)
+@test_throws ErrorException f45350()
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
 end

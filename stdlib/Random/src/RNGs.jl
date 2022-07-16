@@ -388,6 +388,7 @@ end
 
 function __init__()
     seed!(GLOBAL_RNG)
+    ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
 end
 
 

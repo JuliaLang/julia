@@ -506,6 +506,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
                 return jl_true;
             else if (hd == jl_ast_ctx(fl_ctx)->false_sym && llength(e) == 1)
                 return jl_false;
+            else if (hd == fl_ctx->jl_char_sym && llength(e) == 2) {
+                value_t v = car_(cdr_(e));
+                if (!(iscprim(v) && cp_class((cprim_t*)ptr(v)) == fl_ctx->uint32type))
+                    jl_error("malformed julia char");
+                uint32_t c = *(uint32_t*)cp_data((cprim_t*)ptr(v));
+                return jl_box_char(c);
+            }
         }
         if (issymbol(hd))
             sym = scmsym_to_julia(fl_ctx, hd);

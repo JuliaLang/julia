@@ -72,9 +72,11 @@ Base.MathConstants.catalan
 Base.MathConstants.eulergamma
 Base.MathConstants.golden
 Base.Inf
+Base.Inf64
 Base.Inf32
 Base.Inf16
 Base.NaN
+Base.NaN64
 Base.NaN32
 Base.NaN16
 Base.issubnormal

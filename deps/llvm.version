@@ -1,2 +1,8 @@
-LLVM_BRANCH=julia-13.0.1-0
-LLVM_SHA1=julia-13.0.1-0
+## jll artifact
+LLVM_JLL_NAME := libLLVM
+LLVM_ASSERT_JLL_VER := 14.0.5+1
+
+## source build
+LLVM_VER := 14.0.5
+LLVM_BRANCH=julia-14.0.5-1
+LLVM_SHA1=julia-14.0.5-1

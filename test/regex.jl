@@ -69,6 +69,14 @@
     @test findall('→', "OH⁻ + H₃CBr →  HOH₃CBr⁻ → HOCH₃ + Br⁻") == [17, 35]
     @test findall('a', "") == Int[]
     @test findall('c', "batman") == Int[]
+    @test findall([0x52, 0x62], [0x40, 0x52, 0x62, 0x63]) == [2:3]
+    @test findall([0x52, 0x62], [0x40, 0x52, 0x62, 0x63, 0x52, 0x62]) == [2:3, 5:6]
+    @test findall([0x01, 0x01], [0x01, 0x01, 0x01, 0x01]) == [1:2, 3:4]
+    @test findall([0x01, 0x01], [0x01, 0x01, 0x01, 0x01]; overlap=true) == [1:2, 2:3, 3:4]
+
+    # findnext
+    @test findnext(r"z", "zabcz", 2) == 5:5
+    @test_throws BoundsError findnext(r"z", "zabcz", 7)
 
     # count
     @test count(r"\w+", "foo bar") == 2
@@ -115,6 +123,10 @@
     # Backcapture reference in substitution string
     @test replace("abcde", r"(..)(?P<byname>d)" => s"\g<byname>xy\\\1") == "adxy\\bce"
     @test_throws ErrorException replace("a", r"(?P<x>)" => s"\g<y>")
+    # test replace with invalid substitution group pattern
+    @test_throws ErrorException replace("s", r"(?<g1>.)" => s"\gg1>")
+    # test replace with 2-digit substitution group
+    @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
@@ -137,6 +149,8 @@
     @test startswith("abc", r"A"i)
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
+    # test with substring
+    @test endswith((@views "abc"[2:3]), r"C"i)
 
     @testset "multiplication & exponentiation" begin
         @test *(r"a") == r"a"
@@ -202,4 +216,11 @@
 
     # test that we can get the error message of negative error codes
     @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
+
+    # test failure cases for invalid integer flags
+    @test_throws ArgumentError Regex("test", typemax(Int32), 0)
+    @test_throws ArgumentError Regex("test", 0, typemax(Int32))
+
+    # hash
+    @test hash(r"123"i, zero(UInt)) == hash(Regex("123", "i"), zero(UInt))
 end

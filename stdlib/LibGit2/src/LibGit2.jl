@@ -87,7 +87,7 @@ is in the repository.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
 
@@ -230,7 +230,7 @@ Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
 
@@ -1021,6 +1021,15 @@ function set_ssl_cert_locations(cert_loc)
     Your Julia is built with a SSL/TLS engine that libgit2 doesn't know how to configure to use a file or directory of certificate authority roots, but your environment specifies one via the $var variable. If you believe your system's root certificates are safe to use, you can `export JULIA_SSL_CA_ROOTS_PATH=""` in your environment to use those instead.
     """
     throw(Error.GitError(err.class, err.code, chomp(msg)))
+end
+
+"""
+    trace_set(level::Union{Integer,GIT_TRACE_LEVEL})
+
+Sets the system tracing configuration to the specified level.
+"""
+function trace_set(level::Union{Integer,Consts.GIT_TRACE_LEVEL}, cb=trace_cb())
+    @check @ccall "libgit2".git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
 end
 
 end # module

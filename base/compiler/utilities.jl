@@ -64,6 +64,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -183,7 +184,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atype, sparams
+    return Pair{Any,SimpleVector}(atype, sparams)
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
@@ -208,22 +209,19 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-# This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
-            end
-        end
-    end
-    return nothing
-end
+"""
+    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :aggressive`.
+"""
+is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
+
+"""
+    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :none`.
+"""
+is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 
 #########
 # types #
@@ -243,6 +241,27 @@ end
 ###################
 # SSAValues/Slots #
 ###################
+
+function ssamap(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            op[] = f(val)
+        end
+    end
+    return urs[]
+end
+
+function foreachssa(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            f(val)
+        end
+    end
+end
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
@@ -348,6 +367,38 @@ end
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
     isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
+
+######################
+# IncrementalCompact #
+######################
+
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact)
+    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
+    nvals = length(compact.used_ssas)
+    nbody1 = length(body1)
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    function increment_uses(ssa::SSAValue)
+        uses[ssa.id] += 1
+    end
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreachssa(increment_uses, e)
+    end
+    return uses
+end
 
 ###########
 # options #

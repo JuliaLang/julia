@@ -418,7 +418,7 @@ end
     end
     @test nextind("fóobar", 0, 3) == 4
 
-    @test Symbol(gstr) == Symbol("12")
+    @test Symbol(gstr) === Symbol("12")
 
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
@@ -435,6 +435,9 @@ end
         @test all(x -> x == "12", svec)
         @test svec isa Vector{AbstractString}
     end
+    # test startswith and endswith for AbstractString
+    @test endswith(GenericString("abcd"), GenericString("cd"))
+    @test startswith(GenericString("abcd"), GenericString("ab"))
 end
 
 @testset "issue #10307" begin
@@ -1095,13 +1098,44 @@ end
     @test sprint(summary, "") == "empty String"
 end
 
+@testset "Plug holes in test coverage" begin
+    @test_throws MethodError checkbounds(Bool, "abc", [1.0, 2.0])
+
+    apple_uint8 = Vector{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
+    Base.String(::tstStringType) = "Test"
+    abstract_apple = tstStringType(apple_uint8)
+    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+
+    @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
+
+    @test isascii(GenericString("abc"))
+
+    code_units = Base.CodeUnits("abc")
+    @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
+    @test Base.elsize(code_units) == sizeof(UInt8)
+    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+end
+
 @testset "LazyString" begin
     @test repr(lazy"$(1+2) is 3") == "\"3 is 3\""
     let d = Dict(lazy"$(1+2) is 3" => 3)
         @test d["3 is 3"] == 3
     end
     l = lazy"1+2"
+    @test isequal( l, lazy"1+2" )
+    @test ncodeunits(l) == ncodeunits("1+2")
     @test codeunit(l) == UInt8
     @test codeunit(l,2) == 0x2b
     @test isvalid(l, 1)
+    @test Base.infer_effects((Any,)) do a
+        throw(lazy"a is $a")
+    end |> Core.Compiler.is_foldable
+    @test Base.infer_effects((Int,)) do a
+        if a < 0
+            throw(DomainError(a, lazy"$a isn't positive"))
+        end
+        return a
+    end |> Core.Compiler.is_foldable
 end

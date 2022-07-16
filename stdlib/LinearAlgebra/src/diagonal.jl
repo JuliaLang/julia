@@ -285,6 +285,7 @@ function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
 end
 
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
+    require_one_based_indexing(B)
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -306,6 +307,7 @@ end
     return out
 end
 @inline function __muldiag!(out, A, D::Diagonal, alpha, beta)
+    require_one_based_indexing(A)
     require_one_based_indexing(out)
     if iszero(alpha)
         _rmul_or_fill!(out, beta)
@@ -704,7 +706,7 @@ function pinv(D::Diagonal{T}, tol::Real) where T
 end
 
 #Eigensystem
-eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = D.diag
+eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = copy(D.diag)
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
     [eigvals(x) for x in D.diag] #For block matrices, etc.
 eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
@@ -754,8 +756,8 @@ end
 /(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
 /(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
-*(A::AbstractTriangular, D::Diagonal) = Base.@invoke *(A::AbstractMatrix, D::Diagonal)
-*(D::Diagonal, A::AbstractTriangular) = Base.@invoke *(D::Diagonal, A::AbstractMatrix)
+*(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
+*(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
 
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 

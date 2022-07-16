@@ -478,6 +478,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
 
         # Some manual setup
         s = LineEdit.init_state(repl.t, repl.interface)
+        repl.mistate = s
         LineEdit.edit_insert(s, "wip")
 
         # LineEdit functions related to history
@@ -1096,7 +1097,34 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+# test activate_module
+fake_repl() do stdin_write, stdout_read, repl
+    repl.history_file = false
+    repl.interface = REPL.setup_interface(repl)
+    repl.mistate = LineEdit.init_state(repl.t, repl.interface)
+
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    write(stdin_write, "(123, Base.Fix1)\n")
+    @test occursin("julia> ", split(readline(stdout_read), "Base.Fix1")[2])
+    @test occursin("(123, Base.Fix1)", readline(stdout_read))
+    readline(stdout_read)
+
+    repl.mistate.active_module = Base # simulate activate_module(Base)
+    write(stdin_write, "(456, Base.Fix2)\n")
+    @test occursin("(Base) julia> ", split(readline(stdout_read), "Base.Fix2")[2])
+    # ".Base" prefix not shown here
+    @test occursin("(456, Fix2)", readline(stdout_read))
+    readline(stdout_read)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+help_result(line, mod::Module=Base) = mod.eval(REPL._helpmode(IOBuffer(), line))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1139,6 +1167,13 @@ end
 
 # Issue #40563
 @test occursin("does not exist", sprint(show, help_result("..")))
+# test that helpmode is sensitive to contextual module
+@test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Base.Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Fix2", Base)))
+
 
 # Issue #25930
 
@@ -1288,7 +1323,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # necessary to read at least some part of the buffer,
     # for the "region_active" to have time to be updated
 
-    @test LineEdit.state(repl.mistate).region_active == :off
+    @test LineEdit.state(repl.mistate).region_active === :off
     @test s4 == "anything" # no control characters between the last two occurrences of "anything"
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
@@ -1428,4 +1463,88 @@ fake_repl() do stdin_write, stdout_read, repl
     @test readline(stdout_read) == "Stacktrace:"
     write(stdin_write, '\x04')
     Base.wait(repltask)
+end
+
+fakehistory_2 = """
+# time: 2014-06-29 20:44:29 EDT
+# mode: shell
+\txyz = 2
+# time: 2014-06-29 20:44:29 EDT
+# mode: julia
+\txyz = 2
+# time: 2014-06-29 21:44:29 EDT
+# mode: julia
+\txyz = 1
+# time: 2014-06-30 17:32:49 EDT
+# mode: julia
+\tabc = 3
+# time: 2014-06-30 17:32:59 EDT
+# mode: julia
+\txyz = 1
+# time: 2014-06-30 99:99:99 EDT
+# mode: julia
+\txyz = 2
+# time: 2014-06-30 99:99:99 EDT
+# mode: extended
+\tuser imported custom mode
+"""
+
+# Test various history related issues
+for prompt = ["TestΠ", () -> randstring(rand(1:10))]
+    fake_repl() do stdin_write, stdout_read, repl
+        # In the future if we want we can add a test that the right object
+        # gets displayed by intercepting the display
+        repl.specialdisplay = REPL.REPLDisplay(repl)
+
+        errormonitor(@async write(devnull, stdout_read)) # redirect stdout to devnull so we drain the output pipe
+
+        repl.interface = REPL.setup_interface(repl)
+        repl_mode = repl.interface.modes[1]
+        shell_mode = repl.interface.modes[2]
+        help_mode = repl.interface.modes[3]
+        histp = repl.interface.modes[4]
+        prefix_mode = repl.interface.modes[5]
+
+        hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
+                                                       :shell => shell_mode,
+                                                       :help  => help_mode))
+        hist_path = tempname()
+        write(hist_path, fakehistory_2)
+        REPL.hist_from_file(hp, hist_path)
+        f = open(hist_path, read=true, write=true, create=true)
+        hp.history_file = f
+        seekend(f)
+        REPL.history_reset_state(hp)
+
+        histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+
+        s = LineEdit.init_state(repl.t, prefix_mode)
+        prefix_prev() = REPL.history_prev_prefix(s, hp, "x")
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 1"
+        prefix_prev()
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+        prefix_prev()
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "xyz = 2"
+    end
+end
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    repl.interface = REPL.setup_interface(repl)
+    s = LineEdit.init_state(repl.t, repl.interface)
+    LineEdit.edit_insert(s, "1234αβ")
+    input_f = function(filename, line, column)
+        write(filename, "1234αβ56γ\n")
+    end
+    LineEdit.edit_input(s, input_f)
+    @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
 end

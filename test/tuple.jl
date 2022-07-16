@@ -43,6 +43,9 @@ end
     let x = @inferred(convert(Tuple{Integer, UInt8, UInt16, UInt32, Int, Vararg{Real}}, (2.0, 3, 5, 6.0, 42, 3.0+0im)))
         @test x == (2, 0x03, 0x0005, 0x00000006, 42, 3.0)
     end
+    for x in (Int(2), UInt8(3), UInt16(5), UInt32(6), 42, 5.0, 3.0+0im)
+        @test (x,) == @inferred Tuple(x)
+    end
 
     @test_throws MethodError convert(Tuple{Int}, ())
     @test_throws MethodError convert(Tuple{Any}, ())
@@ -61,6 +64,9 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #44179
+    @test_throws TypeError NTuple{3}([1, nothing, nothing])
+    @test_throws TypeError NTuple{3}([nothing, 1, nothing])
     # issue #31824
     @test convert(NTuple, (1, 1.0)) === (1, 1.0)
     let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
@@ -241,6 +247,7 @@ end
     foo(x, y) = x + y
     foo(x, y, z) = x + y + z
     longtuple = ntuple(identity, 20)
+    vlongtuple = ntuple(identity, 33)
 
     @testset "1 argument" begin
         @test map(foo, ()) === ()
@@ -248,6 +255,7 @@ end
         @test map(foo, (1,2)) === (2,4)
         @test map(foo, (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple) === ntuple(i->2i,33)
     end
 
     @testset "2 arguments" begin
@@ -256,6 +264,7 @@ end
         @test map(foo, (1,2), (1,2)) === (2,4)
         @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
         @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+        @test map(foo, vlongtuple, vlongtuple) === ntuple(i->2i,33)
         @test_throws BoundsError map(foo, (), (1,))
         @test_throws BoundsError map(foo, (1,), ())
     end
@@ -266,13 +275,14 @@ end
         @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
         @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
         @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
+        @test map(foo, vlongtuple, vlongtuple, vlongtuple) === ntuple(i->3i,33)
         @test_throws BoundsError map(foo, (), (1,), (1,))
         @test_throws BoundsError map(foo, (1,), (1,), ())
     end
 end
 
 @testset "foreach" begin
-    longtuple = ntuple(identity, 20)
+    longtuple = ntuple(identity, 33)
 
     @testset "1 argument" begin
         foo(x) = push!(a, x)
@@ -351,8 +361,8 @@ end
     @test hash((1,)) === hash(1, Base.tuplehash_seed)
     @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
 
-    # Test Any16 methods
-    t = ntuple(identity, 16)
+    # Test Any32 methods
+    t = ntuple(identity, 32)
     @test isequal((t...,1,2,3), (t...,1,2,3))
     @test !isequal((t...,1,2,3), (t...,1,2,4))
     @test !isequal((t...,1,2,3), (t...,1,2))
@@ -371,7 +381,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,(),UInt(0)])
+    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
 end
 
 @testset "functions" begin
@@ -416,6 +426,19 @@ end
         @test all((true, true)) === true
         @test all((true, false)) === false
         @test all((false, false)) === false
+        @test all((missing, true)) === missing
+        @test all((true, missing)) === missing
+        @test all((missing, false)) === false
+        @test all((false, missing)) === false
+        @test all((missing, true, false)) === false
+        @test_throws TypeError all((missing, 3.2, true))
+        ts = (missing, true, false)
+        @test @allocated(all(ts)) == 0  # PR #44063
+        @test (@inferred (()->all((missing, true)))()) === missing
+        @test (@inferred (()->all((true, missing)))()) === missing
+        @test (@inferred (()->all((missing, false)))()) === false
+        @test (@inferred (()->all((false, missing)))()) === false
+        @test (@inferred (()->all((missing, true, false)))()) === false
     end
 
     @testset "any" begin
@@ -433,6 +456,21 @@ end
         @test any((true,false,true)) === true
         @test any((true,true,false)) === true
         @test any((true,true,true)) === true
+        @test any((missing, true)) === true
+        @test any((true, missing)) === true
+        @test any((missing, false)) === missing
+        @test any((false, missing)) === missing
+        @test any((missing, true, false)) === true
+        @test any((missing, false, false)) === missing
+        @test_throws TypeError any((missing, 3.2, true))
+        ts = (missing, true, false)
+        @test @allocated(any(ts)) == 0  # PR #44063
+        @test (@inferred (()->any((missing, true)))()) === true
+        @test (@inferred (()->any((true, missing)))()) === true
+        @test (@inferred (()->any((missing, false)))()) === missing
+        @test (@inferred (()->any((false, missing)))()) === missing
+        @test (@inferred (()->any((missing, true, false)))()) === true
+        @test (@inferred (()->any((missing, false, false)))()) === missing
     end
 end
 
@@ -568,12 +606,18 @@ end
     @test Base.return_types() do
         findlast(==(0), (1.0,2,3f0))
     end == Any[Nothing]
+
+    @testset "long tuples" begin
+        longtuple = ntuple(i -> i in (15,17) ? 1 : 0, 40)
+        @test findfirst(isequal(1), longtuple) == 15
+        @test findlast(isequal(1), longtuple) == 17
+    end
 end
 
 @testset "properties" begin
     ttest = (:a, :b, :c)
     @test propertynames(ttest) == (1, 2, 3)
-    @test getproperty(ttest, 2) == :b
+    @test getproperty(ttest, 2) === :b
     @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
     @test_throws ErrorException setproperty!(ttest, 1, :d)
 end

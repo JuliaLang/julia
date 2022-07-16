@@ -1,2 +1,10 @@
+## jll artifact
+OPENBLAS_JLL_NAME := OpenBLAS
+
+## source build
+OPENBLAS_VER := 0.3.20
 OPENBLAS_BRANCH=v0.3.20
 OPENBLAS_SHA1=0b678b19dc03f2a999d6e038814c4c50b9640a4e
+
+# LAPACK, source-only
+LAPACK_VER := 3.9.0

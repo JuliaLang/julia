@@ -66,7 +66,11 @@
     ((type *) ((char *)(ptr) - offsetof(type, member)))
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
+typedef struct _jl_tls_states_t *jl_ptls_t;
 
+#ifdef LIBRARY_EXPORTS
+#include "uv.h"
+#endif
 #include "julia_atomics.h"
 #include "julia_threads.h"
 #include "julia_assert.h"
@@ -230,18 +234,19 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
-// the following mirrors `struct EffectsOverride` in `base/compiler/types.jl`
+// the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
-        uint8_t ipo_consistent  : 1;
-        uint8_t ipo_effect_free : 1;
-        uint8_t ipo_nothrow     : 1;
-        uint8_t ipo_terminates  : 1;
+        uint8_t ipo_consistent          : 1;
+        uint8_t ipo_effect_free         : 1;
+        uint8_t ipo_nothrow             : 1;
+        uint8_t ipo_terminates_globally : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
-        uint8_t ipo_terminates_locally : 1;
+        uint8_t ipo_terminates_locally  : 1;
+        uint8_t ipo_notaskstate         : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -392,25 +397,27 @@ typedef struct _jl_code_instance_t {
 
     // purity results
 #ifdef JL_USE_ANON_UNIONS_FOR_PURITY_FLAGS
-    // see also encode_effects() and decode_effects() in `base/compiler/types.jl`,
+    // see also encode_effects() and decode_effects() in `base/compiler/effects.jl`,
     union {
         uint32_t ipo_purity_bits;
         struct {
-            uint8_t ipo_consistent:2;
-            uint8_t ipo_effect_free:2;
-            uint8_t ipo_nothrow:2;
-            uint8_t ipo_terminates:2;
-            uint8_t ipo_nonoverlayed:1;
+            uint8_t ipo_consistent   : 2;
+            uint8_t ipo_effect_free  : 2;
+            uint8_t ipo_nothrow      : 2;
+            uint8_t ipo_terminates   : 2;
+            uint8_t ipo_nonoverlayed : 1;
+            uint8_t ipo_notaskstate  : 2;
         } ipo_purity_flags;
     };
     union {
         uint32_t purity_bits;
         struct {
-            uint8_t consistent:2;
-            uint8_t effect_free:2;
-            uint8_t nothrow:2;
-            uint8_t terminates:2;
-            uint8_t nonoverlayed:1;
+            uint8_t consistent   : 2;
+            uint8_t effect_free  : 2;
+            uint8_t nothrow      : 2;
+            uint8_t terminates   : 2;
+            uint8_t nonoverlayed : 1;
+            uint8_t notaskstate  : 2;
         } purity_flags;
     };
 #else
@@ -1001,7 +1008,7 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_array_t*)a)->flags.ptrarray);
     assert(i < jl_array_len(a));
-    jl_atomic_store_relaxed(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i, (jl_value_t*)x);
+    jl_atomic_store_release(((_Atomic(jl_value_t*)*)(jl_array_data(a))) + i, (jl_value_t*)x);
     if (x) {
         if (((jl_array_t*)a)->flags.how == 3) {
             a = jl_array_data_owner(a);
@@ -1723,10 +1730,11 @@ JL_DLLEXPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_relative_path);
+                                     const char *image_path);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
+JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 
@@ -2052,6 +2060,7 @@ extern JL_DLLEXPORT JL_STREAM *JL_STDERR;
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void);
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void);
+JL_DLLEXPORT int jl_termios_size(void);
 
 // showing and std streams
 JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT;
@@ -2167,7 +2176,7 @@ typedef struct {
 
 #define jl_root_task (jl_current_task->ptls->root_task)
 
-JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 
 // TODO: we need to pin the task while using this (set pure bit)
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void) JL_NOTSAFEPOINT;

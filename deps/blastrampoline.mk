@@ -15,7 +15,7 @@ $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLI
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
-	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src $(MAKE_COMMON) install
+	$(MAKE) -C $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src $(MAKE_COMMON) install DESTDIR="$2"
 endef
 $(eval $(call staged-install, \
 	blastrampoline,$(BLASTRAMPOLINE_SRC_DIR), \
