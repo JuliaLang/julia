@@ -229,7 +229,7 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
         I->deleteValue();
     marker->eraseFromParent();
 
-    assert(!verifyModule(M));
+    assert(!verifyModule(M, &errs()));
     return Changed;
 }
 
