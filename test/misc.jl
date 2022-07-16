@@ -972,8 +972,7 @@ include("testenv.jl")
     cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
     io = IOBuffer()
     pipln = pipeline(cmd; stdout=io, stderr=io)
-    proc = run(pipln; wait = false)
-    wait(proc)
+    proc = run(ignorestatus(pipln))
     if !success(proc)
         # If the test failed, we print the stdout and stderr to the log.
         println(String(take!(io)))
