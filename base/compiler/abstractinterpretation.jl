@@ -1678,7 +1678,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_finalizer(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        return CallMeta(rt, builtin_effects(f, argtypes, rt), false)
+        effects = builtin_effects(f, argtypes[2:end], rt)
+        return CallMeta(rt, effects, false)
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return CallMeta(Any, Effects(), false)
@@ -2059,21 +2060,19 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 @goto t_computed
             end
         end
+        effects = EFFECTS_UNKNOWN
         cconv = e.args[5]
         if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
-            effects = v[2]
-            effects = decode_effects_override(effects)
-            tristate_merge!(sv, Effects(
-                effects.consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.nothrow ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.terminates_globally ? ALWAYS_TRUE : ALWAYS_FALSE,
-                #=nonoverlayed=#true,
-                effects.notaskstate ? ALWAYS_TRUE : ALWAYS_FALSE
-            ))
-        else
-            tristate_merge!(sv, EFFECTS_UNKNOWN)
+            override = decode_effects_override(v[2])
+            effects = Effects(
+                override.consistent          ? ALWAYS_TRUE : effects.consistent,
+                override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
+                override.nothrow             ? ALWAYS_TRUE : effects.nothrow,
+                override.terminates_globally ? ALWAYS_TRUE : effects.terminates_globally,
+                effects.nonoverlayed         ? true        : false,
+                override.notaskstate         ? ALWAYS_TRUE : effects.notaskstate)
         end
+        tristate_merge!(sv, effects)
     elseif ehead === :cfunction
         tristate_merge!(sv, EFFECTS_UNKNOWN)
         t = e.args[1]
@@ -2337,9 +2336,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    def = frame.linfo.def
-    isva = isa(def, Method) && def.isva
-    nargs = length(frame.result.argtypes) - isva
+    nargs = narguments(frame)
     slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
