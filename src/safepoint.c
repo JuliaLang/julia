@@ -44,10 +44,9 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // load/store so that threads waiting for the GC doesn't have to also
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
-uv_cond_t safepoint_cond;
 
 jl_mutex_t safepoint_master_lock;
-const uint64_t timeout_ns = 1e3;
+const uint64_t timeout_ns = 1e5;
 
 extern _Atomic(int32_t) nworkers_marking;
 extern void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT;
@@ -95,7 +94,6 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 void jl_safepoint_init(void)
 {
     uv_mutex_init(&safepoint_lock);
-    uv_cond_init(&safepoint_cond);
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
@@ -156,7 +154,6 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
     uv_mutex_unlock(&safepoint_lock);
-    uv_cond_broadcast(&safepoint_cond);
 }
 
 // Thread recruitment scheme inspired by Hassanein's "spin-master",
@@ -261,13 +258,7 @@ void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
 
 void jl_spinmaster_wait_sweeping(void) JL_NOTSAFEPOINT
 {
-    // Use system mutexes rather than spin locking to minimize wasted CPU
-    // time on the idle cores while we wait for the GC to finish.
-    // This is particularly important when run under rr.
-    uv_mutex_lock(&safepoint_lock);
-    if (jl_atomic_load_relaxed(&jl_gc_running))
-        uv_cond_wait(&safepoint_cond, &safepoint_lock);
-    uv_mutex_unlock(&safepoint_lock);
+    jl_cpu_pause();
 }
 
 void jl_spinmaster_wait_gc(void) JL_NOTSAFEPOINT
