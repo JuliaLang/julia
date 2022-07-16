@@ -222,5 +222,5 @@
     @test_throws ArgumentError Regex("test", 0, typemax(Int32))
 
     # hash
-    @test hash(r"123"i, 0x000000000) == hash(Regex("123", "i"), 0x000000000)
+    @test hash(r"123"i, zero(UInt)) == hash(Regex("123", "i"), zero(UInt))
 end
