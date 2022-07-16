@@ -31,7 +31,7 @@ typedef struct {
     _Atomic(ws_array_t *) array;
 } ws_queue_t;
 
-void ws_queue_push(ws_queue_t *dq, void *elt) JL_NOTSAFEPOINT;
+int ws_queue_push(ws_queue_t *dq, void *elt) JL_NOTSAFEPOINT;
 
 ws_array_t *ws_queue_resize(ws_queue_t *dq) JL_NOTSAFEPOINT;
 

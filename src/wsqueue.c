@@ -16,19 +16,19 @@ ws_array_t *create_ws_array(size_t capacity)
     return a;
 }
 
-void ws_queue_push(ws_queue_t *q, void *v)
+int ws_queue_push(ws_queue_t *q, void *v)
 {
     int64_t b = jl_atomic_load_relaxed(&q->bottom);
     int64_t t = jl_atomic_load_acquire(&q->top);
     ws_array_t *a = jl_atomic_load_relaxed(&q->array);
     if (__unlikely(b - t > a->capacity - 1)) {
-        // Queue is full: resize it
-        jl_safe_printf("Queue overflow\n");
-	abort();
+        // Queue is full
+        return 0;
     }
     jl_atomic_store_relaxed((_Atomic(void *) *)&a->buffer[b % a->capacity], v);
     jl_fence_release();
     jl_atomic_store_relaxed(&q->bottom, b + 1);
+    return 1;
 }
 
 ws_array_t *ws_queue_resize(ws_queue_t *q)

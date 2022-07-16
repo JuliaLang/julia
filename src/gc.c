@@ -1701,7 +1701,11 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
     *mq->current = obj;
     mq->current++;
 #else
-    ws_queue_push(&mq->q, v);
+    // Queue overflow
+    if (!ws_queue_push(&mq->q, v)) {
+        jl_safe_printf("Queue overflow\n");
+        abort();
+    }
 #endif
 }
 
@@ -1721,7 +1725,7 @@ static void *gc_markqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
 static void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
-                           uintptr_t *nptr) JL_NOTSAFEPOINT
+                                  uintptr_t *nptr) JL_NOTSAFEPOINT
 {
     if (!_obj)
         return;
@@ -2890,7 +2894,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->nbig_obj = 0;
 
     // Work-stealing queue
-    size_t init_size = (1 << 18);
+    size_t init_size = (1 << 20);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     ws_queue_t *q = &mq->q;
     ws_array_t *wsa = create_ws_array(init_size);
