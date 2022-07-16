@@ -967,12 +967,18 @@ end
 
 include("testenv.jl")
 
-
-let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
-    local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
-
-    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
-        error("Deprecation test failed, cmd : $cmd")
+@testset "deprecation_exec" begin
+    flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
+    cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
+    io = IOBuffer()
+    pipln = pipeline(cmd; stdout=io, stderr=io)
+    proc = run(pipln; wait = false)
+    wait(proc)
+    if !success(proc)
+        # If the test failed, we print the stdout and stderr to the log.
+        println(String(take!(io)))
+        @error "Deprecation test failed" cmd proc.exitcode proc.termsignal
+        @test false
     end
 end
 
