@@ -2875,7 +2875,7 @@ lolstack(array_of_arrays::Vector{Vector{Vector{N}}}) where {N} = lolstack(array_
 lolstack(array_of_arrays::Vector{Vector{Vector{Vector{N}}}}) where {N} = lolstack(array_of_arrays, ndim=4)
 lolstack(array_of_arrays::Vector{Vector{Vector{Vector{Vector{N}}}}}) where {N} = lolstack(array_of_arrays, ndim=5)
 lolstack(f, c...) = lolstack(Iterators.map(f, c...))
-function lolstack_(aoa; ndim=ndim)
+function lolstack_(aoa; ndim)
     if ndim == 1
         aoa
     else
