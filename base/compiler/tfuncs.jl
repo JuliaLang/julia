@@ -90,6 +90,18 @@ end
 
 add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 
+# works similarly to tuple, but with more type stability
+struct InstanceofResult
+    type # TODO ::Type
+    isexact::Bool
+    isconcrete::Bool
+    istype::Bool
+    InstanceofResult(@nospecialize(type), isexact::Bool, isconcrete::Bool, istype::Bool) = new(type#=::Type=#, isexact, isconcrete, istype)
+end
+@eval iterate(res::InstanceofResult, state=1) =
+    state > $(fieldcount(InstanceofResult)) ? nothing : (getfield(res, state), state+1)
+getindex(res::InstanceofResult, idx::Int) = getfield(res, idx)
+
 # the inverse of typeof_tfunc
 # returns (type, isexact, isconcrete, istype)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
@@ -98,25 +110,25 @@ add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
-            return t.val, true, isconcretetype(t.val), true
+            return InstanceofResult(t.val, true, isconcretetype(t.val), true)
         end
-        return Bottom, true, false, false # runtime throws on non-Type
+        return InstanceofResult(Bottom, true, false, false) # runtime throws on non-Type
     end
     t = widenconst(t)
     troot = widenconst(troot)
     if t === Bottom
-        return Bottom, true, true, false # runtime unreachable
+        return InstanceofResult(Bottom, true, true, false) # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
-        return Bottom, true, false, false # literal Bottom or non-Type
+        return InstanceofResult(Bottom, true, false, false) # literal Bottom or non-Type
     elseif isType(t)
         tp = t.parameters[1]
-        valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        valid_as_lattice(tp, astag) || return InstanceofResult(Bottom, true, false, false) # runtime unreachable / throws on non-Type
         if troot isa UnionAll
             # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
             # Widen them before `UnionAll` rewraping to relax concrete constraint.
             tp = widen_diagonal(tp, troot)
         end
-        return tp, !has_free_typevars(tp), isconcretetype(tp), true
+        return InstanceofResult(tp, !has_free_typevars(tp), isconcretetype(tp), true)
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
         t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
@@ -132,7 +144,7 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
                 isexact = true
             end
         end
-        return tr, isexact, isconcrete, istype
+        return InstanceofResult(tr, isexact, isconcrete, istype)
     elseif isa(t, Union)
         ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag, troot)
         tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag, troot)
@@ -141,11 +153,11 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
         # most users already handle the Union case, so here we assume that
         # `isexact` only cares about the answers where there's actually a Type
         # (and assuming other cases causing runtime errors)
-        ta === Union{} && return tb, isexact_b, isconcrete, istype
-        tb === Union{} && return ta, isexact_a, isconcrete, istype
-        return Union{ta, tb}, false, isconcrete, istype # at runtime, will be exactly one of these
+        ta === Union{} && return InstanceofResult(tb, isexact_b, isconcrete, istype)
+        tb === Union{} && return InstanceofResult(ta, isexact_a, isconcrete, istype)
+        return InstanceofResult(Union{ta, tb}, false, isconcrete, istype) # at runtime, will be exactly one of these
     end
-    return Any, false, false, false
+    return InstanceofResult(Any, false, false, false)
 end
 
 # IntrinsicFunction
