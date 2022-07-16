@@ -1694,8 +1694,10 @@ static jl_value_t *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOIN
 static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 {
 #ifdef GC_VERIFY
-    if (__unlikely(mq->current == mq->end))
+    if (__unlikely(mq->current == mq->end)) {
         jl_safe_printf("Queue overflow\n");
+        abort();
+    }
     *mq->current = obj;
     mq->current++;
 #else
@@ -2888,7 +2890,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->nbig_obj = 0;
 
     // Work-stealing queue
-    size_t init_size = (1 << 17);
+    size_t init_size = (1 << 18);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     ws_queue_t *q = &mq->q;
     ws_array_t *wsa = create_ws_array(init_size);
