@@ -181,7 +181,7 @@ julia> abs2(-3)
 julia> abs2(3.0 + 4.0im)
 25.0
 
-julia> sum(abs2, [1+2im, 3+4im])
+julia> sum(abs2, [1+2im, 3+4im])  # norm(x)^2
 30
 ```
 """
