@@ -1447,6 +1447,7 @@ function length(s::Stateful)
         length(s.itr) - (one(rem) - rem)
     end
 end
+end # if statement several hundred lines above
 
 """
     only(x)
