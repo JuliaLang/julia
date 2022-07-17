@@ -970,9 +970,10 @@ include("testenv.jl")
 @testset "deprecation_exec" begin
     flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
+    cmd = ignorestatus(cmd)
     io = Base.BufferStream()
     pipln = pipeline(cmd; stdout=io, stderr=io)
-    proc = run(ignorestatus(pipln))
+    proc = run(pipln)
     close(io)
     proc_output = String(read(io))
     if !success(proc)
