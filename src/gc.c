@@ -28,6 +28,7 @@ static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 
 _Atomic(int32_t) nworkers_marking = 0;
+extern uv_cond_t safepoint_cond;
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
@@ -2238,8 +2239,10 @@ NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_
 static void gc_wake_workers(jl_ptls_t ptls)
 {
     jl_fence();
-    if (jl_n_threads > 1)
+    if (jl_n_threads > 1) {
         jl_wake_libuv();
+		uv_cond_broadcast(&safepoint_cond);
+	}
     for (int i = 0; i < jl_n_threads; i++) {
         if (i != ptls->tid)
             uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
