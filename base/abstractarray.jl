@@ -2863,23 +2863,20 @@ julia> a = eachcol(reshape(1:6,2,:))
  [3, 4]
  [5, 6]
 
-julia> Base.lolstack(a, ndim=2)
+julia> Base.lolstack(a)
 2×3 Matrix{Int64}:
  1  3  5
  2  4  6
 """
-lolstack(array_of_arrays; ndim) = lolstack_(array_of_arrays, ndim=ndim)
-lolstack(array_of_arrays::Vector{N}) where {N} = lolstack(array_of_arrays, ndim=1)
-lolstack(array_of_arrays::Vector{Vector{N}}) where {N} = lolstack(array_of_arrays, ndim=2)
-lolstack(array_of_arrays::Vector{Vector{Vector{N}}}) where {N} = lolstack(array_of_arrays, ndim=3)
-lolstack(array_of_arrays::Vector{Vector{Vector{Vector{N}}}}) where {N} = lolstack(array_of_arrays, ndim=4)
-lolstack(array_of_arrays::Vector{Vector{Vector{Vector{Vector{N}}}}}) where {N} = lolstack(array_of_arrays, ndim=5)
+lolstack(array_of_arrays) = lolstack_(array_of_arrays)
 lolstack(f, c...) = lolstack(Iterators.map(f, c...))
-function lolstack_(aoa; ndim)
-    if ndim == 1
-        aoa
+function lolstack_(gg; myshape=())
+    head, tail = Iterators.peel(gg)
+    dimlen = length(head)
+    if dimlen == 1
+        reshape(collect(gg), myshape...,:)
     else
-        reduce((a,b)->hvncat(ndim, a, b), lolstack_.(aoa, ndim=ndim-1))
+        lolstack_(Iterators.flatten(gg), myshape=(myshape..., dimlen))
     end
 end
 
