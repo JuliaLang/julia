@@ -2566,6 +2566,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             gc_cblist_root_scanner, (collection));
     }
     gc_mark_loop_master(ptls);
+    // Other workers may still be marking, so put
+    // this barrier to ensure we don't sweep prematurely
+    jl_spinmaster_wait_pmark();
     // main mark-loop is over
 
     // 4. check for objects to finalize
@@ -2589,9 +2592,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_mark_finlist(&ptls->mark_queue, &finalizer_list_marked, orig_marked_len);
     gc_mark_finlist(&ptls->mark_queue, &to_finalize, 0);
     gc_mark_loop(ptls);
-    // Other workers may still be marking, so put
-    // this barrier to ensure we don't sweep prematurely
-    jl_spinmaster_wait_pmark();
 
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
