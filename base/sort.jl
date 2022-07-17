@@ -762,6 +762,7 @@ function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     mn, mx
 end
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+    @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
         lt(o, v[i], v[i-1]) && return false
     end
