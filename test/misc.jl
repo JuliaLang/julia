@@ -970,12 +970,14 @@ include("testenv.jl")
 @testset "deprecation_exec" begin
     flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
-    io = IOBuffer()
+    io = Base.BufferStream()
     pipln = pipeline(cmd; stdout=io, stderr=io)
     proc = run(ignorestatus(pipln))
+    close(io)
+    proc_output = String(read(io))
     if !success(proc)
         # If the test failed, we print the stdout and stderr to the log.
-        println(String(take!(io)))
+        println(proc_output)
         @error "Deprecation test failed" cmd proc.exitcode proc.termsignal
         @test false
     end
