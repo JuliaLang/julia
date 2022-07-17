@@ -482,9 +482,11 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
-active_module()::Module = isdefined(Base, :active_repl) && isdefined(Base.active_repl, :mistate) && Base.active_repl.mistate !== nothing ?
-                      Base.active_repl.mistate.active_module :
-                      Main
+function active_module()
+    isassigned(REPL_MODULE_REF) || return Main
+    REPL = REPL_MODULE_REF[]
+    return REPL.active_module()::Module
+end
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
@@ -1190,12 +1192,12 @@ function print_fullname(io::IO, m::Module)
     end
 end
 
-function sourceinfo_slotnames(src::CodeInfo)
-    slotnames = src.slotnames
+sourceinfo_slotnames(src::CodeInfo) = sourceinfo_slotnames(src.slotnames)
+function sourceinfo_slotnames(slotnames::Vector{Symbol})
     names = Dict{String,Int}()
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
-        if slotnames[i] == :var"#unused#"
+        if slotnames[i] === :var"#unused#"
             printnames[i] = "_"
             continue
         end
@@ -1559,8 +1561,6 @@ unquoted(ex::Expr)       = ex.args[1]
 
 function printstyled end
 function with_output_color end
-
-is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
 
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
     printstyled(io, str; color=col, bold=true) :
@@ -2019,7 +2019,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
         funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
-        show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
+        show_call(head === :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2
@@ -2448,7 +2448,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
             print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_type_stacktrace(env_io, sig[i])
+        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false))
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2458,7 +2458,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
             first = false
             print_within_stacktrace(io, k; color=:light_black)
             print(io, "::")
-            print_type_stacktrace(io, t)
+            print_type_bicolor(io, t; use_color = get(io, :backtrace, false))
         end
     end
     print_within_stacktrace(io, ")", bold=true)
@@ -2466,16 +2466,25 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type;
     nothing
 end
 
-function print_type_stacktrace(io, type; color=:normal)
+function print_type_bicolor(io, type; kwargs...)
     str = sprint(show, type, context=io)
+    print_type_bicolor(io, str; kwargs...)
+end
+
+function print_type_bicolor(io, str::String; color=:normal, inner_color=:light_black, use_color::Bool=true)
     i = findfirst('{', str)
-    if !get(io, :backtrace, false)::Bool
+    if !use_color # fix #41928
         print(io, str)
     elseif i === nothing
         printstyled(io, str; color=color)
     else
         printstyled(io, str[1:prevind(str,i)]; color=color)
-        printstyled(io, str[i:end]; color=:light_black)
+        if endswith(str, "...")
+            printstyled(io, str[i:prevind(str,end,3)]; color=inner_color)
+            printstyled(io, "..."; color=color)
+        else
+            printstyled(io, str[i:end]; color=inner_color)
+        end
     end
 end
 
@@ -2558,7 +2567,7 @@ module IRShow
     import ..Base
     import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument,
         isexpr, compute_basic_blocks, block_for_inst,
-        TriState, Effects, ALWAYS_TRUE, ALWAYS_FALSE
+        TriState, Effects, ALWAYS_TRUE, ALWAYS_FALSE, TRISTATE_UNKNOWN
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)
@@ -2783,6 +2792,9 @@ function dump(arg; maxdepth=DUMP_DEFAULT_MAXDEPTH)
     dump(IOContext(stdout::IO, :limit => true, :module => mod), arg; maxdepth=maxdepth)
 end
 
+nocolor(io::IO) = IOContext(io, :color => false)
+alignment_from_show(io::IO, x::Any) =
+    textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
 
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
@@ -2800,35 +2812,38 @@ julia> Base.alignment(stdout, 1 + 10im)
 (3, 5)
 ```
 """
-alignment(io::IO, x::Any) = (0, length(sprint(show, x, context=io, sizehint=0)))
-alignment(io::IO, x::Number) = (length(sprint(show, x, context=io, sizehint=0)), 0)
-alignment(io::IO, x::Integer) = (length(sprint(show, x, context=io, sizehint=0)), 0)
+alignment(io::IO, x::Any) = (0, alignment_from_show(io, x))
+alignment(io::IO, x::Number) = (alignment_from_show(io, x), 0)
+alignment(io::IO, x::Integer) = (alignment_from_show(io, x), 0)
 function alignment(io::IO, x::Real)
-    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = sprint(show, x, context=nocolor(io), sizehint=0)
+    m = match(r"^(.*?)((?:[\.eEfF].*)?)$", s)
+    m === nothing ? (textwidth(s), 0) :
+                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[^ef][\+\-])(.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = sprint(show, x, context=nocolor(io), sizehint=0)
+    m = match(r"^(.*[^ef][\+\-])(.*)$", s)
+    m === nothing ? (textwidth(s), 0) :
+                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 function alignment(io::IO, x::Rational)
-    m = match(r"^(.*?/)(/.*)$", sprint(show, x, context=io, sizehint=0))
-    m === nothing ? (length(sprint(show, x, context=io, sizehint=0)), 0) :
-                   (length(m.captures[1]), length(m.captures[2]))
+    s = sprint(show, x, context=nocolor(io), sizehint=0)
+    m = match(r"^(.*?/)(/.*)$", s)
+    m === nothing ? (textwidth(s), 0) :
+                    (textwidth(m.captures[1]), textwidth(m.captures[2]))
 end
 
 function alignment(io::IO, x::Pair)
-    s = sprint(show, x, context=io, sizehint=0)
+    fullwidth = alignment_from_show(io, x)
     if !isdelimited(io, x) # i.e. use "=>" for display
         ctx = IOContext(io, :typeinfo => gettypeinfos(io, x)[1])
-        left = length(sprint(show, x.first, context=ctx, sizehint=0))
+        left = alignment_from_show(ctx, x.first)
         left += 2 * !isdelimited(ctx, x.first) # for parens around p.first
         left += !(get(io, :compact, false)::Bool) # spaces are added around "=>"
-        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+        (left+1, fullwidth-left-1) # +1 for the "=" part of "=>"
     else
-        (0, length(s)) # as for x::Any
+        (0, fullwidth) # as for x::Any
     end
 end
 

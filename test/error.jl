@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# for curmod_str
+include("testenv.jl")
+
 @testset "ExponentialBackOff" begin
     @test length(ExponentialBackOff(n=10)) == 10
     @test collect(ExponentialBackOff(n=10, first_delay=0.01))[1] == 0.01
@@ -93,6 +96,6 @@ end
         f44319(1)
     catch e
         s = sprint(showerror, e)
-        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\nClosest candidates are:\n  f44319() at none:0"
+        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
     end
 end

@@ -424,19 +424,21 @@ function sync_end(c::Channel{Any})
     # Capture all waitable objects scheduled after the end of `@sync` and
     # include them in the exception. This way, the user can check what was
     # scheduled by examining at the exception object.
-    local racy
-    for r in c
-        if !@isdefined(racy)
-            racy = []
+    if isready(c)
+        local racy
+        for r in c
+            if !@isdefined(racy)
+                racy = []
+            end
+            push!(racy, r)
         end
-        push!(racy, r)
-    end
-    if @isdefined(racy)
-        if !@isdefined(c_ex)
-            c_ex = CompositeException()
+        if @isdefined(racy)
+            if !@isdefined(c_ex)
+                c_ex = CompositeException()
+            end
+            # Since this is a clear programming error, show this exception first:
+            pushfirst!(c_ex, ScheduledAfterSyncException(racy))
         end
-        # Since this is a clear programming error, show this exception first:
-        pushfirst!(c_ex, ScheduledAfterSyncException(racy))
     end
 
     if @isdefined(c_ex)
@@ -924,7 +926,7 @@ function trypoptask(W::StickyWorkqueue)
             # can't throw here, because it's probably not the fault of the caller to wait
             # and don't want to use print() here, because that may try to incur a task switch
             ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
             continue
         end
         return t

@@ -154,7 +154,7 @@ f265(::Int) = 1
 h265() = true
 file = @__FILE__
 Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
-loc_h265 = "$file:$(@__LINE__() - 3)"
+loc_h265 = "@ $(@__MODULE__) $file:$(@__LINE__() - 3)"
 @test h265()
 @test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)
@@ -170,7 +170,7 @@ let ex = t265.exception
         MethodError: no method matching h265()
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
     @test startswith(str, cmps)
-    cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
+    cmps = "\n  h265() (method too new to be called from this world context.)\n   $loc_h265"
     @test occursin(cmps, str)
 end
 

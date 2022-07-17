@@ -1501,7 +1501,7 @@ function axpy!(α::Number,
     y::StridedVecLike{T}, ry::AbstractRange{<:Integer},
 ) where {T<:BlasFloat}
     if Base.has_offset_axes(rx, ry)
-        return Base.@invoke axpy!(α,
+        return @invoke axpy!(α,
             x::AbstractArray, rx::AbstractArray{<:Integer},
             y::AbstractArray, ry::AbstractArray{<:Integer},
         )

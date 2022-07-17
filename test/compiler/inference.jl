@@ -1817,10 +1817,10 @@ function f24852_kernel_cinfo(fsig::Type)
     Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 1, 0, :propagate)
     if startswith(String(match.method.name), "f24852")
         for a in code_info.code
-            if a isa Expr && a.head == :(=)
+            if Meta.isexpr(a, :(=))
                 a = a.args[2]
             end
-            if a isa Expr && length(a.args) === 3 && a.head === :call
+            if Meta.isexpr(a, :call) && length(a.args) === 3
                 pushfirst!(a.args, Core.SlotNumber(1))
             end
         end
@@ -2129,7 +2129,7 @@ end
     # `InterConditional` handling: `abstract_invoke`
     ispositive(a) = isa(a, Int) && a > 0
     @test Base.return_types((Any,)) do a
-        if Base.@invoke ispositive(a::Any)
+        if @invoke ispositive(a::Any)
             return a
         end
         return 0
@@ -2297,7 +2297,7 @@ end
 
     # work with `invoke`
     @test Base.return_types((Any,Any)) do x, y
-        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
+        @invoke ifelselike(isa(x, Int), x::Any, y::Int)
     end |> only == Int
 
     # don't be confused with vararg method
@@ -2801,7 +2801,7 @@ foo_inlining_apply(args...) = ccall(:jl_, Nothing, (Any,), args[1])
 bar_inlining_apply() = Core._apply_iterate(iterate, Core._apply_iterate, (iterate,), (foo_inlining_apply,), ((1,),))
 let ci = code_typed(bar_inlining_apply, Tuple{})[1].first
     @test length(ci.code) == 2
-    @test ci.code[1].head == :foreigncall
+    @test ci.code[1].head === :foreigncall
 end
 
 # Test that inference can infer .instance of types
@@ -3766,16 +3766,16 @@ end
         f(a::Number, sym::Bool) = sym ? Number : :number
     end
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Any, true::Bool)
+        @invoke f(a::Any, true::Bool)
     end) == Any[Type{Any}]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Number, true::Bool)
+        @invoke f(a::Number, true::Bool)
     end) == Any[Type{Number}]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Any, false::Bool)
+        @invoke f(a::Any, false::Bool)
     end) == Any[Symbol]
     @test (@eval m Base.return_types((Any,)) do a
-        Base.@invoke f(a::Number, false::Bool)
+        @invoke f(a::Number, false::Bool)
     end) == Any[Symbol]
 
     # https://github.com/JuliaLang/julia/issues/41024
@@ -3790,7 +3790,7 @@ end
         abstract type AbstractInterfaceExtended <: AbstractInterface end
         Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
             sym === :y ? getfield(x, sym)::Rational{Int} :
-            return Base.@invoke getproperty(x::AbstractInterface, sym::Symbol)
+            return @invoke getproperty(x::AbstractInterface, sym::Symbol)
     end
     @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
         x.x
@@ -4056,27 +4056,6 @@ end
         end |> only === Union{}
 end
 
-# Test that purity modeling doesn't accidentally introduce new world age issues
-f_redefine_me(x) = x+1
-f_call_redefine() = f_redefine_me(0)
-f_mk_opaque() = @Base.Experimental.opaque ()->Base.inferencebarrier(f_call_redefine)()
-const op_capture_world = f_mk_opaque()
-f_redefine_me(x) = x+2
-@test op_capture_world() == 1
-@test f_mk_opaque()() == 2
-
-# Test that purity doesn't try to accidentally run unreachable code due to
-# boundscheck elimination
-function f_boundscheck_elim(n)
-    # Inbounds here assumes that this is only ever called with n==0, but of
-    # course the compiler has no way of knowing that, so it must not attempt
-    # to run the @inbounds `getfield(sin, 1)`` that ntuple generates.
-    ntuple(x->(@inbounds getfield(sin, x)), n)
-end
-@test Tuple{} <: code_typed(f_boundscheck_elim, Tuple{Int})[1][2]
-
-@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
-
 # Test that max_methods works as expected
 @Base.Experimental.max_methods 1 function f_max_methods end
 f_max_methods(x::Int) = 1
@@ -4102,104 +4081,10 @@ end
     Core.Compiler.return_type(+, NTuple{2, Rational})
 end == Rational
 
+# vararg-tuple comparison within `PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
     @test Core.Compiler.issimplertype(t, t)
-end
-
-# https://github.com/JuliaLang/julia/issues/44763
-global x44763::Int = 0
-increase_x44763!(n) = (global x44763; x44763 += n)
-invoke44763(x) = Base.@invoke increase_x44763!(x)
-@test Base.return_types() do
-    invoke44763(42)
-end |> only === Int
-@test x44763 == 0
-
-# backedge insertion for Any-typed, effect-free frame
-const CONST_DICT = let d = Dict()
-    for c in 'A':'z'
-        push!(d, c => Int(c))
-    end
-    d
-end
-Base.@assume_effects :foldable getcharid(c) = CONST_DICT[c]
-@noinline callf(f, args...) = f(args...)
-function entry_to_be_invalidated(c)
-    return callf(getcharid, c)
-end
-@test Base.infer_effects((Char,)) do x
-    entry_to_be_invalidated(x)
-end |> Core.Compiler.is_foldable
-@test fully_eliminated(; retval=97) do
-    entry_to_be_invalidated('a')
-end
-getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
-@test Base.infer_effects((Char,)) do x
-    entry_to_be_invalidated(x)
-end |> !Core.Compiler.is_foldable
-@test !fully_eliminated() do
-    entry_to_be_invalidated('a')
-end
-
-# control flow backedge should taint `terminates`
-@test Base.infer_effects((Int,)) do n
-    for i = 1:n; end
-end |> !Core.Compiler.is_terminates
-
-# Nothrow for assignment to globals
-global glob_assign_int::Int = 0
-f_glob_assign_int() = global glob_assign_int += 1
-let effects = Base.infer_effects(f_glob_assign_int, ())
-    @test !Core.Compiler.is_effect_free(effects)
-    @test Core.Compiler.is_nothrow(effects)
-end
-# Nothrow for setglobal!
-global SETGLOBAL!_NOTHROW::Int = 0
-let effects = Base.infer_effects() do
-        setglobal!(@__MODULE__, :SETGLOBAL!_NOTHROW, 42)
-    end
-    @test Core.Compiler.is_nothrow(effects)
-end
-
-# we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
-# as the cached effects can be easily wrong otherwise
-# since the inference curently doesn't track "world-age" of global variables
-@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
-setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
-    @test !Core.Compiler.is_nothrow(effects)
-end
-let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefinedyet()
-    end
-    @test !Core.Compiler.is_nothrow(effects)
-end
-global UNDEFINEDYET::String = "0"
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
-    @test !Core.Compiler.is_nothrow(effects)
-end
-let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefinedyet()
-    end
-    @test !Core.Compiler.is_nothrow(effects)
-end
-@test_throws ErrorException setglobal!_nothrow_undefinedyet()
-
-# Nothrow for setfield!
-mutable struct SetfieldNothrow
-    x::Int
-end
-f_setfield_nothrow() = SetfieldNothrow(0).x = 1
-let effects = Base.infer_effects(f_setfield_nothrow, ())
-    # Technically effect free even though we use the heap, since the
-    # object doesn't escape, but the compiler doesn't know that.
-    #@test Core.Compiler.is_effect_free(effects)
-    @test Core.Compiler.is_nothrow(effects)
 end
 
 # check the inference convergence with an empty vartable:
@@ -4211,3 +4096,9 @@ let # NOTE make sure this toplevel chunk doesn't contain any local binding
     while xcond end
 end
 @test !xcond
+
+struct Issue45780
+    oc::Core.OpaqueClosure{Tuple{}}
+end
+f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
+@test (@inferred f45780()) == Val{1}()

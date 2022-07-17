@@ -179,7 +179,7 @@ mutable struct InferenceState
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
         inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
-        consistent = inbounds_taints_consistency ? TRISTATE_UNKNOWN : ALWAYS_TRUE
+        consistent = inbounds_taints_consistency ? ALWAYS_FALSE : ALWAYS_TRUE
         ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
 
         params = InferenceParams(interp)
@@ -219,6 +219,24 @@ function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
 end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
 is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
+
+function InferenceResult(
+    linfo::MethodInstance,
+    arginfo::Union{Nothing,Tuple{ArgInfo,InferenceState}} = nothing)
+    return _InferenceResult(linfo, arginfo)
+end
+
+add_remark!(::AbstractInterpreter, sv::InferenceState, remark) = return
+
+function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::InferenceState)
+    return sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+end
+function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::InferenceState)
+    return rt === Any
+end
+function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::InferenceState)
+    return rt === Any
+end
 
 function any_inbounds(code::Vector{Any})
     for i=1:length(code)
@@ -503,3 +521,10 @@ function print_callstack(sv::InferenceState)
 end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+
+function narguments(sv::InferenceState)
+    def = sv.linfo.def
+    isva = isa(def, Method) && def.isva
+    nargs = length(sv.result.argtypes) - isva
+    return nargs
+end

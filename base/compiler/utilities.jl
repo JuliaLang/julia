@@ -184,7 +184,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atype, sparams
+    return Pair{Any,SimpleVector}(atype, sparams)
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
@@ -208,6 +208,20 @@ end
 function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
+
+"""
+    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :aggressive`.
+"""
+is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
+
+"""
+    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :none`.
+"""
+is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 
 #########
 # types #

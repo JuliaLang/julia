@@ -375,6 +375,15 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     ct->sticky = sticky;
 }
 
+static uint64_t finalizer_rngState[4];
+
+void jl_rng_split(uint64_t to[4], uint64_t from[4]);
+
+JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
+{
+    jl_rng_split(finalizer_rngState, jl_current_task->rngState);
+}
+
 static void run_finalizers(jl_task_t *ct)
 {
     // Racy fast path:
@@ -396,9 +405,16 @@ static void run_finalizers(jl_task_t *ct)
     }
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
+
+    uint64_t save_rngState[4];
+    memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
+    jl_rng_split(ct->rngState, finalizer_rngState);
+
     // This releases the finalizers lock.
     jl_gc_run_finalizers_in_list(ct, &copied_list);
     arraylist_free(&copied_list);
+
+    memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
@@ -481,9 +497,11 @@ static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
 void jl_gc_run_all_finalizers(jl_task_t *ct)
 {
     schedule_all_finalizers(&finalizer_list_marked);
+    // This could be run before we had a chance to setup all threads
     for (int i = 0;i < jl_n_threads;i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
-        schedule_all_finalizers(&ptls2->finalizers);
+        if (ptls2)
+            schedule_all_finalizers(&ptls2->finalizers);
     }
     run_finalizers(ct);
 }
@@ -3258,7 +3276,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
-    gc_final_pause_end(t0, gc_end_time);
+    gc_final_pause_end(gc_start_time, gc_end_time);
     gc_time_sweep_pause(gc_end_time, actual_allocd, live_bytes,
                         estimate_freed, sweep_full);
     gc_num.full_sweep += sweep_full;
@@ -3462,12 +3480,12 @@ void jl_gc_init(void)
     gc_num.max_memory = 0;
 
 #ifdef _P64
-    // on a big memory machine, set max_collect_interval to totalmem / ncores / 2
+    // on a big memory machine, set max_collect_interval to totalmem / nthreads / 2
     uint64_t total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
     if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    size_t maxmem = total_mem / jl_cpu_threads() / 2;
+    size_t maxmem = total_mem / jl_n_threads / 2;
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif
@@ -3762,6 +3780,7 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #endif
     errno = last_errno;
     jl_may_leak(base);
+    assert(align > 0);
     unsigned diff = (offset - base) % align;
     return (void*)(base + diff);
 }

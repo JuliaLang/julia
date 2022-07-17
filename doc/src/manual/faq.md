@@ -802,8 +802,13 @@ foo (generic function with 1 method)
 
 julia> foo([1])
 ERROR: MethodError: no method matching foo(::Vector{Int64})
+
 Closest candidates are:
-  foo(!Matched::Vector{Real}) at none:1
+  foo(!Matched::Vector{Real})
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something

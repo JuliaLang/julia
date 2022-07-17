@@ -67,7 +67,7 @@ If you would rather not compile the latest Julia from source,
 platform-specific tarballs with pre-compiled binaries are also
 [available for download](https://julialang.org/downloads/). The
 downloads page also provides details on the
-[different tiers of support](https://julialang.org/downloads/#support-tiers)
+[different tiers of support](https://julialang.org/downloads/#supported_platforms)
 for OS and platform combinations.
 
 If everything works correctly, you will see a Julia banner and an
@@ -120,10 +120,9 @@ are included in the [build documentation](https://github.com/JuliaLang/julia/blo
 
 ### Uninstalling Julia
 
-Julia does not install anything outside the directory it was cloned
-into. Julia can be completely uninstalled by deleting this
-directory. Julia packages are installed in `~/.julia` by default, and
-can be uninstalled by deleting `~/.julia`.
+By default, Julia does not install anything outside the directory it was cloned
+into and `~/.julia`. Julia and the vast majority of Julia packages can be
+completely uninstalled by deleting these two directories.
 
 ## Source Code Organization
 

@@ -435,6 +435,7 @@ eval(Core, quote
     # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(typ::DataType, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
@@ -451,6 +452,18 @@ convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
+
+_is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false))
+end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
@@ -479,7 +492,6 @@ Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
-
 (Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
 Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
@@ -488,12 +500,12 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
-eval(Core, :(function Symbol(s::String)
-    $(Expr(:meta, :pure))
+function Symbol(s::String)
+    @_foldable_meta
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
                  sizeof(s))
-end))
+end
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),

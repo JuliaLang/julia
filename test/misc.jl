@@ -191,7 +191,7 @@ end
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
                 return :resultvalue
-            end == :resultvalue
+            end === :resultvalue
         end
     end
     @test all(<=(sem_size), history)
@@ -896,7 +896,7 @@ end
     # test against `invoke` doc example
     let
         f(x::Real) = x^2
-        f(x::Integer) = 1 + Base.@invoke f(x::Real)
+        f(x::Integer) = 1 + @invoke f(x::Real)
         @test f(2) == 5
     end
 
@@ -908,17 +908,22 @@ end
         _f2(_) = Real
         @test f1(1) === Integer
         @test f2(1) === Integer
-        @test Base.@invoke(f1(1::Real)) === Real
-        @test Base.@invoke(f2(1::Real)) === Integer
+        @test @invoke(f1(1::Real)) === Real
+        @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Any`
+    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
     let
         f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
-        @test Base.@invoke(f(1::Any)) === Any
-        @test Base.@invoke(f(1)) === Any
+        @test @invoke(f(1::Any)) === Any
+        @test @invoke(f(1)) === Integer
+
+        😎(x, y) = 1
+        😎(x, ::Type{Int}) = 2
+        # Without `Core.Typeof`, the first method would be called
+        @test @invoke(😎(1, Int)) == 2
     end
 
     # handle keyword arguments correctly
@@ -927,8 +932,7 @@ end
         f(::Integer; kwargs...) = error("don't call me")
 
         @test_throws Exception f(1; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1::Any; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1; kw1 = 1, kw2 = 2)
+        @test 3 == @invoke f(1::Any; kw1 = 1, kw2 = 2)
     end
 end
 
@@ -982,19 +986,28 @@ end
 @test_nowarn Core.eval(Main, :(import ....Main))
 
 # issue #27239
+using Base.BinaryPlatforms: HostPlatform, libc
 @testset "strftime tests issue #27239" begin
-    # change to non-Unicode Korean
+    # change to non-Unicode Korean to test that it is properly transcoded into valid UTF-8
     korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-    timestrs = String[]
-    withlocales(korloc) do
-        # system dependent formats
-        push!(timestrs, Libc.strftime(0.0))
-        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
+    at_least_one_locale_found = false
+    withlocales(korloc) do locale
+        at_least_one_locale_found = true
+        # Test both the default format and a custom formatting string
+        for s in (Libc.strftime(0.0), Libc.strftime("%a %A %b %B %p %Z", 0))
+            # Ensure that we always get valid UTF-8 back
+            @test isvalid(s)
+
+            # On `musl` it is impossible for `setlocale` to fail, it just falls back to
+            # the default system locale, which on our buildbots is en_US.UTF-8.  We'll
+            # assert that what we get does _not_ start with `Thu`, as that's what all
+            # en_US.UTF-8 encodings would start with.
+            # X-ref: https://musl.openwall.narkive.com/kO1vpTWJ/setlocale-behavior-with-missing-locales
+            @test !startswith(s, "Thu") broken=(libc(HostPlatform()) == "musl")
+        end
     end
-    # tests
-    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
-    for s in timestrs
-        @test isvalid(s)
+    if !at_least_one_locale_found
+        @warn "skipping stftime tests: no locale found for testing"
     end
 end
 

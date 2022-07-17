@@ -937,6 +937,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,
@@ -1047,4 +1048,5 @@ export
     @goto,
     @view,
     @views,
-    @static
+    @static,
+    @invoke

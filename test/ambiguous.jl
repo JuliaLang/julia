@@ -39,15 +39,11 @@ let err = try
           end
     io = IOBuffer()
     Base.showerror(io, err)
-    lines = split(String(take!(io)), '\n')
-    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Number, y) in $curmod_str at")
-    @test ambig_checkline(lines[2])
-    @test ambig_checkline(lines[3])
-    @test ambig_checkline(lines[4])
-    @test lines[5] == "Possible fix, define"
-    @test lines[6] == "  ambig(::Integer, ::Integer)"
+    errstr = String(take!(io))
+    @test occursin("  ambig(x, y::Integer)\n    @ $curmod_str", errstr)
+    @test occursin("  ambig(x::Integer, y)\n    @ $curmod_str", errstr)
+    @test occursin("  ambig(x::Number, y)\n    @ $curmod_str", errstr)
+    @test occursin("Possible fix, define\n  ambig(::Integer, ::Integer)", errstr)
 end
 
 ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
@@ -60,7 +56,7 @@ let err = try
     io = IOBuffer()
     Base.showerror(io, err)
     lines = split(String(take!(io)), '\n')
-    @test lines[end] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
+    @test lines[end-1] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
 end
 
 ## Other ways of accessing functions
