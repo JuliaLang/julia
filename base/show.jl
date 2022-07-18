@@ -1192,8 +1192,8 @@ function print_fullname(io::IO, m::Module)
     end
 end
 
-function sourceinfo_slotnames(src::CodeInfo)
-    slotnames = src.slotnames
+sourceinfo_slotnames(src::CodeInfo) = sourceinfo_slotnames(src.slotnames)
+function sourceinfo_slotnames(slotnames::Vector{Symbol})
     names = Dict{String,Int}()
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)

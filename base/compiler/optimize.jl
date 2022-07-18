@@ -30,7 +30,6 @@ const IR_FLAG_EFFECT_FREE = 0x01 << 4
 # This statement was proven not to throw
 const IR_FLAG_NOTHROW     = 0x01 << 5
 
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #####################

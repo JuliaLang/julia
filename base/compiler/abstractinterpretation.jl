@@ -496,13 +496,13 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         add_remark!(interp, sv, "Refusing to infer into `depwarn`")
         return MethodCallResult(Any, false, false, nothing, Effects())
     end
-    topmost = nothing
+
     # Limit argument type tuple growth of functions:
     # look through the parents list to see if there's a call to the same method
     # and from the same method.
     # Returns the topmost occurrence of that repeated edge.
-    edgecycle = false
-    edgelimited = false
+    edgecycle = edgelimited = false
+    topmost = nothing
 
     for infstate in InfStackUnwind(sv)
         if method === infstate.linfo.def
@@ -617,9 +617,13 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         # this edge is known to terminate
         effects = Effects(effects; terminates=ALWAYS_TRUE)
     elseif edgecycle
-        # Some sort of recursion was detected. Even if we did not limit types,
-        # we cannot guarantee that the call will terminate
-        effects = Effects(effects; terminates=ALWAYS_FALSE)
+        # Some sort of recursion was detected.
+        if edge !== nothing && !edgelimited && !is_edge_recursed(edge, sv)
+            # no `MethodInstance` cycles -- don't taint :terminate
+        else
+            # we cannot guarantee that the call will terminate
+            effects = Effects(effects; terminates=ALWAYS_FALSE)
+        end
     end
 
     return MethodCallResult(rt, edgecycle, edgelimited, edge, effects)
@@ -689,6 +693,30 @@ function matches_sv(parent::InferenceState, sv::InferenceState)
     parent_method2 = parent.src.method_for_inference_limit_heuristics # limit only if user token match
     parent_method2 isa Method || (parent_method2 = nothing)
     return parent.linfo.def === sv.linfo.def && sv_method2 === parent_method2
+end
+
+function is_edge_recursed(edge::MethodInstance, sv::InferenceState)
+    return any(InfStackUnwind(sv)) do infstate
+        return edge === infstate.linfo
+    end
+end
+
+function is_method_recursed(method::Method, sv::InferenceState)
+    return any(InfStackUnwind(sv)) do infstate
+        return method === infstate.linfo.def
+    end
+end
+
+function is_constprop_edge_recursed(edge::MethodInstance, sv::InferenceState)
+    return any(InfStackUnwind(sv)) do infstate
+        return edge === infstate.linfo && any(infstate.result.overridden_by_const)
+    end
+end
+
+function is_constprop_method_recursed(method::Method, sv::InferenceState)
+    return any(InfStackUnwind(sv)) do infstate
+        return method === infstate.linfo.def && any(infstate.result.overridden_by_const)
+    end
 end
 
 # keeps result and context information of abstract_method_call, which will later be used for
@@ -799,8 +827,7 @@ function const_prop_enabled(interp::AbstractInterpreter, sv::InferenceState, mat
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return false
     end
-    method = match.method
-    if method.constprop == 0x02
+    if is_no_constprop(match.method)
         add_remark!(interp, sv, "[constprop] Disabled by method parameter")
         return false
     end
@@ -836,17 +863,14 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
     if inf_result === nothing
         # if there might be a cycle, check to make sure we don't end up
         # calling ourselves here.
-        let result = result # prevent capturing
-            if result.edgecycle && _any(InfStackUnwind(sv)) do infstate
-                    # if the type complexity limiting didn't decide to limit the call signature (`result.edgelimited = false`)
-                    # we can relax the cycle detection by comparing `MethodInstance`s and allow inference to
-                    # propagate different constant elements if the recursion is finite over the lattice
-                    return (result.edgelimited ? match.method === infstate.linfo.def : mi === infstate.linfo) &&
-                            any(infstate.result.overridden_by_const)
-                end
-                add_remark!(interp, sv, "[constprop] Edge cycle encountered")
-                return nothing
-            end
+        if result.edgecycle && (result.edgelimited ?
+            is_constprop_method_recursed(match.method, sv) :
+            # if the type complexity limiting didn't decide to limit the call signature (`result.edgelimited = false`)
+            # we can relax the cycle detection by comparing `MethodInstance`s and allow inference to
+            # propagate different constant elements if the recursion is finite over the lattice
+            is_constprop_edge_recursed(mi, sv))
+            add_remark!(interp, sv, "[constprop] Edge cycle encountered")
+            return nothing
         end
         inf_result = InferenceResult(mi, (arginfo, sv))
         if !any(inf_result.overridden_by_const)
@@ -963,8 +987,8 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
     isa(arg, PartialOpaque) && return true
     isa(arg, Const) || return true
     val = arg.val
-    # don't consider mutable values or Strings useful constants
-    return isa(val, Symbol) || isa(val, Type) || (!isa(val, String) && !ismutable(val))
+    # don't consider mutable values useful constants
+    return isa(val, Symbol) || isa(val, Type) || !ismutable(val)
 end
 
 function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
@@ -1003,7 +1027,7 @@ function is_all_overridden((; fargs, argtypes)::ArgInfo, sv::InferenceState)
 end
 
 function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
-    return method.constprop == 0x01 ||
+    return is_aggressive_constprop(method) ||
            InferenceParams(interp).aggressive_constant_propagation ||
            istopfunction(f, :getproperty) ||
            istopfunction(f, :setproperty!)
@@ -1345,7 +1369,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
                 end
                 cti = Any[Vararg{argt}]
             end
-            if _any(t -> t === Bottom, cti)
+            if any(@nospecialize(t) -> t === Bottom, cti)
                 continue
             end
             for j = 1:length(ctypes)
@@ -1654,7 +1678,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_finalizer(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        return CallMeta(rt, builtin_effects(f, argtypes, rt), false)
+        effects = builtin_effects(f, argtypes[2:end], rt)
+        return CallMeta(rt, effects, false)
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return CallMeta(Any, Effects(), false)
@@ -2031,23 +2056,23 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         for i = 3:length(e.args)
             if abstract_eval_value(interp, e.args[i], vtypes, sv) === Bottom
                 t = Bottom
+                tristate_merge!(sv, EFFECTS_THROWS)
+                @goto t_computed
             end
         end
+        effects = EFFECTS_UNKNOWN
         cconv = e.args[5]
         if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
-            effects = v[2]
-            effects = decode_effects_override(effects)
-            tristate_merge!(sv, Effects(
-                effects.consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.nothrow ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.terminates_globally ? ALWAYS_TRUE : ALWAYS_FALSE,
-                #=nonoverlayed=#true,
-                effects.notaskstate ? ALWAYS_TRUE : ALWAYS_FALSE
-            ))
-        else
-            tristate_merge!(sv, EFFECTS_UNKNOWN)
+            override = decode_effects_override(v[2])
+            effects = Effects(
+                override.consistent          ? ALWAYS_TRUE : effects.consistent,
+                override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
+                override.nothrow             ? ALWAYS_TRUE : effects.nothrow,
+                override.terminates_globally ? ALWAYS_TRUE : effects.terminates_globally,
+                effects.nonoverlayed         ? true        : false,
+                override.notaskstate         ? ALWAYS_TRUE : effects.notaskstate)
         end
+        tristate_merge!(sv, effects)
     elseif ehead === :cfunction
         tristate_merge!(sv, EFFECTS_UNKNOWN)
         t = e.args[1]
@@ -2311,9 +2336,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    def = frame.linfo.def
-    isva = isa(def, Method) && def.isva
-    nargs = length(frame.result.argtypes) - isva
+    nargs = narguments(frame)
     slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks

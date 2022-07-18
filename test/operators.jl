@@ -2,6 +2,8 @@
 
 using Random: randstring
 
+include("compiler/irutils.jl")
+
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1
     @test ifelse(false, 1, 2) == 2
@@ -182,6 +184,11 @@ end
     @test (@inferred g(1)) == ntuple(Returns(1), 13)
     h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
     @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
+    issue_45877 = reduce(∘, fill(sin,500))
+    @test Core.Compiler.is_foldable(Base.infer_effects(Base.unwrap_composed, (typeof(issue_45877),)))
+    @test fully_eliminated() do
+        issue_45877(1.0)
+    end
 end
 
 @testset "function negation" begin

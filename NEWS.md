@@ -84,7 +84,6 @@ Library changes
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
-* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 
@@ -110,6 +109,9 @@ Standard library changes
 #### Markdown
 
 #### Printf
+
+* Error messages for bad format strings have been improved, to make it clearer what & where in the
+  format string is wrong. ([#45366])
 
 #### Random
 
