@@ -15,6 +15,10 @@ const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
 const PositionCounter = Val{'n'}
 
+const MAX_FRACTIONAL_PART_WIDTH = 17  # max significant decimals + 1: `ceil(Int, log10(1 / eps(Float64))) + 1`
+const MAX_INTEGER_PART_WIDTH = 309  # max exponent: `ceil(Int, log10(prevfloat(typemax(Float64))))`
+const MAX_FMT_CHARS_WIDTH = 5  # hash | sign +/- | decimal dot | exponent e/E | exponent sign
+
 """
 Typed representation of a format specifier.
 
@@ -626,21 +630,12 @@ end
 function fix_dec end
 function ini_dec end
 
-"maximal exponent for `Float64`s: `ceil(Int, log10(prevfloat(typemax(Float64))))`"
-max_integer_part_width() = 309
-
-"number of significant decimals for `Float64`s + 1: `ceil(Int, log10(1 / eps(Float64))) + 1`"
-max_fractional_part_width() = 17
-
-"hash | sign +/- | decimal dot | exponent e/E | exponent sign"
-max_fmt_chars_width() = 5
-
 # generic fallback
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     buf2 = Base.StringVector(
-        max_integer_part_width() + max_fractional_part_width() + max_fmt_chars_width()
+        MAX_INTEGER_PART_WIDTH + MAX_FRACTIONAL_PART_WIDTH + MAX_FMT_CHARS_WIDTH
     )
     ise = T <: Union{Val{'e'}, Val{'E'}}
     isg = T <: Union{Val{'g'}, Val{'G'}}
@@ -828,14 +823,14 @@ function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
     return max(
         f.width,
-        f.precision + ndigits(x2, base=base(T), pad=1) + max_fmt_chars_width()
+        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
     )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, f.hash + max_integer_part_width() + 0 + max_fmt_chars_width())
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.hash + max_integer_part_width() + f.precision + max_fmt_chars_width())
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
