@@ -177,7 +177,7 @@ macro irrational(sym, val, def)
     irrational(sym, val, def)
 end
 macro irrational(sym, def)
-    irrational(sym, Float64(eval(def)), def)
+    irrational(sym, def, def)
 end
 function irrational(sym, val, def)
     esym = esc(sym)
@@ -199,8 +199,10 @@ function irrational(sym, val, def)
     quote
         const $esym = Irrational{$qsym}()
         $bigconvert
-        Base.Float64(::Irrational{$qsym}) = $val
-        Base.Float32(::Irrational{$qsym}) = $(Float32(val))
+        let v = $val, v32 = Float32(v)
+            Base.Float64(::Irrational{$qsym}) = v
+            Base.Float32(::Irrational{$qsym}) = v32
+        end
         @assert isa(big($esym), BigFloat)
         @assert Float64($esym) == Float64(big($esym))
         @assert Float32($esym) == Float32(big($esym))
