@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
     if get(io, :compact, false)
         print(io, sym)
     else
-        print(io, sym, " = ", string(float(x))[1:15], "...")
+        print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")
     end
 end
 

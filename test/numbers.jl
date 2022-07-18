@@ -1151,11 +1151,13 @@ end
 
     @test sqrt(2) == 1.4142135623730951
 end
+Base.@irrational i46051 4863.185427757 1548big(pi)
 @testset "Irrational printing" begin
     @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
     @test sprint(show, "text/plain", π, context=:compact => true) == "π"
     @test sprint(show, π) == "π"
-
+    # issue #46051
+    @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
