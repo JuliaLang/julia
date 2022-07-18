@@ -10,8 +10,8 @@ they both inherit. Recurses on additional varargs.
 
 # Examples
 ```jldoctest
-julia> typejoin(Int, UInt16)
-Integer
+julia> typejoin(Int, Float64)
+Real
 
 julia> typejoin(Int, Float64, ComplexF32)
 Number
