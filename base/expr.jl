@@ -444,8 +444,8 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
 - If the method returns, the results will always be egal.
 
 !!! note
-    This in particular implies that the return value of the method must be
-    immutable. Multiple allocations of mutable objects (even with identical
+    This in particular implies that the method must not return a freshly allocated
+    mutable object. Multiple allocations of mutable objects (even with identical
     contents) are not egal.
 
 !!! note

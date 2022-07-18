@@ -1416,9 +1416,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     if isa(f, Core.Builtin)
-        args = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
-        return Core.Compiler.builtin_effects(f, args, rt)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Core.Compiler.builtin_effects(f, argtypes, rt)
     else
         effects = Core.Compiler.EFFECTS_TOTAL
         matches = _methods(f, types, -1, world)::Vector

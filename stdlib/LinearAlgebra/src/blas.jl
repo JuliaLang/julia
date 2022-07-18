@@ -9,44 +9,60 @@ import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
 
 export
+# Note: `xFUNC_NAME` is a placeholder for not exported BLAS fucntions
+#   ref: http://www.netlib.org/blas/blasqr.pdf
 # Level 1
-    asum,
-    axpy!,
-    axpby!,
-    blascopy!,
-    dotc,
-    dotu,
+    # xROTG
+    # xROTMG
     rot!,
+    # xROTM
+    # xSWAP
     scal!,
     scal,
+    blascopy!,
+    axpy!,
+    axpby!,
+    # xDOT
+    dotc,
+    dotu,
+    # xxDOT
     nrm2,
+    asum,
     iamax,
 # Level 2
-    gbmv!,
-    gbmv,
     gemv!,
     gemv,
+    gbmv!,
+    gbmv,
     hemv!,
     hemv,
+    # xHBMV
     hpmv!,
+    symv!,
+    symv,
     sbmv!,
     sbmv,
     spmv!,
-    spr!,
-    symv!,
-    symv,
-    trsv!,
-    trsv,
     trmv!,
     trmv,
+    # xTBMV
+    # xTPMV
+    trsv!,
+    trsv,
+    # xTBSV
+    # xTPSV
     ger!,
-    syr!,
+    # xGERU
+    # xGERC
     her!,
+    # xHPR
+    # xHER2
+    # xHPR2
+    syr!,
+    spr!,
+    # xSYR2
+    # xSPR2
 # Level 3
-    herk!,
-    herk,
-    her2k!,
-    her2k,
     gemm!,
     gemm,
     symm!,
@@ -55,8 +71,12 @@ export
     hemm,
     syrk!,
     syrk,
+    herk!,
+    herk,
     syr2k!,
     syr2k,
+    her2k!,
+    her2k,
     trmm!,
     trmm,
     trsm!,

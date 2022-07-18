@@ -326,7 +326,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates = jl_unbox_bool(jl_exprarg(ma, 3));
+                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
                     }
