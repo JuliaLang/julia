@@ -199,8 +199,8 @@ function irrational(sym, val, def)
     quote
         const $esym = Irrational{$qsym}()
         $bigconvert
-        let v = $val, v32 = Float32(v)
-            Base.Float64(::Irrational{$qsym}) = v
+        let v = $val, v64 = Float64(v), v32 = Float32(v)
+            Base.Float64(::Irrational{$qsym}) = v64
             Base.Float32(::Irrational{$qsym}) = v32
         end
         @assert isa(big($esym), BigFloat)
