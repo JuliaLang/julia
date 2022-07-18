@@ -501,38 +501,40 @@ function Array{T,N}(B::BitArray{N}) where {T,N}
 end
 
 BitArray(A::AbstractArray{<:Any,N}) where {N} = BitArray{N}(A)
+
 function BitArray{N}(A::AbstractArray{T,N}) where N where T
     B = BitArray(undef, convert(Dims{N}, size(A)::Dims{N}))
-    Bc = B.chunks
-    l = length(B)
+    _checkaxs(axes(B), axes(A))
+    _copyto_bitarray!(B, A)
+    return B::BitArray{N}
+end
+
+function _copyto_bitarray!(B::BitArray, A::AbstractArray)
+    l = length(A)
     l == 0 && return B
-    ind = 1
+    l > length(B) && throw(BoundsError(B, length(B)+1))
+    Bc = B.chunks
+    nc = num_bit_chunks(l)
+    Ai = first(eachindex(A))
     @inbounds begin
-        for i = 1:length(Bc)-1
+        for i = 1:nc-1
             c = UInt64(0)
             for j = 0:63
-                c |= (UInt64(convert(Bool, A[ind])::Bool) << j)
-                ind += 1
+                c |= (UInt64(convert(Bool, A[Ai])::Bool) << j)
+                Ai = nextind(A, Ai)
             end
             Bc[i] = c
         end
         c = UInt64(0)
-        for j = 0:_mod64(l-1)
-            c |= (UInt64(convert(Bool, A[ind])::Bool) << j)
-            ind += 1
+        tail = _mod64(l - 1) + 1
+        for j = 0:tail-1
+            c |= (UInt64(convert(Bool, A[Ai])::Bool) << j)
+            Ai = nextind(A, Ai)
         end
-        Bc[end] = c
+        msk = _msk_end(tail)
+        Bc[nc] = (c & msk) | (Bc[nc] & ~msk)
     end
     return B
-end
-
-function BitArray{N}(A::Array{Bool,N}) where N
-    B = BitArray(undef, size(A))
-    Bc = B.chunks
-    l = length(B)
-    l == 0 && return B
-    copy_to_bitarray_chunks!(Bc, 1, A, 1, l)
-    return B::BitArray{N}
 end
 
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
@@ -721,24 +723,25 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     lx = length(X)
     last_chunk_len = _mod64(length(B)-1)+1
 
-    c = 1
+    Xi = first(eachindex(X))
+    lastXi = last(eachindex(X))
     for i = 1:lc
         @inbounds Imsk = Ic[i]
         @inbounds C = Bc[i]
         u = UInt64(1)
         for j = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
-                lx < c && throw_setindex_mismatch(X, c)
-                @inbounds x = convert(Bool, X[c])
+                Xi > lastXi && throw_setindex_mismatch(X, count(I))
+                @inbounds x = convert(Bool, X[Xi])
                 C = ifelse(x, C | u, C & ~u)
-                c += 1
+                Xi = nextind(X, Xi)
             end
             u <<= 1
         end
         @inbounds Bc[i] = C
     end
-    if length(X) != c-1
-        throw_setindex_mismatch(X, c-1)
+    if Xi != nextind(X, lastXi)
+        throw_setindex_mismatch(X, count(I))
     end
     return B
 end
