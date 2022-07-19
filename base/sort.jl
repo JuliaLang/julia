@@ -972,7 +972,7 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-Uses [`Base.copymutable`](@ref) to support immutable collections and iterables.
+Uses `Base.copymutable` to support immutable collections and iterables.
 
 # Examples
 ```jldoctest
