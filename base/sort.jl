@@ -582,7 +582,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
         hi2 = ismissing(a.hi) ? hi : a.hi
         if _issorted(v, lo2, hi2, o)
             return v
-        elseif _issorted(v, lo2, hi2, Reverse(o))
+        elseif _issorted(v, lo2, hi2, ReverseOrdering(o))
             return reverse!(v, lo2, hi2)
         end
     end
