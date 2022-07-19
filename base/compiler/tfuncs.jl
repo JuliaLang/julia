@@ -1894,7 +1894,7 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     isempty(argtypes) && return EFFECTS_THROWS
     obj = argtypes[1]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
-    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
+    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
     # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
     # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
     # throws `UndefRefError` so doesn't need to taint it
