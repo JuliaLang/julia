@@ -836,8 +836,8 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
     #   lenm1^2 < 3 * bits * lenm1
     #     lenm1 < 3bits
     if lenm1 < 3bits
-        # at lenm1 = 64*3-1, QuickSort is about 20% faster than InsertionSort.
-        return if lenm1 > 120
+        # at lenm1 = 64*3-1, QuickSort is about 40% faster than InsertionSort.
+        return if lenm1 > 80
             sort!(v, lo, hi, QuickSort, o; check_presorted=false)
         else
             sort!(v, lo, hi, SMALL_ALGORITHM, o)
