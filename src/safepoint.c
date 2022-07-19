@@ -95,7 +95,7 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 void jl_safepoint_init(void)
 {
     uv_mutex_init(&safepoint_lock);
-	uv_cond_init(&safepoint_cond);
+    uv_cond_init(&safepoint_cond);
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
@@ -261,12 +261,12 @@ void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
 
 void jl_spinmaster_wait_sweeping(void) JL_NOTSAFEPOINT
 {
-	// Use system mutexes rather than spin locking to minimize wasted CPU
-	// time on the idle cores while we wait for the GC to finish.
-	// This is particularly important when run under rr.
-	uv_mutex_lock(&safepoint_lock);
-	uv_cond_wait(&safepoint_cond, &safepoint_lock);
-	uv_mutex_unlock(&safepoint_lock);
+    // Use system mutexes rather than spin locking to minimize wasted CPU
+    // time on the idle cores while we wait for the GC to finish.
+    // This is particularly important when run under rr.
+    uv_mutex_lock(&safepoint_lock);
+    uv_cond_wait(&safepoint_cond, &safepoint_lock);
+    uv_mutex_unlock(&safepoint_lock);
 }
 
 void jl_spinmaster_wait_gc(void) JL_NOTSAFEPOINT
