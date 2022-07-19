@@ -171,3 +171,8 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     #@test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+
+# nothrow for arrayset
+@test Base.infer_effects((Vector{Int},Int)) do a, i
+    a[i] = 0 # may throw
+end |> !Core.Compiler.is_nothrow
