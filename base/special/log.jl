@@ -571,7 +571,7 @@ function _log_ext(xu)
     z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
-    t, logctail = t_log_table_compat[i+1]
+    t, logctail = getfield(t_log_table_compat, i+1)
     invc, logc = log_tab_unpack(t)
     # Note: invc is j/N or j/N/2 where j is an integer in [N,2N) and
     # |z/c - 1| < 1/N, so r = z/c - 1 is exactly representible.
