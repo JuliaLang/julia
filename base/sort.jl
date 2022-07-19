@@ -574,7 +574,19 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v:
 end
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
-               o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false)
+               o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false;
+               check_presorted=true)
+
+    if check_presorted && !rev && !swap
+        lo2 = ismissing(a.lo) ? lo : a.lo
+        hi2 = ismissing(a.hi) ? hi : a.hi
+        if _issorted(v, lo2, hi2, o)
+            return v
+        elseif _issorted(v, lo2, hi2, Reverse(o))
+            return reverse!(v, lo2, hi2)
+        end
+    end
+
     while lo < hi && hi - lo > SMALL_THRESHOLD
         pivot, j = swap ? partition!(v, lo, hi, o, t, rev) : partition!(t, lo, hi, o, v, rev)
         @inbounds v[j] = pivot
@@ -593,11 +605,11 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
         elseif j-lo < hi-j
             # Sort the lower part recursively because it is smaller. Recursing on the
             # smaller part guarantees O(log(n)) stack space even on pathological inputs.
-            sort!(v, lo, j-1, a, o, t, swap, rev)
+            sort!(v, lo, j-1, a, o, t, swap, rev; check_presorted=false)
             lo = j+1
             rev = !rev
         else # Sort the higher part recursively
-            sort!(v, j+1, hi, a, o, t, swap, !rev)
+            sort!(v, j+1, hi, a, o, t, swap, !rev; check_presorted=false)
             hi = j-1
         end
     end
@@ -790,7 +802,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
                 return sort_int_range!(v, Int(v_range+1), v_min, o === Forward ? identity : reverse, lo, hi)
             end
         end
-        return sort!(v, lo, hi, QuickSort, o)
+        return sort!(v, lo, hi, QuickSort, o; check_presorted=false)
     end
 
     v_min, v_max = _extrema(v, lo, hi, o)
@@ -825,7 +837,11 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
     #     lenm1 < 3bits
     if lenm1 < 3bits
         # at lenm1 = 64*3-1, QuickSort is about 20% faster than InsertionSort.
-        return sort!(v, lo, hi, lenm1 > 120 ? QuickSort : SMALL_ALGORITHM, o)
+        return if lenm1 > 120
+            sort!(v, lo, hi, QuickSort, o; check_presorted=false)
+        else
+            sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        end
     end
 
     # At this point, we are committed to radix sort.
