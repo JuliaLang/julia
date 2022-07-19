@@ -578,12 +578,12 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                check_presorted=true)
 
     if check_presorted && !rev && !swap
-        lo2 = ismissing(a.lo) ? lo : a.lo
-        hi2 = ismissing(a.hi) ? hi : a.hi
-        if _issorted(v, lo2, hi2, o)
+        # Even if we are only sorting a short region, we can only short-circuit if the whole
+        # vector is presorted. A weaker condition is possible, but unlikely to be useful.
+        if _issorted(v, lo, hi, o)
             return v
-        elseif _issorted(v, lo2, hi2, ReverseOrdering(o))
-            return reverse!(v, lo2, hi2)
+        elseif _issorted(v, lo, hi, ReverseOrdering(o))
+            return reverse!(v, lo, hi)
         end
     end
 
