@@ -333,7 +333,7 @@ function report_bug(kind)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
                 old_active_project = Base.ACTIVE_PROJECT[]
                 Base.ACTIVE_PROJECT[] = nothing
-                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                Pkg.add(Pkg.PackageSpec(name=BugReportingId.name, uuid=BugReportingId.uuid, rev="tb/julia_cmd"))
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
                 Base.ACTIVE_PROJECT[] = old_active_project
