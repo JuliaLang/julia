@@ -261,17 +261,12 @@ void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
 
 void jl_spinmaster_wait_sweeping(void) JL_NOTSAFEPOINT
 {
-	// Use normal volatile load in the loop for speed until GC finishes.
-	// Then use an acquire load to make sure the GC result is visible on this thread.
-    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
-        // Use system mutexes rather than spin locking to minimize wasted CPU
-        // time on the idle cores while we wait for the GC to finish.
-        // This is particularly important when run under rr.
-        uv_mutex_lock(&safepoint_lock);
-        if (jl_atomic_load_relaxed(&jl_gc_running))
-            uv_cond_wait(&safepoint_cond, &safepoint_lock);
-        uv_mutex_unlock(&safepoint_lock);
-    }
+	// Use system mutexes rather than spin locking to minimize wasted CPU
+	// time on the idle cores while we wait for the GC to finish.
+	// This is particularly important when run under rr.
+	uv_mutex_lock(&safepoint_lock);
+	uv_cond_wait(&safepoint_cond, &safepoint_lock);
+	uv_mutex_unlock(&safepoint_lock);
 }
 
 void jl_spinmaster_wait_gc(void) JL_NOTSAFEPOINT
