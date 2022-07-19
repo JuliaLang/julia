@@ -972,6 +972,8 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+Uses [`copymutable`](@ref) to support immutable collections and iterables.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -989,7 +991,8 @@ julia> v
  2
 ```
 """
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
+sort(v; kws...) = sort!(copymutable(v); kws...)
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # Method disambiguation
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 

@@ -516,6 +516,20 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
+@testset "sort!(iterable)" begin # issue #38328
+    gen = (x % 7 + .1x for x in 1:50)
+    @test sort(gen) == sort!(collect(gen))
+    gen = (x % 7 + .1y for x in 1:10, y in 1:5)
+    @test sort(gen; dims=1) == sort!(collect(gen); dims=1)
+    @test sort(gen; dims=2) == sort!(collect(gen); dims=2)
+
+    @test_throws ArgumentError("dimension out of range") sort(gen; dims=3)
+
+    @test_throws UndefKeywordError(:dims) sort(gen)
+    @test_throws UndefKeywordError(:dims) sort(collect(gen))
+    @test_throws UndefKeywordError(:dims) sort!(collect(gen))
+end
+
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
     a = view([9:-1:0;], :)::SubArray
     sort!(a)
