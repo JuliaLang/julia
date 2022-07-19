@@ -75,6 +75,7 @@ end
     @test sum(randperm(6)) == 21
     @test length(reverse(0x1:0x2)) == 2
     @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
+    @test sort(Union{}[]) == Union{}[] # issue #45280
 end
 
 @testset "stability" begin
@@ -686,6 +687,8 @@ end
             end
         end
     end
+
+    @test Base.Sort.UIntMappable(Union{Int, UInt}, Base.Forward) === nothing # issue #45280
 end
 
 @testset "invalid lt (#11429)" begin

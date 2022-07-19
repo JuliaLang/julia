@@ -730,8 +730,8 @@ end
 # For AbstractVector{Bool}, counting sort is always best.
 # This is an implementation of counting sort specialized for Bools.
 # Accepts unused buffer to avoid method ambiguity.
-function sort!(v::AbstractVector{B}, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering,
-               t::Union{AbstractVector{B}, Nothing}=nothing) where {B <: Bool}
+function sort!(v::AbstractVector{Bool}, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering,
+        t::Union{AbstractVector{Bool}, Nothing}=nothing)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
     @inbounds for i in lo:hi
@@ -1409,7 +1409,7 @@ uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
 
 # unsigned(Int) is not available during bootstrapping.
 for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
-    @eval UIntMappable(::Type{<:Union{$U, $S}}, ::ForwardOrdering) = $U
+    @eval UIntMappable(::Union{Type{$U}, Type{$S}}, ::ForwardOrdering) = $U
 end
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.

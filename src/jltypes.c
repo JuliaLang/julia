@@ -2699,7 +2699,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
         jl_perm_symsvec(4, "typ", "env", "parent", "source"),
-        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_method_type),
+        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_any_type),
         jl_emptysvec, 0, 0, 4);
 
     // complete builtin type metadata
