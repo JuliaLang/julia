@@ -304,6 +304,35 @@ function find_package(arg)
 end
 
 """
+    Base.identify_package_env(name::String)::Union{Tuple{PkgId, String}, Nothing}
+    Base.identify_package_env(where::Union{Module,PkgId}, name::String)::Union{Tuple{PkgId, String} Nothing}
+
+Same as [`Base.identify_package`](@ref) except that the path to the environment where the package is identified
+is also returned.
+"""
+identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
+function identify_package_env(where::PkgId, name::String)
+    where.name === name && return where, nothing
+    where.uuid === nothing && return identify_package_env(name) # ignore `where`
+    for env in load_path()
+        pkgid = manifest_deps_get(env, where, name)
+        pkgid === nothing && continue # not found--keep looking
+        pkgid.uuid === nothing || return pkgid, env # found in explicit environment--use it
+        return nothing # found in implicit environment--return "not found"
+    end
+    return nothing
+end
+function identify_package_env(name::String)
+    for env in load_path()
+        uuid = project_deps_get(env, name)
+        uuid === nothing || return uuid, env # found--return it
+    end
+    return nothing
+end
+
+_nothing_or_first(x) = x === nothing ? nothing : first(x)
+
+"""
     Base.identify_package(name::String)::Union{PkgId, Nothing}
     Base.identify_package(where::Union{Module,PkgId}, name::String)::Union{PkgId, Nothing}
 
@@ -329,27 +358,6 @@ julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of 
 
 ````
 """
-identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
-function identify_package_env(where::PkgId, name::String)
-    where.name === name && return where, nothing
-    where.uuid === nothing && return identify_package_env(name) # ignore `where`
-    for env in load_path()
-        pkgid = manifest_deps_get(env, where, name)
-        pkgid === nothing && continue # not found--keep looking
-        pkgid.uuid === nothing || return pkgid, env # found in explicit environment--use it
-        return nothing # found in implicit environment--return "not found"
-    end
-    return nothing
-end
-function identify_package_env(name::String)
-    for env in load_path()
-        uuid = project_deps_get(env, name)
-        uuid === nothing || return uuid, env # found--return it
-    end
-    return nothing
-end
-
-_nothing_or_first(x) = x === nothing ? nothing : first(x)
 identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
 identify_package(name::String)                = _nothing_or_first(identify_package_env(name))
