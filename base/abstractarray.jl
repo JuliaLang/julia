@@ -2841,7 +2841,7 @@ end
 catdim_(dims) = (a,b) -> cat(a,b,dims=dims)
 
 """
-    lolstack(list_of_lists, [ndim=n])
+    lolstack(list_of_lists)
 
 Assembles a tensor of order `ndim` from a nested array-of-arrays. Vector sizes must match.
 
@@ -2863,20 +2863,43 @@ julia> a = eachcol(reshape(1:6,2,:))
  [3, 4]
  [5, 6]
 
-julia> Base.lolstack(a)
+julia> lolstack(a)
 2×3 Matrix{Int64}:
  1  3  5
  2  4  6
+
+julia> lolstack([(j,k) for j in 1:4, k in 5:6]) do (j,k)
+                  [j, (j+k)÷2, k]
+              end
+3×4×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3  4
+ 3  3  4  4
+ 5  5  5  5
+
+[:, :, 2] =
+ 1  2  3  4
+ 3  4  4  5
+ 6  6  6  6
 """
-lolstack(array_of_arrays) = lolstack_(array_of_arrays)
-lolstack(f, c...) = lolstack(Iterators.map(f, c...))
-function lolstack_(gg; myshape=())
-    head, tail = Iterators.peel(gg)
-    dimlen = length(head)
-    if dimlen == 1
-        reshape(collect(gg), myshape...,:)
+lolstack(array_of_arrays) =
+    if applicable(size, array_of_arrays)
+        lolstack_(array_of_arrays, outersize=size(array_of_arrays))
     else
-        lolstack_(Iterators.flatten(gg), myshape=(myshape..., dimlen))
+        lolstack_(array_of_arrays)
+    end
+lolstack(f, c...) = lolstack(Iterators.map(f, c...))
+function lolstack_(gg; myshape=(), outersize=nothing)
+    head, tail = Iterators.peel(gg)
+    # if dimlen == 1
+    if !applicable(iterate, head) || !applicable(ndims, head) || length(head) == 1 || ndims(head) == 0
+        if isnothing(outersize)
+            reshape(collect(gg), myshape...,:)
+        else
+            reshape(collect(gg), myshape...,outersize...)
+        end
+    else
+        lolstack_(Iterators.flatten(gg), myshape=(size(head)..., myshape..., ), outersize=outersize)
     end
 end
 
