@@ -699,6 +699,20 @@ end
     end
 end
 
+@testset "sorting preserves identity" begin
+    a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
+    sort!(a)
+    @test length(IdDict(a .=> a)) == 6
+
+    for v in [BigInt.(rand(1:5, 40)), BigInt.(rand(Int, 70)), BigFloat.(rand(52))]
+        hashes = Set(hash.(v))
+        ids = Set(objectid.(v))
+        sort!(v)
+        @test hashes == Set(hash.(v))
+        @test ids == Set(objectid.(v))
+    end
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
