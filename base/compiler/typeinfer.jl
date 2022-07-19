@@ -429,7 +429,8 @@ function adjust_effects(sv::InferenceState)
     if !ipo_effects.inbounds_taints_consistency && rt === Bottom
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
-    elseif ipo_effects.consistent === TRISTATE_UNKNOWN && is_consistent_rt(rt)
+    end
+    if ipo_effects.consistent === TRISTATE_UNKNOWN && is_consistent_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
         # (indicated by `TRISTATE_UNKNOWN`), we may be able to refine it if the return
         # type guarantees that the allocations are never returned
@@ -458,14 +459,6 @@ function adjust_effects(sv::InferenceState)
     end
 
     return ipo_effects
-end
-
-is_consistent_rt(@nospecialize rt) = _is_consistent_rt(widenconst(ignorelimited(rt)))
-function _is_consistent_rt(@nospecialize ty)
-    if isa(ty, Union)
-        return _is_consistent_rt(ty.a) && _is_consistent_rt(ty.b)
-    end
-    return ty === Symbol || isbitstype(ty)
 end
 
 # inference completed on `me`

@@ -300,3 +300,24 @@ function unwraptv(@nospecialize t)
     end
     return t
 end
+
+# this query is specially written for `adjust_effects` and returns true if a value of this type
+# never involves inconsistency of mutable objects that are allocated somewhere within a call graph
+is_consistent_argtype(@nospecialize ty) = is_consistent_type(widenconst(ignorelimited(ty)))
+is_consistent_type(@nospecialize ty) = _is_consistent_type(unwrap_unionall(ty))
+function _is_consistent_type(@nospecialize ty)
+    if isa(ty, Union)
+        return is_consistent_type(ty.a) && is_consistent_type(ty.b)
+    end
+    # N.B. String and Symbol are mutable, but also egal always, and so they never be inconsistent
+    return ty === String || ty === Symbol || isbitstype(ty)
+end
+
+is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
+is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
+function _is_immutable_type(@nospecialize ty)
+    if isa(ty, Union)
+        return is_immutable_type(ty.a) && is_immutable_type(ty.b)
+    end
+    return !isabstracttype(ty) && !ismutabletype(ty)
+end
