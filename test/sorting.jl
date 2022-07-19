@@ -517,9 +517,9 @@ end
 end
 
 @testset "sort!(iterable)" begin # issue #38328
-    gen = (x % 7 + .1x for x in 1:50)
+    gen = (x % 7 + 0.1x for x in 1:50)
     @test sort(gen) == sort!(collect(gen))
-    gen = (x % 7 + .1y for x in 1:10, y in 1:5)
+    gen = (x % 7 + 0.1y for x in 1:10, y in 1:5)
     @test sort(gen; dims=1) == sort!(collect(gen); dims=1)
     @test sort(gen; dims=2) == sort!(collect(gen); dims=2)
 
