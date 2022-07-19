@@ -94,6 +94,7 @@ end
 
 (*)(A::Period, B::AbstractArray) = Broadcast.broadcast_preserving_zero_d(*, A, B)
 (*)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(*, A, B)
+(/)(A::AbstractArray, B::Period) = Broadcast.broadcast_preserving_zero_d(/, A, B)
 
 for op in (:(==), :isless, :/, :rem, :mod, :lcm, :gcd)
     @eval ($op)(x::Period, y::Period) = ($op)(promote(x, y)...)
