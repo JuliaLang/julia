@@ -723,6 +723,14 @@ end
     end
     @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
     @test all(partialsort(v, 315:415, lt = (x,y) -> rand([false, true])) .∈ (1:5,))
+
+    # issue #32675
+    k = [38, 18, 38, 38, 3, 37, 26, 26, 6, 29, 38, 36, 38, 1, 38, 36, 38, 38, 38, 36, 36,
+        36, 28, 34, 35, 38, 25, 20, 38, 1, 1, 5, 38, 38, 3, 34, 16, 38, 4, 10, 35, 37, 38,
+        38, 2, 38, 25, 35, 38, 1, 35, 36, 20, 33, 36, 18, 38, 1, 24, 4, 38, 18, 12, 38, 34,
+        35, 36, 38, 26, 31, 36, 38, 38, 30, 36, 35, 35, 7, 22, 35, 38, 35, 30, 21, 37]
+    idx = sortperm(k; lt=!isless)
+    @test issorted(k[idx], rev=true)
 end
 
 # This testset is at the end of the file because it is slow
