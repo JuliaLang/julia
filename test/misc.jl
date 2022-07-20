@@ -366,7 +366,7 @@ macro capture_stdout(ex)
     end
 end
 
-# compilation reports in @time
+# compilation reports in @time, @timev
 let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
@@ -393,6 +393,36 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
 
         $f(::Float64) = 2
         out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time:", out)
         @test occursin("% of which was recompilation", out)
     end
