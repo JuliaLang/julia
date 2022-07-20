@@ -1734,11 +1734,11 @@ function detect_ambiguities(mods::Module...;
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
-        ord12 = m1.file < m2.file
-        if !ord12 && (m1.file == m2.file)
-            ord12 = m1.line < m2.line
+        ord12 = cmp(m1.file, m2.file)
+        if ord12 == 0
+            ord12 = cmp(m1.line, m2.line)
         end
-        return ord12 ? (m1, m2) : (m2, m1)
+        return ord12 <= 0 ? (m1, m2) : (m2, m1)
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)

@@ -582,7 +582,11 @@ function __init__()
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
 
     if !haskey(ENV, "OPENBLAS_NUM_THREADS")
-        BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+        @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+        else
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+        end
     end
 end
 
