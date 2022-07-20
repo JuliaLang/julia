@@ -343,6 +343,10 @@ end
                 @test s == si
                 invpermute!(s, p)
                 @test s == v
+
+                # Ensure stability, even with reverse short circuit
+                @test all(sort!(Real[fill(2.0, 15); fill(2, 15); fill(1.0, 15); fill(1, 15)])
+                           .=== Real[fill(1.0, 15); fill(1, 15); fill(2.0, 15); fill(2, 15)])
             end
 
             # unstable algorithms
