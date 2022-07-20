@@ -34,8 +34,8 @@ namespace JuliaType {
         return llvm::StructType::get(C);
     }
 
-    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), 0);
+    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C, unsigned addressSpace=0) {
+        return llvm::PointerType::get(get_jlvalue_ty(C), addressSpace);
     }
 
     static inline llvm::PointerType* get_prjlvalue_ty(llvm::LLVMContext &C) {
