@@ -1623,6 +1623,9 @@ Base.size(::FakeZeroDimArray) = ()
     # Zero dimensional parent
     a = reshape(FakeZeroDimArray(),1,1,1)
     @test @inferred(strides(a)) == (1, 1, 1)
+    # Dense parent (but not StridedArray)
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(reshape(A, 3, 2, 3))
 end
 
 @testset "stride for 0 dims array #44087" begin
