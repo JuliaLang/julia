@@ -1968,7 +1968,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             ismutable = ismutabletype(t)
             fcount = fieldcount(t)
             nargs = length(e.args) - 1
-            is_nothrow && (is_nothrow = fcount ≥ nargs)
+            @assert fcount ≥ nargs # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
             local allconst = true
@@ -1977,11 +1977,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 ft = fieldtype(t, i)
                 is_nothrow && (is_nothrow = at ⊑ ft)
                 at = tmeet(at, ft)
-                if at === Bottom
-                    t = Bottom
-                    tristate_merge!(sv, EFFECTS_THROWS)
-                    @goto t_computed
-                end
+                at === Bottom && @goto always_throw
                 if ismutable && !isconst(t, i)
                     ats[i] = ft # can't constrain this field (as it may be modified later)
                     continue
@@ -2060,9 +2056,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         t = sp_type_rewrap(e.args[2], sv.linfo, true)
         for i = 3:length(e.args)
             if abstract_eval_value(interp, e.args[i], vtypes, sv) === Bottom
-                t = Bottom
-                tristate_merge!(sv, EFFECTS_THROWS)
-                @goto t_computed
+                @goto always_throw
             end
         end
         effects = EFFECTS_UNKNOWN
@@ -2122,10 +2116,13 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
             end
         end
+    elseif false
+        @label always_throw
+        t = Bottom
+        tristate_merge!(sv, EFFECTS_THROWS)
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
-    @label t_computed
     @assert !isa(t, TypeVar) "unhandled TypeVar"
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
