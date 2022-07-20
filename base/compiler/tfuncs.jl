@@ -1778,7 +1778,8 @@ const _EFFECT_FREE_BUILTINS = [
 ]
 
 const _CONSISTENT_BUILTINS = Any[
-    tuple, # tuple is immutable, thus tuples of egal arguments are egal
+    tuple, # Tuple is immutable, thus tuples of egal arguments are egal
+    svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
     ===,
     typeof,
     nfields,
