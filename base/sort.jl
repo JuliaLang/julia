@@ -12,7 +12,7 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
     min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
-    midpoint, @boundscheck, checkbounds
+    midpoint, @boundscheck, checkbounds, IteratorSize, HasShape
 
 using .Base: >>>, !==
 
@@ -991,7 +991,10 @@ julia> v
  2
 ```
 """
-sort(v; kws...) = sort!(copymutable(v); kws...)
+function sort(v; kws...)
+    IteratorSize(v) == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
+    sort!(copymutable(v); kws...)
+end
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
