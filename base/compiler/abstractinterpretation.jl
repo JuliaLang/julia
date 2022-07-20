@@ -1965,35 +1965,40 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = true
         if isconcretedispatch(t)
+            ismutable = ismutabletype(t)
             fcount = fieldcount(t)
             nargs = length(e.args) - 1
             is_nothrow && (is_nothrow = fcount ≥ nargs)
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
             local allconst = true
-            for i = 2:length(e.args)
-                at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
-                ft = fieldtype(t, i-1)
+            for i = 1:nargs
+                at = widenconditional(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
+                ft = fieldtype(t, i)
                 is_nothrow && (is_nothrow = at ⊑ ft)
                 at = tmeet(at, ft)
                 if at === Bottom
                     t = Bottom
                     tristate_merge!(sv, EFFECTS_THROWS)
                     @goto t_computed
-                elseif !isa(at, Const)
-                    allconst = false
                 end
+                if ismutable && !isconst(t, i)
+                    ats[i] = ft # can't constrain this field (as it may be modified later)
+                    continue
+                end
+                allconst &= isa(at, Const)
                 if !anyrefine
                     anyrefine = has_nontrivial_const_info(at) || # constant information
                                 at ⋤ ft                          # just a type-level information, but more precise than the declared type
                 end
-                ats[i-1] = at
+                ats[i] = at
             end
             # For now, don't allow:
-            # - Const/PartialStruct of mutables
+            # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
+            #   with `const` fields if anything refined)
             # - partially initialized Const/PartialStruct
-            if !ismutabletype(t) && fcount == nargs
-                if allconst
+            if fcount == nargs
+                if !ismutable && allconst
                     argvals = Vector{Any}(undef, nargs)
                     for j in 1:nargs
                         argvals[j] = (ats[j]::Const).val
