@@ -153,7 +153,7 @@ stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Int
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
-    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a))
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     stp = strides(parent(a))
     els, elp = sizeof(T), sizeof(S)
     els == elp && return stp # 0dim parent is also handled here.
