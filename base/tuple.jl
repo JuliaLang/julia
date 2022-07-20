@@ -55,9 +55,9 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, args...)
+function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
 end
 
 
