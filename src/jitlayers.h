@@ -13,6 +13,10 @@
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
+#include <llvm/Passes/StandardInstrumentations.h>
+
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 #include "debug-registry.h"
@@ -95,6 +99,29 @@ struct jl_locked_stream {
     lock operator*() {
         return lock(mutex, stream);
     }
+};
+
+struct OptimizationOptions {
+    bool lower_intrinsics;
+    bool dump_native;
+    bool external_use;
+
+    static constexpr OptimizationOptions defaults() {
+        return {true, false, false};
+    }
+};
+
+struct NewPM {
+    std::unique_ptr<TargetMachine> TM;
+    StandardInstrumentations SI;
+    std::unique_ptr<PassInstrumentationCallbacks> PIC;
+    PassBuilder PB;
+    ModulePassManager MPM;
+    OptimizationLevel O;
+
+    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults());
+
+    void run(Module &M);
 };
 
 typedef struct _jl_llvm_functions_t {
