@@ -128,9 +128,11 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, 1.0, Forward) == 5
     @test searchsortedlast(r, 1, Forward) == 5
     @test searchsortedlast(r, UInt(1), Forward) == 5
+end
 
+@testset "Each sorting algorithm individually" begin
     a = rand(1:10000, 1000)
-    for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
         b = sort(a, alg=alg)
         @test issorted(b)
@@ -195,18 +197,16 @@ Base.step(r::ConstantRange) = 0
         @test b == c
     end
 
-    @testset "unstable algorithms" begin
-        for alg in [QuickSort, Base.DEFAULT_UNSTABLE]
-            b = sort(a, alg=alg)
-            @test issorted(b)
-            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
-            b = sort(a, alg=alg, rev=true)
-            @test issorted(b, rev=true)
-            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
-            b = sort(a, alg=alg, by=x->1/x)
-            @test issorted(b, by=x->1/x)
-            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
-        end
+    @testset "PartialQuickSort" begin
+        b = sort(a)
+        @test issorted(b)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+        b = sort(a, rev=true)
+        @test issorted(b, rev=true)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+        b = sort(a, by=x->1/x)
+        @test issorted(b, by=x->1/x)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
     end
 end
 @testset "insorted" begin
@@ -333,7 +333,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, QuickSort, Base.DEFAULT_STABLE]
+            for alg in [MergeSort, QuickSort, PartialQuickSort(1:n), Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
