@@ -2406,7 +2406,6 @@ void gc_drain_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
             uintptr_t nptr = c->nptr;
             gc_mark_objarray(ptls, obj_parent, obj_begin, obj_end, step,
                              nptr);
-            gc_mark_loop_(ptls, mq);
         }
         else if (c->cid == ary8_chunk) {
             jl_value_t *ary8_parent = c->parent;
@@ -2417,7 +2416,6 @@ void gc_drain_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
             uintptr_t nptr = c->nptr;
             gc_mark_array8(ptls, ary8_parent, ary8_begin, ary8_end, elem_begin, elem_end,
                            nptr);
-            gc_mark_loop_(ptls, mq);
         }
         else {
             jl_value_t *ary16_parent = c->parent;
@@ -2428,8 +2426,8 @@ void gc_drain_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
             uintptr_t nptr = c->nptr;
             gc_mark_array16(ptls, ary16_parent, ary16_begin, ary16_end, elem_begin, elem_end,
                             nptr);
-            gc_mark_loop_(ptls, mq);
         }
+        gc_mark_loop_(ptls, mq);
     }
 #endif
 }
