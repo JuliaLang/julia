@@ -1696,7 +1696,7 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 {
 #ifdef GC_VERIFY
     if (__unlikely(mq->current == mq->end)) {
-        jl_safe_printf("Queue overflow\n");
+        jl_safe_printf("GC internal error: queue overflow\n");
         abort();
     }
     *mq->current = v;
@@ -1704,7 +1704,7 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 #else
     // Queue overflow
     if (!ws_queue_push(&mq->q, v)) {
-        jl_safe_printf("Queue overflow\n");
+        jl_safe_printf("GC internal error: queue overflow\n");
         abort();
     }
 #endif
@@ -1791,10 +1791,26 @@ static void gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint32_t *obj32_be
 
 // Mark object array
 static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
-                             jl_value_t **obj_end, uint32_t step, uintptr_t nptr) JL_NOTSAFEPOINT
+                             jl_value_t **obj_end, uint32_t step,
+                             uintptr_t nptr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
+    // Decide whether need to chunk objary
+    size_t nobjs = (obj_end - obj_begin) / step;
+    if (nobjs > MAX_REFS_AT_ONCE) {
+        jl_gc_chunk_t c = {objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
+                           obj_end,      NULL,       NULL,
+                           step,         nptr};
+        // Chunk queue overflow
+        if (mq->current_chunk == mq->chunk_end) {
+            jl_safe_printf("GC internal error: queue overflow");
+            abort();
+        }
+        *mq->current_chunk = c;
+        mq->current_chunk++;
+        obj_end = obj_begin + step * MAX_REFS_AT_ONCE;
+    }
     for (; obj_begin < obj_end; obj_begin += step) {
         new_obj = *obj_begin;
         if (new_obj)
@@ -1813,6 +1829,21 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary8_parent)->elsize / sizeof(jl_value_t *);
+    // Decide whether need to chunk arr8
+    size_t nrefs = (ary8_end - ary8_begin) / elsize;
+    if (nrefs > MAX_REFS_AT_ONCE) {
+        jl_gc_chunk_t c = {ary8_chunk, ary8_parent, ary8_begin + MAX_REFS_AT_ONCE,
+                           ary8_end,   elem_begin,  elem_end,
+                           0,          nptr};
+        // Chunk queue overflow
+        if (mq->current_chunk == mq->chunk_end) {
+            jl_safe_printf("GC internal error: queue overflow");
+            abort();
+        }
+        *mq->current_chunk = c;
+        mq->current_chunk++;
+        ary8_end = ary8_begin + MAX_REFS_AT_ONCE;
+    }
     for (; ary8_begin < ary8_end; ary8_begin += elsize) {
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             new_obj = ary8_begin[*pindex];
@@ -1826,13 +1857,29 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
 }
 
 // Mark array with 16bit field descriptors
-static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_value_t **ary16_begin,
-                            jl_value_t **ary16_end, uint16_t *elem_begin, uint16_t *elem_end,
+static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
+                            jl_value_t **ary16_begin, jl_value_t **ary16_end,
+                            uint16_t *elem_begin, uint16_t *elem_end,
                             uintptr_t nptr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
+    // Decide whether need to chunk arr16
+    size_t nrefs = (ary16_end - ary16_begin) / elsize;
+    if (nrefs > MAX_REFS_AT_ONCE) {
+        jl_gc_chunk_t c = {ary16_chunk, ary16_parent, ary16_begin + MAX_REFS_AT_ONCE,
+                           ary16_end,   elem_begin,   elem_end,
+                           0,           nptr};
+        // Chunk queue overflow
+        if (mq->current_chunk == mq->chunk_end) {
+            jl_safe_printf("GC internal error: queue overflow");
+            abort();
+        }
+        *mq->current_chunk = c;
+        mq->current_chunk++;
+        ary16_end = ary16_begin + MAX_REFS_AT_ONCE;
+    }
     for (; ary16_begin < ary16_end; ary16_begin += elsize) {
         for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             new_obj = ary16_begin[*pindex];
@@ -1846,8 +1893,8 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_value_t
 }
 
 // Mark gc frame
-static void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots, uintptr_t offset,
-                          uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT
+static void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots,
+                          uintptr_t offset, uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
@@ -1880,7 +1927,8 @@ static void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots, uint
 }
 
 // Mark exception stack
-static void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr) JL_NOTSAFEPOINT
+static void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack,
+                             size_t itr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
@@ -1908,9 +1956,9 @@ static void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr
 }
 
 // Mark module binding
-static void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t **mb_begin,
-                                   jl_binding_t **mb_end, uintptr_t nptr,
-                                   uint8_t bits) JL_NOTSAFEPOINT
+static void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent,
+                                   jl_binding_t **mb_begin, jl_binding_t **mb_end,
+                                   uintptr_t nptr, uint8_t bits) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     for (; mb_begin < mb_end; mb_begin += 2) {
@@ -2241,8 +2289,8 @@ static void gc_wake_workers(jl_ptls_t ptls)
     jl_fence();
     if (jl_n_threads > 1) {
         jl_wake_libuv();
-		uv_cond_broadcast(&safepoint_cond);
-	}
+        uv_cond_broadcast(&safepoint_cond);
+    }
     for (int i = 0; i < jl_n_threads; i++) {
         if (i != ptls->tid)
             uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
@@ -2250,7 +2298,7 @@ static void gc_wake_workers(jl_ptls_t ptls)
 }
 
 // Used in `gc-debug`
-void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 {
     void *new_obj;
     pop : {
@@ -2283,6 +2331,48 @@ void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
     }
 }
 
+// Drain overflow queue of chunked arrays
+void gc_drain_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+{
+    jl_gc_chunk_t *c;
+    while (mq->current_chunk != mq->chunk_start) {
+        mq->current_chunk--;
+        c = mq->current_chunk;
+        if (c->cid == objary_chunk) {
+            jl_value_t *obj_parent = c->parent;
+            jl_value_t **obj_begin = c->begin;
+            jl_value_t **obj_end = c->end;
+            uint32_t step = c->step;
+            uintptr_t nptr = c->nptr;
+            gc_mark_objarray(ptls, obj_parent, obj_begin, obj_end, step,
+                             nptr);
+            gc_mark_loop_(ptls, mq);
+        }
+        else if (c->cid == ary8_chunk) {
+            jl_value_t *ary8_parent = c->parent;
+            jl_value_t **ary8_begin = c->begin;
+            jl_value_t **ary8_end = c->end;
+            uint8_t *elem_begin = (uint8_t *)c->elem_begin;
+            uint8_t *elem_end = (uint8_t *)c->elem_end;
+            uintptr_t nptr = c->nptr;
+            gc_mark_array8(ptls, ary8_parent, ary8_begin, ary8_end, elem_begin, elem_end,
+                           nptr);
+            gc_mark_loop_(ptls, mq);
+        }
+        else {
+            jl_value_t *ary16_parent = c->parent;
+            jl_value_t **ary16_begin = c->begin;
+            jl_value_t **ary16_end = c->end;
+            uint16_t *elem_begin = (uint16_t *)c->elem_begin;
+            uint16_t *elem_end = (uint16_t *)c->elem_end;
+            uintptr_t nptr = c->nptr;
+            gc_mark_array16(ptls, ary16_parent, ary16_begin, ary16_end, elem_begin, elem_end,
+                            nptr);
+            gc_mark_loop_(ptls, mq);
+        }
+    }
+}
+
 // Main mark loop. Single stack (allocated on the heap) of `jl_value_t *`
 // is used to keep track of processed items. Maintaning this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
@@ -2291,7 +2381,8 @@ void gc_mark_loop(jl_ptls_t ptls)
 {
     jl_atomic_fetch_add(&nworkers_marking, 1);
     uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
-    _gc_mark_loop(ptls, &ptls->mark_queue);
+    gc_mark_loop_(ptls, &ptls->mark_queue);
+    gc_drain_chunkqueue(ptls, &ptls->mark_queue);
     jl_atomic_store_release(&ptls->gc_state, state0);
     jl_atomic_fetch_add(&nworkers_marking, -1);
 }
@@ -2302,7 +2393,8 @@ STATIC_INLINE void gc_mark_loop_master(jl_ptls_t ptls)
     jl_atomic_fetch_add(&nworkers_marking, 1);
     uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
     gc_wake_workers(ptls);
-    _gc_mark_loop(ptls, &ptls->mark_queue);
+    gc_mark_loop_(ptls, &ptls->mark_queue);
+    gc_drain_chunkqueue(ptls, &ptls->mark_queue);
     jl_atomic_store_release(&ptls->gc_state, state0);
     jl_atomic_fetch_add(&nworkers_marking, -1);
 }
@@ -2896,19 +2988,23 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
 
-    // Work-stealing queue
-    size_t init_size = (1 << 20);
+    // Initialize mark-queue
+    size_t mq_init_size = (1 << 22);
+    size_t cq_init_size = (1 << 12);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 #ifndef GC_VERIFY
     ws_queue_t *q = &mq->q;
-    ws_array_t *wsa = create_ws_array(init_size);
+    ws_array_t *wsa = create_ws_array(mq_init_size);
     jl_atomic_store_relaxed(&q->array, wsa);
     jl_atomic_store_relaxed(&q->top, 0);
     jl_atomic_store_relaxed(&q->bottom, 0);
+    mq->chunk_start = (jl_gc_chunk_t *)malloc_s(cq_init_size * sizeof(jl_gc_chunk_t));
+    mq->current_chunk = mq->chunk_start;
+    mq->chunk_end = mq->chunk_start + cq_init_size;
 #else
-	mq->start = (jl_value_t **)malloc_s(init_size * sizeof(jl_value_t *));
+	mq->start = (jl_value_t **)malloc_s(mq_init_size * sizeof(jl_value_t *));
     mq->current = mq->start;
-    mq->end = mq->start + init_size;
+    mq->end = mq->start + mq_init_size;
 #endif
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
