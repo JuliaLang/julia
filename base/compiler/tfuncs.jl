@@ -896,7 +896,7 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
     end
     isa(s, DataType) || return Any
     isabstracttype(s) && return Any
-    if s <: Tuple && !(Int <: widenconst(name))
+    if s <: Tuple && !hasintersect(widenconst(name), Int)
         return Bottom
     end
     if s <: Module
@@ -969,6 +969,57 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         return R
     end
     return rewrap_unionall(R, s00)
+end
+
+function getfield_notundefined(@nospecialize(typ0), @nospecialize(name))
+    typ = unwrap_unionall(typ0)
+    if isa(typ, Union)
+        return getfield_notundefined(rewrap_unionall(typ.a, typ0), name) &&
+               getfield_notundefined(rewrap_unionall(typ.b, typ0), name)
+    end
+    isa(typ, DataType) || return false
+    if typ.name === Tuple.name || typ.name === _NAMEDTUPLE_NAME
+        # tuples and named tuples can't be instantiated with undefined fields,
+        # so we don't need to be conservative here
+        return true
+    end
+    if !isa(name, Const)
+        isvarargtype(name) && return false
+        if !hasintersect(widenconst(name), Union{Int,Symbol})
+            return true # no undefined behavior if thrown
+        end
+        # field isn't known precisely, but let's check if all the fields can't be
+        # initialized with undefined value so to avoid being too conservative
+        fcnt = fieldcount_noerror(typ)
+        fcnt === nothing && return false
+        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), 1:fcnt) && return true
+        return false
+    end
+    name = name.val
+    if isa(name, Symbol)
+        fidx = fieldindex(typ, name, false)
+        fidx === nothing && return true # no undefined behavior if thrown
+    elseif isa(name, Int)
+        fidx = name
+    else
+        return true # no undefined behavior if thrown
+    end
+    fcnt = fieldcount_noerror(typ)
+    fcnt === nothing && return false
+    0 < fidx ≤ fcnt || return true # no undefined behavior if thrown
+    ftyp = fieldtype(typ, fidx)
+    is_undefref_fieldtype(ftyp) && return true
+    return fidx ≤ datatype_min_ninitialized(typ)
+end
+# checks if a field of this type will not be initialized with undefined value
+# and the access to that uninitialized field will cause and `UndefRefError`, e.g.,
+# - is_undefref_fieldtype(String) === true
+# - is_undefref_fieldtype(Integer) === true
+# - is_undefref_fieldtype(Any) === true
+# - is_undefref_fieldtype(Int) === false
+# - is_undefref_fieldtype(Union{Int32,Int64}) === false
+function is_undefref_fieldtype(@nospecialize ftyp)
+    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
 end
 
 function setfield!_tfunc(o, f, v, order)
@@ -1817,6 +1868,14 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         end
         s = s::DataType
         consistent = !ismutabletype(s) ? ALWAYS_TRUE : ALWAYS_FALSE
+        # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
+        # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
+        # throws `UndefRefError` so doesn't need to taint it
+        # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
+        # with undefined value so that we don't taint `:consistent`-cy too aggressively here
+        if f === Core.getfield && !getfield_notundefined(s, argtypes[2])
+            consistent = ALWAYS_FALSE
+        end
         if f === Core.getfield && !isvarargtype(argtypes[end]) && getfield_boundscheck(argtypes) !== true
             # If we cannot independently prove inboundsness, taint consistency.
             # The inbounds-ness assertion requires dynamic reachability, while

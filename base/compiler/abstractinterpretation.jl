@@ -1966,7 +1966,6 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         end
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
-        is_nothrow = true
         if isconcretedispatch(t)
             ismutable = ismutabletype(t)
             fcount = fieldcount(t)
@@ -1975,6 +1974,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
             local allconst = true
+            local is_nothrow = true
             for i = 1:nargs
                 at = widenconditional(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
                 ft = fieldtype(t, i)
@@ -1992,12 +1992,22 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
                 ats[i] = at
             end
+            if fcount > nargs && any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
+                # allocation with undefined field leads to undefined behavior and should taint `:consistent`-cy
+                consistent = ALWAYS_FALSE
+            elseif ismutable
+                # mutable object isn't `:consistent`, but we can still give the return
+                # type information a chance to refine this `:consistent`-cy later
+                consistent = TRISTATE_UNKNOWN
+            else
+                consistent = ALWAYS_TRUE
+            end
             # For now, don't allow:
             # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
             #   with `const` fields if anything refined)
             # - partially initialized Const/PartialStruct
             if fcount == nargs
-                if !ismutable && allconst
+                if consistent === ALWAYS_TRUE && allconst
                     argvals = Vector{Any}(undef, nargs)
                     for j in 1:nargs
                         argvals[j] = (ats[j]::Const).val
@@ -2007,12 +2017,11 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                     t = PartialStruct(t, ats)
                 end
             end
+            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE
         else
-            is_nothrow = false
+            consistent = nothrow = ALWAYS_FALSE
         end
-        tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
-            nothrow = is_nothrow ? ALWAYS_TRUE : ALWAYS_FALSE))
+        tristate_merge!(sv, Effects(EFFECTS_TOTAL; consistent, nothrow))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = false # TODO: More precision
