@@ -582,7 +582,8 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
         # vector is presorted. A weaker condition is possible, but unlikely to be useful.
         if _issorted(v, lo, hi, o)
             return v
-        elseif _issorted(v, lo, hi, ReverseOrdering(o))
+        elseif _issorted(v, lo, hi, Lt((x, y) -> !lt(o, x, y)))
+            # Reverse only if necessary. A weaker condition would violate stability.
             return reverse!(v, lo, hi)
         end
     end
@@ -784,6 +785,8 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
 
     # For large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if lenm1 >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
+        # If reversing is valid, do so. This does not violate stability
+        # because being UIntMappable implies a linear order.
         reverse!(v, lo, hi)
         return v
     end
