@@ -60,6 +60,50 @@ end |> !Core.Compiler.is_consistent
     return nothing
 end |> Core.Compiler.is_foldable
 
+# :the_exception expression should taint :consistent-cy
+global inconsistent_var::Int = 42
+function throw_inconsistent() # this is still :consistent
+    throw(inconsistent_var)
+end
+function catch_inconsistent()
+    try
+        throw_inconsistent()
+    catch err
+        err
+    end
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(catch_inconsistent))
+cache_inconsistent() = catch_inconsistent()
+function compare_inconsistent()
+    a = cache_inconsistent()
+    global inconsistent_var = 0
+    b = cache_inconsistent()
+    global inconsistent_var = 42
+    return a === b
+end
+@test !compare_inconsistent()
+# return type information shouldn't be able to refine it also
+function catch_inconsistent(x::T) where T
+    v = x
+    try
+        throw_inconsistent()
+    catch err
+        v = err::T
+    end
+    return v
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(catch_inconsistent, (Int,)))
+cache_inconsistent(x) = catch_inconsistent(x)
+function compare_inconsistent(x::T) where T
+    x = one(T)
+    a = cache_inconsistent(x)
+    global inconsistent_var = 0
+    b = cache_inconsistent(x)
+    global inconsistent_var = 42
+    return a === b
+end
+@test !compare_inconsistent(3)
+
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
