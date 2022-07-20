@@ -95,9 +95,9 @@ ERROR: ArgumentError: No value arguments present
 function something end
 
 something() = throw(ArgumentError("No value arguments present"))
-something(x::Nothing, y...) = something(y...)
-something(x::Some, y...) = x.value
-something(x::Any, y...) = x
+something(x::Nothing, @nospecialize(y...)) = something(y...)
+something(x::Some, @nospecialize(y...)) = x.value
+something(@nospecialize(x::Any), @nospecialize(y...)) = x
 
 
 """
