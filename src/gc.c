@@ -2374,9 +2374,8 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
     steal : {
         // Steal from a random victim
         for (int i = 0; i < 2 * jl_n_threads; i++) {
-            uint32_t v1 = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
-            uint32_t v2 = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
-            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[v1 > v2 ? v1 : v2]->mark_queue;
+            uint32_t v = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
+            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[v]->mark_queue;
             new_obj = gc_markqueue_steal_from(mq2);
             if (new_obj)
                 goto mark;
@@ -2698,9 +2697,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     for (int t_i = 0; t_i < jl_n_threads; t_i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t_i];
         // 2.1. mark every thread local root
-        gc_queue_thread_local(&ptls->mark_queue, ptls2);
+        gc_queue_thread_local(mq, ptls2);
         // 2.2 mark any managed objects in the backtrace buffer
-        gc_queue_bt_buf(&ptls->mark_queue, ptls2);
+        gc_queue_bt_buf(mq, ptls2);
         // 2.3. mark every object in the `last_remsets` and `rem_binding`
         gc_queue_remset(ptls, ptls2);
     }
