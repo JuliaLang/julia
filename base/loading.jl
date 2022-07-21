@@ -2262,12 +2262,12 @@ macro __DIR__()
 end
 
 """
-    precompile(f, args::Tuple{Vararg{Any}})
+    precompile(f, argtypes::Tuple{Vararg{Any}})
 
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+Compile the given function `f` for the argument tuple (of types) `argtypes`, but do not execute it.
 """
-function precompile(@nospecialize(f), @nospecialize(args::Tuple))
-    precompile(Tuple{Core.Typeof(f), args...})
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    precompile(Tuple{Core.Typeof(f), argtypes...})
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
@@ -2277,6 +2277,29 @@ function precompile(@nospecialize(argt::Type))
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
     return ret
+end
+
+# Variants that work for `invoke`d calls for which the signature may not be sufficient
+precompile(mi::Core.MethodInstance, world=get_world_counter()) = (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+
+"""
+    precompile(m::Method, argtypes::Tuple{Vararg{Any}})
+
+Precompile a specific method for the given argument types. This may be used to precompile
+a different method than the one that would ordinarily be chosen by dispatch.
+"""
+function precompile(m::Method, @nospecialize(argtypes::Tuple))
+    world = get_world_counter()
+    f = getglobal(m.module, m.name)
+    matches = _methods(f, argtypes, -1, world)::Vector
+    for mtch in matches
+        mtch = mtch::Core.MethodMatch
+        if mtch.method == m
+            mi = Core.Compiler.specialize_method(m, mtch.spec_types, mtch.sparams)
+            return precompile(mi)
+        end
+    end
+    return false
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))

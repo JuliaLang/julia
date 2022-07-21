@@ -2296,16 +2296,9 @@ static void jl_compile_now(jl_method_instance_t *mi)
     }
 }
 
-JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
+JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world)
 {
-    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     size_t tworld = jl_typeinf_world;
-    size_t min_valid = 0;
-    size_t max_valid = ~(size_t)0;
-    jl_method_instance_t *mi = jl_get_specialization1(types, world, &min_valid, &max_valid, 1);
-    if (mi == NULL)
-        return 0;
-    JL_GC_PROMISE_ROOTED(mi);
     mi->precompiled = 1;
     if (jl_generating_output()) {
         jl_compile_now(mi);
@@ -2314,7 +2307,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
         // additional useful methods that should be compiled
         //ALT: if (jl_is_datatype(types) && ((jl_datatype_t*)types)->isdispatchtuple && !jl_egal(mi->specTypes, types))
         //ALT: if (jl_subtype(types, mi->specTypes))
-        if (!jl_subtype(mi->specTypes, (jl_value_t*)types)) {
+        if (types && !jl_subtype(mi->specTypes, (jl_value_t*)types)) {
             jl_svec_t *tpenv2 = jl_emptysvec;
             jl_value_t *types2 = NULL;
             JL_GC_PUSH2(&tpenv2, &types2);
@@ -2335,6 +2328,18 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
         // we should generate the native code immediately in preparation for use.
         (void)jl_compile_method_internal(mi, world);
     }
+}
+
+JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
+{
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    size_t min_valid = 0;
+    size_t max_valid = ~(size_t)0;
+    jl_method_instance_t *mi = jl_get_specialization1(types, world, &min_valid, &max_valid, 1);
+    if (mi == NULL)
+        return 0;
+    JL_GC_PROMISE_ROOTED(mi);
+    jl_compile_method_instance(mi, types, world);
     return 1;
 }
 

@@ -967,6 +967,14 @@ precompile_test_harness("invoke") do dir
     @test isempty(m.specializations)
     m = get_real_method(M.hnc)
     @test isempty(m.specializations)
+
+    # Precompile specific methods for arbitrary arg types
+    invokeme(x) = 1
+    invokeme(::Int) = 2
+    m_any, m_int = sort(collect(methods(invokeme)); by=m->m.line)
+    precompile(m_any, (Int,))
+    @test m_any.specializations[1].specTypes === Tuple{typeof(invokeme), Int}
+    @test isempty(m_int.specializations)
 end
 
 # test --compiled-modules=no command line option
