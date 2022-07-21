@@ -7814,5 +7814,5 @@ f45350() = (global x45350 = 2)
 end
 
 @testset "error message for getfield with bad integer type" begin
-    @test_throws "expected $Int" getfield((1,2), Int8(1))
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end
