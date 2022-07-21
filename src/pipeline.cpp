@@ -96,19 +96,17 @@ namespace {
 
     #ifdef _COMPILER_MSAN_ENABLED_
         auto MSanPass = [&](/*SanitizerMask Mask, */bool CompileKernel) {
-        //   if (LangOpts.Sanitize.has(Mask)) {
+        // if (LangOpts.Sanitize.has(Mask)) {
             // int TrackOrigins = CodeGenOpts.SanitizeMemoryTrackOrigins;
             // bool Recover = CodeGenOpts.SanitizeRecover.has(Mask);
 
             // MemorySanitizerOptions options(TrackOrigins, Recover, CompileKernel,
-            //                                CodeGenOpts.SanitizeMemoryParamRetval);
-            MemorySanitizerOptions options{};
-    #if JL_LLVM_VERSION >= 140000
+            //                             CodeGenOpts.SanitizeMemoryParamRetval);
+            MemorySanitizerOptions options;
             MPM.addPass(ModuleMemorySanitizerPass(options));
-    #endif
             FunctionPassManager FPM;
             FPM.addPass(MemorySanitizerPass(options));
-            if (O.getSpeedupLevel() != 0) {
+            if (O != OptimizationLevel::O0) {
             // MemorySanitizer inserts complex instrumentation that mostly
             // follows the logic of the original code, but operates on
             // "shadow" values. It can benefit from re-running some
@@ -121,7 +119,7 @@ namespace {
             // compiler-rt/test/msan/select_origin.cpp.
             }
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-        //   }
+        // }
         };
         MSanPass(/*SanitizerKind::Memory, */false);
         // MSanPass(SanitizerKind::KernelMemory, true);
@@ -129,9 +127,7 @@ namespace {
 
     #ifdef _COMPILER_TSAN_ENABLED_
         // if (LangOpts.Sanitize.has(SanitizerKind::Thread)) {
-    #if JL_LLVM_VERSION >= 140000
         MPM.addPass(ModuleThreadSanitizerPass());
-    #endif
         MPM.addPass(createModuleToFunctionPassAdaptor(ThreadSanitizerPass()));
         // }
     #endif
@@ -152,8 +148,8 @@ namespace {
             MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
             // MPM.addPass(ModuleAddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
-            MPM.addPass(ModuleAddressSanitizerPass());
-            MPM.addPass(createModuleToFunctionPassAdaptor(AddressSanitizerPass()));
+            //Let's assume the defaults are actually fine for our purposes
+            MPM.addPass(ModuleAddressSanitizerPass(AddressSanitizerOptions()));
         //   }
         };
         ASanPass(/*SanitizerKind::Address, */false);

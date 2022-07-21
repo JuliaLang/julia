@@ -8597,6 +8597,9 @@ extern "C" void jl_init_llvm(void)
     if (jl_using_gdb_jitevents)
         jl_ExecutionEngine->enableJITDebuggingSupport();
 
+#if defined(_COMPILER_ASAN_ENABLED_) && defined(JL_USE_NEW_PM)
+#warning "JIT profiling support (JL_USE_*_JITEVENTS) not yet available for ASAN with NewPM (requires JITLink)"
+#else
 #if defined(JL_USE_INTEL_JITEVENTS) || \
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
@@ -8636,6 +8639,7 @@ extern "C" void jl_init_llvm(void)
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
+#endif
 #endif
 #endif
 #endif

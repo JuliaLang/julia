@@ -20,6 +20,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 #include "debug-registry.h"
+#include "platform.h"
 
 #include <stack>
 #include <queue>
@@ -40,7 +41,10 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64.
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+
+#define JL_USE_NEW_PM
+
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(_COMPILER_ASAN_ENABLED_) && defined(JL_USE_NEW_PM) && defined(_OS_LINUX_)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
@@ -136,7 +140,6 @@ struct AnalysisManagers {
 
 OptimizationLevel getOptLevel(int optlevel);
 
-#define JL_USE_NEW_PM
 
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
