@@ -2287,20 +2287,17 @@ precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
     precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)
 
 Precompile a specific method for the given argument types. This may be used to precompile
-a different method than the one that would ordinarily be chosen by dispatch, for example
+a different method than the one that would ordinarily be chosen by dispatch, thus
 mimicking `invoke`.
 """
 function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
-    world = get_world_counter()
-    matches = _methods(f, argtypes, -1, world)::Vector
-    for mtch in matches
-        mtch = mtch::Core.MethodMatch
-        if mtch.method == m
-            mi = Core.Compiler.specialize_method(m, mtch.spec_types, mtch.sparams)
-            return precompile(mi, world)
-        end
-    end
-    return false
+    precompile(Tuple{Core.Typeof(f), argtypes...}, m)
+end
+
+function precompile(@nospecialize(argt::Type), m::Method)
+    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    mi = Core.Compiler.specialize_method(m, atype, sparams)
+    return precompile(mi)
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))

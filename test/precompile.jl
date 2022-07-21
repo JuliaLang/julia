@@ -971,8 +971,8 @@ precompile_test_harness("invoke") do dir
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1
     invokeme(::Int) = 2
-    m_any, m_int = sort(collect(methods(invokeme)); by=m->m.line)
-    precompile(invokeme, (Int,), m_any)
+    m_any, m_int = sort(collect(methods(invokeme)); by=m->(m.file,m.line))
+    @test precompile(invokeme, (Int,), m_any)
     @test m_any.specializations[1].specTypes === Tuple{typeof(invokeme), Int}
     @test isempty(m_int.specializations)
 end
