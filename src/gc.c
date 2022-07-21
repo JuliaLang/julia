@@ -1796,7 +1796,7 @@ static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t 
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
-#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
+#if !defined(GC_VERIFY)
     // Decide whether need to chunk objary
     size_t nobjs = (obj_end - obj_begin) / step;
     if (nobjs > MAX_REFS_AT_ONCE) {
@@ -1831,7 +1831,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary8_parent)->elsize / sizeof(jl_value_t *);
-#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
+#if !defined(GC_VERIFY)
     // Decide whether need to chunk ary8
     size_t nrefs = (ary8_end - ary8_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -1869,7 +1869,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
-#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
+#if !defined(GC_VERIFY)
     // Decide whether need to chunk ary16
     size_t nrefs = (ary16_end - ary16_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -2374,15 +2374,9 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
     steal : {
         // Steal from a random victim
         for (int i = 0; i < 2 * jl_n_threads; i++) {
-            uint32_t v = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
-            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[v]->mark_queue;
-            new_obj = gc_markqueue_steal_from(mq2);
-            if (new_obj)
-                goto mark;
-        }
-        // Check if there is no work in victims' queues
-        for (int i = 0; i < jl_n_threads; i++) {
-            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[i]->mark_queue;
+            uint32_t v1 = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
+            uint32_t v2 = cong(UINT64_MAX, UINT64_MAX, &ptls->rngseed) % jl_n_threads;
+            jl_gc_markqueue_t *mq2 = &jl_all_tls_states[v1 > v2 ? v1 : v2]->mark_queue;
             new_obj = gc_markqueue_steal_from(mq2);
             if (new_obj)
                 goto mark;
@@ -2393,7 +2387,7 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // Drain overflow queue of chunked arrays
 void gc_drain_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
+#if !defined(GC_VERIFY)
     jl_gc_chunk_t *c;
     while (mq->current_chunk != mq->chunk_start) {
         mq->current_chunk--;
@@ -2704,11 +2698,11 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     for (int t_i = 0; t_i < jl_n_threads; t_i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t_i];
         // 2.1. mark every thread local root
-        gc_queue_thread_local(&ptls2->mark_queue, ptls2);
+        gc_queue_thread_local(&ptls->mark_queue, ptls2);
         // 2.2 mark any managed objects in the backtrace buffer
-        gc_queue_bt_buf(&ptls2->mark_queue, ptls2);
+        gc_queue_bt_buf(&ptls->mark_queue, ptls2);
         // 2.3. mark every object in the `last_remsets` and `rem_binding`
-        gc_queue_remset(ptls2, ptls2);
+        gc_queue_remset(ptls, ptls2);
     }
     // 3. walk roots
     gc_mark_roots(mq);
@@ -3056,12 +3050,10 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&q->array, wsa);
     jl_atomic_store_relaxed(&q->top, 0);
     jl_atomic_store_relaxed(&q->bottom, 0);
-#if defined(CHUNK_BIG_ARRAYS)
-    size_t cq_init_size = (1 << 12);
+    size_t cq_init_size = (1 << 14);
     mq->chunk_start = (jl_gc_chunk_t *)malloc_s(cq_init_size * sizeof(jl_gc_chunk_t));
     mq->current_chunk = mq->chunk_start;
     mq->chunk_end = mq->chunk_start + cq_init_size;
-#endif
 #else
 	mq->start = (jl_value_t **)malloc_s(mq_init_size * sizeof(jl_value_t *));
     mq->current = mq->start;
