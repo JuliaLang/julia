@@ -1835,7 +1835,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
     // Decide whether need to chunk ary8
     size_t nrefs = (ary8_end - ary8_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {ary8_chunk, ary8_parent, ary8_begin + MAX_REFS_AT_ONCE,
+        jl_gc_chunk_t c = {ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
                            ary8_end,   elem_begin,  elem_end,
                            0,          nptr};
         // Chunk queue overflow
@@ -1845,7 +1845,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
         }
         *mq->current_chunk = c;
         mq->current_chunk++;
-        ary8_end = ary8_begin + MAX_REFS_AT_ONCE;
+        ary8_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
     }
 #endif
     for (; ary8_begin < ary8_end; ary8_begin += elsize) {
@@ -1873,7 +1873,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
     // Decide whether need to chunk ary16
     size_t nrefs = (ary16_end - ary16_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {ary16_chunk, ary16_parent, ary16_begin + MAX_REFS_AT_ONCE,
+        jl_gc_chunk_t c = {ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
                            ary16_end,   elem_begin,   elem_end,
                            0,           nptr};
         // Chunk queue overflow
@@ -1883,7 +1883,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
         }
         *mq->current_chunk = c;
         mq->current_chunk++;
-        ary16_end = ary16_begin + MAX_REFS_AT_ONCE;
+        ary16_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
     }
 #endif
     for (; ary16_begin < ary16_end; ary16_begin += elsize) {
