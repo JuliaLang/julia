@@ -2284,20 +2284,20 @@ precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
     (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
 
 """
-    precompile(m::Method, argtypes::Tuple{Vararg{Any}})
+    precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)
 
 Precompile a specific method for the given argument types. This may be used to precompile
-a different method than the one that would ordinarily be chosen by dispatch.
+a different method than the one that would ordinarily be chosen by dispatch, for example
+mimicking `invoke`.
 """
-function precompile(m::Method, @nospecialize(argtypes::Tuple))
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
     world = get_world_counter()
-    f = getglobal(m.module, m.name)
     matches = _methods(f, argtypes, -1, world)::Vector
     for mtch in matches
         mtch = mtch::Core.MethodMatch
         if mtch.method == m
             mi = Core.Compiler.specialize_method(m, mtch.spec_types, mtch.sparams)
-            return precompile(mi)
+            return precompile(mi, world)
         end
     end
     return false

@@ -972,7 +972,7 @@ precompile_test_harness("invoke") do dir
     invokeme(x) = 1
     invokeme(::Int) = 2
     m_any, m_int = sort(collect(methods(invokeme)); by=m->m.line)
-    precompile(m_any, (Int,))
+    precompile(invokeme, (Int,), m_any)
     @test m_any.specializations[1].specTypes === Tuple{typeof(invokeme), Int}
     @test isempty(m_int.specializations)
 end
