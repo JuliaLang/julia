@@ -1,8 +1,8 @@
 ## jll artifact
 LLVM_JLL_NAME := libLLVM
-LLVM_ASSERT_JLL_VER := 14.0.5+1
+LLVM_ASSERT_JLL_VER := 14.0.5+3
 
 ## source build
 LLVM_VER := 14.0.5
-LLVM_BRANCH=julia-14.0.5-1
-LLVM_SHA1=julia-14.0.5-1
+LLVM_BRANCH=julia-14.0.5-3
+LLVM_SHA1=julia-14.0.5-3

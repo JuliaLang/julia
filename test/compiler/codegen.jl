@@ -10,11 +10,16 @@ const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
+const is_debug_build = ccall(:jl_is_debugbuild, Cint, ()) != 0
+function libjulia_codegen_name()
+    is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
+end
+
 # `_dump_function` might be more efficient but it doesn't really matter here...
 get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
     sprint(code_llvm, f, t, raw, dump_module, optimize)
 
-if opt_level > 0
+if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", get_llvm(identity, Tuple{String}))
 end
@@ -104,7 +109,7 @@ function test_jl_dump_llvm_opt()
     end
 end
 
-if opt_level > 0
+if !is_debug_build && opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
     # Make sure `Core.sizeof` call is inlined
@@ -675,10 +680,11 @@ U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
 
+
 # test that we can start julia with libjulia-codegen removed; PR #41936
 mktempdir() do pfx
     cp(dirname(Sys.BINDIR), pfx; force=true)
-    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libpath = relpath(dirname(dlpath(libjulia_codegen_name())), dirname(Sys.BINDIR))
     libs_deleted = 0
     for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
         rm(joinpath(pfx, libpath, f); force=true, recursive=true)

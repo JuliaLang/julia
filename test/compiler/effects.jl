@@ -171,3 +171,14 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     #@test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+
+# nothrow for arrayset
+@test Base.infer_effects((Vector{Int},Int)) do a, i
+    a[i] = 0 # may throw
+end |> !Core.Compiler.is_nothrow
+
+# SimpleVector allocation can be consistent
+@test Core.Compiler.is_consistent(Base.infer_effects(Core.svec))
+@test Base.infer_effects() do
+    Core.svec(nothing, 1, "foo")
+end |> Core.Compiler.is_consistent

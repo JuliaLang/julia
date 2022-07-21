@@ -70,12 +70,21 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
     // Create the GC frame.
-    AllocaInst *gcframe = new AllocaInst(
+    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
+    AllocaInst *gcframe_alloca = new AllocaInst(
         T_prjlvalue,
-        0,
+        allocaAddressSpace,
         ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2),
         Align(16));
-    gcframe->insertAfter(target);
+    gcframe_alloca->insertAfter(target);
+    Instruction *gcframe;
+    if (allocaAddressSpace) {
+        // addrspacecast as needed for non-0 alloca addrspace
+        gcframe = new AddrSpaceCastInst(gcframe_alloca, T_prjlvalue->getPointerTo(0));
+        gcframe->insertAfter(gcframe_alloca);
+    } else {
+        gcframe = gcframe_alloca;
+    }
     gcframe->takeName(target);
 
     // Zero out the GC frame.

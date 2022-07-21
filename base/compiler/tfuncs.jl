@@ -1697,7 +1697,7 @@ end
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4) || return true
+        array_builtin_common_nothrow(argtypes, 4) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
@@ -1778,7 +1778,8 @@ const _EFFECT_FREE_BUILTINS = [
 ]
 
 const _CONSISTENT_BUILTINS = Any[
-    tuple, # tuple is immutable, thus tuples of egal arguments are egal
+    tuple, # Tuple is immutable, thus tuples of egal arguments are egal
+    svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
     ===,
     typeof,
     nfields,
