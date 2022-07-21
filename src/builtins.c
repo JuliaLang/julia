@@ -893,7 +893,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
         if (idx >= jl_datatype_nfields(st))
             jl_bounds_error(v, arg);
     }
-    else if (!jl_is_symbol(arg)) {
+    else if (jl_isa(arg, (jl_value_t*)jl_number_type)) {
         // This always throws but makes the error way better
         // Otherwise it would think you were trying to pass a symbol which isn't what you were trying to do.
         JL_TYPECHKS(name, long, arg);
