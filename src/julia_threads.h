@@ -187,7 +187,7 @@ typedef struct {
     uintptr_t nptr;
 } jl_gc_chunk_t;
 
-#define CHUNK_BIG_ARRAYS
+// #define CHUNK_BIG_ARRAYS
 #define MAX_REFS_AT_ONCE (1 << 18)
 
 typedef struct {
