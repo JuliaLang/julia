@@ -567,18 +567,40 @@ NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, Optimizatio
     PB(this->TM.get(), PipelineTuningOptions(), None, PIC.get()),
     MPM(createMPM(PB, O, options)), O(O) {}
 
-void NewPM::run(Module &M) {
-    //We must recreate the analysis managers every time
-    //so that analyses from previous runs of the pass manager
-    //do not hang around for the next run
-    LoopAnalysisManager LAM;
-    FunctionAnalysisManager FAM(createFAM(O, TM->getTargetIRAnalysis(), TM->getTargetTriple()));
-    CGSCCAnalysisManager CGAM;
-    ModuleAnalysisManager MAM;
+AnalysisManagers::AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O) : LAM(), FAM(createFAM(O, TM.getTargetIRAnalysis(), TM.getTargetTriple())), CGAM(), MAM() {
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
     PB.registerCGSCCAnalyses(CGAM);
     PB.registerModuleAnalyses(MAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
-    MPM.run(M, MAM);
+}
+
+AnalysisManagers::AnalysisManagers(PassBuilder &PB) : LAM(), FAM(), CGAM(), MAM() {
+    PB.registerLoopAnalyses(LAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerModuleAnalyses(MAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+}
+
+void NewPM::run(Module &M) {
+    //We must recreate the analysis managers every time
+    //so that analyses from previous runs of the pass manager
+    //do not hang around for the next run
+    AnalysisManagers AM{*TM, PB, O};
+    MPM.run(M, AM.MAM);
+}
+
+OptimizationLevel getOptLevel(int optlevel) {
+    switch (std::min(std::max(optlevel, 0), 3)) {
+        case 0:
+            return OptimizationLevel::O0;
+        case 1:
+            return OptimizationLevel::O1;
+        case 2:
+            return OptimizationLevel::O2;
+        case 3:
+            return OptimizationLevel::O3;
+    }
+    llvm_unreachable("cannot get here!");
 }

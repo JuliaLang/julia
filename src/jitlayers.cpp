@@ -874,7 +874,11 @@ namespace {
 
 namespace {
 
+#ifndef JL_USE_NEW_PM
     typedef legacy::PassManager PassManager;
+#else
+    typedef NewPM PassManager;
+#endif
 
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
         return orc::JITTargetMachineBuilder(TM.getTargetTriple())
@@ -896,20 +900,23 @@ namespace {
         }
     };
 
+#ifndef JL_USE_NEW_PM
     struct PMCreator {
         std::unique_ptr<TargetMachine> TM;
         int optlevel;
         PMCreator(TargetMachine &TM, int optlevel) : TM(cantFail(createJTMBFromTM(TM, optlevel).createTargetMachine())), optlevel(optlevel) {}
         PMCreator(const PMCreator &other) : PMCreator(*other.TM, other.optlevel) {}
-        PMCreator(PMCreator &&other) : TM(std::move(other.TM)), optlevel(other.optlevel) {}
+        PMCreator &operator=(const PMCreator &other) {
+            TM = cantFail(createJTMBFromTM(*other.TM, other.optlevel).createTargetMachine());
+            optlevel = other.optlevel;
+            return *this;
+        }
+        PMCreator(PMCreator &&other) = default;
+        PMCreator &operator=(PMCreator &&other) = default;
         friend void swap(PMCreator &self, PMCreator &other) {
             using std::swap;
             swap(self.TM, other.TM);
             swap(self.optlevel, other.optlevel);
-        }
-        PMCreator &operator=(PMCreator other) {
-            swap(*this, other);
-            return *this;
         }
         std::unique_ptr<PassManager> operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
@@ -919,6 +926,18 @@ namespace {
             return PM;
         }
     };
+
+#else
+
+    struct PMCreator {
+        orc::JITTargetMachineBuilder JTMB;
+        OptimizationLevel O;
+        PMCreator(TargetMachine &TM, int optlevel) : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)) {}
+        std::unique_ptr<PassManager> operator()() {
+            return std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+        }
+    };
+#endif
 
     struct OptimizerT {
         OptimizerT(TargetMachine &TM, int optlevel) : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}

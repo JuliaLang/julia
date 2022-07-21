@@ -124,6 +124,20 @@ struct NewPM {
     void run(Module &M);
 };
 
+struct AnalysisManagers {
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    AnalysisManagers(PassBuilder &PB);
+    AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O);
+};
+
+OptimizationLevel getOptLevel(int optlevel);
+
+#define JL_USE_NEW_PM
+
 typedef struct _jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
     std::string specFunctionObject; // specialized llvm Function name
