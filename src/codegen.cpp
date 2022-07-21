@@ -5001,7 +5001,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             expr_t = (jl_value_t*)jl_any_type;
         else {
             expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
-            is_promotable = ctx.ssavalue_usecount[ssaidx_0based] == 1;
+            is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
         jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
         // some intrinsics (e.g. typeassert) can return a wider type
@@ -5119,7 +5119,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_new_sym) {
         bool is_promotable = false;
         if (ssaidx_0based >= 0) {
-            is_promotable = ctx.ssavalue_usecount[ssaidx_0based] == 1;
+            is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
         assert(nargs > 0);
         jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
