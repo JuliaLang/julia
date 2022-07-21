@@ -1796,7 +1796,7 @@ static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t 
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
-#ifndef GC_VERIFY
+#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
     // Decide whether need to chunk objary
     size_t nobjs = (obj_end - obj_begin) / step;
     if (nobjs > MAX_REFS_AT_ONCE) {
@@ -1831,7 +1831,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary8_parent)->elsize / sizeof(jl_value_t *);
-#ifndef GC_VERIFY
+#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
     // Decide whether need to chunk ary8
     size_t nrefs = (ary8_end - ary8_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -1869,7 +1869,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
-#ifndef GC_VERIFY
+#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
     // Decide whether need to chunk ary16
     size_t nrefs = (ary16_end - ary16_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -2393,7 +2393,7 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // Drain overflow queue of chunked arrays
 void gc_drain_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-#ifndef GC_VERIFY
+#if !defined(GC_VERIFY) && defined(CHUNK_BIG_ARRAYS)
     jl_gc_chunk_t *c;
     while (mq->current_chunk != mq->chunk_start) {
         mq->current_chunk--;
@@ -3056,10 +3056,12 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&q->array, wsa);
     jl_atomic_store_relaxed(&q->top, 0);
     jl_atomic_store_relaxed(&q->bottom, 0);
+#if defined(CHUNK_BIG_ARRAYS)
     size_t cq_init_size = (1 << 12);
     mq->chunk_start = (jl_gc_chunk_t *)malloc_s(cq_init_size * sizeof(jl_gc_chunk_t));
     mq->current_chunk = mq->chunk_start;
     mq->chunk_end = mq->chunk_start + cq_init_size;
+#endif
 #else
 	mq->start = (jl_value_t **)malloc_s(mq_init_size * sizeof(jl_value_t *));
     mq->current = mq->start;
