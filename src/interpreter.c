@@ -16,7 +16,9 @@ extern "C" {
 
 typedef struct {
     jl_code_info_t *src; // contains the names and number of slots
-    jl_method_instance_t *mi; // MethodInstance we're executing, or NULL if toplevel
+    jl_value_t *mi_or_method;
+    // MethodInstance or Method (if opaque closure) we're executing,
+    // or NULL if toplevel.
     jl_module_t *module; // context for globals
     jl_value_t **locals; // slots for holding local slots and ssavalues
     jl_svec_t *sparam_vals; // method static parameters, if eval-ing a method body
@@ -681,7 +683,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->sparam_vals = mi->sparam_vals;
     s->preevaluation = 0;
     s->continue_at = 0;
-    s->mi = mi;
+    s->mi_or_method = (jl_value_t*)mi;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -690,7 +692,7 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
 
 JL_DLLEXPORT jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
 
-jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
+jl_value_t *NOINLINE jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
     jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
@@ -712,7 +714,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->sparam_vals = NULL;
     s->preevaluation = 0;
     s->continue_at = 0;
-    s->mi = NULL;
+    s->mi_or_method = (jl_value_t*)source;
     size_t defargs = source->nargs;
     int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -743,7 +745,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
-    s->mi = NULL;
+    s->mi_or_method = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -767,7 +769,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->sparam_vals = sparam_vals;
     s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
-    s->mi = NULL;
+    s->mi_or_method = NULL;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);
@@ -779,20 +781,32 @@ JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
         void *stateend, size_t space_remaining)
 {
     interpreter_state *s = &((interpreter_state*)stateend)[-1];
-    int need_module = !s->mi;
-    int required_space = need_module ? 4 : 3;
+    int need_module = !s->mi_or_method;
+    int is_opaque_closure = s->mi_or_method && jl_is_method(s->mi_or_method);
+    size_t njlvalues = need_module ? 2 : 1;
+    // For opaque closure, we also capture the arguments in order to be able to
+    // say something about them (in compiled code, the compiler would have
+    // synthesized a MethodInstance with an appropriate specialization).
+    if (is_opaque_closure) {
+        njlvalues += ((jl_method_t*)s->mi_or_method)->nargs;
+    }
+    int required_space = 2 + njlvalues;
     if (space_remaining < required_space)
         return 0; // Should not happen
-    size_t njlvalues = need_module ? 2 : 1;
     uintptr_t entry_tags = jl_bt_entry_descriptor(njlvalues, 0, JL_BT_INTERP_FRAME_TAG, s->ip);
     bt_entry[0].uintptr = JL_BT_NON_PTR_ENTRY;
     bt_entry[1].uintptr = entry_tags;
-    bt_entry[2].jlvalue = s->mi  ? (jl_value_t*)s->mi  :
+    bt_entry[2].jlvalue = s->mi_or_method  ? (jl_value_t*)s->mi_or_method  :
                           s->src ? (jl_value_t*)s->src : (jl_value_t*)jl_nothing;
     if (need_module) {
         // If we only have a CodeInfo (s->src), we are in a top level thunk and
         // need to record the module separately.
         bt_entry[3].jlvalue = (jl_value_t*)s->module;
+    }
+    else if (is_opaque_closure) {
+        for (int i = 0; i < ((jl_method_t*)s->mi_or_method)->nargs; ++i) {
+            bt_entry[3+i].jlvalue = s->locals[i];
+        }
     }
     return required_space;
 }

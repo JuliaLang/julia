@@ -87,8 +87,22 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
-            mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
+            code = bt2[j]::Union{CodeInfo,Method, Core.MethodInstance,Nothing}
+            mod = nothing
+            if isa(code, Method)
+                # This is an opaque closure that ran in the interpreter, so
+                # never had a MethodInstance synthesized for it. Do that now,
+                # so we can show something sensible in backtraces
+                mi = ccall(:jl_new_method_instance_uninit,
+                    Ref{Core.MethodInstance}, ())
+                mi.def = code
+                mi.specTypes = Tuple{map(Core.Typeof, bt2[(j+1):(j+njlvalues-1)])...}
+                mi.specTypes = Tuple{Any[Core.Typeof(bt2[i]) for i = (j + 1):(j + njlvalues - 1)]...}
+                mi.uninferred = uncompressed_ir(code)
+                code = mi
+            elseif njlvalues == 2
+                mod = bt2[j+1]::Union{Module,Nothing}
+            end
             push!(ret, InterpreterIP(code, header, mod))
         else
             # Tags we don't know about are an error

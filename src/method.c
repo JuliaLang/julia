@@ -795,7 +795,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     m->isva = isva;
     m->is_for_opaque_closure = 1;
     if (name == jl_nothing) {
-        m->name = jl_symbol("opaque closure");
+        m->name = jl_symbol("<unnamed opaque closure>");
     } else {
         assert(jl_is_symbol(name));
         m->name = (jl_sym_t*)name;

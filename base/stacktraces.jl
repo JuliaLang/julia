@@ -241,7 +241,13 @@ function show_spec_linfo(io::IO, frame::StackFrame)
                                         kwargs=zip(kwnames, kwarg_types),
                                         argnames=argnames[def.nkw+2:end])
             else
-                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
+                is_opaque_closure = def.is_for_opaque_closure
+                if is_opaque_closure
+                    print(io, def.name)
+                    sig = Tuple{sig.parameters[2:end]...}
+                end
+                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames, hasfirst=!is_opaque_closure)
+
             end
         else
             Base.show_mi(io, linfo, true)
