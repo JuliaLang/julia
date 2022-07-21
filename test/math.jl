@@ -1461,9 +1461,6 @@ for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbr
         if Core.Compiler.is_foldable(eff)
             @test true
         else
-            # XXX only print bad effects – especially `[sin|cos|tan](::Float32)` are analyzed
-            # as non-foldable sometimes but non-deterministically somehow, we need to dig
-            # into what's leading to the bad analysis with Cthulhu on each platform
             @warn "bad effects found for $f(::$T)" eff
         end
     end
