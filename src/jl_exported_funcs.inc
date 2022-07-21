@@ -199,7 +199,6 @@
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
     XX(jl_getallocationgranularity) \
-    XX(jl_getch) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \
@@ -288,6 +287,7 @@
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
     XX(jl_is_debugbuild) \
+    XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
     XX(jl_is_imported) \
     XX(jl_is_initialized) \
@@ -462,6 +462,7 @@
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
     XX(jl_task_stack_buffer) \
+    XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \

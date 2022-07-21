@@ -130,6 +130,8 @@ const REPL_MODULE_REF = Ref{Module}()
 
 include("checked.jl")
 using .Checked
+function cld end
+function fld end
 
 # Lazy strings
 include("strings/lazy.jl")

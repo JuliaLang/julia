@@ -121,7 +121,10 @@ static Value *stringConstPtr(
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str", *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
-    return irbuilder.CreateInBoundsGEP(gv->getValueType(), gv, Args);
+    return irbuilder.CreateInBoundsGEP(gv->getValueType(),
+                                       // Addrspacecast in case globals are in non-0 AS
+                                       irbuilder.CreateAddrSpaceCast(gv, gv->getValueType()->getPointerTo(0)),
+                                       Args);
 }
 
 

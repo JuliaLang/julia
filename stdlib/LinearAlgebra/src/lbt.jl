@@ -159,9 +159,9 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
     println(io, "Libraries: ")
     for (i,l) in enumerate(lbt.loaded_libs)
         char = i == length(lbt.loaded_libs) ? "└" : "├"
-        interface_str = if l.interface == :ilp64
+        interface_str = if l.interface === :ilp64
             "ILP64"
-        elseif l.interface == :lp64
+        elseif l.interface === :lp64
             " LP64"
         else
             "UNKWN"

@@ -493,14 +493,18 @@ function show(io::IO, ::MIME"text/plain", c::Channel)
 end
 
 function iterate(c::Channel, state=nothing)
-    try
-        return (take!(c), nothing)
-    catch e
-        if isa(e, InvalidStateException) && e.state === :closed
-            return nothing
-        else
-            rethrow()
+    if isopen(c) || isready(c)
+        try
+            return (take!(c), nothing)
+        catch e
+            if isa(e, InvalidStateException) && e.state === :closed
+                return nothing
+            else
+                rethrow()
+            end
         end
+    else
+        return nothing
     end
 end
 

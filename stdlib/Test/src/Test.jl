@@ -682,6 +682,9 @@ a matching function,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
 
+!!! compat "Julia 1.8"
+    The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
+
 # Examples
 ```jldoctest
 julia> @test_throws BoundsError [1, 2, 3][4]
@@ -1328,7 +1331,7 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head != :call)
+    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head !== :call)
 
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
@@ -1731,11 +1734,11 @@ function detect_ambiguities(mods::Module...;
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
-        ord12 = m1.file < m2.file
-        if !ord12 && (m1.file == m2.file)
-            ord12 = m1.line < m2.line
+        ord12 = cmp(m1.file, m2.file)
+        if ord12 == 0
+            ord12 = cmp(m1.line, m2.line)
         end
-        return ord12 ? (m1, m2) : (m2, m1)
+        return ord12 <= 0 ? (m1, m2) : (m2, m1)
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)

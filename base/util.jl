@@ -257,26 +257,83 @@ graphical interface.
 """
 function getpass end
 
-_getch() = UInt8(ccall(:jl_getch, Cint, ()))
+# Note, this helper only works within `with_raw_tty()` on POSIX platforms!
+function _getch()
+    @static if Sys.iswindows()
+        return UInt8(ccall(:_getch, Cint, ()))
+    else
+        return read(stdin, UInt8)
+    end
+end
+
+const termios_size = Int(ccall(:jl_termios_size, Cint, ()))
+make_termios() = zeros(UInt8, termios_size)
+
+# These values seem to hold on all OSes we care about:
+# glibc Linux, musl Linux, macOS, FreeBSD
+@enum TCSETATTR_FLAGS TCSANOW=0 TCSADRAIN=1 TCSAFLUSH=2
+
+function tcgetattr(fd::RawFD, termios)
+    ret = ccall(:tcgetattr, Cint, (Cint, Ptr{Cvoid}), fd, termios)
+    if ret != 0
+        throw(IOError("tcgetattr failed", ret))
+    end
+end
+function tcsetattr(fd::RawFD, termios, mode::TCSETATTR_FLAGS = TCSADRAIN)
+    ret = ccall(:tcsetattr, Cint, (Cint, Cint, Ptr{Cvoid}), fd, Cint(mode), termios)
+    if ret != 0
+        throw(IOError("tcsetattr failed", ret))
+    end
+end
+cfmakeraw(termios) = ccall(:cfmakeraw, Cvoid, (Ptr{Cvoid},), termios)
+
+function with_raw_tty(f::Function, input::TTY)
+    input === stdin || throw(ArgumentError("with_raw_tty only works for stdin"))
+    fd = RawFD(0)
+
+    # If we're on windows, we do nothing, as we have access to `_getch()` quite easily
+    @static if Sys.iswindows()
+        return f()
+    end
+
+    # Get the current terminal mode
+    old_termios = make_termios()
+    tcgetattr(fd, old_termios)
+    try
+        # Set a new, raw, terminal mode
+        new_termios = copy(old_termios)
+        cfmakeraw(new_termios)
+        tcsetattr(fd, new_termios)
+
+        # Call the user-supplied callback
+        f()
+    finally
+        # Always restore the terminal mode
+        tcsetattr(fd, old_termios)
+    end
+end
+
 function getpass(input::TTY, output::IO, prompt::AbstractString)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
-    print(output, prompt, ": ")
-    flush(output)
-    s = SecretBuffer()
-    plen = 0
-    while true
-        c = _getch()
-        if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
-            break # EOF or return
-        elseif c == 0x00 || c == 0xe0
-            _getch() # ignore function/arrow keys
-        elseif c == UInt8('\b') && plen > 0
-            plen -= 1 # delete last character on backspace
-        elseif !iscntrl(Char(c)) && plen < 128
-            write(s, c)
+    with_raw_tty(stdin) do
+        print(output, prompt, ": ")
+        flush(output)
+        s = SecretBuffer()
+        plen = 0
+        while true
+            c = _getch()
+            if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
+                break # EOF or return
+            elseif c == 0x00 || c == 0xe0
+                _getch() # ignore function/arrow keys
+            elseif c == UInt8('\b') && plen > 0
+                plen -= 1 # delete last character on backspace
+            elseif !iscntrl(Char(c)) && plen < 128
+                write(s, c)
+            end
         end
+        return seekstart(s)
     end
-    return seekstart(s)
 end
 
 # allow new getpass methods to be defined if stdin has been

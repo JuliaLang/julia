@@ -288,7 +288,7 @@ end
 end
 @testset "issue #21510" begin
     f21510(; @nospecialize a = 2) = a
-    @test f21510(a=:b) == :b
+    @test f21510(a=:b) === :b
     @test f21510() == 2
 end
 @testset "issue #34516" begin

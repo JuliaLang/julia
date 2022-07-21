@@ -1602,6 +1602,7 @@ JL_CALLABLE(jl_f_donotdelete)
 
 JL_CALLABLE(jl_f_finalizer)
 {
+    // NOTE the compiler may temporarily insert additional argument for the later inlining pass
     JL_NARGS(finalizer, 2, 4);
     jl_task_t *ct = jl_current_task;
     jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);

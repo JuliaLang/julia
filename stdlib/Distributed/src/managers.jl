@@ -281,7 +281,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     end
 
     # Julia process with passed in command line flag arguments
-    if shell == :posix
+    if shell === :posix
         # ssh connects to a POSIX shell
 
         cmds = "exec $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
@@ -297,7 +297,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
         # shell login (-l) with string command (-c) to launch julia process
         remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
 
-    elseif shell == :csh
+    elseif shell === :csh
         # ssh connects to (t)csh
 
         remotecmd = "exec $(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
@@ -313,7 +313,7 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
             remotecmd = "cd $(shell_escape_csh(dir))\n$remotecmd"
         end
 
-    elseif shell == :wincmd
+    elseif shell === :wincmd
         # ssh connects to Windows cmd.exe
 
         any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
