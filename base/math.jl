@@ -293,7 +293,7 @@ end
 
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
-@inline function exthorner(x, p::Tuple)
+Base.@assume_effects :total  @inline function exthorner(x::Union{Float16, Float32, Float64}, p::Tuple)
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
         pi = p[i]
