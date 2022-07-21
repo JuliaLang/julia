@@ -1968,7 +1968,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             ismutable = ismutabletype(t)
             fcount = fieldcount(t)
             nargs = length(e.args) - 1
-            @assert fcount ≥ nargs # syntactically enforced by the front-end
+            @assert fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
             local allconst = true
