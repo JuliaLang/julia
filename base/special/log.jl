@@ -571,6 +571,7 @@ function _log_ext(xu)
     z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
+    # getfield instead of getindex to satisfy effect analysis not knowing whether this is inbounds
     t, logctail = getfield(t_log_table_compact, Int(i+1))
     invc, logc = log_tab_unpack(t)
     # Note: invc is j/N or j/N/2 where j is an integer in [N,2N) and
