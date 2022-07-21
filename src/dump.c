@@ -2336,7 +2336,7 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                 // Is this still the method we'd be calling?
                 jl_methtable_t *mt = jl_method_table_for(mi->specTypes);
                 struct jl_typemap_assoc search = {(jl_value_t*)mi->specTypes, world, NULL, 0, ~(size_t)0};
-                jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
+                jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
                 if (entry) {
                     jl_value_t *mworld = entry->func.value;
                     if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
@@ -2350,7 +2350,7 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                             j = get_next_backedge(mi->backedges, j, &invokeTypes, &caller);
                             if (invokeTypes) {
                                 struct jl_typemap_assoc search = {invokeTypes, world, NULL, 0, ~(size_t)0};
-                                entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/1);
+                                entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
                                 if (entry) {
                                     jl_value_t *imworld = entry->func.value;
                                     if (jl_is_method(imworld) && mi->def.method == (jl_method_t*)imworld) {
