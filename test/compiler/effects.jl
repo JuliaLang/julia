@@ -177,6 +177,9 @@ end
     a[i] = 0 # may throw
 end |> !Core.Compiler.is_nothrow
 
+# even if 2-arg `getfield` may throw, it should be still `:consistent`
+@test Core.Compiler.is_consistent(Base.infer_effects(getfield, (NTuple{5, Float64}, Int)))
+
 # SimpleVector allocation can be consistent
 @test Core.Compiler.is_consistent(Base.infer_effects(Core.svec))
 @test Base.infer_effects() do
