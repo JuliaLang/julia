@@ -898,10 +898,6 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
 BINARY:=64
-ifeq ($(OS),Darwin)
-# Apple Chips are all at least A12Z
-MCPU:=apple-m1
-endif
 endif
 
 # Set MARCH-specific flags
@@ -1283,7 +1279,13 @@ JLDFLAGS += -Wl,--large-address-aware
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
-endif
+# Use hard links for files on windows, rather than soft links
+#   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
+# Usage: $(WIN_MAKE_HARD_LINK) <source> <target>
+WIN_MAKE_HARD_LINK := cp --dereference --link --force
+else
+WIN_MAKE_HARD_LINK := true -ignore
+endif # $(OS) == WINNT
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)

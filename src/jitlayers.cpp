@@ -2,6 +2,7 @@
 
 #include "llvm-version.h"
 #include "platform.h"
+#include <stdint.h>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
@@ -226,7 +227,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     orc::ThreadSafeContext ctx;
-    auto into = reinterpret_cast<orc::ThreadSafeModule*>(llvmmod);
+    auto into = unwrap(llvmmod);
     jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
     orc::ThreadSafeModule backing;
     if (into == NULL) {
@@ -240,7 +241,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     if (pparams == NULL)
         pparams = &params;
     assert(pparams->tsctx.getContext() == into->getContext().getContext());
-    const char *name = jl_generate_ccallable(reinterpret_cast<LLVMOrcThreadSafeModuleRef>(into), sysimg, declrt, sigt, *pparams);
+    const char *name = jl_generate_ccallable(wrap(into), sysimg, declrt, sigt, *pparams);
     bool success = true;
     if (!sysimg) {
         if (jl_ExecutionEngine->getGlobalValueAddress(name)) {
@@ -472,10 +473,11 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     }
 
     // whatever, that didn't work - use the assembler output instead
-    void *F = jl_get_llvmf_defn(mi, world, getwrapper, true, jl_default_cgparams);
-    if (!F)
+    jl_llvmf_dump_t llvmf_dump;
+    jl_get_llvmf_defn(&llvmf_dump, mi, world, getwrapper, true, jl_default_cgparams);
+    if (!llvmf_dump.F)
         return jl_an_empty_string;
-    return jl_dump_function_asm(F, raw_mc, asm_variant, debuginfo, binary);
+    return jl_dump_function_asm(&llvmf_dump, raw_mc, asm_variant, debuginfo, binary);
 }
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
@@ -495,7 +497,7 @@ static auto countBasicBlocks(const Function &F)
 }
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
-    size_t optlevel = ~0ull;
+    size_t optlevel = SIZE_MAX;
     TSM.withModuleDo([&](Module &M) {
         if (jl_generating_output()) {
             optlevel = 0;
@@ -509,7 +511,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
                     StringRef val = attr.getValueAsString();
                     if (val != "") {
                         size_t ol = (size_t)val[0] - '0';
-                        if (ol >= 0 && ol < optlevel)
+                        if (ol < optlevel)
                             optlevel = ol;
                     }
                 }
@@ -517,7 +519,7 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
             optlevel = std::min(std::max(optlevel, optlevel_min), this->count);
         }
     });
-    assert(optlevel != ~0ull && "Failed to select a valid optimization level!");
+    assert(optlevel != SIZE_MAX && "Failed to select a valid optimization level!");
     this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
 }
 
@@ -812,13 +814,20 @@ namespace {
         SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
         std::string errorstr;
         const Target *TheTarget = TargetRegistry::lookupTarget("", TheTriple, errorstr);
-        if (!TheTarget)
-            jl_errorf("%s", errorstr.c_str());
+        if (!TheTarget) {
+            // Note we are explicitly not using `jl_errorf()` here, as it will attempt to
+            // collect a backtrace, but we're too early in LLVM initialization for that.
+            jl_printf(JL_STDERR, "ERROR: %s", errorstr.c_str());
+            exit(1);
+        }
         if (jl_processor_print_help || (target_flags & JL_TARGET_UNKNOWN_NAME)) {
             std::unique_ptr<MCSubtargetInfo> MSTI(
                 TheTarget->createMCSubtargetInfo(TheTriple.str(), "", ""));
-            if (!MSTI->isCPUStringValid(TheCPU))
-                jl_errorf("Invalid CPU name \"%s\".", TheCPU.c_str());
+            if (!MSTI->isCPUStringValid(TheCPU)) {
+                // Same as above, we are too early to use `jl_errorf()` here.
+                jl_printf(JL_STDERR, "ERROR: Invalid CPU name \"%s\".", TheCPU.c_str());
+                exit(1);
+            }
             if (jl_processor_print_help) {
                 // This is the only way I can find to print the help message once.
                 // It'll be nice if we can iterate through the features and print our own help
@@ -864,6 +873,9 @@ namespace {
 } // namespace
 
 namespace {
+
+    typedef legacy::PassManager PassManager;
+
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
         return orc::JITTargetMachineBuilder(TM.getTargetTriple())
         .setCPU(TM.getTargetCPU().str())
@@ -899,7 +911,7 @@ namespace {
             swap(*this, other);
             return *this;
         }
-        std::unique_ptr<legacy::PassManager> operator()() {
+        std::unique_ptr<PassManager> operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
             addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
             addOptimizationPasses(PM.get(), optlevel);
@@ -930,7 +942,7 @@ namespace {
                             // Each function is printed as a YAML object with several attributes
                             jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
                             jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                         }
 
                         start_time = jl_hrtime();
@@ -958,7 +970,7 @@ namespace {
                             }
                             jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
                             jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %lu\n", countBasicBlocks(F));
+                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                         }
                     }
                 }
@@ -967,7 +979,7 @@ namespace {
         }
     private:
         int optlevel;
-        JuliaOJIT::ResourcePool<std::unique_ptr<legacy::PassManager>> PMs;
+        JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>> PMs;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
@@ -1095,12 +1107,26 @@ JuliaOJIT::JuliaOJIT()
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+
+    orc::SymbolAliasMap jl_crt = {
+        { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } }
+    };
+    cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+}
+
+orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
+{
+    std::string MangleName = getMangledName(Name);
+    return ES.intern(MangleName);
 }
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 {
-    std::string MangleName = getMangledName(Name);
-    cantFail(JD.define(orc::absoluteSymbols({{ES.intern(MangleName), JITEvaluatedSymbol::fromPointer((void*)Addr)}})));
+    cantFail(JD.define(orc::absoluteSymbols({{mangle(Name), JITEvaluatedSymbol::fromPointer((void*)Addr)}})));
 }
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
@@ -1455,17 +1481,21 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
 static void jl_decorate_module(Module &M) {
 #if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
     // Add special values used by debuginfo to build the UnwindData table registration for Win64
-    ArrayType *atype = ArrayType::get(Type::getInt32Ty(M.getContext()), 3); // want 4-byte alignment of 12-bytes of data
-    GlobalVariable *gvs[2] = {
-        new GlobalVariable(M, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__UnwindData"),
-        new GlobalVariable(M, atype,
-            false, GlobalVariable::InternalLinkage,
-            ConstantAggregateZero::get(atype), "__catchjmp") };
-    gvs[0]->setSection(".text");
-    gvs[1]->setSection(".text");
-    appendToCompilerUsed(M, makeArrayRef((GlobalValue**)gvs, 2));
+    // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
+    // TODO: The data is set in debuginfo.cpp but it should be okay to actually emit it here.
+    M.appendModuleInlineAsm("\
+    .section .text                  \n\
+    .type   __UnwindData,@object    \n\
+    .p2align        2, 0x90         \n\
+    __UnwindData:                   \n\
+        .zero   12                  \n\
+        .size   __UnwindData, 12    \n\
+                                    \n\
+        .type   __catchjmp,@object  \n\
+        .p2align        2, 0x90     \n\
+    __catchjmp:                     \n\
+        .zero   12                  \n\
+        .size   __catchjmp, 12");
 #endif
 }
 

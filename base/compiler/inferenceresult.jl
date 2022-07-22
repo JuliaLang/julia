@@ -23,8 +23,9 @@ end
 function matching_cache_argtypes(
     linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#)
     (; fargs, argtypes) = arginfo
-    @assert isa(linfo.def, Method) # ensure the next line works
-    nargs::Int = linfo.def.nargs
+    def = linfo.def
+    @assert isa(def, Method) # ensure the next line works
+    nargs::Int = def.nargs
     cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)
     given_argtypes = Vector{Any}(undef, length(argtypes))
     local condargs = nothing
@@ -37,9 +38,9 @@ function matching_cache_argtypes(
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
                 sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
-                vtype = tmeet(cnd.vtype, sigt)
+                thentype = tmeet(cnd.thentype, sigt)
                 elsetype = tmeet(cnd.elsetype, sigt)
-                if vtype === Bottom && elsetype === Bottom
+                if thentype === Bottom && elsetype === Bottom
                     # we accidentally proved this method match is impossible
                     # TODO bail out here immediately rather than just propagating Bottom ?
                     given_argtypes[i] = Bottom
@@ -48,14 +49,14 @@ function matching_cache_argtypes(
                         condargs = Tuple{Int,Int}[]
                     end
                     push!(condargs, (slotid, i))
-                    given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
                 end
                 continue
             end
         end
         given_argtypes[i] = widenconditional(argtype)
     end
-    isva = linfo.def.isva
+    isva = def.isva
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - isva)
@@ -106,7 +107,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
     if !toplevel && isva
-        if specTypes == Tuple
+        if specTypes::Type == Tuple
             if nargs > 1
                 linfo_argtypes = Any[Any for i = 1:nargs]
                 linfo_argtypes[end] = Vararg{Any}

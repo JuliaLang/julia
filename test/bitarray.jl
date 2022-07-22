@@ -217,6 +217,11 @@ timesofar("utils")
         @test_throws DimensionMismatch BitMatrix((isodd(i) for i in 1:3))
     end
 
+    @testset "constructor from infinite iterator" begin
+        inf_iter = Base.Iterators.cycle([true])
+        @test_throws ArgumentError BitArray(inf_iter)
+    end
+
     @testset "constructor from NTuple" begin
         for nt in ((true, false, false), NTuple{0,Bool}(), (false,), (true,))
             @test BitVector(nt) == BitVector(collect(nt))
@@ -1781,4 +1786,39 @@ end
         @test all(bitarray[rangeout, rangein] .== true)
         @test all(bitarray[rangein, rangeout] .== true)
     end
+end
+
+# issue #45825
+
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+let all_false = OffsetArray(falses(2001), -1000:1000)
+    @test !any(==(true), all_false)
+    # should be run with --check-bounds=yes
+    @test_throws DimensionMismatch BitArray(all_false)
+    all_false = OffsetArray(falses(2001), 1:2001)
+    @test !any(==(true), BitArray(all_false))
+    all_false = OffsetArray(falses(100, 100), 0:99, -1:98)
+    @test !any(==(true), all_false)
+    @test_throws DimensionMismatch BitArray(all_false)
+    all_false = OffsetArray(falses(100, 100), 1:100, 1:100)
+    @test !any(==(true), all_false)
+end
+let a = falses(1000),
+    msk = BitArray(rand(Bool, 1000)),
+    n = count(msk),
+    b = OffsetArray(rand(Bool, n), (-n÷2):(n÷2)-iseven(n))
+    a[msk] = b
+    @test a[msk] == collect(b)
+    a = falses(100, 100)
+    msk = BitArray(rand(Bool, 100, 100))
+    n = count(msk)
+    b = OffsetArray(rand(Bool, 1, n), 1:1, (-n÷2):(n÷2)-iseven(n))
+    a[msk] = b
+    @test a[msk] == vec(collect(b))
+end
+let b = trues(10)
+    copyto!(b, view([0,0,0], :))
+    @test b == [0,0,0,1,1,1,1,1,1,1]
 end

@@ -409,19 +409,19 @@ end
                 @test true
                 @test false
                 @test 1 == 1
-                @test 2 == :foo
+                @test 2 === :foo
                 @test 3 == 3
                 @testset "d" begin
                     @test 4 == 4
                 end
                 @testset begin
-                    @test :blank != :notblank
+                    @test :blank !== :notblank
                 end
             end
             @testset "inner1" begin
                 @test 1 == 1
                 @test 2 == 2
-                @test 3 == :bar
+                @test 3 === :bar
                 @test 4 == 4
                 @test_throws ErrorException 1+1
                 @test_throws ErrorException error()
@@ -1160,6 +1160,111 @@ end
     end
 end
 
+@testset "failfast option" begin
+    @testset "non failfast (default)" begin
+        expected = r"""
+        Test Summary: | Pass  Fail  Error  Total  Time
+        Foo           |    1     2      1      4  \s*\d*.\ds
+          Bar         |    1     1             2  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast passes to child testsets" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        PackageName   |    1      1  \s*\d*.\ds
+          1           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "1" begin
+                   @test false
+                end
+                @testset "2" begin
+                   @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast via env var" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            ENV["JULIA_TEST_FAILFAST"] = true
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+end
+
 # Non-booleans in @test (#35888)
 struct T35888 end
 Base.isequal(::T35888, ::T35888) = T35888()
@@ -1282,12 +1387,12 @@ Test.finish(ts::PassInformationTestSet) = ts
     end
     test_line_number = (@__LINE__) - 3
     test_throws_line_number =  (@__LINE__) - 3
-    @test ts.results[1].test_type == :test
+    @test ts.results[1].test_type === :test
     @test ts.results[1].orig_expr == :(1 == 1)
     @test ts.results[1].data == Expr(:comparison, 1, :(==), 1)
     @test ts.results[1].value == true
     @test ts.results[1].source == LineNumberNode(test_line_number, @__FILE__)
-    @test ts.results[2].test_type == :test_throws
+    @test ts.results[2].test_type === :test_throws
     @test ts.results[2].orig_expr == :(throw(ErrorException("Msg")))
     @test ts.results[2].data == ErrorException
     @test ts.results[2].value == ErrorException("Msg")

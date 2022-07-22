@@ -388,15 +388,13 @@ loop. Here is an example of a `while` loop:
 ```jldoctest
 julia> i = 1;
 
-julia> while i <= 5
+julia> while i <= 3
            println(i)
            global i += 1
        end
 1
 2
 3
-4
-5
 ```
 
 The `while` loop evaluates the condition expression (`i <= 5` in this case), and as long it remains
@@ -408,39 +406,53 @@ down like the above `while` loop does is so common, it can be expressed more con
 `for` loop:
 
 ```jldoctest
-julia> for i = 1:5
+julia> for i = 1:3
            println(i)
        end
 1
 2
 3
-4
-5
 ```
 
-Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
+Here the `1:3` is a range object, representing the sequence of numbers 1, 2, 3. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in another
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
-outside/afterwards. You'll either need a new interactive session instance or a different variable
+during which the variable is visible. A `for` loop always introduces a new iteration variable in
+its body, regardless of whether a variable of the same name exists in the enclosing scope.
+This implies that on the one hand `i` need not be declared before the loop. On the other hand it
+will not be visible outside the loop, nor will an outside variable of the same name be affected.
+You'll either need a new interactive session instance or a different variable
 name to test this:
 
 ```jldoctest
-julia> for j = 1:5
+julia> for j = 1:3
            println(j)
        end
 1
 2
 3
-4
-5
 
 julia> j
 ERROR: UndefVarError: j not defined
 ```
 
-See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope and how it works in
+```jldoctest
+julia> j = 0;
+
+julia> for j = 1:3
+           println(j)
+       end
+1
+2
+3
+
+julia> j
+0
+```
+
+Use `for outer` to modify the latter behavior and reuse an existing local variable.
+
+See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
 Julia.
 
 In general, the `for` loop construct can iterate over any container. In these cases, the alternative
@@ -475,7 +487,7 @@ julia> i = 1;
 
 julia> while true
            println(i)
-           if i >= 5
+           if i >= 3
                break
            end
            global i += 1
@@ -483,20 +495,16 @@ julia> while true
 1
 2
 3
-4
-5
 
 julia> for j = 1:1000
            println(j)
-           if j >= 5
+           if j >= 3
                break
            end
        end
 1
 2
 3
-4
-5
 ```
 
 Without the `break` keyword, the above `while` loop would never terminate on its own, and the `for` loop would iterate up to 1000. These loops are both exited early by using `break`.

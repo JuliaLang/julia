@@ -98,8 +98,8 @@ function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=60, debug::Bool
 
         status = fetch(timer)
         close(ptm)
-        if status != :success
-            if status == :timeout
+        if status !== :success
+            if status === :timeout
                 error("Process timed out possibly waiting for a response. ",
                       format_output(out))
             else
@@ -218,6 +218,12 @@ end
         LibGit2.set!(cfg, "fake.property", "AAAA")
         @test LibGit2.getconfig("fake.property", "") == "AAAA"
     end
+end
+
+@testset "Trace" begin
+    code = "import LibGit2; LibGit2.trace_set(LibGit2.Consts.TRACE_DEBUG); exit(LibGit2.trace_set(0))"
+    p = run(`$(Base.julia_cmd()) --startup-file=no -e $code`, wait=false); wait(p)
+    @test success(p)
 end
 
 # See #21872 and #21636
@@ -1473,7 +1479,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
+            @test readlines(joinpath(test_repo, test_file)) == readlines(joinpath(cache_repo, test_file))
         end
 
         @testset "tags & branches" begin
@@ -3115,7 +3121,7 @@ mktempdir() do dir
             catch
             end
 
-            loopback = ip"127.0.0.1"
+            loopbacks = (ip"127.0.0.1", ip"::1")
             for hostname in hostnames
                 local addr
                 try
@@ -3124,7 +3130,7 @@ mktempdir() do dir
                     continue
                 end
 
-                if addr == loopback
+                if addr ∈ loopbacks
                     common_name = hostname
                     break
                 end
@@ -3180,9 +3186,9 @@ mktempdir() do dir
                     err = open(errfile, "r") do f
                         deserialize(f)
                     end
-                    @test err.code == LibGit2.Error.ECERTIFICATE
+                    @test err.code == LibGit2.Error.ERROR
                     @test startswith(lowercase(err.msg),
-                                     lowercase("The SSL certificate is invalid"))
+                                     lowercase("user rejected certificate for localhost"))
 
                     rm(errfile)
 

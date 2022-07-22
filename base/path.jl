@@ -35,7 +35,7 @@ elseif Sys.iswindows()
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
@@ -516,6 +516,8 @@ end
     expanduser(path::AbstractString) -> AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+
+See also: [`contractuser`](@ref).
 """
 expanduser(path::AbstractString)
 
@@ -523,6 +525,8 @@ expanduser(path::AbstractString)
     contractuser(path::AbstractString) -> AbstractString
 
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+
+See also: [`expanduser`](@ref).
 """
 contractuser(path::AbstractString)
 

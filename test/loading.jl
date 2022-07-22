@@ -124,6 +124,7 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
     @test UUID(UInt128(uuid)) == uuid
+    @test UUID(uuid) === uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 
@@ -356,6 +357,13 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(NotPkgModule, "src") === nothing
+    end
+
+    @testset "pkgversion" begin
+        @test pkgversion(Foo) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo1) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo2) == v"1.2.3"
+        @test pkgversion(NotPkgModule) === nothing
     end
 
 end

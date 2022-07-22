@@ -182,8 +182,8 @@ pattern match against the log event stream.
 
 Message filtering can be influenced through the `JULIA_DEBUG` environment
 variable, and serves as an easy way to enable debug logging for a file or
-module. For example, loading julia with `JULIA_DEBUG=loading` will activate
-`@debug` log messages in `loading.jl`:
+module. Loading julia with `JULIA_DEBUG=loading` will activate
+`@debug` log messages in `loading.jl`. For example, in Linux shells:
 
 ```
 $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
@@ -194,6 +194,9 @@ $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
 └ @ Base loading.jl:1328
 ...
 ```
+
+On windows, the same can be achieved in `CMD` via first running `set JULIA_DEBUG="loading"` and in `Powershell` via
+`$env:JULIA_DEBUG="loading"`.
 
 Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To

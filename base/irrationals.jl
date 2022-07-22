@@ -24,7 +24,7 @@ abstract type AbstractIrrational <: Real end
 Number type representing an exact irrational value denoted by the
 symbol `sym`, such as [`π`](@ref pi), [`ℯ`](@ref) and [`γ`](@ref Base.MathConstants.eulergamma).
 
-See also [`@irrational`], [`AbstractIrrational`](@ref).
+See also [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 
@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
     if get(io, :compact, false)
         print(io, sym)
     else
-        print(io, sym, " = ", string(float(x))[1:15], "...")
+        print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")
     end
 end
 

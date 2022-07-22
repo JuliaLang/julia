@@ -29,7 +29,7 @@ function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     # simulate what happens in LineEdit.set_action!
     s isa LineEdit.MIState && (s.current_action = :unknown)
     status = f(s)
-    if s isa LineEdit.MIState && status != :ignore
+    if s isa LineEdit.MIState && status !== :ignore
         # simulate what happens in LineEdit.prompt!
         s.last_action = s.current_action
     end
@@ -375,6 +375,16 @@ let buf = IOBuffer()
     @test content(buf) == "βγαεδ"
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "βγαδε"
+
+    seek(buf, 0)
+    @inferred(LineEdit.edit_clear(buf))
+    edit_insert(buf, "a")
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    seekend(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    @test position(buf) == 0
 end
 
 @testset "edit_word_transpose" begin

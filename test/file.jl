@@ -604,7 +604,8 @@ close(s)
         false
     catch e
         isa(e, SystemError) || rethrow()
-        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        @test e.errnum == 2
+        @test startswith(sprint(showerror, e), "SystemError: opening file \"this file is not expected to exist\"")
         true
     end
 end

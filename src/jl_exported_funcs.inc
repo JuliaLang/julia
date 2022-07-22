@@ -287,6 +287,7 @@
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
     XX(jl_is_debugbuild) \
+    XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
     XX(jl_is_imported) \
     XX(jl_is_initialized) \
@@ -461,6 +462,7 @@
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
     XX(jl_task_stack_buffer) \
+    XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
@@ -515,10 +517,10 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
-    XX(jl_yield)
+    XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
-    XX(jl_setjmp)
+    XX(jl_setjmp) \
 
 // use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
@@ -542,8 +544,6 @@
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
-    YY(jl_lock_profile) \
-    YY(jl_unlock_profile) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
@@ -568,4 +568,6 @@
     YY(LLVMExtraAddRemoveNIPass) \
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass)
+    YY(LLVMExtraAddCPUFeaturesPass) \
+
+// end of file

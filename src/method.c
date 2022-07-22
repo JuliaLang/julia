@@ -19,7 +19,7 @@ extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
@@ -51,11 +51,14 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
     else if (jl_is_returnnode(expr)) {
-        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
-        if (val != jl_returnnode_value(expr)) {
-            JL_GC_PUSH1(&val);
-            expr = jl_new_struct(jl_returnnode_type, val);
-            JL_GC_POP();
+        jl_value_t *retval = jl_returnnode_value(expr);
+        if (retval) {
+            jl_value_t *val = resolve_globals(retval, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != retval) {
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct(jl_returnnode_type, val);
+                JL_GC_POP();
+            }
         }
         return expr;
     }
@@ -102,7 +105,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -319,12 +322,13 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 5) {
+                    if (jl_expr_nargs(ma) == 6) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates = jl_unbox_bool(jl_exprarg(ma, 3));
+                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
+                        li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
                     }
                 }
                 else
@@ -495,7 +499,7 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
-        jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
+        jl_value_t *ln_name = (jl_is_int32(inl) && jl_unbox_int32(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
         rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
@@ -782,7 +786,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
@@ -796,7 +800,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
         assert(jl_is_symbol(name));
         m->name = (jl_sym_t*)name;
     }
-    m->nargs = jl_unbox_long(nargs) + 1;
+    m->nargs = nargs + 1;
     assert(jl_is_linenode(functionloc));
     jl_value_t *file = jl_linenode_file(functionloc);
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
@@ -1012,6 +1016,46 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
 // root blocks
 
+// This section handles method roots. Roots are GC-preserved items needed to
+// represent lowered, type-inferred, and/or compiled code. These items are
+// stored in a flat list (`m.roots`), and during serialization and
+// deserialization of code we replace C-pointers to these items with a
+// relocatable reference. We use a bipartite reference, `(key, index)` pair,
+// where `key` identifies the module that added the root and `index` numbers
+// just those roots with the same `key`.
+//
+// During precompilation (serialization), we save roots that were added to
+// methods that are tagged with this package's module-key, even for "external"
+// methods not owned by a module currently being precompiled. During
+// deserialization, we load the new roots and append them to the method. When
+// code is deserialized (see ircode.c), we replace the bipartite reference with
+// the pointer to the memory address in the current session. The bipartite
+// reference allows us to cache both roots and references in precompilation .ji
+// files using a naming scheme that is independent of which packages are loaded
+// in arbitrary order.
+//
+// To track the module-of-origin for each root, methods also have a
+// `root_blocks` field that uses run-length encoding (RLE) storing `key` and the
+// (absolute) integer index within `roots` at which a block of roots with that
+// key begins. This makes it possible to look up an individual `(key, index)`
+// pair fairly efficiently. A given `key` may possess more than one block; the
+// `index` continues to increment regardless of block boundaries.
+//
+// Roots with `key = 0` are considered to be of unknown origin, and
+// CodeInstances referencing such roots will remain unserializable unless all
+// such roots were added at the time of system image creation. To track this
+// additional data, we use two fields:
+//
+// - methods have an `nroots_sysimg` field to count the number of roots defined
+//   at the time of writing the system image (such occur first in the list of
+//   roots). These are the cases with `key = 0` that do not prevent
+//   serialization.
+// - CodeInstances have a `relocatability` field which when 1 indicates that
+//   every root is "safe," meaning it was either added at sysimg creation or is
+//   tagged with a non-zero `key`. Even a single unsafe root will cause this to
+//   have value 0.
+
+// Get the key of the current (final) block of roots
 static uint64_t current_root_id(jl_array_t *root_blocks)
 {
     if (!root_blocks)
@@ -1024,6 +1068,7 @@ static uint64_t current_root_id(jl_array_t *root_blocks)
     return blocks[nx2-2];
 }
 
+// Add a new block of `len` roots with key `modid` (module id)
 static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 {
     assert(jl_is_array(root_blocks));
@@ -1034,6 +1079,7 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
     blocks[nx2-1] = len;
 }
 
+// Allocate storage for roots
 static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
@@ -1046,6 +1092,7 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
     }
 }
 
+// Add a single root with owner `mod` to a method
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
 {
     JL_GC_PUSH2(&m, &root);
@@ -1062,6 +1109,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     JL_GC_POP();
 }
 
+// Add a list of roots with key `modid` to a method
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
 {
     JL_GC_PUSH2(&m, &roots);
@@ -1101,6 +1149,7 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
     return jl_array_ptr_ref(m->roots, i);
 }
 
+// Count the number of roots added by module with id `key`
 int nroots_with_key(jl_method_t *m, uint64_t key)
 {
     size_t nroots = 0;

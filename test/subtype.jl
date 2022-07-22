@@ -1247,7 +1247,7 @@ end
 
 # Issue #19414
 let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
-    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414"
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414: can only subtype data types."
 end
 
 # issue #20103, OP and comments
@@ -1982,3 +1982,17 @@ end
 @test_throws TypeError(:typeassert, Type, Vararg{Int}) typeintersect(Int, Vararg{Int})
 @test_throws TypeError(:typeassert, Type, 1) typeintersect(1, Int)
 @test_throws TypeError(:typeassert, Type, 1) typeintersect(Int, 1)
+
+let A = Tuple{typeof(identity), Type{Union{}}},
+    B = Tuple{typeof(identity), typeof(Union{})}
+    @test A == B && (Base.isdispatchtuple(A) == Base.isdispatchtuple(B))
+end
+
+# issue #45703
+# requires assertions enabled (to catch discrepancy in obvious_subtype)
+let T = TypeVar(:T, Real),
+    V = TypeVar(:V, AbstractVector{T}),
+    S = Type{Pair{T, V}}
+    @test !(UnionAll(T, UnionAll(V, UnionAll(T, Type{Pair{T, V}}))) <: UnionAll(T, UnionAll(V, Type{Pair{T, V}})))
+    @test !(UnionAll(T, UnionAll(V, UnionAll(T, S))) <: UnionAll(T, UnionAll(V, S)))
+end

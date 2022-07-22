@@ -209,16 +209,18 @@ macro _total_meta()
         #=:effect_free=#true,
         #=:nothrow=#true,
         #=:terminates_globally=#true,
-        #=:terminates_locally=#false))
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true))
 end
-# can be used in place of `@assume_effects :total_may_throw` (supposed to be used for bootstrapping)
-macro _total_may_throw_meta()
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
         #=:nothrow=#false,
         #=:terminates_globally=#true,
-        #=:terminates_locally=#false))
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -277,7 +279,14 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 """
 function convert end
 
-convert(::Type{Union{}}, @nospecialize x) = throw(MethodError(convert, (Union{}, x)))
+# make convert(::Type{<:Union{}}, x::T) intentionally ambiguous for all T
+# so it will never get called or invalidated by loading packages
+# with carefully chosen types that won't have any other convert methods defined
+convert(T::Type{<:Core.IntrinsicFunction}, x) = throw(MethodError(convert, (T, x)))
+convert(T::Type{<:Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{T}, x::T) where {T<:Core.IntrinsicFunction} = x
+convert(::Type{T}, x::T) where {T<:Nothing} = x
+
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
@@ -511,7 +520,7 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the size, in bytes, of object `obj` if it is not a `DataType`.
 
-See also [`summarysize`](@ref).
+See also [`Base.summarysize`](@ref).
 
 # Examples
 ```jldoctest
@@ -638,7 +647,10 @@ end
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
     Only use `@inbounds` when it is certain from the information locally available
-    that all accesses are in bounds.
+    that all accesses are in bounds. In particular, using `1:length(A)` instead of
+    `eachindex(A)` in a function like the one above is _not_ safely inbounds because
+    the first index of `A` may not be `1` for all user defined types that subtype
+    `AbstractArray`.
 """
 macro inbounds(blk)
     return Expr(:block,

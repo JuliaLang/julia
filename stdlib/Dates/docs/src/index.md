@@ -206,7 +206,8 @@ ERROR: MethodError: no method matching *(::Date, ::Date)
 [...]
 
 julia> dt / dt2
-ERROR: MethodError: no method matching /(::Date, ::Date)
+ERROR: MethodError: no method matching inv(::Date)
+[...]
 
 julia> dt - dt2
 4411 days

@@ -11,14 +11,13 @@ import Base.MainInclude: eval, include
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "Base.jl")))
 pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 
-# set up depot & load paths to be able to find stdlib packages
-@eval Base creating_sysimg = true
-Base.init_depot_path()
-Base.init_load_path()
-
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
 let
+    # set up depot & load paths to be able to find stdlib packages
+    push!(empty!(LOAD_PATH), "@stdlib")
+    Base.append_default_depot_path!(DEPOT_PATH)
+
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
@@ -38,7 +37,6 @@ let
         :Unicode,
 
         # 1-depth packages
-        :DelimitedFiles,
         :LinearAlgebra,
         :Markdown,
         :Printf,
@@ -52,14 +50,11 @@ let
         :InteractiveUtils,
         :LibGit2,
         :Profile,
-        :SparseArrays,
         :UUIDs,
 
         # 3-depth packages
         :REPL,
         :SharedArrays,
-        :Statistics,
-        :SuiteSparse,
         :TOML,
         :Test,
 
@@ -114,12 +109,12 @@ let
     tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg
 
     println("Sysimage built. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
-    print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
-    print("Stdlibs: ──── "); Base.time_print(tot_time_stdlib * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib / tot_time) * 100); println("%")
+    print("Base ──────── "); Base.time_print(tot_time_base    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base    / tot_time) * 100); println("%")
+    print("Stdlibs ───── "); Base.time_print(tot_time_stdlib  * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib  / tot_time) * 100); println("%")
     if isfile("userimg.jl")
-    print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
+    print("Userimg ───── "); Base.time_print(tot_time_userimg * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg / tot_time) * 100); println("%")
     end
+    print("Total ─────── "); Base.time_print(tot_time         * 10^9); println();
 
     empty!(LOAD_PATH)
     empty!(DEPOT_PATH)

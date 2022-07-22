@@ -36,7 +36,7 @@ Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 function Base.show(io::IO, x::Enum)
     sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
-        from = get(io, :module, Main)
+        from = get(io, :module, Base.active_module())
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
             show(io, def)
@@ -151,8 +151,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
-    lo = hi = 0
-    i = zero(basetype)
+    lo = hi = i = zero(basetype)
     hasexpr = false
 
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
@@ -193,7 +192,6 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         if length(values) == 1
             lo = hi = i
         else
-            lo = min(lo, i)
             hi = max(hi, i)
         end
         i += oneunit(i)
@@ -208,6 +206,9 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        let enum_hash = hash($(esc(typename)))
+            Base.hash(x::$(esc(typename)), h::UInt) = hash(enum_hash, hash(Integer(x), h))
+        end
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts
         end
