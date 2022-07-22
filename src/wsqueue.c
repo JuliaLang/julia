@@ -16,6 +16,8 @@ ws_array_t *create_ws_array(size_t capacity)
     return a;
 }
 
+// ---------- Chase-Lev work-stealing queue
+
 int ws_queue_push(ws_queue_t *q, void *v)
 {
     int64_t b = jl_atomic_load_relaxed(&q->bottom);
@@ -89,6 +91,50 @@ void *ws_queue_steal_from(ws_queue_t *q)
             return NULL;
     }
     return v;
+}
+
+// ---------- Idempotent work-stealing queue
+
+int idemp_ws_queue_push(idemp_ws_queue_t *iwsq, void *elt)
+{
+    ws_anchor_t anc = jl_atomic_load_acquire(&iwsq->anchor);
+    ws_array_t *ary = jl_atomic_load_relaxed(&iwsq->array);
+    if (anc.tail == ary->capacity)
+        // Queue overflow
+        return 0;
+    memcpy(&ary->buffer[anc.tail * iwsq->eltsize], elt, iwsq->eltsize);
+    anc.tail++;
+    anc.tag++;
+    jl_atomic_store_release(&iwsq->anchor, anc);
+    return 1;
+}
+
+void *idemp_ws_queue_pop(idemp_ws_queue_t *iwsq)
+{
+    ws_anchor_t anc = jl_atomic_load_acquire(&iwsq->anchor);
+    if (anc.tail == 0)
+        // Empty queue
+        return NULL;
+    ws_array_t *ary = jl_atomic_load_relaxed(&iwsq->array);
+    void *elt = &ary->buffer[(anc.tail - 1) * iwsq->eltsize];
+    anc.tail--;
+    jl_atomic_store_release(&iwsq->anchor, anc);
+    return elt;
+}
+
+void *idemp_ws_queue_steal_from(idemp_ws_queue_t *iwsq)
+{
+    ws_anchor_t anc = jl_atomic_load_acquire(&iwsq->anchor);
+    if (anc.tail == 0)
+        // Empty queue
+        return NULL;
+    ws_array_t *ary = jl_atomic_load_acquire(&iwsq->array);
+    void *elt = &ary->buffer[(anc.tail - 1) * iwsq->eltsize];
+    ws_anchor_t anc2 = {anc.tail - 1, anc.tag};
+    if (!jl_atomic_cmpswap(&iwsq->anchor, &anc, anc2))
+        // Steal failed
+        return NULL;
+    return elt;
 }
 
 #ifdef __cplusplus

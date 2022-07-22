@@ -20,7 +20,7 @@ ws_array_t *create_ws_array(size_t capacity) JL_NOTSAFEPOINT;
 // Chase and Lev's work-stealing queue, optimized for
 // weak memory models by Le et al.
 //
-// * Chase D., Lev. Y. Dynamic Circular Work-Stealing queue
+// * Chase D., Lev Y. Dynamic Circular Work-Stealing queue
 // * Le N. M. et al. Correct and Efficient Work-Stealing for
 //   Weak Memory Models
 // =======
@@ -38,6 +38,29 @@ ws_array_t *ws_queue_resize(ws_queue_t *dq) JL_NOTSAFEPOINT;
 void *ws_queue_pop(ws_queue_t *dq) JL_NOTSAFEPOINT;
 
 void *ws_queue_steal_from(ws_queue_t *dq) JL_NOTSAFEPOINT;
+
+// =======
+// Idempotent work-stealing queue
+//
+// * Michael M. M. et al. Idempotent Work Stealing
+// =======
+
+typedef struct {
+    size_t tail:22;
+    size_t tag:10;
+} ws_anchor_t;
+
+typedef struct {
+    _Atomic(ws_anchor_t) anchor;
+    _Atomic(ws_array_t *) array;
+    size_t eltsize;
+} idemp_ws_queue_t;
+
+int idemp_ws_queue_push(idemp_ws_queue_t *iwsq, void *elt) JL_NOTSAFEPOINT;
+
+void *idemp_ws_queue_pop(idemp_ws_queue_t *iwsq) JL_NOTSAFEPOINT;
+
+void *idemp_ws_queue_steal_from(idemp_ws_queue_t *iwsq) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }
