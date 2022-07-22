@@ -2067,7 +2067,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 override.consistent          ? ALWAYS_TRUE : effects.consistent,
                 override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
                 override.nothrow             ? ALWAYS_TRUE : effects.nothrow,
-                override.terminates_globally ? ALWAYS_TRUE : effects.terminates_globally,
+                override.terminates_globally ? ALWAYS_TRUE : effects.terminates,
                 effects.nonoverlayed         ? true        : false,
                 override.notaskstate         ? ALWAYS_TRUE : effects.notaskstate)
         end
