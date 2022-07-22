@@ -1729,21 +1729,20 @@ static void *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 // at expense of debuggability
 
 // Push chunk `*c` into `mq`
-static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
+static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
-    // idemp_ws_queue_t *cq = &mq->cq;
-    // ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
-    // ws_array_t *ary = jl_atomic_load_relaxed(&cq->array);
-    // if (anc.tail == ary->capacity) {
-    //     jl_safe_printf("GC internal error: chunk-queue overflow");
-    //     abort();
-    // }
-    // ((jl_gc_chunk_t *)ary->buffer)[anc.tail] = *c;
-    // anc.tail++;
-    // anc.tag++;
-    // jl_atomic_store_release(&cq->anchor, anc);
-    abort();
+    idemp_ws_queue_t *cq = &mq->cq;
+    ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
+    ws_array_t *ary = jl_atomic_load_relaxed(&cq->array);
+    if (anc.tail == ary->capacity) {
+        jl_safe_printf("GC internal error: chunk-queue overflow");
+        abort();
+    }
+    ((jl_gc_chunk_t *)ary->buffer)[anc.tail] = c;
+    anc.tail++;
+    anc.tag++;
+    jl_atomic_store_release(&cq->anchor, anc);
 #endif
 }
 
@@ -1751,21 +1750,19 @@ static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSA
 static jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
+    idemp_ws_queue_t *cq = &mq->cq;
+    ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
     jl_gc_chunk_t c = {.cid = empty_chunk};
+    if (anc.tail == 0) {
+        // Empty queue
+        return c;
+    }
+    ws_array_t *ary = jl_atomic_load_acquire(&cq->array);
+    ws_anchor_t anc2 = {anc.tail - 1, anc.tag};
+    c = ((jl_gc_chunk_t *)ary->buffer)[anc2.tail];
+    if (!jl_atomic_cmpswap(&cq->anchor, &anc, anc2))
+        c.cid = empty_chunk;
     return c;
-    // idemp_ws_queue_t *cq = &mq->cq;
-    // ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
-    // jl_gc_chunk_t c = {.cid = empty_chunk};
-    // if (anc.tail == 0) {
-    //     // Empty queue
-    //     return c;
-    // }
-    // ws_array_t *ary = jl_atomic_load_acquire(&cq->array);
-    // ws_anchor_t anc2 = {anc.tail - 1, anc.tag};
-    // c = ((jl_gc_chunk_t *)ary->buffer)[anc2.tail];
-    // if (!jl_atomic_cmpswap(&cq->anchor, &anc, anc2))
-    //     c.cid = empty_chunk;
-    // return c;
 #endif
 }
 
@@ -1848,7 +1845,7 @@ static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t 
         jl_gc_chunk_t c = {objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
                            obj_end,      NULL,       NULL,
                            step,         nptr};
-        gc_chunkqueue_push(mq, &c);
+        gc_chunkqueue_push(mq, c);
         obj_end = obj_begin + step * MAX_REFS_AT_ONCE;
     }
 #endif
@@ -1877,7 +1874,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
         jl_gc_chunk_t c = {ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
                            ary8_end,   elem_begin,  elem_end,
                            0,          nptr};
-        gc_chunkqueue_push(mq, &c);
+        gc_chunkqueue_push(mq, c);
         ary8_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
     }
 #endif
@@ -1909,7 +1906,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
         jl_gc_chunk_t c = {ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
                            ary16_end,   elem_begin,   elem_end,
                            0,           nptr};
-        gc_chunkqueue_push(mq, &c);
+        gc_chunkqueue_push(mq, c);
         ary16_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
     }
 #endif
@@ -2423,6 +2420,7 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
             uintptr_t nptr = c.nptr;
             gc_mark_objarray(ptls, obj_parent, obj_begin, obj_end, step,
                              nptr);
+            break;
         }
         case ary8_chunk: {
             jl_value_t *ary8_parent = c.parent;
@@ -2433,6 +2431,7 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
             uintptr_t nptr = c.nptr;
             gc_mark_array8(ptls, ary8_parent, ary8_begin, ary8_end, elem_begin, elem_end,
                            nptr);
+            break;
         }
         case ary16_chunk: {
             jl_value_t *ary16_parent = c.parent;
@@ -2443,10 +2442,11 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
             uintptr_t nptr = c.nptr;
             gc_mark_array16(ptls, ary16_parent, ary16_begin, ary16_end, elem_begin, elem_end,
                             nptr);
+            break;
         }
         default: {
             // `empty-chunk` should be checked by caller
-            jl_safe_printf("GC internal error: chunk mismatch\n");
+            jl_safe_printf("GC internal error: chunk mismatch cid=%d\n", c.cid);
             abort();
         }
     }
@@ -3105,7 +3105,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     ws_anchor_t anc = {0, 0};
     jl_atomic_store_relaxed(&q->array, wsa);
     jl_atomic_store_relaxed(&q->anchor, anc);
-    size_t cq_init_size = (1 << 14);
+    size_t cq_init_size = (1 << 16);
     idemp_ws_queue_t *cq = &mq->cq;
     ws_array_t *wsa2 = create_ws_array(cq_init_size * sizeof(jl_gc_chunk_t));
     jl_atomic_store_relaxed(&cq->array, wsa2);
