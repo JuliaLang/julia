@@ -1749,10 +1749,10 @@ static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAF
 // Steal chunk enqueued in `mq`
 static jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
+    jl_gc_chunk_t c = {.cid = empty_chunk};
 #ifndef GC_VERIFY
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
-    jl_gc_chunk_t c = {.cid = empty_chunk};
     if (anc.tail == 0) {
         // Empty queue
         return c;
@@ -1762,8 +1762,8 @@ static jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEP
     c = ((jl_gc_chunk_t *)ary->buffer)[anc2.tail];
     if (!jl_atomic_cmpswap(&cq->anchor, &anc, anc2))
         c.cid = empty_chunk;
-    return c;
 #endif
+    return c;
 }
 
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
