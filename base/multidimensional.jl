@@ -4,12 +4,12 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule
+                  convert, show, iterate, promote_rule, to_indices
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
-    import .Base: to_indices, to_index, _to_indices1, _cutdim
-    using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
+    using .Base: to_index, fill_to_length, tail, safe_tail
+    using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1
     using .Base.Iterators: Reverse, PartitionIterator
     using .Base: @propagate_inbounds
@@ -465,11 +465,13 @@ module IteratorsMD
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
-    _to_indices1(A, inds, I1::CartesianIndices) = map(Fix1(to_index, A), I1.indices)
-    _cutdim(inds::Tuple, I1::CartesianIndices) = split(inds, Val(ndims(I1)))[2]
-
+    @inline function to_indices(A, inds, I::Tuple{CartesianIndices{N}, Vararg}) where N
+        _, indstail = split(inds, Val(N))
+        (map(Fix1(to_index, A), I[1].indices)..., to_indices(A, indstail, tail(I))...)
+    end
     # but preserve CartesianIndices{0} as they consume a dimension.
-    _to_indices1(A, inds, I1::CartesianIndices{0}) = (I1,)
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0}, Vararg}) =
+        (first(I), to_indices(A, inds, tail(I))...)
 
     @inline in(i::CartesianIndex, r::CartesianIndices) = false
     @inline in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N} = all(map(in, i.I, r.indices))
@@ -863,12 +865,20 @@ ensure_indexable(I::Tuple{}) = ()
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
 # But some index types require more context spanning multiple indices
 # CartesianIndex is unfolded outside the inner to_indices for better inference
-_to_indices1(A, inds, I1::CartesianIndex) = map(Fix1(to_index, A), I1.I)
-_cutdim(inds, I1::CartesianIndex) = IteratorsMD.split(inds, Val(length(I1)))[2]
+@inline function to_indices(A, inds, I::Tuple{CartesianIndex{N}, Vararg}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (map(Fix1(to_index, A), I[1].I)..., to_indices(A, indstail, tail(I))...)
+end
 # For arrays of CartesianIndex, we just skip the appropriate number of inds
-_cutdim(inds, I1::AbstractArray{CartesianIndex{N}}) where {N} = IteratorsMD.split(inds, Val(N))[2]
+@inline function to_indices(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
+end
 # And boolean arrays behave similarly; they also skip their number of dimensions
-_cutdim(inds::Tuple, I1::AbstractArray{Bool}) = IteratorsMD.split(inds, Val(ndims(I1)))[2]
+@inline function to_indices(A, inds, I::Tuple{AbstractArray{Bool, N}, Vararg}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
+end
 # As an optimization, we allow trailing Array{Bool} and BitArray to be linear over trailing dimensions
 @inline to_indices(A, inds, I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) where {N} =
     (_maybe_linear_logical_index(IndexStyle(A), A, I[1]),)
@@ -876,7 +886,8 @@ _maybe_linear_logical_index(::IndexStyle, A, i) = to_index(A, i)
 _maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
 
 # Colons get converted to slices by `uncolon`
-_to_indices1(A, inds, I1::Colon) = (uncolon(inds),)
+@inline to_indices(A, inds, I::Tuple{Colon, Vararg}) =
+    (uncolon(inds), to_indices(A, Base.safe_tail(inds), tail(I))...)
 
 uncolon(::Tuple{}) = Slice(OneTo(1))
 uncolon(inds::Tuple) = Slice(inds[1])
