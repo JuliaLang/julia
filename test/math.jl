@@ -1458,11 +1458,7 @@ for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbr
     for T in (Float32, Float64)
         f = getfield(@__MODULE__, fn)
         eff = Base.infer_effects(f, (T,))
-        if Core.Compiler.is_foldable(eff)
-            @test true
-        else
-            @warn "bad effects found for $f(::$T)" eff
-        end
+        @test Core.Compiler.is_foldable(eff)
     end
 end
 for T in (Float32, Float64)
