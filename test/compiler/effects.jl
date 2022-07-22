@@ -182,3 +182,8 @@ end |> !Core.Compiler.is_nothrow
 @test Base.infer_effects() do
     Core.svec(nothing, 1, "foo")
 end |> Core.Compiler.is_consistent
+
+# issue 46122: @assume_effects for @ccall
+@test Base.infer_effects((Vector{Int},)) do a
+    Base.@assume_effects :effect_free @ccall jl_array_ptr(a::Any)::Ptr{Int}
+end |> Core.Compiler.is_effect_free
