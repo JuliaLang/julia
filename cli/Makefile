@@ -28,6 +28,13 @@ endif
 # Build list of dependent libraries that must be opened
 SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
 DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+ifneq (,$(findstring MINGW,$(shell uname)))
+# In MSYS2, do not perform path conversion for `DEP_LIBS`.
+# https://www.msys2.org/wiki/Porting/#filesystem-namespaces
+CC_WITH_ENV := MSYS2_ARG_CONV_EXCL="-DDEP_LIBS=" $(CC)
+else
+CC_WITH_ENV := $(CC)
+endif # in MSYS2?
 
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj
@@ -45,9 +52,9 @@ all: release debug
 release debug :  % : julia-% libjulia-%
 
 $(BUILDDIR)/loader_lib.o : $(SRCDIR)/loader_lib.c $(HEADERS) $(JULIAHOME)/VERSION
-	@$(call PRINT_CC, $(CC) -DLIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC_WITH_ENV) -DLIBRARY_EXPORTS $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_lib.dbg.obj : $(SRCDIR)/loader_lib.c $(HEADERS) $(JULIAHOME)/VERSION
-	@$(call PRINT_CC, $(CC) -DLIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC_WITH_ENV) -DLIBRARY_EXPORTS $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_exe.o : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/VERSION
