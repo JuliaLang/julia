@@ -2454,7 +2454,7 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
 }
 
 // Mark objects and drain chunk queues (if needed)
-void gc_mark_and_drain(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+void gc_mark_and_drain(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     gc_mark_loop_(ptls, &ptls->mark_queue);
     loop : {
