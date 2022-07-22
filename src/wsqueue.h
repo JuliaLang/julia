@@ -46,8 +46,8 @@ void *ws_queue_steal_from(ws_queue_t *dq) JL_NOTSAFEPOINT;
 // =======
 
 typedef struct {
-    size_t tail:22;
-    size_t tag:10;
+    uint32_t tail:22;
+    uint32_t tag:10;
 } ws_anchor_t;
 
 typedef struct {

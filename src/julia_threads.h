@@ -197,7 +197,7 @@ typedef struct {
     struct _jl_value_t **current;
     struct _jl_value_t **end;
 #else
-    idemp_ws_queue_t q;
+    ws_queue_t q;
     idemp_ws_queue_t cq;
 #endif
 } jl_gc_markqueue_t;
