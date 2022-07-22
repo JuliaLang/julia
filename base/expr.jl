@@ -415,8 +415,10 @@ Vector{Int64} (alias for Array{Int64, 1})
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
-    incorrect answers, or other hard to track bugs). Use with care and only if
-    absolutely required.
+    incorrect answers, or other hard to track bugs). Use with care and only as a
+    last resort if absolutely required. Even in such a case, you SHOULD take all
+    possible steps to minimize the strength of the effect assertion (e.g.,
+    do not use `:total` if `:nothrow` would have been sufficient).
 
 In general, each `setting` value makes an assertion about the behavior of the
 function, without requiring the compiler to prove that this behavior is indeed
