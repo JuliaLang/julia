@@ -175,12 +175,11 @@ int64_t jl_spinmaster_count_work(jl_ptls_t ptls) JL_NOTSAFEPOINT
     for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         jl_gc_markqueue_t *mq2 = &ptls2->mark_queue;
-        ws_queue_t *q2 = &mq2->q;
+        idemp_ws_queue_t *q2 = &mq2->q;
         // This count can be slightly off, but it doesn't matter
         // for recruitment heuristics
-        int64_t t2 = jl_atomic_load_relaxed(&q2->top);
-        int64_t b2 = jl_atomic_load_relaxed(&q2->bottom);
-        work += b2 - t2;
+        ws_anchor_t a = jl_atomic_load_relaxed(&q2->anchor);
+        work += a.tail;
     }
     return work;
 }

@@ -53,8 +53,13 @@ typedef struct {
 typedef struct {
     _Atomic(ws_anchor_t) anchor;
     _Atomic(ws_array_t *) array;
-    size_t eltsize;
 } idemp_ws_queue_t;
+
+int idemp_ws_queue_push(idemp_ws_queue_t *iwsq, void *elt) JL_NOTSAFEPOINT;
+
+void *idemp_ws_queue_pop(idemp_ws_queue_t *iwsq) JL_NOTSAFEPOINT;
+
+void *idemp_ws_queue_steal_from(idemp_ws_queue_t *iwsq) JL_NOTSAFEPOINT;
 
 int idemp_ws_queue_push(idemp_ws_queue_t *iwsq, void *elt) JL_NOTSAFEPOINT;
 

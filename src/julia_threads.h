@@ -171,6 +171,7 @@ typedef struct {
 } jl_thread_heap_t;
 
 typedef enum {
+    empty_chunk,
     objary_chunk,
     ary8_chunk,
     ary16_chunk,
@@ -187,7 +188,7 @@ typedef struct {
     uintptr_t nptr;
 } jl_gc_chunk_t;
 
-#define MAX_REFS_AT_ONCE (1 << 16)
+#define MAX_REFS_AT_ONCE (1 << 18)
 
 typedef struct {
 // Debugging infrastructure is limited to single threaded GC
@@ -197,9 +198,7 @@ typedef struct {
     struct _jl_value_t **end;
 #else
     idemp_ws_queue_t q;
-    jl_gc_chunk_t *chunk_start;
-    jl_gc_chunk_t *current_chunk;
-    jl_gc_chunk_t *chunk_end;
+    idemp_ws_queue_t cq;
 #endif
 } jl_gc_markqueue_t;
 
