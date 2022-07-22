@@ -102,7 +102,7 @@ int idemp_ws_queue_push(idemp_ws_queue_t *iwsq, void *elt)
     if (anc.tail == ary->capacity)
         // Queue overflow
         return 0;
-    memcpy(&ary->buffer[anc.tail * iwsq->eltsize], elt, iwsq->eltsize);
+    ary->buffer[anc.tail] = elt;
     anc.tail++;
     anc.tag++;
     jl_atomic_store_release(&iwsq->anchor, anc);
@@ -116,8 +116,8 @@ void *idemp_ws_queue_pop(idemp_ws_queue_t *iwsq)
         // Empty queue
         return NULL;
     ws_array_t *ary = jl_atomic_load_relaxed(&iwsq->array);
-    void *elt = &ary->buffer[(anc.tail - 1) * iwsq->eltsize];
     anc.tail--;
+    void *elt = ary->buffer[anc.tail];
     jl_atomic_store_release(&iwsq->anchor, anc);
     return elt;
 }
@@ -129,8 +129,8 @@ void *idemp_ws_queue_steal_from(idemp_ws_queue_t *iwsq)
         // Empty queue
         return NULL;
     ws_array_t *ary = jl_atomic_load_acquire(&iwsq->array);
-    void *elt = &ary->buffer[(anc.tail - 1) * iwsq->eltsize];
     ws_anchor_t anc2 = {anc.tail - 1, anc.tag};
+    void *elt = ary->buffer[anc2.tail];
     if (!jl_atomic_cmpswap(&iwsq->anchor, &anc, anc2))
         // Steal failed
         return NULL;

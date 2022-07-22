@@ -196,7 +196,7 @@ typedef struct {
     struct _jl_value_t **current;
     struct _jl_value_t **end;
 #else
-    ws_queue_t q;
+    idemp_ws_queue_t q;
     jl_gc_chunk_t *chunk_start;
     jl_gc_chunk_t *current_chunk;
     jl_gc_chunk_t *chunk_end;
