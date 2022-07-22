@@ -1394,13 +1394,13 @@ define symlink_target # (from, to-dir, to-name)
 CLEAN_TARGETS += clean-$$(abspath $(2)/$(3))
 clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
+	-cmd //C rmdir $$(call cygpath_w,$(2)/$(3))
 else
 	rm -rf $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+	@cmd //C mklink //J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
@@ -1418,7 +1418,7 @@ WINE ?= wine
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
-cygpath_w = $(1)
+cygpath_w = `cygpath -w $(1)`
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
