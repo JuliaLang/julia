@@ -1729,7 +1729,7 @@ static void *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 // at expense of debuggability
 
 // Push chunk `*c` into `mq`
-static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAFEPOINT
+static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
     idemp_ws_queue_t *cq = &mq->cq;
@@ -1739,7 +1739,7 @@ static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAF
         jl_safe_printf("GC internal error: chunk-queue overflow");
         abort();
     }
-    ((jl_gc_chunk_t *)ary->buffer)[anc.tail] = c;
+    ((jl_gc_chunk_t *)ary->buffer)[anc.tail] = *c;
     anc.tail++;
     anc.tag++;
     jl_atomic_store_release(&cq->anchor, anc);
@@ -1845,7 +1845,7 @@ static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t 
         jl_gc_chunk_t c = {objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
                            obj_end,      NULL,       NULL,
                            step,         nptr};
-        gc_chunkqueue_push(mq, c);
+        gc_chunkqueue_push(mq, &c);
         obj_end = obj_begin + step * MAX_REFS_AT_ONCE;
     }
 #endif
@@ -1874,7 +1874,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
         jl_gc_chunk_t c = {ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
                            ary8_end,   elem_begin,  elem_end,
                            0,          nptr};
-        gc_chunkqueue_push(mq, c);
+        gc_chunkqueue_push(mq, &c);
         ary8_end = ary8_begin + elsize * MAX_REFS_AT_ONCE;
     }
 #endif
@@ -1906,7 +1906,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
         jl_gc_chunk_t c = {ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
                            ary16_end,   elem_begin,   elem_end,
                            0,           nptr};
-        gc_chunkqueue_push(mq, c);
+        gc_chunkqueue_push(mq, &c);
         ary16_end = ary16_begin + elsize * MAX_REFS_AT_ONCE;
     }
 #endif
