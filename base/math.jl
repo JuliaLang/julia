@@ -293,10 +293,10 @@ end
 
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
-Base.@assume_effects :total  @inline function exthorner(x::Union{Float16, Float32, Float64}, p::Tuple)
+Base.@assume_effects :terminates_locally  @inline function exthorner(x::Union{Float16, Float32, Float64}, p::Tuple)
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
-        pi = p[i]
+        pi = getfield(p, i)
         prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
