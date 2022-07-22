@@ -1525,3 +1525,11 @@ end
         @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
     end
 end
+
+# Test that one opaque closure capturing another gets inlined properly.
+function oc_capture_oc(z)
+    oc1 = @opaque x->x
+    oc2 = @opaque y->oc1(y)
+    return oc2(z)
+end
+@test fully_eliminated(oc_capture_oc, (Int,))
