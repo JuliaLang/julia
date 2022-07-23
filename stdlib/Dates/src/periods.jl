@@ -132,13 +132,13 @@ struct CompoundPeriod <: AbstractTime
         n = length(p)
         if n > 1
             # We sort periods in decreasing order (rev = true) according to the length of
-            # the period's type (by = days ∘ oneunit). We sort by type, not value, so that
+            # the period's type (by = tons ∘ oneunit). We sort by type, not value, so that
             # we can merge equal types.
             #
-            # This works by computing how many days are in a single period, and then sorting
-            # by that. For example, (days ∘ oneunit)(Week(10)) = days(oneunit(Week(10))) =
-            # days(Week(1)) = 7, which is less than (days ∘ oneunit)(Month(-2)) = 30.436875
-            sort!(p, rev = true, by = days ∘ oneunit)
+            # This works by computing how many nanoseconds are in a single period, and sorting
+            # by that. For example, (tons ∘ oneunit)(Week(10)) = tons(oneunit(Week(10))) =
+            # tons(Week(1)) ≈ 6.0e14, which is less than (tons ∘ oneunit)(Month(-2)) ≈ 2.6e15
+            sort!(p, rev = true, by = tons ∘ oneunit)
             # canonicalize p by merging equal period types and removing zeros
             i = j = 1
             while j <= n
