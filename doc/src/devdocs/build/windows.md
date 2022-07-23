@@ -118,11 +118,55 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
 ### Compiling with MinGW/MSYS2
 
-Compiling Julia from source using [MSYS2](https://msys2.github.io) has worked in the past
-but is not actively supported. Pull requests to restore support would be welcome. See a
-[past version of this
-file](https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md) for the former
-instructions for compiling using MSYS2.
+> MSYS2 provides a robust MSYS experience.
+
+Note: MSYS2 requires **64 bit** Windows 7 or newer.
+
+ 1. Install and configure [MSYS2](https://www.msys2.org/), Software Distribution
+    and Building Platform for Windows.
+
+    1. Download and run the latest installer for the
+        [64-bit](https://github.com/msys2/msys2-installer/releases/latest) distribution.
+        The installer will have a name like `msys2-x86_64-yyyymmdd.exe`.
+
+    2. Open MSYS2. Update package database and base packages:
+        ```sh
+        pacman -Syu
+        ```
+
+    3. Exit and restart MSYS2, Update the rest of the base packages:
+        ```sh
+        pacman -Syu
+        ```
+
+    3. Then install tools required to build julia:
+        ```sh
+        # tools
+        pacman -S cmake diffutils git m4 make patch tar p7zip curl python
+
+        # For 64 bit Julia, install x86_64
+        pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran
+        # For 32 bit Julia, install i686
+        pacman -S mingw-w64-i686-gcc mingw-w64-i686-gcc-fortran
+        ```
+
+    4. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
+
+
+ 2. Build Julia and its dependencies with pre-build dependencies.
+
+    1. Open a new [**MINGW64/32 shell**](https://www.msys2.org/docs/environments/#overview)
+        and clone the Julia sources
+        ```sh
+        git clone https://github.com/JuliaLang/julia.git
+        cd julia
+        ```
+
+    2. Start the build
+        ```sh
+        # Adjust the number of cores (4) to match your build environment.
+        make -j 4
+        ```
 
 
 ### Cross-compiling from Unix (Linux/Mac/WSL)
