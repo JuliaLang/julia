@@ -1298,7 +1298,10 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
     for (i = 0; i < edges_map.size; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
-        if (callees != HT_NOTFOUND && (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))) {
+        if (callees == HT_NOTFOUND)
+            continue;
+        assert(jl_is_method_instance(caller));
+        if (jl_is_method(caller->def.method) && (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))) {
             size_t i, l = jl_array_len(callees);
             for (i = 0; i < l; i++) {
                 jl_value_t *c = jl_array_ptr_ref(callees, i);
