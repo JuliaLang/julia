@@ -168,8 +168,8 @@ round(x::Irrational, r::RoundingMode) = round(float(x), r)
     @irrational sym [val] def
 
 Define a new `Irrational` value, `sym`, with arbitrary-precision definition in terms
-of `BigFloat`s given by the expression `def`. 
-    
+of `BigFloat`s given by the expression `def`.
+
 Optionally provide a pre-computed `Float64` value `val` which must equal `Float64(def)`.
 `val` will be computed automatically if omitted.
 """
