@@ -1543,6 +1543,14 @@ using Base: typed_hvncat
     @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
 
     @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
+
+    #45461, #46133 - ensure non-numeric types do not error
+    @test [1;;; 2;;; nothing;;; 4] == reshape([1; 2; nothing; 4], (1, 1, 4))
+    @test [1 2;;; nothing 4] == reshape([1; 2; nothing; 4], (1, 2, 2))
+    @test [[1 2];;; nothing 4] == reshape([1; 2; nothing; 4], (1, 2, 2))
+    @test ["A";;"B";;"C";;"D"] == ["A" "B" "C" "D"]
+    @test ["A";"B";;"C";"D"] == ["A" "C"; "B" "D"]
+    @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
 end
 
 @testset "keepat!" begin
