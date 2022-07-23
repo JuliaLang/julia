@@ -171,3 +171,22 @@ let effects = Base.infer_effects(f_setfield_nothrow, ())
     #@test Core.Compiler.is_effect_free(effects)
     @test Core.Compiler.is_nothrow(effects)
 end
+
+# nothrow for arrayset
+@test Base.infer_effects((Vector{Int},Int)) do a, i
+    a[i] = 0 # may throw
+end |> !Core.Compiler.is_nothrow
+
+# even if 2-arg `getfield` may throw, it should be still `:consistent`
+@test Core.Compiler.is_consistent(Base.infer_effects(getfield, (NTuple{5, Float64}, Int)))
+
+# SimpleVector allocation can be consistent
+@test Core.Compiler.is_consistent(Base.infer_effects(Core.svec))
+@test Base.infer_effects() do
+    Core.svec(nothing, 1, "foo")
+end |> Core.Compiler.is_consistent
+
+# issue 46122: @assume_effects for @ccall
+@test Base.infer_effects((Vector{Int},)) do a
+    Base.@assume_effects :effect_free @ccall jl_array_ptr(a::Any)::Ptr{Int}
+end |> Core.Compiler.is_effect_free

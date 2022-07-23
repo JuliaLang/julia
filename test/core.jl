@@ -7808,3 +7808,11 @@ end
 import .Foo45350: x45350
 f45350() = (global x45350 = 2)
 @test_throws ErrorException f45350()
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
+end

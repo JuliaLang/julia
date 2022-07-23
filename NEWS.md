@@ -24,6 +24,7 @@ Language changes
 * The `@invoke` macro introduced in 1.7 is now exported. Additionally, it now uses `Core.Typeof(x)`
   rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
   as arguments are handled correctly. ([#45807])
+* The `invokelatest` function and `@invokelatest` macro introduced in 1.7 are now exported. ([#45831])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -84,7 +85,6 @@ Library changes
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
-* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 

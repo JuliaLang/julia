@@ -1107,12 +1107,26 @@ JuliaOJIT::JuliaOJIT()
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+
+    orc::SymbolAliasMap jl_crt = {
+        { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } }
+    };
+    cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+}
+
+orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
+{
+    std::string MangleName = getMangledName(Name);
+    return ES.intern(MangleName);
 }
 
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 {
-    std::string MangleName = getMangledName(Name);
-    cantFail(JD.define(orc::absoluteSymbols({{ES.intern(MangleName), JITEvaluatedSymbol::fromPointer((void*)Addr)}})));
+    cantFail(JD.define(orc::absoluteSymbols({{mangle(Name), JITEvaluatedSymbol::fromPointer((void*)Addr)}})));
 }
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)

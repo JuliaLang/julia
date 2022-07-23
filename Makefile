@@ -108,7 +108,7 @@ check-whitespace:
 ifneq ($(NO_GIT), 1)
 	@# Append the directory containing the julia we just built to the end of `PATH`,
 	@# to give us the best chance of being able to run this check.
-	@PATH=$(PATH):$(dirname $(JULIA_EXECUTABLE)) $(JULIAHOME)/contrib/check-whitespace.jl
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif

@@ -59,6 +59,10 @@ struct DictCompletion <: Completion
     key::String
 end
 
+struct KeywordArgumentCompletion <: Completion
+    kwarg::String
+end
+
 # interface definition
 function Base.getproperty(c::Completion, name::Symbol)
     if name === :text
@@ -85,6 +89,8 @@ function Base.getproperty(c::Completion, name::Symbol)
         return getfield(c, :text)::String
     elseif name === :key
         return getfield(c, :key)::String
+    elseif name === :kwarg
+        return getfield(c, :kwarg)::String
     end
     return getfield(c, name)
 end
@@ -100,6 +106,7 @@ _completion_text(c::MethodCompletion) = repr(c.method)
 _completion_text(c::BslashCompletion) = c.bslash
 _completion_text(c::ShellCompletion) = c.text
 _completion_text(c::DictCompletion) = c.key
+_completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
 
 completion_text(c) = _completion_text(c)::String
 
@@ -316,22 +323,6 @@ function complete_expanduser(path::AbstractString, r)
     return Completion[PathCompletion(expanded)], r, path != expanded
 end
 
-# Determines whether method_complete should be tried. It should only be done if
-# the string endswiths ',' or '(' when disregarding whitespace_chars
-function should_method_complete(s::AbstractString)
-    method_complete = false
-    for c in reverse(s)
-        if c in [',', '(', ';']
-            method_complete = true
-            break
-        elseif !(c in whitespace_chars)
-            method_complete = false
-            break
-        end
-    end
-    method_complete
-end
-
 # Returns a range that includes the method name in front of the first non
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
@@ -530,50 +521,59 @@ end
 
 # Method completion on function call expression that look like :(max(1))
 MAX_METHOD_COMPLETIONS::Int = 40
-function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
-    out = Completion[]
+function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     funct, found = get_type(ex_org.args[1], context_module)::Tuple{Any,Bool}
-    !found && return out
+    !found && return 2, funct, [], Set{Symbol}()
 
-    args_ex, kwargs_ex = complete_methods_args(ex_org.args[2:end], ex_org, context_module, true, true)
-    push!(args_ex, Vararg{Any})
-    complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS)
+    args_ex, kwargs_ex, kwargs_flag = complete_methods_args(ex_org, context_module, true, true)
+    return kwargs_flag, funct, args_ex, kwargs_ex
+end
 
+function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
+    kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex_org, context_module, shift)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
+    out = Completion[]
+    kwargs_flag == 2 && return out # one of the kwargs is invalid
+    kwargs_flag == 0 && push!(args_ex, Vararg{Any}) # allow more arguments if there is no semicolon
+    complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
     return out
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
     out = Completion[]
-    args_ex, kwargs_ex = try
+    args_ex, kwargs_ex, kwargs_flag = try
         # this may throw, since we set default_any to false
-        complete_methods_args(ex_org.args[2:end], ex_org, context_module, false, false)
+        complete_methods_args(ex_org, context_module, false, false)
     catch ex
         ex isa ArgumentError || rethrow()
         return out
     end
+    kwargs_flag == 2 && return out # one of the kwargs is invalid
+
+    # moreargs determines whether to accept more args, independently of the presence of a
+    # semicolon for the ".?(" syntax
     moreargs && push!(args_ex, Vararg{Any})
 
     seen = Base.IdSet()
     for name in names(callee_module; all=true)
-        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name)
+        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name) && !startswith(string(name), '#')
             func = getfield(callee_module, name)
             if !isa(func, Module)
                 funct = Core.Typeof(func)
                 if !in(funct, seen)
                     push!(seen, funct)
-                    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS)
+                    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
                 end
             elseif callee_module === Main && isa(func, Module)
                 callee_module2 = func
                 for name in names(callee_module2)
-                    if !Base.isdeprecated(callee_module2, name) && isdefined(callee_module2, name)
+                    if !Base.isdeprecated(callee_module2, name) && isdefined(callee_module2, name) && !startswith(string(name), '#')
                         func = getfield(callee_module, name)
                         if !isa(func, Module)
                             funct = Core.Typeof(func)
                             if !in(funct, seen)
                                 push!(seen, funct)
-                                complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS)
+                                complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
                             end
                         end
                     end
@@ -595,32 +595,57 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     return out
 end
 
-function complete_methods_args(funargs::Vector{Any}, ex_org::Expr, context_module::Module, default_any::Bool, allow_broadcasting::Bool)
+function detect_invalid_kwarg!(kwargs_ex::Vector{Symbol}, @nospecialize(x), kwargs_flag::Int, possible_splat::Bool)
+    n = isexpr(x, :kw) ? x.args[1] : x
+    if n isa Symbol
+        push!(kwargs_ex, n)
+        return kwargs_flag
+    end
+    possible_splat && isexpr(x, :...) && return kwargs_flag
+    return 2 # The kwarg is invalid
+end
+
+function detect_args_kwargs(funargs::Vector{Any}, context_module::Module, default_any::Bool, broadcasting::Bool)
     args_ex = Any[]
-    kwargs_ex = false
-    if allow_broadcasting && ex_org.head === :. && ex_org.args[2] isa Expr
-        # handle broadcasting, but only handle number of arguments instead of
-        # argument types
-        for _ in (ex_org.args[2]::Expr).args
-            push!(args_ex, Any)
-        end
-    else
-        for ex in funargs
-            if isexpr(ex, :parameters)
-                if !isempty(ex.args)
-                    kwargs_ex = true
-                end
-            elseif isexpr(ex, :kw)
-                kwargs_ex = true
+    kwargs_ex = Symbol[]
+    kwargs_flag = 0
+    # kwargs_flag is:
+    # * 0 if there is no semicolon and no invalid kwarg
+    # * 1 if there is a semicolon and no invalid kwarg
+    # * 2 if there are two semicolons or more, or if some kwarg is invalid, which
+    #        means that it is not of the form "bar=foo", "bar" or "bar..."
+    for i in (1+!broadcasting):length(funargs)
+        ex = funargs[i]
+        if isexpr(ex, :parameters)
+            kwargs_flag = ifelse(kwargs_flag == 0, 1, 2) # there should be at most one :parameters
+            for x in ex.args
+                kwargs_flag = detect_invalid_kwarg!(kwargs_ex, x, kwargs_flag, true)
+            end
+        elseif isexpr(ex, :kw)
+            kwargs_flag = detect_invalid_kwarg!(kwargs_ex, ex, kwargs_flag, false)
+        else
+            if broadcasting
+                # handle broadcasting, but only handle number of arguments instead of
+                # argument types
+                push!(args_ex, Any)
             else
                 push!(args_ex, get_type(get_type(ex, context_module)..., default_any))
             end
         end
     end
-    return args_ex, kwargs_ex
+    return args_ex, Set{Symbol}(kwargs_ex), kwargs_flag
 end
 
-function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_ex::Vector{Any}, kwargs_ex::Bool, max_method_completions::Int)
+is_broadcasting_expr(ex::Expr) = ex.head === :. && isexpr(ex.args[2], :tuple)
+
+function complete_methods_args(ex::Expr, context_module::Module, default_any::Bool, allow_broadcasting::Bool)
+    if allow_broadcasting && is_broadcasting_expr(ex)
+        return detect_args_kwargs((ex.args[2]::Expr).args, context_module, default_any, true)
+    end
+    return detect_args_kwargs(ex.args, context_module, default_any, false)
+end
+
+function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_ex::Vector{Any}, kwargs_ex::Set{Symbol}, max_method_completions::Int, exact_nargs::Bool)
     # Input types and number of arguments
     t_in = Tuple{funct, args_ex...}
     m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
@@ -633,6 +658,7 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
         # TODO: if kwargs_ex, filter out methods without kwargs?
         push!(out, MethodCompletion(match.spec_types, match.method))
     end
+    # TODO: filter out methods with wrong number of arguments if `exact_nargs` is set
 end
 
 include("latex_symbols.jl")
@@ -744,6 +770,76 @@ end
     return matches
 end
 
+# Identify an argument being completed in a method call. If the argument is empty, method
+# suggestions will be provided instead of argument completions.
+function identify_possible_method_completion(partial, last_idx)
+    fail = 0:-1, Expr(:nothing), 0:-1, 0
+
+    # First, check that the last punctuation is either ',', ';' or '('
+    idx_last_punct = something(findprev(x -> ispunct(x) && x != '_' && x != '!', partial, last_idx), 0)::Int
+    idx_last_punct == 0 && return fail
+    last_punct = partial[idx_last_punct]
+    last_punct == ',' || last_punct == ';' || last_punct == '(' || return fail
+
+    # Then, check that `last_punct` is only followed by an identifier or nothing
+    before_last_word_start = something(findprev(in(non_identifier_chars), partial, last_idx), 0)
+    before_last_word_start == 0 && return fail
+    all(isspace, @view partial[nextind(partial, idx_last_punct):before_last_word_start]) || return fail
+
+    # Check that `last_punct` is either the last '(' or placed after a previous '('
+    frange, method_name_end = find_start_brace(@view partial[1:idx_last_punct])
+    method_name_end ∈ frange || return fail
+
+    # Strip the preceding ! operators, if any, and close the expression with a ')'
+    s = replace(partial[frange], r"\G\!+([^=\(]+)" => s"\1"; count=1) * ')'
+    ex = Meta.parse(s, raise=false, depwarn=false)
+    isa(ex, Expr) || return fail
+
+    # `wordrange` is the position of the last argument to complete
+    wordrange = nextind(partial, before_last_word_start):last_idx
+    return frange, ex, wordrange, method_name_end
+end
+
+# Provide completion for keyword arguments in function calls
+function complete_keyword_argument(partial, last_idx, context_module)
+    frange, ex, wordrange, = identify_possible_method_completion(partial, last_idx)
+    fail = Completion[], 0:-1, frange
+    ex.head === :call || is_broadcasting_expr(ex) || return fail
+
+    kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex, context_module, true)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
+    kwargs_flag == 2 && return fail # one of the previous kwargs is invalid
+
+    methods = Completion[]
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, kwargs_flag == 1)
+    # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
+    # method calls compatible with the current arguments.
+
+    # For each method corresponding to the function call, provide completion suggestions
+    # for each keyword that starts like the last word and that is not already used
+    # previously in the expression. The corresponding suggestion is "kwname=".
+    # If the keyword corresponds to an existing name, also include "kwname" as a suggestion
+    # since the syntax "foo(; kwname)" is equivalent to "foo(; kwname=kwname)".
+    last_word = partial[wordrange] # the word to complete
+    kwargs = Set{String}()
+    for m in methods
+        m::MethodCompletion
+        possible_kwargs = Base.kwarg_decl(m.method)
+        current_kwarg_candidates = String[]
+        for _kw in possible_kwargs
+            kw = String(_kw)
+            if !endswith(kw, "...") && startswith(kw, last_word) && _kw ∉ kwargs_ex
+                push!(current_kwarg_candidates, kw)
+            end
+        end
+        union!(kwargs, current_kwarg_candidates)
+    end
+
+    suggestions = Completion[KeywordArgumentCompletion(kwarg) for kwarg in kwargs]
+    append!(suggestions, complete_symbol(last_word, Returns(true), context_module))
+
+    return sort!(suggestions, by=completion_text), wordrange
+end
+
 function project_deps_get_completion_candidates(pkgstarts::String, project_file::String)
     loading_candidates = String[]
     d = Base.parsed_toml(project_file)
@@ -827,16 +923,12 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     # Make sure that only bslash_completions is working on strings
     inc_tag === :string && return Completion[], 0:-1, false
-    if inc_tag === :other && should_method_complete(partial)
-        frange, method_name_end = find_start_brace(partial)
-        # strip preceding ! operator
-        s = replace(partial[frange], r"\!+([^=\(]+)" => s"\1")
-        ex = Meta.parse(s * ")", raise=false, depwarn=false)
-
-        if isa(ex, Expr)
+    if inc_tag === :other
+        frange, ex, wordrange, method_name_end = identify_possible_method_completion(partial, pos)
+        if last(frange) != -1 && all(isspace, @view partial[wordrange]) # no last argument to complete
             if ex.head === :call
                 return complete_methods(ex, context_module, shift), first(frange):method_name_end, false
-            elseif ex.head === :. && ex.args[2] isa Expr && (ex.args[2]::Expr).head === :tuple
+            elseif is_broadcasting_expr(ex)
                 return complete_methods(ex, context_module, shift), first(frange):(method_name_end - 1), false
             end
         end
@@ -844,14 +936,18 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         return Completion[], 0:-1, false
     end
 
+    # Check whether we can complete a keyword argument in a function call
+    kwarg_completion, wordrange = complete_keyword_argument(partial, pos, context_module)
+    isempty(wordrange) || return kwarg_completion, wordrange, !isempty(kwarg_completion)
+
     dotpos = something(findprev(isequal('.'), string, pos), 0)
     startpos = nextind(string, something(findprev(in(non_identifier_chars), string, pos), 0))
     # strip preceding ! operator
-    if (m = match(r"^\!+", string[startpos:pos])) !== nothing
+    if (m = match(r"\G\!+", partial, startpos)) isa RegexMatch
         startpos += length(m.match)
     end
 
-    ffunc = (mod,x)->true
+    ffunc = Returns(true)
     suggestions = Completion[]
     comp_keywords = true
     if afterusing(string, startpos)

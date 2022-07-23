@@ -1678,7 +1678,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_finalizer(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        return CallMeta(rt, builtin_effects(f, argtypes, rt), false)
+        effects = builtin_effects(f, argtypes[2:end], rt)
+        return CallMeta(rt, effects, false)
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return CallMeta(Any, Effects(), false)
@@ -1964,35 +1965,36 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = true
         if isconcretedispatch(t)
+            ismutable = ismutabletype(t)
             fcount = fieldcount(t)
             nargs = length(e.args) - 1
-            is_nothrow && (is_nothrow = fcount ≥ nargs)
+            @assert fcount ≥ nargs "malformed :new expression" # syntactically enforced by the front-end
             ats = Vector{Any}(undef, nargs)
             local anyrefine = false
             local allconst = true
-            for i = 2:length(e.args)
-                at = widenconditional(abstract_eval_value(interp, e.args[i], vtypes, sv))
-                ft = fieldtype(t, i-1)
+            for i = 1:nargs
+                at = widenconditional(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
+                ft = fieldtype(t, i)
                 is_nothrow && (is_nothrow = at ⊑ ft)
                 at = tmeet(at, ft)
-                if at === Bottom
-                    t = Bottom
-                    tristate_merge!(sv, EFFECTS_THROWS)
-                    @goto t_computed
-                elseif !isa(at, Const)
-                    allconst = false
+                at === Bottom && @goto always_throw
+                if ismutable && !isconst(t, i)
+                    ats[i] = ft # can't constrain this field (as it may be modified later)
+                    continue
                 end
+                allconst &= isa(at, Const)
                 if !anyrefine
                     anyrefine = has_nontrivial_const_info(at) || # constant information
                                 at ⋤ ft                          # just a type-level information, but more precise than the declared type
                 end
-                ats[i-1] = at
+                ats[i] = at
             end
             # For now, don't allow:
-            # - Const/PartialStruct of mutables
+            # - Const/PartialStruct of mutables (but still allow PartialStruct of mutables
+            #   with `const` fields if anything refined)
             # - partially initialized Const/PartialStruct
-            if !ismutabletype(t) && fcount == nargs
-                if allconst
+            if fcount == nargs
+                if !ismutable && allconst
                     argvals = Vector{Any}(undef, nargs)
                     for j in 1:nargs
                         argvals[j] = (ats[j]::Const).val
@@ -2054,26 +2056,22 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
         t = sp_type_rewrap(e.args[2], sv.linfo, true)
         for i = 3:length(e.args)
             if abstract_eval_value(interp, e.args[i], vtypes, sv) === Bottom
-                t = Bottom
-                tristate_merge!(sv, EFFECTS_THROWS)
-                @goto t_computed
+                @goto always_throw
             end
         end
+        effects = EFFECTS_UNKNOWN
         cconv = e.args[5]
         if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
-            effects = v[2]
-            effects = decode_effects_override(effects)
-            tristate_merge!(sv, Effects(
-                effects.consistent ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.effect_free ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.nothrow ? ALWAYS_TRUE : ALWAYS_FALSE,
-                effects.terminates_globally ? ALWAYS_TRUE : ALWAYS_FALSE,
-                #=nonoverlayed=#true,
-                effects.notaskstate ? ALWAYS_TRUE : ALWAYS_FALSE
-            ))
-        else
-            tristate_merge!(sv, EFFECTS_UNKNOWN)
+            override = decode_effects_override(v[2])
+            effects = Effects(
+                override.consistent          ? ALWAYS_TRUE : effects.consistent,
+                override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
+                override.nothrow             ? ALWAYS_TRUE : effects.nothrow,
+                override.terminates_globally ? ALWAYS_TRUE : effects.terminates,
+                effects.nonoverlayed         ? true        : false,
+                override.notaskstate         ? ALWAYS_TRUE : effects.notaskstate)
         end
+        tristate_merge!(sv, effects)
     elseif ehead === :cfunction
         tristate_merge!(sv, EFFECTS_UNKNOWN)
         t = e.args[1]
@@ -2118,10 +2116,13 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 end
             end
         end
+    elseif false
+        @label always_throw
+        t = Bottom
+        tristate_merge!(sv, EFFECTS_THROWS)
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
-    @label t_computed
     @assert !isa(t, TypeVar) "unhandled TypeVar"
     if isa(t, DataType) && isdefined(t, :instance)
         # replace singleton types with their equivalent Const object
@@ -2337,9 +2338,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
     @assert !frame.inferred
     frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
-    def = frame.linfo.def
-    isva = isa(def, Method) && def.isva
-    nargs = length(frame.result.argtypes) - isva
+    nargs = narguments(frame)
     slottypes = frame.slottypes
     ssavaluetypes = frame.ssavaluetypes
     bbs = frame.cfg.blocks
