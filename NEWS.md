@@ -24,6 +24,7 @@ Language changes
 * The `@invoke` macro introduced in 1.7 is now exported. Additionally, it now uses `Core.Typeof(x)`
   rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
   as arguments are handled correctly. ([#45807])
+* The `invokelatest` function and `@invokelatest` macro introduced in 1.7 are now exported. ([#45831])
 
 Compiler/Runtime improvements
 -----------------------------
