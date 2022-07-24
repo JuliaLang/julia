@@ -174,8 +174,8 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
 	len = hi - lo
-    @inbounds while len != 0
-		half_len = len >> 1
+    @inbounds while !(len == 0)
+		half_len = len >>> 1
         m = lo + half_len
         if lt(o, v[m], x)
             lo = m + 1
