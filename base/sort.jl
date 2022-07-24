@@ -175,7 +175,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::key
     hi = hi + T(1)
 	len = hi - lo
     @inbounds while len != 0
-		half_len = len >>> 1
+		half_len = len >>> 0x01
         m = lo + half_len
         if lt(o, v[m], x)
             lo = m + 1
