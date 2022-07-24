@@ -1735,12 +1735,12 @@ static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSA
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
     ws_array_t *ary = jl_atomic_load_relaxed(&cq->array);
-    if (anc.size == ary->capacity) {
+    if (anc.tail == ary->capacity) {
         jl_safe_printf("GC internal error: chunk-queue overflow");
         abort();
     }
-    ((jl_gc_chunk_t *)ary->buffer)[(anc.head + anc.size) % ary->capacity] = *c;
-    anc.size++;
+    ((jl_gc_chunk_t *)ary->buffer)[anc.tail] = *c;
+    anc.tail++;
     anc.tag++;
     jl_atomic_store_release(&cq->anchor, anc);
 #endif
@@ -1754,10 +1754,11 @@ static jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
     ws_array_t *ary = jl_atomic_load_acquire(&cq->array);
-    if (anc.size == 0)
+    if (anc.tail == 0)
         // Empty queue
         return c;
-    c = ((jl_gc_chunk_t *)ary->buffer)[(anc.head + anc.size) % ary->capacity];
+    anc.tail--;
+	c = ((jl_gc_chunk_t *)ary->buffer)[anc.tail];
     jl_atomic_store_release(&cq->anchor, anc);
 #endif
     return c;
@@ -1771,11 +1772,11 @@ static jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEP
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
     ws_array_t *ary = jl_atomic_load_acquire(&cq->array);
-    if (anc.size == 0)
+    if (anc.tail == 0)
         // Empty queue
         return c;
-    c = ((jl_gc_chunk_t *)ary->buffer)[anc.head % ary->capacity];
-    ws_anchor_t anc2 = {(anc.head + 1) % ary->capacity, anc.size - 1, anc.tag};
+    c = ((jl_gc_chunk_t *)ary->buffer)[anc.tail - 1];
+    ws_anchor_t anc2 = {anc.tail - 1, anc.tag};
     if (!jl_atomic_cmpswap(&cq->anchor, &anc, anc2))
         // Steal failed
         c.cid = empty_chunk;
@@ -3140,7 +3141,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 	jl_atomic_store_relaxed(&q->array, wsa);
 	size_t cq_init_size = (1 << 14);
     idemp_ws_queue_t *cq = &mq->cq;
-    ws_anchor_t anc = {0, 0, 0};
+    ws_anchor_t anc = {0, 0};
 	ws_array_t *wsa2 = create_ws_array(cq_init_size, sizeof(jl_gc_chunk_t));
     jl_atomic_store_relaxed(&cq->anchor, anc);
 	jl_atomic_store_relaxed(&cq->array, wsa2);
