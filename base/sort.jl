@@ -583,7 +583,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
         if _issorted(v, lo, hi, o)
             return v
         elseif _issorted(v, lo, hi, Lt((x, y) -> !lt(o, x, y)))
-            # Reverse only if necessary. A weaker condition would violate stability.
+            # Reverse only if necessary. Using issorted(..., Reverse(o)) would violate stability.
             return reverse!(v, lo, hi)
         end
     end
