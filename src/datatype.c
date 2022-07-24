@@ -1491,7 +1491,7 @@ void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, 
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
+        jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {

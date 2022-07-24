@@ -117,11 +117,6 @@ struct jl_returninfo_t {
     unsigned return_roots;
 };
 
-struct jl_llvmf_dump_t {
-    LLVMOrcThreadSafeModuleRef TSM;
-    LLVMValueRef F;
-};
-
 typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
 
 typedef struct _jl_codegen_params_t {
@@ -374,6 +369,7 @@ public:
     void RegisterJITEventListener(JITEventListener *L);
 #endif
 
+    orc::SymbolStringPtr mangle(StringRef Name);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(orc::ThreadSafeModule M);
 

@@ -330,7 +330,9 @@ end
 """
     objectid(x) -> UInt
 
-Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
+Get a hash value for `x` based on object identity.
+
+If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
@@ -1108,10 +1110,10 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atype, sparams)
+    may_invoke_generator(method, atype, sparams) -> Bool
 
 Computes whether or not we may invoke the generator for the given `method` on
-the given atype and sparams. For correctness, all generated function are
+the given `atype` and `sparams`. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
 functions on concrete types. The one exception to this is that we allow calling
@@ -1122,8 +1124,8 @@ computes whether we are in either of these cases.
 Unlike normal functions, the compilation heuristics still can't generate good dispatch
 in some cases, but this may still allow inference not to fall over in some limited cases.
 """
-function may_invoke_generator(method::MethodInstance)
-    return may_invoke_generator(method.def::Method, method.specTypes, method.sparam_vals)
+function may_invoke_generator(mi::MethodInstance)
+    return may_invoke_generator(mi.def::Method, mi.specTypes, mi.sparam_vals)
 end
 function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
@@ -1317,7 +1319,7 @@ internals.
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
-```jldoctest
+```julia
 julia> Base.code_ircode(+, (Float64, Int64))
 1-element Vector{Any}:
  388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
@@ -1414,17 +1416,15 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     if isa(f, Core.Builtin)
-        args = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
-        return Core.Compiler.builtin_effects(f, args, rt)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Core.Compiler.builtin_effects(f, argtypes, rt)
     else
         effects = Core.Compiler.EFFECTS_TOTAL
         matches = _methods(f, types, -1, world)::Vector
         if isempty(matches)
-            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
-            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
-            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
-            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
+            # this call is known to throw MethodError
+            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.ALWAYS_FALSE)
         end
         for match in matches
             match = match::Core.MethodMatch
@@ -1644,7 +1644,7 @@ function bodyfunction(basemethod::Method)
     f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
-        if isa(callexpr, Expr) && callexpr.head == :call
+        if isa(callexpr, Expr) && callexpr.head === :call
             fsym = callexpr.args[1]
             if isa(fsym, Symbol)
                 f = getfield(fmod, fsym)
@@ -1857,30 +1857,45 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 """
     @invoke f(arg::T, ...; kwargs...)
 
-Provides a convenient way to call [`invoke`](@ref);
-`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
-When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
-`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+Provides a convenient way to call [`invoke`](@ref) by expanding
+`@invoke f(arg1::T1, arg2::T2; kwargs...)` to `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
+When an argument's type annotation is omitted, it's replaced with `Core.Typeof` that argument.
+To invoke a method where an argument is untyped or explicitly typed as `Any`, annotate the
+argument with `::Any`.
+
+# Examples
+
+```jldoctest
+julia> @macroexpand @invoke f(x::T, y)
+:(Core.invoke(f, Tuple{T, Core.Typeof(y)}, x, y))
+
+julia> @invoke 420::Integer % Unsigned
+0x00000000000001a4
+```
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
+
+!!! compat "Julia 1.9"
+    This macro is exported as of Julia 1.9.
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
-    newargs, newargtypes = Any[], Any[]
-    for i = 1:length(args)
-        x = args[i]
-        if isexpr(x, :(::))
-            a = x.args[1]
-            t = x.args[2]
+    types = Expr(:curly, :Tuple)
+    out = Expr(:call, GlobalRef(Core, :invoke))
+    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
+    push!(out.args, f)
+    push!(out.args, types)
+    for arg in args
+        if isexpr(arg, :(::))
+            push!(out.args, arg.args[1])
+            push!(types.args, arg.args[2])
         else
-            a = x
-            t = GlobalRef(Core, :Any)
+            push!(out.args, arg)
+            push!(types.args, Expr(:call, GlobalRef(Core, :Typeof), arg))
         end
-        push!(newargs, a)
-        push!(newargtypes, t)
     end
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(newargtypes...)}, $(newargs...); $(kwargs...))))
+    return esc(out)
 end
 
 """

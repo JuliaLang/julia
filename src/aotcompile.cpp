@@ -20,6 +20,7 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
@@ -32,6 +33,7 @@
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 #if defined(USE_POLLY)
@@ -434,6 +436,23 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
+{
+    Function *target = M.getFunction(alias);
+    if (!target) {
+        target = Function::Create(FT, Function::ExternalLinkage, alias, M);
+    }
+    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+    appendToCompilerUsed(M, {interposer});
+
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
+    SmallVector<Value *, 4> CallArgs;
+    for (auto &arg : interposer->args())
+        CallArgs.push_back(&arg);
+    auto val = builder.CreateCall(target, CallArgs);
+    builder.CreateRet(val);
+}
+
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -550,7 +569,24 @@ void jl_dump_native_impl(void *native_code,
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
         preopt.run(M);
         optimizer.run(M);
+
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
         postopt.run(M);
+
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -631,7 +667,19 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     //       to merge allocations and sometimes eliminate them,
     //       since AllocOpt does not handle PhiNodes.
     //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
+    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true);
+    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true)
+        //These mess with loop rotation, so only do them after that
+        .hoistCommonInsts(true)
+        // Causes an SRET assertion error in late-gc-lowering
+        // .sinkCommonInsts(true)
+        ;
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -646,7 +694,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             if (opt_level == 1)
                 PM->add(createInstSimplifyLegacyPass());
         }
-        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -676,7 +724,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
                 PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -697,7 +745,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -711,7 +759,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
@@ -781,14 +829,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
     }
     PM->add(createDeadStoreEliminationPass());
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
+    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
+
+    // More dead allocation (store) deletion before loop optimization
+    // consider removing this:
+    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
+    PM->add(createAllocOptPass());
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
@@ -796,12 +845,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Cleanup after LV pass
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        SimplifyCFGOptions()
-            .forwardSwitchCondToPhi(true)
-            .convertSwitchToLookupTable(true)
-            .needCanonicalLoops(false)
-            .hoistCommonInsts(true)
-            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+        aggressiveSimplifyCFGOptions
     ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
@@ -812,7 +856,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (lower_intrinsics) {
         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
         // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        // pass pipeline being re-executed. Prevent this by inserting a barrier.
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
@@ -990,12 +1034,13 @@ llvmGetPassPluginInfo() {
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
         // not a generic function
-        return NULL;
+        dump->F = NULL;
+        return;
     }
 
     // get the source code for this function
@@ -1071,8 +1116,11 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
-        if (F)
-            return new jl_llvmf_dump_t{wrap(new orc::ThreadSafeModule(std::move(m))), wrap(F)};
+        if (F) {
+            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(m)));
+            dump->F = wrap(F);
+            return;
+        }
     }
 
     const char *mname = name_from_method_instance(mi);

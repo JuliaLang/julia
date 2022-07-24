@@ -55,9 +55,9 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, args...)
+function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
 end
 
 
@@ -383,7 +383,7 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
-    return (t1, ts...)
+    return (t1, ts...)::T
 end
 
 # use iterative algorithm for long tuples

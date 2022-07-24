@@ -15,7 +15,6 @@ typedef struct {
     int64_t slide;
 } objfileentry_t;
 
-
 // Central registry for resolving function addresses to `jl_method_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
 //
@@ -81,32 +80,6 @@ public:
         ~Locked() JL_NOTSAFEPOINT = default;
     };
 
-    template<typename datatype>
-    struct jl_pthread_key_t {
-        static_assert(std::is_trivially_default_constructible<datatype>::value, "Invalid datatype for pthread key!");
-        static_assert(std::is_trivially_destructible<datatype>::value, "Expected datatype to be trivially destructible!");
-        static_assert(sizeof(datatype) == sizeof(void*), "Expected datatype to be like a void*!");
-        pthread_key_t key;
-
-        void init() JL_NOTSAFEPOINT {
-            if (pthread_key_create(&key, NULL))
-                jl_error("fatal: pthread_key_create failed");
-        }
-
-        operator datatype() JL_NOTSAFEPOINT {
-            return reinterpret_cast<datatype>(pthread_getspecific(key));
-        }
-
-        jl_pthread_key_t &operator=(datatype val) JL_NOTSAFEPOINT {
-            pthread_setspecific(key, reinterpret_cast<void*>(val));
-            return *this;
-        }
-
-        void destroy() JL_NOTSAFEPOINT {
-            pthread_key_delete(key);
-        }
-    };
-
     struct sysimg_info_t {
         uint64_t jl_sysimage_base;
         jl_sysimg_fptrs_t sysimg_fptrs;
@@ -159,16 +132,6 @@ public:
     JITDebugInfoRegistry() JL_NOTSAFEPOINT;
     ~JITDebugInfoRegistry() JL_NOTSAFEPOINT = default;
 
-    // Any function that acquires this lock must be either a unmanaged thread
-    // or in the GC safe region and must NOT allocate anything through the GC
-    // while holding this lock.
-    // Certain functions in this file might be called from an unmanaged thread
-    // and cannot have any interaction with the julia runtime
-    // They also may be re-entrant, and operating while threads are paused, so we
-    // separately manage the re-entrant count behavior for safety across platforms
-    // Note that we cannot safely upgrade read->write
-    uv_rwlock_t debuginfo_asyncsafe{};
-    jl_pthread_key_t<uintptr_t> debuginfo_asyncsafe_held{};
     libc_frames_t libc_frames{};
 
     void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;

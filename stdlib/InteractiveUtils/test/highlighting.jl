@@ -9,7 +9,8 @@ myzeros(::Type{T}, ::Type{S}, ::Type{R}, dims::Tuple{Vararg{Integer, N}}, dims2:
                   Tuple{Type{<:Integer}, Type{>:String}, Type{T} where Signed<:T<:Real, Tuple{Vararg{Int}}, NTuple{4,Int}})
     seekstart(io)
     @test startswith(readline(io), "MethodInstance for ")
-    @test startswith(readline(io), "  from myzeros(::Type{T}, ::")
+    @test occursin(r"^  from myzeros\(::.*Type.*{T}, ::", readline(io))
+    readline(io) # skip location information from method printing - already tested in base
     @test occursin(r"^Static Parameters$", readline(io))
     @test occursin(r"^  T <: .*Integer", readline(io))
     @test occursin(r"^  .*Signed.* <: R <: .*Real", readline(io))
@@ -159,10 +160,10 @@ const XU = B * "}" * XB
 
     @testset "attributes" begin
         @test hilight_llvm(
-            """attributes #1 = { uwtable "frame-pointer"="all" "thunk" }""") ==
+            """attributes #1 = { uwtable "frame-pointer"="all" }""") ==
             "$(K)attributes$(XK) $(D)#1$(XD) $EQU " *
             "$U $(K)uwtable$(XK) $(V)\"frame-pointer\"$(XV)$EQU" *
-            "$(V)\"all\"$(XV) $(V)\"thunk\"$(XV) $XU\n"
+            "$(V)\"all\"$(XV) $XU\n"
     end
 
     @testset "terminator" begin
