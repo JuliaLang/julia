@@ -265,7 +265,8 @@ void jl_spinmaster_wait_sweeping(void) JL_NOTSAFEPOINT
     // time on the idle cores while we wait for the GC to finish.
     // This is particularly important when run under rr.
     uv_mutex_lock(&safepoint_lock);
-    uv_cond_wait(&safepoint_cond, &safepoint_lock);
+    if (jl_atomic_load_relaxed(&jl_gc_running))
+        uv_cond_wait(&safepoint_cond, &safepoint_lock);
     uv_mutex_unlock(&safepoint_lock);
 }
 
