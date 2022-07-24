@@ -518,10 +518,10 @@ end
         @test !(3.5 in 1:5)
         @test (3 in 1:5)
         @test (3 in 5:-1:1)
-        #@test (3 in 3+0*(1:5))
+        @test (3 in 3 .+ 0*(1:5))
         @test !(4 in 3 .+ 0*(1:5))
-        @test 0 in (0 .* (1:10))
         @test 0. in (0. .* (1:10))
+        @test !(0.1 in (0. .* (1:10)))
 
         let r = 0.0:0.01:1.0
             @test (r[30] in r)
