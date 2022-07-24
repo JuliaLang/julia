@@ -2881,6 +2881,7 @@ julia> lolstack([(j,k) for j in 1:4, k in 5:6]) do (j,k)
  1  2  3  4
  3  4  4  5
  6  6  6  6
+```
 """
 lolstack(array_of_arrays) =
     if applicable(size, array_of_arrays)
