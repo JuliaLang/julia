@@ -14,7 +14,7 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
     midpoint, @boundscheck, checkbounds
 
-using .Base: >>>, !==
+using .Base: >>>, !==, !=
 
 import .Base:
     sort,
@@ -174,7 +174,7 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
 	len = hi - lo
-    @inbounds while !(len == 0)
+    @inbounds while len != 0
 		half_len = len >>> 1
         m = lo + half_len
         if lt(o, v[m], x)
