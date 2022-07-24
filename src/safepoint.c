@@ -180,7 +180,7 @@ int64_t jl_spinmaster_count_work(jl_ptls_t ptls) JL_NOTSAFEPOINT
         // for recruitment heuristics
     	int64_t t2 = jl_atomic_load_relaxed(&q2->top);
         int64_t b2 = jl_atomic_load_relaxed(&q2->bottom);
-        work += b2 - t2;    
+        work += b2 - t2;
 	}
     return work;
 }
