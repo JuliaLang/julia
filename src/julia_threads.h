@@ -170,26 +170,6 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
-typedef enum {
-    empty_chunk,
-    objary_chunk,
-    ary8_chunk,
-    ary16_chunk,
-} gc_chunk_id_t;
-
-typedef struct {
-    gc_chunk_id_t cid;
-    struct _jl_value_t *parent;
-    struct _jl_value_t **begin;
-    struct _jl_value_t **end;
-    void *elem_begin;
-    void *elem_end;
-    uint32_t step;
-    uintptr_t nptr;
-} jl_gc_chunk_t;
-
-#define MAX_REFS_AT_ONCE (1 << 12)
-
 typedef struct {
 // Debugging infrastructure is limited to single threaded GC
 #ifdef GC_VERIFY

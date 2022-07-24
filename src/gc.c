@@ -2953,7 +2953,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
 #endif
 
-
     _report_gc_finished(pause, gc_num.freed, sweep_full, recollect);
 
     gc_final_pause_end(gc_start_time, gc_end_time);
@@ -3139,7 +3138,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&q->top, 0);
 	jl_atomic_store_relaxed(&q->bottom, 0);
 	jl_atomic_store_relaxed(&q->array, wsa);
-	size_t cq_init_size = (1 << 14);
+	size_t cq_init_size = (1 << 16);
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = {0, 0};
 	ws_array_t *wsa2 = create_ws_array(cq_init_size, sizeof(jl_gc_chunk_t));

@@ -81,6 +81,26 @@ typedef struct {
     uint64_t    total_mark_time;
 } jl_gc_num_t;
 
+typedef enum {
+    empty_chunk,
+    objary_chunk,
+    ary8_chunk,
+    ary16_chunk,
+} gc_chunk_id_t;
+
+typedef struct {
+    gc_chunk_id_t cid;
+    struct _jl_value_t *parent;
+    struct _jl_value_t **begin;
+    struct _jl_value_t **end;
+    void *elem_begin;
+    void *elem_end;
+    uint32_t step;
+    uintptr_t nptr;
+} jl_gc_chunk_t;
+
+#define MAX_REFS_AT_ONCE (1 << 16)
+
 // layout for big (>2k) objects
 
 JL_EXTENSION typedef struct _bigval_t {
