@@ -2868,7 +2868,7 @@ julia> lolstack(a)
  1  3  5
  2  4  6
 
-julia> lolstack([(j,k) for j in 1:4, k in 5:6]) do (j,k)
+julia> lolstack((j,k) for j in 1:4, k in 5:6) do (j,k)
                   [j, (j+k)÷2, k]
               end
 3×4×2 Array{Int64, 3}:
