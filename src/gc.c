@@ -1693,7 +1693,7 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
     mq->current++;
 #else
     // Queue overflow
-    if (!idemp_ws_queue_push(&mq->q, v)) {
+    if (!ws_queue_push(&mq->q, v)) {
         jl_safe_printf("GC internal error: queue overflow\n");
         abort();
     }
@@ -1710,7 +1710,7 @@ static void *gc_markqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     jl_value_t *obj = *mq->current;
     return obj;
 #else
-    return idemp_ws_queue_pop(&mq->q);
+    return ws_queue_pop(&mq->q);
 #endif
 }
 
@@ -1720,11 +1720,11 @@ static void *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 #ifdef GC_VERIFY
     return NULL;
 #else
-    return idemp_ws_queue_steal_from(&mq->q);
+    return ws_queue_steal_from(&mq->q);
 #endif
 }
 
-// Chunk queue push/steal functions are almost verbatim copied
+// Chunk queue push/pop/steal functions are almost verbatim copied
 // from `wsqueue.c`. Could be less repetitive with use of macros,
 // at expense of debuggability
 
@@ -3133,14 +3133,15 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     size_t mq_init_size = (1 << 22);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 #ifndef GC_VERIFY
-    idemp_ws_queue_t *q = &mq->q;
-    ws_anchor_t anc = {0, 0, 0};
+    ws_queue_t *q = &mq->q;
     ws_array_t *wsa = create_ws_array(mq_init_size, sizeof(void *));
-    jl_atomic_store_relaxed(&q->anchor, anc);
-    jl_atomic_store_relaxed(&q->array, wsa);
+    jl_atomic_store_relaxed(&q->top, 0);
+	jl_atomic_store_relaxed(&q->bottom, 0);
+	jl_atomic_store_relaxed(&q->array, wsa);
 	size_t cq_init_size = (1 << 14);
     idemp_ws_queue_t *cq = &mq->cq;
-    ws_array_t *wsa2 = create_ws_array(cq_init_size, sizeof(jl_gc_chunk_t));
+    ws_anchor_t anc = {0, 0, 0};
+	ws_array_t *wsa2 = create_ws_array(cq_init_size, sizeof(jl_gc_chunk_t));
     jl_atomic_store_relaxed(&cq->anchor, anc);
 	jl_atomic_store_relaxed(&cq->array, wsa2);
 #else
