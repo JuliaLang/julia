@@ -1422,7 +1422,7 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         rem = s.remaining
-        s.remaining = rem - one(rem)
+        s.remaining = rem - typeof(rem)(1)
         return val
     end
 end
@@ -1443,7 +1443,7 @@ function length(s::Stateful)
     if rem > 0
         rem
     else
-        length(s.itr) - (one(rem) - rem)
+        length(s.itr) - (typeof(rem)(1) - rem)
     end
 end
 end # if statement several hundred lines above
