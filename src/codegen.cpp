@@ -4821,6 +4821,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
 }
 
+void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
+
 static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_method_t *closure_method, jl_tupletype_t *env_t, jl_tupletype_t *argt_typ, jl_value_t *rettype)
 {
     jl_svec_t *sig_args = NULL;
@@ -4861,6 +4863,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     std::string fname = isspecsig ?
         closure_decls.functionObject :
         closure_decls.specFunctionObject;
+    jl_add_code_in_flight(fname, ci, jl_Module->getDataLayout());
     if (GlobalValue *V = jl_Module->getNamedValue(fname)) {
         F = cast<Function>(V);
     } else {
@@ -4880,6 +4883,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
             jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module,
                 closure_decls.specFunctionObject, sigtype, rettype, true);
             specF = returninfo.decl;
+            jl_add_code_in_flight(closure_decls.specFunctionObject, ci, jl_Module->getDataLayout());
         }
     }
     ctx.oc_modules.push_back(std::move(closure_m));
@@ -8165,8 +8169,6 @@ static jl_llvm_functions_t
 }
 
 // --- entry point ---
-
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL);
 
 JL_GCC_IGNORE_START("-Wclobbered")
 jl_llvm_functions_t jl_emit_code(
