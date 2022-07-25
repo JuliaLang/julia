@@ -205,7 +205,7 @@ let ci = make_ci([
     # come after it.
     for i in 1:length(ir.stmts)
         s = ir.stmts[i]
-        if isa(s, Expr) && s.head == :call && s.args[1] == :something
+        if Meta.isexpr(s, :call) && s.args[1] === :something
             if isa(s.args[2], SSAValue)
                 @test s.args[2].id <= i
             end

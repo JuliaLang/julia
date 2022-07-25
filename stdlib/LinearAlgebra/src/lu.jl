@@ -64,7 +64,7 @@ LU{T}(factors::AbstractMatrix, ipiv::AbstractVector{<:Integer}, info::Integer) w
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(LU{T,S}(factors::AbstractMatrix{T}, ipiv::AbstractVector{<:Integer},
                    info::BlasInt) where {T,S},
-           LU{T,S,typeof(ipiv)}(factors, ipiv, info))
+           LU{T,S,typeof(ipiv)}(factors, ipiv, info), false)
 
 # iteration for destructuring into components
 Base.iterate(S::LU) = (S.L, Val(:U))

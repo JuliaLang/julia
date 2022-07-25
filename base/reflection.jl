@@ -330,7 +330,9 @@ end
 """
     objectid(x) -> UInt
 
-Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
+Get a hash value for `x` based on object identity.
+
+If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
@@ -1317,7 +1319,7 @@ internals.
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
-```jldoctest
+```julia
 julia> Base.code_ircode(+, (Float64, Int64))
 1-element Vector{Any}:
  388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
@@ -1414,9 +1416,9 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     types = to_tuple_type(types)
     if isa(f, Core.Builtin)
-        args = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
-        return Core.Compiler.builtin_effects(f, args, rt)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Core.Compiler.builtin_effects(f, argtypes, rt)
     else
         effects = Core.Compiler.EFFECTS_TOTAL
         matches = _methods(f, types, -1, world)::Vector
@@ -1642,7 +1644,7 @@ function bodyfunction(basemethod::Method)
     f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
-        if isa(callexpr, Expr) && callexpr.head == :call
+        if isa(callexpr, Expr) && callexpr.head === :call
             fsym = callexpr.args[1]
             if isa(fsym, Symbol)
                 f = getfield(fmod, fsym)

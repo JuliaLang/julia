@@ -30,7 +30,6 @@ const IR_FLAG_EFFECT_FREE = 0x01 << 4
 # This statement was proven not to throw
 const IR_FLAG_NOTHROW     = 0x01 << 5
 
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
 #####################
@@ -772,7 +771,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             return 0
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke || head == :invoke_modify
+    elseif head === :foreigncall || head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from

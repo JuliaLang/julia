@@ -415,8 +415,10 @@ Vector{Int64} (alias for Array{Int64, 1})
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
-    incorrect answers, or other hard to track bugs). Use with care and only if
-    absolutely required.
+    incorrect answers, or other hard to track bugs). Use with care and only as a
+    last resort if absolutely required. Even in such a case, you SHOULD take all
+    possible steps to minimize the strength of the effect assertion (e.g.,
+    do not use `:total` if `:nothrow` would have been sufficient).
 
 In general, each `setting` value makes an assertion about the behavior of the
 function, without requiring the compiler to prove that this behavior is indeed
@@ -444,8 +446,8 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
 - If the method returns, the results will always be egal.
 
 !!! note
-    This in particular implies that the return value of the method must be
-    immutable. Multiple allocations of mutable objects (even with identical
+    This in particular implies that the method must not return a freshly allocated
+    mutable object. Multiple allocations of mutable objects (even with identical
     contents) are not egal.
 
 !!! note
@@ -649,7 +651,7 @@ macro assume_effects(args...)
     end
     ex = args[end]
     isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
-    if ex.head === :macrocall && ex.args[1] == Symbol("@ccall")
+    if ex.head === :macrocall && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
             consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate

@@ -292,7 +292,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
-    modul = if mt === _TYPE_NAME.mt # type constructor
+    modul = if mt === _TYPE_NAME.mt && length(ms) > 0 # type constructor
             which(ms.ms[1].module, ms.ms[1].name)
         else
             mt.module
@@ -374,7 +374,7 @@ function url(m::Method)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
                 LibGit2.with(LibGit2.GitConfig(repo)) do cfg
                     u = LibGit2.get(cfg, "remote.origin.url", "")
-                    u = match(LibGit2.GITHUB_REGEX,u).captures[1]
+                    u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
                     commit = string(LibGit2.head_oid(repo))
                     root = LibGit2.path(repo)
                     if startswith(file, root) || startswith(realpath(file), root)

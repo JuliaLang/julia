@@ -75,6 +75,7 @@ end
     @test sum(randperm(6)) == 21
     @test length(reverse(0x1:0x2)) == 2
     @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
+    @test sort(Union{}[]) == Union{}[] # issue #45280
 end
 
 @testset "partialsort" begin
@@ -678,21 +679,37 @@ end
             end
         end
     end
+
+    @test Base.Sort.UIntMappable(Union{Int, UInt}, Base.Forward) === nothing # issue #45280
 end
 
-@testset "sort(x; workspace=w) " begin
+@testset "sort(x; buffer)" begin
     for n in [1,10,100,1000]
         v = rand(n)
-        w = [0.0]
-        @test sort(v) == sort(v; workspace=w)
-        @test sort!(copy(v)) == sort!(copy(v); workspace=w)
-        @test sortperm(v) == sortperm(v; workspace=[4])
-        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; workspace=[4])
+        buffer = [0.0]
+        @test sort(v) == sort(v; buffer)
+        @test sort!(copy(v)) == sort!(copy(v); buffer)
+        @test sortperm(v) == sortperm(v; buffer=[4])
+        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; buffer=[4])
 
         n > 100 && continue
         M = rand(n, n)
-        @test sort(M; dims=2) == sort(M; dims=2, workspace=w)
-        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, workspace=w)
+        @test sort(M; dims=2) == sort(M; dims=2, buffer)
+        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
+    end
+end
+
+@testset "sorting preserves identity" begin
+    a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
+    sort!(a)
+    @test length(IdDict(a .=> a)) == 6
+
+    for v in [BigInt.(rand(1:5, 40)), BigInt.(rand(Int, 70)), BigFloat.(rand(52))]
+        hashes = Set(hash.(v))
+        ids = Set(objectid.(v))
+        sort!(v)
+        @test hashes == Set(hash.(v))
+        @test ids == Set(objectid.(v))
     end
 end
 

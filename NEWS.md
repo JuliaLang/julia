@@ -16,14 +16,10 @@ Language changes
 * New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
   for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
   `getfield`. ([#44137])
-* A few basic operators have been generalized to more naturally support vector space structures:
-  unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
-  binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
-  left- and right-division fall back to multiplication with the inverse from left and right,
-  respectively, as stated in the docstring. ([#44564])
 * The `@invoke` macro introduced in 1.7 is now exported. Additionally, it now uses `Core.Typeof(x)`
   rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
   as arguments are handled correctly. ([#45807])
+* The `invokelatest` function and `@invokelatest` macro introduced in 1.7 are now exported. ([#45831])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -84,7 +80,6 @@ Library changes
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
-* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 
@@ -110,6 +105,9 @@ Standard library changes
 #### Markdown
 
 #### Printf
+
+* Error messages for bad format strings have been improved, to make it clearer what & where in the
+  format string is wrong. ([#45366])
 
 #### Random
 
