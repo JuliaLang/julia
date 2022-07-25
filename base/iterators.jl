@@ -1422,7 +1422,6 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
         rem = s.remaining
-        @assert !iszero(rem)
         s.remaining = rem - one(rem)
         return val
     end
