@@ -327,4 +327,6 @@ function setproperty!(ci::CodeInfo, s::Symbol, v)
     return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
 end
 
+@eval Threads nthreads() = threadpoolsize()
+
 # END 1.9 deprecations

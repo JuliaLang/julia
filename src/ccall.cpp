@@ -1540,7 +1540,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == getVoidTy(ctx.builder.getContext()));
         assert(!isVa && !llvmcall && nccallargs == 0);
         JL_GC_POP();
-        emit_gc_safepoint(ctx);
+        ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
+        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
         return ghostValue(ctx, jl_nothing_type);
     }
     else if (is_libjulia_func("jl_get_ptls_states")) {
@@ -1643,7 +1644,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         ctx.builder.SetInsertPoint(checkBB);
         ctx.builder.CreateLoad(
                 getSizeTy(ctx.builder.getContext()),
-                ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()), get_current_signal_page(ctx), -1),
+                ctx.builder.CreateConstInBoundsGEP1_32(getSizeTy(ctx.builder.getContext()),
+                    get_current_signal_page_from_ptls(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const), -1),
                 true);
         ctx.builder.CreateBr(contBB);
         ctx.f->getBasicBlockList().push_back(contBB);

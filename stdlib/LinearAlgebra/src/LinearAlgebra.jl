@@ -548,7 +548,8 @@ function versioninfo(io::IO=stdout)
         println(io, indent, "--> ", lib.libname, " (", interface, ")")
     end
     println(io, "Threading:")
-    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "Threads.threadpoolsize() = ", Threads.threadpoolsize())
+    println(io, indent, "Threads.maxthreadid() = ", Base.Threads.maxthreadid())
     println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
     println(io, "Relevant environment variables:")
     env_var_names = [

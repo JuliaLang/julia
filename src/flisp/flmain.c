@@ -10,7 +10,7 @@ extern "C" {
 
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
-const char* __asan_default_options() {
+const char* __asan_default_options(void) {
     return "detect_leaks=0";
 }
 #endif

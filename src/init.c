@@ -211,10 +211,8 @@ static void jl_close_item_atexit(uv_handle_t *handle)
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
-    if (jl_all_tls_states == NULL)
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
-
-    jl_task_t *ct = jl_current_task;
 
     if (exitcode == 0)
         jl_write_compiler_output();
@@ -223,7 +221,14 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
+    int8_t old_state;
+    jl_task_t *ct = NULL;
     if (jl_base_module) {
+        ct = jl_get_current_task();
+        if (ct == NULL) {
+            ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
+        }
+        old_state = jl_gc_unsafe_enter(ct->ptls);
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
@@ -246,7 +251,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    jl_gc_run_all_finalizers(ct);
+    if (ct != NULL)
+        jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
     if (loop != NULL) {
@@ -295,11 +301,13 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #endif
 
     jl_teardown_codegen();
+    if (ct != NULL)
+        jl_gc_unsafe_leave(ct->ptls, old_state);
 }
 
 JL_DLLEXPORT void jl_postoutput_hook(void)
 {
-    if (jl_all_tls_states == NULL)
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
     if (jl_base_module) {
@@ -777,7 +785,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
-        jl_n_threads = 1;
+        jl_atomic_store_relaxed(&jl_n_threads, 1);
     }
     jl_start_threads();
 

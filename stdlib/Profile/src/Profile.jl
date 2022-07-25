@@ -423,7 +423,7 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
-    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.nthreads(), RoundUp))
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
         Threads.@spawn begin
             for i in indexes_part
                 iplookups[i] = _lookup_corrected(unique_ips[i])

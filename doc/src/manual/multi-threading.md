@@ -6,10 +6,10 @@ of Julia multi-threading features.
 ## Starting Julia with multiple threads
 
 By default, Julia starts up with a single thread of execution. This can be verified by using the
-command [`Threads.nthreads()`](@ref):
+command [`Threads.threadpoolsize()`](@ref):
 
 ```jldoctest
-julia> Threads.nthreads()
+julia> Threads.threadpoolsize()
 1
 ```
 
@@ -38,7 +38,7 @@ $ julia --threads 4
 Let's verify there are 4 threads at our disposal.
 
 ```julia-repl
-julia> Threads.nthreads()
+julia> Threads.threadpoolsize()
 4
 ```
 
@@ -267,7 +267,7 @@ avoid the race:
 ```julia-repl
 julia> using Base.Threads
 
-julia> nthreads()
+julia> Threads.threadpoolsize()
 4
 
 julia> acc = Ref(0)
