@@ -891,11 +891,11 @@ See also [`copyto!`](@ref).
     is available from the `Future` standard library as `Future.copy!`.
 """
 function copy!(dst::AbstractVector, src::AbstractVector)
+    firstindex(dst) == firstindex(src) || throw(ArgumentError(
+        "vectors must have the same offset for copy! (consider using `copyto!`)"))
     if length(dst) != length(src)
         resize!(dst, length(src))
     end
-    firstindex(dst) == firstindex(src) || throw(ArgumentError(
-        "vectors must have the same offset for copy! (consider using `copyto!`)"))
     copyto!(dst, src)
 end
 
