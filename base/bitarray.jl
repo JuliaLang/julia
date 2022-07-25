@@ -458,10 +458,11 @@ function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Arra
     return dest
 end
 
-copyto!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
+copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer) =
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
-function _copyto_int!(dest::BitArray, doffs::Int, src::Array, soffs::Int, n::Int)
+function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
+    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
