@@ -891,13 +891,12 @@ See also [`copyto!`](@ref).
     is available from the `Future` standard library as `Future.copy!`.
 """
 function copy!(dst::AbstractVector, src::AbstractVector)
+    firstindex(dst) == firstindex(src) || throw(ArgumentError(
+        "vectors must have the same offset for copy! (consider using `copyto!`)"))
     if length(dst) != length(src)
         resize!(dst, length(src))
     end
-    for i in eachindex(dst, src)
-        @inbounds dst[i] = src[i]
-    end
-    dst
+    copyto!(dst, src)
 end
 
 function copy!(dst::AbstractArray, src::AbstractArray)
@@ -1108,8 +1107,9 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
-    @inbounds for i = 0:(n-1)
-        dest[dstart+i] = src[sstart+i]
+    src′ = unalias(dest, src)
+    @inbounds for i = 0:n-1
+        dest[dstart+i] = src′[sstart+i]
     end
     return dest
 end
@@ -1131,11 +1131,12 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
+    A′ = unalias(B, A)
     jdest = first(jr_dest)
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            @inbounds B[idest,jdest] = A[isrc,jsrc]
+            @inbounds B[idest,jdest] = A′[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
