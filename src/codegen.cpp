@@ -6892,7 +6892,8 @@ static jl_llvm_functions_t
         else {
             tableKind = DICompileUnit::DebugNameTableKind::None;
         }
-        topfile = dbuilder.createFile(ctx.file, ".");
+        SmallString<256> Path(ctx.file);
+        topfile = dbuilder.createFile(Path, sys::path::parent_path(Path));
         DICompileUnit *CU =
             dbuilder.createCompileUnit(llvm::dwarf::DW_LANG_Julia
                                        ,topfile      // File
