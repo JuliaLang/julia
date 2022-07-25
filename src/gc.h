@@ -99,7 +99,7 @@ typedef struct {
     uintptr_t nptr;
 } jl_gc_chunk_t;
 
-#define MAX_REFS_AT_ONCE (1 << 16)
+#define MAX_REFS_AT_ONCE (1 << 18)
 
 // layout for big (>2k) objects
 
