@@ -217,11 +217,8 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
 #ifndef GC_VERIFY
     if (jl_mutex_trylock_nogc(&safepoint_master_lock)) {
         spin : {
-            // Check if all threads have finished marking
             if (!jl_spinmaster_all_workers_done(ptls)) {
                 int64_t work = jl_spinmaster_count_work(ptls);
-                // If there is enough work, recruit workers and also become a worker,
-                // relinquishing the spin-master status
                 if (work > 1) {
                     jl_spinmaster_recruit_workers(ptls, work - 1);
                     jl_mutex_unlock_nogc(&safepoint_master_lock);
@@ -243,8 +240,6 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
 void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
 {
     jl_ptls_t ptls = jl_current_task->ptls;
-    // There are still workers in the mark-loop: go through
-    // spin-master protocol
     while(!jl_spinmaster_end_marking(ptls)) {
         uv_mutex_lock(&ptls->gc_sleep_lock);
         if (!uv_cond_timedwait(&ptls->gc_wake_signal,
@@ -254,8 +249,6 @@ void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
             gc_mark_loop(ptls);
         }
         uv_mutex_unlock(&ptls->gc_sleep_lock);
-        // Otherwise, just go to the top of the loop and try
-        // to become a spin-master
     }
 }
 
