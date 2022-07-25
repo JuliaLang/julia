@@ -544,6 +544,18 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             name = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
+
+            if ((jl_sym_t*)file != jl_symbol("none") && (jl_sym_t*)file != jl_symbol("stdin")) {
+                char *path = realpath(jl_symbol_name((jl_sym_t*)file), NULL);
+                if (path) {
+                    file = jl_symbol(path);
+                    free(path);
+                } else {
+                    jl_printf(JL_STDERR, "WARNING: could not resolve path for %s\n", jl_symbol_name((jl_sym_t*)file));
+                }
+                // TODO: probably better change the parser to construct lineinfo nodes
+                //       with absolute paths in the first place?
+            }
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);

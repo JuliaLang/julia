@@ -1088,9 +1088,15 @@ static jl_value_t *jl_file_content_as_string(jl_value_t *filename)
 // statements into `module` after applying `mapexpr` to each one.
 JL_DLLEXPORT jl_value_t *jl_load_(jl_module_t *module, jl_value_t *filename)
 {
+    jl_value_t *path = NULL;
     jl_value_t *text = jl_file_content_as_string(filename);
-    JL_GC_PUSH1(&text);
-    jl_value_t *result = jl_parse_eval_all(module, text, filename);
+    JL_GC_PUSH2(&text, &path);
+    char *c_filename = jl_string_data(filename);
+    char *c_path = realpath(c_filename, NULL);
+    assert(c_path);
+    path = jl_cstr_to_string(c_path);
+    free(c_path);
+    jl_value_t *result = jl_parse_eval_all(module, text, path);
     JL_GC_POP();
     return result;
 }
