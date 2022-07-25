@@ -295,7 +295,7 @@ end |> !Core.Compiler.is_nothrow
 # even if 2-arg `getfield` may throw, it should be still `:consistent`
 @test Core.Compiler.is_consistent(Base.infer_effects(getfield, (NTuple{5, Float64}, Int)))
 
-# SimpleVector allocation can be consistent
+# SimpleVector allocation is consistent
 @test Core.Compiler.is_consistent(Base.infer_effects(Core.svec))
 @test Base.infer_effects() do
     Core.svec(nothing, 1, "foo")
@@ -305,3 +305,12 @@ end |> Core.Compiler.is_consistent
 @test Base.infer_effects((Vector{Int},)) do a
     Base.@assume_effects :effect_free @ccall jl_array_ptr(a::Any)::Ptr{Int}
 end |> Core.Compiler.is_effect_free
+
+# `getfield_effects` handles union object nicely
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{String}, Core.Const(:value)], String))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{Symbol}, Core.Const(:value)], Symbol))
+@test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
+@test Base.infer_effects((Bool,)) do c
+    obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
+    return getfield(obj, :value)
+end |> Core.Compiler.is_consistent
