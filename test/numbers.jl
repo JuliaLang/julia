@@ -2679,6 +2679,7 @@ end
     for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
         for x in (Inf, -Inf, NaN, -NaN)
             @test isnan(rem2pi(T(x), r))
+            @test rem2pi(T(x), r) isa T
         end
     end
 end
