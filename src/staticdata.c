@@ -368,6 +368,7 @@ typedef enum {
 // --- Static Compile ---
 
 static void *jl_sysimg_handle = NULL;
+static const char *sysimg_fname = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
 static const int32_t *sysimg_gvars_offsets = NULL;
@@ -397,7 +398,6 @@ static void jl_load_sysimg_so(void)
 {
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     int sysimg_chained = jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED;
-    const char *fname = NULL;
     // in --build mode only use sysimg data, not precompiled native code
     if (sysimg_chained ||
         (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES)) {
@@ -421,16 +421,14 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_tls_offset", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 
+        sysimage_base = 0;
 #ifdef _OS_WINDOWS_
         sysimage_base = (intptr_t)jl_sysimg_handle;
 #else
         Dl_info dlinfo;
         if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
             sysimage_base = (intptr_t)dlinfo.dli_fbase;
-            fname = dlinfo.dli_fname;
-        }
-        else {
-            sysimage_base = 0;
+            // sysimg_fname = dlinfo.dli_fname;
         }
 #endif
     }
@@ -443,8 +441,8 @@ static void jl_load_sysimg_so(void)
     jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
     jl_restore_system_image_data(sysimg_data, *plen);
 
-    if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && fname) {
-        jl_init_sysimage_chaining((void*)sysimage_base, fname);
+    if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && sysimg_fname && sysimage_base) {
+        jl_init_sysimage_chaining((void*)sysimage_base, sysimg_fname);
     }
 }
 
@@ -2030,8 +2028,10 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     int is_ji = (dot && !strcmp(dot, ".ji"));
 
     // Get handle to sys.so
-    if (!is_ji) // .ji extension => load .ji file only
+    if (!is_ji){ // .ji extension => load .ji file only
         jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
+        sysimg_fname = fname;
+    }
 }
 
 // Allow passing in a module handle directly, rather than a path
