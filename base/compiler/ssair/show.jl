@@ -815,7 +815,7 @@ function Base.show(io::IO, t::TriState)
     if s !== nothing
         printstyled(io, s; color = tristate_color(t))
     else # unknown state, redirect to the fallback printing
-        Base.@invoke show(io::IO, t::Any)
+        Core.invoke(show, Tuple{IO,Any}, io, t)
     end
 end
 

@@ -140,7 +140,7 @@ end |> only === Union{}
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
 increase_x44763!(n) = (global x44763; x44763 += n)
-invoke44763(x) = @invoke increase_x44763!(x)
+invoke44763(x) = Base.@invoke increase_x44763!(x)
 @test Base.return_types() do
     invoke44763(42)
 end |> only === Int
