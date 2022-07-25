@@ -1432,15 +1432,15 @@ end
     return ns !== nothing ? ns[1] : sentinel
 end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
-IteratorSize(::Type{<:Stateful{T}) where {T} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
-eltype(::Type{<:Stateful{T}} where {T} = eltype(T)
-IteratorEltype(::Type{<:Stateful{T}) where {T} = IteratorEltype(T)
+IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
+eltype(::Type{<:Stateful{T}}) where {T} = eltype(T)
+IteratorEltype(::Type{<:Stateful{T}}) where {T} = IteratorEltype(T)
 
 function length(s::Stateful)
     rem = s.remaining
     # If rem is actually remaining length, return it.
     # else, rem is number of consumed elements.
-    if rem > 0
+    if rem >= 0
         rem
     else
         length(s.itr) - (typeof(rem)(1) - rem)
