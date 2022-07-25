@@ -1462,7 +1462,7 @@ import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
 const Floats = Union{Float16, Float32,Float64}
-const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+const FPSortable = Union{ # Mixed bitwidths are not allowed.
     AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
     AbstractVector{Union{Float64, Missing}},
