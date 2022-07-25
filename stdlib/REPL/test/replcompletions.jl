@@ -1433,6 +1433,14 @@ end
     c, r = test_complete("CompletionFoo.kwtest3(a; namedarg=0, foob")
     @test c == ["foobar="]
 
+    # Check completion of kwargs given before all the args are present
+    c, r = test_complete("CompletionFoo.kwtest3(a")
+    @test "another!kwarg=" ∈ c
+    c, r = test_complete("CompletionFoo.kwtest3(le")
+    @test "length" ∈ c
+    @test "length=" ∈ c
+    @test "len2=" ∈ c
+
     # Check for confusion with CompletionFoo.named
     c, r = test_complete_foo("kwtest3(blabla; unknown=4, namedar")
     @test c == ["namedarg="]
@@ -1450,7 +1458,7 @@ end
     @test "len2=" ∈ c
     c, r = test_complete_foo("kwtest3(1+3im; named")
     @test "named" ∈ c
-    # TODO: @test "namedarg=" ∉ c
+    @test "namedarg=" ∉ c
     @test "len2" ∉ c
     c, r = test_complete_foo("kwtest3(1+3im; named.")
     @test c == ["len2"]
@@ -1516,8 +1524,6 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest3(a; kwargs..., ")
 
     #= TODO: Test the absence of kwarg completion the call is incompatible with the method bearing the kwarg.
-    @test hasnokwsuggestions("CompletionFoo.kwtest3(a")
-    @test hasnokwsuggestions("CompletionFoo.kwtest3(le")
     @test hasnokwsuggestions("CompletionFoo.kwtest3(a; unknown=4, another!kw") # only methods 1 and 3 could slurp `unknown`
     @test hasnokwsuggestions("CompletionFoo.kwtest3(1+3im; nameda")
     @test hasnokwsuggestions("CompletionFoo.kwtest3(12//7; foob") # because of specificity
