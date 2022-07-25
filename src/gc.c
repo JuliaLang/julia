@@ -3145,7 +3145,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     jl_atomic_store_relaxed(&cq->anchor, anc);
     jl_atomic_store_relaxed(&cq->array, wsa2);
 #else
-	mq->start = (jl_value_t **)malloc_s(mq_init_size * sizeof(jl_value_t *));
+    mq->start = (jl_value_t **)malloc_s(mq_init_size * sizeof(jl_value_t *));
     mq->current = mq->start;
     mq->end = mq->start + mq_init_size;
 #endif
