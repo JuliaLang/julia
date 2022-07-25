@@ -1131,7 +1131,7 @@ julia> rem2pi(7pi/4, RoundDown)
 """
 function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
-    isnan(x) && return NaN
+    isfinite(x) || return NaN
 
     abs(x) < pi && return x
 
@@ -1156,7 +1156,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:ToZero})
-    isnan(x) && return NaN
+    isfinite(x) || return NaN
 
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
@@ -1183,7 +1183,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     copysign(z,x)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Down})
-    isnan(x) && return NaN
+    isfinite(x) || return NaN
 
     if x < pi4o2_h
         if x >= 0
@@ -1214,7 +1214,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:Up})
-    isnan(x) && return NaN
+    isfinite(x) || return NaN
 
     if x > -pi4o2_h
         if x <= 0
