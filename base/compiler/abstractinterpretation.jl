@@ -1809,18 +1809,21 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::V
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::VarTable, sv::InferenceState)
-    if e.head === :static_parameter
+    head = e.head
+    if head === :static_parameter
         n = e.args[1]::Int
         t = Any
         if 1 <= n <= length(sv.sptypes)
             t = sv.sptypes[n]
         end
         return t
-    elseif e.head === :boundscheck
+    elseif head === :boundscheck
         return Bool
-    else
+    elseif head === :the_exception
+        tristate_merge!(sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
         return Any
     end
+    return Any
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
@@ -1886,6 +1889,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     elseif ehead === :new
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         is_nothrow = true
+        is_consistent = false
         if isconcretedispatch(t)
             fcount = fieldcount(t)
             nargs = length(e.args) - 1
@@ -1916,22 +1920,27 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             # For now, don't allow:
             # - Const/PartialStruct of mutables
             # - partially initialized Const/PartialStruct
-            if !ismutabletype(t) && fcount == nargs
-                if allconst
-                    argvals = Vector{Any}(undef, nargs)
-                    for j in 1:nargs
-                        argvals[j] = (ats[j]::Const).val
+            if !ismutabletype(t)
+                if fcount == nargs
+                    is_consistent = true
+                    if allconst
+                        argvals = Vector{Any}(undef, nargs)
+                        for j in 1:nargs
+                            argvals[j] = (ats[j]::Const).val
+                        end
+                        t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
+                    elseif anyrefine
+                        t = PartialStruct(t, ats)
                     end
-                    t = Const(ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), t, argvals, nargs))
-                elseif anyrefine
-                    t = PartialStruct(t, ats)
+                else
+                    is_consistent = all(i::Int -> is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
                 end
             end
         else
             is_nothrow = false
         end
         tristate_merge!(sv, Effects(EFFECTS_TOTAL;
-            consistent = !ismutabletype(t) ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
+            consistent = is_consistent ? ALWAYS_TRUE : TRISTATE_UNKNOWN,
             nothrow = is_nothrow ? ALWAYS_TRUE : TRISTATE_UNKNOWN))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
