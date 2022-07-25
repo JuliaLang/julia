@@ -1239,7 +1239,7 @@ julia> rem2pi(7pi/4, RoundDown)
 """
 function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
-    isnan(x) && return NaN
+    (x-x !== 0.0) && return NaN
 
     abs(x) < pi && return x
 
