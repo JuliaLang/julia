@@ -60,6 +60,121 @@ end |> !Core.Compiler.is_consistent
     return nothing
 end |> Core.Compiler.is_foldable
 
+# :the_exception expression should taint :consistent-cy
+global inconsistent_var::Int = 42
+function throw_inconsistent() # this is still :consistent
+    throw(inconsistent_var)
+end
+function catch_inconsistent()
+    try
+        throw_inconsistent()
+    catch err
+        err
+    end
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(catch_inconsistent))
+cache_inconsistent() = catch_inconsistent()
+function compare_inconsistent()
+    a = cache_inconsistent()
+    global inconsistent_var = 0
+    b = cache_inconsistent()
+    global inconsistent_var = 42
+    return a === b
+end
+@test !compare_inconsistent()
+# return type information shouldn't be able to refine it also
+function catch_inconsistent(x::T) where T
+    v = x
+    try
+        throw_inconsistent()
+    catch err
+        v = err::T
+    end
+    return v
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(catch_inconsistent, (Int,)))
+cache_inconsistent(x) = catch_inconsistent(x)
+function compare_inconsistent(x::T) where T
+    x = one(T)
+    a = cache_inconsistent(x)
+    global inconsistent_var = 0
+    b = cache_inconsistent(x)
+    global inconsistent_var = 42
+    return a === b
+end
+@test !compare_inconsistent(3)
+
+# allocation/access of uninitialized fields should taint the :consistent-cy
+struct Maybe{T}
+    x::T
+    Maybe{T}() where T = new{T}()
+    Maybe{T}(x) where T = new{T}(x)
+    Maybe(x::T) where T = new{T}(x)
+end
+Base.getindex(x::Maybe) = x.x
+
+import Core.Compiler: Const, getfield_notundefined
+for T = (Base.RefValue, Maybe) # both mutable and immutable
+    for name = (Const(1), Const(:x))
+        @test getfield_notundefined(T{String}, name)
+        @test getfield_notundefined(T{Integer}, name)
+        @test getfield_notundefined(T{Union{String,Integer}}, name)
+        @test getfield_notundefined(Union{T{String},T{Integer}}, name)
+        @test !getfield_notundefined(T{Int}, name)
+        @test !getfield_notundefined(T{<:Integer}, name)
+        @test !getfield_notundefined(T{Union{Int32,Int64}}, name)
+        @test !getfield_notundefined(T, name)
+    end
+    # throw doesn't account for undefined behavior
+    for name = (Const(0), Const(2), Const(1.0), Const(:y), Const("x"),
+                Float64, String, Nothing)
+        @test getfield_notundefined(T{String}, name)
+        @test getfield_notundefined(T{Int}, name)
+        @test getfield_notundefined(T{Integer}, name)
+        @test getfield_notundefined(T{<:Integer}, name)
+        @test getfield_notundefined(T{Union{Int32,Int64}}, name)
+        @test getfield_notundefined(T, name)
+    end
+    # should not be too conservative when field isn't known very well but object information is accurate
+    @test getfield_notundefined(T{String}, Int)
+    @test getfield_notundefined(T{String}, Symbol)
+    @test getfield_notundefined(T{Integer}, Int)
+    @test getfield_notundefined(T{Integer}, Symbol)
+    @test !getfield_notundefined(T{Int}, Int)
+    @test !getfield_notundefined(T{Int}, Symbol)
+    @test !getfield_notundefined(T{<:Integer}, Int)
+    @test !getfield_notundefined(T{<:Integer}, Symbol)
+end
+# should be conservative when object information isn't accurate
+@test !getfield_notundefined(Any, Const(1))
+@test !getfield_notundefined(Any, Const(:x))
+# tuples and namedtuples should be okay if not given accurate information
+for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tuple,
+                    NamedTuple{(:a, :b), Tuple{Int,Int}}, NamedTuple{(:x,),Tuple{Any}}, NamedTuple],
+    FieldType = Any[Int, Symbol, Any]
+    @test getfield_notundefined(TupleType, FieldType)
+end
+
+# TODO add equivalent test cases for `Ref` once we handle mutability more nicely
+@test Base.infer_effects() do
+    Maybe{Int}()
+end |> !Core.Compiler.is_consistent
+@test Base.infer_effects() do
+    Maybe{Int}()[]
+end |> !Core.Compiler.is_consistent
+@test !fully_eliminated() do
+    Maybe{Int}()[]
+end
+@test Base.infer_effects() do
+    Maybe{String}()
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects() do
+    Maybe{String}()[]
+end |> Core.Compiler.is_consistent
+@test Base.return_types() do
+    Maybe{String}()[] # this expression should be concrete evaluated
+end |> only === Union{}
+
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
 global x44763::Int = 0
