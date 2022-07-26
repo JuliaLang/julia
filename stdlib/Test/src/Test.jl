@@ -1380,7 +1380,7 @@ of nesting in the test set hierarchy and are passed through directly to the
 parent test set (with the context object appended to any failing tests.)
 
     !!! compat "Julia 1.9"
-    `@testeset let` requires at least Julia 1.9.
+    `@testset let` requires at least Julia 1.9.
 
 ## Examples
 ```jldoctest
