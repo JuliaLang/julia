@@ -430,11 +430,12 @@ function adjust_effects(sv::InferenceState)
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
-    if ipo_effects.consistent === TRISTATE_UNKNOWN && is_consistent_argtype(rt)
+    if is_consistent_if_notreturned(ipo_effects) && is_consistent_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
-        # (indicated by `TRISTATE_UNKNOWN`), we may be able to refine it if the return
+        # (indicated by `CONSISTENT_IF_NOTRETURNED`), we may be able to refine it if the return
         # type guarantees that the allocations are never returned
-        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
+        ipo_effects = Effects(ipo_effects; consistent)
     end
 
     # override the analyzed effects using manually annotated effect settings
@@ -445,16 +446,16 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; effect_free=true)
         end
         if is_effect_overridden(override, :nothrow)
-            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; nothrow=true)
         end
         if is_effect_overridden(override, :terminates_globally)
-            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; terminates=true)
         end
         if is_effect_overridden(override, :notaskstate)
-            ipo_effects = Effects(ipo_effects; notaskstate=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; notaskstate=true)
         end
     end
 
@@ -775,11 +776,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
+    merge_effects!(parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
+        merge_effects!(child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState

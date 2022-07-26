@@ -1858,7 +1858,7 @@ function isdefined_effects(argtypes::Vector{Any})
     obj = argtypes[1]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
     consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = isdefined_nothrow(argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = isdefined_nothrow(argtypes)
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
@@ -1883,25 +1883,26 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
         # N.B. We do not taint for `--check-bounds=no` here -that happens in
         # InferenceState.
         if length(argtypes) ≥ 2 && getfield_nothrow(argtypes[1], argtypes[2], true)
-            nothrow = ALWAYS_TRUE
+            nothrow = true
         else
-            consistent = nothrow = ALWAYS_FALSE
+            consistent = ALWAYS_FALSE
+            nothrow = false
         end
     else
-        nothrow = getfield_nothrow(argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
+        nothrow = getfield_nothrow(argtypes)
     end
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
-    consistent = nothrow = ALWAYS_FALSE
+    consistent = ALWAYS_FALSE
+    nothrow = false
     if getglobal_nothrow(argtypes)
+        nothrow = true
         # typeasserts below are already checked in `getglobal_nothrow`
         M, s = (argtypes[1]::Const).val::Module, (argtypes[2]::Const).val::Symbol
         if isconst(M, s)
-            consistent = nothrow = ALWAYS_TRUE
-        else
-            nothrow = ALWAYS_TRUE
+            consistent = ALWAYS_TRUE
         end
     end
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
@@ -1922,10 +1923,8 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         return getglobal_effects(argtypes, rt)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
-        effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)) ?
-            ALWAYS_TRUE : ALWAYS_FALSE
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt)) ?
-            ALWAYS_TRUE : ALWAYS_FALSE
+        effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f))
+        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
         return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
     end
 end
@@ -2100,9 +2099,8 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         f === Intrinsics.have_fma ||        # this one depends on the runtime environment
         f === Intrinsics.cglobal            # cglobal lookup answer changes at runtime
         ) ? ALWAYS_TRUE : ALWAYS_FALSE
-    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)) ?
-        ALWAYS_TRUE : ALWAYS_FALSE
+    effect_free = !(f === Intrinsics.pointerset)
+    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
