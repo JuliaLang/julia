@@ -515,20 +515,23 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
-    legacy::PassManager preopt, postopt;
+    PassBuilder emptyPB;
+    AnalysisManagers empty(emptyPB);
+    ModulePassManager preopt, postopt;
+    legacy::PassManager emitter; // MC emission is only supported on legacy PM
 
     if (unopt_bc_fname)
-        preopt.add(createBitcodeWriterPass(unopt_bc_OS));
+        preopt.addPass(BitcodeWriterPass(unopt_bc_OS));
 
-    //Is this necessary for TM?
-    // addTargetPasses(&postopt, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (bc_fname)
-        postopt.add(createBitcodeWriterPass(bc_OS));
+        postopt.addPass(BitcodeWriterPass(bc_OS));
+    //Is this necessary for TM?
+    addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (obj_fname)
-        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(emitter, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     legacy::PassManager optimizer;
@@ -567,7 +570,7 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        preopt.run(M);
+        preopt.run(M, empty.MAM);
         optimizer.run(M);
 
         // We would like to emit an alias or an weakref alias to redirect these symbols
@@ -585,7 +588,7 @@ void jl_dump_native_impl(void *native_code,
         injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
                 FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
 
-        postopt.run(M);
+        postopt.run(M, empty.MAM);
 
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);

@@ -205,6 +205,8 @@ namespace {
     // BPF, NVPTX, and AMDGPU.
     //TODO implement these once LLVM exposes
     //the PassBuilder extension point callbacks
+    //For now we'll maintain the insertion points even though they don't do anything
+    //for the sake of documentation
     void invokePipelineStartCallbacks(ModulePassManager &MPM, PassBuilder &PB, OptimizationLevel O) {}
     void invokePeepholeEPCallbacks(FunctionPassManager &MPM, PassBuilder &PB, OptimizationLevel O) {}
     void invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PassBuilder &PB, OptimizationLevel O) {}
