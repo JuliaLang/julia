@@ -589,6 +589,7 @@ void jl_dump_native_impl(void *native_code,
                 FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
 
         postopt.run(M, empty.MAM);
+        emitter.run(M);
 
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
