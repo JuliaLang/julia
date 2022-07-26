@@ -551,17 +551,20 @@ void jl_dump_native_impl(void *native_code,
         if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
-    legacy::PassManager optimizer;
-    if (bc_fname || obj_fname || asm_fname) {
-        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-        addMachinePasses(&optimizer, jl_options.opt_level);
-    }
-
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
     dataM->setTargetTriple(TM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*TM));
+
+#ifndef JL_USE_NEW_PM
+    legacy::PassManager optimizer;
+    addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+    addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+    addMachinePasses(&optimizer, jl_options.opt_level);
+#else
+    NewPM optimizer{std::move(TM), getOptLevel(jl_options.opt_level), {true, true, false}};
+#endif
+
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);
@@ -588,7 +591,7 @@ void jl_dump_native_impl(void *native_code,
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
         preopt.run(M, empty.MAM);
-        optimizer.run(M);
+        if (bc_fname || obj_fname || asm_fname) optimizer.run(M);
 
         // We would like to emit an alias or an weakref alias to redirect these symbols
         // but LLVM doesn't let us emit a GlobalAlias to a declaration...
@@ -1065,10 +1068,14 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize) {
+#ifndef JL_USE_NEW_PM
                 legacy::PassManager PM;
                 addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
                 addOptimizationPasses(&PM, jl_options.opt_level);
                 addMachinePasses(&PM, jl_options.opt_level);
+#else
+                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+#endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
             }
