@@ -19,13 +19,16 @@ The effects are composed of the following set of different properties:
 - `effect_free::TriState`: this method is free from externally semantically visible side effects
 - `nothrow::TriState`: this method is guaranteed to not throw an exception
 - `terminates::TriState`: this method is guaranteed to terminate
-- `nonoverlayed::Bool`: indicates that any methods that may be called within this method
-  are not defined in an [overlayed method table](@ref OverlayMethodTable)
 - `notaskstate::TriState`: this method does not access any state bound to the current
   task and may thus be moved to a different task without changing observable
   behavior. Note that this currently implies that `noyield` as well, since
   yielding modifies the state of the current task, though this may be split
   in the future.
+- `nonoverlayed::Bool`: indicates that any methods that may be called within this method
+  are not defined in an [overlayed method table](@ref OverlayMethodTable)
+- `noinbounds::Bool`: indicates this method can't be `:consistent` because of bounds checking.
+  This effect is currently only set on `InferenceState` construction and used to taint
+  `:consistent`-cy before caching. We may want to track it with more accuracy in the future.
 See [`Base.@assume_effects`](@ref) for more detailed explanation on the definitions of these properties.
 
 Along the abstract interpretation, `Effects` at each statement are analyzed locally and
@@ -52,51 +55,49 @@ struct Effects
     effect_free::TriState
     nothrow::TriState
     terminates::TriState
-    nonoverlayed::Bool
     notaskstate::TriState
-    # This effect is currently only tracked in inference and modified
-    # :consistent before caching. We may want to track it in the future.
-    inbounds_taints_consistency::Bool
+    nonoverlayed::Bool
+    noinbounds::Bool
     function Effects(
         consistent::TriState,
         effect_free::TriState,
         nothrow::TriState,
         terminates::TriState,
-        nonoverlayed::Bool,
         notaskstate::TriState,
-        inbounds_taints_consistency::Bool = false)
+        nonoverlayed::Bool,
+        noinbounds::Bool = true)
         return new(
             consistent,
             effect_free,
             nothrow,
             terminates,
-            nonoverlayed,
             notaskstate,
-            inbounds_taints_consistency)
+            nonoverlayed,
+            noinbounds)
     end
 end
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  true,  ALWAYS_TRUE)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_FALSE, ALWAYS_TRUE,  true,  ALWAYS_TRUE)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, true,  ALWAYS_FALSE) # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false, ALWAYS_FALSE) # unknown, really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_TRUE,  true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  ALWAYS_FALSE, ALWAYS_TRUE,  ALWAYS_TRUE,  true)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, true)  # mostly unknown, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, ALWAYS_FALSE, false) # unknown, really
 
 function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::TriState = e.consistent,
     effect_free::TriState = e.effect_free,
     nothrow::TriState = e.nothrow,
     terminates::TriState = e.terminates,
-    nonoverlayed::Bool = e.nonoverlayed,
     notaskstate::TriState = e.notaskstate,
-    inbounds_taints_consistency::Bool = e.inbounds_taints_consistency)
+    nonoverlayed::Bool = e.nonoverlayed,
+    noinbounds::Bool = e.noinbounds)
     return Effects(
         consistent,
         effect_free,
         nothrow,
         terminates,
-        nonoverlayed,
         notaskstate,
-        inbounds_taints_consistency)
+        nonoverlayed,
+        noinbounds)
 end
 
 is_consistent(effects::Effects)   = effects.consistent === ALWAYS_TRUE
@@ -126,8 +127,8 @@ function encode_effects(e::Effects)
            ((e.effect_free.state)          << 2) |
            ((e.nothrow.state)              << 4) |
            ((e.terminates.state)           << 6) |
-           ((e.nonoverlayed % UInt32)      << 8) |
-           ((e.notaskstate.state % UInt32) << 9)
+           ((e.notaskstate.state % UInt32) << 8) |
+           ((e.nonoverlayed % UInt32)      << 10)
 end
 
 function decode_effects(e::UInt32)
@@ -136,8 +137,8 @@ function decode_effects(e::UInt32)
         TriState((e >> 2) & 0x03),
         TriState((e >> 4) & 0x03),
         TriState((e >> 6) & 0x03),
-        _Bool(   (e >> 8) & 0x01),
-        TriState((e >> 9) & 0x03))
+        TriState((e >> 8) & 0x03),
+        _Bool(   (e >> 10) & 0x01))
 end
 
 function tristate_merge(old::Effects, new::Effects)
@@ -150,10 +151,10 @@ function tristate_merge(old::Effects, new::Effects)
             old.nothrow, new.nothrow),
         tristate_merge(
             old.terminates, new.terminates),
-        old.nonoverlayed & new.nonoverlayed,
         tristate_merge(
             old.notaskstate, new.notaskstate),
-        old.inbounds_taints_consistency | new.inbounds_taints_consistency)
+        old.nonoverlayed & new.nonoverlayed,
+        old.noinbounds & new.noinbounds)
 end
 
 struct EffectsOverride

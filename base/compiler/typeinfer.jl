@@ -426,7 +426,7 @@ function adjust_effects(sv::InferenceState)
     # that is currently modeled in a flow-insensitive way: ideally we want to model it
     # with a proper dataflow analysis instead
     rt = sv.bestguess
-    if !ipo_effects.inbounds_taints_consistency && rt === Bottom
+    if ipo_effects.noinbounds && rt === Bottom
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end

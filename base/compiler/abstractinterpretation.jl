@@ -2080,8 +2080,8 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
                 override.nothrow             ? ALWAYS_TRUE : effects.nothrow,
                 override.terminates_globally ? ALWAYS_TRUE : effects.terminates,
-                effects.nonoverlayed         ? true        : false,
-                override.notaskstate         ? ALWAYS_TRUE : effects.notaskstate)
+                override.notaskstate         ? ALWAYS_TRUE : effects.notaskstate,
+                effects.nonoverlayed         ? true        : false)
         end
         tristate_merge!(sv, effects)
     elseif ehead === :cfunction

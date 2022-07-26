@@ -178,9 +178,9 @@ mutable struct InferenceState
         #       are stronger than the inbounds assumptions, since the latter
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
-        inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
-        consistent = inbounds_taints_consistency ? ALWAYS_FALSE : ALWAYS_TRUE
-        ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
+        noinbounds = inbounds === :on || (inbounds === :default && !any_inbounds(code))
+        consistent = noinbounds ? ALWAYS_TRUE : ALWAYS_FALSE
+        ipo_effects = Effects(EFFECTS_TOTAL; consistent, noinbounds)
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
