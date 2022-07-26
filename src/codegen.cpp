@@ -8276,10 +8276,10 @@ jl_llvm_functions_t jl_emit_codeinst(
             }
             else if (// don't delete toplevel code
                      jl_is_method(def) &&
-                     // and there is something to delete (test this before calling jl_ir_flag_inlineable)
+                     // and there is something to delete (test this before calling jl_ir_inlining_cost)
                      codeinst->inferred != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
+                     (codeinst->invoke == jl_fptr_const_return_addr || (jl_ir_inlining_cost((jl_array_t*)codeinst->inferred) == UINT16_MAX)) &&
                      // don't delete code when generating a precompile file
                      !(params.imaging || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again

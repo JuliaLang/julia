@@ -1094,7 +1094,7 @@ function const_prop_methodinstance_heuristic(
     # was able to cut it down to something simple (inlineable in particular).
     # If so, there's a good chance we might be able to const prop all the way
     # through and learn something new.
-    if isdefined(method, :source) && ccall(:jl_ir_flag_inlineable, Bool, (Any,), method.source)
+    if isdefined(method, :source) && is_inlineable(method.source)
         return true
     else
         flag = get_curr_ssaflag(sv)
