@@ -1844,7 +1844,8 @@ const _CONSISTENT_BUILTINS = Any[
     Core.ifelse,
     (<:),
     typeassert,
-    throw
+    throw,
+    setfield!
 ]
 
 const _SPECIAL_BUILTINS = Any[

@@ -314,3 +314,5 @@ end |> Core.Compiler.is_effect_free
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
 end |> Core.Compiler.is_consistent
+
+@test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
