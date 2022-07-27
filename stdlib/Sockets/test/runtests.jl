@@ -26,6 +26,8 @@ sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
     @test ip"192.0" == IPv4(192,0,0,0)
+    @test zero(IPv4) == IPv4(0)
+    @test zero(IPv6) == IPv6(0)
 
     # These used to work, but are now disallowed. Check that they error
     @test_throws ArgumentError parse(IPv4, "192.0xFFF") # IPv4(192,0,15,255)
@@ -90,6 +92,7 @@ end
     inet = Sockets.InetAddr("127.0.0.1", 1024)
     @test inet.host == ip"127.0.0.1"
     @test inet.port == 1024
+    @test zero(Sockets.InetAddr{IPv4}) == Sockets.InetAddr(zero(IPv4), zero(UInt16))
 end
 @testset "InetAddr invalid port" begin
     @test_throws InexactError Sockets.InetAddr(IPv4(127,0,0,1), -1)

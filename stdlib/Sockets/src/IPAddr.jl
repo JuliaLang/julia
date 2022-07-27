@@ -58,7 +58,7 @@ print(io::IO,ip::IPv4) = print(io,string((ip.host&(0xFF000000))>>24),".",
                                   string((ip.host&(0xFF00))>>8),".",
                                   string(ip.host&0xFF))
 
-zero(::Type{IPv4}) = IPv4(zero(UInt32))
+Base.zero(::Type{IPv4}) = IPv4(zero(UInt32))
 
 struct IPv6 <: IPAddr
     host::UInt128
@@ -167,7 +167,7 @@ function print(io::IO,ip::IPv6)
     end
 end
 
-zero(::Type{IPv6}) = IPv6(zero(UInt128))
+Base.zero(::Type{IPv6}) = IPv6(zero(UInt128))
 
 # Parsing
 
@@ -315,4 +315,5 @@ function show(io::IO, addr::InetAddr)
     print(io, ", ", Int(addr.port), ")")
 end
 
-zero(::Type{InetAddr{T}}) where {T<:IPAddr} = InetAddr(zero(T), zero(UInt16))
+Base.zero(::Type{InetAddr{T}}) where {T<:IPAddr} =
+    InetAddr(zero(T), zero(UInt16))
