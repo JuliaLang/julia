@@ -976,7 +976,10 @@ struct ContextTestSet <: AbstractTestSet
 end
 
 function ContextTestSet(name::Union{Symbol, Expr}, @nospecialize(context))
-    ContextTestSet(get_testset(), name, context)
+    if (name isa Expr) && (name.head != :tuple)
+        error("Invalid syntax: $(name)")
+    end
+    return ContextTestSet(get_testset(), name, context)
 end
 record(c::ContextTestSet, t) = record(c.parent_ts, t)
 function record(c::ContextTestSet, t::Fail)
