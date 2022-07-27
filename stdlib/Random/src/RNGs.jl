@@ -291,7 +291,7 @@ function make_seed()
 end
 
 function make_seed(n::Integer)
-    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
+    n = unsigned(n)
     seed = UInt32[]
     while true
         push!(seed, n & 0xffffffff)
