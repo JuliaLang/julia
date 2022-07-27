@@ -78,9 +78,14 @@ struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
     bool external_use;
+    bool llvm_only;
 
-    static constexpr OptimizationOptions defaults() {
-        return {true, false, false};
+    static constexpr OptimizationOptions defaults(
+        bool lower_intrinsics=true,
+        bool dump_native=false,
+        bool external_use=false,
+        bool llvm_only=false) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only};
     }
 };
 

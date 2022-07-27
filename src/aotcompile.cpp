@@ -562,7 +562,7 @@ void jl_dump_native_impl(void *native_code,
     addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
     addMachinePasses(&optimizer, jl_options.opt_level);
 #else
-    NewPM optimizer{std::move(TM), getOptLevel(jl_options.opt_level), {true, true, false}};
+    NewPM optimizer{std::move(TM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
 #endif
 
     Type *T_size;
@@ -959,45 +959,6 @@ static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire
 extern "C" JL_DLLEXPORT
 void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
-}
-
-// new pass manager plugin
-
-// NOTE: Instead of exporting all the constructors in passes.h we could
-// forward the callbacks to the respective passes. LLVM seems to prefer this,
-// and when we add the full pass builder having them directly will be helpful.
-static void registerCallbacks(PassBuilder &PB) {
-    PB.registerPipelineParsingCallback(
-        [](StringRef Name, FunctionPassManager &PM,
-           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
-#include "llvm-julia-passes.inc"
-#undef FUNCTION_PASS
-            return false;
-        });
-
-    PB.registerPipelineParsingCallback(
-        [](StringRef Name, ModulePassManager &PM,
-           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
-#include "llvm-julia-passes.inc"
-#undef MODULE_PASS
-            return false;
-        });
-
-    PB.registerPipelineParsingCallback(
-        [](StringRef Name, LoopPassManager &PM,
-           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
-#include "llvm-julia-passes.inc"
-#undef LOOP_PASS
-            return false;
-        });
-}
-
-extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
-llvmGetPassPluginInfo() {
-      return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
 }
 
 // --- native code info, and dump function to IR and ASM ---
