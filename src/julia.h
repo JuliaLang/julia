@@ -422,7 +422,7 @@ typedef struct _jl_code_instance_t {
     };
 #else
     uint32_t ipo_purity_bits;
-    uint32_t purity_bits;
+    _Atomic(uint32_t) purity_bits;
 #endif
     jl_value_t *argescapes; // escape information of call arguments
 

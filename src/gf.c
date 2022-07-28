@@ -424,7 +424,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     codeinst->ipo_purity_bits = ipo_effects;
-    codeinst->purity_bits = effects;
+    jl_atomic_store_relaxed(&codeinst->purity_bits, effects);
     codeinst->argescapes = argescapes;
     codeinst->relocatability = relocatability;
     return codeinst;
