@@ -337,7 +337,33 @@ struct NonIsBitsDimsUndef
     NonIsBitsDimsUndef() = new()
 end
 @test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
-@test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
+mutable struct BigRecursive
+    self::Union{Nothing,BigRecursive}
+end
+let
+    o = c = BigRecursive(nothing)
+    for i = 1:1000
+        c = c.self = BigRecursive(nothing)
+    end
+    @test !Core.Compiler.is_inlineable_constant(o)
+end
+@test Core.Compiler.is_inlineable_constant(Vector)
+@test Core.Compiler.is_inlineable_constant(Vector{Int})
+@test Core.Compiler.is_inlineable_constant(:abc)
+@test Core.Compiler.is_inlineable_constant("abc")
+
+@noinline return_const_string() = "abc"
+@noinline return_string(str::String) = str
+@noinline return_string(sym::Symbol) = String(sym)
+@test fully_eliminated(; retval="abc") do
+    return_const_string()
+end
+@test fully_eliminated(; retval="abc") do
+    return_string("abc")
+end
+@test fully_eliminated(; retval="abc") do
+    return_string(:abc)
+end
 
 # More nothrow modeling for apply_type
 f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
