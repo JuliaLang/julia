@@ -691,7 +691,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     write_uint32(s->s, codeinst->purity_bits);
     jl_serialize_value(s, (jl_value_t*)codeinst->def);
     if (write_ret_type) {
-        jl_serialize_value(s, codeinst->inferred);
+        jl_serialize_value(s, jl_atomic_load_relaxed(&codeinst->inferred));
         jl_serialize_value(s, codeinst->rettype_const);
         jl_serialize_value(s, codeinst->rettype);
         jl_serialize_value(s, codeinst->argescapes);
@@ -1904,8 +1904,10 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     codeinst->purity_bits = read_uint32(s->s);
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
-    codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
-    jl_gc_wb(codeinst, codeinst->inferred);
+    //Strictly speaking this atomic->not-atomic cast is not safe
+    jl_value_t *inferred = jl_deserialize_value(s, (jl_value_t*)&codeinst->inferred);
+    jl_atomic_store_relaxed(&codeinst->inferred, inferred);
+    jl_gc_wb(codeinst, inferred);
     codeinst->rettype_const = jl_deserialize_value(s, &codeinst->rettype_const);
     if (codeinst->rettype_const)
         jl_gc_wb(codeinst, codeinst->rettype_const);

@@ -326,7 +326,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     jl_value_t *ci = jl_rettype_inferred(mi, world, world);
     jl_code_instance_t *codeinst = (ci == jl_nothing ? NULL : (jl_code_instance_t*)ci);
     if (codeinst) {
-        src = (jl_code_info_t*)codeinst->inferred;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         if ((jl_value_t*)src == jl_nothing)
             src = NULL;
         else if (jl_is_method(mi->def.method))
@@ -352,8 +352,10 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else if (src && jl_is_code_info(src)) {
         if (!codeinst) {
             codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
-            if (src->inferred && !codeinst->inferred)
-                codeinst->inferred = jl_nothing;
+            if (src->inferred) {
+                jl_value_t *null = nullptr;
+                jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
+            }
         }
         _jl_compile_codeinst(codeinst, src, world, context);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)

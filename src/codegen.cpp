@@ -4839,13 +4839,15 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
     jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred(mi, ctx.world, ctx.world);
 
-    if (ci == NULL || (jl_value_t*)ci == jl_nothing || ci->inferred == NULL || ci->inferred == jl_nothing) {
+    if (ci == NULL || (jl_value_t*)ci == jl_nothing ||
+        jl_atomic_load_relaxed(&ci->inferred) == NULL ||
+        jl_atomic_load_relaxed(&ci->inferred) == jl_nothing) {
         JL_GC_POP();
         return std::make_pair((Function*)NULL, (Function*)NULL);
     }
     ++EmittedOpaqueClosureFunctions;
 
-    ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)ci->inferred);
+    ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)jl_atomic_load_relaxed(&ci->inferred));
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
     orc::ThreadSafeModule closure_m = jl_create_llvm_module(
@@ -8223,7 +8225,7 @@ jl_llvm_functions_t jl_emit_codeinst(
     JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
     if (!src) {
-        src = (jl_code_info_t*)codeinst->inferred;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_t *def = codeinst->def->def.method;
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
             src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
@@ -8257,33 +8259,34 @@ jl_llvm_functions_t jl_emit_codeinst(
         if (// don't alter `inferred` when the code is not directly being used
             params.world &&
             // don't change inferred state
-            codeinst->inferred) {
+            jl_atomic_load_relaxed(&codeinst->inferred)) {
             jl_method_t *def = codeinst->def->def.method;
             if (// keep code when keeping everything
                 !(JL_DELETE_NON_INLINEABLE) ||
                 // aggressively keep code when debugging level >= 2
                 jl_options.debug_level > 1) {
                 // update the stored code
-                if (codeinst->inferred != (jl_value_t*)src) {
+                if (jl_atomic_load_relaxed(&codeinst->inferred) != (jl_value_t*)src) {
                     if (jl_is_method(def)) {
                         src = (jl_code_info_t*)jl_compress_ir(def, src);
                         assert(jl_typeis(src, jl_array_uint8_type));
                         codeinst->relocatability = ((uint8_t*)jl_array_data(src))[jl_array_len(src)-1];
                     }
-                    codeinst->inferred = (jl_value_t*)src;
+                    jl_atomic_store_relaxed(&codeinst->inferred, (jl_value_t*)src);
                     jl_gc_wb(codeinst, src);
                 }
             }
             else if (// don't delete toplevel code
                      jl_is_method(def) &&
                      // and there is something to delete (test this before calling jl_ir_inlining_cost)
-                     codeinst->inferred != jl_nothing &&
+                     jl_atomic_load_relaxed(&codeinst->inferred) != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return_addr || (jl_ir_inlining_cost((jl_array_t*)codeinst->inferred) == UINT16_MAX)) &&
+                     (codeinst->invoke == jl_fptr_const_return_addr ||
+                        (jl_ir_inlining_cost((jl_array_t*)jl_atomic_load_relaxed(&codeinst->inferred)) == UINT16_MAX)) &&
                      // don't delete code when generating a precompile file
                      !(params.imaging || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
-                codeinst->inferred = jl_nothing;
+                jl_atomic_store_relaxed(&codeinst->inferred, jl_nothing);
             }
         }
     }
@@ -8336,7 +8339,7 @@ void jl_compile_workqueue(
                 // Reinfer the function. The JIT came along and removed the inferred
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
-                    codeinst->inferred && codeinst->inferred == jl_nothing) {
+                    jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src) {
                         orc::ThreadSafeModule result_m =
