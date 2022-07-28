@@ -155,18 +155,31 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
  2. Build Julia and its dependencies with pre-build dependencies.
 
-    1. Open a new [**MINGW64/32 shell**](https://www.msys2.org/docs/environments/#overview)
-        and clone the Julia sources
+    1. Open a new [**MINGW64/MINGW32 shell**](https://www.msys2.org/docs/environments/#overview).  
+        Currently we can't use both mingw32 and mingw64,
+        so if you want to build the x86_64 and i686 versions,
+        you'll need to build them in each environment separately.
+
+    2. and clone the Julia sources
         ```sh
         git clone https://github.com/JuliaLang/julia.git
         cd julia
         ```
 
-    2. Start the build
+    3. Start the build
         ```sh
         # Adjust the number of cores (4) to match your build environment.
         make -j 4
         ```
+
+    > Protip: build in dir
+    > ```sh
+    > make O=julia-mingw-w64 configure
+    > echo 'ifeq ($(BUILDROOT),$(JULIAHOME))
+    >         $(error "in-tree build disabled")
+    >       endif' >> Make.user
+    > make -C julia-mingw-w64
+    > ```
 
 
 ### Cross-compiling from Unix (Linux/Mac/WSL)
