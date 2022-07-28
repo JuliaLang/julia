@@ -2102,6 +2102,16 @@ let M = Module()
     @test rt == Tuple{Union{Nothing,Int},Any}
 end
 
+# make sure we never form nested `Conditional` (https://github.com/JuliaLang/julia/issues/46207)
+@test Base.return_types((Any,)) do a
+    c = isa(a, Integer)
+    42 === c ? :a : "b"
+end |> only === String
+@test Base.return_types((Any,)) do a
+    c = isa(a, Integer)
+    c === 42 ? :a : "b"
+end |> only === String
+
 @testset "conditional constraint propagation from non-`Conditional` object" begin
     @test Base.return_types((Bool,)) do b
         if b
