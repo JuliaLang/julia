@@ -2,7 +2,7 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!
+import Base: typesof, insert!, replace_ref_begin_end!
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -32,6 +32,9 @@ function recursive_dotcalls!(ex, args, i=1)
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
+    if Meta.isexpr(ex0, :ref)
+        ex0 = replace_ref_begin_end!(ex0)
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
