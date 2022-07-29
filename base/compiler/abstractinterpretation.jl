@@ -1430,20 +1430,26 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             if isa(aty, Const) && isa(b, SlotNumber)
                 if rt === Const(false)
                     aty = Union{}
+                    bty = widenconditional(bty)
                 elseif rt === Const(true)
                     bty = Union{}
                 elseif bty isa Type && isdefined(typeof(aty.val), :instance) # can only widen a if it is a singleton
                     bty = typesubtract(bty, typeof(aty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+                else
+                    bty = widenconditional(bty)
                 end
                 return Conditional(b, aty, bty)
             end
             if isa(bty, Const) && isa(a, SlotNumber)
                 if rt === Const(false)
                     bty = Union{}
+                    aty = widenconditional(aty)
                 elseif rt === Const(true)
                     aty = Union{}
                 elseif aty isa Type && isdefined(typeof(bty.val), :instance) # same for b
                     aty = typesubtract(aty, typeof(bty.val), InferenceParams(interp).MAX_UNION_SPLITTING)
+                else
+                    aty = widenconditional(aty)
                 end
                 return Conditional(a, bty, aty)
             end
