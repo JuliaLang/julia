@@ -1,26 +1,8 @@
 #!/usr/bin/env julia
 
-const patterns = split("""
-    *.1
-    *.c
-    *.cpp
-    *.h
-    *.inc
-    *.jl
-    *.lsp
-    *.make
-    *.md
-    *.mk
-    *.rst
-    *.scm
-    *.sh
-    *.yml
-    *Makefile
-""")
-
 const errors = Set{Tuple{String,Int,String}}()
 
-for path in eachline(`git ls-files -- $patterns`)
+for path in eachline(stdin)
     lineno = 0
     non_blank = 0
 

@@ -104,11 +104,11 @@ docs: julia-sysimg-$(JULIA_BUILD_MODE)
 docs-revise:
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no' revise=true
 
+WS_CHECK_PATTERNS=*.1 *.c *.cpp *.h *.inc *.jl *.lsp *.make *.md *.mk *.rst *.scm *.sh *.yml *Makefile
+
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@# Append the directory containing the julia we just built to the end of `PATH`,
-	@# to give us the best chance of being able to run this check.
-	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" $(JULIAHOME)/contrib/check-whitespace.jl
+	@git ls-files -- $(WS_CHECK_PATTERNS) | $(call spawn,$(JULIA_EXECUTABLE)) $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
