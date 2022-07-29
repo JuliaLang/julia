@@ -103,6 +103,7 @@ which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
 `InterruptException` in the [`try`](@ref) block.
+Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
