@@ -143,7 +143,7 @@ GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
     auto GV = new GlobalVariable(*M, T, false, GlobalVariable::WeakODRLinkage,
                                  Constant::getNullValue(T), name + ".real");
     GV->setVisibility(GlobalVariable::HiddenVisibility);
-    GV->setDSOLocal(true);
+    // GV->setDSOLocal(true);
     add_comdat(GlobalAlias::create(T, 0, GlobalVariable::WeakODRLinkage,
                                    name, GV, M));
 #else

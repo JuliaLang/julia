@@ -421,14 +421,12 @@ static void jl_load_sysimg_so(void)
         jl_dlsym(jl_sysimg_handle, "jl_sysimg_tls_offset", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 
-        sysimage_base = 0;
 #ifdef _OS_WINDOWS_
-        sysimage_base = (intptr_t)jl_sysimg_handle;
+        sysimage_base = 0;
 #else
         Dl_info dlinfo;
         if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
             sysimage_base = (intptr_t)dlinfo.dli_fbase;
-            // sysimg_fname = dlinfo.dli_fname;
         }
 #endif
     }
@@ -441,8 +439,8 @@ static void jl_load_sysimg_so(void)
     jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
     jl_restore_system_image_data(sysimg_data, *plen);
 
-    if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && sysimg_fname && sysimage_base) {
-        jl_init_sysimage_chaining((void*)sysimage_base, sysimg_fname);
+    if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && sysimg_fname) {
+        jl_init_sysimage_chaining((void*)sysimage_base, sysimg_fname, jl_sysimg_handle);
     }
 }
 

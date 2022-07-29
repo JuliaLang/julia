@@ -775,7 +775,7 @@ void jl_init_thread_heap(jl_ptls_t ptls);
 void jl_init_int32_int64_cache(void);
 JL_DLLEXPORT void jl_init_options(void);
 
-void jl_init_sysimage_chaining(void *sysimg_base, const char *fname);
+void jl_init_sysimage_chaining(void *sysimg_base, const char *fname, void * sysimage_ptr);
 void JL_DLLEXPORT jl_foreach_sysimg_gvar_slot(void (*fptr)(void *, void *, jl_value_t **), void *ctx1, void *ctx2);
 
 void jl_teardown_codegen(void);

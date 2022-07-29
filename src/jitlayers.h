@@ -381,7 +381,7 @@ public:
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst, bool create = true);
 
     StringRef getGlobalAtAddress(uint64_t Addr);
-    void addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile);
+    void addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile, void * sysimage_ptr);
 
     auto getContext() {
         return *ContextPool;

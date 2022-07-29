@@ -55,7 +55,7 @@ using namespace llvm;
 #define DEBUG_TYPE "jitlayers"
 
 extern "C" JL_DLLEXPORT
-void jl_init_sysimage_chaining_impl(void *sysimg_base, const char *fname)
+void jl_init_sysimage_chaining_impl(void *sysimg_base, const char *fname, void * sysimage_ptr)
 {
     auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
     if (!errorobj) {
@@ -63,7 +63,7 @@ void jl_init_sysimage_chaining_impl(void *sysimg_base, const char *fname)
     }
 
     auto *theobj = errorobj->getBinary();
-    jl_ExecutionEngine->addSysimgSymbolsByName(sysimg_base, theobj);
+    jl_ExecutionEngine->addSysimgSymbolsByName(sysimg_base, theobj, sysimage_ptr);
 }
 
 // Snooping on which functions are being compiled, and how long it takes
@@ -1248,18 +1248,32 @@ StringRef JuliaOJIT::getGlobalAtAddress(uint64_t Addr)
     auto &fname = ReverseLocalSymbolTable[(void*)(uintptr_t)Addr];
     assert(!fname.empty());
     if(fname.empty()){
-        for(auto & gv : ReverseLocalSymbolTable){
-            jl_safe_printf("%p", gv.first);
-            jl_safe_printf(" %s\n", gv.second.c_str());
-        }
         jl_safe_printf("Name is empty %d\n", fname.empty());
         jl_errorf("Name %s", fname.c_str());
     }
     return fname;
 }
 
-void JuliaOJIT::addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile)
+void JuliaOJIT::addSysimgSymbolsByName(void *sysimg_base, llvm::object::ObjectFile *ofile,  void * sysimage_ptr)
 {
+    if (!sysimg_base){
+        // On Windows, it seems impossible to determine the `sysimg_base` by `dladdr`.
+        // Thus, the offset is determined for `jl_sysimg_fvars_offsets` symbol that must exist.
+        for (auto symbol : ofile->symbols()) {
+            if (symbol.getType().get() != llvm::object::SymbolRef::ST_Function &&
+                symbol.getType().get() != llvm::object::SymbolRef::ST_Data) {
+                continue;
+            }
+            if (symbol.getFlags().get() & llvm::object::SymbolRef::SF_Undefined) {
+                continue;
+            }
+            if (symbol.getName().get().str() == "jl_sysimg_fvars_offsets"){
+                void *Addr2;
+                jl_dlsym(sysimage_ptr, symbol.getName().get().str().c_str(), (void **)&Addr2, 1);
+                sysimg_base = (void*)((char*)Addr2 - (char*)symbol.getAddress().get());
+            }
+        }
+    }
     for (auto symbol : ofile->symbols()) {
         if (symbol.getType().get() != llvm::object::SymbolRef::ST_Function &&
             symbol.getType().get() != llvm::object::SymbolRef::ST_Data) {
