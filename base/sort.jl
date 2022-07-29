@@ -173,16 +173,16 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
-	len = hi - lo
+    len = hi - lo
     @inbounds while len != 0
-		half_len = len >>> 0x01
+        half_len = len >>> 0x01
         m = lo + half_len
         if lt(o, v[m], x)
             lo = m + 1
-			len -= half_len + 1
+            len -= half_len + 1
         else
             hi = m
-			len = half_len
+            len = half_len
         end
     end
     return lo
