@@ -402,6 +402,23 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
+"""
+    basetype(x::Type)
+Strips the type parameter from given type x. 
+# Examples
+```jldoctest
+julia> basetype(Array{Int64, 3})
+Array
+
+julia> basetype(Vector{Vector{ComplexF32}})
+Array
+
+julia> basetype(Int)
+Int64
+```
+"""
+basetype(::Type{T}) where T = T.name.wrapper
+
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
