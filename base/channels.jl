@@ -393,6 +393,12 @@ end;
 
 julia> fetch(c)
 1
+
+julia> collect(c)  # item is not removed
+3-element Vector{Any}:
+ 1
+ 2
+ 3
 ```
 
 Unbuffered channel:
