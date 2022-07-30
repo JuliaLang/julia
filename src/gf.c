@@ -409,7 +409,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     codeinst->min_world = min_world;
     codeinst->max_world = max_world;
     codeinst->rettype = rettype;
-    jl_atomic_store_relaxed(&codeinst->inferred, inferred);
+    jl_atomic_store_release(&codeinst->inferred, inferred);
     //codeinst->edges = NULL;
     if ((const_flags & 2) == 0)
         inferred_const = NULL;

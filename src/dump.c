@@ -1904,9 +1904,8 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     jl_atomic_store_relaxed(&codeinst->purity_bits, read_uint32(s->s));
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
-    //Strictly speaking this atomic->not-atomic cast is not safe
-    jl_value_t *inferred = jl_deserialize_value(s, (jl_value_t**)&codeinst->inferred);
-    jl_atomic_store_relaxed(&codeinst->inferred, inferred);
+    jl_value_t *inferred = jl_deserialize_value(s, NULL);
+    jl_atomic_store_release(&codeinst->inferred, inferred);
     jl_gc_wb(codeinst, inferred);
     codeinst->rettype_const = jl_deserialize_value(s, &codeinst->rettype_const);
     if (codeinst->rettype_const)
