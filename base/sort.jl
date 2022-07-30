@@ -995,6 +995,8 @@ function sort(v; kws...)
     IteratorSize(v) == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
     sort!(copymutable(v); kws...)
 end
+sort(::AbstractString; kws...) =
+    throw(ArgumentError("sort(x::AbstractString) is ambiguous. Use sort!(collect(x)) or String(sort!(collect(x))) instead."))
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
