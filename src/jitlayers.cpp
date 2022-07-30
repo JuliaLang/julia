@@ -540,6 +540,7 @@ struct JITObjectInfo {
 };
 
 class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
+    std::mutex PluginMutex;
     std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
     // Resources from distinct MaterializationResponsibilitys can get merged
     // after emission, so we can have multiple debug objects per resource key.
@@ -560,33 +561,40 @@ public:
         auto NewObj =
             cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
-        assert(PendingObjs.count(&MR) == 0);
-        PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(
-            new JITObjectInfo{std::move(NewBuffer), std::move(NewObj), {}});
+        {
+            std::lock_guard<std::mutex> lock(PluginMutex);
+            assert(PendingObjs.count(&MR) == 0);
+            PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(
+                new JITObjectInfo{std::move(NewBuffer), std::move(NewObj), {}});
+        }
     }
 
     Error notifyEmitted(MaterializationResponsibility &MR) override
     {
-        auto It = PendingObjs.find(&MR);
-        if (It == PendingObjs.end())
-            return Error::success();
+        {
+            std::lock_guard<std::mutex> lock(PluginMutex);
+            auto It = PendingObjs.find(&MR);
+            if (It == PendingObjs.end())
+                return Error::success();
 
-        auto NewInfo = PendingObjs[&MR].get();
-        auto getLoadAddress = [NewInfo](const StringRef &Name) -> uint64_t {
-            auto result = NewInfo->SectionLoadAddresses.find(Name);
-            if (result == NewInfo->SectionLoadAddresses.end()) {
-                LLVM_DEBUG({
-                    dbgs() << "JLDebuginfoPlugin: No load address found for section '"
-                           << Name << "'\n";
-                });
-                return 0;
-            }
-            return result->second;
-        };
+            auto NewInfo = PendingObjs[&MR].get();
+            auto getLoadAddress = [NewInfo](const StringRef &Name) -> uint64_t {
+                auto result = NewInfo->SectionLoadAddresses.find(Name);
+                if (result == NewInfo->SectionLoadAddresses.end()) {
+                    LLVM_DEBUG({
+                        dbgs() << "JLDebuginfoPlugin: No load address found for section '"
+                            << Name << "'\n";
+                    });
+                    return 0;
+                }
+                return result->second;
+            };
 
-        jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+            jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+        }
 
         cantFail(MR.withResourceKeyDo([&](ResourceKey K) {
+            std::lock_guard<std::mutex> lock(PluginMutex);
             RegisteredObjs[K].push_back(std::move(PendingObjs[&MR]));
             PendingObjs.erase(&MR);
         }));
@@ -596,12 +604,14 @@ public:
 
     Error notifyFailed(MaterializationResponsibility &MR) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         PendingObjs.erase(&MR);
         return Error::success();
     }
 
     Error notifyRemovingResources(ResourceKey K) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         RegisteredObjs.erase(K);
         // TODO: If we ever unload code, need to notify debuginfo registry.
         return Error::success();
@@ -609,6 +619,7 @@ public:
 
     void notifyTransferringResources(ResourceKey DstKey, ResourceKey SrcKey) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         auto SrcIt = RegisteredObjs.find(SrcKey);
         if (SrcIt != RegisteredObjs.end()) {
             for (std::unique_ptr<JITObjectInfo> &Info : SrcIt->second)
@@ -620,13 +631,16 @@ public:
     void modifyPassConfig(MaterializationResponsibility &MR, jitlink::LinkGraph &,
                           jitlink::PassConfiguration &PassConfig) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         auto It = PendingObjs.find(&MR);
         if (It == PendingObjs.end())
             return;
 
         JITObjectInfo &Info = *It->second;
-        PassConfig.PostAllocationPasses.push_back([&Info](jitlink::LinkGraph &G) -> Error {
+        PassConfig.PostAllocationPasses.push_back([&Info, this](jitlink::LinkGraph &G) -> Error {
+            std::lock_guard<std::mutex> lock(PluginMutex);
             for (const jitlink::Section &Sec : G.sections()) {
+#ifdef _OS_DARWIN_
                 // Canonical JITLink section names have the segment name included, e.g.
                 // "__TEXT,__text" or "__DWARF,__debug_str". There are some special internal
                 // sections without a comma separator, which we can just ignore.
@@ -639,6 +653,9 @@ public:
                     continue;
                 }
                 auto SecName = Sec.getName().substr(SepPos + 1);
+#else
+                auto SecName = Sec.getName();
+#endif
                 // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
 #if JL_LLVM_VERSION >= 140000
                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
@@ -1051,7 +1068,7 @@ JuliaOJIT::JuliaOJIT()
     OptSelLayer(Pipelines)
 {
 #ifdef JL_USE_JITLINK
-# if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+# if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
     // also used with RTDyld to inform both our and the libc copy of libunwind.
     auto ehRegistrar = std::make_unique<JLEHFrameRegistrar>();
