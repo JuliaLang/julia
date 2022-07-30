@@ -388,7 +388,7 @@ Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 Buffered channel:
 ```jldoctest
 julia> c = Channel(3) do ch
-           foreach(i -> put!(ch, i), 1:4)
+           foreach(i -> put!(ch, i), 1:3)
        end;
 
 julia> fetch(c)
@@ -399,23 +399,6 @@ julia> collect(c)  # item is not removed
  1
  2
  3
-```
-
-Unbuffered channel:
-```jldoctest
-julia> c = Channel(0) do ch
-           foreach(i -> put!(ch, i), 1:4)
-       end;
-
-julia> fetch(c)
-ERROR: `fetch` is not supported on an unbuffered Channel.
-Stacktrace:
- [1] fetch_unbuffered(c::Channel{Any})
-   @ Base ./channels.jl:372
- [2] fetch(c::Channel{Any})
-   @ Base ./channels.jl:359
- [3] top-level scope
-   @ REPL[61]:1
 ```
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
