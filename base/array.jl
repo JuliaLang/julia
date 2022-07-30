@@ -2509,7 +2509,7 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
     return out
 end
 
-function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:Real})
+function findall(pred::Fix2{typeof(in),<:Union{AbstractArray{<:Real},Real}}, x::AbstractArray{<:Real})
     if issorted(x) && issorted(pred.x)
         return _sortedfindin(x, pred.x)
     else
@@ -2518,8 +2518,7 @@ function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-findall(pred::Fix2{typeof(in)}, x::AbstractArray) = _findin(x, pred.x)
-findall(pred::Fix2{typeof(in)}, x::Tuple) = _findin(x, pred.x)
+findall(pred::Fix2{typeof(in)}, x::Union{AbstractArray, Tuple}) = _findin(x, pred.x)
 
 # Copying subregions
 function indcopy(sz::Dims, I::Vector)
