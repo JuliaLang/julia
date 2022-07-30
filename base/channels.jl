@@ -393,7 +393,7 @@ end;
 
 julia> fetch(c)
 1
-````
+```
 
 Unbuffered channel:
 ```jldoctest
@@ -410,7 +410,7 @@ Stacktrace:
    @ Base ./channels.jl:359
  [3] top-level scope
    @ REPL[61]:1
-````
+```
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
 function fetch_buffered(c::Channel)
@@ -565,7 +565,7 @@ false
 julia> put!(c, 1)
 I'm ready!
 1
-````
+```
 """
 function wait(c::Channel)
     isready(c) && return
