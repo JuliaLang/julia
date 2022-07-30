@@ -791,7 +791,7 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
 end
 
 function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
-    if name === :consistent || name === :inaccessiblememonly
+    if name === :consistent || name === :effect_free || name === :inaccessiblememonly
         prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
                  getfield(effects, name) === ALWAYS_FALSE ? '!' : '?'
     else
@@ -801,7 +801,7 @@ function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
 end
 
 function effectbits_color(effects::Effects, name::Symbol)
-    if name === :consistent || name === :inaccessiblememonly
+    if name === :consistent || name === :effect_free || name === :inaccessiblememonly
         color = getfield(effects, name) === ALWAYS_TRUE ? :green :
                 getfield(effects, name) === ALWAYS_FALSE ? :red : :yellow
     else
