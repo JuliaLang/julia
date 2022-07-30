@@ -463,7 +463,6 @@ julia> schedule(task);
 julia> take!(c)
 1
 ```
-```
 """
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
