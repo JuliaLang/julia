@@ -2772,8 +2772,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
     combine_thread_gc_counts(&gc_num);
 
-    jl_gc_markqueue_t *mq = &ptls->mark_queue;
-
     uint64_t gc_start_time = jl_hrtime();
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
 
@@ -2794,10 +2792,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_queue_remset(ptls2, ptls2);
     }
     // 3. walk roots
-    gc_mark_roots(mq);
+    gc_mark_roots(&ptls->mark_queue);
     if (gc_cblist_root_scanner) {
-        gc_invoke_callbacks(jl_gc_cb_root_scanner_t,
-            gc_cblist_root_scanner, (collection));
+        gc_invoke_callbacks(jl_gc_cb_root_scanner_t, gc_cblist_root_scanner,
+                            (collection));
     }
     gc_mark_loop_master(ptls);
     // Other workers may still be marking, so put
