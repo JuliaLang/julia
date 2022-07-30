@@ -388,8 +388,8 @@ Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 Buffered channel:
 ```jldoctest
 julia> c = Channel(3) do ch
-    foreach(i -> put!(ch, i), 1:4)
-end;
+           foreach(i -> put!(ch, i), 1:4)
+       end;
 
 julia> fetch(c)
 1
@@ -403,9 +403,9 @@ julia> collect(c)  # item is not removed
 
 Unbuffered channel:
 ```jldoctest
-julia> c = Channel() do ch
-    foreach(i -> put!(ch, i), 1:4)
-end;
+julia> c = Channel(0) do ch
+           foreach(i -> put!(ch, i), 1:4)
+       end;
 
 julia> fetch(c)
 ERROR: `fetch` is not supported on an unbuffered Channel.
@@ -556,9 +556,9 @@ julia> isready(c)
 false
 
 julia> function announce(c)
-    wait(c)
-    println("I'm ready!")
-end;
+            wait(c)
+            println("I'm ready!")
+        end;
 
 julia> task = Task(() -> announce(c));
 
