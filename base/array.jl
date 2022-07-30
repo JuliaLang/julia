@@ -2510,7 +2510,7 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
 end
 
 function findall(pred::Fix2{typeof(in),<:Union{Array{<:Real},Real}}, x::Array{<:Real})
-    if issorted(x, Sort.Forward) && issorted(pred.x, Sort.Forward)
+    if issorted(x) && issorted(pred.x)
         return _sortedfindin(x, pred.x)
     else
         return _findin(x, pred.x)
