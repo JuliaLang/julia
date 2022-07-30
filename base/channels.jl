@@ -538,21 +538,17 @@ julia> c = Channel(1);
 julia> isready(c)
 false
 
-julia> function announce(c)
-            wait(c)
-            println("I'm ready!")
-        end;
-
-julia> task = Task(() -> announce(c));
+julia> task = Task(() -> wait(c));
 
 julia> schedule(task);
 
 julia> istaskdone(task)  # task is blocked because channel is not ready
 false
 
-julia> put!(c, 1)
-I'm ready!
-1
+julia> put!(c, 1);
+
+julia> istaskdone(task)  # task is now unblocked
+true
 ```
 """
 function wait(c::Channel)
