@@ -1151,11 +1151,13 @@ end
 
     @test sqrt(2) == 1.4142135623730951
 end
+Base.@irrational i46051 4863.185427757 1548big(pi)
 @testset "Irrational printing" begin
     @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
     @test sprint(show, "text/plain", π, context=:compact => true) == "π"
     @test sprint(show, π) == "π"
-
+    # issue #46051
+    @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
@@ -2671,6 +2673,15 @@ end
     @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
     @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
+end
+
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+    for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
+        for x in (Inf, -Inf, NaN, -NaN)
+            @test isnan(rem2pi(T(x), r))
+            @test rem2pi(T(x), r) isa T
+        end
+    end
 end
 
 import Base.^

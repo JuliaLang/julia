@@ -1458,14 +1458,10 @@ for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbr
     for T in (Float32, Float64)
         f = getfield(@__MODULE__, fn)
         eff = Base.infer_effects(f, (T,))
-        if Core.Compiler.is_foldable(eff)
-            @test true
-        else
-            # XXX only print bad effects – especially `[sin|cos|tan](::Float32)` are analyzed
-            # as non-foldable sometimes but non-deterministically somehow, we need to dig
-            # into what's leading to the bad analysis with Cthulhu on each platform
-            @warn "bad effects found for $f(::$T)" eff
-        end
+        @test Core.Compiler.is_foldable(eff)
     end
 end
-@test Core.Compiler.is_foldable(Base.infer_effects(^, (Float32,Int)))
+for T in (Float32, Float64)
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+end

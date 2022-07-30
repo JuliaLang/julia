@@ -155,8 +155,8 @@ end
 
         @testset "Scaling with rdiv! and ldiv!" begin
             @test rdiv!(copy(a), 5.) == a/5
-            @test ldiv!(5., copy(a)) == 5\a
-            @test ldiv!(zero(a), 5., copy(a)) == 5\a
+            @test ldiv!(5., copy(a)) == a/5
+            @test ldiv!(zero(a), 5., copy(a)) == a/5
         end
 
         @testset "Scaling with 3-argument mul!" begin
@@ -441,6 +441,7 @@ Base.:-(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k - b.k)
 Base.:*(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k * b.k)
 Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
+Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
 
 Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
@@ -448,6 +449,10 @@ Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 Base.conj(a::ModInt{n}) where {n} = a
 LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
+Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
+Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
+LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
+LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
 
 @testset "Issue 22042" begin
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]

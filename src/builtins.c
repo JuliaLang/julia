@@ -893,9 +893,13 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
         if (idx >= jl_datatype_nfields(st))
             jl_bounds_error(v, arg);
     }
-    else {
-        JL_TYPECHKS(name, symbol, arg);
+    else if (jl_is_symbol(arg)) {
         idx = jl_field_index(st, (jl_sym_t*)arg, 1);
+    }
+    else {
+        jl_value_t *ts[2] = {(jl_value_t*)jl_long_type, (jl_value_t*)jl_symbol_type};
+        jl_value_t *t = jl_type_union(ts, 2);
+        jl_type_error("getfield", t, arg);
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
@@ -1602,6 +1606,7 @@ JL_CALLABLE(jl_f_donotdelete)
 
 JL_CALLABLE(jl_f_finalizer)
 {
+    // NOTE the compiler may temporarily insert additional argument for the later inlining pass
     JL_NARGS(finalizer, 2, 4);
     jl_task_t *ct = jl_current_task;
     jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);

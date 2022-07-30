@@ -322,9 +322,8 @@ end
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
-    if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
-        throw(BoundsError())
-    end
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
     return dest
 end
@@ -612,7 +611,6 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 ## Conversions ##
 
 convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
-convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 

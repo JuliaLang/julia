@@ -353,9 +353,11 @@ macro timev(msg, ex)
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
+        cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
+            cumulative_compile_timing(false);
             compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
         local diff = GC_Diff(gc_num(), stats)

@@ -234,19 +234,19 @@ typedef struct _jl_line_info_node_t {
     intptr_t inlined_at;
 } jl_line_info_node_t;
 
-// the following mirrors `struct EffectsOverride` in `base/compiler/types.jl`
+// the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
-        uint8_t ipo_consistent  : 1;
-        uint8_t ipo_effect_free : 1;
-        uint8_t ipo_nothrow     : 1;
-        uint8_t ipo_terminates  : 1;
+        uint8_t ipo_consistent          : 1;
+        uint8_t ipo_effect_free         : 1;
+        uint8_t ipo_nothrow             : 1;
+        uint8_t ipo_terminates_globally : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
-        uint8_t ipo_terminates_locally : 1;
-        uint8_t ipo_notaskstate : 1;
+        uint8_t ipo_terminates_locally  : 1;
+        uint8_t ipo_notaskstate         : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -279,7 +279,7 @@ typedef struct _jl_code_info_t {
     size_t max_world;
     // various boolean properties:
     uint8_t inferred;
-    uint8_t inlineable;
+    uint16_t inlining_cost;
     uint8_t propagate_inbounds;
     uint8_t pure;
     // uint8 settings
@@ -397,25 +397,27 @@ typedef struct _jl_code_instance_t {
 
     // purity results
 #ifdef JL_USE_ANON_UNIONS_FOR_PURITY_FLAGS
-    // see also encode_effects() and decode_effects() in `base/compiler/types.jl`,
+    // see also encode_effects() and decode_effects() in `base/compiler/effects.jl`,
     union {
         uint32_t ipo_purity_bits;
         struct {
-            uint8_t ipo_consistent:2;
-            uint8_t ipo_effect_free:2;
-            uint8_t ipo_nothrow:2;
-            uint8_t ipo_terminates:2;
-            uint8_t ipo_nonoverlayed:1;
+            uint8_t ipo_consistent   : 2;
+            uint8_t ipo_effect_free  : 2;
+            uint8_t ipo_nothrow      : 2;
+            uint8_t ipo_terminates   : 2;
+            uint8_t ipo_nonoverlayed : 1;
+            uint8_t ipo_notaskstate  : 2;
         } ipo_purity_flags;
     };
     union {
         uint32_t purity_bits;
         struct {
-            uint8_t consistent:2;
-            uint8_t effect_free:2;
-            uint8_t nothrow:2;
-            uint8_t terminates:2;
-            uint8_t nonoverlayed:1;
+            uint8_t consistent   : 2;
+            uint8_t effect_free  : 2;
+            uint8_t nothrow      : 2;
+            uint8_t terminates   : 2;
+            uint8_t nonoverlayed : 1;
+            uint8_t notaskstate  : 2;
         } purity_flags;
     };
 #else
@@ -1811,8 +1813,8 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_array_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_array_t *data) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint8_t jl_ir_flag_inlineable(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_pure(jl_array_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_array_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
