@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-extern LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo);
+extern LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int global);
 
 // Instead of using ntdll!_except_handler4, we call directly to our UnhandledExceptionFilter.
 // This seems to work better, since it's unclear if we have made a valid frame
@@ -25,7 +25,7 @@ JL_DLLEXPORT EXCEPTION_DISPOSITION NTAPI __julia_personality(
     ExceptionInfo.ContextRecord = ContextRecord;
 
     EXCEPTION_DISPOSITION rval;
-    switch (jl_exception_handler(&ExceptionInfo)) {
+    switch (jl_exception_handler(&ExceptionInfo, 0)) {
         case EXCEPTION_EXECUTE_HANDLER:
             rval = ExceptionExecuteHandler;
             break;

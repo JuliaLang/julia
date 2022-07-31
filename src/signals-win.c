@@ -224,7 +224,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
-LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int global)
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -261,6 +261,9 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                     jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
+        }
+        if (!global) {
+            return EXCEPTION_CONTINUE_SEARCH;
         }
         if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
             jl_safe_printf("\n");
@@ -315,13 +318,14 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
         jl_critical_error(0, ExceptionInfo->ContextRecord, ct);
-        static int recursion = 0;
-        if (recursion++)
-            exit(1);
-        else
-            jl_exit(1);
+        return EXCEPTION_CONTINUE_SEARCH;
     }
     return EXCEPTION_CONTINUE_SEARCH;
+}
+
+LONG WINAPI jl_global_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    return jl_exception_handler(ExceptionInfo, 1);
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
@@ -465,7 +469,7 @@ void jl_install_default_signal_handlers(void)
     if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGABRT");
     }
-    SetUnhandledExceptionFilter(jl_exception_handler);
+    SetUnhandledExceptionFilter(jl_global_exception_handler);
 }
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
