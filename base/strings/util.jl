@@ -543,6 +543,15 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
 end
 
+# Specialization for partition(s,n) to return a SubString
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+
+function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
+    state > ncodeunits(itr.c) && return nothing
+    r = min(nextind(itr.c, state, itr.n - 1), lastindex(itr.c))
+    return SubString(itr.c, state, r), nextind(itr.c, r)
+end
+
 eachsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =
     SplitIterator(str, splitter, limit, keepempty)
 
