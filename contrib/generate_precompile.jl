@@ -19,12 +19,6 @@ CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
 
-task = current_task()
-task.rngState0 = 0x33680cab0d0d3ae2
-task.rngState1 = 0x13d8eff5fab25661
-task.rngState2 = 0x631fbafa04b7fcf5
-task.rngState3 = 0xa4239a7dbd0a1a97
-
 hardcoded_precompile_statements = """
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
@@ -378,9 +372,9 @@ function generate_precompile_statements()
         end
     end
 
-    # Execute the collected precompile statements
+    # Execute the precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort!(collect(statements))
+    include_time = @elapsed for statement in statements
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
         occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
