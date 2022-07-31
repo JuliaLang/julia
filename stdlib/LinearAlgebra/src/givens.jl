@@ -59,12 +59,9 @@ AbstractRotation{T}(R::Rotation) where {T} = Rotation{T}(R)
 
 adjoint(G::Givens) = Givens(G.i1, G.i2, G.c', -G.s)
 adjoint(R::Rotation) = AdjointRotation(R)
-# function Base.copy(aG::Adjoint{<:Any,<:Givens})
-#     G = aG.parent
-#     return Givens(G.i1, G.i2, conj(G.c), -G.s)
-# end
+
 Base.copy(aR::AdjointRotation{T,Rotation{T}}) where {T} =
-    Rotation{T}(([r' for r in Iterators.reverse(aR.R.rotations)]))
+    Rotation{T}([r' for r in Iterators.reverse(aR.R.rotations)])
 
 floatmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 floatmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
