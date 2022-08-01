@@ -229,13 +229,14 @@ end
     for pivot in (ColumnNorm(), NoPivot()), A in (rand(5, 3), rand(5, 5), rand(3, 5))
         Q = qr(A, pivot).Q
         m = size(A, 1)
-        @test Q*Q ≈ (Q*I) * (Q*I)
+        C = Matrix{Float64}(undef, (m, m))
+        @test Q*Q ≈ (Q*I) * (Q*I) ≈ mul!(C, Q, Q)
         @test size(Q*Q) == (m, m)
-        @test Q'Q ≈ (Q'*I) * (Q*I)
+        @test Q'Q ≈ (Q'*I) * (Q*I) ≈ mul!(C, Q', Q)
         @test size(Q'Q) == (m, m)
-        @test Q*Q' ≈ (Q*I) * (Q'*I)
+        @test Q*Q' ≈ (Q*I) * (Q'*I) ≈ mul!(C, Q, Q')
         @test size(Q*Q') == (m, m)
-        @test Q'Q' ≈ (Q'*I) * (Q'*I)
+        @test Q'Q' ≈ (Q'*I) * (Q'*I) ≈ mul!(C, Q', Q')
         @test size(Q'Q') == (m, m)
     end
 end
