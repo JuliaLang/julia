@@ -226,7 +226,6 @@ end
 end
 
 @testset "Multiplication of Qs" begin
-    A = rand()
     for pivot in (ColumnNorm(), NoPivot()), A in (rand(5, 3), rand(5, 5), rand(3, 5))
         Q = qr(A, pivot).Q
         m = size(A, 1)
