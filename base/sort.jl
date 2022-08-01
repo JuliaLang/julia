@@ -863,14 +863,15 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
         u[i] -= u_min
     end
 
+    len = lenm1 + 1
     if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned buffer
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, t))
         uint_unmap!(v, u2, lo, hi, o, u_min)
-    elseif t !== nothing && (applicable(resize!, t) || length(t) >= hi-lo+1) # Viable buffer
-        length(t) >= hi-lo+1 || resize!(t, hi-lo+1)
+    elseif t !== nothing && (applicable(resize!, t, len) || length(t) >= len) # Viable buffer
+        length(t) >= len || resize!(t, len)
         t1 = axes(t, 1) isa OneTo ? t : view(t, firstindex(t):lastindex(t))
-        u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, reinterpret(U, t1))
-        uint_unmap!(view(v, lo:hi), u2, 1, hi-lo+1, o, u_min)
+        u2 = radix_sort!(view(u, lo:hi), 1, len, bits, reinterpret(U, t1))
+        uint_unmap!(view(v, lo:hi), u2, 1, len, o, u_min)
     else # No viable buffer
         u2 = radix_sort!(u, lo, hi, bits, similar(u))
         uint_unmap!(v, u2, lo, hi, o, u_min)

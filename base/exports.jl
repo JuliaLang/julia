@@ -660,7 +660,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -794,6 +793,9 @@ export
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -1048,5 +1050,4 @@ export
     @goto,
     @view,
     @views,
-    @static,
-    @invoke
+    @static

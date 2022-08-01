@@ -790,35 +790,39 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
     nothing
 end
 
-tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
-tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :yellow
-tristate_repr(t::TriState) =
-    t === ALWAYS_TRUE ? "ALWAYS_TRUE" :
-    t === ALWAYS_FALSE ? "ALWAYS_FALSE" :
-    t === TRISTATE_UNKNOWN ? "TRISTATE_UNKNOWN" : nothing
-
-function Base.show(io::IO, e::Core.Compiler.Effects)
-    print(io, "(")
-    printstyled(io, string(tristate_letter(e.consistent), 'c'); color=tristate_color(e.consistent))
-    print(io, ',')
-    printstyled(io, string(tristate_letter(e.effect_free), 'e'); color=tristate_color(e.effect_free))
-    print(io, ',')
-    printstyled(io, string(tristate_letter(e.nothrow), 'n'); color=tristate_color(e.nothrow))
-    print(io, ',')
-    printstyled(io, string(tristate_letter(e.terminates), 't'); color=tristate_color(e.terminates))
-    print(io, ',')
-    printstyled(io, string(tristate_letter(e.notaskstate), 's'); color=tristate_color(e.notaskstate))
-    print(io, ')')
-    e.nonoverlayed || printstyled(io, '′'; color=:red)
+function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
+    if name === :consistent
+        prefix = effects.consistent === ALWAYS_TRUE ? '+' :
+                 effects.consistent === ALWAYS_FALSE ? '!' : '?'
+    else
+        prefix = getfield(effects, name) ? '+' : '!'
+    end
+    return string(prefix, suffix)
 end
 
-function Base.show(io::IO, t::TriState)
-    s = tristate_repr(t)
-    if s !== nothing
-        printstyled(io, s; color = tristate_color(t))
-    else # unknown state, redirect to the fallback printing
-        @invoke show(io::IO, t::Any)
+function effectbits_color(effects::Effects, name::Symbol)
+    if name === :consistent
+        color = effects.consistent === ALWAYS_TRUE ? :green :
+                 effects.consistent === ALWAYS_FALSE ? :red : :yellow
+    else
+        color = getfield(effects, name) ? :green : :red
     end
+    return color
+end
+
+function Base.show(io::IO, e::Effects)
+    print(io, "(")
+    printstyled(io, effectbits_letter(e, :consistent,  'c'); color=effectbits_color(e, :consistent))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :effect_free, 'e'); color=effectbits_color(e, :effect_free))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :nothrow,     'n'); color=effectbits_color(e, :nothrow))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :terminates,  't'); color=effectbits_color(e, :terminates))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :notaskstate, 's'); color=effectbits_color(e, :notaskstate))
+    print(io, ')')
+    e.nonoverlayed || printstyled(io, '′'; color=:red)
 end
 
 @specialize

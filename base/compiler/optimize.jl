@@ -32,6 +32,20 @@ const IR_FLAG_NOTHROW     = 0x01 << 5
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
+# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
+const InlineCostType = UInt16
+const MAX_INLINE_COST = typemax(InlineCostType)
+const MIN_INLINE_COST = InlineCostType(10)
+
+is_inlineable(src::Union{CodeInfo, Vector{UInt8}}) = ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+set_inlineable!(src::CodeInfo, val::Bool) = src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
+
+function inline_cost_clamp(x::Int)::InlineCostType
+    x > MAX_INLINE_COST && return MAX_INLINE_COST
+    x < MIN_INLINE_COST && return MIN_INLINE_COST
+    return convert(InlineCostType, x)
+end
+
 #####################
 # OptimizationState #
 #####################
@@ -67,7 +81,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
                          mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = is_source_inferred(src)
-        src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inferred && src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
@@ -461,7 +475,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 @assert isconstType(result)
                 analyzed = ConstAPI(result.parameters[1])
             end
-            force_noinline || (src.inlineable = true)
+            force_noinline || set_inlineable!(src, true)
         end
     end
 
@@ -482,14 +496,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
         else
             force_noinline = true
         end
-        if !src.inlineable && result === Bottom
+        if !is_inlineable(src) && result === Bottom
             force_noinline = true
         end
     end
     if force_noinline
-        src.inlineable = false
+        set_inlineable!(src, false)
     elseif isa(def, Method)
-        if src.inlineable && isdispatchtuple(specTypes)
+        if is_inlineable(src) && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             # compute the cost (size) of inlining this code
@@ -498,7 +512,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 cost_threshold += params.inline_tupleret_bonus
             end
             # if the method is declared as `@inline`, increase the cost threshold 20x
-            if src.inlineable
+            if is_inlineable(src)
                 cost_threshold += 19*default
             end
             # a few functions get special treatment
@@ -508,7 +522,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                     cost_threshold += 4*default
                 end
             end
-            src.inlineable = inline_worthy(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
         end
     end
 
@@ -820,16 +834,16 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_worthy(ir::IRCode,
-                       params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
+function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
+                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
         thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return false
+        bodycost > cost_threshold && return MAX_INLINE_COST
     end
-    return true
+    return inline_cost_clamp(bodycost)
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)

@@ -515,20 +515,23 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
-    legacy::PassManager preopt, postopt;
+    PassBuilder emptyPB;
+    AnalysisManagers empty(emptyPB);
+    ModulePassManager preopt, postopt;
+    legacy::PassManager emitter; // MC emission is only supported on legacy PM
 
     if (unopt_bc_fname)
-        preopt.add(createBitcodeWriterPass(unopt_bc_OS));
+        preopt.addPass(BitcodeWriterPass(unopt_bc_OS));
 
-    //Is this necessary for TM?
-    // addTargetPasses(&postopt, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (bc_fname)
-        postopt.add(createBitcodeWriterPass(bc_OS));
+        postopt.addPass(BitcodeWriterPass(bc_OS));
+    //Is this necessary for TM?
+    addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (obj_fname)
-        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(emitter, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     legacy::PassManager optimizer;
@@ -567,7 +570,7 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        preopt.run(M);
+        preopt.run(M, empty.MAM);
         optimizer.run(M);
 
         // We would like to emit an alias or an weakref alias to redirect these symbols
@@ -585,7 +588,8 @@ void jl_dump_native_impl(void *native_code,
         injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
                 FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
 
-        postopt.run(M);
+        postopt.run(M, empty.MAM);
+        emitter.run(M);
 
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
@@ -946,79 +950,27 @@ static void registerCallbacks(PassBuilder &PB) {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "DemoteFloat16") {
-                PM.addPass(DemoteFloat16());
-                return true;
-            }
-            if (Name == "CombineMulAdd") {
-              PM.addPass(CombineMulAdd());
-              return true;
-            }
-            if (Name == "LateLowerGCFrame") {
-                PM.addPass(LateLowerGC());
-                return true;
-            }
-            if (Name == "AllocOpt") {
-                PM.addPass(AllocOptPass());
-                return true;
-            }
-            if (Name == "PropagateJuliaAddrspaces") {
-                PM.addPass(PropagateJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "LowerExcHandlers") {
-                PM.addPass(LowerExcHandlers());
-                return true;
-            }
-            if (Name == "GCInvariantVerifier") {
-                // TODO: Parse option and allow users to set `Strong`
-                PM.addPass(GCInvariantVerifierPass());
-                return true;
-            }
+#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef FUNCTION_PASS
             return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "CPUFeatures") {
-              PM.addPass(CPUFeatures());
-              return true;
-            }
-            if (Name == "RemoveNI") {
-              PM.addPass(RemoveNI());
-              return true;
-            }
-            if (Name == "LowerSIMDLoop") {
-              PM.addPass(LowerSIMDLoop());
-              return true;
-            }
-            if (Name == "FinalLowerGC") {
-                PM.addPass(FinalLowerGCPass());
-                return true;
-            }
-            if (Name == "RemoveJuliaAddrspaces") {
-                PM.addPass(RemoveJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "MultiVersioning") {
-                PM.addPass(MultiVersioning());
-                return true;
-            }
-            if (Name == "LowerPTLS") {
-                PM.addPass(LowerPTLSPass());
-                return true;
-            }
+#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef MODULE_PASS
             return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "JuliaLICM") {
-                PM.addPass(JuliaLICMPass());
-                return true;
-            }
+#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef LOOP_PASS
             return false;
         });
 }

@@ -978,7 +978,7 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
 end
-rank(x::Number) = iszero(x) ? 0 : 1
+rank(x::Union{Number,AbstractVector}) = iszero(x) ? 0 : 1
 
 """
     tr(M)
