@@ -296,7 +296,7 @@ end
 Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
-        pi = getfield(p, i)
+        pi = getfield(p, i) # needed to prove consistency
         prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
