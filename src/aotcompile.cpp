@@ -20,6 +20,8 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
@@ -31,6 +33,9 @@
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -431,6 +436,23 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
+{
+    Function *target = M.getFunction(alias);
+    if (!target) {
+        target = Function::Create(FT, Function::ExternalLinkage, alias, M);
+    }
+    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+    appendToCompilerUsed(M, {interposer});
+
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
+    SmallVector<Value *, 4> CallArgs;
+    for (auto &arg : interposer->args())
+        CallArgs.push_back(&arg);
+    auto val = builder.CreateCall(target, CallArgs);
+    builder.CreateRet(val);
+}
+
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -475,7 +497,7 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
-    legacy::PassManager PM;
+    legacy::PassManager PM, postopt;
     addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
@@ -500,12 +522,12 @@ void jl_dump_native_impl(void *native_code,
         addMachinePasses(&PM, TM.get(), jl_options.opt_level);
     }
     if (bc_fname)
-        PM.add(createBitcodeWriterPass(bc_OS));
+        postopt.add(createBitcodeWriterPass(bc_OS));
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     // Reset the target triple to make sure it matches the new target machine
@@ -539,6 +561,24 @@ void jl_dump_native_impl(void *native_code,
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
         PM.run(M);
+
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+        postopt.run(M);
+
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
