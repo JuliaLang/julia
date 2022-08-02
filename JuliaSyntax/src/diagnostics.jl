@@ -89,7 +89,7 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
         # a...............
         # .....p...q......
         # ...............b
-        _printstyled(io, source[p:q]; color=hicol)
+        _printstyled(io, source[p:q]; bgcolor=hicol)
     else
         # Or large and we trucate the code to show only the region around the
         # start and end of the error.
@@ -100,9 +100,9 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
         # c...............
         # .....q..........
         # ...............d
-        _printstyled(io, source[p:b]; color=hicol)
+        _printstyled(io, source[p:b]; bgcolor=hicol)
         println(io, "…")
-        _printstyled(io, source[c:q]; color=hicol)
+        _printstyled(io, source[c:q]; bgcolor=hicol)
     end
     print(io, source[nextind(text,q):d])
     println(io)
