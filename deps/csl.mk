@@ -76,7 +76,7 @@ else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_seh,1)))
 endif
 else
-ifeq ($(APPLE_ARCH),arm64)
+ifeq ($(OS), Darwin)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1.1)))
 else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
