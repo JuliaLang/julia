@@ -1461,7 +1461,11 @@ for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbr
         @test Core.Compiler.is_foldable(eff)
     end
 end
-for T in (Float32, Float64)
+for T in (Float16, Float32, Float64)
+    for f in (exp, exp2, exp10)
+        @test Base.infer_effects(f, T).nothrow
+    end
+    @test Core.Compiler.is_foldable(Base.infer_effects(, (T,T)))
     @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
     @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
 end
