@@ -268,10 +268,6 @@ end
 
 const empty_backedge_iter = BackedgeIterator(Any[])
 
-function BackedgeIterator(mi::MethodInstance)
-    isdefined(mi, :backedges) || return empty_backedge_iter
-    return BackedgeIterator(mi.backedges)
-end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
