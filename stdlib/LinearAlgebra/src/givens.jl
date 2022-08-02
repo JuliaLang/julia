@@ -8,18 +8,20 @@ struct AdjointRotation{T,S<:AbstractRotation{T}} <: AbstractRotation{T}
 end
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using adjoint instead of transpose.")
-convert(::Type{AbstractRotation{T}}, adjR::AdjointRotation) where {T} =
-    convert(AbstractRotation{T}, adjR.R)'
 
 function (*)(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     lmul!(convert(AbstractRotation{TS}, R), copy_similar(A, TS))
 end
+function (*)(adjR::AdjointRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
+    TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
+    lmul!(convert(AbstractRotation{TS}, adjR.R)', copy_similar(A, TS))
+end
 (*)(A::AbstractVector, adjR::AdjointRotation) = _absvecormat_mul_adjrot(A, adjR)
 (*)(A::AbstractMatrix, adjR::AdjointRotation) = _absvecormat_mul_adjrot(A, adjR)
 function _absvecormat_mul_adjrot(A::AbstractVecOrMat{T}, adjR::AdjointRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-    rmul!(copy_similar(A, TS), convert(AbstractRotation{TS}, adjR))
+    rmul!(copy_similar(A, TS), convert(AbstractRotation{TS}, adjR.R)')
 end
 function(*)(A::AbstractMatrix{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
@@ -47,6 +49,7 @@ struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 
+convert(::Type{T}, r::T) where {T<:AbstractRotation} = r
 convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)
 
 Givens(i1, i2, c, s) = Givens(i1, i2, promote(c, s)...)
@@ -58,7 +61,8 @@ AbstractRotation{T}(G::Givens) where {T} = Givens{T}(G)
 AbstractRotation{T}(R::Rotation) where {T} = Rotation{T}(R)
 
 adjoint(G::Givens) = Givens(G.i1, G.i2, G.c', -G.s)
-adjoint(R::Rotation) = AdjointRotation(R)
+adjoint(R::AbstractRotation) = AdjointRotation(R)
+adjoint(adjR::AdjointRotation) = adjR.R
 
 Base.copy(aR::AdjointRotation{T,Rotation{T}}) where {T} =
     Rotation{T}([r' for r in Iterators.reverse(aR.R.rotations)])
@@ -382,6 +386,19 @@ end
 function lmul!(R::Rotation, A::AbstractMatrix)
     @inbounds for i = 1:length(R.rotations)
         lmul!(R.rotations[i], A)
+    end
+    return A
+end
+function rmul!(A::AbstractMatrix, R::Rotation)
+    @inbounds for i = 1:length(R.rotations)
+        rmul!(A, R.rotations[i])
+    end
+    return A
+end
+function lmul!(adjR::AdjointRotation{<:Any,<:Rotation}, A::AbstractMatrix)
+    R = adjR.R
+    @inbounds for i = 1:length(R.rotations)
+        lmul!(adjoint(R.rotations[i]), A)
     end
     return A
 end
