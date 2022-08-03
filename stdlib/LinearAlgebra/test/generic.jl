@@ -235,6 +235,8 @@ end
     @test norm(NaN, 0) === NaN
 end
 
+@test rank(zeros(4)) == 0
+@test rank(1:10) == 1
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1

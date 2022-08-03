@@ -430,12 +430,26 @@ function adjust_effects(sv::InferenceState)
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
+    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv)) do i::Int
+            return is_mutation_free_argtype(sv.slottypes[i])
+        end
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
     if is_consistent_if_notreturned(ipo_effects) && is_consistent_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
         # (indicated by `CONSISTENT_IF_NOTRETURNED`), we may be able to refine it if the return
         # type guarantees that the allocations are never returned
         consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
         ipo_effects = Effects(ipo_effects; consistent)
+    end
+    if is_consistent_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; consistent)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
+        end
     end
 
     # override the analyzed effects using manually annotated effect settings
@@ -456,6 +470,9 @@ function adjust_effects(sv::InferenceState)
         end
         if is_effect_overridden(override, :notaskstate)
             ipo_effects = Effects(ipo_effects; notaskstate=true)
+        end
+        if is_effect_overridden(override, :inaccessiblememonly)
+            ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
     end
 
