@@ -210,7 +210,8 @@ macro _total_meta()
         #=:nothrow=#true,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#true))
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true))
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
@@ -220,7 +221,8 @@ macro _foldable_meta()
         #=:nothrow=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false))
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#true))
 end
 
 # another version of inlining that propagates an inbounds context

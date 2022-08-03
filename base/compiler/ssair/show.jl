@@ -791,9 +791,9 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
 end
 
 function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
-    if name === :consistent
-        prefix = effects.consistent === ALWAYS_TRUE ? '+' :
-                 effects.consistent === ALWAYS_FALSE ? '!' : '?'
+    if name === :consistent || name === :inaccessiblememonly
+        prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
+                 getfield(effects, name) === ALWAYS_FALSE ? '!' : '?'
     else
         prefix = getfield(effects, name) ? '+' : '!'
     end
@@ -801,9 +801,9 @@ function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
 end
 
 function effectbits_color(effects::Effects, name::Symbol)
-    if name === :consistent
-        color = effects.consistent === ALWAYS_TRUE ? :green :
-                 effects.consistent === ALWAYS_FALSE ? :red : :yellow
+    if name === :consistent || name === :inaccessiblememonly
+        color = getfield(effects, name) === ALWAYS_TRUE ? :green :
+                getfield(effects, name) === ALWAYS_FALSE ? :red : :yellow
     else
         color = getfield(effects, name) ? :green : :red
     end
@@ -821,6 +821,8 @@ function Base.show(io::IO, e::Effects)
     printstyled(io, effectbits_letter(e, :terminates,  't'); color=effectbits_color(e, :terminates))
     print(io, ',')
     printstyled(io, effectbits_letter(e, :notaskstate, 's'); color=effectbits_color(e, :notaskstate))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end

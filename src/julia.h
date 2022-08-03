@@ -247,6 +247,7 @@ typedef union __jl_purity_overrides_t {
         // assertions about any called functions.
         uint8_t ipo_terminates_locally  : 1;
         uint8_t ipo_notaskstate         : 1;
+        uint8_t ipo_inaccessiblememonly : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -401,23 +402,25 @@ typedef struct _jl_code_instance_t {
     union {
         uint32_t ipo_purity_bits;
         struct {
-            uint8_t ipo_consistent   : 2;
-            uint8_t ipo_effect_free  : 2;
-            uint8_t ipo_nothrow      : 2;
-            uint8_t ipo_terminates   : 2;
-            uint8_t ipo_nonoverlayed : 1;
-            uint8_t ipo_notaskstate  : 2;
+            uint8_t ipo_consistent          : 2;
+            uint8_t ipo_effect_free         : 2;
+            uint8_t ipo_nothrow             : 2;
+            uint8_t ipo_terminates          : 2;
+            uint8_t ipo_nonoverlayed        : 1;
+            uint8_t ipo_notaskstate         : 2;
+            uint8_t ipo_inaccessiblememonly : 2;
         } ipo_purity_flags;
     };
     union {
         uint32_t purity_bits;
         struct {
-            uint8_t consistent   : 2;
-            uint8_t effect_free  : 2;
-            uint8_t nothrow      : 2;
-            uint8_t terminates   : 2;
-            uint8_t nonoverlayed : 1;
-            uint8_t notaskstate  : 2;
+            uint8_t consistent          : 2;
+            uint8_t effect_free         : 2;
+            uint8_t nothrow             : 2;
+            uint8_t terminates          : 2;
+            uint8_t nonoverlayed        : 1;
+            uint8_t notaskstate         : 2;
+            uint8_t inaccessiblememonly : 2;
         } purity_flags;
     };
 #else

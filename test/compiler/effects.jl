@@ -306,7 +306,7 @@ end |> Core.Compiler.is_consistent
     Base.@assume_effects :effect_free @ccall jl_array_ptr(a::Any)::Ptr{Int}
 end |> Core.Compiler.is_effect_free
 
-# `getfield_effects` handles union object nicely
+# `getfield_effects` handles access to union object nicely
 @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{String}, Core.Const(:value)], String))
 @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Some{Symbol}, Core.Const(:value)], Symbol))
 @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
@@ -316,3 +316,74 @@ end |> Core.Compiler.is_effect_free
 end |> Core.Compiler.is_consistent
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
+
+# :inaccessiblememonly effect
+const global constant_global::Int = 42
+const global ConstantType = Ref
+global nonconstant_global::Int = 42
+const global constant_mutable_global = Ref(0)
+const global constant_global_nonisbits = Some(:foo)
+@test Base.infer_effects() do
+    constant_global
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    ConstantType
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    ConstantType{Any}()
+end |> Core.Compiler.is_inaccessiblememonly
+@test_broken Base.infer_effects() do
+    constant_global_nonisbits
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :constant_global)
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    nonconstant_global
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :nonconstant_global)
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects((Symbol,)) do name
+    getglobal(@__MODULE__, name)
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects((Int,)) do v
+    global nonconstant_global = v
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects((Int,)) do v
+    setglobal!(@__MODULE__, :nonconstant_global, v)
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects((Int,)) do v
+    constant_mutable_global[] = v
+end |> !Core.Compiler.is_inaccessiblememonly
+module ConsistentModule
+const global constant_global::Int = 42
+const global ConstantType = Ref
+end # module
+@test Base.infer_effects() do
+    ConsistentModule.constant_global
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    ConsistentModule.ConstantType
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    ConsistentModule.ConstantType{Any}()
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :ConsistentModule).constant_global
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :ConsistentModule).ConstantType
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do
+    getglobal(@__MODULE__, :ConsistentModule).ConstantType{Any}()
+end |> Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects((Module,)) do M
+    M.constant_global
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects((Module,)) do M
+    M.ConstantType
+end |> !Core.Compiler.is_inaccessiblememonly
+@test Base.infer_effects() do M
+    M.ConstantType{Any}()
+end |> !Core.Compiler.is_inaccessiblememonly
