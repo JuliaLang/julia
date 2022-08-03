@@ -346,7 +346,7 @@ function showerror_ambiguous(io::IO, meths, f, args)
     sigfix = Any
     for m in meths
         print(io, "  ")
-        show(io, m; digit_align_width=-2)
+        show_method(io, m; digit_align_width=0)
         println(io)
         sigfix = typeintersect(m.sig, sigfix)
     end
@@ -543,8 +543,8 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 println(iob)
 
                 m = parentmodule_before_main(method.module)
-                color = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-                print_module_path_file(iob, m, string(file), line, color, 1)
+                modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+                print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
 
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
@@ -685,7 +685,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -693,7 +693,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     else
         :default
     end
-    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -707,7 +707,7 @@ function parentmodule_before_main(m)
 end
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
     file = fixup_stdlib_path(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
@@ -722,8 +722,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     inlined = getfield(frame, :inlined)
     modul = parentmodule(frame)
 
+    digit_align_width = ndigits_max + 2
+
     # frame number
-    print(io, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
@@ -733,14 +735,14 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     println(io)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line, modulecolor, digit_align_width)
+    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line, modulecolor = :light_black, digit_align_width = 0)
-    printstyled(io, " " ^ (digit_align_width + 2) * "@", color = :light_black)
+function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+    printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
     if modul !== nothing && modulecolor !== nothing
