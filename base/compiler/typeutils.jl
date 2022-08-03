@@ -317,7 +317,24 @@ is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimi
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
 function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
-        return is_immutable_type(ty.a) && is_immutable_type(ty.b)
+        return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
     end
     return !isabstracttype(ty) && !ismutabletype(ty)
+end
+
+is_mutation_free_argtype(@nospecialize argtype) =
+    is_mutation_free_type(widenconst(ignorelimited(argtype)))
+is_mutation_free_type(@nospecialize ty) =
+    _is_mutation_free_type(unwrap_unionall(ty))
+function _is_mutation_free_type(@nospecialize ty)
+    if isa(ty, Union)
+        return _is_mutation_free_type(ty.a) && _is_mutation_free_type(ty.b)
+    end
+    if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
+        return true
+    end
+    # this is okay as access and modifcation on global state are tracked separately
+    ty === Module && return true
+    # TODO improve this analysis, e.g. allow `Some{Symbol}`
+    return isbitstype(ty)
 end

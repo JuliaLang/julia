@@ -1452,10 +1452,10 @@ end
 
 # test constant-foldability
 for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
-           # TODO? :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
-           # TODO? :exp, :exp2, :exp10, :expm1
+           :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+           :exp, :exp2, :exp10, :expm1
            )
-    for T in (Float32, Float64)
+    for T in (Float16, Float32, Float64)
         f = getfield(@__MODULE__, fn)
         eff = Base.infer_effects(f, (T,))
         @test Core.Compiler.is_foldable(eff)
