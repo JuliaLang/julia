@@ -86,6 +86,7 @@ typedef enum {
     objary_chunk,
     ary8_chunk,
     ary16_chunk,
+    finlist_chunk,
 } gc_chunk_id_t;
 
 typedef struct {
@@ -99,7 +100,7 @@ typedef struct {
     uintptr_t nptr;
 } jl_gc_chunk_t;
 
-#define MAX_REFS_AT_ONCE (1 << 18)
+#define MAX_REFS_AT_ONCE (1 << 16)
 
 // layout for big (>2k) objects
 
@@ -367,6 +368,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
+void _gc_mark_finlist(jl_gc_markqueue_t *mq, jl_value_t **fl_begin,
+                      jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
                      size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT;

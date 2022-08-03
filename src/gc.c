@@ -1977,6 +1977,12 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
                             nptr);
             break;
         }
+        case finlist_chunk: {
+            jl_value_t **fl_begin = c.begin;
+            jl_value_t **fl_end = c.end;
+            _gc_mark_finlist(mq, fl_begin, fl_end);
+            break;
+        }
         default: {
             // `empty-chunk` should be checked by caller
             jl_safe_printf("GC internal error: chunk mismatch cid=%d\n", c.cid);
@@ -2095,15 +2101,19 @@ static void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent,
     }
 }
 
-// Mark finalizer list (or list of objects following same format)
-void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT
+void _gc_mark_finlist(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
-    size_t len = list->len;
-    if (len <= start)
-        return;
-    jl_value_t **fl_begin = (jl_value_t **)list->items + start;
-    jl_value_t **fl_end = (jl_value_t **)list->items + len;
+#ifndef GC_VERIFY
+    // Decide whether need to chunk finlist
+    size_t nrefs = (fl_end - fl_begin);
+    if (nrefs > MAX_REFS_AT_ONCE) {
+        jl_gc_chunk_t c = {
+            finlist_chunk, NULL, fl_begin + MAX_REFS_AT_ONCE, fl_end, 0, 0, 0, 0};
+        gc_chunkqueue_push(mq, &c);
+        fl_end = fl_begin + MAX_REFS_AT_ONCE;
+    }
+#endif
     for (; fl_begin < fl_end; fl_begin++) {
         new_obj = *fl_begin;
         if (__unlikely(!new_obj))
@@ -2115,6 +2125,17 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_
         }
         gc_try_claim_and_push(mq, new_obj, NULL);
     }
+}
+
+// Mark finalizer list (or list of objects following same format)
+void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
+{
+    size_t len = list->len;
+    if (len <= start)
+        return;
+    jl_value_t **fl_begin = (jl_value_t **)list->items + start;
+    jl_value_t **fl_end = (jl_value_t **)list->items + len;
+    _gc_mark_finlist(mq, fl_begin, fl_end);
 }
 
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
