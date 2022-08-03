@@ -325,6 +325,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     if (*bp != HT_NOTFOUND)
         return (char*)*bp - (char*)HT_NOTFOUND - 1;
     *bp = (void*)((char*)HT_NOTFOUND + 1);  // preliminarily mark as "not found"
+    // TODO: this algorithm deals with cycles incorrectly
     jl_module_t *mod = mi->def.module;
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
@@ -1193,7 +1194,7 @@ static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   fully serialized
 // - otherwise (i.e., if it's an external method), check all of its specializations.
-//   Collect backedges from those that are not being fully serialized.
+//   Collect all external backedges (may be needed later when we invert this list).
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
 {
     jl_array_t *s = (jl_array_t*)closure;
@@ -1207,7 +1208,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if ((jl_value_t*)callee != jl_nothing && !method_instance_in_queue(callee))
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }
@@ -1270,6 +1271,8 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL
 // flatten the backedge map reachable from caller into callees
 static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_callees) JL_GC_DISABLED
 {
+    if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))
+        return;
     jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
                 *callees = *pcallees;
     if (callees != HT_NOTFOUND) {
@@ -1298,7 +1301,10 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
     for (i = 0; i < edges_map.size; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
-        if (callees != HT_NOTFOUND && (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))) {
+        if (callees == HT_NOTFOUND)
+            continue;
+        assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
+        if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller)) {
             size_t i, l = jl_array_len(callees);
             for (i = 0; i < l; i++) {
                 jl_value_t *c = jl_array_ptr_ref(callees, i);
