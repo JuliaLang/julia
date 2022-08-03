@@ -11,9 +11,11 @@ following meanings:
   * `ALWAYS_FALSE`: this method may be not return or terminate consistently, and there is
     no need for further analysis with respect to this effect property as this conclusion
     will not be refined anyway.
-  * `CONSISTENT_IF_NOTRETURNED`: the `:consistent`-cy of this method can be refined to
+  * `CONSISTENT_IF_NOTRETURNED`: the `:consistent`-cy of this method can later be refined to
     `ALWAYS_TRUE` in a case when the return value of this method never involves newly
     allocated mutable objects.
+  * `CONSISTENT_IF_INACCESSIBLEMEMONLY`: the `:consistent`-cy of this method can later be refined to
+    `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
 - `effect_free::Bool`: this method is free from externally semantically visible side effects.
 - `nothrow::Bool`: this method is guaranteed to not throw an exception.
 - `terminates::Bool`: this method is guaranteed to terminate.
@@ -80,7 +82,9 @@ end
 const ALWAYS_TRUE  = 0x00
 const ALWAYS_FALSE = 0x01
 
-const CONSISTENT_IF_NOTRETURNED = 0x01 << 1
+# :consistent-cy bits
+const CONSISTENT_IF_NOTRETURNED         = 0x01 << 1
+const CONSISTENT_IF_INACCESSIBLEMEMONLY = 0x01 << 2
 
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
@@ -153,29 +157,30 @@ is_removable_if_unused(effects::Effects) =
     is_terminates(effects) &&
     is_nothrow(effects)
 
-is_consistent_if_notreturned(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_NOTRETURNED)
+is_consistent_if_notreturned(effects::Effects)         = !iszero(effects.consistent & CONSISTENT_IF_NOTRETURNED)
+is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
 
 is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
 
 function encode_effects(e::Effects)
     return ((e.consistent          % UInt32) << 0) |
-           ((e.effect_free         % UInt32) << 2) |
-           ((e.nothrow             % UInt32) << 3) |
-           ((e.terminates          % UInt32) << 4) |
-           ((e.notaskstate         % UInt32) << 5) |
-           ((e.inaccessiblememonly % UInt32) << 6) |
-           ((e.nonoverlayed        % UInt32) << 8)
+           ((e.effect_free         % UInt32) << 3) |
+           ((e.nothrow             % UInt32) << 4) |
+           ((e.terminates          % UInt32) << 5) |
+           ((e.notaskstate         % UInt32) << 6) |
+           ((e.inaccessiblememonly % UInt32) << 7) |
+           ((e.nonoverlayed        % UInt32) << 9)
 end
 
 function decode_effects(e::UInt32)
     return Effects(
-        UInt8((e >> 0) & 0x03),
-        _Bool((e >> 2) & 0x01),
+        UInt8((e >> 0) & 0x07),
         _Bool((e >> 3) & 0x01),
         _Bool((e >> 4) & 0x01),
         _Bool((e >> 5) & 0x01),
-        UInt8((e >> 6) & 0x01),
-        _Bool((e >> 8) & 0x03))
+        _Bool((e >> 6) & 0x01),
+        UInt8((e >> 7) & 0x03),
+        _Bool((e >> 9) & 0x01))
 end
 
 struct EffectsOverride

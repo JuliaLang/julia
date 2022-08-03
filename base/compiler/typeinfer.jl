@@ -442,6 +442,15 @@ function adjust_effects(sv::InferenceState)
         consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
         ipo_effects = Effects(ipo_effects; consistent)
     end
+    if is_consistent_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; consistent)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
+        end
+    end
 
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
