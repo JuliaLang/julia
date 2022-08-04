@@ -12,35 +12,6 @@ ID `1`.
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 """
-    Threads.nthreads([:default|:interactive]) -> Int
-
-Get the number of threads (across all thread pools or within the specified
-thread pool) available to Julia. The number of threads across all thread
-pools is the inclusive upper bound on [`threadid()`](@ref).
-
-See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
-[`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
-[`Distributed`](@ref man-distributed) standard library.
-"""
-function nthreads end
-
-nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
-function nthreads(pool::Symbol)
-    if pool === :default
-        tpid = Int8(0)
-    elseif pool === :interactive
-        tpid = Int8(1)
-    else
-        error("invalid threadpool specified")
-    end
-    return _nthreads_in_pool(tpid)
-end
-function _nthreads_in_pool(tpid::Int8)
-    p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
-    return Int(unsafe_load(p, tpid + 1))
-end
-
-"""
     Threads.threadpool(tid = threadid()) -> Symbol
 
 Returns the specified thread's threadpool; either `:default` or `:interactive`.
