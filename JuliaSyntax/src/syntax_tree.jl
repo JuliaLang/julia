@@ -253,7 +253,7 @@ function highlight(code::String, node, path::Int...; color=(40,40,70))
     node, p, span = child_position_span(node, path...)
     q = p + span
     print(stdout, code[1:p-1])
-    _printstyled(stdout, code[p:q-1]; color=color)
+    _printstyled(stdout, code[p:q-1]; bgcolor=color)
     print(stdout, code[q:end])
 end
 

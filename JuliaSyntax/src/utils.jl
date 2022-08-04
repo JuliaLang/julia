@@ -2,11 +2,20 @@
 """
     Like printstyled, but allows providing RGB colors for true color terminals
 """
-function _printstyled(io::IO, text; color)
-    if length(color) != 3 || !all(0 .<= color .< 256)
-        error("Invalid ansi color $color")
+function _printstyled(io::IO, text; fgcolor=nothing, bgcolor=nothing)
+    colcode = ""
+    if !isnothing(fgcolor)
+        if length(fgcolor) != 3 || !all(0 .<= fgcolor .< 256)
+            error("Invalid ansi color $fgcolor")
+        end
+        colcode *= "\e[38;2;$(fgcolor[1]);$(fgcolor[2]);$(fgcolor[3])m"
     end
-    colcode = "\e[48;2;$(color[1]);$(color[2]);$(color[3])m"
+    if !isnothing(bgcolor)
+        if length(bgcolor) != 3 || !all(0 .<= bgcolor .< 256)
+            error("Invalid ansi color $bgcolor")
+        end
+        colcode *= "\e[48;2;$(bgcolor[1]);$(bgcolor[2]);$(bgcolor[3])m"
+    end
     colreset = "\e[0;0m"
     first = true
     for linepart in split(text, '\n')

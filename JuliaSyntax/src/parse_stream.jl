@@ -557,7 +557,15 @@ end
     bump(stream [, flags=EMPTY_FLAGS];
          skip_newlines=false, error, remap_kind)
 
-Shift the current token from the input to the output, adding the given flags.
+Copy the current token from the input stream to the output. Adds the given
+flags to the output token (normally this would be the default `EMPTY_FLAGS` or
+`TRIVIA_FLAG`).
+
+Keyword arguments:
+* `skip_newlines` - if `true`, newlines are treated as whitespace.
+* `error` - if set, emit an error for this token
+* `remap_kind` - the kind of the token in the output token stream if it needs
+                 to be modified.
 """
 function bump(stream::ParseStream, flags=EMPTY_FLAGS; skip_newlines=false,
               error=nothing, remap_kind::Kind=K"None")
