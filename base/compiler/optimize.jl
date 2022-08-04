@@ -726,7 +726,7 @@ plus_saturate(x::Int, y::Int) = max(x, y, x+y)
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
 
 function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                        union_penalties::Bool, params::OptimizationParams, error_path::Bool = false)
+                        union_penalties::Bool, params::OptimizationParams, error_path::Bool = false, info = nothing)
     head = ex.head
     if is_meta_expr_head(head)
         return 0
@@ -784,7 +784,15 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         if extyp === Union{}
             return 0
         end
-        return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
+        if error_path
+            return params.inline_error_path_cost
+        elseif nameof(typeof(info)) === :RRuleInfo
+        #    println("here")
+        #    println(ex)
+            return 20
+        else
+            return params.inline_nonleaf_penalty
+        end
     elseif head === :foreigncall || head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
@@ -817,12 +825,12 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
 end
 
 function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any},
-                                  union_penalties::Bool, params::OptimizationParams)
+                                  union_penalties::Bool, params::OptimizationParams, info)
     thiscost = 0
     dst(tgt) = isa(src, IRCode) ? first(src.cfg.blocks[tgt].stmts) : tgt
     if stmt isa Expr
         thiscost = statement_cost(stmt, line, src, sptypes, union_penalties, params,
-                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]))::Int
+                                  is_stmt_throw_block(isa(src, IRCode) ? src.stmts.flag[line] : src.ssaflags[line]), info)::Int
     elseif stmt isa GotoNode
         # loops are generally always expensive
         # but assume that forward jumps are already counted for from
@@ -839,7 +847,11 @@ function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bo
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
-        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
+        info = ir.stmts[line][:info]
+        #if nameof(typeof(info)) === :RRuleInfo
+        #    println(info)
+        #end
+        thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params, info)
         bodycost = plus_saturate(bodycost, thiscost)
         bodycost > cost_threshold && return MAX_INLINE_COST
     end
@@ -850,8 +862,9 @@ function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeI
     maxcost = 0
     for line = 1:length(body)
         stmt = body[line]
+        info = src isa IRCode ? src.stmts[line][:info] : nothing
         thiscost = statement_or_branch_cost(stmt, line, src, sptypes,
-                                            unionpenalties, params)
+                                            unionpenalties, params, info)
         cost[line] = thiscost
         if thiscost > maxcost
             maxcost = thiscost
