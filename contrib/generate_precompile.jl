@@ -1,9 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if Threads.nthreads() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.nthreads()
-end
-
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
