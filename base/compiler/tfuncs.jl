@@ -1960,7 +1960,13 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         return getglobal_effects(argtypes, rt)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
-        effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f))
+        if f === setfield! || f === arrayset
+            effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+        elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
+            effect_free = ALWAYS_TRUE
+        else
+            effect_free = ALWAYS_FALSE
+        end
         nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
@@ -2143,7 +2149,7 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         f === Intrinsics.have_fma ||        # this one depends on the runtime environment
         f === Intrinsics.cglobal            # cglobal lookup answer changes at runtime
         ) ? ALWAYS_TRUE : ALWAYS_FALSE
-    effect_free = !(f === Intrinsics.pointerset)
+    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
     nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)

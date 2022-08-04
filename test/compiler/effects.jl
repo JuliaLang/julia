@@ -432,3 +432,62 @@ global inconsistent_condition_ref = Ref{Bool}(false)
         return 1
     end
 end |> !Core.Compiler.is_consistent
+
+# the `:inaccessiblememonly` helper effect allows us to prove `:effect_free`-ness of frames
+# including `setfield!` modifying local mutable object
+
+const global_ref = Ref{Any}()
+global const global_bit::Int = 42
+makeref() = Ref{Any}()
+setref!(ref, @nospecialize v) = ref[] = v
+
+@noinline function removable_if_unused1()
+    x = makeref()
+    setref!(x, 42)
+    x
+end
+@noinline function removable_if_unused2()
+    x = makeref()
+    setref!(x, global_bit)
+    x
+end
+for f = Any[removable_if_unused1, removable_if_unused2]
+    effects = Base.infer_effects(f)
+    @test Core.Compiler.is_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_removable_if_unused(effects)
+    @test @eval fully_eliminated() do
+        $f()
+        nothing
+    end
+end
+@noinline function removable_if_unused3(v)
+    x = makeref()
+    setref!(x, v)
+    x
+end
+let effects = Base.infer_effects(removable_if_unused3, (Int,))
+    @test Core.Compiler.is_inaccessiblememonly(effects)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_removable_if_unused(effects)
+end
+@test fully_eliminated((Int,)) do v
+    removable_if_unused3(v)
+    nothing
+end
+
+@noinline function unremovable_if_unused1!(x)
+    setref!(x, 42)
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused1!, (typeof(global_ref),)))
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused1!, (Any,)))
+
+@noinline function unremovable_if_unused2!()
+    setref!(global_ref, 42)
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused2!))
+
+@noinline function unremovable_if_unused3!()
+    getfield(@__MODULE__, :global_ref)[] = nothing
+end
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused3!))
