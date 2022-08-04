@@ -145,9 +145,9 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
         pacman -S cmake diffutils git m4 make patch tar p7zip curl python
 
         # For 64 bit Julia, install x86_64
-        pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran
+        pacman -S mingw-w64-x86_64-gcc
         # For 32 bit Julia, install i686
-        pacman -S mingw-w64-i686-gcc mingw-w64-i686-gcc-fortran
+        pacman -S mingw-w64-i686-gcc
         ```
 
     4. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
@@ -168,8 +168,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     3. Start the build
         ```sh
-        # Adjust the number of cores (4) to match your build environment.
-        make -j 4
+        make -j$(nproc)
         ```
 
     > Protip: build in dir
