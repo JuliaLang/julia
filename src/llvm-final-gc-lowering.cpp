@@ -208,6 +208,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize });
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
+    newI->addRetAttr(Attribute::getWithDereferenceableBytes(F.getContext(),offset));
     newI->takeName(target);
     return newI;
 }
