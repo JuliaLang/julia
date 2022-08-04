@@ -2188,14 +2188,13 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 
-
-# Examples for construction of the arguments:
-```julia
+# Examples for construction of the arguments
+```
 [a b c ; d e f ;;;
  g h i ; j k l ;;;
  m n o ; p q r ;;;
  s t u ; v w x]
-=> dims = (2, 3, 4)
+⇒ dims = (2, 3, 4)
 
 [a b ; c ;;; d ;;;;]
  ___   _     _
@@ -2206,7 +2205,7 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4             = elements in each 3d slice (4,)
  _____________
  4             = elements in each 4d slice (4,)
- => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
+⇒ shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `row_first` = true
 ```
 """
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
