@@ -1660,3 +1660,28 @@ end
     @test (@inferred A[i,i,i]) === A[1]
     @test (@inferred to_indices([], (1, CIdx(1, 1), 1, CIdx(1, 1), 1, CIdx(1, 1), 1))) == ntuple(Returns(1), 10)
 end
+
+@testset "reshape inference for empty arrays does not fail, and attempts to preserve size of non-empty dimensions (issue #45589)" begin
+    @test size(reshape(zeros(0,2), :)) == (0,)
+    @test size(reshape(zeros(0,2), 0,:)) == (0,2)
+    @test size(reshape(zeros(0,2), 1,:)) == (1,0)
+    @test size(reshape(zeros(0,2), 2,:)) == (2,0)
+    @test size(reshape(zeros(0,2), 3,:)) == (3,0)
+    @test size(reshape(zeros(0,0,0), 0,:,0)) == (0,0,0)
+    @test size(reshape(zeros(0,0,0), 0,:,1)) == (0,0,1)
+    @test size(reshape(zeros(0,0,0), 0,:,1111)) == (0,0,1111)
+    @test size(reshape(zeros(0,2,3), 0,:)) == (0,6)
+    @test size(reshape(zeros(0,2,3), 5,:)) == (5,0)
+    @test size(reshape(zeros(0,2,3), 6,:)) == (6,0)
+    @test size(reshape(zeros(0,2,3), 7,:)) == (7,0)
+    @test size(reshape(zeros(0,2,3), 0,:,2)) == (0,3,2)
+    @test size(reshape(zeros(0,2,3), 0,:,3)) == (0,2,3)
+    @test size(reshape(zeros(0,2,3), 0,:,5)) == (0,1,5)
+    @test size(reshape(zeros(0,2,3), 0,:,6)) == (0,1,6)
+    @test size(reshape(zeros(0,2,3), 0,:,7)) == (0,0,7)
+    @test size(reshape(zeros(0,2,3), 1,:,3)) == (1,0,3)
+    @test size(reshape(zeros(0,2,3), 1,:,5)) == (1,0,5)
+    @test size(reshape(zeros(0,2,3), 1,:,6)) == (1,0,6)
+    @test size(reshape(zeros(0,2,3), 1,:,7)) == (1,0,7)
+    @test size(reshape(zeros(0,2,3), 3,:,2)) == (3,0,2)
+end
