@@ -304,7 +304,7 @@ Assign a value to a key in the current task's task-local storage.
 
 See also [`task_local_storage`](@ref).
 """
-setindex!(::TaskLocalStorage, value, key) = (task_local_storage()[key] = val)
+setindex!(::TaskLocalStorage, value, key) = (task_local_storage()[key] = value)
 
 """
     haskey(::TaskLocalStorage, key)::Bool
