@@ -9,6 +9,8 @@ New language features
   handled via `Base.split_rest`. ([#42902])
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
+* `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
+  may now be used as binary operators with arrow precedence. ([#45962])
 
 Language changes
 ----------------
