@@ -175,7 +175,7 @@ static void JL_NO_ASAN JL_NO_MSAN memcpy_stack_a16(uint64_t *to, uint64_t *from,
     memcpy_noasan((char*)to_addr, (char*)from_addr, shadow_nb);
     memcpy_a16_noasan(jl_assume_aligned(to, 16), jl_assume_aligned(from, 16), nb);
 #elif defined(_COMPILER_MSAN_ENABLED_)
-# warning This function is imcompletely impleneted for MSAN (TODO).
+# warning This function is imcompletely implemented for MSAN (TODO).
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
 #else
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
@@ -936,10 +936,13 @@ void jl_init_tasks(void) JL_GC_DISABLED
 #endif
 }
 
-STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
+STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void);
+STATIC_OR_JS void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
 {
 CFI_NORETURN
-    // this runs the first time we switch to a task
+#if defined(_COMPILER_ASAN_ENABLED_)
+    // First complete the fiber switch, otherwise ASAN will be confused
+    // when it unpoisons the stack in _start_task
 #ifdef __clang_gcanalyzer__
     jl_task_t *ct = jl_get_current_task();
 #else
@@ -947,6 +950,19 @@ CFI_NORETURN
 #endif
     jl_ptls_t ptls = ct->ptls;
     sanitizer_finish_switch_fiber(ptls->previous_task, ct);
+    _start_task();
+}
+STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void)
+{
+CFI_NORETURN
+#endif
+    // this runs the first time we switch to a task
+#ifdef __clang_gcanalyzer__
+    jl_task_t *ct = jl_get_current_task();
+#else
+    jl_task_t *ct = jl_current_task;
+#endif
+    jl_ptls_t ptls = ct->ptls;
     jl_value_t *res;
     assert(ptls->finalizers_inhibited == 0);
 

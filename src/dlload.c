@@ -109,10 +109,10 @@ typedef void* (dlopen_prototype)(const char* filename, int flags);
    See https://llvm.org/LICENSE.txt for license information.
    SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 */
-inline uintptr_t RoundUpTo(uintptr_t size, uintptr_t boundary) {
+static inline uintptr_t RoundUpTo(uintptr_t size, uintptr_t boundary) {
   return (size + boundary - 1) & ~(boundary - 1);
 }
-inline uintptr_t RoundDownTo(uintptr_t x, uintptr_t boundary) {
+static inline uintptr_t RoundDownTo(uintptr_t x, uintptr_t boundary) {
   return x & ~(boundary - 1);
 }
 void ForEachMappedRegion(struct link_map *map, void (*cb)(const void *, uintptr_t)) {
