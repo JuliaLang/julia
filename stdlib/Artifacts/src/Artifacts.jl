@@ -560,7 +560,8 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     suggestion_str = if query_override(hash) !== nothing
         "Check that your `Overrides.toml` file is correct (https://pkgdocs.julialang.org/v1/artifacts/#Overriding-artifact-locations)."
     else
-        "Try `using Pkg; Pkg.instantiate()` to re-install all missing resources."
+        "Try `using Pkg; Pkg.instantiate()` to re-install all missing resources if the artifact is part of a package \
+         or call `Pkg.ensure_artifact_installed` (https://pkgdocs.julialang.org/v1/api/#Pkg.Artifacts.ensure_artifact_installed) if not."
     end
 
     error("Artifact $(repr(name)) was not found by looking in the $(path_str)$suggestion_str")
