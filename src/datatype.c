@@ -74,6 +74,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
+    tn->_reserved = 0;
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;

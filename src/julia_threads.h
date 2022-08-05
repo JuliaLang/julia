@@ -90,13 +90,16 @@ typedef ucontext_t _jl_ucontext_t;
 #endif
 #endif
 
-typedef struct {
+typedef struct jl_ucontext_t {
     union {
         _jl_ucontext_t ctx;
         jl_stack_context_t copy_ctx;
     };
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
+#endif
+#if defined(_COMPILER_ASAN_ENABLED_)
+    void *asan_fake_stack;
 #endif
 } jl_ucontext_t;
 

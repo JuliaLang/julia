@@ -42,15 +42,17 @@ extern "C" {
 #endif
 
 #if defined(_COMPILER_ASAN_ENABLED_)
-static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {
-    __sanitizer_start_switch_fiber(NULL, bottom, size);
+static inline void sanitizer_start_switch_fiber(jl_task_t *from, jl_task_t *to) {
+    __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, to->stkbuf, to->bufsz);
 }
-static inline void sanitizer_finish_switch_fiber(void) {
-    __sanitizer_finish_switch_fiber(NULL, NULL, NULL);
+static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *current) {
+    __sanitizer_finish_switch_fiber(current->ctx.asan_fake_stack, NULL, NULL);
+        //(const void**)&last->stkbuf,
+        //&last->bufsz);
 }
 #else
-static inline void sanitizer_start_switch_fiber(const void* bottom, size_t size) {}
-static inline void sanitizer_finish_switch_fiber(void) {}
+static inline void sanitizer_start_switch_fiber(jl_task_t *from, jl_task_t *to) {}
+static inline void sanitizer_finish_switch_fiber(jl_task_t *current) {}
 #endif
 
 #if defined(_COMPILER_TSAN_ENABLED_)
@@ -133,13 +135,54 @@ static int always_copy_stacks = 1;
 static int always_copy_stacks = 0;
 #endif
 
+#if defined(_COMPILER_ASAN_ENABLED_)
+extern void __asan_get_shadow_mapping(size_t *shadow_scale, size_t *shadow_offset);
+
+JL_NO_ASAN void *memcpy_noasan(void *dest, const void *src, size_t n) {
+  char *d = (char*)dest;
+  const char *s = (const char *)src;
+  for (size_t i = 0; i < n; ++i)
+    d[i] = s[i];
+  return dest;
+}
+
+JL_NO_ASAN void *memcpy_a16_noasan(uint64_t *dest, const uint64_t *src, size_t nb) {
+  uint64_t *end = (uint64_t*)((char*)src + nb);
+  while (src < end)
+    *(dest++) = *(src++);
+  return dest;
+}
+#endif
+
 #ifdef COPY_STACKS
-static void memcpy_a16(uint64_t *to, uint64_t *from, size_t nb)
+static void JL_NO_ASAN JL_NO_MSAN memcpy_stack_a16(uint64_t *to, uint64_t *from, size_t nb)
 {
+#if defined(_COMPILER_ASAN_ENABLED_)
+    /* Asan keeps shadow memory for everything on the stack. However, in general,
+       this function may touch invalid portions of the stack, since it just moves
+       the stack around. To keep ASAN's stack tracking capability intact, we need
+       to move the shadow memory along with the stack memory itself. */
+    size_t shadow_offset;
+    size_t shadow_scale;
+    __asan_get_shadow_mapping(&shadow_scale, &shadow_offset);
+    uintptr_t from_addr = (((uintptr_t)from) >> shadow_scale) + shadow_offset;
+    uintptr_t to_addr = (((uintptr_t)to) >> shadow_scale) + shadow_offset;
+    // Make sure that the shadow scale is compatible with the alignment, so
+    // we can copy whole bytes.
+    assert((16 - 1) >> shadow_scale == 0);
+    size_t shadow_nb = nb >> shadow_scale;
+    // Copy over the shadow memory
+    memcpy_noasan((char*)to_addr, (char*)from_addr, shadow_nb);
+    memcpy_a16_noasan(jl_assume_aligned(to, 16), jl_assume_aligned(from, 16), nb);
+#elif defined(_COMPILER_MSAN_ENABLED_)
+# warning This function is imcompletely impleneted for MSAN (TODO).
+    memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
+#else
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
     //uint64_t *end = (uint64_t*)((char*)from + nb);
     //while (from < end)
     //    *(to++) = *(from++);
+#endif
 }
 
 static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt)
@@ -160,7 +203,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     *pt = NULL; // clear the gc-root for the target task before copying the stack for saving
     lastt->copy_stack = nb;
     lastt->sticky = 1;
-    memcpy_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
+    memcpy_stack_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
     // this task's stack could have been modified after
     // it was marked by an incremental collection
     // move the barrier back instead of walking it again here
@@ -181,9 +224,8 @@ static void NOINLINE JL_NORETURN restore_stack(jl_task_t *t, jl_ptls_t ptls, cha
     }
     void *_y = t->stkbuf;
     assert(_x != NULL && _y != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
+    memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 
-    sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
 #if defined(_OS_WINDOWS_)
     jl_setcontext(&t->ctx.copy_ctx);
 #else
@@ -199,7 +241,7 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
     char *_x = (char*)ptls->stackbase - nb;
     void *_y = t->stkbuf;
     assert(_x != NULL && _y != NULL);
-    memcpy_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
+    memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb); // destroys all but the current stackframe
 #if defined(JL_HAVE_UNW_CONTEXT)
     volatile int returns = 0;
     int r = unw_getcontext(&lastt->ctx.ctx);
@@ -213,7 +255,6 @@ static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *lastt)
 #else
 #error COPY_STACKS is incompatible with this platform
 #endif
-    sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
     tsan_switch_to_copyctx(&t->ctx);
 #if defined(_OS_WINDOWS_)
     jl_setcontext(&t->ctx.copy_ctx);
@@ -416,7 +457,7 @@ static void ctx_switch(jl_task_t *lastt)
         if (lastt->copy_stack) { // save the old copy-stack
             save_stack(ptls, lastt, pt); // allocates (gc-safepoint, and can also fail)
             if (jl_setjmp(lastt->ctx.copy_ctx.uc_mcontext, 0)) {
-                sanitizer_finish_switch_fiber();
+                sanitizer_finish_switch_fiber(ptls->previous_task, ptls->current_task);
                 // TODO: mutex unlock the thread we just switched from
                 return;
             }
@@ -439,6 +480,7 @@ static void ctx_switch(jl_task_t *lastt)
 #endif
 
     if (t->started) {
+        sanitizer_start_switch_fiber(lastt, t);
 #ifdef COPY_STACKS
         if (t->copy_stack) {
             if (!killed && !lastt->copy_stack)
@@ -459,7 +501,6 @@ static void ctx_switch(jl_task_t *lastt)
         else
 #endif
         {
-            sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
             if (killed) {
                 tsan_switch_to_ctx(&t->ctx);
                 tsan_destroy_ctx(ptls, &lastt->ctx);
@@ -480,7 +521,7 @@ static void ctx_switch(jl_task_t *lastt)
         }
     }
     else {
-        sanitizer_start_switch_fiber(t->stkbuf, t->bufsz);
+        sanitizer_start_switch_fiber(lastt, t);
         if (t->copy_stack && always_copy_stacks) {
             tsan_switch_to_ctx(&t->ctx);
             if (killed) {
@@ -513,7 +554,7 @@ static void ctx_switch(jl_task_t *lastt)
             }
         }
     }
-    sanitizer_finish_switch_fiber();
+    sanitizer_finish_switch_fiber(ptls->previous_task, ptls->current_task);
 }
 
 JL_DLLEXPORT void jl_switch(void)
@@ -819,6 +860,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 #ifdef _COMPILER_TSAN_ENABLED_
     t->ctx.tsan_state = __tsan_create_fiber(0);
 #endif
+#ifdef _COMPILER_ASAN_ENABLED_
+    t->ctx.asan_fake_stack = NULL;
+#endif
     return t;
 }
 
@@ -896,13 +940,13 @@ STATIC_OR_JS void NOINLINE JL_NORETURN start_task(void)
 {
 CFI_NORETURN
     // this runs the first time we switch to a task
-    sanitizer_finish_switch_fiber();
 #ifdef __clang_gcanalyzer__
     jl_task_t *ct = jl_get_current_task();
 #else
     jl_task_t *ct = jl_current_task;
 #endif
     jl_ptls_t ptls = ct->ptls;
+    sanitizer_finish_switch_fiber(ptls->previous_task, ct);
     jl_value_t *res;
     assert(ptls->finalizers_inhibited == 0);
 
@@ -1373,6 +1417,9 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
 
 #ifdef _COMPILER_TSAN_ENABLED_
     ct->ctx.tsan_state = __tsan_get_current_fiber();
+#endif
+#ifdef _COMPILER_ASAN_ENABLED_
+    ct->ctx.asan_fake_stack = NULL;
 #endif
 
 #ifdef COPY_STACKS

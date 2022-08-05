@@ -43,29 +43,37 @@
 #error Unsupported compiler
 #endif
 
-#define NO_SANITIZE
+
+#define JL_NO_ASAN
+#define JL_NO_MSAN
+#define JL_NO_TSAN
 #if defined(__has_feature) // Clang flavor
 #if __has_feature(address_sanitizer)
 #define _COMPILER_ASAN_ENABLED_
-#define JL_NO_SANITIZE __attribute__((no_sanitize("address")))
+#undef JL_NO_ASAN
+#define JL_NO_ASAN __attribute__((no_sanitize("address")))
 #endif
 #if __has_feature(memory_sanitizer)
 #define _COMPILER_MSAN_ENABLED_
-#define JL_NO_SANITIZE __attribute__((no_sanitize("mempry")))
+#undef JL_NO_MSAN
+#define JL_NO_MSAN __attribute__((no_sanitize("mempry")))
 #endif
 #if __has_feature(thread_sanitizer)
 #if __clang_major__ < 11
 #error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
 #endif
 #define _COMPILER_TSAN_ENABLED_
-#define JL_NO_SANITIZE __attribute__((no_sanitize("thread")))
+#undef JL_NO_TSAN
+#define JL_NO_TSAN __attribute__((no_sanitize("thread")))
 #endif
 #else // GCC flavor
 #if defined(__SANITIZE_ADDRESS__)
 #define _COMPILER_ASAN_ENABLED_
-#define JL_NO_SANITIZE __attribute__((no_sanitize("address")))
+#undef JL_NO_ASAN
+#define JL_NO_ASAN __attribute__((no_sanitize("address")))
 #endif
 #endif // __has_feature
+#define JL_NO_SANITIZE JL_NO_ASAN JL_NO_MSAN JL_NO_TSAN
 
 /*******************************************************************************
 *                               OS                                             *

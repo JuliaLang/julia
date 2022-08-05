@@ -242,7 +242,7 @@ const HELP_PROMPT = "help?> "
 
 function generate_precompile_statements()
     start_time = time_ns()
-    debug_output = devnull # or stdout
+    debug_output = stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Extract the precompile statements from the precompile file
