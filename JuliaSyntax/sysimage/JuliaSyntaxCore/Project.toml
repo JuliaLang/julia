@@ -7,4 +7,4 @@ version = "0.1.0"
 julia = "1.6"
 
 [deps]
-JuliaSyntax = "70703baa-626e-46a2-a12c-08ffd08c73b4"
+JuliaSyntax = "54354a4c-6cac-4c00-8566-e7c1beb8bfd8"
