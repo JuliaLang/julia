@@ -3450,6 +3450,7 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
     Function *F = prepare_call(jl_alloc_obj_func);
     auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(getSizeTy(ctx.builder.getContext()), static_size), maybe_decay_untracked(ctx, jt)});
     call->setAttributes(F->getAttributes());
+    call->addRetAttr(Attribute::getWithDereferenceableBytes(ctx.builder.getContext(),static_size));
     return call;
 }
 
