@@ -301,6 +301,9 @@ end |> !Core.Compiler.is_nothrow
     Core.svec(nothing, 1, "foo")
 end |> Core.Compiler.is_consistent
 
+# fastmath operations are inconsistent
+@test !Core.Compiler.is_consistent(Base.infer_effects((a,b)->@fastmath(a+b), (Float64,Float64)))
+
 # issue 46122: @assume_effects for @ccall
 @test Base.infer_effects((Vector{Int},)) do a
     Base.@assume_effects :effect_free @ccall jl_array_ptr(a::Any)::Ptr{Int}
