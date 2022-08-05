@@ -12,9 +12,4 @@ import .Tokens: untokenize
 
 export tokenize, untokenize, Tokens
 
-# disable precompilation when profiling runtime performance, as
-# it can lead to wrong traces
-include("_precompile.jl")
-_precompile_()
-
 end # module

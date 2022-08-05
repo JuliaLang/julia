@@ -1,7 +1,3 @@
-using JuliaSyntax.Tokenize
-using JuliaSyntax.Tokenize.Lexers
-using Test
-
 const T = Tokenize.Tokens
 
 tok(str, i = 1) = collect(tokenize(str))[i]

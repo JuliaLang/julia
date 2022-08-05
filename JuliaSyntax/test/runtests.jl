@@ -7,11 +7,11 @@ using JuliaSyntax: GreenNode, SyntaxNode,
     flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
     children, child, setchild!, SyntaxHead
 
-module TokenizeTests
-    using Test
-    @testset "Tokenize" begin
-        include("../Tokenize/test/runtests.jl")
-    end
+using JuliaSyntax.Tokenize
+using JuliaSyntax.Tokenize.Lexers
+
+@testset "Tokenize" begin
+    include("lexer.jl")
 end
 
 include("test_utils.jl")
