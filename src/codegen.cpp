@@ -4341,7 +4341,7 @@ static jl_cgval_t emit_varinfo(jl_codectx_t &ctx, jl_varinfo_t &vi, jl_sym_t *va
         }
         else {
             // copy value to a non-mutable (non-volatile SSA) location
-            AllocaInst *varslot = cast<AllocaInst>(vi.value.V);
+            AllocaInst *varslot = cast<AllocaInst>(vi.value.V->stripPointerCasts());
             Type *T = varslot->getAllocatedType();
             assert(!varslot->isArrayAllocation() && "variables not expected to be VLA");
             AllocaInst *ssaslot = cast<AllocaInst>(varslot->clone());
@@ -4721,7 +4721,7 @@ static void emit_upsilonnode(jl_codectx_t &ctx, ssize_t phic, jl_value_t *val)
         }
         else if (vi.value.V && !vi.value.constant && vi.value.typ != jl_bottom_type) {
             assert(vi.value.ispointer());
-            Type *T = cast<AllocaInst>(vi.value.V)->getAllocatedType();
+            Type *T = cast<AllocaInst>(vi.value.V->stripPointerCasts())->getAllocatedType();
             if (CountTrackedPointers(T).count) {
                 // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
                 ctx.builder.CreateStore(Constant::getNullValue(T), vi.value.V, true);
@@ -7055,7 +7055,12 @@ static jl_llvm_functions_t
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+            Type *alloc_type = ArrayType::get(getInt8Ty(ctx.builder.getContext()), jl_datatype_size(jt));
+            Value *lv = new AllocaInst(alloc_type, M->getDataLayout().getAllocaAddrSpace(), nullptr,
+                Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+#ifndef JL_LLVM_OPAQUE_POINTERS
+            lv = new BitCastInst(lv, PointerType::get(vtype, M->getDataLayout().getAllocaAddrSpace()), "", /*InsertBefore*/ctx.topalloca);
+#endif
             if (CountTrackedPointers(vtype).count) {
                 StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
                 SI->insertAfter(ctx.topalloca);
