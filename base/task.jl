@@ -258,7 +258,13 @@ end
 
 task_result(t::Task) = t.result
 
+"""
+    task_local_storage()::AbstractDict
+
+Returns the current task's task-local storage in the form of an `AbstractDict`.
+"""
 task_local_storage() = get_task_tls(current_task())
+
 function get_task_tls(t::Task)
     if t.storage === nothing
         t.storage = IdDict()
