@@ -10,6 +10,7 @@ Base.current_task
 Base.istaskdone
 Base.istaskstarted
 Base.istaskfailed
+Base.task_local_storage()
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
