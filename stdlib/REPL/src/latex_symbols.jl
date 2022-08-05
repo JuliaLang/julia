@@ -1569,6 +1569,7 @@ const latex_symbols = Dict(
     "\\bsimilarleftarrow" => "\u2b41",  # reverse tilde operator above leftwards arrow
     "\\leftarrowbackapprox" => "\u2b42",  # leftwards arrow above reverse almost equal to
     "\\rightarrowgtr" => "\u2b43",  # rightwards arrow through greater-than
+    "\\leftarrowless" => "\u2977",  # leftwards arrow through less-than
     "\\rightarrowsupset" => "\u2b44",  # rightwards arrow through superset
     "\\leftarrowsubset" => "\u297a",  # leftwards arrow through subset
     "\\LLeftarrow" => "\u2b45",  # leftwards quadruple arrow
