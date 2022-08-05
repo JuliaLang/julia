@@ -2213,6 +2213,14 @@ end
     @test Meta.parse("a ⫫ b") == Expr(:call, :⫫, :a, :b)
 end
 
+# issue 45962
+@testset "binary ⭄, ⥺, ⭃, and ⥷" begin
+    @test Meta.parse("a ⭄ b") == Expr(:call, :⭄, :a, :b)
+    @test Meta.parse("a ⥺ b") == Expr(:call, :⥺, :a, :b)
+    @test Meta.parse("a ⭃ b") == Expr(:call, :⭃, :a, :b)
+    @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
+end
+
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
 @test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) === :string
