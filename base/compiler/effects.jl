@@ -85,8 +85,8 @@ struct Effects
     end
 end
 
-const ALWAYS_TRUE  = 0x00
-const ALWAYS_FALSE = 0x01
+const ALWAYS_TRUE  = 0x01
+const ALWAYS_FALSE = 0x00
 
 # :consistent-cy bits
 const CONSISTENT_IF_NOTRETURNED         = 0x01 << 1
@@ -171,7 +171,7 @@ is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consist
 
 is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect_free & EFFECT_FREE_IF_INACCESSIBLEMEMONLY)
 
-is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
+is_inaccessiblemem_or_argmemonly(effects::Effects) = !iszero(effects.inaccessiblememonly & INACCESSIBLEMEM_OR_ARGMEMONLY)
 
 function encode_effects(e::Effects)
     return ((e.consistent          % UInt32) << 0) |
@@ -192,37 +192,4 @@ function decode_effects(e::UInt32)
         _Bool((e >> 7) & 0x01),
         UInt8((e >> 8) & 0x03),
         _Bool((e >> 10) & 0x01))
-end
-
-struct EffectsOverride
-    consistent::Bool
-    effect_free::Bool
-    nothrow::Bool
-    terminates_globally::Bool
-    terminates_locally::Bool
-    notaskstate::Bool
-    inaccessiblememonly::Bool
-end
-
-function encode_effects_override(eo::EffectsOverride)
-    e = 0x00
-    eo.consistent          && (e |= (0x01 << 0))
-    eo.effect_free         && (e |= (0x01 << 1))
-    eo.nothrow             && (e |= (0x01 << 2))
-    eo.terminates_globally && (e |= (0x01 << 3))
-    eo.terminates_locally  && (e |= (0x01 << 4))
-    eo.notaskstate         && (e |= (0x01 << 5))
-    eo.inaccessiblememonly && (e |= (0x01 << 6))
-    return e
-end
-
-function decode_effects_override(e::UInt8)
-    return EffectsOverride(
-        (e & (0x01 << 0)) != 0x00,
-        (e & (0x01 << 1)) != 0x00,
-        (e & (0x01 << 2)) != 0x00,
-        (e & (0x01 << 3)) != 0x00,
-        (e & (0x01 << 4)) != 0x00,
-        (e & (0x01 << 5)) != 0x00,
-        (e & (0x01 << 6)) != 0x00)
 end

@@ -321,16 +321,8 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
-                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 7) {
-                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
-                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
-                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
-                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
-                        li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
-                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
-                    }
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym && jl_expr_nargs(ma) == 1) {
+                    li->purity = jl_unbox_uint32(jl_exprarg(ma, 0));
                 }
                 else
                     jl_array_ptr_set(meta, ins++, ma);
@@ -473,7 +465,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->pure = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
-    src->purity.bits = 0;
+    src->purity = 0;
     return src;
 }
 
@@ -661,7 +653,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->pure = src->pure;
     m->constprop = src->constprop;
-    m->purity.bits = src->purity.bits;
+    m->purity = src->purity;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;

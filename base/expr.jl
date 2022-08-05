@@ -673,19 +673,37 @@ macro assume_effects(args...)
     end
     ex = args[end]
     isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
+    bits = Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates_globally,
+        terminates_locally,
+        notaskstate,
+        inaccessiblememonly,
+    ))
     if ex.head === :macrocall && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
-        )))
+        insert!(ex.args, 3, bits)
         return esc(ex)
     end
-    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+    return esc(pushmeta!(ex, :purity, bits))
 end
 
-function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
+function compute_assumed_setting(@nospecialize(setting), val::Union{UInt8,Bool}=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
-        return compute_assumed_setting(setting.args[2], !val)
+        if isa(val, Bool)
+            return compute_assumed_setting(setting.args[2], !val)
+        else
+            throw(ArgumentError("TODO1"))
+        end
+    elseif isexpr(setting, :(=))
+        arg2 = setting.args[2]
+        if arg2 isa Union{UInt8,Bool}
+            return compute_assumed_setting(setting.args[1], arg2)
+        else
+            throw(ArgumentError("TODO2"))
+        end
     elseif isa(setting, QuoteNode)
         return compute_assumed_setting(setting.value, val)
     else

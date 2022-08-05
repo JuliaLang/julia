@@ -31,6 +31,42 @@ macro noinline() Expr(:meta, :noinline) end
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
+# the same constructor as defined in float.jl, but with a different name to avoid redefinition
+_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+
+# NOTE when modify this data structure, make sure to update the definitions of
+# `@_foldable_meta` and `@_total_meta` defined in boot.jl and essentials.jl also
+struct EffectsOverride
+    consistent::UInt8
+    effect_free::UInt8
+    nothrow::Bool
+    terminates_globally::Bool
+    terminates_locally::Bool
+    notaskstate::Bool
+    inaccessiblememonly::UInt8
+end
+
+function encode_effects_override(eo::EffectsOverride)
+    return ((eo.consistent % UInt32)          << 0) |
+           ((eo.effect_free % UInt32)         << 3) |
+           ((eo.nothrow % UInt32)             << 5) |
+           ((eo.terminates_globally % UInt32) << 6) |
+           ((eo.terminates_locally % UInt32)  << 7) |
+           ((eo.notaskstate % UInt32)         << 8) |
+           ((eo.inaccessiblememonly % UInt32) << 9)
+end
+
+function decode_effects_override(e::UInt32)
+    return EffectsOverride(
+        UInt8((e << 0) & 0x07),
+        UInt8((e << 3) & 0x03),
+        _Bool((e << 5) & 0x01),
+        _Bool((e << 6) & 0x01),
+        _Bool((e << 7) & 0x01),
+        _Bool((e << 8) & 0x01),
+        UInt8((e << 9) & 0x03))
+end
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
@@ -65,8 +101,6 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 
-# the same constructor as defined in float.jl, but with a different name to avoid redefinition
-_Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
 # fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
 fld(x::T, y::T) where {T<:Unsigned} = div(x, y)
 function fld(x::T, y::T) where T<:Integer

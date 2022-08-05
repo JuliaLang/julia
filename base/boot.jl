@@ -453,178 +453,10 @@ convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
-_is_internal(__module__) = __module__ === Core
-# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
-macro _foldable_meta()
-    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
-        #=:consistent=#true,
-        #=:effect_free=#true,
-        #=:nothrow=#false,
-        #=:terminates_globally=#true,
-        #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#false))
-end
-
-const NTuple{N,T} = Tuple{Vararg{T,N}}
-
-## primitive Array constructors
-struct UndefInitializer end
-const undef = UndefInitializer()
-# type and dimensionality specified, accepting dims as series of Ints
-Array{T,1}(::UndefInitializer, m::Int) where {T} =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
-Array{T,2}(::UndefInitializer, m::Int, n::Int) where {T} =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
-Array{T,3}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
-Array{T,N}(::UndefInitializer, d::Vararg{Int,N}) where {T,N} =
-    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-# type and dimensionality specified, accepting dims as tuples of Ints
-Array{T,1}(::UndefInitializer, d::NTuple{1,Int}) where {T} = Array{T,1}(undef, getfield(d,1))
-Array{T,2}(::UndefInitializer, d::NTuple{2,Int}) where {T} = Array{T,2}(undef, getfield(d,1), getfield(d,2))
-Array{T,3}(::UndefInitializer, d::NTuple{3,Int}) where {T} = Array{T,3}(undef, getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
-# type but not dimensionality specified
-Array{T}(::UndefInitializer, m::Int) where {T} = Array{T,1}(undef, m)
-Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
-Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
-Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
-# empty vector constructor
-Array{T,1}() where {T} = Array{T,1}(undef, 0)
-
-(Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
-
-Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
-Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
-
-AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
-
-# primitive Symbol constructors
-function Symbol(s::String)
-    @_foldable_meta
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
-                 sizeof(s))
-end
-function Symbol(a::Array{UInt8,1})
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-                 Intrinsics.arraylen(a))
-end
-Symbol(s::Symbol) = s
-
-# module providing the IR object model
-module IR
-export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
-
-import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
-    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
-    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct
-
-end
-
-# docsystem basics
-const unescape = Symbol("hygienic-scope")
-macro doc(x...)
-    docex = atdoc(__source__, __module__, x...)
-    isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
-end
-macro __doc__(x)
-    return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
-end
-atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
-atdoc!(λ) = global atdoc = λ
-
-# macros for big integer syntax
-macro int128_str end
-macro uint128_str end
-macro big_str end
-
-# macro for command syntax
-macro cmd end
-
-
-# simple stand-alone print definitions for debugging
-abstract type IO end
-struct CoreSTDOUT <: IO end
-struct CoreSTDERR <: IO end
-const stdout = CoreSTDOUT()
-const stderr = CoreSTDERR()
-io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
-io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
-
-unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
-    (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
-unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
-    (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, Int), io_pointer(io), x, nb); nb)
-write(io::IO, x::UInt8) =
-    (ccall(:jl_uv_putb, Cvoid, (Ptr{Cvoid}, UInt8), io_pointer(io), x); 1)
-function write(io::IO, x::String)
-    nb = sizeof(x)
-    unsafe_write(io, ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), x), nb)
-    return nb
-end
-
-show(io::IO, @nospecialize x) = ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), io_pointer(io), x)
-print(io::IO, x::AbstractChar) = ccall(:jl_uv_putc, Cvoid, (Ptr{Cvoid}, Char), io_pointer(io), x)
-print(io::IO, x::String) = (write(io, x); nothing)
-print(io::IO, @nospecialize x) = show(io, x)
-print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
-println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
-println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
-
-show(@nospecialize a) = show(stdout, a)
-print(@nospecialize a...) = print(stdout, a...)
-println(@nospecialize a...) = println(stdout, a...)
-
-struct GeneratedFunctionStub
-    gen
-    argnames::Array{Any,1}
-    spnames::Union{Nothing, Array{Any,1}}
-    line::Int
-    file::Symbol
-    expand_early::Bool
-end
-
-# invoke and wrap the results of @generated
-function (g::GeneratedFunctionStub)(@nospecialize args...)
-    body = g.gen(args...)
-    if body isa CodeInfo
-        return body
-    end
-    lam = Expr(:lambda, g.argnames,
-               Expr(Symbol("scope-block"),
-                    Expr(:block,
-                         LineNumberNode(g.line, g.file),
-                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
-                         Expr(:return, body),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
-    if spnames === nothing
-        return lam
-    else
-        return Expr(Symbol("with-static-parameters"), lam, spnames...)
-    end
-end
-
-NamedTuple() = NamedTuple{(),Tuple{}}(())
-
-NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
-
-using .Intrinsics: sle_int, add_int
-
-eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
-             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
-
 # constructors for built-in types
 
-import .Intrinsics: eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast, sext_int, zext_int, and_int
+using .Intrinsics: sle_int, add_int, eq_int, trunc_int, lshr_int, sub_int, shl_int, bitcast,
+                   sext_int, zext_int, and_int
 
 throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = (@noinline; throw(InexactError(f, T, val)))
 
@@ -811,6 +643,179 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+_is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
+    bits = UInt32(585) # NOTE update this bits when the `EffectsOverride` gets changed
+    if _is_internal(__module__)
+        return Expr(:meta, Expr(:purity, bits))
+    else # this branch is no-op and only used for Test
+        return bits === Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+            #=:consistent=#true,
+            #=:effect_free=#true,
+            #=:nothrow=#false,
+            #=:terminates_globally=#true,
+            #=:terminates_locally=#false,
+            #=:notaskstate=#false,
+            #=:inaccessiblememonly=#true
+        ))
+    end
+end
+
+const NTuple{N,T} = Tuple{Vararg{T,N}}
+
+## primitive Array constructors
+struct UndefInitializer end
+const undef = UndefInitializer()
+# type and dimensionality specified, accepting dims as series of Ints
+Array{T,1}(::UndefInitializer, m::Int) where {T} =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(::UndefInitializer, m::Int, n::Int) where {T} =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
+Array{T,3}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
+Array{T,N}(::UndefInitializer, d::Vararg{Int,N}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type and dimensionality specified, accepting dims as tuples of Ints
+Array{T,1}(::UndefInitializer, d::NTuple{1,Int}) where {T} = Array{T,1}(undef, getfield(d,1))
+Array{T,2}(::UndefInitializer, d::NTuple{2,Int}) where {T} = Array{T,2}(undef, getfield(d,1), getfield(d,2))
+Array{T,3}(::UndefInitializer, d::NTuple{3,Int}) where {T} = Array{T,3}(undef, getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+# type but not dimensionality specified
+Array{T}(::UndefInitializer, m::Int) where {T} = Array{T,1}(undef, m)
+Array{T}(::UndefInitializer, m::Int, n::Int) where {T} = Array{T,2}(undef, m, n)
+Array{T}(::UndefInitializer, m::Int, n::Int, o::Int) where {T} = Array{T,3}(undef, m, n, o)
+Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d)
+# empty vector constructor
+Array{T,1}() where {T} = Array{T,1}(undef, 0)
+
+(Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
+
+Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
+Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
+
+AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
+
+# primitive Symbol constructors
+function Symbol(s::String)
+    @_foldable_meta
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
+                 sizeof(s))
+end
+function Symbol(a::Array{UInt8,1})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+                 Intrinsics.arraylen(a))
+end
+Symbol(s::Symbol) = s
+
+# module providing the IR object model
+module IR
+export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    Const, PartialStruct
+
+import Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
+    NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot, Argument,
+    PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
+    Const, PartialStruct
+
+end
+
+# docsystem basics
+const unescape = Symbol("hygienic-scope")
+macro doc(x...)
+    docex = atdoc(__source__, __module__, x...)
+    isa(docex, Expr) && docex.head === :escape && return docex
+    return Expr(:escape, Expr(unescape, docex, typeof(atdoc).name.module))
+end
+macro __doc__(x)
+    return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
+end
+atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
+atdoc!(λ) = global atdoc = λ
+
+# macros for big integer syntax
+macro int128_str end
+macro uint128_str end
+macro big_str end
+
+# macro for command syntax
+macro cmd end
+
+
+# simple stand-alone print definitions for debugging
+abstract type IO end
+struct CoreSTDOUT <: IO end
+struct CoreSTDERR <: IO end
+const stdout = CoreSTDOUT()
+const stderr = CoreSTDERR()
+io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
+io_pointer(::CoreSTDERR) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stderr, Ptr{Cvoid}), 1, 1)
+
+unsafe_write(io::IO, x::Ptr{UInt8}, nb::UInt) =
+    (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, UInt), io_pointer(io), x, nb); nb)
+unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
+    (ccall(:jl_uv_puts, Cvoid, (Ptr{Cvoid}, Ptr{UInt8}, Int), io_pointer(io), x, nb); nb)
+write(io::IO, x::UInt8) =
+    (ccall(:jl_uv_putb, Cvoid, (Ptr{Cvoid}, UInt8), io_pointer(io), x); 1)
+function write(io::IO, x::String)
+    nb = sizeof(x)
+    unsafe_write(io, ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), x), nb)
+    return nb
+end
+
+show(io::IO, @nospecialize x) = ccall(:jl_static_show, Cvoid, (Ptr{Cvoid}, Any), io_pointer(io), x)
+print(io::IO, x::AbstractChar) = ccall(:jl_uv_putc, Cvoid, (Ptr{Cvoid}, Char), io_pointer(io), x)
+print(io::IO, x::String) = (write(io, x); nothing)
+print(io::IO, @nospecialize x) = show(io, x)
+print(io::IO, @nospecialize(x), @nospecialize a...) = (print(io, x); print(io, a...))
+println(io::IO) = (write(io, 0x0a); nothing) # 0x0a = '\n'
+println(io::IO, @nospecialize x...) = (print(io, x...); println(io))
+
+show(@nospecialize a) = show(stdout, a)
+print(@nospecialize a...) = print(stdout, a...)
+println(@nospecialize a...) = println(stdout, a...)
+
+struct GeneratedFunctionStub
+    gen
+    argnames::Array{Any,1}
+    spnames::Union{Nothing, Array{Any,1}}
+    line::Int
+    file::Symbol
+    expand_early::Bool
+end
+
+# invoke and wrap the results of @generated
+function (g::GeneratedFunctionStub)(@nospecialize args...)
+    body = g.gen(args...)
+    if body isa CodeInfo
+        return body
+    end
+    lam = Expr(:lambda, g.argnames,
+               Expr(Symbol("scope-block"),
+                    Expr(:block,
+                         LineNumberNode(g.line, g.file),
+                         Expr(:meta, :push_loc, g.file, Symbol("@generated body")),
+                         Expr(:return, body),
+                         Expr(:meta, :pop_loc))))
+    spnames = g.spnames
+    if spnames === nothing
+        return lam
+    else
+        return Expr(Symbol("with-static-parameters"), lam, spnames...)
+    end
+end
+
+NamedTuple() = NamedTuple{(),Tuple{}}(())
+
+NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+
+eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
 
 # Binding for the julia parser, called as
 #

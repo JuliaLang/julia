@@ -212,13 +212,13 @@ end
 merge_effects!(caller::InferenceState, callee::InferenceState) =
     merge_effects!(caller, Effects(callee))
 
-is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
-function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
+overriden_effectbits(sv::InferenceState, effect::Symbol) = overriden_effectbits(sv.linfo, effect)
+function overriden_effectbits(linfo::MethodInstance, effect::Symbol)
     def = linfo.def
-    return isa(def, Method) && is_effect_overridden(def, effect)
+    return isa(def, Method) && overriden_effectbits(def, effect)
 end
-is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
-is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
+overriden_effectbits(method::Method, effect::Symbol) = overriden_effectbits(decode_effects_override(method.purity), effect)
+overriden_effectbits(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
 
 function InferenceResult(
     linfo::MethodInstance,

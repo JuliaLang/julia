@@ -609,10 +609,10 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
 
     # we look for the termination effect override here as well, since the :terminates effect
     # may have been tainted due to recursion at this point even if it's overridden
-    if is_effect_overridden(sv, :terminates_globally)
+    if overriden_effectbits(sv, :terminates_globally)
         # this frame is known to terminate
         effects = Effects(effects, terminates=true)
-    elseif is_effect_overridden(method, :terminates_globally)
+    elseif overriden_effectbits(method, :terminates_globally)
         # this edge is known to terminate
         effects = Effects(effects; terminates=true)
     elseif edgecycle
@@ -2079,16 +2079,15 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             abstract_eval_value(interp, x, vtypes, sv)
         end
         cconv = e.args[5]
-        if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
+        if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt32}))
             override = decode_effects_override(v[2])
-            effects = Effects(
-                override.consistent          ? ALWAYS_TRUE : effects.consistent,
-                override.effect_free         ? ALWAYS_TRUE : effects.effect_free,
-                override.nothrow             ? true        : effects.nothrow,
-                override.terminates_globally ? true        : effects.terminates,
-                override.notaskstate         ? true        : effects.notaskstate,
-                override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-                effects.nonoverlayed)
+            effects = Effects(effects;
+                consistent          = effects.consistent | override.consistent,
+                effect_free         = effects.effect_free | override.effect_free,
+                nothrow             = effects.nothrow | override.nothrow,
+                terminates          = effects.terminates | override.terminates_globally,
+                notaskstate         = effects.notaskstate | override.notaskstate,
+                inaccessiblememonly = effects.inaccessiblememonly | override.inaccessiblememonly)
         end
         merge_effects!(sv, effects)
     elseif ehead === :cfunction
@@ -2281,7 +2280,7 @@ end
 
 function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
     if from > to
-        if is_effect_overridden(frame, :terminates_locally)
+        if overriden_effectbits(frame, :terminates_locally)
             # this backedge is known to terminate
         else
             merge_effects!(frame, Effects(EFFECTS_TOTAL; terminates=false))

@@ -7816,3 +7816,9 @@ end
 @testset "error message for getfield with bad integer type" begin
     @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end
+
+@testset "validation for internal :purity bits" begin
+    @test Core.@_foldable_meta
+    @test Base.@_total_meta
+    @test Base.@_foldable_meta
+end

@@ -204,25 +204,37 @@ macro _pure_meta()
 end
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
 macro _total_meta()
-    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
-        #=:consistent=#true,
-        #=:effect_free=#true,
-        #=:nothrow=#true,
-        #=:terminates_globally=#true,
-        #=:terminates_locally=#false,
-        #=:notaskstate=#true,
-        #=:inaccessiblememonly=#true))
+    bits = 0x00000369 # NOTE update this bits when the `EffectsOverride` gets changed
+    if _is_internal(__module__)
+        return Expr(:meta, Expr(:purity, bits))
+    else # this branch is no-op and only used for Test
+        return bits === Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+            #=:consistent=#true,
+            #=:effect_free=#true,
+            #=:nothrow=#true,
+            #=:terminates_globally=#true,
+            #=:terminates_locally=#false,
+            #=:notaskstate=#true,
+            #=:inaccessiblememonly=#true
+        ))
+    end
 end
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
-    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
-        #=:consistent=#true,
-        #=:effect_free=#true,
-        #=:nothrow=#false,
-        #=:terminates_globally=#true,
-        #=:terminates_locally=#false,
-        #=:notaskstate=#false,
-        #=:inaccessiblememonly=#true))
+    bits = 0x00000249 # NOTE update this bits when the `EffectsOverride` gets changed
+    if _is_internal(__module__)
+        return Expr(:meta, Expr(:purity, bits))
+    else # this branch is no-op and only used for Test
+        return bits === Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+            #=:consistent=#true,
+            #=:effect_free=#true,
+            #=:nothrow=#false,
+            #=:terminates_globally=#true,
+            #=:terminates_locally=#false,
+            #=:notaskstate=#false,
+            #=:inaccessiblememonly=#true
+        ))
+    end
 end
 
 # another version of inlining that propagates an inbounds context
