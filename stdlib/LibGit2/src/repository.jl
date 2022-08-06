@@ -263,7 +263,7 @@ end
 peel(obj::GitObject) = peel(GitObject, obj)
 
 """
-    LibGit2.GitDescribeResult(committish::GitObject; kwarg...)
+    LibGit2.GitDescribeResult(committish::GitObject; kwargs...)
 
 Produce a `GitDescribeResult` of the `committish` `GitObject`, which
 contains detailed information about it based on the keyword argument:
@@ -292,7 +292,7 @@ function GitDescribeResult(committish::GitObject;
 end
 
 """
-    LibGit2.GitDescribeResult(repo::GitRepo; kwarg...)
+    LibGit2.GitDescribeResult(repo::GitRepo; kwargs...)
 
 Produce a `GitDescribeResult` of the repository `repo`'s working directory.
 The `GitDescribeResult` contains detailed information about the workdir based
@@ -319,7 +319,7 @@ function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptio
 end
 
 """
-    LibGit2.format(result::GitDescribeResult; kwarg...) -> String
+    LibGit2.format(result::GitDescribeResult; kwargs...) -> String
 
 Produce a formatted string based on a `GitDescribeResult`.
 Formatting options are controlled by the keyword argument:
