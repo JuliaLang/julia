@@ -1177,7 +1177,7 @@ function func_for_method_checked(m::Method, @nospecialize(types), sparams::Simpl
 end
 
 """
-    code_typed(f, types; kw...)
+    code_typed(f, types; kws...)
 
 Returns an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature.

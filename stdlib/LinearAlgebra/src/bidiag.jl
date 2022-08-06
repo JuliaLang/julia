@@ -216,8 +216,8 @@ function svd!(M::Bidiagonal{<:BlasReal}; full::Bool = false)
     d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.uplo, 'I', M.dv, M.ev)
     SVD(U, d, Vt)
 end
-function svd(M::Bidiagonal; kw...)
-    svd!(copy(M), kw...)
+function svd(M::Bidiagonal; kws...)
+    svd!(copy(M), kws...)
 end
 
 ####################

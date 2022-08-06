@@ -804,7 +804,7 @@ end
 @test Meta.parse("@a(b=1, c=2)") == Expr(:macrocall, Symbol("@a"), LineNumberNode(1, :none), :(b=1), :(c=2))
 
 # issue #19685
-let f = function (x; kw...)
+let f = function (x; kws...)
             return (x, kw)
         end,
     g = function (x; a = 2)
@@ -1931,7 +1931,7 @@ b32121 = 9
 @test @id28992((a32121=a32121, b32121=b32121)) === (a32121=8, b32121=9)
 
 # issue #31596
-f31596(x; kw...) = x
+f31596(x; kws...) = x
 @test f31596((a=1,), b = 1.0) === (a=1,)
 
 # issue #32325
@@ -2308,7 +2308,7 @@ f35201(c) = h35201((;c...), k=true)
 @test f35201(Dict(:a=>1,:b=>3)) === ((a=1,b=3), true)
 
 # issue #44343
-f44343(;kw...) = NamedTuple(kw)
+f44343(;kws...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin

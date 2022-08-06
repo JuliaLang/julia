@@ -904,7 +904,7 @@ _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 """
     f = Returns(value)
 
-Create a callable `f` such that `f(args...; kw...) === value` holds.
+Create a callable `f` such that `f(args...; kws...) === value` holds.
 
 # Examples
 
@@ -930,7 +930,7 @@ struct Returns{V} <: Function
     Returns(value) = new{_stable_typeof(value)}(value)
 end
 
-(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
+(obj::Returns)(@nospecialize(args...); @nospecialize(kws...)) = obj.value
 
 # function composition
 
@@ -980,7 +980,7 @@ function ∘ end
 
 Represents the composition of two callable objects `outer::Outer` and `inner::Inner`. That is
 ```julia
-ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
+ComposedFunction(outer, inner)(args...; kws...) === outer(inner(args...; kws...))
 ```
 The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
@@ -1013,14 +1013,14 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
+(c::ComposedFunction)(x...; kws...) = call_composed(unwrap_composed(c), x, kw)
 unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.outer)..., unwrap_composed(c.inner)...)
 unwrap_composed(c) = (maybeconstructor(c),)
 call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
-call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
+call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kws...)
 
 struct Constructor{F} <: Function end
-(::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
+(::Constructor{F})(args...; kws...) where {F} = (@inline; F(args...; kws...))
 maybeconstructor(::Type{F}) where {F} = Constructor{F}()
 maybeconstructor(f) = f
 

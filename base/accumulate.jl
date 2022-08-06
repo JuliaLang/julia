@@ -269,10 +269,10 @@ julia> accumulate(+, fill(1, 2, 5), dims=2, init=100.0)
  101.0  102.0  103.0  104.0  105.0
 ```
 """
-function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
+function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kws...)
     if dims === nothing && !(A isa AbstractVector)
         # This branch takes care of the cases not handled by `_accumulate!`.
-        return collect(Iterators.accumulate(op, A; kw...))
+        return collect(Iterators.accumulate(op, A; kws...))
     end
     nt = values(kw)
     if isempty(kw)
@@ -282,7 +282,7 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     else
         throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
-    accumulate!(op, out, A; dims=dims, kw...)
+    accumulate!(op, out, A; dims=dims, kws...)
 end
 
 function accumulate(op, xs::Tuple; init = _InitialValue())
@@ -334,7 +334,7 @@ julia> accumulate!(*, B, A, dims=2, init=10)
  40  200  1200
 ```
 """
-function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
+function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kws...)
     nt = values(kw)
     if isempty(kw)
         _accumulate!(op, B, A, dims, nothing)

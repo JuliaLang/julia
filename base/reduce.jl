@@ -190,7 +190,7 @@ julia> accumulate(=>, (1,2,3,4))
 (1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
 ```
 """
-foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
+foldl(op, itr; kws...) = mapfoldl(identity, op, itr; kws...)
 
 ## foldr & mapfoldr
 
@@ -234,7 +234,7 @@ julia> foldr(=>, 1:4; init=0)
 1 => (2 => (3 => (4 => 0)))
 ```
 """
-foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
+foldr(op, itr; kws...) = mapfoldr(identity, op, itr; kws...)
 
 ## reduce & mapreduce
 
@@ -299,8 +299,8 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
-mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+mapreduce(f, op, itr; kws...) = mapfoldl(f, op, itr; kws...)
+mapreduce(f, op, itrs...; kws...) = reduce(op, Generator(f, itrs...); kws...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -480,7 +480,7 @@ julia> reduce(*, [2; 3; 4]; init=-1)
 -24
 ```
 """
-reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
+reduce(op, itr; kws...) = mapreduce(identity, op, itr; kws...)
 
 reduce(op, a::Number) = a  # Do we want this?
 
@@ -525,7 +525,7 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
+sum(f, a; kws...) = mapreduce(f, add_sum, a; kws...)
 
 """
     sum(itr; [init])
@@ -554,9 +554,9 @@ julia> sum(1:20; init = 0.0)
 210.0
 ```
 """
-sum(a; kw...) = sum(identity, a; kw...)
-sum(a::AbstractArray{Bool}; kw...) =
-    isempty(kw) ? count(a) : reduce(add_sum, a; kw...)
+sum(a; kws...) = sum(identity, a; kws...)
+sum(a::AbstractArray{Bool}; kws...) =
+    isempty(kw) ? count(a) : reduce(add_sum, a; kws...)
 
 ## prod
 """
@@ -581,7 +581,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
+prod(f, a; kws...) = mapreduce(f, mul_prod, a; kws...)
 
 """
     prod(itr; [init])
@@ -610,7 +610,7 @@ julia> prod(1:5; init = 1.0)
 120.0
 ```
 """
-prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
+prod(a; kws...) = mapreduce(identity, mul_prod, a; kws...)
 
 ## maximum, minimum, & extrema
 _fast(::typeof(min),x,y) = min(x,y)
@@ -695,7 +695,7 @@ julia> maximum(sin, Real[]; init=-1.0)  # good, since output of sin is >= -1
 -1.0
 ```
 """
-maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
+maximum(f, a; kws...) = mapreduce(f, max, a; kws...)
 
 """
     minimum(f, itr; [init])
@@ -722,7 +722,7 @@ julia> minimum(sin, Real[]; init=1.0)  # good, since output of sin is <= 1
 1.0
 ```
 """
-minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
+minimum(f, a; kws...) = mapreduce(f, min, a; kws...)
 
 """
     maximum(itr; [init])
@@ -754,7 +754,7 @@ julia> maximum((); init=-Inf)
 -Inf
 ```
 """
-maximum(a; kw...) = mapreduce(identity, max, a; kw...)
+maximum(a; kws...) = mapreduce(identity, max, a; kws...)
 
 """
     minimum(itr; [init])
@@ -786,7 +786,7 @@ julia> minimum([]; init=Inf)
 Inf
 ```
 """
-minimum(a; kw...) = mapreduce(identity, min, a; kw...)
+minimum(a; kws...) = mapreduce(identity, min, a; kws...)
 
 """
     extrema(itr; [init]) -> (mn, mx)
@@ -815,7 +815,7 @@ julia> extrema([]; init = (Inf, -Inf))
 (Inf, -Inf)
 ```
 """
-extrema(itr; kw...) = extrema(identity, itr; kw...)
+extrema(itr; kws...) = extrema(identity, itr; kws...)
 
 """
     extrema(f, itr; [init]) -> (mn, mx)
@@ -845,7 +845,7 @@ julia> extrema(sin, Real[]; init = (1.0, -1.0))  # good, since -1 ≤ sin(::Real
 (1.0, -1.0)
 ```
 """
-extrema(f, itr; kw...) = mapreduce(ExtremaMap(f), _extrema_rf, itr; kw...)
+extrema(f, itr; kws...) = mapreduce(ExtremaMap(f), _extrema_rf, itr; kws...)
 
 # Not using closure since `extrema(type, itr)` is a very likely use-case and it's better
 # to avoid type-instability (#23618).

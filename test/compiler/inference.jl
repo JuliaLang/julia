@@ -346,7 +346,7 @@ result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtyp
 
 
 # issue #10878
-function g10878(x; kw...); end
+function g10878(x; kws...); end
 invoke_g10878() = invoke(g10878, Tuple{Any}, 1)
 code_typed(invoke_g10878, ())
 code_llvm(devnull, invoke_g10878, ())

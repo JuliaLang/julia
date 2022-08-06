@@ -348,20 +348,20 @@ end
 
 # Tuples of integers are treated as offsets
 # Empty Tuples are handled here
-@inline function OffsetArray(A::AbstractArray, offsets::Tuple{Vararg{Integer}}; kw...)
+@inline function OffsetArray(A::AbstractArray, offsets::Tuple{Vararg{Integer}}; kws...)
     _checkindices(A, offsets, "offsets")
-    OffsetArray{eltype(A), ndims(A), typeof(A)}(A, offsets; kw...)
+    OffsetArray{eltype(A), ndims(A), typeof(A)}(A, offsets; kws...)
 end
 
 # These methods are necessary to disallow incompatible dimensions for
 # the OffsetVector and the OffsetMatrix constructors
 for (FT, ND) in ((:OffsetVector, :1), (:OffsetMatrix, :2))
-    @eval @inline function $FT(A::AbstractArray{<:Any,$ND}, offsets::Tuple{Vararg{Integer}}; kw...)
+    @eval @inline function $FT(A::AbstractArray{<:Any,$ND}, offsets::Tuple{Vararg{Integer}}; kws...)
         _checkindices(A, offsets, "offsets")
-        OffsetArray{eltype(A), $ND, typeof(A)}(A, offsets; kw...)
+        OffsetArray{eltype(A), $ND, typeof(A)}(A, offsets; kws...)
     end
     FTstr = string(FT)
-    @eval @inline function $FT(A::AbstractArray, offsets::Tuple{Vararg{Integer}}; kw...)
+    @eval @inline function $FT(A::AbstractArray, offsets::Tuple{Vararg{Integer}}; kws...)
         throw(ArgumentError($FTstr*" requires a "*string($ND)*"D array"))
     end
 end
@@ -377,28 +377,28 @@ for FT in (:OffsetArray, :OffsetVector, :OffsetMatrix)
         I = map(+, _offsets(A, parent(A)), offsets)
         $FT(parent(A), I, checkoverflow = false)
     end
-    @eval @inline function $FT(A::OffsetArray, offsets::Tuple{Integer,Vararg{Integer}}; kw...)
-        $FT(A, map(Int, offsets); kw...)
+    @eval @inline function $FT(A::OffsetArray, offsets::Tuple{Integer,Vararg{Integer}}; kws...)
+        $FT(A, map(Int, offsets); kws...)
     end
 
     # In general, indices get converted to AbstractUnitRanges.
     # CartesianIndices{N} get converted to N ranges
-    @eval @inline function $FT(A::AbstractArray, inds::Tuple{Any,Vararg{Any}}; kw...)
-        $FT(A, _toAbstractUnitRanges(to_indices(A, axes(A), inds)); kw...)
+    @eval @inline function $FT(A::AbstractArray, inds::Tuple{Any,Vararg{Any}}; kws...)
+        $FT(A, _toAbstractUnitRanges(to_indices(A, axes(A), inds)); kws...)
     end
 
     # convert ranges to offsets
-    @eval @inline function $FT(A::AbstractArray, inds::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}; kw...)
+    @eval @inline function $FT(A::AbstractArray, inds::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}; kws...)
         _checkindices(A, inds, "indices")
         # Performance gain by wrapping the error in a function: see https://github.com/JuliaLang/julia/issues/37558
         throw_dimerr(lA, lI) = throw(DimensionMismatch("supplied axes do not agree with the size of the array (got size $lA for the array and $lI for the indices"))
         lA = size(A)
         lI = map(length, inds)
         lA == lI || throw_dimerr(lA, lI)
-        $FT(A, map(_offset, axes(A), inds); kw...)
+        $FT(A, map(_offset, axes(A), inds); kws...)
     end
 
-    @eval @inline $FT(A::AbstractArray, inds...; kw...) = $FT(A, inds; kw...)
+    @eval @inline $FT(A::AbstractArray, inds...; kws...) = $FT(A, inds; kws...)
     @eval @inline $FT(A::AbstractArray; checkoverflow = false) = $FT(A, ntuple(zero, Val(ndims(A))), checkoverflow = checkoverflow)
 
     @eval @inline $FT(A::AbstractArray, origin::Origin; checkoverflow = true) = $FT(A, origin.index .- first.(axes(A)); checkoverflow = checkoverflow)
@@ -408,16 +408,16 @@ end
 Origin(A::AbstractArray) = Origin(first.(axes(A)))
 
 # conversion-related methods
-@inline OffsetArray{T}(M::AbstractArray, I...; kw...) where {T} = OffsetArray{T,ndims(M)}(M, I...; kw...)
+@inline OffsetArray{T}(M::AbstractArray, I...; kws...) where {T} = OffsetArray{T,ndims(M)}(M, I...; kws...)
 
-@inline function OffsetArray{T,N}(M::AbstractArray{<:Any,N}, I...; kw...) where {T,N}
+@inline function OffsetArray{T,N}(M::AbstractArray{<:Any,N}, I...; kws...) where {T,N}
     M2 = _of_eltype(T, M)
-    OffsetArray{T,N}(M2, I...; kw...)
+    OffsetArray{T,N}(M2, I...; kws...)
 end
-@inline OffsetArray{T,N}(M::OffsetArray{T,N}, I...; kw...) where {T,N} = OffsetArray(M, I...; kw...)
-@inline OffsetArray{T,N}(M::AbstractArray{T,N}, I...; kw...) where {T,N} = OffsetArray{T,N,typeof(M)}(M, I...; kw...)
+@inline OffsetArray{T,N}(M::OffsetArray{T,N}, I...; kws...) where {T,N} = OffsetArray(M, I...; kws...)
+@inline OffsetArray{T,N}(M::AbstractArray{T,N}, I...; kws...) where {T,N} = OffsetArray{T,N,typeof(M)}(M, I...; kws...)
 
-@inline OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I...; kw...) where {T,N,A<:AbstractArray{T,N}} = OffsetArray{T,N,A}(M, I; kw...)
+@inline OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I...; kws...) where {T,N,A<:AbstractArray{T,N}} = OffsetArray{T,N,A}(M, I; kws...)
 @inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I::NTuple{N,Int}; checkoverflow = true) where {T,N,A<:AbstractArray{T,N}}
     checkoverflow && map(overflow_check, axes(M), I)
     Mv = no_offset_view(M)
@@ -425,25 +425,25 @@ end
     Iof = map(+, _offsets(M), I)
     OffsetArray{T,N,A}(MvA, Iof, checkoverflow = false)
 end
-@inline function OffsetArray{T, N, AA}(parent::AbstractArray{<:Any,N}, offsets::NTuple{N, Integer}; kw...) where {T, N, AA<:AbstractArray{T,N}}
-    OffsetArray{T, N, AA}(parent, map(Int, offsets)::NTuple{N,Int}; kw...)
+@inline function OffsetArray{T, N, AA}(parent::AbstractArray{<:Any,N}, offsets::NTuple{N, Integer}; kws...) where {T, N, AA<:AbstractArray{T,N}}
+    OffsetArray{T, N, AA}(parent, map(Int, offsets)::NTuple{N,Int}; kws...)
 end
-@inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}; kw...) where {T,N,A<:AbstractArray{T,N}}
+@inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}; kws...) where {T,N,A<:AbstractArray{T,N}}
     _checkindices(M, I, "indices")
     # Performance gain by wrapping the error in a function: see https://github.com/JuliaLang/julia/issues/37558
     throw_dimerr(lA, lI) = throw(DimensionMismatch("supplied axes do not agree with the size of the array (got size $lA for the array and $lI for the indices"))
     lM = size(M)
     lI = map(length, I)
     lM == lI || throw_dimerr(lM, lI)
-    OffsetArray{T,N,A}(M, map(_offset, axes(M), I); kw...)
+    OffsetArray{T,N,A}(M, map(_offset, axes(M), I); kws...)
 end
-@inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I::Tuple; kw...) where {T,N,A<:AbstractArray{T,N}}
-    OffsetArray{T,N,A}(M, _toAbstractUnitRanges(to_indices(M, axes(M), I)); kw...)
+@inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}, I::Tuple; kws...) where {T,N,A<:AbstractArray{T,N}}
+    OffsetArray{T,N,A}(M, _toAbstractUnitRanges(to_indices(M, axes(M), I)); kws...)
 end
-@inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}; kw...) where {T,N,A<:AbstractArray{T,N}}
+@inline function OffsetArray{T,N,A}(M::AbstractArray{<:Any,N}; kws...) where {T,N,A<:AbstractArray{T,N}}
     Mv = no_offset_view(M)
     MvA = convert(A, Mv)::A
-    OffsetArray{T,N,A}(MvA, _offsets(M); kw...)
+    OffsetArray{T,N,A}(MvA, _offsets(M); kws...)
 end
 @inline OffsetArray{T,N,A}(M::A; checkoverflow = false) where {T,N,A<:AbstractArray{T,N}} = OffsetArray{T,N,A}(M, ntuple(zero, Val(N)); checkoverflow = checkoverflow)
 
@@ -452,21 +452,21 @@ Base.convert(::Type{T}, M::AbstractArray) where {T<:OffsetArray} = M isa T ? M :
 @inline AbstractArray{T,N}(M::OffsetArray{S,N}) where {T,S,N} = OffsetArray{T}(M)
 
 # array initialization
-@inline function OffsetArray{T,N}(init::ArrayInitializer, inds::Tuple{Vararg{OffsetAxisKnownLength}}; kw...) where {T,N}
+@inline function OffsetArray{T,N}(init::ArrayInitializer, inds::Tuple{Vararg{OffsetAxisKnownLength}}; kws...) where {T,N}
     _checkindices(N, inds, "indices")
     AA = Array{T,N}(init, map(_indexlength, inds))
-    OffsetArray{T, N, typeof(AA)}(AA, map(_indexoffset, inds); kw...)
+    OffsetArray{T, N, typeof(AA)}(AA, map(_indexoffset, inds); kws...)
 end
-@inline function OffsetArray{T, N}(init::ArrayInitializer, inds::Tuple; kw...) where {T, N}
-    OffsetArray{T, N}(init, _toAbstractUnitRanges(inds); kw...)
+@inline function OffsetArray{T, N}(init::ArrayInitializer, inds::Tuple; kws...) where {T, N}
+    OffsetArray{T, N}(init, _toAbstractUnitRanges(inds); kws...)
 end
-@inline OffsetArray{T,N}(init::ArrayInitializer, inds...; kw...) where {T,N} = OffsetArray{T,N}(init, inds; kw...)
+@inline OffsetArray{T,N}(init::ArrayInitializer, inds...; kws...) where {T,N} = OffsetArray{T,N}(init, inds; kws...)
 
-@inline OffsetArray{T}(init::ArrayInitializer, inds::NTuple{N, OffsetAxisKnownLength}; kw...) where {T,N} = OffsetArray{T,N}(init, inds; kw...)
-@inline function OffsetArray{T}(init::ArrayInitializer, inds::Tuple; kw...) where {T}
-    OffsetArray{T}(init, _toAbstractUnitRanges(inds); kw...)
+@inline OffsetArray{T}(init::ArrayInitializer, inds::NTuple{N, OffsetAxisKnownLength}; kws...) where {T,N} = OffsetArray{T,N}(init, inds; kws...)
+@inline function OffsetArray{T}(init::ArrayInitializer, inds::Tuple; kws...) where {T}
+    OffsetArray{T}(init, _toAbstractUnitRanges(inds); kws...)
 end
-@inline OffsetArray{T}(init::ArrayInitializer, inds...; kw...) where {T} = OffsetArray{T}(init, inds; kw...)
+@inline OffsetArray{T}(init::ArrayInitializer, inds...; kws...) where {T} = OffsetArray{T}(init, inds; kws...)
 
 Base.IndexStyle(::Type{OA}) where {OA<:OffsetArray} = IndexStyle(parenttype(OA))
 parenttype(::Type{OffsetArray{T,N,AA}}) where {T,N,AA} = AA
@@ -743,11 +743,11 @@ end
 
 # mapreduce is faster with an IdOffsetRange than with an OffsetUnitRange
 # We therefore convert OffsetUnitRanges to IdOffsetRanges with the same values and axes
-function Base.mapreduce(f, op, A1::OffsetUnitRange{<:Integer}, As::OffsetUnitRange{<:Integer}...; kw...)
+function Base.mapreduce(f, op, A1::OffsetUnitRange{<:Integer}, As::OffsetUnitRange{<:Integer}...; kws...)
     As = (A1, As...)
     ofs = map(A -> first(axes(A,1)) - 1, As)
     AIds = map((A, of) -> IdOffsetRange(_subtractoffset(parent(A), of), of), As, ofs)
-    mapreduce(f, op, AIds...; kw...)
+    mapreduce(f, op, AIds...; kws...)
 end
 
 # Optimize certain reductions that treat an OffsetVector as a list

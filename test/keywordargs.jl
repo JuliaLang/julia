@@ -51,7 +51,7 @@ end
     @test kwf9(write=true) === (true,true)
 end
 # rest keywords
-kwdelegator(ones;kw...) = kwf1(ones;kw...)
+kwdelegator(ones;kws...) = kwf1(ones;kws...)
 @test kwdelegator(4,hundreds=8) == 804
 
 @testset "optional positional args" begin
@@ -93,7 +93,7 @@ end
     @test_throws MethodError kwf5(1)
 end
 
-extravagant_args(x,y=0,rest...;color="blue",kw...) = (x,y,rest,color,kwf1(6;tens=8,kw...))
+extravagant_args(x,y=0,rest...;color="blue",kws...) = (x,y,rest,color,kwf1(6;tens=8,kws...))
 @testset "with every feature!" begin
     @test isequal(extravagant_args(1), (1,0,(),"blue",86))
     @test isequal(extravagant_args(1;hundreds=7), (1,0,(),"blue",786))

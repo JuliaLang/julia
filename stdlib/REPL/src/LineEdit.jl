@@ -416,16 +416,16 @@ prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
 prompt_string(f::Function) = Base.invokelatest(f)
 
-function refresh_multi_line(s::PromptState; kw...)
+function refresh_multi_line(s::PromptState; kws...)
     if s.refresh_wait !== nothing
         close(s.refresh_wait)
         s.refresh_wait = nothing
     end
-    refresh_multi_line(terminal(s), s; kw...)
+    refresh_multi_line(terminal(s), s; kws...)
 end
-refresh_multi_line(s::ModeState; kw...) = refresh_multi_line(terminal(s), s; kw...)
-refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kw...) = refresh_multi_line(termbuf, terminal(s), s; kw...)
-refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kw...) = (@assert term === terminal(s); refresh_multi_line(termbuf,s; kw...))
+refresh_multi_line(s::ModeState; kws...) = refresh_multi_line(terminal(s), s; kws...)
+refresh_multi_line(termbuf::TerminalBuffer, s::ModeState; kws...) = refresh_multi_line(termbuf, terminal(s), s; kws...)
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState; kws...) = (@assert term === terminal(s); refresh_multi_line(termbuf,s; kws...))
 
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf::IOBuffer,
                             state::InputAreaState, prompt = "";

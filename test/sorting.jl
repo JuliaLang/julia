@@ -556,12 +556,12 @@ end
     @test searchsortedlast(o, 1.5) == -1
 end
 
-function adaptive_sort_test(v; trusted=InsertionSort, kw...)
+function adaptive_sort_test(v; trusted=InsertionSort, kws...)
     sm = sum(hash.(v))
-    truth = sort!(deepcopy(v); alg=trusted, kw...)
+    truth = sort!(deepcopy(v); alg=trusted, kws...)
     return (
-        v === sort!(v; kw...) &&
-        issorted(v; kw...) &&
+        v === sort!(v; kws...) &&
+        issorted(v; kws...) &&
         sum(hash.(v)) == sm &&
         all(v .=== truth))
 end

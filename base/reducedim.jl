@@ -356,8 +356,8 @@ julia> mapreduce(isodd, |, a, dims=1)
 """
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
-    reduce(op, map(f, A...); kw...)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kws...) =
+    reduce(op, map(f, A...); kws...)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
@@ -403,7 +403,7 @@ julia> reduce(max, a, dims=1)
  4  8  12  16
 ```
 """
-reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
+reduce(op, A::AbstractArray; kws...) = mapreduce(identity, op, A; kws...)
 
 ##### Specific reduction functions #####
 
@@ -991,12 +991,12 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
     @eval begin
         # User-facing methods with keyword arguments
-        @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
-        @inline ($fname)(f, a::AbstractArray; dims=:, kw...) = ($_fname)(f, a, dims; kw...)
+        @inline ($fname)(a::AbstractArray; dims=:, kws...) = ($_fname)(a, dims; kws...)
+        @inline ($fname)(f, a::AbstractArray; dims=:, kws...) = ($_fname)(f, a, dims; kws...)
 
         # Underlying implementations using dispatch
-        ($_fname)(a, ::Colon; kw...) = ($_fname)(identity, a, :; kw...)
-        ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
+        ($_fname)(a, ::Colon; kws...) = ($_fname)(identity, a, :; kws...)
+        ($_fname)(f, a, ::Colon; kws...) = mapreduce($mapf, $op, a; kws...)
     end
 end
 
@@ -1019,8 +1019,8 @@ for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
             mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
-        $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
-        $(_fname)(f, A, dims; kw...) = mapreduce($mapf, $(op), A; dims=dims, kw...)
+        $(_fname)(A, dims; kws...)    = $(_fname)(identity, A, dims; kws...)
+        $(_fname)(f, A, dims; kws...) = mapreduce($mapf, $(op), A; dims=dims, kws...)
     end
 end
 

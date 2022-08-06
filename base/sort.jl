@@ -412,7 +412,7 @@ false
      `insorted` was added in Julia 1.6.
 """
 function insorted end
-insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
+insorted(x, v::AbstractVector; kws...) = !isempty(searchsorted(v, x; kws...))
 insorted(x, r::AbstractRange) = in(x, r)
 
 ## sorting algorithms ##

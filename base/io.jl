@@ -439,10 +439,10 @@ for f in (
 end
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
-readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
-readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
+readuntil(io::AbstractPipe, arg::UInt8; kws...) = readuntil(pipe_reader(io)::IO, arg; kws...)
+readuntil(io::AbstractPipe, arg::AbstractChar; kws...) = readuntil(pipe_reader(io)::IO, arg; kws...)
+readuntil(io::AbstractPipe, arg::AbstractString; kws...) = readuntil(pipe_reader(io)::IO, arg; kws...)
+readuntil(io::AbstractPipe, arg::AbstractVector; kws...) = readuntil(pipe_reader(io)::IO, arg; kws...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
@@ -504,7 +504,7 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), convert(String, filename)::String)
+readuntil(filename::AbstractString, args...; kws...) = open(io->readuntil(io, args...; kws...), convert(String, filename)::String)
 
 """
     readline(io::IO=stdin; keep::Bool=false)
@@ -582,12 +582,12 @@ julia> readlines("my_file.txt", keep=true)
 julia> rm("my_file.txt")
 ```
 """
-function readlines(filename::AbstractString; kw...)
+function readlines(filename::AbstractString; kws...)
     open(filename) do f
-        readlines(f; kw...)
+        readlines(f; kws...)
     end
 end
-readlines(s=stdin; kw...) = collect(eachline(s; kw...))
+readlines(s=stdin; kws...) = collect(eachline(s; kws...))
 
 ## byte-order mark, ntoh & hton ##
 
