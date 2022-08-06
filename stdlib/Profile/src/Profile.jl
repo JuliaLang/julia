@@ -138,6 +138,7 @@ function default_init()
         n = 1_000_000
         delay = 0.01
     else
+        # Keep these values synchronized with trigger_profile_peek
         n = 10_000_000
         delay = 0.001
     end
