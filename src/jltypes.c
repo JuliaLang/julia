@@ -2417,7 +2417,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "min_world",
                             "max_world",
                             "inferred",
-                            "inlineable",
+                            "inlining_cost",
                             "propagate_inbounds",
                             "pure",
                             "constprop",
@@ -2438,7 +2438,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
-                            jl_bool_type,
+                            jl_uint16_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_uint8_type,
@@ -2699,7 +2699,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
         jl_perm_symsvec(4, "typ", "env", "parent", "source"),
-        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_method_type),
+        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_any_type),
         jl_emptysvec, 0, 0, 4);
 
     // complete builtin type metadata

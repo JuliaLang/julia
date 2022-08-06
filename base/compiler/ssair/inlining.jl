@@ -1379,8 +1379,7 @@ function handle_const_opaque_closure_call!(
     ir::IRCode, idx::Int, stmt::Expr, result::ConstPropResult, flag::UInt8,
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     item = InliningTodo(result.result, sig.argtypes)
-    isdispatchtuple(item.mi.specTypes) || return
-    validate_sparams(item.mi.sparam_vals) || return
+    validate_sparams(item.mi.sparam_vals) || return nothing
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     handle_single_case!(ir, idx, stmt, item, todo, state.params)
     return nothing

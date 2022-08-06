@@ -1570,7 +1570,7 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, 0, "", /*InsertBefore=*/ctx.topalloca);
+    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), "", /*InsertBefore=*/ctx.topalloca);
 }
 
 static void undef_derived_strct(IRBuilder<> &irbuilder, Value *ptr, jl_datatype_t *sty, MDNode *tbaa)
@@ -5008,7 +5008,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             expr_t = (jl_value_t*)jl_any_type;
         else {
             expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
-            is_promotable = ctx.ssavalue_usecount[ssaidx_0based] == 1;
+            is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
         jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
         // some intrinsics (e.g. typeassert) can return a wider type
@@ -5126,7 +5126,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_new_sym) {
         bool is_promotable = false;
         if (ssaidx_0based >= 0) {
-            is_promotable = ctx.ssavalue_usecount[ssaidx_0based] == 1;
+            is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
         assert(nargs > 0);
         jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
@@ -6480,7 +6480,9 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, String
             if (tracked.count && !tracked.all)
                 props.return_roots = tracked.count;
             props.cc = jl_returninfo_t::SRet;
-            fsig.push_back(rt->getPointerTo());
+            // sret is always passed from alloca
+            assert(M);
+            fsig.push_back(rt->getPointerTo(M->getDataLayout().getAllocaAddrSpace()));
             srt = rt;
             rt = getVoidTy(ctx.builder.getContext());
         }
@@ -7060,7 +7062,7 @@ static jl_llvm_functions_t
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, 0, jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
             if (CountTrackedPointers(vtype).count) {
                 StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
                 SI->insertAfter(ctx.topalloca);
@@ -7079,7 +7081,7 @@ static jl_llvm_functions_t
             specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
             (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
             i == 0) { // or it is the first argument (which isn't in `argArray`)
-            AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, 0,
+            AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
                 jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
             StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
             SI->insertAfter(ctx.topalloca);
@@ -8281,10 +8283,10 @@ jl_llvm_functions_t jl_emit_codeinst(
             }
             else if (// don't delete toplevel code
                      jl_is_method(def) &&
-                     // and there is something to delete (test this before calling jl_ir_flag_inlineable)
+                     // and there is something to delete (test this before calling jl_ir_inlining_cost)
                      codeinst->inferred != jl_nothing &&
                      // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
+                     (codeinst->invoke == jl_fptr_const_return_addr || (jl_ir_inlining_cost((jl_array_t*)codeinst->inferred) == UINT16_MAX)) &&
                      // don't delete code when generating a precompile file
                      !(params.imaging || jl_options.incremental)) {
                 // if not inlineable, code won't be needed again
@@ -8608,7 +8610,7 @@ extern "C" void jl_init_llvm(void)
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
 #ifdef JL_USE_JITLINK
-#error "JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink"
+#pragma message("JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink")
 #else
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 
@@ -8630,6 +8632,7 @@ extern "C" void jl_init_llvm(void)
     }
 #endif
 
+#ifndef JL_USE_JITLINK
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
@@ -8643,6 +8646,7 @@ extern "C" void jl_init_llvm(void)
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
+#endif
 #endif
 #endif
 #endif

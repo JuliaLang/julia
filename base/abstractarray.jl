@@ -891,13 +891,12 @@ See also [`copyto!`](@ref).
     is available from the `Future` standard library as `Future.copy!`.
 """
 function copy!(dst::AbstractVector, src::AbstractVector)
+    firstindex(dst) == firstindex(src) || throw(ArgumentError(
+        "vectors must have the same offset for copy! (consider using `copyto!`)"))
     if length(dst) != length(src)
         resize!(dst, length(src))
     end
-    for i in eachindex(dst, src)
-        @inbounds dst[i] = src[i]
-    end
-    dst
+    copyto!(dst, src)
 end
 
 function copy!(dst::AbstractArray, src::AbstractArray)
@@ -1035,6 +1034,10 @@ julia> y
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
     isempty(src) && return dest
+    if dest isa BitArray
+        # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
+        return _copyto_bitarray!(dest, src)
+    end
     src′ = unalias(dest, src)
     copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
@@ -1104,8 +1107,9 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
-    @inbounds for i = 0:(n-1)
-        dest[dstart+i] = src[sstart+i]
+    src′ = unalias(dest, src)
+    @inbounds for i = 0:n-1
+        dest[dstart+i] = src′[sstart+i]
     end
     return dest
 end
@@ -1127,11 +1131,12 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
+    A′ = unalias(B, A)
     jdest = first(jr_dest)
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            @inbounds B[idest,jdest] = A[isrc,jsrc]
+            @inbounds B[idest,jdest] = A′[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -1139,10 +1144,10 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     return B
 end
 
-function copyto_axcheck!(dest, src)
-    @noinline checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))
+@noinline _checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))
 
-    checkaxs(axes(dest), axes(src))
+function copyto_axcheck!(dest, src)
+    _checkaxs(axes(dest), axes(src))
     copyto!(dest, src)
 end
 
@@ -2183,14 +2188,13 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 
-
-# Examples for construction of the arguments:
-```julia
+# Examples for construction of the arguments
+```
 [a b c ; d e f ;;;
  g h i ; j k l ;;;
  m n o ; p q r ;;;
  s t u ; v w x]
-=> dims = (2, 3, 4)
+⇒ dims = (2, 3, 4)
 
 [a b ; c ;;; d ;;;;]
  ___   _     _
@@ -2201,7 +2205,7 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4             = elements in each 3d slice (4,)
  _____________
  4             = elements in each 4d slice (4,)
- => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
+⇒ shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `row_first` = true
 ```
 """
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)

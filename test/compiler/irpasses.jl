@@ -950,36 +950,39 @@ end
 let # effect-freeness computation for array allocation
 
     # should eliminate dead allocations
-    good_dims = (0, 2)
+    good_dims = 1:10
     for dim in good_dims, N in 0:10
         dims = ntuple(i->dim, N)
-        @eval @test fully_eliminated(()) do
+        @test @eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
             nothing
         end
     end
 
     # shouldn't eliminate errorneous dead allocations
-    bad_dims = [-1,           # should keep "invalid Array dimensions"
-                typemax(Int)] # should keep "invalid Array size"
+    bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
         dims = ntuple(i->dim, N)
-        @eval @test !fully_eliminated(()) do
+        @test @eval !fully_eliminated() do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+        @test_throws "invalid Array" @eval let
             Array{Int,$N}(undef, $(dims...))
             nothing
         end
     end
 
     # some high-level examples
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         Int[]
         nothing
     end
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         Matrix{Tuple{String,String}}(undef, 4, 4)
         nothing
     end
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         IdDict{Any,Any}()
         nothing
     end

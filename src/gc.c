@@ -375,6 +375,15 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     ct->sticky = sticky;
 }
 
+static uint64_t finalizer_rngState[4];
+
+void jl_rng_split(uint64_t to[4], uint64_t from[4]);
+
+JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
+{
+    jl_rng_split(finalizer_rngState, jl_current_task->rngState);
+}
+
 static void run_finalizers(jl_task_t *ct)
 {
     // Racy fast path:
@@ -396,9 +405,16 @@ static void run_finalizers(jl_task_t *ct)
     }
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 0);
     arraylist_new(&to_finalize, 0);
+
+    uint64_t save_rngState[4];
+    memcpy(&save_rngState[0], &ct->rngState[0], sizeof(save_rngState));
+    jl_rng_split(ct->rngState, finalizer_rngState);
+
     // This releases the finalizers lock.
     jl_gc_run_finalizers_in_list(ct, &copied_list);
     arraylist_free(&copied_list);
+
+    memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
 }
 
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)

@@ -24,12 +24,12 @@ configure-y: | $(BUILDDIRMAKE)
 configure:
 ifeq ("$(origin O)", "command line")
 	@if [ "$$(ls '$(BUILDROOT)' 2> /dev/null)" ]; then \
-		echo 'WARNING: configure called on non-empty directory $(BUILDROOT)'; \
+		printf $(WARNCOLOR)'WARNING: configure called on non-empty directory'$(ENDCOLOR)' %s\n' '$(BUILDROOT)'; \
 		read -p "Proceed [y/n]? " answer; \
 	else \
 		answer=y;\
 	fi; \
-	[ $$answer = 'y' ] && $(MAKE) configure-$$answer
+	[ "y$$answer" = yy ] && $(MAKE) configure-$$answer
 else
 	$(error "cannot rerun configure from within a build directory")
 endif
@@ -108,7 +108,7 @@ check-whitespace:
 ifneq ($(NO_GIT), 1)
 	@# Append the directory containing the julia we just built to the end of `PATH`,
 	@# to give us the best chance of being able to run this check.
-	@PATH=$(PATH):$(dirname $(JULIA_EXECUTABLE)) $(JULIAHOME)/contrib/check-whitespace.jl
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
