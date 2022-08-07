@@ -135,22 +135,23 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
 
 GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
 {
-#ifndef _OS_DARWIN_
+    auto null = Constant::getNullValue(T);
+#if  defined(_OS_DARWIN_)
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::CommonLinkage, null, name);
+    GV->setVisibility(GlobalVariable::DefaultVisibility);
+    GV->setDSOLocal(true);
+#elif defined(_OS_WINDOWS_)
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::InternalLinkage, null, name + ".real");
+    GV->setVisibility(GlobalVariable::HiddenVisibility);
+    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::ExternalLinkage, name, GV, M));
+#else
     // ELF linkers are picky about DSO-local references. Trick them by adding
     // an extra global with the same address, but different linkage. This
     // allows LLVM to use a PIC-rel reference, while still making the symbol
     // available for dlsym.
-    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::WeakODRLinkage,
-                                 Constant::getNullValue(T), name + ".real");
+    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::WeakODRLinkage, null, name + ".real");
     GV->setVisibility(GlobalVariable::HiddenVisibility);
-    // GV->setDSOLocal(true);
-    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::WeakODRLinkage,
-                                   name, GV, M));
-#else
-    auto GV = new GlobalVariable(*M, T, false, GlobalVariable::CommonLinkage,
-                                 Constant::getNullValue(T), name);
-    GV->setVisibility(GlobalVariable::DefaultVisibility);
-    GV->setDSOLocal(true);
+    add_comdat(GlobalAlias::create(T, 0, GlobalVariable::WeakODRLinkage, name, GV, M));
 #endif
     return GV;
 }
