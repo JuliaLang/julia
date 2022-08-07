@@ -506,9 +506,12 @@ order to function correctly with the keyword outer constructor.
     `Base.@kwdef` for parametric structs, and structs with supertypes
     requires at least Julia 1.1.
 
+!!! compat "Julia 1.9"
+    This macro was added to the public API and exported in Julia 1.9
+
 # Examples
 ```jldoctest
-julia> Base.@kwdef struct Foo
+julia> @kwdef struct Foo
            a::Int = 1         # specified default
            b::String          # required keyword
        end

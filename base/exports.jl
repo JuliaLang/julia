@@ -771,6 +771,7 @@ export
 # syntax
     esc,
     gensym,
+    @kwdef,
     macroexpand,
     @macroexpand1,
     @macroexpand,
