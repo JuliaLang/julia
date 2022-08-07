@@ -577,7 +577,16 @@ function _kwdef!(blk, params_args, call_args)
             push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
-            if ei.head === :(=)
+            is_atomic = ei.head == :atomic
+            ei = is_atomic ? first(ei.args) : ei # strip "@atomic" and add it back later
+            is_const = ei.head == :const
+            ei = is_const ? first(ei.args) : ei # strip "const" and add it back later
+            # Note: `@atomic const ..` isn't valid, but reconstruct it anyway to serve a nice error
+            if ei isa Symbol
+                # const var
+                push!(params_args, ei)
+                push!(call_args, ei)
+            elseif ei.head === :(=)
                 lhs = ei.args[1]
                 if lhs isa Symbol
                     #  var = defexpr
@@ -593,7 +602,9 @@ function _kwdef!(blk, params_args, call_args)
                 defexpr = ei.args[2]  # defexpr
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
-                blk.args[i] = lhs
+                lhs = is_const ? Expr(:const, lhs) : lhs
+                lhs = is_atomic ? Expr(:atomic, lhs) : lhs
+                blk.args[i] = lhs # overrides arg
             elseif ei.head === :(::) && ei.args[1] isa Symbol
                 # var::Typ
                 var = ei.args[1]
