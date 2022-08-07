@@ -660,7 +660,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -790,9 +789,13 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgversion,
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -936,6 +939,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,

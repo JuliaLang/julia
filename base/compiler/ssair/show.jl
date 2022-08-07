@@ -10,7 +10,7 @@ length(s::String) = Base.length(s)
 end
 
 import Base: show_unquoted
-using Base: printstyled, with_output_color, prec_decl
+using Base: printstyled, with_output_color, prec_decl, @invoke
 
 function Base.show(io::IO, cfg::CFG)
     for (idx, block) in enumerate(cfg.blocks)
@@ -790,18 +790,39 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
     nothing
 end
 
-tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
-tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :orange
+function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
+    if name === :consistent || name === :effect_free || name === :inaccessiblememonly
+        prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
+                 getfield(effects, name) === ALWAYS_FALSE ? '!' : '?'
+    else
+        prefix = getfield(effects, name) ? '+' : '!'
+    end
+    return string(prefix, suffix)
+end
 
-function Base.show(io::IO, e::Core.Compiler.Effects)
+function effectbits_color(effects::Effects, name::Symbol)
+    if name === :consistent || name === :effect_free || name === :inaccessiblememonly
+        color = getfield(effects, name) === ALWAYS_TRUE ? :green :
+                getfield(effects, name) === ALWAYS_FALSE ? :red : :yellow
+    else
+        color = getfield(effects, name) ? :green : :red
+    end
+    return color
+end
+
+function Base.show(io::IO, e::Effects)
     print(io, "(")
-    printstyled(io, string(tristate_letter(e.consistent), 'c'); color=tristate_color(e.consistent))
+    printstyled(io, effectbits_letter(e, :consistent,  'c'); color=effectbits_color(e, :consistent))
     print(io, ',')
-    printstyled(io, string(tristate_letter(e.effect_free), 'e'); color=tristate_color(e.effect_free))
+    printstyled(io, effectbits_letter(e, :effect_free, 'e'); color=effectbits_color(e, :effect_free))
     print(io, ',')
-    printstyled(io, string(tristate_letter(e.nothrow), 'n'); color=tristate_color(e.nothrow))
+    printstyled(io, effectbits_letter(e, :nothrow,     'n'); color=effectbits_color(e, :nothrow))
     print(io, ',')
-    printstyled(io, string(tristate_letter(e.terminates), 't'); color=tristate_color(e.terminates))
+    printstyled(io, effectbits_letter(e, :terminates,  't'); color=effectbits_color(e, :terminates))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :notaskstate, 's'); color=effectbits_color(e, :notaskstate))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end

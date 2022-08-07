@@ -37,21 +37,76 @@ extern "C" {
 // careful to match the sequence, if necessary reserving space for something that will
 // be updated later.
 
-// It is also necessary to save & restore references to externally-defined objects,
-// e.g., for package methods that call methods defined in Base or elsewhere.
-// Consequently during deserialization there's a distinction between "reference"
-// types, methods, and method instances (essentially like a GlobalRef),
-// and "recached" version that refer to the actual entity in the running session.
-// We complete deserialization before beginning the process of recaching,
-// because we need the backreferences during deserialization and the actual
-// objects during recaching.
+// It is also necessary to save & restore references to externally-defined
+// objects, e.g., for package methods that call methods defined in Base or
+// elsewhere. Consequently during deserialization there's a distinction between
+// "reference" types, methods, and method instances (essentially like a
+// GlobalRef), and "recached" version that refer to the actual entity in the
+// running session. As a concrete example, types have a module in which they are
+// defined, but once defined those types can be used by any dependent package.
+// We don't store the full type definition again in that dependent package, we
+// just encode a reference to that type. In the running session, such references
+// are merely pointers to the type-cache, but the specific address is obviously
+// not likely to be reproducible across sessions (it will differ between the
+// session in which you precompile and the session in which you're using the
+// package). Hence, during serialization we recode them as "verbose" references
+// (that follow Julia syntax to allow them to be reconstructed), but on
+// deserialization we have to replace those verbose references with the
+// appropriate pointer in the user's running session. We complete
+// deserialization before beginning the process of recaching, because we need
+// the backreferences during deserialization and the actual objects during
+// recaching.
 
 // Finally, because our backedge graph is not bidirectional, special handling is
 // required to identify backedges from external methods that call internal methods.
 // These get set aside and restored at the end of deserialization.
 
+// In broad terms, the major steps in serialization are:
+// - starting from a "worklist" of modules, write the header. This stores things
+//   like the Julia build this was precompiled for, the package dependencies,
+//   the list of include files, file modification times, etc.
+// - gather the collection of items to be written to this precompile file. This
+//   includes accessible from the module's binding table (if they are owned by a
+//   worklist module), but also includes things like methods added to external
+//   functions, instances of external methods that were newly type-inferred
+//   while precompiling a worklist module, and backedges of callees that were
+//   called by methods in this package. By and large, these latter items are not
+//   referenced by the module(s) in the package, and so these have to be
+//   extracted by traversing the entire system searching for things that do link
+//   back to a module in the worklist.
+// - serialize all the items. The first time we encounter an item, we serialized
+//   it, and on future references (pointers) to that item we replace them with
+//   with a backreference.  `jl_serialize_*` functions handle this work.
+// - write source text for the files that defined the package. This is primarily
+//   to support Revise.jl.
+
+// Deserialization is the mirror image of serialization, but in some ways is
+// trickier:
+// - we have to merge items into the running session (recaching as described
+//   above) and handle cases like having two dependent packages caching the same
+//   MethodInstance of a dependency
+// - we have to check for invalidation---the user might have loaded other
+//   packages that define methods that supersede some of the dispatches chosen
+//   when the package was precompiled, or this package might define methods that
+//   supercede dispatches for previously-loaded packages. These two
+//   possibilities are checked during backedge and method insertion,
+//   respectively.
+// Both of these mean that deserialization requires one to look up a lot of
+// things in the running session; for example, for invalidation checks we have
+// to do type-intersection between signatures used for MethodInstances and the
+// current session's full MethodTable. In practice, such steps dominate package
+// loading time (it has very little to do with I/O or deserialization
+// performance). Paradoxically, sometimes storing more code in a package can
+// lead to faster performance: references to things in the same .ji file can be
+// precomputed, but external references have to be looked up. You can see this
+// effect in the benchmarks for #43990, where storing external MethodInstances
+// and CodeInstances (more code than was stored previously) actually decreased
+// load times for many packages.
+
 // Note that one should prioritize deserialization performance over serialization performance,
 // since deserialization may be performed much more often than serialization.
+// Certain items are preprocessed during serialization to save work when they are
+// later deserialized.
 
 
 // TODO: put WeakRefs on the weak_refs list during deserialization
@@ -69,9 +124,11 @@ static jl_value_t *deser_symbols[256];
 // (the order in the serializer stream). the low
 // bit is reserved for flagging certain entries and pos is
 // left shift by 1
-static htable_t backref_table;
+static htable_t backref_table;    // pos = backref_table[obj]
 static int backref_table_numel;
-static arraylist_t backref_list;
+static arraylist_t backref_list;  // obj = backref_list[pos]
+
+// set of all CodeInstances yet to be (in)validated
 static htable_t new_code_instance_validate;
 
 // list of (jl_value_t **loc, size_t pos) entries
@@ -83,16 +140,20 @@ static arraylist_t flagref_list;
 // like types, methods, and method instances
 static htable_t uniquing_table;
 
-// list of (size_t pos, (void *f)(jl_value_t*)) entries
-// for the serializer to mark values in need of rework by function f
+// list of (size_t pos, itemkey) entries
+// for the serializer to mark values in need of rework
 // during deserialization later
+// This includes items that need rehashing (IdDict, TypeMapLevels)
+// and modules.
 static arraylist_t reinit_list;
 
-// list of stuff that is being serialized
+// list of modules being serialized
 // This is not quite globally rooted, but we take care to only
 // ever assigned rooted values here.
 static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
-// external MethodInstances we want to serialize
+// The set of external MethodInstances we want to serialize
+// (methods owned by other modules that were first inferred for a
+//  module currently being serialized)
 static htable_t external_mis;
 // Inference tracks newly-inferred MethodInstances during precompilation
 // and registers them by calling jl_set_newly_inferred
@@ -100,7 +161,14 @@ static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
 
 // New roots to add to Methods. These can't be added until after
 // recaching is complete, so we have to hold on to them separately
-// Stored as method => (worklist_key, roots)
+// Stored as method => (worklist_key, newroots)
+// The worklist_key is the uuid of the module that triggered addition
+// of `newroots`. This is needed because CodeInstances reference
+// their roots by "index", and we use a bipartite index
+// (module_uuid, integer_index) to make indexes "relocatable"
+// (meaning that users can load modules in different orders and
+//  so the absolute integer index of a root is not reproducible).
+// See the "root blocks" section of method.c for more detail.
 static htable_t queued_method_roots;
 
 // inverse of backedges graph (caller=>callees hash)
@@ -257,6 +325,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     if (*bp != HT_NOTFOUND)
         return (char*)*bp - (char*)HT_NOTFOUND - 1;
     *bp = (void*)((char*)HT_NOTFOUND + 1);  // preliminarily mark as "not found"
+    // TODO: this algorithm deals with cycles incorrectly
     jl_module_t *mod = mi->def.module;
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
@@ -1125,7 +1194,7 @@ static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   fully serialized
 // - otherwise (i.e., if it's an external method), check all of its specializations.
-//   Collect backedges from those that are not being fully serialized.
+//   Collect all external backedges (may be needed later when we invert this list).
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
 {
     jl_array_t *s = (jl_array_t*)closure;
@@ -1139,7 +1208,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if ((jl_value_t*)callee != jl_nothing && !method_instance_in_queue(callee))
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }
@@ -1202,6 +1271,8 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL
 // flatten the backedge map reachable from caller into callees
 static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_callees) JL_GC_DISABLED
 {
+    if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))
+        return;
     jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
                 *callees = *pcallees;
     if (callees != HT_NOTFOUND) {
@@ -1230,7 +1301,10 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
     for (i = 0; i < edges_map.size; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
-        if (callees != HT_NOTFOUND && (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))) {
+        if (callees == HT_NOTFOUND)
+            continue;
+        assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
+        if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller)) {
             size_t i, l = jl_array_len(callees);
             for (i = 0; i < l; i++) {
                 jl_value_t *c = jl_array_ptr_ref(callees, i);

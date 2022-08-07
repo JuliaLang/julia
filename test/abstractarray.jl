@@ -1469,9 +1469,7 @@ using Base: typed_hvncat
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            # current behavior, not potentially dangerous.
-            # should throw error like above loop
-            @test [v1 ;;; v2 v3] == [v2 v3;;;]
+            @test_throws ArgumentError [v1 ;;; v2 v3]
             @test_throws ArgumentError [v1 ;;; v2]
             @test_throws ArgumentError [v1 v1 ;;; v2 v3]
         end
@@ -1545,6 +1543,14 @@ using Base: typed_hvncat
     @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
 
     @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
+
+    #45461, #46133 - ensure non-numeric types do not error
+    @test [1;;; 2;;; nothing;;; 4] == reshape([1; 2; nothing; 4], (1, 1, 4))
+    @test [1 2;;; nothing 4] == reshape([1; 2; nothing; 4], (1, 2, 2))
+    @test [[1 2];;; nothing 4] == reshape([1; 2; nothing; 4], (1, 2, 2))
+    @test ["A";;"B";;"C";;"D"] == ["A" "B" "C" "D"]
+    @test ["A";"B";;"C";"D"] == ["A" "C"; "B" "D"]
+    @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
 end
 
 @testset "keepat!" begin
@@ -1569,26 +1575,65 @@ end
 end
 
 @testset "reshape methods for AbstractVectors" begin
-    r = Base.IdentityUnitRange(3:4)
-    @test reshape(r, :) === reshape(r, (:,)) === r
+    for r in Any[1:3, Base.IdentityUnitRange(3:4)]
+        @test reshape(r, :) === reshape(r, (:,)) === r
+    end
+    r = 3:5
+    rr = reshape(r, 1, 3)
+    @test length(rr) == length(r)
 end
 
+struct FakeZeroDimArray <: AbstractArray{Int, 0} end
+Base.strides(::FakeZeroDimArray) = ()
+Base.size(::FakeZeroDimArray) = ()
 @testset "strides for ReshapedArray" begin
     # Type-based contiguous check is tested in test/compiler/inline.jl
+    function check_strides(A::AbstractArray)
+        # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+        dims = ntuple(identity, ndims(A))
+        map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
+        # Test strides via value check.
+        for i in eachindex(IndexLinear(), A)
+            A[i] === Base.unsafe_load(pointer(A, i)) || return false
+        end
+        return true
+    end
     # General contiguous check
     a = view(rand(10,10), 1:10, 1:10)
-    @test strides(vec(a)) == (1,)
+    @test check_strides(vec(a))
     b = view(parent(a), 1:9, 1:10)
-    @test_throws "Parent must be contiguous." strides(vec(b))
+    @test_throws "Input is not strided." strides(vec(b))
     # StridedVector parent
     for n in 1:3
         a = view(collect(1:60n), 1:n:60n)
-        @test strides(reshape(a, 3, 4, 5)) == (n, 3n, 12n)
-        @test strides(reshape(a, 5, 6, 2)) == (n, 5n, 30n)
+        @test check_strides(reshape(a, 3, 4, 5))
+        @test check_strides(reshape(a, 5, 6, 2))
         b = view(parent(a), 60n:-n:1)
-        @test strides(reshape(b, 3, 4, 5)) == (-n, -3n, -12n)
-        @test strides(reshape(b, 5, 6, 2)) == (-n, -5n, -30n)
+        @test check_strides(reshape(b, 3, 4, 5))
+        @test check_strides(reshape(b, 5, 6, 2))
     end
+    # StridedVector like parent
+    a = randn(10, 10, 10)
+    b = view(a, 1:10, 1:1, 5:5)
+    @test check_strides(reshape(b, 2, 5))
+    # Other StridedArray parent
+    a = view(randn(10,10), 1:9, 1:10)
+    @test check_strides(reshape(a,3,3,2,5))
+    @test check_strides(reshape(a,3,3,5,2))
+    @test check_strides(reshape(a,9,5,2))
+    @test check_strides(reshape(a,3,3,10))
+    @test check_strides(reshape(a,1,3,1,3,1,5,1,2))
+    @test check_strides(reshape(a,3,3,5,1,1,2,1,1))
+    @test_throws "Input is not strided." strides(reshape(a,3,6,5))
+    @test_throws "Input is not strided." strides(reshape(a,3,2,3,5))
+    @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
+    @test_throws "Input is not strided." strides(reshape(a,5,3,3,2))
+    # Zero dimensional parent
+    a = reshape(FakeZeroDimArray(),1,1,1)
+    @test @inferred(strides(a)) == (1, 1, 1)
+    # Dense parent (but not StridedArray)
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(reshape(A, 3, 2, 3))
 end
 
 @testset "stride for 0 dims array #44087" begin
@@ -1605,10 +1650,13 @@ end
 end
 
 @testset "to_indices inference (issue #42001 #44059)" begin
-    @test (@inferred to_indices([], ntuple(Returns(CartesianIndex(1)), 32))) == ntuple(Returns(1), 32)
-    @test (@inferred to_indices([], ntuple(Returns(CartesianIndices(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
-    @test (@inferred to_indices([], (CartesianIndex(),1,CartesianIndex(1,1,1)))) == ntuple(Returns(1), 4)
-    A = randn(2,2,2,2,2,2);
-    i = CartesianIndex((1,1))
+    CIdx = CartesianIndex
+    CIdc = CartesianIndices
+    @test (@inferred to_indices([], ntuple(Returns(CIdx(1)), 32))) == ntuple(Returns(1), 32)
+    @test (@inferred to_indices([], ntuple(Returns(CIdc(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
+    @test (@inferred to_indices([], (CIdx(), 1, CIdx(1,1,1)))) == ntuple(Returns(1), 4)
+    A = randn(2, 2, 2, 2, 2, 2);
+    i = CIdx((1, 1))
     @test (@inferred A[i,i,i]) === A[1]
+    @test (@inferred to_indices([], (1, CIdx(1, 1), 1, CIdx(1, 1), 1, CIdx(1, 1), 1))) == ntuple(Returns(1), 10)
 end

@@ -1,4 +1,5 @@
 ## nghttp2
+include $(SRCDIR)/nghttp2.version
 
 ifneq ($(USE_BINARYBUILDER_NGHTTP2), 1)
 

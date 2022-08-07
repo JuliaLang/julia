@@ -9,6 +9,9 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 n=12 #Size of matrix problem to test
 Random.seed!(1)
 
@@ -785,14 +788,24 @@ end
     @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
+@testset "Multiplication of a Diagonal with an OffsetArray" begin
+    # Offset indices should throw
+    D = Diagonal(1:4)
+    A = OffsetArray(rand(4,4), 2, 2)
+    @test_throws ArgumentError D * A
+    @test_throws ArgumentError A * D
+    @test_throws ArgumentError mul!(similar(A, size(A)), A, D)
+    @test_throws ArgumentError mul!(similar(A, size(A)), D, A)
+end
+
 @testset "Triangular division by Diagonal #27989" begin
     K = 5
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
         U = UpperTriangular(randn(elty, K, K))
         L = LowerTriangular(randn(elty, K, K))
         D = Diagonal(randn(elty, K))
-        @test (U / D)::UpperTriangular{elty} ≈ UpperTriangular(Matrix(U) / Matrix(D)) rtol=2eps(real(elty))
-        @test (L / D)::LowerTriangular{elty} ≈ LowerTriangular(Matrix(L) / Matrix(D)) rtol=2eps(real(elty))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
         @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
         @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
@@ -806,8 +819,8 @@ end
         D0 = Diagonal(zeros(elty, K))
         @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
         @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
-        @test (S / D)::Tridiagonal{elty} ≈ Tridiagonal(Matrix(S) / Matrix(D)) rtol=2eps(real(elty))
-        @test (T / D)::Tridiagonal{elty} ≈ Tridiagonal(Matrix(T) / Matrix(D)) rtol=2eps(real(elty))
+        @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
+        @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
         @test_throws SingularException D0 \ S
         @test_throws SingularException D0 \ T
         @test_throws SingularException S / D0
@@ -851,8 +864,8 @@ end
     D = Diagonal(rand(1:20, K))
     @test (D \ S)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(S))
     @test (D \ T)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(T))
-    @test (S / D)::Tridiagonal{Float64} ≈ Tridiagonal(Matrix(S) / Matrix(D)) rtol=2eps()
-    @test (T / D)::Tridiagonal{Float64} ≈ Tridiagonal(Matrix(T) / Matrix(D)) rtol=2eps()
+    @test (S / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(S) / Matrix(D))
+    @test (T / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(T) / Matrix(D))
 end
 
 @testset "eigenvalue sorting" begin
@@ -960,7 +973,7 @@ end
 @testset "divisions functionality" for elty in (Int, Float64, ComplexF64)
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
-    @test \(x, B) ≈ /(B, x) rtol=2eps()
+    @test \(x, B) == /(B, x)
 end
 
 @testset "promotion" begin

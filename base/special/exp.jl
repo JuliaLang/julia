@@ -175,8 +175,10 @@ const J_TABLE = (0x0000000000000000, 0xaac00b1afa5abcbe, 0x9b60163da9fb3335, 0xa
                  0xa66f0f9c1cb64129, 0x93af252b376bba97, 0xacdf3ac948dd7273, 0x99df50765b6e4540, 0x9faf6632798844f8,
                  0xa12f7bfdad9cbe13, 0xaeef91d802243c88, 0x874fa7c1819e90d8, 0xacdfbdba3692d513, 0x62efd3c22b8f71f1, 0x74afe9d96b2a23d9)
 
-@inline function table_unpack(ind)
-    j = @inbounds J_TABLE[ind]
+# :nothrow needed since the compiler can't prove `ind` is inbounds.
+Base.@assume_effects :nothrow @inline function table_unpack(ind::Int32)
+    ind = ind & 255 + 1 # 255 == length(J_TABLE) - 1
+    j = getfield(J_TABLE, ind) # use getfield so the compiler can prove consistent
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
     jL = reinterpret(Float64, JL_CONST | (j>>8))
     return jU, jL
@@ -211,7 +213,7 @@ end
     r = muladd(N_float, LogBo256U(base, T), x)
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
-    jU, jL = table_unpack(N&255 + 1)
+    jU, jL = table_unpack(N)
     small_part =  muladd(jU, expm1b_kernel(base, r), jL) + jU
 
     if !(abs(x) <= SUBNORM_EXP(base, T))
@@ -236,7 +238,7 @@ end
     r = muladd(N_float, LogBo256U(base, T), x)
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
-    jU, jL = table_unpack(N&255 + 1)
+    jU, jL = table_unpack(N)
     very_small = muladd(jU, expm1b_kernel(base, r), jL)
     small_part =  muladd(jU,xlo,very_small) + jU
     if !(abs(x) <= SUBNORM_EXP(base, T))
@@ -439,7 +441,7 @@ function expm1(x::Float64)
     r = muladd(N_float, LogBo256U(Val(:ℯ), T), x)
     r = muladd(N_float, LogBo256L(Val(:ℯ), T), r)
     k = Int64(N >> 8)
-    jU, jL = table_unpack(N&255 +1)
+    jU, jL = table_unpack(N)
     p = expm1b_kernel(Val(:ℯ), r)
     twopk  = reinterpret(Float64, (1023+k) << 52)
     twopnk = reinterpret(Float64, (1023-k) << 52)

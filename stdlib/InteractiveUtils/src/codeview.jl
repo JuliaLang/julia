@@ -32,7 +32,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     str = "::$ty"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Union && Base.is_expected_union(ty)
+    elseif ty isa Union && is_expected_union(ty)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
     elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
         Base.emphasize(io, str)
@@ -40,6 +40,18 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
     nothing
+end
+
+# True if one can be pretty certain that the compiler handles this union well,
+# i.e. must be small with concrete types.
+function is_expected_union(u::Union)
+    Base.unionlen(u) < 4 || return false
+    for x in Base.uniontypes(u)
+        if !Base.isdispatchelem(x) || x == Core.Box
+            return false
+        end
+    end
+    return true
 end
 
 """
@@ -211,12 +223,18 @@ function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wr
     return str
 end
 
+struct LLVMFDump
+    tsm::Ptr{Cvoid} # opaque
+    f::Ptr{Cvoid} # opaque
+end
+
 function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, true, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, true, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_asm, Ref{String},
-                (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                llvmf, false, syntax, debuginfo, binary)
+                (Ptr{LLVMFDump}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                llvmf_dump, false, syntax, debuginfo, binary)
     return str
 end
 
@@ -225,11 +243,12 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, optimize, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
-                (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
-                llvmf, strip_ir_metadata, dump_module, debuginfo)
+                (Ptr{LLVMFDump}, Bool, Bool, Ptr{UInt8}),
+                llvmf_dump, strip_ir_metadata, dump_module, debuginfo)
     return str
 end
 

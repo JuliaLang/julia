@@ -11,8 +11,8 @@ New language features
   e.g. `[;;;]` creates a 0×0×0 `Array` ([#41618]).
 * `try`-blocks can now optionally have an `else`-block which is executed right after the main body only if
   no errors were thrown ([#42211]).
-* `@inline` and `@noinline` annotations can now be placed within a function body ([#41312]).
-* `@inline` and `@noinline` annotations can now be applied to a function call site or block
+* `@inline` and `@noinline` can now be placed within a function body, allowing one to annotate anonymous function ([#41312]).
+* `@inline` and `@noinline` can now be applied to a function at callsite or block
   to enforce the involved function calls to be (or not to be) inlined ([#41328]).
 * `∀`, `∃`, and `∄` are now allowed as identifier characters ([#42314]).
 * Support for Unicode 14.0.0 ([#43443]).
@@ -43,7 +43,9 @@ Compiler/Runtime improvements
   `libjulia-codegen`. It is loaded by default, so normal usage should see no changes.
   In deployments that do not need the compiler (e.g. system images where all needed code
   is precompiled), this library (and its LLVM dependency) can simply be excluded ([#41936]).
-* Conditional type constraints can now be forwarded interprocedurally (i.e. propagated from caller to callee) ([#42529]).
+* Conditional type constraints are now be forwarded interprocedurally (i.e. propagated from caller to callee).
+  This allows inference to understand e.g. `Base.ifelse(isa(x, Int), x, 0)` returns `::Int`-value
+  even if the type of `x` is not known ([#42529]).
 * Julia-level SROA (Scalar Replacement of Aggregates) has been improved: allowing elimination of
   `getfield` calls with constant global fields ([#42355]), enabling elimination of mutable structs with
   uninitialized fields ([#43208]), improving performance ([#43232]), and handling more nested `getfield`
@@ -53,7 +55,7 @@ Compiler/Runtime improvements
 * Inference now tracks various effects such as side-effectful-ness and nothrow-ness on a per-specialization basis.
   Code heavily dependent on constant propagation should see significant compile-time performance improvements and
   certain cases (e.g. calls to uninlinable functions that are nevertheless effect free) should see runtime performance
-  improvements. Effects may be overwritten manually with the `@Base.assume_effects` macro ([#43852]).
+  improvements. Effects may be overwritten manually with the `Base.@assume_effects` macro ([#43852]).
 
 Command-line option changes
 ---------------------------
@@ -113,7 +115,8 @@ Standard library changes
 
 #### InteractiveUtils
 
-* New macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612]).
+* New macro `@time_imports` for reporting any time spent importing packages and their dependencies, highlighting
+  compilation and recompilation time as percentages per import ([#41612],[#45064]).
 
 #### LinearAlgebra
 
@@ -198,6 +201,11 @@ Standard library changes
   definitions, including to other function calls, while recording all intermediate test results ([#42518]).
 * `TestLogger` and `LogRecord` are now exported from the Test stdlib ([#44080]).
 
+#### Distributed
+
+* SSHManager now supports workers with csh/tcsh login shell, via `addprocs()` option `shell=:csh` ([#41485]).
+
+
 Deprecated or removed
 ---------------------
 
@@ -229,6 +237,7 @@ Tooling Improvements
 [#41312]: https://github.com/JuliaLang/julia/issues/41312
 [#41328]: https://github.com/JuliaLang/julia/issues/41328
 [#41449]: https://github.com/JuliaLang/julia/issues/41449
+[#41485]: https://github.com/JuliaLang/julia/issues/41485
 [#41551]: https://github.com/JuliaLang/julia/issues/41551
 [#41576]: https://github.com/JuliaLang/julia/issues/41576
 [#41612]: https://github.com/JuliaLang/julia/issues/41612
@@ -3291,7 +3300,7 @@ Deprecated or removed
      array interface should define their own `strides` method ([#25321]).
 
   * `module_parent`, `Base.datatype_module`, and `Base.function_module` have been deprecated
-    in favor of `parentmodule` ([#TODO]).
+    in favor of `parentmodule` ([#25629]).
 
   * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
     `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
@@ -3664,6 +3673,7 @@ Command-line option changes
 [#25571]: https://github.com/JuliaLang/julia/issues/25571
 [#25616]: https://github.com/JuliaLang/julia/issues/25616
 [#25622]: https://github.com/JuliaLang/julia/issues/25622
+[#25629]: https://github.com/JuliaLang/julia/issues/25629
 [#25631]: https://github.com/JuliaLang/julia/issues/25631
 [#25633]: https://github.com/JuliaLang/julia/issues/25633
 [#25634]: https://github.com/JuliaLang/julia/issues/25634

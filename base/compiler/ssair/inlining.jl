@@ -18,6 +18,8 @@ struct ResolvedInliningSpec
     # Effects of the call statement
     effects::Effects
 end
+ResolvedInliningSpec(ir::IRCode, effects::Effects) =
+    ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects)
 
 """
 Represents a callsite that our analysis has determined is legal to inline,
@@ -306,21 +308,17 @@ function finish_cfg_inline!(state::CFGInliningState)
     end
 end
 
-function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
-                         linetable::Vector{LineInfoNode}, item::InliningTodo,
-                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
-    # Ok, do the inlining here
-    spec = item.spec::ResolvedInliningSpec
-    sparam_vals = item.mi.sparam_vals
-    def = item.mi.def::Method
+function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCode,
+                              inlinee::Method,
+                              inlined_at::Int32)
+    coverage = coverage_enabled(inlinee.module)
     linetable_offset::Int32 = length(linetable)
     # Append the linetable of the inlined function to our line table
-    inlined_at = compact.result[idx][:line]
     topline::Int32 = linetable_offset + Int32(1)
-    coverage = coverage_enabled(def.module)
     coverage_by_path = JLOptions().code_coverage == 3
-    push!(linetable, LineInfoNode(def.module, def.name, def.file, def.line, inlined_at))
-    oldlinetable = spec.ir.linetable
+    push!(linetable, LineInfoNode(inlinee.module, inlinee.name, inlinee.file, inlinee.line, inlined_at))
+    oldlinetable = inlinee_ir.linetable
+    extra_coverage_line = 0
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
         if !coverage && coverage_by_path && is_file_tracked(entry.file)
@@ -339,8 +337,25 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         end
         push!(linetable, newentry)
     end
-    if coverage && spec.ir.stmts[1][:line] + linetable_offset != topline
-        insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, topline))
+    if coverage && inlinee_ir.stmts[1][:line] + linetable_offset != topline
+        extra_coverage_line = topline
+    end
+    return linetable_offset, extra_coverage_line
+end
+
+function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
+                         linetable::Vector{LineInfoNode}, item::InliningTodo,
+                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
+    # Ok, do the inlining here
+    spec = item.spec::ResolvedInliningSpec
+    sparam_vals = item.mi.sparam_vals
+    def = item.mi.def::Method
+    inlined_at = compact.result[idx][:line]
+    linetable_offset::Int32 = length(linetable)
+    topline::Int32 = linetable_offset + Int32(1)
+    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, item.spec.ir, def, inlined_at)
+    if extra_coverage_line != 0
+        insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
@@ -379,6 +394,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 inline_compact[idx′] = val
                 inline_compact.result[idx′][:type] =
                     argextype(val, isa(val, Argument) || isa(val, Expr) ? compact : inline_compact)
+                # Everything legal in value position is guaranteed to be effect free in stmt position
+                inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE
                 break
             end
             inline_compact[idx′] = stmt′
@@ -401,21 +418,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
-                    # GlobalRefs can have side effects, but are currently
-                    # allowed in arguments of ReturnNodes
+                    @assert !isa(val, Expr) # GlobalRefs with side-effects are disallowed in value position in IRCode
                     push!(pn.edges, inline_compact.active_result_bb-1)
-                    if isa(val, GlobalRef) || isa(val, Expr)
-                        stmt′ = val
-                        inline_compact.result[idx′][:type] =
-                            argextype(val, isa(val, Expr) ? compact : inline_compact)
-                        insert_node_here!(inline_compact, NewInstruction(GotoNode(post_bb_id),
-                                          Any, compact.result[idx′][:line]),
-                                          true)
-                        push!(pn.values, SSAValue(idx′))
-                    else
-                        push!(pn.values, val)
-                        stmt′ = GotoNode(post_bb_id)
-                    end
+                    push!(pn.values, val)
+                    stmt′ = GotoNode(post_bb_id)
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
@@ -761,7 +767,7 @@ function rewrite_apply_exprargs!(
                 elseif isa(new_info, MethodMatchInfo) || isa(new_info, UnionSplitInfo)
                     new_infos = isa(new_info, MethodMatchInfo) ? MethodMatchInfo[new_info] : new_info.matches
                     # See if we can inline this call to `iterate`
-                    analyze_single_call!(
+                    handle_call!(
                         ir, state1.id, new_stmt, new_infos, flag,
                         new_sig, istate, todo)
                 end
@@ -786,20 +792,20 @@ end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch, effects::Effects)
     mi = specialize_method(match; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
 function compileable_specialization(et::Union{EdgeTracker, Nothing}, linfo::MethodInstance, effects::Effects)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
-    mi !== nothing && et !== nothing && push!(et, mi::MethodInstance)
     mi === nothing && return nothing
+    et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, (; linfo)::InferenceResult, effects::Effects)
-    return compileable_specialization(et, linfo, effects)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects)
+    return compileable_specialization(et, result.linfo, effects)
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
@@ -815,7 +821,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
             et !== nothing && push!(et, mi)
             return ConstantCase(quoted(inferred_src.val))
         else
-            src = inferred_src
+            src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
         end
         effects = match.ipo_effects
     else
@@ -829,7 +835,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
                 src = code.inferred
             end
             effects = decode_effects(code.ipo_purity_bits)
-        else
+        else # fallback pass for external AbstractInterpreter cache
             effects = Effects()
             src = code
         end
@@ -843,16 +849,10 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
-    if src === nothing
-        return compileable_specialization(et, match, effects)
-    end
-
-    if isa(src, IRCode)
-        src = copy(src)
-    end
+    src === nothing && return compileable_specialization(et, match, effects)
 
     et !== nothing && push!(et, mi)
-    return InliningTodo(mi, src, effects)
+    return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
 end
 
 function resolve_todo((; fully_covered, atype, cases, #=bbs=#)::UnionSplit, state::InliningState, flag::UInt8)
@@ -913,18 +913,15 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
 end
 
 function InliningTodo(mi::MethodInstance, ir::IRCode, effects::Effects)
-    return InliningTodo(mi, ResolvedInliningSpec(ir, linear_inline_eligible(ir), effects))
+    return InliningTodo(mi, ResolvedInliningSpec(ir, effects))
 end
 
-function InliningTodo(mi::MethodInstance, src::Union{CodeInfo, Array{UInt8, 1}}, effects::Effects)
-    if !isa(src, CodeInfo)
-        src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
-    end
-
-    @timeit "inline IR inflation" begin;
-        return InliningTodo(mi, inflate_ir(src, mi)::IRCode, effects)
-    end
+function retrieve_ir_for_inlining(mi::MethodInstance, src::Array{UInt8, 1})
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src::Vector{UInt8})::CodeInfo
+    return inflate_ir!(src, mi)
 end
+retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)
+retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode) = copy(ir)
 
 function handle_single_case!(
     ir::IRCode, idx::Int, stmt::Expr,
@@ -937,7 +934,9 @@ function handle_single_case!(
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)
         if is_removable_if_unused(case.effects)
-            ir[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE
+            ir[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        elseif is_nothrow(case.effects)
+            ir[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
         end
     elseif case === nothing
         # Do, well, nothing
@@ -1140,11 +1139,13 @@ end
 # For primitives, we do that right here. For proper calls, we will
 # discover this when we consult the caches.
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt))
-    if stmt_effect_free(stmt, rt, ir)
-        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
-        return true
+    (total, nothrow) = stmt_effect_flags(stmt, rt, ir)
+    if total
+        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif nothrow
+        ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
     end
-    return false
+    return total
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
@@ -1206,7 +1207,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         end
     end
 
-    if sig.f !== Core.invoke && is_builtin(sig)
+    if sig.f !== Core.invoke && sig.f !== Core.finalizer && is_builtin(sig)
         # No inlining for builtins (other invoke/apply/typeassert)
         return nothing
     end
@@ -1223,9 +1224,8 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
 end
 
 # TODO inline non-`isdispatchtuple`, union-split callsites?
-function analyze_single_call!(
-    ir::IRCode, idx::Int, stmt::Expr, infos::Vector{MethodMatchInfo}, flag::UInt8,
-    sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
+function compute_inlining_cases(infos::Vector{MethodMatchInfo},
+    flag::UInt8, sig::Signature, state::InliningState)
     argtypes = sig.argtypes
     cases = InliningCase[]
     local any_fully_covered = false
@@ -1242,7 +1242,7 @@ function analyze_single_call!(
             continue
         end
         for match in meth
-            handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, true)
+            handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true)
             any_fully_covered |= match.fully_covers
         end
     end
@@ -1252,16 +1252,13 @@ function analyze_single_call!(
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    handle_cases!(ir, idx, stmt, argtypes_to_type(argtypes), cases,
-        handled_all_cases & any_fully_covered, todo, state.params)
+    return cases, handled_all_cases & any_fully_covered
 end
 
-# similar to `analyze_single_call!`, but with constant results
-function handle_const_call!(
-    ir::IRCode, idx::Int, stmt::Expr, cinfo::ConstCallInfo, flag::UInt8,
-    sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
+function compute_inlining_cases(info::ConstCallInfo,
+    flag::UInt8, sig::Signature, state::InliningState)
     argtypes = sig.argtypes
-    (; call, results) = cinfo
+    (; call, results) = info
     infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
     cases = InliningCase[]
     local any_fully_covered = false
@@ -1289,7 +1286,7 @@ function handle_const_call!(
                 handled_all_cases &= handle_const_prop_result!(result, argtypes, flag, state, cases, true)
             else
                 @assert result === nothing
-                handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, true)
+                handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true)
             end
         end
     end
@@ -1299,8 +1296,27 @@ function handle_const_call!(
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    handle_cases!(ir, idx, stmt, argtypes_to_type(argtypes), cases,
-        handled_all_cases & any_fully_covered, todo, state.params)
+    return cases, handled_all_cases & any_fully_covered
+end
+
+function handle_call!(
+    ir::IRCode, idx::Int, stmt::Expr, infos::Vector{MethodMatchInfo}, flag::UInt8,
+    sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
+    cases = compute_inlining_cases(infos, flag, sig, state)
+    cases === nothing && return nothing
+    cases, all_covered = cases
+    handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
+        all_covered, todo, state.params)
+end
+
+function handle_const_call!(
+    ir::IRCode, idx::Int, stmt::Expr, info::ConstCallInfo, flag::UInt8,
+    sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
+    cases = compute_inlining_cases(info, flag, sig, state)
+    cases === nothing && return nothing
+    cases, all_covered = cases
+    handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
+        all_covered, todo, state.params)
 end
 
 function handle_match!(
@@ -1333,7 +1349,9 @@ end
 
 function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        return compileable_specialization(state.et, result.mi, result.effects)
+        case = compileable_specialization(state.et, result.mi, result.effects)
+        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
+        return case
     end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
@@ -1361,10 +1379,57 @@ function handle_const_opaque_closure_call!(
     ir::IRCode, idx::Int, stmt::Expr, result::ConstPropResult, flag::UInt8,
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     item = InliningTodo(result.result, sig.argtypes)
-    isdispatchtuple(item.mi.specTypes) || return
-    validate_sparams(item.mi.sparam_vals) || return
+    validate_sparams(item.mi.sparam_vals) || return nothing
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     handle_single_case!(ir, idx, stmt, item, todo, state.params)
+    return nothing
+end
+
+function handle_finalizer_call!(
+    ir::IRCode, stmt::Expr, info::FinalizerInfo, state::InliningState)
+    # Only inline finalizers that are known nothrow and notls.
+    # This avoids having to set up state for finalizer isolation
+    (is_nothrow(info.effects) && is_notaskstate(info.effects)) || return nothing
+
+    info = info.info
+    if isa(info, MethodMatchInfo)
+        infos = MethodMatchInfo[info]
+    elseif isa(info, UnionSplitInfo)
+        infos = info.matches
+    # elseif isa(info, ConstCallInfo)
+    #     # NOTE currently this code path isn't active as constant propagation won't happen
+    #     # for `Core.finalizer` call because inference currently isn't able to fold a mutable
+    #     # object as a constant
+    else
+        return nothing
+    end
+
+    ft = argextype(stmt.args[2], ir)
+    has_free_typevars(ft) && return nothing
+    f = singleton_type(ft)
+    argtypes = Vector{Any}(undef, 2)
+    argtypes[1] = ft
+    argtypes[2] = argextype(stmt.args[3], ir)
+    sig = Signature(f, ft, argtypes)
+
+    cases = compute_inlining_cases(infos, #=flag=#UInt8(0), sig, state)
+    cases === nothing && return nothing
+    cases, all_covered = cases
+    if all_covered && length(cases) == 1
+        # NOTE we don't append `item1` to `stmt` here so that we don't serialize
+        # `Core.Compiler` data structure into the global cache
+        item1 = cases[1].item
+        if isa(item1, InliningTodo)
+            push!(stmt.args, true)
+            push!(stmt.args, item1.mi)
+        elseif isa(item1, InvokeCase)
+            push!(stmt.args, false)
+            push!(stmt.args, item1.invoke)
+        elseif isa(item1, ConstantCase)
+            push!(stmt.args, nothing)
+            push!(stmt.args, item1.val)
+        end
+    end
     return nothing
 end
 
@@ -1418,10 +1483,14 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # Handle invoke
-        if sig.f === Core.invoke
-            if isa(info, InvokeCallInfo)
-                inline_invoke!(ir, idx, stmt, info, flag, sig, state, todo)
-            end
+        if isa(info, InvokeCallInfo)
+            inline_invoke!(ir, idx, stmt, info, flag, sig, state, todo)
+            continue
+        end
+
+        # Handle finalizer
+        if isa(info, FinalizerInfo)
+            handle_finalizer_call!(ir, stmt, info, state)
             continue
         end
 
@@ -1443,7 +1512,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue # isa(info, ReturnTypeCallInfo), etc.
         end
 
-        analyze_single_call!(ir, idx, stmt, infos, flag, sig, state, todo)
+        handle_call!(ir, idx, stmt, infos, flag, sig, state, todo)
     end
 
     return todo

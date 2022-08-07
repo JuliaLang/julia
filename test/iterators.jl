@@ -187,6 +187,8 @@ end
 @test isempty(collect(drop(0:2:10, 100)))
 @test_throws ArgumentError drop(0:2:8, -1)
 @test length(drop(1:3,typemax(Int))) == 0
+@test length(drop(UInt(1):2, 3)) == 0
+@test length(drop(StepRangeLen(1, 1, UInt(2)), 3)) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
 @test Base.IteratorSize(Iterators.drop(Iterators.filter(i -> i>0, 1:10), 2)) == Base.SizeUnknown()
@@ -324,6 +326,8 @@ let itr
     @test collect(itr) == Int[] # Stateful do not preserve shape
     itr = (i-1 for i in Base.Stateful(zeros(Int, 0, 0)))
     @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = Iterators.Stateful(Iterators.Stateful(1:1))
+    @test collect(itr) == [1]
 end
 
 # with 1D inputs
