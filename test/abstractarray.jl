@@ -733,6 +733,10 @@ function test_cat(::Type{TestAbstractArray})
     cat3v(As) = cat(As...; dims=Val(3))
     @test @inferred(cat3v(As)) == zeros(2, 2, 2)
     @test @inferred(cat(As...; dims=Val((1,2)))) == zeros(4, 4)
+
+    r = rand(Float32, 56, 56, 64, 1);
+    f(r) = cat(r, r, dims=(3,))
+    @inferred f(r);
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -1615,6 +1619,9 @@ Base.size(::FakeZeroDimArray) = ()
     # Zero dimensional parent
     a = reshape(FakeZeroDimArray(),1,1,1)
     @test @inferred(strides(a)) == (1, 1, 1)
+    # Dense parent (but not StridedArray)
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(reshape(A, 3, 2, 3))
 end
 
 @testset "stride for 0 dims array #44087" begin

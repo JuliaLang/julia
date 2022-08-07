@@ -407,7 +407,7 @@ It also bails out from local statement/frame inference when any lattice element 
 but `AbstractInterpreter` doesn't provide a specific interface for configuring it.
 """
 bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv#=::InferenceState=#) =
-    return isa(sv.linfo.def, Module) && !isdispatchtuple(callsig)
+    return sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
 bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
     return rt === Any
 bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =

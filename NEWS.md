@@ -111,7 +111,6 @@ New library features
 * `extrema` now accepts an `init` keyword argument ([#36265], [#43604]).
 * `Iterators.countfrom` now accepts any type that defines `+` ([#37747]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
-* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 
 Standard library changes
 ------------------------
@@ -147,7 +146,8 @@ Standard library changes
 
 #### InteractiveUtils
 
-* New macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612]).
+* New macro `@time_imports` for reporting any time spent importing packages and their dependencies, highlighting
+  compilation and recompilation time as percentages per import ([#41612],[#45064]).
 
 #### LinearAlgebra
 

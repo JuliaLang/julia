@@ -641,15 +641,6 @@ JL_DLLEXPORT void jl_exit(int exitcode)
     exit(exitcode);
 }
 
-JL_DLLEXPORT int jl_getpid(void) JL_NOTSAFEPOINT
-{
-#ifdef _OS_WINDOWS_
-    return GetCurrentProcessId();
-#else
-    return getpid();
-#endif
-}
-
 typedef union {
     struct sockaddr in;
     struct sockaddr_in v4;

@@ -861,7 +861,7 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
     end
     isa(s, DataType) || return Any
     isabstracttype(s) && return Any
-    if s <: Tuple && !(Int <: widenconst(name))
+    if s <: Tuple && !hasintersect(widenconst(name), Int)
         return Bottom
     end
     if s <: Module
@@ -934,6 +934,57 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         return R
     end
     return rewrap_unionall(R, s00)
+end
+
+function getfield_notundefined(@nospecialize(typ0), @nospecialize(name))
+    typ = unwrap_unionall(typ0)
+    if isa(typ, Union)
+        return getfield_notundefined(rewrap_unionall(typ.a, typ0), name) &&
+               getfield_notundefined(rewrap_unionall(typ.b, typ0), name)
+    end
+    isa(typ, DataType) || return false
+    if typ.name === Tuple.name || typ.name === _NAMEDTUPLE_NAME
+        # tuples and named tuples can't be instantiated with undefined fields,
+        # so we don't need to be conservative here
+        return true
+    end
+    if !isa(name, Const)
+        isvarargtype(name) && return false
+        if !hasintersect(widenconst(name), Union{Int,Symbol})
+            return true # no undefined behavior if thrown
+        end
+        # field isn't known precisely, but let's check if all the fields can't be
+        # initialized with undefined value so to avoid being too conservative
+        fcnt = fieldcount_noerror(typ)
+        fcnt === nothing && return false
+        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), 1:fcnt) && return true
+        return false
+    end
+    name = name.val
+    if isa(name, Symbol)
+        fidx = fieldindex(typ, name, false)
+        fidx === nothing && return true # no undefined behavior if thrown
+    elseif isa(name, Int)
+        fidx = name
+    else
+        return true # no undefined behavior if thrown
+    end
+    fcnt = fieldcount_noerror(typ)
+    fcnt === nothing && return false
+    0 < fidx ≤ fcnt || return true # no undefined behavior if thrown
+    ftyp = fieldtype(typ, fidx)
+    is_undefref_fieldtype(ftyp) && return true
+    return fidx ≤ datatype_min_ninitialized(typ)
+end
+# checks if a field of this type will not be initialized with undefined value
+# and the access to that uninitialized field will cause and `UndefRefError`, e.g.,
+# - is_undefref_fieldtype(String) === true
+# - is_undefref_fieldtype(Integer) === true
+# - is_undefref_fieldtype(Any) === true
+# - is_undefref_fieldtype(Int) === false
+# - is_undefref_fieldtype(Union{Int32,Int64}) === false
+function is_undefref_fieldtype(@nospecialize ftyp)
+    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
 end
 
 function setfield!_tfunc(o, f, v, order)
@@ -1010,10 +1061,10 @@ end
 function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, false)
-        nargs > 3 || return CallMeta(Any, false)
+        nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
+        nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, false)
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, false)
+        5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
     end
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
@@ -1036,7 +1087,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         end
         info = callinfo.info
     end
-    return CallMeta(RT, info)
+    return CallMeta(RT, Effects(), info)
 end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
@@ -1772,9 +1823,15 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, rt)
         end
         s = s::DataType
         ipo_consistent = !ismutabletype(s)
-        nothrow = false
-        if f === Core.getfield && !isvarargtype(argtypes[end]) &&
-                getfield_boundscheck(argtypes[2:end]) !== true
+        # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
+        # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
+        # throws `UndefRefError` so doesn't need to taint it
+        # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
+        # with undefined value so that we don't taint `:consistent`-cy too aggressively here
+        if f === Core.getfield && !getfield_notundefined(s, argtypes[2])
+            ipo_consistent = false
+        end
+        if f === Core.getfield && !isvarargtype(argtypes[end]) && getfield_boundscheck(argtypes) !== true
             # If we cannot independently prove inboundsness, taint consistency.
             # The inbounds-ness assertion requires dynamic reachability, while
             # :consistent needs to be true for all input values.
@@ -1991,39 +2048,45 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), false)
+                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, false)
                     end
+                    # Run the abstract_call without restricting abstract call
+                    # sites. Otherwise, our behavior model of abstract_call
+                    # below will be wrong.
+                    old_restrict = sv.restrict_abstract_call_sites
+                    sv.restrict_abstract_call_sites = false
                     call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
-                    info = verbose_stmt_info(interp) ? ReturnTypeCallInfo(call.info) : false
+                    sv.restrict_abstract_call_sites = old_restrict
+                    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), info)
+                        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
                     end
                     rt = widenconst(rt)
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), info)
+                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
                     elseif !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, info)
+                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
                         (isa(aft, Const) || isconstType(aft))
                         # input arguments were known for certain
                         # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), info)
+                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
                     elseif isType(rt)
-                        return CallMeta(Type{rt}, info)
+                        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
                     else
-                        return CallMeta(Type{<:rt}, info)
+                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
                     end
                 end
             end
         end
     end
-    return CallMeta(Type, false)
+    return CallMeta(Type, EFFECTS_THROWS, false)
 end
 
 # N.B.: typename maps type equivalence classes to a single value

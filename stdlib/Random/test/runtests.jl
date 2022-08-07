@@ -449,6 +449,7 @@ end
 @testset "rand(Bool) uniform distribution" begin
     for n in [rand(1:8), rand(9:16), rand(17:64)]
         a = zeros(Bool, n)
+        a8 = unsafe_wrap(Array, Ptr{UInt8}(pointer(a)), length(a); own=false) # unsafely observe the actual bit patterns in `a`
         as = zeros(Int, n)
         # we will test statistical properties for each position of a,
         # but also for 3 linear combinations of positions (for the array version)
@@ -466,6 +467,7 @@ end
                         end
                     else
                         as .+= rand!(rng, a)
+                        @test all(x -> x === 0x00 || x === 0x01, a8)
                         aslcs .+= [xor(getindex.(Ref(a), lcs[i])...) for i in 1:3]
                     end
                 end
@@ -912,9 +914,6 @@ end
 
     @testset "RandomDevice" begin
         @test string(RandomDevice()) == "$RandomDevice()"
-        if !Sys.iswindows()
-            @test string(RandomDevice(unlimited=false)) == "$RandomDevice(unlimited=false)"
-        end
     end
 end
 
@@ -975,4 +974,27 @@ end
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106
+end
+
+# issue #42752
+# test that running finalizers that launch tasks doesn't change RNG stream
+function f42752(do_gc::Bool, cell = (()->Any[[]])())
+    a = rand()
+    if do_gc
+        finalizer(cell[1]) do _
+            @async nothing
+        end
+        cell[1] = nothing
+        GC.gc()
+    end
+    b = rand()
+    (a, b)
+end
+guardseed() do
+    for _ in 1:4
+        Random.seed!(1)
+        val = f42752(false)
+        Random.seed!(1)
+        @test f42752(true) === val
+    end
 end

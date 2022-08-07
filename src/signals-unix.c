@@ -673,6 +673,14 @@ void trigger_profile_peek(void)
     jl_safe_printf("\n======================================================================================\n");
     jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
     jl_safe_printf("======================================================================================\n");
+    if (bt_size_max == 0){
+        // If the buffer hasn't been initialized, initialize with default size
+        // Keep these values synchronized with Profile.default_init()
+        if (jl_profile_init(10000000 * jl_n_threads, 1000000) == -1){
+            jl_safe_printf("ERROR: could not initialize the profile buffer");
+            return;
+        }
+    }
     bt_size_cur = 0; // clear profile buffer
     if (jl_profile_start_timer() < 0)
         jl_safe_printf("ERROR: Could not start profile timer\n");
@@ -897,7 +905,7 @@ static void *signal_listener(void *arg)
                     jl_ptls_t ptls2 = jl_all_tls_states[idx];
                     nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
                 }
-                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", jl_getpid(), nrunning, jl_n_threads);
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, jl_n_threads);
 #endif
 
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));

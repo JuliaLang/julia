@@ -442,6 +442,8 @@ clangsa: $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 clangsa: $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 # TODO: clangsa: $(build_shlibdir)/libImplicitAtomics2Plugin.$(SHLIB_EXT)
 
+# make sure LLVM's invariant information is not discarded with -DNDEBUG
+clang-sagc-%: JL_CXXFLAGS += -UNDEBUG
 clang-sagc-%: $(SRCDIR)/%.c $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text --analyzer-no-default-checks \
 		-Xclang -load -Xclang $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=core$(COMMA)julia.GCChecker \
@@ -458,6 +460,7 @@ SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-disable-chec
  # these need to be annotated (and possibly fixed)
 SKIP_IMPLICIT_ATOMICS := dump.c gf.c jitlayers.cpp module.c precompile.c rtutils.c staticdata.c toplevel.c codegen.cpp
 
+clang-sa-%: JL_CXXFLAGS += -UNDEBUG
 clang-sa-%: $(SRCDIR)/%.c $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) .FORCE | analyzegc-deps-check
 	@$(call PRINT_ANALYZE, $(build_depsbindir)/clang --analyze -Xanalyzer -analyzer-werror -Xanalyzer -analyzer-output=text \
 		$(if $(findstring $(notdir $<),$(SKIP_IMPLICIT_ATOMICS)),,-Xclang -load -Xclang $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT) -Xclang -analyzer-checker=julia.ImplicitAtomics) \
