@@ -8661,6 +8661,11 @@ extern "C" JL_DLLEXPORT void jl_init_codegen_impl(void)
     init_jit_functions();
 }
 
+extern "C" JL_DLLEXPORT void jl_init_codegen_name_generator_impl(int init_value)
+{
+    globalUniqueGeneratedNames.store(init_value);
+}
+
 extern "C" JL_DLLEXPORT void jl_teardown_codegen_impl()
 {
     // output LLVM timings and statistics

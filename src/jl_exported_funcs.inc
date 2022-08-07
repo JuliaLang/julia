@@ -538,6 +538,7 @@
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
     YY(jl_init_codegen) \
+    YY(jl_init_codegen_name_generator) \
     YY(jl_getFunctionInfo) \
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr) \

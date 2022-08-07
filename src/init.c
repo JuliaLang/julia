@@ -797,6 +797,13 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
         jl_install_sigint_handler();
+
+    if (jl_options.image_file) {
+        // TODO: set the number of existing symbols more precisely
+        // This is probably important to do at the end because some symbols
+        // depend on the specific order of its initialization.
+        jl_init_codegen_name_generator(80000);
+    }
 }
 
 static jl_value_t *core(const char *name)

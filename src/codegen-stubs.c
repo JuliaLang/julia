@@ -25,6 +25,7 @@ JL_DLLEXPORT void *jl_LLVMCreateDisasm_fallback(const char *TripleName, void *Di
 JL_DLLEXPORT size_t jl_LLVMDisasmInstruction_fallback(void *DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize) UNAVAILABLE
 
 JL_DLLEXPORT void jl_init_codegen_fallback(void) { }
+JL_DLLEXPORT void jl_init_codegen_name_generator_fallback(int init_value) { }
 
 JL_DLLEXPORT int jl_getFunctionInfo_fallback(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline)
 {

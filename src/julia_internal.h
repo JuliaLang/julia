@@ -760,6 +760,7 @@ void jl_init_common_symbols(void);
 void jl_init_primitives(void) JL_GC_DISABLED;
 void jl_init_llvm(void);
 void jl_init_codegen(void);
+void jl_init_codegen_name_generator(int);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
