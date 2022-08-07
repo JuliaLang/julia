@@ -440,7 +440,7 @@ static void jl_load_sysimg_so(void)
     jl_restore_system_image_data(sysimg_data, *plen);
 
     if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && sysimg_fname) {
-        jl_init_sysimage_chaining((void*)sysimage_base, sysimg_fname, jl_sysimg_handle);
+        jl_init_sysimage_chaining((void*)(uintptr_t)sysimage_base, sysimg_fname, jl_sysimg_handle);
     }
 }
 

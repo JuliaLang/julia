@@ -142,7 +142,6 @@ GlobalVariable *LowerPTLS::create_aliased_global(Type *T, StringRef name) const
     GV->setDSOLocal(true);
 #elif defined(_OS_WINDOWS_)
     auto GV = new GlobalVariable(*M, T, false, GlobalVariable::InternalLinkage, null, name + ".real");
-    GV->setVisibility(GlobalVariable::HiddenVisibility);
     add_comdat(GlobalAlias::create(T, 0, GlobalVariable::ExternalLinkage, name, GV, M));
 #else
     // ELF linkers are picky about DSO-local references. Trick them by adding
