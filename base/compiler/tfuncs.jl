@@ -1875,6 +1875,30 @@ const _ARGMEM_BUILTINS = Any[
     swapfield!,
 ]
 
+const _INCONSISTENT_INTRINSICS = Any[
+    Intrinsics.pointerref,      # this one is volatile
+    Intrinsics.arraylen,        # this one is volatile
+    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
+    Intrinsics.have_fma,        # this one depends on the runtime environment
+    Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
+    # ... and list fastmath intrinsics:
+    # join(string.("Intrinsics.", sort(filter(endswith("_fast")∘string, names(Core.Intrinsics)))), ",\n")
+    Intrinsics.add_float_fast,
+    Intrinsics.div_float_fast,
+    Intrinsics.eq_float_fast,
+    Intrinsics.le_float_fast,
+    Intrinsics.lt_float_fast,
+    Intrinsics.mul_float_fast,
+    Intrinsics.ne_float_fast,
+    Intrinsics.neg_float_fast,
+    Intrinsics.rem_float_fast,
+    Intrinsics.sqrt_llvm_fast,
+    Intrinsics.sub_float_fast
+    # TODO needs to revive #31193 to mark this as inconsistent to be accurate
+    # while preserving the currently optimizations for many math operations
+    # Intrinsics.muladd_float,    # this is not interprocedurally consistent
+]
+
 const _SPECIAL_BUILTINS = Any[
     Core._apply_iterate,
 ]
@@ -1960,7 +1984,13 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         return getglobal_effects(argtypes, rt)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
-        effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f))
+        if f === setfield! || f === arrayset
+            effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+        elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
+            effect_free = ALWAYS_TRUE
+        else
+            effect_free = ALWAYS_FALSE
+        end
         nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
@@ -2136,14 +2166,8 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         return Effects()
     end
 
-    consistent = !(
-        f === Intrinsics.pointerref ||      # this one is volatile
-        f === Intrinsics.arraylen ||        # this one is volatile
-        f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||        # this one depends on the runtime environment
-        f === Intrinsics.cglobal            # cglobal lookup answer changes at runtime
-        ) ? ALWAYS_TRUE : ALWAYS_FALSE
-    effect_free = !(f === Intrinsics.pointerset)
+    consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
+    effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
     nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)

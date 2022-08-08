@@ -451,6 +451,15 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
         end
     end
+    if is_effect_free_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; effect_free)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_FALSE)
+        end
+    end
 
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
@@ -460,7 +469,7 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=true)
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :nothrow)
             ipo_effects = Effects(ipo_effects; nothrow=true)

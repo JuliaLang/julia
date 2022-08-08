@@ -14,7 +14,7 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
     midpoint, @boundscheck, checkbounds
 
-using .Base: >>>, !==
+using .Base: >>>, !==, !=
 
 import .Base:
     sort,
@@ -172,18 +172,20 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 # index of the first value of vector a that is greater than or equal to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
+    hi = hi + T(1)
+    len = hi - lo
+    @inbounds while len != 0
+        half_len = len >>> 0x01
+        m = lo + half_len
         if lt(o, v[m], x)
-            lo = m
+            lo = m + 1
+            len -= half_len + 1
         else
             hi = m
+            len = half_len
         end
     end
-    return hi
+    return lo
 end
 
 # index of the last value of vector a that is less than or equal to x;

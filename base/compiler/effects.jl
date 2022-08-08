@@ -14,9 +14,15 @@ following meanings:
   * `CONSISTENT_IF_NOTRETURNED`: the `:consistent`-cy of this method can later be refined to
     `ALWAYS_TRUE` in a case when the return value of this method never involves newly
     allocated mutable objects.
-  * `CONSISTENT_IF_INACCESSIBLEMEMONLY`: the `:consistent`-cy of this method can later be refined to
-    `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
-- `effect_free::Bool`: this method is free from externally semantically visible side effects.
+  * `CONSISTENT_IF_INACCESSIBLEMEMONLY`: the `:consistent`-cy of this method can later be
+    refined to `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
+- `effect_free::UInt8`:
+  * `ALWAYS_TRUE`: this method is free from externally semantically visible side effects.
+  * `ALWAYS_FALSE`: this method may not be free from externally semantically visible side effects, and there is
+    no need for further analysis with respect to this effect property as this conclusion
+    will not be refined anyway.
+  * `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`: the `:effect-free`-ness of this method can later be
+    refined to `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
 - `nothrow::Bool`: this method is guaranteed to not throw an exception.
 - `terminates::Bool`: this method is guaranteed to terminate.
 - `notaskstate::Bool`: this method does not access any state bound to the current
@@ -51,7 +57,7 @@ analysis on each statement usually taint the global conclusion conservatively.
 """
 struct Effects
     consistent::UInt8
-    effect_free::Bool
+    effect_free::UInt8
     nothrow::Bool
     terminates::Bool
     notaskstate::Bool
@@ -60,7 +66,7 @@ struct Effects
     noinbounds::Bool
     function Effects(
         consistent::UInt8,
-        effect_free::Bool,
+        effect_free::UInt8,
         nothrow::Bool,
         terminates::Bool,
         notaskstate::Bool,
@@ -86,17 +92,20 @@ const ALWAYS_FALSE = 0x01
 const CONSISTENT_IF_NOTRETURNED         = 0x01 << 1
 const CONSISTENT_IF_INACCESSIBLEMEMONLY = 0x01 << 2
 
+# :effect_free-ness bits
+const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
+
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 
-const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  true,  true,  true,  true,  ALWAYS_TRUE,  true)
-const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  true,  false, true,  true,  ALWAYS_TRUE,  true)
-const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, false, false, false, false, ALWAYS_FALSE, true)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
-const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, false, false, false, false, ALWAYS_FALSE, false) # unknown really
+const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true)
+const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true)
+const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
+const EFFECTS_UNKNOWN′ = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, false) # unknown really
 
 function Effects(e::Effects = EFFECTS_UNKNOWN′;
     consistent::UInt8 = e.consistent,
-    effect_free::Bool = e.effect_free,
+    effect_free::UInt8 = e.effect_free,
     nothrow::Bool = e.nothrow,
     terminates::Bool = e.terminates,
     notaskstate::Bool = e.notaskstate,
@@ -135,7 +144,7 @@ end
 merge_effectbits(old::Bool, new::Bool) = old & new
 
 is_consistent(effects::Effects)          = effects.consistent === ALWAYS_TRUE
-is_effect_free(effects::Effects)         = effects.effect_free
+is_effect_free(effects::Effects)         = effects.effect_free === ALWAYS_TRUE
 is_nothrow(effects::Effects)             = effects.nothrow
 is_terminates(effects::Effects)          = effects.terminates
 is_notaskstate(effects::Effects)         = effects.notaskstate
@@ -160,27 +169,29 @@ is_removable_if_unused(effects::Effects) =
 is_consistent_if_notreturned(effects::Effects)         = !iszero(effects.consistent & CONSISTENT_IF_NOTRETURNED)
 is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
 
+is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect_free & EFFECT_FREE_IF_INACCESSIBLEMEMONLY)
+
 is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
 
 function encode_effects(e::Effects)
     return ((e.consistent          % UInt32) << 0) |
            ((e.effect_free         % UInt32) << 3) |
-           ((e.nothrow             % UInt32) << 4) |
-           ((e.terminates          % UInt32) << 5) |
-           ((e.notaskstate         % UInt32) << 6) |
-           ((e.inaccessiblememonly % UInt32) << 7) |
-           ((e.nonoverlayed        % UInt32) << 9)
+           ((e.nothrow             % UInt32) << 5) |
+           ((e.terminates          % UInt32) << 6) |
+           ((e.notaskstate         % UInt32) << 7) |
+           ((e.inaccessiblememonly % UInt32) << 8) |
+           ((e.nonoverlayed        % UInt32) << 10)
 end
 
 function decode_effects(e::UInt32)
     return Effects(
         UInt8((e >> 0) & 0x07),
-        _Bool((e >> 3) & 0x01),
-        _Bool((e >> 4) & 0x01),
+        UInt8((e >> 3) & 0x03),
         _Bool((e >> 5) & 0x01),
         _Bool((e >> 6) & 0x01),
-        UInt8((e >> 7) & 0x03),
-        _Bool((e >> 9) & 0x01))
+        _Bool((e >> 7) & 0x01),
+        UInt8((e >> 8) & 0x03),
+        _Bool((e >> 10) & 0x01))
 end
 
 struct EffectsOverride
