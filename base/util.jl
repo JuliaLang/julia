@@ -577,9 +577,9 @@ function _kwdef!(blk, params_args, call_args)
             push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
-            is_atomic = ei.head == :atomic
+            is_atomic = ei.head === :atomic
             ei = is_atomic ? first(ei.args) : ei # strip "@atomic" and add it back later
-            is_const = ei.head == :const
+            is_const = ei.head === :const
             ei = is_const ? first(ei.args) : ei # strip "const" and add it back later
             # Note: `@atomic const ..` isn't valid, but reconstruct it anyway to serve a nice error
             if ei isa Symbol
