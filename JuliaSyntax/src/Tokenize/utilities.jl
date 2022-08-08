@@ -224,29 +224,29 @@ end
 end
 
 function optakessuffix(k)
-    (Tokens.begin_ops < k < Tokens.end_ops) &&
+    (K"BEGIN_OPS" < k < K"END_OPS") &&
     !(
-        k == Tokens.DDDOT ||
-        Tokens.begin_assignments <= k <= Tokens.end_assignments ||
-        k == Tokens.CONDITIONAL ||
-        k == Tokens.ISSUBTYPE ||
-        k == Tokens.ISSUPERTYPE ||
-        k == Tokens.LAZY_AND ||
-        k == Tokens.LAZY_OR ||
-        k == Tokens.IN ||
-        k == Tokens.ISA ||
-        k == Tokens.COLON_EQUALS ||
-        k == Tokens.DOUBLE_COLON_EQUAL ||
-        k == Tokens.COLON ||
-        k == Tokens.DDOT ||
-        k == Tokens.EX_OR ||
-        k == Tokens.DECLARATION ||
-        k == Tokens.WHERE ||
-        k == Tokens.DOT ||
-        k == Tokens.NOT ||
-        k == Tokens.TRANSPOSE ||
-        k == Tokens.ANON_FUNC ||
-        Tokens.NOT_SIGN <= k <= Tokens.QUAD_ROOT
+        k == K"..." ||
+        K"BEGIN_ASSIGNMENTS" <= k <= K"END_ASSIGNMENTS" ||
+        k == K"?"   ||
+        k == K"<:"  ||
+        k == K">:"  ||
+        k == K"&&"  ||
+        k == K"||"  ||
+        k == K"in"  ||
+        k == K"isa" ||
+        k == K"≔"   ||
+        k == K"⩴"   ||
+        k == K":"   ||
+        k == K".."  ||
+        k == K"$"   ||
+        k == K"::"  ||
+        k == K"where" ||
+        k == K"."   ||
+        k == K"!"   ||
+        k == K".'"  ||
+        k == K"->"  ||
+        K"¬" <= k <= K"∜"
     )
 end
 

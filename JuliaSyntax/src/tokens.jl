@@ -1,43 +1,4 @@
-using .Tokenize.Tokens: Kind
 
-include("token_kinds.jl")
-
-"""
-    K"s"
-
-The full kind of a string "s".  For example, K")" is the kind of the
-right parenthesis token.
-
-Naming rules:
-* Kinds which correspond to exactly one textural form are represented with that
-  text. This includes keywords like K"for" and operators like K"*".
-* Kinds which represent many textural forms have UpperCamelCase names. This
-  includes kinds like K"Identifier" and K"Comment".
-* Kinds which exist merely as delimiters are all uppercase
-"""
-macro K_str(str)
-    get(_str_to_kind, str) do
-        error("unknown token kind K$(repr(str))")
-    end
-end
-
-"""
-A set of kinds which can be used with the `in` operator.  For example
-
-    k in KSet"+ - *"
-"""
-macro KSet_str(str)
-    kinds = [get(_str_to_kind, s) do
-         error("unknown token kind KSet\"$(repr(str)[2:end-1])\"")
-    end
-    for s in split(str)]
-
-    quote
-        ($(kinds...),)
-    end
-end
-
-kind(k::Kind) = k
 kind(raw::TzTokens.Token) = TzTokens.exactkind(raw)
 
 # Some renaming for naming consistency
@@ -114,6 +75,32 @@ function is_whitespace(t)
     kind(t) in (K"Whitespace", K"NewlineWs")
 end
 
+
+#-------------------------------------------------------------------------------
+# Mapping from kinds to their unique string representation, if it exists
+# FIXME: put this in token_kinds ?
+const _kind_to_str_unique =
+    Dict{Kind,String}(k=>string(s) for (k,s) in TzTokens.UNICODE_OPS_REVERSE)
+for kw in split("""
+        ( [ { } ] ) @ , ; " \"\"\" ` ```
+
+        baremodule begin break catch const
+        continue do else elseif end export finally for
+        function global if import let local
+        macro module quote return struct try type using while
+
+        as abstract doc mutable outer primitive type var
+
+        block call comparison curly string inert macrocall kw parameters
+        toplevel tuple ref vect braces bracescat hcat
+        vcat ncat typed_hcat typed_vcat typed_ncat row nrow generator
+        filter flatten comprehension typed_comprehension
+
+        error nothing true false None
+    """)
+    _kind_to_str_unique[convert(Kind, kw)] = kw
+end
+
 """
 Return the string representation of a token kind, or `nothing` if the kind
 represents a class of tokens like K"Identifier".
@@ -125,5 +112,9 @@ return the name of the kind.
 TODO: Replace `untokenize()` with `Base.string()`?
 """
 function untokenize(k::Kind; unique=true)
-    get(unique ? _kind_to_str_unique : _kind_to_str, k, nothing)
+    if unique
+        get(_kind_to_str_unique, k, nothing)
+    else
+        convert(String, k)
+    end
 end

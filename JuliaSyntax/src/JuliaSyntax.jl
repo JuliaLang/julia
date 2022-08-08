@@ -5,6 +5,7 @@ using Mmap
 # Helper utilities
 include("utils.jl")
 
+include("kinds.jl")
 # Lexing uses a significantly modified version of Tokenize.jl
 include("Tokenize/Tokenize.jl")
 using .Tokenize.Tokens: Token
