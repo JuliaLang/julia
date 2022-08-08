@@ -32,6 +32,10 @@ handful of failures remaining in the Base tests and standard library.
 The tree data structures should be somewhat usable but will evolve as we try
 out various use cases.
 
+A talk from JuliaCon 2022 covered some aspects of this package.
+
+[![Youtube video thumbnail](https://img.youtube.com/vi/CIiGng9Brrk/mqdefault.jpg)](https://youtu.be/CIiGng9Brrk)
+
 # Examples
 
 Here's what parsing of a small piece of code currently looks like in various
@@ -243,14 +247,104 @@ JuliaSyntax currently deals in three types of trees:
     associated `GreenTree` nodes.
 * `Expr` is used as a conversion target for compatibility
 
-Wherever possible, the tree structure of `GreenNode`/`SyntaxNode` is 1:1 with
-`Expr`. There are, however, some exceptions.
+## Julia AST structures
+
+In this section we describe some features of Julia's AST structures.
+
+### Concatenation syntax
+
+Concatenation syntax comes in two syntax forms:
+* The traditional `hcat`/`vcat`/`row` which deal with concatenation or matrix
+  construction along dimensions one and two.
+* The new `ncat`/`nrow` syntax which deals with concatenation or array
+  construction along arbitrary dimensions.
+
+We write `ncat-3` for concatenation along the third dimension. (The `3` is
+stored in the head flags for `SyntaxNode` trees, and in the first `arg` for
+`Expr` trees.) Semantically the new syntax can work like the old:
+* `ncat-1` is the same as `vcat`
+* `ncat-2` is the same as `hcat`
+* `row` is the same as `nrow-2`
+
+#### Vertical concatenation (dimension 1)
+
+Vertical concatenation along dimension 1 can be done with semicolons or newlines
+
+```julia
+julia> print_tree(:([a
+                     b]))
+Expr(:vcat)
+├─ :a
+└─ :b
+
+julia> print_tree(:([a ; b]))
+Expr(:vcat)
+├─ :a
+└─ :b
+```
+
+#### Horizontal concatenation (dimension 2)
+
+For horizontal concatenation along dimension 2, use spaces or double semicolons
+
+```julia
+julia> print_tree(:([a b]))
+Expr(:hcat)
+├─ :a
+└─ :b
+
+julia> print_tree(:([a ;; b]))
+Expr(:ncat)
+├─ 2
+├─ :a
+└─ :b
+```
+
+#### Mixed concatenation
+
+Concatenation along dimensions 1 and 2 can be done with spaces and single
+semicolons or newlines, producing a mixture of `vcat` and `row` expressions:
+
+```julia
+julia> print_tree(:([a b
+                     c d]))
+# OR
+julia> print_tree(:([a b ; c d]))
+Expr(:vcat)
+├─ Expr(:row)
+│  ├─ :a
+│  └─ :b
+└─ Expr(:row)
+   ├─ :c
+   └─ :d
+```
+
+General n-dimensional concatenation results in nested `ncat` and `nrow`, for
+example
+
+```julia
+julia> print_tree(:([a ; b ;; c ; d ;;; x]))
+Expr(:ncat)
+├─ 3
+├─ Expr(:nrow)
+│  ├─ 2
+│  ├─ Expr(:nrow)
+│  │  ├─ 1
+│  │  ├─ :a
+│  │  └─ :b
+│  └─ Expr(:nrow)
+│     ├─ 1
+│     ├─ :c
+│     └─ :d
+└─ :x
+```
 
 ## Tree differences between GreenNode and Expr
 
-First, `GreenNode` inherently stores source position, so there's no need for
-the `LineNumberNode`s used by `Expr`. There's also a small number of other
-differences
+Wherever possible, the tree structure of `GreenNode`/`SyntaxNode` is 1:1 with
+`Expr`. There are, however, some exceptions. First, `GreenNode` inherently
+stores source position, so there's no need for the `LineNumberNode`s used by
+`Expr`. There's also a small number of other differences
 
 ### Flattened generators
 
