@@ -384,26 +384,6 @@ using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
 
-import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Any[]
-
-code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
-get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
-
-# check if `x` is a dynamic call of a given function
-iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
-    return iscall(x) do @nospecialize x
-        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
-    end
-end
-iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
-isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
-
 @testset "@inline/@noinline annotation before definition" begin
     M = Module()
     @eval M begin
@@ -1253,7 +1233,7 @@ let src = code_typed1(g_call_peel, Tuple{Any})
 end
 
 const my_defined_var = 42
-@test fully_eliminated((); retval=42) do
+@test fully_eliminated(; retval=42) do
     getglobal(@__MODULE__, :my_defined_var, :monotonic)
 end
 @test !fully_eliminated() do
