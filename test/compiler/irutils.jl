@@ -1,5 +1,5 @@
 import Core: CodeInfo, ReturnNode, MethodInstance
-import Core.Compiler: argextype, singleton_type
+import Core.Compiler: IRCode, IncrementalCompact, argextype, singleton_type
 import Base.Meta: isexpr
 
 argextype(@nospecialize args...) = argextype(args..., Any[])
@@ -12,7 +12,7 @@ isreturn(@nospecialize x) = isa(x, ReturnNode)
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{CodeInfo,Base.Callable}, @nospecialize(x))
+function iscall((src, f)::Tuple{IR,Base.Callable}, @nospecialize(x)) where IR<:Union{CodeInfo,IRCode,IncrementalCompact}
     return iscall(x) do @nospecialize x
         singleton_type(argextype(x, src)) === f
     end
