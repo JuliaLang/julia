@@ -494,3 +494,43 @@ end
     getfield(@__MODULE__, :global_ref)[] = nothing
 end
 @test !Core.Compiler.is_removable_if_unused(Base.infer_effects(unremovable_if_unused3!))
+
+@testset "effects analysis on array ops" begin
+
+@testset "effects analysis on array construction" begin
+
+@noinline construct_array(@nospecialize(T), args...) = Array{T}(undef, args...)
+
+# should eliminate safe but dead allocations
+let good_dims = @static Int === Int64 ? (1:10) : (1:8)
+    Ns = @static Int === Int64 ? (1:10) : (1:8)
+    for dim = good_dims, N = Ns
+        dims = ntuple(i->dim, N)
+        @test @eval Base.infer_effects() do
+            $construct_array(Int, $(dims...))
+        end |> Core.Compiler.is_removable_if_unused
+        @test @eval fully_eliminated() do
+            $construct_array(Int, $(dims...))
+            nothing
+        end
+    end
+end
+
+# should analyze throwness correctly
+let bad_dims = [-1, typemax(Int)]
+    for dim in bad_dims, N in 1:10
+        dims = ntuple(i->dim, N)
+        @test @eval Base.infer_effects() do
+            $construct_array(Int, $(dims...))
+        end |> !Core.Compiler.is_removable_if_unused
+        @test @eval !fully_eliminated() do
+            $construct_array(Int, $(dims...))
+            nothing
+        end
+        @test_throws "invalid Array" @eval $construct_array(Int, $(dims...))
+    end
+end
+
+end # @testset "effects analysis on array construction" begin
+
+end # @testset "effects analysis on array ops" begin
