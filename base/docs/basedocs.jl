@@ -2032,38 +2032,59 @@ end
 
 @eval begin
     """
-    $(Int) <: Signed
+        Int$(Sys.WORD_SIZE) <: Signed
 
-    `Int` is aliased to `Int64` on 64-bit systems and `Int32` on 32-bit systems.
+    $(Sys.WORD_SIZE)-bit signed integer type.
+    On $(Sys.WORD_SIZE)-bit systems, `Int` is an alias for `Int$(Sys.WORD_SIZE).`
 
-    `Int` is the default integer type in Julia, and should be preferred unless there
-    are explicit reasons for using another integer type.
-
-    See also: [`UInt`](@ref).
-
-    # Examples
-    ```jldoctest
-    julia> 1 isa Int
-    true
-
-    julia> typeof(length(Dict())) === Int
-    true
-
-    julia> Threads.nthreads() isa Int
-    true
-    ```
+    See also: [`Int`](@ref)
     """
     $(Symbol("Int", Sys.WORD_SIZE))
-
+    
     """
-    $(UInt) <: Unsigned
+        UInt$(Sys.WORD_SIZE) <: Unsigned
 
-    `UInt` is aliased to `UInt64` on 64-bit systems and `UInt32` on 32-bit systems.
+    $(Sys.WORD_SIZE)-bit unsigned integer type.
+    On $(Sys.WORD_SIZE)-bit systems, `UInt` is an alias for `UInt$(Sys.WORD_SIZE).`
 
-    See also: [`Int`](@ref).
+    See also: [`UInt`](@ref)
     """
     $(Symbol("UInt", Sys.WORD_SIZE))
 end
+
+
+"""
+    Int <: Signed
+
+`Int` is aliased to `Int64` on 64-bit systems and `Int32` on 32-bit systems.
+
+`Int` is the default integer type in Julia, and should be preferred unless there
+are explicit reasons for using another integer type.
+
+See also: [`$(Symbol("Int", Sys.WORD_SIZE))`](@ref), [`UInt`](@ref).
+
+# Examples
+```jldoctest
+julia> 1 isa Int
+true
+
+julia> typeof(length(Dict())) === Int
+true
+
+julia> Threads.nthreads() isa Int
+true
+```
+"""
+Int
+
+"""
+    UInt <: Unsigned
+
+`UInt` is aliased to `UInt64` on 64-bit systems and `UInt32` on 32-bit systems.
+
+See also: [`$(Symbol("UInt", Sys.WORD_SIZE))`](@ref), [`Int`](@ref).
+"""
+UInt
 
 """
     Symbol

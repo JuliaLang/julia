@@ -29,7 +29,9 @@ Core.UInt16
 Core.Int32
 Core.UInt32
 Core.Int64
+Core.Int
 Core.UInt64
+Core.UInt
 Core.Int128
 Core.UInt128
 Base.BigInt
