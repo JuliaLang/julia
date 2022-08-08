@@ -2040,7 +2040,7 @@ end
     See also: [`Int`](@ref)
     """
     $(Symbol("Int", Sys.WORD_SIZE))
-    
+
     """
         UInt$(Sys.WORD_SIZE) <: Unsigned
 
