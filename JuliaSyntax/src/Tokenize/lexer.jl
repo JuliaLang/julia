@@ -1,12 +1,61 @@
-module Lexers
+module Tokenize
 
-import ..Tokens
-import ..Tokens: @K_str, Token, Kind, UNICODE_OPS, EMPTY_TOKEN,
-    isliteral, iserror, iscontextualkeyword, iswordoperator
+export tokenize, untokenize, Tokens
+
+using ..JuliaSyntax: Kind, @K_str
+
+import ..JuliaSyntax: kind,
+    is_literal, is_error, is_contextual_keyword, is_word_operator
+
+import Base.eof
 
 include("utilities.jl")
 
-export tokenize
+#-------------------------------------------------------------------------------
+# Tokens
+
+# Error kind => description
+TOKEN_ERROR_DESCRIPTION = Dict{Kind, String}(
+    K"ErrorEofMultiComment" => "unterminated multi-line comment #= ... =#",
+    K"ErrorEofChar" => "unterminated character literal",
+    K"ErrorInvalidNumericConstant" => "invalid numeric constant",
+    K"ErrorInvalidOperator" => "invalid operator",
+    K"ErrorInvalidInterpolationTerminator" => "interpolated variable ends with invalid character; use `\$(...)` instead",
+    K"error" => "unknown error",
+)
+
+struct Token
+    kind::Kind
+    # Offsets into a string or buffer
+    startbyte::Int # The byte where the token start in the buffer
+    endbyte::Int # The byte where the token ended in the buffer
+    dotop::Bool
+    suffix::Bool
+end
+function Token(kind::Kind, startbyte::Int, endbyte::Int)
+    Token(kind, startbyte, endbyte, false, false)
+end
+Token() = Token(K"error", 0, 0, false, false)
+
+const EMPTY_TOKEN = Token()
+
+kind(t::Token) = t.kind
+
+startbyte(t::Token) = t.startbyte
+endbyte(t::Token) = t.endbyte
+
+
+function untokenize(t::Token, str::String)
+    String(codeunits(str)[1 .+ (t.startbyte:t.endbyte)])
+end
+
+function Base.show(io::IO, t::Token)
+    print(io, rpad(string(startbyte(t), "-", endbyte(t)), 11, " "))
+    print(io, rpad(kind(t), 15, " "))
+end
+
+#-------------------------------------------------------------------------------
+# Lexer
 
 @inline ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 @inline isbinary(c::Char) = c == '0' || c == '1'
@@ -266,7 +315,7 @@ Returns an `K"error"` token with error `err` and starts a new `Token`.
 """
 function emit_error(l::Lexer, err::Kind = K"error")
     l.errored = true
-    @assert iserror(err)
+    @assert is_error(err)
     return emit(l, err)
 end
 
@@ -838,14 +887,14 @@ end
 
 function lex_prime(l, doemit = true)
     if l.last_token == K"Identifier" ||
-        iscontextualkeyword(l.last_token) ||
-        iswordoperator(l.last_token) ||
+        is_contextual_keyword(l.last_token) ||
+        is_word_operator(l.last_token) ||
         l.last_token == K"." ||
         l.last_token ==  K")" ||
         l.last_token ==  K"]" ||
         l.last_token ==  K"}" ||
         l.last_token == K"'" ||
-        l.last_token == K"end" || isliteral(l.last_token)
+        l.last_token == K"end" || is_literal(l.last_token)
         return emit(l, K"'")
     else
         if accept(l, '\'')
@@ -888,8 +937,8 @@ end
 # A '"' has been consumed
 function lex_quote(l::Lexer)
     raw = l.last_token == K"Identifier" ||
-          iscontextualkeyword(l.last_token) ||
-          iswordoperator(l.last_token)
+          is_contextual_keyword(l.last_token) ||
+          is_word_operator(l.last_token)
     pc, dpc = dpeekchar(l)
     triplestr = pc == '"' && dpc == '"'
     push!(l.string_states, StringState(triplestr, raw, '"', 0))

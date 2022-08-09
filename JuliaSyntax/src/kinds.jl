@@ -994,3 +994,109 @@ Return the `Kind` of `x`.
 """
 kind(k::Kind) = k
 
+#-------------------------------------------------------------------------------
+const _nonunique_kind_names = Set([
+    K"Comment"
+    K"Whitespace"
+    K"NewlineWs"
+    K"Identifier"
+
+    K"ErrorEofMultiComment"
+    K"ErrorEofChar"
+    K"ErrorInvalidNumericConstant"
+    K"ErrorInvalidOperator"
+    K"ErrorInvalidInterpolationTerminator"
+
+    K"Integer"
+    K"BinInt"
+    K"HexInt"
+    K"OctInt"
+    K"Float"
+    K"String"
+    K"Char"
+    K"CmdString"
+
+    K"MacroName"
+    K"StringMacroName"
+    K"CmdMacroName"
+])
+
+"""
+Return the string representation of a token kind, or `nothing` if the kind
+represents a class of tokens like K"Identifier".
+
+When `unique=true` only return a string when the kind uniquely defines the
+corresponding input token, otherwise return `nothing`.  When `unique=false`,
+return the name of the kind.
+
+TODO: Replace `untokenize()` with `Base.string()`?
+"""
+function untokenize(k::Kind; unique=true)
+    if unique && k in _nonunique_kind_names
+        return nothing
+    else
+        return convert(String, k)
+    end
+end
+
+
+#-------------------------------------------------------------------------------
+# Predicates
+is_contextual_keyword(k::Kind) = K"BEGIN_CONTEXTUAL_KEYWORDS" < k < K"END_CONTEXTUAL_KEYWORDS"
+is_error(k::Kind) = K"BEGIN_ERRORS" < k < K"END_ERRORS"
+is_keyword(k::Kind) = K"BEGIN_KEYWORDS" < k < K"END_KEYWORDS"
+is_literal(k::Kind) = K"BEGIN_LITERAL" < k < K"END_LITERAL"
+is_operator(k::Kind) = K"BEGIN_OPS" < k < K"END_OPS"
+is_word_operator(k::Kind) = (k == K"in" || k == K"isa" || k == K"where")
+
+is_contextual_keyword(k) = is_contextual_keyword(kind(k))
+is_error(k) = is_error(kind(k))
+is_keyword(k) = is_keyword(kind(k))
+is_literal(k) = is_literal(kind(k))
+is_operator(k) = is_operator(kind(k))
+is_word_operator(k) = is_word_operator(kind(k))
+
+
+# Predicates for operator precedence
+# FIXME: Review how precedence depends on dottedness, eg
+# https://github.com/JuliaLang/julia/pull/36725
+is_prec_assignment(x)  = K"BEGIN_ASSIGNMENTS" < kind(x) < K"END_ASSIGNMENTS"
+is_prec_pair(x)        = K"BEGIN_PAIRARROW"   < kind(x) < K"END_PAIRARROW"
+is_prec_conditional(x) = K"BEGIN_CONDITIONAL" < kind(x) < K"END_CONDITIONAL"
+is_prec_arrow(x)       = K"BEGIN_ARROW"       < kind(x) < K"END_ARROW"
+is_prec_lazy_or(x)     = K"BEGIN_LAZYOR"      < kind(x) < K"END_LAZYOR"
+is_prec_lazy_and(x)    = K"BEGIN_LAZYAND"     < kind(x) < K"END_LAZYAND"
+is_prec_comparison(x)  = K"BEGIN_COMPARISON"  < kind(x) < K"END_COMPARISON"
+is_prec_pipe(x)        = K"BEGIN_PIPE"        < kind(x) < K"END_PIPE"
+is_prec_colon(x)       = K"BEGIN_COLON"       < kind(x) < K"END_COLON"
+is_prec_plus(x)        = K"BEGIN_PLUS"        < kind(x) < K"END_PLUS"
+is_prec_bitshift(x)    = K"BEGIN_BITSHIFTS"   < kind(x) < K"END_BITSHIFTS"
+is_prec_times(x)       = K"BEGIN_TIMES"       < kind(x) < K"END_TIMES"
+is_prec_rational(x)    = K"BEGIN_RATIONAL"    < kind(x) < K"END_RATIONAL"
+is_prec_power(x)       = K"BEGIN_POWER"       < kind(x) < K"END_POWER"
+is_prec_decl(x)        = K"BEGIN_DECL"        < kind(x) < K"END_DECL"
+is_prec_where(x)       = K"BEGIN_WHERE"       < kind(x) < K"END_WHERE"
+is_prec_dot(x)         = K"BEGIN_DOT"         < kind(x) < K"END_DOT"
+is_prec_unicode_ops(x) = K"BEGIN_UNICODE_OPS" < kind(x) < K"END_UNICODE_OPS"
+is_prec_pipe_lt(x)     = kind(x) == K"<|"
+is_prec_pipe_gt(x)     = kind(x) == K"|>"
+is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS" < kind(x) < K"END_SYNTAX_KINDS"
+is_macro_name(x)       = K"BEGIN_MACRO_NAMES" < kind(x) < K"END_MACRO_NAMES"
+
+function is_number(x)
+    kind(x) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
+end
+
+function is_string_delim(x)
+    kind(x) in (K"\"", K"\"\"\"")
+end
+
+function is_radical_op(x)
+    kind(x) in (K"√", K"∛", K"∜")
+end
+
+function is_whitespace(x)
+    kind(x) in (K"Whitespace", K"NewlineWs")
+end
+
+

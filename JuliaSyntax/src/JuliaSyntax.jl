@@ -6,11 +6,10 @@ using Mmap
 include("utils.jl")
 
 include("kinds.jl")
+
 # Lexing uses a significantly modified version of Tokenize.jl
 include("Tokenize/Tokenize.jl")
-using .Tokenize.Tokens: Token
-const TzTokens = Tokenize.Tokens
-include("tokens.jl")
+using .Tokenize: Token
 
 # Source and diagnostics
 include("source_files.jl")
