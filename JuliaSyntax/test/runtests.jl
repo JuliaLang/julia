@@ -8,7 +8,7 @@ using JuliaSyntax: GreenNode, SyntaxNode,
     children, child, setchild!, SyntaxHead
 
 @testset "Tokenize" begin
-    include("lexer.jl")
+    include("tokenize.jl")
 end
 
 include("test_utils.jl")

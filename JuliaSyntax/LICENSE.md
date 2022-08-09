@@ -20,7 +20,7 @@ The JuliaSyntax.jl package is licensed under the MIT "Expat" License:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
-The code in src/Tokenize and test/lexer.jl is derived from the Tokenize.jl
+The code in src/tokenize*.jl and test/tokenize.jl is derived from the Tokenize.jl
 package and is also licensed under the MIT "Expat" License:
 
 > Copyright (c) 2016: Kristoffer Carlsson.
