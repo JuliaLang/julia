@@ -399,9 +399,9 @@ Julia applies the following order and associativity of operations, from highest 
 | Fractions      | `//`                                                                                              | Left                       |
 | Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
 | Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
-| Syntax         | `: ..`                                                                                            | Left                       |
+| Syntax         | `: ..`                                                                                            | Left[^3]                   |
 | Syntax         | `\|>`                                                                                             | Left                       |
-| Syntax         | `<\|`                                                                                             | Right                      |
+| Syntax         | `<\|`                                                                                             | Right[^3]                  |
 | Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
 | Pair           | `=>`                                                                                              | Right                      |
@@ -412,6 +412,8 @@ Julia applies the following order and associativity of operations, from highest 
 [^2]:
     The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
     c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
+[^3]:
+    The operators `..` and `<|` are currently not implemented by default into the language, but some packages provide use cases for them.
 
 For a complete list of *every* Julia operator's precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm). Note that some of the operators there are not defined
