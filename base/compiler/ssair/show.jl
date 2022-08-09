@@ -791,21 +791,27 @@ function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=def
 end
 
 function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
-    if name === :consistent || name === :effect_free || name === :inaccessiblememonly
+    ft = fieldtype(Effects, name)
+    if ft === UInt8
         prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
                  getfield(effects, name) === ALWAYS_FALSE ? '!' : '?'
-    else
+    elseif ft === Bool
         prefix = getfield(effects, name) ? '+' : '!'
+    else
+        error("unsupported effectbits type given")
     end
     return string(prefix, suffix)
 end
 
 function effectbits_color(effects::Effects, name::Symbol)
-    if name === :consistent || name === :effect_free || name === :inaccessiblememonly
+    ft = fieldtype(Effects, name)
+    if ft === UInt8
         color = getfield(effects, name) === ALWAYS_TRUE ? :green :
                 getfield(effects, name) === ALWAYS_FALSE ? :red : :yellow
-    else
+    elseif ft === Bool
         color = getfield(effects, name) ? :green : :red
+    else
+        error("unsupported effectbits type given")
     end
     return color
 end
