@@ -9,7 +9,7 @@ import ..JuliaSyntax: kind,
 
 import Base.eof
 
-include("utilities.jl")
+include("tokenize_utils.jl")
 
 #-------------------------------------------------------------------------------
 # Tokens
