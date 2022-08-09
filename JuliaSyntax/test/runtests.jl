@@ -7,9 +7,6 @@ using JuliaSyntax: GreenNode, SyntaxNode,
     flags, EMPTY_FLAGS, TRIVIA_FLAG, INFIX_FLAG,
     children, child, setchild!, SyntaxHead
 
-using JuliaSyntax.Tokenize
-using JuliaSyntax.Tokenize.Lexers
-
 @testset "Tokenize" begin
     include("lexer.jl")
 end

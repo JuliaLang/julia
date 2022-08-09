@@ -4,19 +4,16 @@ module TokenizeTests
 using Test
 
 using JuliaSyntax:
-    # Parsing
     @K_str,
+    Kind,
     kind,
-    Kind
+    is_error,
+    is_operator
 
 using JuliaSyntax.Tokenize:
-    Tokens,
-    Lexers,
     Tokenize,
     tokenize,
-    untokenize
-
-using JuliaSyntax.Tokenize.Tokens:
+    untokenize,
     Token
 
 tok(str, i = 1) = collect(tokenize(str))[i]
@@ -26,13 +23,13 @@ strtok(str) = untokenize.(collect(tokenize(str)), str)
 @testset "tokens" begin
     for s in ["a", IOBuffer("a")]
         l = tokenize(s)
-        @test Lexers.readchar(l) == 'a'
+        @test Tokenize.readchar(l) == 'a'
 
         # @test l.current_pos == 0
         l_old = l
         @test l == l_old
-        @test Lexers.eof(l)
-        @test Lexers.readchar(l) == Lexers.EOF_CHAR
+        @test Tokenize.eof(l)
+        @test Tokenize.readchar(l) == Tokenize.EOF_CHAR
 
         # @test l.current_pos == 0
     end
@@ -82,7 +79,7 @@ end # testset
 
     # Generate the following with
     # ```
-    # for t in Tokens.kind.(collect(tokenize(str)))
+    # for t in kind.(collect(tokenize(str)))
     #    print(kind(t), ",")
     # end
     # ```
@@ -520,14 +517,14 @@ end
         @test ts[4] ~ (K"Identifier" , "x" , str)
         @test ts[5] ~ (K"ErrorInvalidInterpolationTerminator" , ""  , str)
         @test ts[6] ~ (K"String"     , "෴" , str)
-        @test Tokens.iserror(ts[5].kind)
+        @test is_error(ts[5].kind)
         @test ts[5].kind == K"ErrorInvalidInterpolationTerminator"
     end
 end
 
 @testset "inferred" begin
     l = tokenize("abc")
-    @inferred Tokenize.Lexers.next_token(l)
+    @inferred Tokenize.next_token(l)
 end
 
 @testset "modifying function names (!) followed by operator" begin
@@ -677,7 +674,7 @@ end
 
 
 @testset "dotted and suffixed operators" begin
-ops = collect(values(Tokenize.Tokens.UNICODE_OPS_REVERSE))
+ops = collect(values(Tokenize.UNICODE_OPS_REVERSE))
 
 for op in ops
     op in (:isa, :in, :where, Symbol('\''), :?, :(:)) && continue
@@ -709,7 +706,7 @@ for op in ops
                 tokens = collect(tokenize(str))
                 exop = expr.head == :call ? expr.args[1] : expr.head
                 #println(str)
-                @test Symbol(Tokenize.Tokens.untokenize(tokens[arity == 1 ? 1 : 3], str)) == exop
+                @test Symbol(Tokenize.untokenize(tokens[arity == 1 ? 1 : 3], str)) == exop
             else
                 break
             end
@@ -740,7 +737,7 @@ end
 end
 
 function test_error(tok, kind)
-    @test Tokens.iserror(tok.kind)
+    @test is_error(tok.kind)
     @test tok.kind == kind
 end
 
@@ -762,14 +759,14 @@ end
 
 @testset "suffixed op" begin
     s = "+¹"
-    @test Tokens.isoperator(tok(s, 1).kind)
+    @test is_operator(tok(s, 1).kind)
     @test untokenize(collect(tokenize(s))[1], s) == s
 end
 
 @testset "invalid float juxt" begin
     s = "1.+2"
     @test tok(s, 1).kind == K"error"
-    @test Tokens.isoperator(tok(s, 2).kind)
+    @test is_operator(tok(s, 2).kind)
     test_roundtrip("1234.+1", K"error", "1234.")
     @test tok("1.+ ").kind == K"error"
     @test tok("1.⤋").kind  == K"error"
@@ -824,7 +821,7 @@ end
         push!(ops, raw"<-- <-->")
     end
     allops = split(join(ops, " "), " ")
-    @test all(s->Base.isoperator(Symbol(s)) == Tokens.isoperator(first(collect(tokenize(s))).kind), allops)
+    @test all(s->Base.isoperator(Symbol(s)) == is_operator(first(collect(tokenize(s))).kind), allops)
 end
 
 const all_kws = Set([
@@ -877,14 +874,14 @@ const all_kws = Set([
 function check_kw_hashes(iter)
     for cs in iter
         str = String([cs...])
-        if Lexers.simple_hash(str) in keys(Tokenize.Lexers.kw_hash)
+        if Tokenize.simple_hash(str) in keys(Tokenize.kw_hash)
             @test str in all_kws
         end
     end
 end
 
 @testset "simple_hash" begin
-    @test length(all_kws) == length(Tokenize.Lexers.kw_hash)
+    @test length(all_kws) == length(Tokenize.kw_hash)
 
     @testset "Length $len keywords" for len in 1:5
         check_kw_hashes(String([cs...]) for cs in Iterators.product(['a':'z' for _ in 1:len]...))

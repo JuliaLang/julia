@@ -91,8 +91,7 @@ end
 kind(x)  = kind(head(x))
 flags(x) = flags(head(x))
 
-# Predicates based on kind() / flags()
-is_error(x)  = is_error(kind(x))
+# Predicates based on flags()
 has_flags(x, test_flags) = has_flags(flags(x), test_flags)
 is_trivia(x) = has_flags(x, TRIVIA_FLAG)
 is_infix(x)  = has_flags(x, INFIX_FLAG)
@@ -174,7 +173,7 @@ mutable struct ParseStream
     # the `textbuf` owner was unknown (eg, ptr,length was passed)
     text_root::Any
     # Lexer, transforming the input bytes into a token stream
-    lexer::Tokenize.Lexers.Lexer{IOBuffer}
+    lexer::Tokenize.Lexer{IOBuffer}
     # Lookahead buffer for already lexed tokens
     lookahead::Vector{SyntaxToken}
     lookahead_index::Int
@@ -196,7 +195,7 @@ mutable struct ParseStream
                          version::VersionNumber)
         io = IOBuffer(text_buf)
         seek(io, next_byte-1)
-        lexer = Tokenize.Lexers.Lexer(io)
+        lexer = Tokenize.Lexer(io)
         # To avoid keeping track of the exact Julia development version where new
         # features were added or comparing prerelease strings, we treat prereleases
         # or dev versons as the release version using only major and minor version
@@ -317,8 +316,8 @@ function _buffer_lookahead_tokens(lexer, lookahead)
     had_whitespace = false
     token_count = 0
     while true
-        raw = Tokenize.Lexers.next_token(lexer)
-        k = TzTokens.exactkind(raw)
+        raw = Tokenize.next_token(lexer)
+        k = kind(raw)
         was_whitespace = k in (K"Whitespace", K"Comment", K"NewlineWs")
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
