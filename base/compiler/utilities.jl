@@ -253,7 +253,7 @@ function ssamap(f, @nospecialize(stmt))
     return urs[]
 end
 
-function foreachssa(f, @nospecialize(stmt))
+function foreachssa(@specialize(f), @nospecialize(stmt))
     urs = userefs(stmt)
     for op in urs
         val = op[]
