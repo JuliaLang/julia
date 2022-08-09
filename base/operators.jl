@@ -530,9 +530,9 @@ const ⊽ = nor
 afoldl(op, a) = a
 function afoldl(op, a, bs...)
     l = length(bs)
-    i =  0; y = a;            l == i && return y
+    i =  0; l == i && return a
     #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)
-    i =  1; y = op(y, bs[i]); l == i && return y
+    i =  1; y = op(a, bs[i]); l == i && return y
     i =  2; y = op(y, bs[i]); l == i && return y
     i =  3; y = op(y, bs[i]); l == i && return y
     i =  4; y = op(y, bs[i]); l == i && return y
