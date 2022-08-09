@@ -230,8 +230,8 @@ typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
     jl_value_t *method;
     jl_sym_t *file;
-    intptr_t line;
-    intptr_t inlined_at;
+    int32_t line;
+    int32_t inlined_at;
 } jl_line_info_node_t;
 
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
