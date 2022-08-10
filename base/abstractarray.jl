@@ -2834,33 +2834,7 @@ _first_array(x::AbstractArray, ys...) = x
 _first_array(x, ys...) = _first_array(ys...)
 _first_array() = 1:0
 
-# With tuple elements, we can make the empty array the right size:
-function _empty_stack(::Colon, ::Type{T}, ::Type{S}, A) where {T, S<:Tuple}
-    similar(_first_array(A), T, OneTo(length(fieldtypes(S))), axes(A)...)
-end
-function _empty_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T, S<:Tuple}
-    ax1 = OneTo(length(fieldtypes(S)))
-    dims in 1:2 || throw(ArgumentError("cannot stack tuples along dims = $dims"))
-    similar(_first_array(A), T, ntuple(d -> d==dims ? OneTo(0) : ax1, 2))
-end
-# but with arrays of arrays, we must settle for the right ndims:
-_empty_stack(dims, ::Type{T}, ::Type{S}, A) where {T,S} = _empty_stack(dims, T, IteratorSize(S), A)
-_empty_stack(dims, ::Type{T}, ::HasLength, A) where {T} = _empty_stack(dims, T, HasShape{1}(), A)
-_empty_stack(dims, ::Type{T}, ::IteratorSize, A) where {T} = _empty_stack(dims, T, HasShape{0}(), A)
-
-function _empty_stack(::Colon, ::Type{T}, ::HasShape{N}, A) where {T,N}
-    similar(_first_array(A), T, ntuple(_->OneTo(1), N)..., _axes(A)...)
-end
-function _empty_stack(dims::Integer, ::Type{T}, ::HasShape{N}, A) where {T,N}
-    # Not sure we should check dims here, e.g. stack(Vector[]; dims=2) is an error
-    dims in 1:N+1 || throw(ArgumentError("cannot stack slices ndims(x) = $N along dims = $dims"))
-    ax = ntuple(d -> d==dims ? _vec_axis(A) : OneTo(1), N+1)
-    similar(_first_array(A), T, ax...)
-end
-
-# These make stack(()) work like stack([])
-_empty_stack(::Colon, ::Type{T}, ::Type{Union{}}, A) where {T} = _empty_stack(:, T, Array{T,0}, A)
-_empty_stack(dims::Integer, ::Type{T}, ::Type{Union{}}, A) where {T} = _empty_stack(dims, T, Array{T,0}, A)
+_empty_stack(_...) = throw(ArgumentError("`stack` on an empty collection is not allowed"))
 
 
 ## Reductions and accumulates ##

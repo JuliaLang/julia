@@ -1656,14 +1656,9 @@ end
     @test_throws ArgumentError stack(abs2, 1:3; dims=2)
 
     # Empty
-    @test size(stack([])) == (0,)
-    @test size(stack(())) == (0,)
-    @test size(stack(x for x in 1:3 if false)) == (0,)
-    @test size(stack(empty!([1:3, 4:6]))) == (1, 0)
-    @test size(stack(empty!([1:3, 4:6]); dims=1)) == (0, 1)
-    @test size(stack(empty!([1:3, 4:6]); dims=2)) == (1, 0)
-    @test size(stack(empty!([(1,2,3), (4,5,6)]))) == (3, 0)
-    @test size(stack(empty!([(1,2,3), (4,5,6)]); dims=1)) == (0, 3)
+    @test_throws ArgumentError stack(())
+    @test_throws ArgumentError stack([])
+    @test_throws ArgumentError stack(x for x in 1:3 if false)
 end
 
 @testset "tests from PR 31644" begin
