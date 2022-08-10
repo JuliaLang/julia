@@ -675,7 +675,7 @@ for f in (:exp, :cis, :log, :sqrt,
 end
 
 function inv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
+    Di = similar(D.diag, typeof(inv(one(T))))
     for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
             throw(SingularException(i))
