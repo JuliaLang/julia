@@ -82,6 +82,8 @@ end
 # `Expr(:error)`.
 Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 
+const _default_parser = Core._parse
+
 """
 Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
 flisp parser for all parsing work.
@@ -97,7 +99,7 @@ function enable_in_core!(enable=true)
         close(_debug_log)
         _debug_log = nothing
     end
-    parser = enable ? core_parser_hook : Core.Compiler.fl_parse
+    parser = enable ? core_parser_hook : _default_parser
     Base.eval(Core, :(_parse = $parser))
     nothing
 end
