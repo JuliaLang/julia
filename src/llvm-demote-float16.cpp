@@ -50,6 +50,7 @@ extern JuliaOJIT *jl_ExecutionEngine;
 Optional<bool> always_have_fp16() {
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
     // x86 doesn't support fp16
+    // TODO: update for sapphire rapids when it comes out
     return false;
 #else
     return {};
@@ -67,9 +68,13 @@ bool have_fp16(Function &caller) {
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
 #if defined _CPU_AARCH64_
-      if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
+    if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
         return true;
-      }
+    }
+#else
+    if (FS.find("+avx512fp16") != llvm::StringRef::npos){
+        return true;
+    }
 #endif
     return false;
 }
