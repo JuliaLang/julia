@@ -1512,3 +1512,7 @@ end
 # Test getfield modeling of Type{Ref{_A}} where _A
 @test Core.Compiler.getfield_tfunc(Type, Core.Compiler.Const(:parameters)) !== Union{}
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
+
+@test fully_eliminated() do
+    Ref.body.name
+end
