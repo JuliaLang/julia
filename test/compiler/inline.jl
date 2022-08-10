@@ -1940,3 +1940,8 @@ let result = @test_throws MethodError issue49074(Issue49050Concrete)
     @test result.value.f === issue49074
     @test result.value.args === (Any,)
 end
+
+# inlining of `TypeName`
+@test fully_eliminated() do
+    Ref.body.name
+end
