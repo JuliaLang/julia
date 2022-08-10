@@ -285,6 +285,13 @@ end
 @test Core.Compiler.getfield_notundefined(SyntacticallyDefined{Float64}, Symbol)
 @test Core.Compiler.getfield_notundefined(Const(Main), Const(:var))
 @test Core.Compiler.getfield_notundefined(Const(Main), Const(42))
+# access to `Type`-object is always safe
+@test getfield_notundefined(Type{Ref}, Const(:body))
+@test getfield_notundefined(Type{Ref}, Symbol)
+@test getfield_notundefined(Type{Ref{Int}}, Const(:body))
+@test getfield_notundefined(Type{Ref{Int}}, Symbol)
+@test getfield_notundefined(DataType, Const(:hash))
+@test getfield_notundefined(DataType, Symbol)
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
@@ -326,6 +333,8 @@ end
 @test Base.infer_effects((SyntacticallyDefined{Float64}, Symbol)) do w, s
     getfield(w, s)
 end |> Core.Compiler.is_foldable
+@test Base.infer_effects(getproperty, (Type{Ref}, Symbol)) |> Core.Compiler.is_consistent
+@test Base.infer_effects(getproperty, (Type{Ref}, Symbol)) |> Core.Compiler.is_foldable
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
