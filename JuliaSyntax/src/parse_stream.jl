@@ -84,8 +84,8 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
 end
 
 #-------------------------------------------------------------------------------
-# Generic interface for types `T` which have kind and flags:
-# 1. Define kind(::T) and flags(::T) directly
+# Generic interface for types `T` which have kind and flags. Either:
+# 1. Define kind(::T) and flags(::T), or
 # 2. Define head(::T) to return a type like `SyntaxKind` for which `kind` and
 #    `flags` are defined
 kind(x)  = kind(head(x))
