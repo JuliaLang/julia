@@ -254,6 +254,13 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
     FieldType = Any[Int, Symbol, Any]
     @test getfield_notundefined(TupleType, FieldType)
 end
+# access to `Type`-object is always safe
+@test getfield_notundefined(Type{Ref}, Const(:body))
+@test getfield_notundefined(Type{Ref}, Symbol)
+@test getfield_notundefined(Type{Ref{Int}}, Const(:body))
+@test getfield_notundefined(Type{Ref{Int}}, Symbol)
+@test getfield_notundefined(DataType, Const(:hash))
+@test getfield_notundefined(DataType, Symbol)
 # high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
@@ -292,6 +299,8 @@ let f() = Ref{String}()[]
         f() # this call should be concrete evaluated
     end |> only === Union{}
 end
+@test Base.infer_effects(getproperty, (Type{Ref}, Symbol)) |> Core.Compiler.is_consistent
+@test Base.infer_effects(getproperty, (Type{Ref}, Symbol)) |> Core.Compiler.is_foldable
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
