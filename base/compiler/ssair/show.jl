@@ -329,8 +329,7 @@ function compute_ir_line_annotations(code::IRCode)
     return (loc_annotations, loc_methods, loc_lineno)
 end
 
-Base.show(io::IO, code::IRCode) = show_ir(io, code)
-
+Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 
 lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
@@ -522,6 +521,10 @@ function _stmt(code::IRCode, idx::Int)
     stmts = code.stmts
     return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
 end
+function _stmt(compact::IncrementalCompact, idx::Int)
+    stmts = compact.result
+    return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
+end
 function _stmt(code::CodeInfo, idx::Int)
     code = code.code
     return isassigned(code, idx) ? code[idx] : UNDEF
@@ -529,6 +532,10 @@ end
 
 function _type(code::IRCode, idx::Int)
     stmts = code.stmts
+    return isassigned(stmts.type, idx) ? stmts[idx][:type] : UNDEF
+end
+function _type(compact::IncrementalCompact, idx::Int)
+    stmts = compact.result
     return isassigned(stmts.type, idx) ? stmts[idx][:type] : UNDEF
 end
 function _type(code::CodeInfo, idx::Int)
@@ -559,13 +566,13 @@ end
 # pop_new_node!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
 #   node at the current index `idx`, which is printed before the statement at index
 #   `idx`. This function is repeatedly called until it returns `nothing`
-function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, config::IRShowConfig,
+function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
                         used, cfg, bb_idx; pop_new_node!, config.bb_color)
 end
 
-function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info_preprinter, line_info_postprinter,
+function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), bb_color=:light_black)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
@@ -660,15 +667,12 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
     return bb_idx
 end
 
-function ircode_new_nodes_iter(code::IRCode)
-    stmts = code.stmts
-    new_nodes = code.new_nodes.stmts
-    new_nodes_info = code.new_nodes.info
+function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
     new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
     perm_idx = Ref(1)
 
-    function (idx::Int)
+    return function (idx::Int)
         perm_idx[] <= length(new_nodes_perm) || return nothing
         node_idx = new_nodes_perm[perm_idx[]]
         if new_nodes_info[node_idx].pos != idx
@@ -681,6 +685,20 @@ function ircode_new_nodes_iter(code::IRCode)
         node_idx += length(stmts)
         return node_idx, new_node_inst, new_node_type
     end
+end
+
+function new_nodes_iter(ir::IRCode)
+    stmts = ir.stmts
+    new_nodes = ir.new_nodes.stmts
+    new_nodes_info = ir.new_nodes.info
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+end
+
+function new_nodes_iter(compact::IncrementalCompact)
+    stmts = compact.result
+    new_nodes = compact.new_new_nodes.stmts
+    new_nodes_info = compact.new_new_nodes.info
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
@@ -770,24 +788,69 @@ function default_config(code::IRCode; verbose_linetable=false)
 end
 default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
 
-function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=default_config(code);
-                 pop_new_node! = code isa IRCode ? ircode_new_nodes_iter(code) : Returns(nothing))
-    stmts = code isa IRCode ? code.stmts : code.code
-    used = stmts_used(io, code)
-    cfg = code isa IRCode ? code.cfg : compute_basic_blocks(stmts)
-    bb_idx = 1
-
-    for idx in 1:length(stmts)
-        if config.should_print_stmt(code, idx, used)
-            bb_idx = show_ir_stmt(io, code, idx, config, used, cfg, bb_idx; pop_new_node!)
+function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
+                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+    for idx in inds
+        if config.should_print_stmt(ir, idx, used)
+            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx; pop_new_node!)
         elseif bb_idx <= length(cfg.blocks) && idx == cfg.blocks[bb_idx].stmts.stop
             bb_idx += 1
         end
     end
+    return bb_idx
+end
 
+function finish_show_ir(io::IO, cfg, config::IRShowConfig)
     max_bb_idx_size = length(string(length(cfg.blocks)))
     config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
-    nothing
+    return nothing
+end
+
+function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
+                 pop_new_node! = new_nodes_iter(ir))
+    used = stmts_used(io, ir)
+    cfg = ir.cfg
+    show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
+    finish_show_ir(io, cfg, config)
+end
+
+function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
+                 pop_new_node! = Returns(nothing))
+    used = stmts_used(io, ci)
+    cfg = compute_basic_blocks(ci.code)
+    show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+    finish_show_ir(io, cfg, config)
+end
+
+function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+    cfg = compact.ir.cfg
+    (_, width) = displaysize(io)
+
+    # First print everything that has already been compacted
+
+    # merge uses in uncompacted region into compacted uses
+    used_compacted = BitSet(i for (i, x) in pairs(compact.used_ssas) if x != 0)
+    used_uncompacted = stmts_used(io, compact.ir)
+    for (i, ssa) = enumerate(compact.ssa_rename)
+        if isa(ssa, SSAValue) && ssa.id in used_uncompacted
+            push!(used_compacted, i)
+        end
+    end
+    pop_new_node! = new_nodes_iter(compact)
+    bb_idx = show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, cfg, 1; pop_new_node!)
+
+    # Print uncompacted nodes from the original IR
+    stmts = compact.ir.stmts
+    pop_new_node! = new_nodes_iter(compact.ir)
+    if compact.idx < length(stmts)
+        indent = length(string(length(stmts)))
+        # config.line_info_preprinter(io, "", compact.idx)
+        printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+    end
+
+    show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
+
+    finish_show_ir(io, cfg, config)
 end
 
 function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
