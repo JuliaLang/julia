@@ -1519,3 +1519,7 @@ function oc_capture_oc(z)
     return oc2(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
+
+@test fully_eliminated() do
+    Ref.body.name
+end

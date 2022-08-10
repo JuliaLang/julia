@@ -1,15 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#############
-# constants #
-#############
-
-const _REF_NAME = Ref.body.name
-
-#########
-# logic #
-#########
-
 # See if the inference result of the current statement's result value might affect
 # the final answer for the method (aside from optimization potential and exceptions).
 # To do that, we need to check both for slot assignment and SSA usage.
@@ -1854,7 +1844,7 @@ function sp_type_rewrap(@nospecialize(T), linfo::MethodInstance, isreturn::Bool)
     if T === Bottom
         return Bottom
     elseif isa(T, Type)
-        if isa(T, DataType) && (T::DataType).name === _REF_NAME
+        if isa(T, DataType) && (T::DataType).name === Ref.body.name
             isref = true
             T = T.parameters[1]
             if isreturn && T === Any
