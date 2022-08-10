@@ -988,13 +988,6 @@ end
     @invoke conditional_escape!(false::Any, x::Any)
 end
 
-@testset "strides for ReshapedArray (PR#44027)" begin
-    # Type-based contiguous check
-    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
-    f(a) = only(strides(a));
-    @test fully_eliminated(f, Tuple{typeof(a)}) && f(a) == 1
-end
-
 @testset "elimination of `get_binding_type`" begin
     m = Module()
     @eval m begin
