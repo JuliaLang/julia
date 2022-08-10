@@ -507,7 +507,7 @@ order to function correctly with the keyword outer constructor.
     requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
-    This macro was added to the public API and exported in Julia 1.9
+    This macro is exported as of Julia 1.9.
 
 # Examples
 ```jldoctest
