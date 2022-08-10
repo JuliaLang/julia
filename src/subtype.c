@@ -800,10 +800,8 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             // TODO: substitute the value (if any) of this variable into previous envout entries
         }
     }
-    else {
-        ans = R ? subtype(t, u->body, e, param) :
-                  subtype(u->body, t, e, param);
-    }
+    else
+        ans = subtype(u->body, t, e, param);
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
