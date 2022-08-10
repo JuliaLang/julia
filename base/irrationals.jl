@@ -24,7 +24,7 @@ abstract type AbstractIrrational <: Real end
 Number type representing an exact irrational value denoted by the
 symbol `sym`, such as [`π`](@ref pi), [`ℯ`](@ref) and [`γ`](@ref Base.MathConstants.eulergamma).
 
-See also [`@irrational`], [`AbstractIrrational`](@ref).
+See also [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 
@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
     if get(io, :compact, false)
         print(io, sym)
     else
-        print(io, sym, " = ", string(float(x))[1:15], "...")
+        print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")
     end
 end
 
@@ -48,7 +48,8 @@ AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
 Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
-@pure function Rational{T}(x::AbstractIrrational) where T<:Integer
+# XXX this may change `DEFAULT_PRECISION`, thus not effect free
+@assume_effects :total function Rational{T}(x::AbstractIrrational) where T<:Integer
     o = precision(BigFloat)
     p = 256
     while true
@@ -64,7 +65,7 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 end
 Rational{BigInt}(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
 
-@pure function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
+@assume_effects :total function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
         T(BigFloat(x)::BigFloat, r)
     end
@@ -106,11 +107,11 @@ end
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
 # Irrational vs Rational
-@pure function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
+@assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
     return rationalize(T, big(x), tol=tol)
 end
-@pure function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
-    # an @pure version of `<` for determining if the rationalization of
+@assume_effects :total function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
+    # an @assume_effects :total version of `<` for determining if the rationalization of
     # an irrational number required rounding up or down
     return rx < big(x)
 end
@@ -152,6 +153,8 @@ zero(::Type{<:AbstractIrrational}) = false
 
 one(::AbstractIrrational) = true
 one(::Type{<:AbstractIrrational}) = true
+
+sign(x::AbstractIrrational) = ifelse(x < zero(x), -1.0, 1.0)
 
 -(x::AbstractIrrational) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]

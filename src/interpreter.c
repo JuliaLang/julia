@@ -287,9 +287,9 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
-        JL_NARGSV(new_opaque_closure, 5);
+        JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv[4], argv+5, nargs-5);
+            argv[3], argv+4, nargs-4);
         JL_GC_POP();
         return ret;
     }
@@ -483,7 +483,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
+                    jl_binding_t *b = jl_get_binding_wr_or_error(modu, sym);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }
@@ -696,6 +696,9 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = oc->world;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)oc;
@@ -710,9 +713,8 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
-
     size_t defargs = source->nargs;
-    int isva = !!oc->isva;
+    int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
     for (size_t i = 1; i < defargs - isva; i++)
         s->locals[i] = args[i - 1];
@@ -722,6 +724,10 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     }
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(code->code, s, 0, 0);
+    locals[0] = r; // GC root
+    JL_GC_PROMISE_ROOTED(r);
+    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
+    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }

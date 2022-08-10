@@ -29,7 +29,7 @@ endif
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)" LIBPREFIX="libopenblas$(OPENBLAS_LIBNAMESUFFIX)"
 ifeq ($(OS), Darwin)
-OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(build_bindir)/objconv)
+OPENBLAS_BUILD_OPTS += OBJCONV=$(abspath $(build_depsbindir)/objconv)
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(build_prefix)/manifest/objconv
 endif
 endif
@@ -90,12 +90,7 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/
 		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-julia42415-lapack625-openblas3392.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/openblas-julia42415-lapack625-openblas3392.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-julia42415-lapack625-openblas3392.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
 		patch -p1 -f < $(SRCDIR)/patches/neoverse-generic-kernels.patch
 	echo 1 > $@
@@ -120,7 +115,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT) $$(build_shlibdir)/libopenblas$$(OPENBLAS_LIBNAMESUFFIX).$$(SHLIB_EXT)))
 
 clean-openblas:
-	-rm $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean
 
 
@@ -191,11 +186,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)liblapack.$$(SHLIB_EXT) $$(build_shlibdir)/liblapack.$$(SHLIB_EXT)))
 
 clean-lapack:
-	-rm $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
+	-rm -f $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
-	-rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
 get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz

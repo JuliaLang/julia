@@ -193,7 +193,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == i 
+            @test length(TEMP_CLEANUP) == i
             @test TEMP_CLEANUP_MAX[] == n
             # delete 1/3 of the temp paths
             i % 3 == 0 && rm(t, recursive=true, force=true)
@@ -604,7 +604,8 @@ close(s)
         false
     catch e
         isa(e, SystemError) || rethrow()
-        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        @test e.errnum == 2
+        @test startswith(sprint(showerror, e), "SystemError: opening file \"this file is not expected to exist\"")
         true
     end
 end

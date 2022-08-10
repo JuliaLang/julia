@@ -494,9 +494,9 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
 
     # isassigned(a::AbstractArray, i::Int...)
     j = rand(1:length(B))
-    @test isassigned(B, j) == true
+    @test isassigned(B, j)
     if T == T24Linear
-        @test isassigned(B, length(B) + 1) == false
+        @test !isassigned(B, length(B) + 1)
     end
 
     # reshape(a::AbstractArray, dims::Dims)
@@ -529,7 +529,7 @@ mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
 @testset "ErrorException if getindex is not defined" begin
     Base.length(::TestThrowNoGetindex) = 2
     Base.size(::TestThrowNoGetindex) = (2,)
-    @test_throws ErrorException isassigned(TestThrowNoGetindex{Float64}(), 1)
+    @test_throws Base.CanonicalIndexError isassigned(TestThrowNoGetindex{Float64}(), 1)
 end
 
 function test_in_bounds(::Type{TestAbstractArray})
@@ -565,10 +565,10 @@ end
 function test_getindex_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws ErrorException getindex(U, 1)
-    @test_throws ErrorException Base.unsafe_getindex(U, 1)
-    @test_throws ErrorException getindex(V, 1, 1)
-    @test_throws ErrorException Base.unsafe_getindex(V, 1, 1)
+    @test_throws Base.CanonicalIndexError getindex(U, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_getindex(U, 1)
+    @test_throws Base.CanonicalIndexError getindex(V, 1, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_getindex(V, 1, 1)
 end
 
 function test_setindex!_internals(::Type{T}, shape, ::Type{TestAbstractArray}) where T
@@ -583,10 +583,10 @@ end
 function test_setindex!_internals(::Type{TestAbstractArray})
     U = UnimplementedFastArray{Int, 2}()
     V = UnimplementedSlowArray{Int, 2}()
-    @test_throws ErrorException setindex!(U, 0, 1)
-    @test_throws ErrorException Base.unsafe_setindex!(U, 0, 1)
-    @test_throws ErrorException setindex!(V, 0, 1, 1)
-    @test_throws ErrorException Base.unsafe_setindex!(V, 0, 1, 1)
+    @test_throws Base.CanonicalIndexError setindex!(U, 0, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_setindex!(U, 0, 1)
+    @test_throws Base.CanonicalIndexError setindex!(V, 0, 1, 1)
+    @test_throws Base.CanonicalIndexError Base.unsafe_setindex!(V, 0, 1, 1)
 end
 
 function test_get(::Type{TestAbstractArray})
@@ -732,6 +732,11 @@ function test_cat(::Type{TestAbstractArray})
     @test @inferred(cat(As...; dims=Val(3))) == zeros(2, 2, 2)
     cat3v(As) = cat(As...; dims=Val(3))
     @test @inferred(cat3v(As)) == zeros(2, 2, 2)
+    @test @inferred(cat(As...; dims=Val((1,2)))) == zeros(4, 4)
+
+    r = rand(Float32, 56, 56, 64, 1);
+    f(r) = cat(r, r, dims=(3,))
+    @inferred f(r);
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -1464,9 +1469,7 @@ using Base: typed_hvncat
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            # current behavior, not potentially dangerous.
-            # should throw error like above loop
-            @test [v1 ;;; v2 v3] == [v2 v3;;;]
+            @test_throws ArgumentError [v1 ;;; v2 v3]
             @test_throws ArgumentError [v1 ;;; v2]
             @test_throws ArgumentError [v1 v1 ;;; v2 v3]
         end
@@ -1534,6 +1537,20 @@ using Base: typed_hvncat
     @test Int[] == typed_hvncat(Int, 1) isa Array{Int, 1}
     @test Array{Int, 2}(undef, 0, 0) == typed_hvncat(Int, 2) isa Array{Int, 2}
     @test Array{Int, 3}(undef, 0, 0, 0) == typed_hvncat(Int, 3) isa Array{Int, 3}
+
+    # Issue 43933 - semicolon precedence mistake should produce an error
+    @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
+    @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
+
+    @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
+
+    #45461, #46133 - ensure non-numeric types do not error
+    @test [1;;; 2;;; nothing;;; 4] == reshape([1; 2; nothing; 4], (1, 1, 4))
+    @test [1 2;;; nothing 4] == reshape([1; 2; nothing; 4], (1, 2, 2))
+    @test [[1 2];;; nothing 4] == reshape([1; 2; nothing; 4], (1, 2, 2))
+    @test ["A";;"B";;"C";;"D"] == ["A" "B" "C" "D"]
+    @test ["A";"B";;"C";"D"] == ["A" "C"; "B" "D"]
+    @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
 end
 
 @testset "keepat!" begin
@@ -1558,6 +1575,88 @@ end
 end
 
 @testset "reshape methods for AbstractVectors" begin
-    r = Base.IdentityUnitRange(3:4)
-    @test reshape(r, :) === reshape(r, (:,)) === r
+    for r in Any[1:3, Base.IdentityUnitRange(3:4)]
+        @test reshape(r, :) === reshape(r, (:,)) === r
+    end
+    r = 3:5
+    rr = reshape(r, 1, 3)
+    @test length(rr) == length(r)
+end
+
+struct FakeZeroDimArray <: AbstractArray{Int, 0} end
+Base.strides(::FakeZeroDimArray) = ()
+Base.size(::FakeZeroDimArray) = ()
+@testset "strides for ReshapedArray" begin
+    # Type-based contiguous check is tested in test/compiler/inline.jl
+    function check_strides(A::AbstractArray)
+        # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+        dims = ntuple(identity, ndims(A))
+        map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
+        # Test strides via value check.
+        for i in eachindex(IndexLinear(), A)
+            A[i] === Base.unsafe_load(pointer(A, i)) || return false
+        end
+        return true
+    end
+    # General contiguous check
+    a = view(rand(10,10), 1:10, 1:10)
+    @test check_strides(vec(a))
+    b = view(parent(a), 1:9, 1:10)
+    @test_throws "Input is not strided." strides(vec(b))
+    # StridedVector parent
+    for n in 1:3
+        a = view(collect(1:60n), 1:n:60n)
+        @test check_strides(reshape(a, 3, 4, 5))
+        @test check_strides(reshape(a, 5, 6, 2))
+        b = view(parent(a), 60n:-n:1)
+        @test check_strides(reshape(b, 3, 4, 5))
+        @test check_strides(reshape(b, 5, 6, 2))
+    end
+    # StridedVector like parent
+    a = randn(10, 10, 10)
+    b = view(a, 1:10, 1:1, 5:5)
+    @test check_strides(reshape(b, 2, 5))
+    # Other StridedArray parent
+    a = view(randn(10,10), 1:9, 1:10)
+    @test check_strides(reshape(a,3,3,2,5))
+    @test check_strides(reshape(a,3,3,5,2))
+    @test check_strides(reshape(a,9,5,2))
+    @test check_strides(reshape(a,3,3,10))
+    @test check_strides(reshape(a,1,3,1,3,1,5,1,2))
+    @test check_strides(reshape(a,3,3,5,1,1,2,1,1))
+    @test_throws "Input is not strided." strides(reshape(a,3,6,5))
+    @test_throws "Input is not strided." strides(reshape(a,3,2,3,5))
+    @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
+    @test_throws "Input is not strided." strides(reshape(a,5,3,3,2))
+    # Zero dimensional parent
+    a = reshape(FakeZeroDimArray(),1,1,1)
+    @test @inferred(strides(a)) == (1, 1, 1)
+    # Dense parent (but not StridedArray)
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(reshape(A, 3, 2, 3))
+end
+
+@testset "stride for 0 dims array #44087" begin
+    struct Fill44087 <: AbstractArray{Int,0}
+        a::Int
+    end
+    # `stride` shouldn't work if `strides` is not defined.
+    @test_throws MethodError stride(Fill44087(1), 1)
+    # It is intentionally to only check the return type. (The value is somehow arbitrary)
+    @test stride(fill(1), 1) isa Int
+    @test stride(reinterpret(Float64, fill(Int64(1))), 1) isa Int
+    @test stride(reinterpret(reshape, Float64, fill(Int64(1))), 1) isa Int
+    @test stride(Base.ReshapedArray(fill(1), (), ()), 1) isa Int
+end
+
+@testset "to_indices inference (issue #42001 #44059)" begin
+    CIdx = CartesianIndex
+    CIdc = CartesianIndices
+    @test (@inferred to_indices([], ntuple(Returns(CIdx(1)), 32))) == ntuple(Returns(1), 32)
+    @test (@inferred to_indices([], ntuple(Returns(CIdc(1:1)), 32))) == ntuple(Returns(Base.OneTo(1)), 32)
+    @test (@inferred to_indices([], (CIdx(), 1, CIdx(1,1,1)))) == ntuple(Returns(1), 4)
+    A = randn(2, 2, 2, 2, 2, 2);
+    i = CIdx((1, 1))
+    @test (@inferred A[i,i,i]) === A[1]
+    @test (@inferred to_indices([], (1, CIdx(1, 1), 1, CIdx(1, 1), 1, CIdx(1, 1), 1))) == ntuple(Returns(1), 10)
 end

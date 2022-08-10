@@ -16,7 +16,7 @@ extern "C" {
 
 
 JL_DLLEXPORT int16_t jl_threadid(void);
-JL_DLLEXPORT void jl_threading_profile(void);
+JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
@@ -201,11 +201,13 @@ typedef struct {
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
+
 // This includes all the thread local states we care about for a thread.
 // Changes to TLS field types must be reflected in codegen.
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
     int16_t tid;
+    int8_t threadpoolid;
     uint64_t rngseed;
     volatile size_t *safepoint;
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
@@ -246,6 +248,8 @@ typedef struct _jl_tls_states_t {
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
     struct _jl_bt_element_t *bt_data; // JL_MAX_BT_SIZE + 1 elements long
     size_t bt_size;    // Size for backtrace in transit in bt_data
+    // Temporary backtrace buffer used only for allocations profiler.
+    struct _jl_bt_element_t *profiling_bt_buffer;
     // Atomically set by the sender, reset by the handler.
     volatile _Atomic(sig_atomic_t) signal_request; // TODO: no actual reason for this to be _Atomic
     // Allow the sigint to be raised asynchronously
@@ -275,9 +279,13 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
-} jl_tls_states_t;
 
-typedef jl_tls_states_t *jl_ptls_t;
+    // some hidden state (usually just because we don't have the type's size declaration)
+#ifdef LIBRARY_EXPORTS
+    uv_mutex_t sleep_lock;
+    uv_cond_t wake_signal;
+#endif
+} jl_tls_states_t;
 
 #ifndef LIBRARY_EXPORTS
 // deprecated (only for external consumers)
@@ -354,7 +362,6 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
-JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);

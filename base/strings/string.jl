@@ -29,6 +29,18 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 
 @inline between(b::T, lo::T, hi::T) where {T<:Integer} = (lo ≤ b) & (b ≤ hi)
 
+"""
+    String <: AbstractString
+
+The default string type in Julia, used by e.g. string literals.
+
+`String`s are immutable sequences of `Char`s. A `String` is stored internally as
+a contiguous byte array, and while they are interpreted as being UTF-8 encoded,
+they can be composed of any byte sequence. Use [`isvalid`](@ref) to validate
+that the underlying byte sequence is valid as UTF-8.
+"""
+String
+
 ## constructors and conversions ##
 
 # String constructor docstring from boot.jl, workaround for #16730
@@ -36,9 +48,9 @@ const ByteArray = Union{CodeUnits{UInt8,String}, Vector{UInt8},Vector{Int8}, Fas
 """
     String(v::AbstractVector{UInt8})
 
-Create a new `String` object from a byte vector `v` containing UTF-8 encoded
-characters. If `v` is `Vector{UInt8}` it will be truncated to zero length and
-future modification of `v` cannot affect the contents of the resulting string.
+Create a new `String` object using the data buffer from byte vector `v`.
+If `v` is a `Vector{UInt8}` it will be truncated to zero length and future
+modification of `v` cannot affect the contents of the resulting string.
 To avoid truncation of `Vector{UInt8}` data, use `String(copy(v))`; for other
 `AbstractVector` types, `String(v)` already makes a copy.
 
@@ -71,16 +83,17 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-_string_n(n::Integer) = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
+# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# but the macro is not available at this time in bootstrap, so we write it manually.
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0xe)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
 
-Convert a string to a contiguous byte array representation encoded as UTF-8 bytes.
-This representation is often appropriate for passing strings to C.
+Create a new `String` from an existing `AbstractString`.
 """
 String(s::AbstractString) = print_to_string(s)
-@pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+@assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 
@@ -95,7 +108,7 @@ String(s::CodeUnits{UInt8,String}) = s.s
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 
-@pure ncodeunits(s::String) = Core.sizeof(s)
+ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
 @inline function codeunit(s::String, i::Integer)
@@ -234,7 +247,7 @@ function getindex_continued(s::String, i::Int, u::UInt32)
     end
     n = ncodeunits(s)
 
-    (i += 1) > n && @goto ret
+    (i += 1) > n && @goto ret
     @inbounds b = codeunit(s, i) # cont byte 1
     b & 0xc0 == 0x80 || @goto ret
     u |= UInt32(b) << 16
@@ -274,7 +287,7 @@ length(s::String) = length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 @inline function length(s::String, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
+        0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
     end
     j < i && return 0
     @inbounds i, k = thisind(s, i), i
@@ -287,8 +300,8 @@ end
     @inbounds b = codeunit(s, i)
     @inbounds while true
         while true
-            (i += 1) ≤ n || return c
-            0xc0 ≤ b ≤ 0xf7 && break
+            (i += 1) ≤ n || return c
+            0xc0 ≤ b ≤ 0xf7 && break
             b = codeunit(s, i)
         end
         l = b
@@ -296,12 +309,12 @@ end
         c -= (x = b & 0xc0 == 0x80)
         x & (l ≥ 0xe0) || continue
 
-        (i += 1) ≤ n || return c
+        (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 2
         c -= (x = b & 0xc0 == 0x80)
         x & (l ≥ 0xf0) || continue
 
-        (i += 1) ≤ n || return c
+        (i += 1) ≤ n || return c
         b = codeunit(s, i) # cont byte 3
         c -= (b & 0xc0 == 0x80)
     end

@@ -157,12 +157,65 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
-# and ensure a reinterpret array containing a strided array can have strides computed
-let A = view(reinterpret(Int16, collect(reshape(UnitRange{Int64}(1, 20), 5, 4))), :, 1:2)
-    R = reinterpret(Int32, A)
-    @test strides(R) == (1, 10)
-    @test stride(R, 1) == 1
-    @test stride(R, 2) == 10
+function check_strides(A::AbstractArray)
+    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+    dims = ntuple(identity, ndims(A))
+    map(i -> stride(A, i), dims) == strides(A) || return false
+    # Test strides via value check.
+    for i in eachindex(IndexLinear(), A)
+        A[i] === Base.unsafe_load(pointer(A, i)) || return false
+    end
+    return true
+end
+
+@testset "strides for NonReshapedReinterpretArray" begin
+    A = Array{Int32}(reshape(1:88, 11, 8))
+    for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1, 2:3:8, 7:-6:1, 3:5:11)
+        # dim1 is contiguous
+        for T in (Int16, Float32)
+            @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
+        end
+        if mod(step(viewax2), 2) == 0
+            @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+        end
+        # non-integer-multipled classified
+        if mod(step(viewax2), 3) == 0
+            @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+        end
+        if mod(step(viewax2), 5) == 0
+            @test check_strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+        end
+        # dim1 is not contiguous
+        for T in (Int16, Int64)
+            @test_throws "Parent must" strides(reinterpret(T, view(A, 8:-1:1, viewax2)))
+        end
+        @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
+    end
+    # issue 46113
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(A)
+end
+
+@testset "strides for ReshapedReinterpretArray" begin
+    A = Array{Int32}(reshape(1:192, 3, 8, 8))
+    for viewax1 in (1:8, 1:2:8, 8:-1:1, 8:-2:1), viewax2 in (1:2, 4:-1:1)
+        for T in (Int16, Float32)
+            @test check_strides(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
+            @test check_strides(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
+        end
+        if mod(step(viewax1), 2) == 0
+            @test check_strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+        else
+            @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+        end
+        @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
+    end
 end
 
 @testset "strides" begin
@@ -276,8 +329,8 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     @test r[1,2] === reinterpret(Int64, v[1,2])
     @test r[0,3] === reinterpret(Int64, v[0,3])
     @test r[1,3] === reinterpret(Int64, v[1,3])
-    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is OffsetArrays.IdOffsetRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
-    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got OffsetArrays.IdOffsetRange(0:1)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
+    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is $(repr(axes(v,1))). Try reshaping first.") reinterpret(UInt32, v)
+    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got $(repr(axes(v,1)))) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
     v = OffsetArray(a, (0, 1))
     @test axes(reinterpret(reshape, Tuple{Float64,Float64}, v)) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), 1),)
     r = reinterpret(UInt32, v)
@@ -297,7 +350,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is OffsetArrays.IdOffsetRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is $(repr(axes(vt,1))). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))
@@ -415,9 +468,11 @@ end
     @test_throws ArgumentError reinterpret(Nothing, 1:6)
     @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
 
-    # reintepret of empty array with reshape
-    @test reinterpret(reshape, Nothing, fill(missing, (0,0,0))) == fill(nothing, (0,0,0))
+    # reintepret of empty array
+    @test reinterpret(reshape, Nothing, fill(missing, (1,0,3))) == fill(nothing, (1,0,3))
+    @test reinterpret(reshape, Missing, fill((), (0,))) == fill(missing, (0,))
     @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
+    @test_throws ArgumentError reinterpret(Missing, fill(77, (0,1)))
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, 0))
 
     # reinterpret of 0-dimensional array

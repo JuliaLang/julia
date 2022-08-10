@@ -197,7 +197,8 @@ end
 Create all intermediate directories in the `path` as required. Directories are created with
 the permissions `mode` which defaults to `0o777` and is modified by the current file
 creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path` (or parts of it)
-already exists. Return `path`.
+already exists. However, an error will be thrown if `path` (or parts of it) points to an
+existing file. Return `path`.
 
 If `path` includes a filename you will probably want to use `mkpath(dirname(path))` to
 avoid creating a directory using the filename.
@@ -428,6 +429,7 @@ end
 
 """
     touch(path::AbstractString)
+    touch(fd::File)
 
 Update the last-modified timestamp on a file to the current time.
 
@@ -453,18 +455,13 @@ We can see the [`mtime`](@ref) has been modified by `touch`.
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
-        if Sys.isunix()
-            ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
-            systemerror(:futimes, ret != 0, extrainfo=path)
-        else
-            t = time()
-            futime(f,t,t)
-        end
+        touch(f)
     finally
         close(f)
     end
     path
 end
+
 
 """
     tempdir()
@@ -796,6 +793,8 @@ By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
 you can use `readdir(dir, sort=false)` to opt out of sorting.
 
+See also: [`walkdir`](@ref).
+
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
 
@@ -894,6 +893,8 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+
+See also: [`readdir`](@ref).
 
 # Examples
 ```julia

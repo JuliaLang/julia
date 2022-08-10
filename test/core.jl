@@ -92,6 +92,20 @@ let abcd = ABCDconst(1, 2, 3, 4)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
 
+# test `===` handling null pointer in struct #44712
+struct N44712
+    a::Some{Any}
+    b::Int
+    N44712() = new()
+end
+let a  = Int[0, 1], b = Int[0, 2]
+    GC.@preserve a b begin
+        @test unsafe_load(Ptr{N44712}(pointer(a))) !== unsafe_load(Ptr{N44712}(pointer(b)))
+    end
+end
+
+# another possible issue in #44712
+@test (("", 0),) !== (("", 1),)
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
@@ -323,6 +337,15 @@ end
 #struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
 @test_broken @isdefined S22624
 
+# issue #42297
+mutable struct Node42297{T, V}
+    value::V
+    next::Union{Node42297{T, T}, Node42297{T, Val{T}}, Nothing}
+    Node42297{T}(value) where {T} = new{T, typeof(value)}(value, nothing)
+end
+@test fieldtype(Node42297{Int,Val{Int}}, 1) === Val{Int}
+@test fieldtype(Node42297{Int,Int}, 1) === Int
+
 # issue #3890
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
@@ -404,9 +427,6 @@ function typeassert_instead_of_decl()
     return 0
 end
 @test_throws TypeError typeassert_instead_of_decl()
-
-# type declarations on globals not implemented yet
-@test_throws ErrorException eval(Meta.parse("global x20327::Int"))
 
 y20327 = 1
 @test_throws TypeError y20327::Float64
@@ -1526,6 +1546,12 @@ let
     i2169(a::Array{T}) where {T} = typemin(T)
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
+
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
 
 # issue #2365
 mutable struct B2365{T}
@@ -2812,10 +2838,10 @@ let f
     end
 end
 for m in methods(f10373)
-    @test m.name == :f10373
+    @test m.name === :f10373
 end
 for m in methods(g10373)
-    @test m.name == :g10373
+    @test m.name === :g10373
 end
 
 # issue #7221
@@ -3581,7 +3607,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3591,7 +3617,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -4203,7 +4229,7 @@ end
 let ex = quote
              $(if true; :(test); end)
          end
-    @test ex.args[2] == :test
+    @test ex.args[2] === :test
 end
 
 # issue #15180
@@ -4329,6 +4355,30 @@ let gc_enabled13995 = GC.enable(false)
     GC.enable(false)
     @test finalized13995 == [true, true, true, true]
     GC.enable(gc_enabled13995)
+end
+
+# Ensure an independent GC frame
+@noinline outlined(f) = f()
+
+@testset "finalizers must not change the sticky flag" begin
+    GC.enable(false)
+    try
+        outlined() do
+            local obj = Ref(0)
+            finalizer(obj) do _
+                @async nothing
+            end
+            Base.donotdelete(obj)
+        end
+        task = Threads.@spawn begin
+            GC.enable(true)
+            GC.gc()
+        end
+        wait(task)
+        @test !task.sticky
+    finally
+        GC.enable(true)
+    end
 end
 
 # issue #15283
@@ -7327,6 +7377,35 @@ end
 @test isbitstype(X41654)
 @test ('a'=>X41654(),)[1][2] isa X41654
 
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
+
+# issue #44614
+struct T44614_1{T}
+    m::T
+end
+struct T44614_2{L}
+    tuple::NTuple{3, Int64}
+    T44614_2{L}(t::NTuple{3, Int64}) where {L} = new{sum(t)}(t)
+end
+struct T44614_3{L, N}
+    a::Tuple{T44614_2{L}}
+    param::NTuple{N, T44614_1}
+    T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
+end
+@test sizeof((T44614_2{L} where L).body) == 24
+let T = T44614_3{L,2} where L
+    # these values are computable, but we currently don't know how to compute them properly
+    ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
+    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T)
+    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test fieldoffset(T{1}, 2) == 24
+end
+
 # Issue #34206/34207
 function mre34206(a, n)
     va = view(a, :)
@@ -7700,4 +7779,40 @@ end
     a, b... = x
     @test a == 1
     @test b == Core.svec(2, 3)
+end
+
+@testset "setproperty! on modules" begin
+    m = Module()
+    @eval m global x::Int
+
+    setglobal!(m, :x, 1)
+    @test m.x === 1
+    setglobal!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+
+    m.x = 1
+    @test m.x === 1
+    setproperty!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
+    m.x = 4.
+    @test m.x === 4
+end
+
+# #45350 - Codegen for assignment to binding imported from module
+module Foo45350
+    global x45350::Int = 1
+end
+import .Foo45350: x45350
+f45350() = (global x45350 = 2)
+@test_throws ErrorException f45350()
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end

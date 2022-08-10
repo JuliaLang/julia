@@ -40,15 +40,8 @@ julia> supertype(Int32)
 Signed
 ```
 """
-function supertype(T::DataType)
-    @_pure_meta
-    T.super
-end
-
-function supertype(T::UnionAll)
-    @_pure_meta
-    UnionAll(T.var, supertype(T.body))
-end
+supertype(T::DataType) = (@_total_meta; T.super)
+supertype(T::UnionAll) = (@_total_meta; UnionAll(T.var, supertype(T.body)))
 
 ## generic comparison ##
 
@@ -234,7 +227,11 @@ isgreater(x, y) = isunordered(x) || isunordered(y) ? isless(x, y) : isless(y, x)
 """
     isunordered(x)
 
-Return true if `x` is a value that is not normally orderable, such as `NaN` or `missing`.
+Return `true` if `x` is a value that is not orderable according to [`<`](@ref), such as `NaN`
+or `missing`.
+
+The values that evaluate to `true` with this predicate may be orderable with respect to other
+orderings such as [`isless`](@ref).
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
@@ -243,14 +240,8 @@ isunordered(x) = false
 isunordered(x::AbstractFloat) = isnan(x)
 isunordered(x::Missing) = true
 
-function ==(T::Type, S::Type)
-    @_pure_meta
-    return ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0
-end
-function !=(T::Type, S::Type)
-    @_pure_meta
-    return !(T == S)
-end
+==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
+!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
@@ -333,7 +324,7 @@ Because of the behavior of floating-point NaN values, this operator implements
 a partial order.
 
 # Implementation
-New numeric types with a canonical partial order should implement this function for
+New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 
@@ -519,7 +510,7 @@ julia> identity("Well, what did you expect?")
 "Well, what did you expect?"
 ```
 """
-identity(x) = x
+identity(@nospecialize x) = x
 
 +(x::Number) = x
 *(x::Number) = x
@@ -897,14 +888,18 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
     |>(x, f)
 
 Applies a function to the preceding argument. This allows for easy function chaining.
+When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] |> (x->x.^2) |> sum |> inv
+julia> [1:5;] .|> (x -> x^2) |> sum |> inv
 0.01818181818181818
 ```
 """
 |>(x, f) = f(x)
+
+_stable_typeof(x) = typeof(x)
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
@@ -932,16 +927,11 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{Core.Typeof(value)}(value)
+    Returns(value) = new{_stable_typeof(value)}(value)
 end
 
-(obj::Returns)(args...; kw...) = obj.value
-function show(io::IO, obj::Returns)
-    show(io, typeof(obj))
-    print(io, "(")
-    show(io, obj.value)
-    print(io, ")")
-end
+(obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
+
 # function composition
 
 """
@@ -1023,23 +1013,45 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
+(c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
+unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.outer)..., unwrap_composed(c.inner)...)
+unwrap_composed(c) = (maybeconstructor(c),)
+call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
+call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
+
+struct Constructor{F} <: Function end
+(::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
+maybeconstructor(::Type{F}) where {F} = Constructor{F}()
+maybeconstructor(f) = f
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)
 
 function show(io::IO, c::ComposedFunction)
-    show(io, c.outer)
+    c.outer isa ComposedFunction ? show(io, c.outer) : _showcomposed(io, c.outer)
     print(io, " ∘ ")
-    show(io, c.inner)
+    _showcomposed(io, c.inner)
 end
+
+#shows !f instead of (!) ∘ f when ! is the outermost function
+function show(io::IO, c::ComposedFunction{typeof(!)})
+    print(io, '!')
+    _showcomposed(io, c.inner)
+end
+
+_showcomposed(io::IO, x) = show(io, x)
+#display operators like + and - inside parens
+_showcomposed(io::IO, f::Function) = isoperator(Symbol(f)) ? (print(io, '('); show(io, f); print(io, ')')) : show(io, f)
+#nesting for chained composition
+_showcomposed(io::IO, f::ComposedFunction) = (print(io, '('); show(io, f); print(io, ')'))
+#no nesting when ! is the outer function in a composition chain
+_showcomposed(io::IO, f::ComposedFunction{typeof(!)}) = show(io, f)
 
 """
     !f::Function
 
-Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`.
+Predicate function negation: when the argument of `!` is a function, it returns a composed function which computes the boolean negation of `f`.
 
 See also [`∘`](@ref).
 
@@ -1054,8 +1066,12 @@ julia> filter(isletter, str)
 julia> filter(!isletter, str)
 "∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < "
 ```
+
+!!! compat "Julia 1.9"
+    Starting with Julia 1.9, `!f` returns a [`ComposedFunction`](@ref) instead of an anonymous function.
 """
-!(f::Function) = (x...)->!f(x...)
+!(f::Function) = (!) ∘ f
+!(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
     Fix1(f, x)
@@ -1070,8 +1086,8 @@ struct Fix1{F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -1087,8 +1103,8 @@ struct Fix2{F,T} <: Function
     f::F
     x::T
 
-    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)
@@ -1181,27 +1197,42 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    splat(f)
+    Splat(f)
 
-Defined as
+Equivalent to
 ```julia
-    splat(f) = args->f(args...)
+    my_splat(f) = args->f(args...)
 ```
 i.e. given a function returns a new function that takes one argument and splats
 its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
-passes a tuple as that single argument.
+passes a tuple as that single argument. Additionally has pretty printing.
+
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
 
 # Example usage:
 ```jldoctest
-julia> map(Base.splat(+), zip(1:3,4:6))
+julia> map(Base.Splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
  5
  7
  9
+
+julia> my_add = Base.Splat(+)
+Splat(+)
+
+julia> my_add((1,2,3))
+6
 ```
 """
-splat(f) = args->f(args...)
+struct Splat{F} <: Function
+    f::F
+    Splat(f) = new{Core.Typeof(f)}(f)
+end
+(s::Splat)(args) = s.f(args...)
+print(io::IO, s::Splat) = print(io, "Splat(", s.f, ')')
+show(io::IO, s::Splat) = print(io, s)
 
 ## in and related operators
 

@@ -22,7 +22,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64, Matrix{Float64}}
+Schur{Float64, Matrix{Float64}, Vector{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -47,13 +47,19 @@ julia> t == F.T && z == F.Z && vals == F.values
 true
 ```
 """
-struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
+struct Schur{Ty,S<:AbstractMatrix,C<:AbstractVector} <: Factorization{Ty}
     T::S
     Z::S
-    values::Vector
-    Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
+    values::C
+    Schur{Ty,S,C}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty},
+                  values::AbstractVector) where {Ty,S,C} = new(T, Z, values)
 end
-Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::AbstractVector) where {Ty} =
+    Schur{Ty, typeof(T), typeof(values)}(T, Z, values)
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty},
+                       values::AbstractVector) where {Ty,S},
+           Schur{Ty,S,typeof(values)}(T, Z, values))
 
 # iteration for destructuring into components
 Base.iterate(S::Schur) = (S.T, Val(:Z))
@@ -74,7 +80,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur!(A)
-Schur{Float64, Matrix{Float64}}
+Schur{Float64, Matrix{Float64}, Vector{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -121,7 +127,7 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> F = schur(A)
-Schur{Float64, Matrix{Float64}}
+Schur{Float64, Matrix{Float64}, Vector{Float64}}
 T factor:
 2×2 Matrix{Float64}:
  3.0   9.0
@@ -298,22 +304,29 @@ with `F.α./F.β`.
 Iterating the decomposition produces the components `F.S`, `F.T`, `F.Q`, `F.Z`,
 `F.α`, and `F.β`.
 """
-struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
+struct GeneralizedSchur{Ty,M<:AbstractMatrix,A<:AbstractVector,B<:AbstractVector{Ty}} <: Factorization{Ty}
     S::M
     T::M
-    α::Vector
-    β::Vector{Ty}
+    α::A
+    β::B
     Q::M
     Z::M
-    function GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
-                                    beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M}
-        new(S, T, alpha, beta, Q, Z)
+    function GeneralizedSchur{Ty,M,A,B}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty},
+                                        alpha::AbstractVector, beta::AbstractVector{Ty},
+                                        Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M,A,B}
+        new{Ty,M,A,B}(S, T, alpha, beta, Q, Z)
     end
 end
-function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector,
-                          beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where Ty
-    GeneralizedSchur{Ty, typeof(S)}(S, T, alpha, beta, Q, Z)
+function GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty},
+                          alpha::AbstractVector, beta::AbstractVector{Ty},
+                          Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where Ty
+    GeneralizedSchur{Ty, typeof(S), typeof(alpha), typeof(beta)}(S, T, alpha, beta, Q, Z)
 end
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(GeneralizedSchur{Ty,M}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty},
+                                 alpha::AbstractVector, beta::AbstractVector{Ty},
+                                 Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) where {Ty,M},
+           GeneralizedSchur{Ty,M,typeof(alpha),typeof(beta)}(S, T, alpha, beta, Q, Z))
 
 # iteration for destructuring into components
 Base.iterate(S::GeneralizedSchur) = (S.S, Val(:T))

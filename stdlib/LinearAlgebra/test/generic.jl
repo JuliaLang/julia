@@ -76,6 +76,33 @@ n = 5 # should be odd
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
     end
+
+    @testset "det with nonstandard Number type" begin
+        struct MyDual{T<:Real} <: Real
+            val::T
+            eps::T
+        end
+        Base.:+(x::MyDual, y::MyDual) = MyDual(x.val + y.val, x.eps + y.eps)
+        Base.:*(x::MyDual, y::MyDual) = MyDual(x.val * y.val, x.eps * y.val + y.eps * x.val)
+        Base.:/(x::MyDual, y::MyDual) = x.val / y.val
+        Base.:(==)(x::MyDual, y::MyDual) = x.val == y.val && x.eps == y.eps
+        Base.zero(::MyDual{T}) where {T} = MyDual(zero(T), zero(T))
+        Base.zero(::Type{MyDual{T}}) where {T} = MyDual(zero(T), zero(T))
+        Base.one(::MyDual{T}) where {T} = MyDual(one(T), zero(T))
+        Base.one(::Type{MyDual{T}}) where {T} = MyDual(one(T), zero(T))
+        # the following line is required for BigFloat, IDK why it doesn't work via
+        # promote_rule like for all other types
+        Base.promote_type(::Type{MyDual{BigFloat}}, ::Type{BigFloat}) = MyDual{BigFloat}
+        Base.promote_rule(::Type{MyDual{T}}, ::Type{S}) where {T,S<:Real} =
+            MyDual{promote_type(T, S)}
+        Base.promote_rule(::Type{MyDual{T}}, ::Type{MyDual{S}}) where {T,S} =
+            MyDual{promote_type(T, S)}
+        Base.convert(::Type{MyDual{T}}, x::MyDual) where {T} =
+            MyDual(convert(T, x.val), convert(T, x.eps))
+        if elty <: Real
+            @test det(triu(MyDual.(A, zero(A)))) isa MyDual
+        end
+    end
 end
 
 @testset "diag" begin
@@ -208,6 +235,8 @@ end
     @test norm(NaN, 0) === NaN
 end
 
+@test rank(zeros(4)) == 0
+@test rank(1:10) == 1
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
@@ -295,6 +324,25 @@ end
     @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
 
+@testset "LinearAlgebra.axp(b)y! for non strides input" begin
+    a = rand(5, 5)
+    @test LinearAlgebra.axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test LinearAlgebra.axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test LinearAlgebra.axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test LinearAlgebra.axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
+@testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test LinearAlgebra.axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test LinearAlgebra.axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test LinearAlgebra.axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test LinearAlgebra.axpy!(1, b, zeros(T, size(b))) == b
+    end
+end
+
 @testset "norm and normalize!" begin
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)
@@ -327,6 +375,13 @@ end
     end
 
     @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
+end
+
+@testset "normalize for scalars" begin
+    @test normalize(8.0) == 1.0
+    @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
+    @test isnan(normalize(0.0))
 end
 
 @testset "Issue #30466" begin
@@ -395,6 +450,7 @@ Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 Base.conj(a::ModInt{n}) where {n} = a
+LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
@@ -404,13 +460,22 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
     @test A*(lu(A, NoPivot())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
+    @test_throws MethodError lu(A, RowMaximum())
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-
     @test A*(lu(A, RowMaximum())\b) == b
+
+    A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
 end
 
 @testset "Issue 18742" begin
@@ -497,20 +562,21 @@ end
 end
 
 @testset "adjtrans dot" begin
-    for t in (transpose, adjoint)
-        x, y = t(rand(ComplexF64, 10)), t(rand(ComplexF64, 10))
+    for t in (transpose, adjoint), T in (ComplexF64, Quaternion{Float64})
+        x, y = t(rand(T, 10)), t(rand(T, 10))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t([rand(ComplexF64, 2, 2) for _ in 1:5]), t([rand(ComplexF64, 2, 2) for _ in 1:5])
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x, y = t(rand(ComplexF64, 10, 5)), t(rand(ComplexF64, 10, 5))
+        x, y = t(rand(T, 10, 5)), t(rand(T, 10, 5))
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
-        x = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
-        y = t([rand(ComplexF64, 2, 2) for _ in 1:5, _ in 1:5])
+        x = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
         X, Y = copy(x), copy(y)
         @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
     end
 end
 

@@ -200,7 +200,6 @@ end
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = C_NULL
     lock(sock.cond)
     try
         sock.status = StatusClosed
@@ -626,7 +625,7 @@ listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(localhost, port
 listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host, port); backlog=backlog)
 
 function listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
-    uv_error("listen", trylisten(sock))
+    uv_error("listen", trylisten(sock; backlog=backlog))
     return sock
 end
 

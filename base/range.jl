@@ -34,8 +34,7 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
 , and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
 
-`:` is also used in indexing to select whole dimensions
- and for [`Symbol`](@ref) literals, as in e.g. `:hello`.
+`:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 """
 (:)(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 (:)(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
@@ -468,6 +467,9 @@ value `r[1]`, but alternatively you can supply it as the value of
 `r[offset]` for some other index `1 <= offset <= len`. In conjunction
 with `TwicePrecision` this can be used to implement ranges that are
 free of roundoff error.
+
+!!! compat "Julia 1.7"
+    The 4th type parameter `L` requires at least Julia 1.7.
 """
 struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)
@@ -508,7 +510,7 @@ be an `Integer`.
 ```jldoctest
 julia> LinRange(1.5, 5.5, 9)
 9-element LinRange{Float64, Int64}:
- 1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5
+ 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5
 ```
 
 Compared to using [`range`](@ref), directly constructing a `LinRange` should
@@ -574,12 +576,14 @@ range_start_stop_length(start::T, stop::T, len::Integer) where {T<:Integer} =
 # for all other types we fall back to a plain old LinRange
 _linspace(::Type{T}, start::Integer, stop::Integer, len::Integer) where T = LinRange{T}(start, stop, len)
 
-function show(io::IO, r::LinRange)
-    print(io, "range(")
+function show(io::IO, r::LinRange{T}) where {T}
+    print(io, "LinRange{")
+    show(io, T)
+    print(io, "}(")
     show(io, first(r))
-    print(io, ", stop=")
+    print(io, ", ")
     show(io, last(r))
-    print(io, ", length=")
+    print(io, ", ")
     show(io, length(r))
     print(io, ')')
 end
@@ -590,7 +594,7 @@ as if it were `collect(r)`, dependent on the size of the
 terminal, and taking into account whether compact numbers should be shown.
 It figures out the width in characters of each element, and if they
 end up too wide, it shows the first and last elements separated by a
-horizontal ellipsis. Typical output will look like `1.0,2.0,3.0,…,4.0,5.0,6.0`.
+horizontal ellipsis. Typical output will look like `1.0, 2.0, …, 5.0, 6.0`.
 
 `print_range(io, r, pre, sep, post, hdots)` uses optional
 parameters `pre` and `post` characters for each printed row,
@@ -599,9 +603,9 @@ parameters `pre` and `post` characters for each printed row,
 """
 function print_range(io::IO, r::AbstractRange,
                      pre::AbstractString = " ",
-                     sep::AbstractString = ",",
+                     sep::AbstractString = ", ",
                      post::AbstractString = "",
-                     hdots::AbstractString = ",\u2026,") # horiz ellipsis
+                     hdots::AbstractString = ", \u2026, ") # horiz ellipsis
     # This function borrows from print_matrix() in show.jl
     # and should be called by show and display
     sz = displaysize(io)
@@ -685,11 +689,6 @@ step_hp(r::AbstractRange) = step(r)
 
 axes(r::AbstractRange) = (oneto(length(r)),)
 
-# Needed to fold the `firstindex` call in SimdLoop.simd_index
-firstindex(::UnitRange) = 1
-firstindex(::StepRange) = 1
-firstindex(::LinRange) = 1
-
 # n.b. checked_length for these is defined iff checked_add and checked_sub are
 # defined between the relevant types
 function checked_length(r::OrdinalRange{T}) where T
@@ -765,13 +764,13 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         # therefore still be valid (if the result is representable at all)
         # n.b. !(s isa T)
         if s isa Unsigned || -1 <= s <= 1 || s == -s
-            a = div(diff, s)
+            a = div(diff, s) % T
         elseif s < 0
-            a = div(unsigned(-diff), -s) % typeof(diff)
+            a = div(unsigned(-diff), -s) % T
         else
-            a = div(unsigned(diff), s) % typeof(diff)
+            a = div(unsigned(diff), s) % T
         end
-        return Integer(a) + oneunit(a)
+        return a + oneunit(T)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
@@ -789,7 +788,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
         else
             a = div(checked_sub(start, stop), -s)
         end
-        return checked_add(a, oneunit(a))
+        return checked_add(convert(T, a), oneunit(T))
     end
 end
 
@@ -1261,12 +1260,16 @@ function -(r::LinRange)
     LinRange{typeof(start)}(start, -r.stop, length(r))
 end
 
-
 # promote eltype if at least one container wouldn't change, otherwise join container types.
-el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a
+el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{T,n}}) where {T,n}   = a # we assume a === b
 el_same(::Type{T}, a::Type{<:AbstractArray{T,n}}, b::Type{<:AbstractArray{S,n}}) where {T,S,n} = a
 el_same(::Type{T}, a::Type{<:AbstractArray{S,n}}, b::Type{<:AbstractArray{T,n}}) where {T,S,n} = b
 el_same(::Type, a, b) = promote_typejoin(a, b)
+
+promote_result(::Type{<:AbstractArray}, ::Type{<:AbstractArray}, ::Type{T}, ::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+promote_result(::Type{T}, ::Type{S}, ::Type{Bottom}, ::Type{Bottom}) where {T<:AbstractArray,S<:AbstractArray} = (@inline; promote_typejoin(T,S))
+# If no promote_rule is defined, both directions give Bottom. In that case use typejoin on the eltypes instead and give Array as the container.
+promote_result(::Type{<:AbstractArray{T,n}}, ::Type{<:AbstractArray{S,n}}, ::Type{Bottom}, ::Type{Bottom}) where {T,S,n} = (@inline; Array{promote_type(T,S),n})
 
 promote_rule(a::Type{UnitRange{T1}}, b::Type{UnitRange{T2}}) where {T1,T2} =
     el_same(promote_type(T1, T2), a, b)
@@ -1287,10 +1290,8 @@ AbstractUnitRange{T}(r::AbstractUnitRange{T}) where {T} = r
 AbstractUnitRange{T}(r::UnitRange) where {T} = UnitRange{T}(r)
 AbstractUnitRange{T}(r::OneTo) where {T} = OneTo{T}(r)
 
-OrdinalRange{T1, T2}(r::StepRange) where {T1, T2<: Integer} = StepRange{T1, T2}(r)
-OrdinalRange{T1, T2}(r::AbstractUnitRange{T1}) where {T1, T2<:Integer} = r
-OrdinalRange{T1, T2}(r::UnitRange) where {T1, T2<:Integer} = UnitRange{T1}(r)
-OrdinalRange{T1, T2}(r::OneTo) where {T1, T2<:Integer} = OneTo{T1}(r)
+OrdinalRange{T, S}(r::OrdinalRange) where {T, S} = StepRange{T, S}(r)
+OrdinalRange{T, T}(r::AbstractUnitRange) where {T} = AbstractUnitRange{T}(r)
 
 function promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) where {T1a,T1b,T2a,T2b}
     Tb = promote_type(T1b, T2b)

@@ -1258,7 +1258,6 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     }
     if (jl_is_unionall(y))
         return subtype_unionall(x, (jl_unionall_t*)y, e, 1, param);
-    assert(!jl_is_vararg(x) && !jl_is_vararg(y));
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         if (x == y) return 1;
         if (y == (jl_value_t*)jl_any_type) return 1;
@@ -1543,8 +1542,15 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
         *subtype = 1;
         return 1;
     }
-    if (jl_is_unionall(x))
-        x = jl_unwrap_unionall(x);
+    while (jl_is_unionall(x)) {
+        if (!jl_is_unionall(y)) {
+            if (obvious_subtype(jl_unwrap_unionall(x), y, y0, subtype) && !*subtype)
+                return 1;
+            return 0;
+        }
+        x = ((jl_unionall_t*)x)->body;
+        y = ((jl_unionall_t*)y)->body;
+    }
     if (jl_is_unionall(y))
         y = jl_unwrap_unionall(y);
     if (x == (jl_value_t*)jl_typeofbottom_type->super)
@@ -3107,7 +3113,6 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     }
     if (jl_is_unionall(y))
         return intersect_unionall(x, (jl_unionall_t*)y, e, 1, param);
-    assert(!jl_is_vararg(x) && !jl_is_vararg(y));
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         if (param < 2) {

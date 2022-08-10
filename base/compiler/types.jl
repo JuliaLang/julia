@@ -4,16 +4,17 @@
     AbstractInterpreter
 
 An abstract base class that allows multiple dispatch to determine the method of
-executing Julia code.  The native Julia LLVM pipeline is enabled by using the
+executing Julia code. The native Julia-LLVM pipeline is enabled by using the
 `NativeInterpreter` concrete instantiation of this abstract class, others can be
 swapped in as long as they follow the `AbstractInterpreter` API.
 
-If `interp` is an `AbstractInterpreter`, it is expected to provide at least the following methods:
-- `InferenceParams(interp)` - return an `InferenceParams` instance
-- `OptimizationParams(interp)` - return an `OptimizationParams` instance
-- `get_world_counter(interp)` - return the world age for this interpreter
-- `get_inference_cache(interp)` - return the runtime inference cache
-- `code_cache(interp)` - return the global inference cache
+If `interp::NewInterpreter` is an `AbstractInterpreter`, it is expected to provide at least
+the following methods to satisfy the `AbstractInterpreter` API requirement:
+- `InferenceParams(interp::NewInterpreter)` - return an `InferenceParams` instance
+- `OptimizationParams(interp::NewInterpreter)` - return an `OptimizationParams` instance
+- `get_world_counter(interp::NewInterpreter)` - return the world age for this interpreter
+- `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
+- `code_cache(interp::NewInterpreter)` - return the global inference cache
 """
 abstract type AbstractInterpreter end
 
@@ -31,14 +32,19 @@ mutable struct InferenceResult
     linfo::MethodInstance
     argtypes::Vector{Any}
     overridden_by_const::BitVector
-    result # ::Type, or InferenceState if WIP
-    src #::Union{CodeInfo, OptimizationState, Nothing} # if inferred copy is available
+    result                   # ::Type, or InferenceState if WIP
+    src                      # ::Union{CodeInfo, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
-    function InferenceResult(linfo::MethodInstance,
-                             arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=# = nothing,
-                             va_override::Bool = false)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo, va_override)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing, WorldRange())
+    ipo_effects::Effects     # if inference is finished
+    effects::Effects         # if optimization is finished
+    argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
+    # NOTE the main constructor is defined within inferencestate.jl
+    global function _InferenceResult(
+        linfo::MethodInstance,
+        arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=#)
+        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
+        return new(linfo, argtypes, overridden_by_const, Any, nothing,
+            WorldRange(), Effects(), Effects(), nothing)
     end
 end
 
@@ -53,6 +59,8 @@ struct OptimizationParams
     inline_nonleaf_penalty::Int # penalty for dynamic dispatch
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
+
+    trust_inference::Bool
 
     # Duplicating for now because optimizer inlining requires it.
     # Keno assures me this will be removed in the near future
@@ -69,6 +77,7 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
+            trust_inference::Bool = false
         )
         return new(
             inlining,
@@ -76,9 +85,10 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            trust_inference,
             max_methods,
             tuple_splat,
-            union_splitting,
+            union_splitting
         )
     end
 end
@@ -140,7 +150,7 @@ end
 """
     NativeInterpreter
 
-This represents Julia's native type inference algorithm and codegen backend.
+This represents Julia's native type inference algorithm and the Julia-LLVM codegen backend.
 It contains many parameters used by the compilation pipeline.
 """
 struct NativeInterpreter <: AbstractInterpreter
@@ -167,7 +177,6 @@ struct NativeInterpreter <: AbstractInterpreter
         # incorrect, fail out loudly.
         @assert world <= get_world_counter()
 
-
         return new(
             # Initially empty cache
             Vector{InferenceResult}(),
@@ -190,13 +199,26 @@ get_inference_cache(ni::NativeInterpreter) = ni.cache
 code_cache(ni::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(ni))
 
 """
-    lock_mi_inference(ni::NativeInterpreter, mi::MethodInstance)
+    already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)
+
+For the `NativeInterpreter`, we don't need to do an actual cache query to know if something
+was already inferred. If we reach this point, but the inference flag has been turned off,
+then it's in the cache. This is purely for a performance optimization.
+"""
+already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) = !mi.inInference
+already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) = false
+
+"""
+    lock_mi_inference(::AbstractInterpreter, mi::MethodInstance)
 
 Hint that `mi` is in inference to help accelerate bootstrapping.
-This helps us limit the amount of wasted work we might do when inference is working on initially inferring itself
-by letting us detect when inference is already in progress and not running a second copy on it.
-This creates a data-race, but the entry point into this code from C (`jl_type_infer`) already includes detection and restriction on recursion,
-so it is hopefully mostly a benign problem (since it should really only happen during the first phase of bootstrapping that we encounter this flag).
+This is particularly used by `NativeInterpreter` and helps us limit the amount of wasted
+work we might do when inference is working on initially inferring itself by letting us
+detect when inference is already in progress and not running a second copy on it.
+This creates a data-race, but the entry point into this code from C (`jl_type_infer`)
+already includes detection and restriction on recursion, so it is hopefully mostly a
+benign problem, since it should really only happen during the first phase of bootstrapping
+that we encounter this flag.
 """
 lock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference = true; nothing)
 lock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
@@ -208,34 +230,41 @@ unlock_mi_inference(::NativeInterpreter, mi::MethodInstance) = (mi.inInference =
 unlock_mi_inference(::AbstractInterpreter, ::MethodInstance) = return
 
 """
-Emit an analysis remark during inference for the current line (`sv.pc`).
-These annotations are ignored by the native interpreter, but can be used by external tooling
-to annotate inference results.
+    add_remark!(::AbstractInterpreter, sv::InferenceState, remark)
+
+Emit an analysis remark during inference for the current line (i.e. `sv.currpc`).
+These annotations are ignored by default, but can be used by external tooling to annotate
+inference results.
 """
-add_remark!(::AbstractInterpreter, sv#=::InferenceState=#, s) = return
+function add_remark! end
 
 may_optimize(::AbstractInterpreter) = true
 may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
 verbose_stmt_info(::AbstractInterpreter) = false
 
+"""
+    method_table(interp::AbstractInterpreter) -> MethodTableView
+
+Returns a method table this `interp` uses for method lookup.
+External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
+to incorporate customized dispatches for the overridden methods.
+"""
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:
-- `bail_out_toplevel_call(::AbstractInterpreter, sig, ::InferenceState)`: bail out from inter-procedural inference when inferring top-level and non-concrete call site `callsig`
-- `bail_out_call(::AbstractInterpreter, rt, ::InferenceState)`: bail out from inter-procedural inference when return type `rt` grows up to `Any`
-- `bail_out_apply(::AbstractInterpreter, rt, ::InferenceState)`: bail out from `_apply_iterate` inference when return type `rt` grows up to `Any`
+- `bail_out_toplevel_call(::AbstractInterpreter, sig, ::InferenceState)`: bail out from
+   inter-procedural inference when inferring top-level and non-concrete call site `callsig`
+- `bail_out_call(::AbstractInterpreter, rt, ::InferenceState)`: bail out from
+  inter-procedural  inference when return type `rt` grows up to `Any`
+- `bail_out_apply(::AbstractInterpreter, rt, ::InferenceState)`: bail out from
+  `_apply_iterate` inference when return type `rt` grows up to `Any`
 
 It also bails out from local statement/frame inference when any lattice element gets down to `Bottom`,
 but `AbstractInterpreter` doesn't provide a specific interface for configuring it.
 """
-bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv#=::InferenceState=#) =
-    return isa(sv.linfo.def, Module) && !isdispatchtuple(callsig)
-bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
-    return rt === Any
-bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv#=::InferenceState=#) =
-    return rt === Any
+function bail_out_toplevel_call end, function bail_out_call end, function bail_out_apply end
 
 """
     infer_compilation_signature(::AbstractInterpreter)::Bool

@@ -124,6 +124,7 @@ let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
     @test string(uuid) == uuidstr == sprint(print, uuid)
     @test "check $uuid" == "check $uuidstr"
     @test UUID(UInt128(uuid)) == uuid
+    @test UUID(uuid) === uuid
     @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
     @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
 
@@ -234,6 +235,7 @@ append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
 @test watcher_counter[] == 0
 @test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
 @test watcher_counter[] == 1
+pop!(Base.active_project_callbacks)
 
 @test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
 
@@ -355,6 +357,13 @@ module NotPkgModule; end
         @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
         @test pkgdir(NotPkgModule, "src") === nothing
+    end
+
+    @testset "pkgversion" begin
+        @test pkgversion(Foo) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo1) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo2) == v"1.2.3"
+        @test pkgversion(NotPkgModule) === nothing
     end
 
 end
@@ -651,6 +660,7 @@ finally
     Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
+@test Base.pkgorigins[Base.PkgId(UUID("69145d58-7df6-11e8-0660-cf7622583916"), "TestPkg")].version == v"1.2.3"
 
 @testset "--project and JULIA_PROJECT paths should be absolutified" begin
     mktempdir() do dir; cd(dir) do
@@ -731,14 +741,14 @@ end
 
 append!(empty!(LOAD_PATH), saved_load_path)
 append!(empty!(DEPOT_PATH), saved_depot_path)
-for _ = 1:2 pop!(Base.active_project_callbacks) end
+pop!(Base.active_project_callbacks)
 Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
 
 # issue #28190
-module Foo; import Libdl; end
-import .Foo.Libdl; import Libdl
-@test Foo.Libdl === Libdl
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
 
 @testset "include with mapexpr" begin
     let exprs = Any[]
@@ -801,8 +811,10 @@ end
         try
             push!(LOAD_PATH, tmp)
             write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                                        check for typos in package module name") (@eval using BadCase)
+            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
+                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                    check for typos in package module name") (@eval using BadCase)
+            end
         finally
             copy!(LOAD_PATH, old_loadpath)
         end

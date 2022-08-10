@@ -8,7 +8,6 @@ BUILDDIR := scratch
 else
 BUILDDIR := .
 endif
-include $(SRCDIR)/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(SRCDIR)/tools/common.mk
 include $(SRCDIR)/tools/git-external.mk
@@ -214,6 +213,7 @@ include $(SRCDIR)/blastrampoline.mk
 include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
+include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
@@ -224,7 +224,6 @@ include $(SRCDIR)/nghttp2.mk
 include $(SRCDIR)/curl.mk
 include $(SRCDIR)/libgit2.mk
 include $(SRCDIR)/libwhich.mk
-include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/p7zip.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

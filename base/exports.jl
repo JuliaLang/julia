@@ -18,6 +18,7 @@ export
     AbstractMatrix,
     AbstractRange,
     AbstractSet,
+    AbstractSlices,
     AbstractUnitRange,
     AbstractVector,
     AbstractVecOrMat,
@@ -41,6 +42,7 @@ export
     ComplexF32,
     ComplexF16,
     ComposedFunction,
+    ColumnSlices,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -80,8 +82,10 @@ export
     RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
+    RowSlices,
     Set,
     Some,
+    Slices,
     StepRange,
     StepRangeLen,
     StridedArray,
@@ -122,6 +126,7 @@ export
     Cwstring,
 
 # Exceptions
+    CanonicalIndexError,
     CapturedException,
     CompositeException,
     DimensionMismatch,
@@ -497,6 +502,7 @@ export
 # collections
     all!,
     all,
+    allequal,
     allunique,
     any!,
     any,
@@ -654,7 +660,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -784,9 +789,13 @@ export
     parentmodule,
     pathof,
     pkgdir,
+    pkgversion,
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -805,6 +814,7 @@ export
     atreplinit,
     exit,
     ntuple,
+    Splat,
 
 # I/O and events
     close,
@@ -879,6 +889,7 @@ export
     basename,
     dirname,
     expanduser,
+    contractuser,
     homedir,
     isabspath,
     isdirpath,
@@ -928,6 +939,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,

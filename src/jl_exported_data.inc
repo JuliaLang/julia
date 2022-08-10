@@ -68,6 +68,7 @@
     XX(jl_method_type) \
     XX(jl_methtable_type) \
     XX(jl_module_type) \
+    XX(jl_n_threads_per_pool) \
     XX(jl_namedtuple_type) \
     XX(jl_namedtuple_typename) \
     XX(jl_newvarnode_type) \
@@ -85,7 +86,6 @@
     XX(jl_pinode_type) \
     XX(jl_pointer_type) \
     XX(jl_pointer_typename) \
-    XX(jl_precompile_toplevel_module) \
     XX(jl_quotenode_type) \
     XX(jl_readonlymemory_exception) \
     XX(jl_ref_type) \
@@ -125,9 +125,12 @@
     XX(jl_vecelement_typename) \
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
-    XX(jl_weakref_type)
+    XX(jl_weakref_type) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
+    XX(jl_n_threadpools, int) \
     XX(jl_n_threads, int) \
-    XX(jl_options, jl_options_t)
+    XX(jl_options, jl_options_t) \
+
+// end of file

@@ -3,7 +3,7 @@
 using Base.Meta
 using Core.IR
 const Compiler = Core.Compiler
-using .Compiler: CFG, BasicBlock
+using .Compiler: CFG, BasicBlock, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -36,7 +36,7 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), 0, 0)
+#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), Int32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -121,7 +121,7 @@ let cfg = CFG(BasicBlock[
     make_bb([2, 3]    , []    ),
 ], Int[])
     insts = Compiler.InstructionStream([], [], Any[], Int32[], UInt8[])
-    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], [], [])
+    code = Compiler.IRCode(insts, cfg, LineInfoNode[], [], Expr[], [])
     compact = Compiler.IncrementalCompact(code, true)
     @test length(compact.result_bbs) == 4 && 0 in compact.result_bbs[3].preds
 end
@@ -205,7 +205,7 @@ let ci = make_ci([
     # come after it.
     for i in 1:length(ir.stmts)
         s = ir.stmts[i]
-        if isa(s, Expr) && s.head == :call && s.args[1] == :something
+        if Meta.isexpr(s, :call) && s.args[1] === :something
             if isa(s.args[2], SSAValue)
                 @test s.args[2].id <= i
             end
@@ -333,4 +333,84 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
     stderr = IOBuffer()
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+end
+
+@testset "code_ircode" begin
+    @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
+          Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
+          Compiler.IRCode
+
+    function demo(f)
+        f()
+        f()
+        f()
+    end
+    @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
+end
+
+let
+    function test_useref(stmt, v, op)
+        if isa(stmt, Expr)
+            @test stmt.args[op] === v
+        elseif isa(stmt, GotoIfNot)
+            @test stmt.cond === v
+        elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
+            @test stmt.val === v
+        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
+            @test stmt === v
+        elseif isa(stmt, PiNode)
+            @test stmt.val === v && stmt.typ === typeof(stmt)
+        elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
+            @test stmt.values[op] === v
+        end
+    end
+
+    function _test_userefs(@nospecialize stmt)
+        ex = Expr(:call, :+, Core.SSAValue(3), 1)
+        urs = Core.Compiler.userefs(stmt)::Core.Compiler.UseRefIterator
+        it = Core.Compiler.iterate(urs)
+        while it !== nothing
+            ur = getfield(it, 1)::Core.Compiler.UseRef
+            op = getfield(it, 2)::Int
+            v1 = Core.Compiler.getindex(ur)
+            # set to dummy expression and then back to itself to test `_useref_setindex!`
+            v2 = Core.Compiler.setindex!(ur, ex)
+            test_useref(v2, ex, op)
+            Core.Compiler.setindex!(ur, v1)
+            @test Core.Compiler.getindex(ur) === v1
+            it = Core.Compiler.iterate(urs, op)
+        end
+    end
+
+    function test_userefs(body)
+        for stmt in body
+            _test_userefs(stmt)
+        end
+    end
+
+    # this isn't valid code, we just care about looking at a variety of IR nodes
+    body = Any[
+        Expr(:enter, 11),
+        Expr(:call, :+, SSAValue(3), 1),
+        Expr(:throw_undef_if_not, :expected, false),
+        Expr(:leave, 1),
+        Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
+        UpsilonNode(),
+        UpsilonNode(SSAValue(2)),
+        PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]),
+        PhiCNode(Any[SSAValue(6)]),
+        PhiNode(Int32[8], Any[SSAValue(7)]),
+        PiNode(SSAValue(6), GotoNode),
+        GotoIfNot(SSAValue(3), 10),
+        GotoNode(5),
+        SSAValue(7),
+        NewSSAValue(9),
+        ReturnNode(SSAValue(11)),
+    ]
+
+    test_userefs(body)
 end

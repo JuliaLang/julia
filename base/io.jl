@@ -20,7 +20,7 @@ struct SystemError <: Exception
     extrainfo
     SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
     SystemError(p::AbstractString, e::Integer) = new(p, e, nothing)
-    SystemError(p::AbstractString) = new(p, Libc.errno())
+    SystemError(p::AbstractString) = new(p, Libc.errno(), nothing)
 end
 
 lock(::IO) = nothing
@@ -173,6 +173,19 @@ function will block to wait for more data if necessary, and then return `false`.
 it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
+
+# Examples
+```jldoctest
+julia> b = IOBuffer("my buffer");
+
+julia> eof(b)
+false
+
+julia> seekend(b);
+
+julia> eof(b)
+true
+```
 """
 function eof end
 
@@ -368,11 +381,9 @@ descriptor upon completion.
 
 # Examples
 ```jldoctest
-julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!")
-       end;
+julia> write("myfile.txt", "Hello world!");
 
-julia> open(f->read(f, String), "myfile.txt")
+julia> open(io->read(io, String), "myfile.txt")
 "Hello world!"
 
 julia> rm("myfile.txt")
@@ -445,7 +456,7 @@ wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
-write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")
+write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), convert(String, filename)::String, "w")
 
 """
     read(filename::AbstractString, args...)
@@ -457,9 +468,9 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 
 Read the entire contents of a file as a string.
 """
-read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+read(filename::AbstractString, args...) = open(io->read(io, args...), convert(String, filename)::String)
 
-read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), convert(String, filename)::String)
 
 """
     read!(stream::IO, array::AbstractArray)
@@ -469,7 +480,7 @@ Read binary data from an I/O stream or file, filling in `array`.
 """
 function read! end
 
-read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, filename)::String)
 
 """
     readuntil(stream::IO, delim; keep::Bool = false)
@@ -482,10 +493,7 @@ The text is assumed to be encoded in UTF-8.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readuntil("my_file.txt", 'L')
 "Julia"
@@ -496,7 +504,7 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
+readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), convert(String, filename)::String)
 
 """
     readline(io::IO=stdin; keep::Bool=false)
@@ -511,10 +519,7 @@ line.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
@@ -562,10 +567,7 @@ arguments and saving the resulting lines as a vector of strings.  See also
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readlines("my_file.txt")
 2-element Vector{String}:
@@ -948,9 +950,7 @@ if there is one. Equivalent to `chomp(read(x, String))`.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readchomp("my_file.txt")
 "JuliaLang is a GitHub organization.\\nIt has many members."
@@ -1034,9 +1034,7 @@ lines, respectively.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\n It has many members.\\n");
 
 julia> for line in eachline("my_file.txt")
            print(line)
@@ -1220,7 +1218,7 @@ isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
 # not in base.
 
 """
-    mark(s)
+    mark(s::IO)
 
 Add a mark at the current position of stream `s`. Return the marked position.
 
@@ -1231,7 +1229,7 @@ function mark(io::IO)
 end
 
 """
-    unmark(s)
+    unmark(s::IO)
 
 Remove a mark from stream `s`. Return `true` if the stream was marked, `false` otherwise.
 
@@ -1244,7 +1242,7 @@ function unmark(io::IO)
 end
 
 """
-    reset(s)
+    reset(s::IO)
 
 Reset a stream `s` to a previously marked position, and remove the mark. Return the
 previously marked position. Throw an error if the stream is not marked.
@@ -1260,7 +1258,7 @@ function reset(io::T) where T<:IO
 end
 
 """
-    ismarked(s)
+    ismarked(s::IO)
 
 Return `true` if stream `s` is marked.
 

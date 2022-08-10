@@ -229,6 +229,7 @@ static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_task_t *ct = jl_current_task;
+    JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
     if (jl_atomic_load_relaxed(&t->_isexception))
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
@@ -532,6 +533,8 @@ JL_DLLEXPORT void jl_switch(void)
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 
+    JL_PROBE_RT_PAUSE_TASK(ct);
+
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
@@ -579,6 +582,8 @@ JL_DLLEXPORT void jl_switch(void)
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
+
+    JL_PROBE_RT_RUN_TASK(ct);
 }
 
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
@@ -645,7 +650,6 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL) // During startup
         jl_no_exc_handler(e);
-    JL_GC_PROMISE_ROOTED(ct);
     record_backtrace(ct->ptls, 1);
     throw_internal(ct, e);
 }
@@ -701,12 +705,12 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
    There is a pure Julia implementation in stdlib that tends to be faster when used from
    within Julia, due to inlining and more agressive architecture-specific optimizations.
 */
-JL_DLLEXPORT uint64_t jl_tasklocal_genrandom(jl_task_t *task) JL_NOTSAFEPOINT
+uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
 {
-    uint64_t s0 = task->rngState0;
-    uint64_t s1 = task->rngState1;
-    uint64_t s2 = task->rngState2;
-    uint64_t s3 = task->rngState3;
+    uint64_t s0 = rngState[0];
+    uint64_t s1 = rngState[1];
+    uint64_t s2 = rngState[2];
+    uint64_t s3 = rngState[3];
 
     uint64_t t = s1 << 17;
     uint64_t tmp = s0 + s3;
@@ -718,14 +722,14 @@ JL_DLLEXPORT uint64_t jl_tasklocal_genrandom(jl_task_t *task) JL_NOTSAFEPOINT
     s2 ^= t;
     s3 = (s3 << 45) | (s3 >> 19);
 
-    task->rngState0 = s0;
-    task->rngState1 = s1;
-    task->rngState2 = s2;
-    task->rngState3 = s3;
+    rngState[0] = s0;
+    rngState[1] = s1;
+    rngState[2] = s2;
+    rngState[3] = s3;
     return res;
 }
 
-void rng_split(jl_task_t *from, jl_task_t *to) JL_NOTSAFEPOINT
+void jl_rng_split(uint64_t to[4], uint64_t from[4]) JL_NOTSAFEPOINT
 {
     /* TODO: consider a less ad-hoc construction
        Ideally we could just use the output of the random stream to seed the initial
@@ -743,16 +747,17 @@ void rng_split(jl_task_t *from, jl_task_t *to) JL_NOTSAFEPOINT
        0x3688cf5d48899fa7 == hash(UInt(3))|0x01
        0x867b4bb4c42e5661 == hash(UInt(4))|0x01
     */
-    to->rngState0 = 0x02011ce34bce797f * jl_tasklocal_genrandom(from);
-    to->rngState1 = 0x5a94851fb48a6e05 * jl_tasklocal_genrandom(from);
-    to->rngState2 = 0x3688cf5d48899fa7 * jl_tasklocal_genrandom(from);
-    to->rngState3 = 0x867b4bb4c42e5661 * jl_tasklocal_genrandom(from);
+    to[0] = 0x02011ce34bce797f * jl_genrandom(from);
+    to[1] = 0x5a94851fb48a6e05 * jl_genrandom(from);
+    to[2] = 0x3688cf5d48899fa7 * jl_genrandom(from);
+    to[3] = 0x867b4bb4c42e5661 * jl_genrandom(from);
 }
 
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    JL_PROBE_RT_NEW_TASK(ct, t);
     t->copy_stack = 0;
     if (ssize == 0) {
         // stack size unspecified; use default
@@ -785,15 +790,16 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     // Inherit logger state from parent task
     t->logstate = ct->logstate;
     // Fork task-local random state from parent
-    rng_split(ct, t);
+    jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
     t->sticky = 1;
     t->gcstack = NULL;
     t->excstack = NULL;
     t->started = 0;
-    t->prio = -1;
+    t->priority = 0;
     jl_atomic_store_relaxed(&t->tid, t->copy_stack ? jl_atomic_load_relaxed(&ct->tid) : -1); // copy_stacks are always pinned since they can't be moved
+    t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
 
@@ -822,6 +828,7 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     return pgcstack == NULL ? NULL : container_of(pgcstack, jl_task_t, gcstack);
 }
+
 
 #ifdef JL_HAVE_ASYNCIFY
 JL_DLLEXPORT jl_ucontext_t *task_ctx_ptr(jl_task_t *t)
@@ -892,7 +899,6 @@ CFI_NORETURN
     sanitizer_finish_switch_fiber();
 #ifdef __clang_gcanalyzer__
     jl_task_t *ct = jl_get_current_task();
-    JL_GC_PROMISE_ROOTED(ct);
 #else
     jl_task_t *ct = jl_current_task;
 #endif
@@ -908,6 +914,7 @@ CFI_NORETURN
 #endif
 
     ct->started = 1;
+    JL_PROBE_RT_START_TASK(ct);
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
@@ -1354,6 +1361,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->gcstack = NULL;
     ct->excstack = NULL;
     jl_atomic_store_relaxed(&ct->tid, ptls->tid);
+    ct->threadpoolid = jl_threadpoolid(ptls->tid);
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
@@ -1387,6 +1395,10 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ptls->stackbase = stkbuf + ssize;
     ptls->stacksize = ssize;
 #endif
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_thread_signal_handler(ptls);
+
     return ct;
 }
 
@@ -1398,6 +1410,11 @@ JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT
 JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&t->tid);
+}
+
+JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
+{
+    return t->threadpoolid;
 }
 
 

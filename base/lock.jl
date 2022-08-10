@@ -16,6 +16,8 @@ should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
 
+This provides a acquire/release memory ordering on lock/unlock calls.
+
 ```
 lock(l)
 try
@@ -24,6 +26,9 @@ finally
     unlock(l)
 end
 ```
+
+If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
+succeeds unless there are other tasks attempting to hold the lock "at the same time."
 """
 mutable struct ReentrantLock <: AbstractLock
     # offset = 16
@@ -50,10 +55,43 @@ assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
     islocked(lock) -> Status (Boolean)
 
 Check whether the `lock` is held by any task/thread.
-This should not be used for synchronization (see instead [`trylock`](@ref)).
+This function alone should not be used for synchronization. However, `islocked` combined
+with [`trylock`](@ref) can be used for writing the test-and-test-and-set or exponential
+backoff algorithms *if it is supported by the `typeof(lock)`* (read its documentation).
+
+# Extended help
+
+For example, an exponential backoff can be implemented as follows if the `lock`
+implementation satisfied the properties documented below.
+
+```julia
+nspins = 0
+while true
+    while islocked(lock)
+        GC.safepoint()
+        nspins += 1
+        nspins > LIMIT && error("timeout")
+    end
+    trylock(lock) && break
+    backoff()
+end
+```
+
+## Implementation
+
+A lock implementation is advised to define `islocked` with the following properties and note
+it in its docstring.
+
+* `islocked(lock)` is data-race-free.
+* If `islocked(lock)` returns `false`, an immediate invocation of `trylock(lock)` must
+  succeed (returns `true`) if there is no interference from other tasks.
 """
+function islocked end
+# Above docstring is a documentation for the abstract interface and not the one specific to
+# `ReentrantLock`.
+
 function islocked(rl::ReentrantLock)
-    return rl.havelock != 0
+    return (@atomic :monotonic rl.havelock) != 0
 end
 
 """
@@ -65,7 +103,15 @@ If the lock is already locked by a different task/thread,
 return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
+
+Function `trylock` combined with [`islocked`](@ref) can be used for writing the
+test-and-test-and-set or exponential backoff algorithms *if it is supported by the
+`typeof(lock)`* (read its documentation).
 """
+function trylock end
+# Above docstring is a documentation for the abstract interface and not the one specific to
+# `ReentrantLock`.
+
 @inline function trylock(rl::ReentrantLock)
     ct = current_task()
     if rl.locked_by === ct
@@ -287,6 +333,8 @@ end
 Create a counting semaphore that allows at most `sem_size`
 acquires to be in use at any time.
 Each acquire must be matched with a release.
+
+This provides a acquire & release memory ordering on acquire/release calls.
 """
 mutable struct Semaphore
     sem_size::Int
@@ -368,28 +416,61 @@ end
 
 
 """
-    Event()
+    Event([autoreset=false])
 
 Create a level-triggered event source. Tasks that call [`wait`](@ref) on an
 `Event` are suspended and queued until [`notify`](@ref) is called on the `Event`.
 After `notify` is called, the `Event` remains in a signaled state and
-tasks will no longer block when waiting for it.
+tasks will no longer block when waiting for it, until `reset` is called.
+
+If `autoreset` is true, at most one task will be released from `wait` for
+each call to `notify`.
+
+This provides an acquire & release memory ordering on notify/wait.
 
 !!! compat "Julia 1.1"
     This functionality requires at least Julia 1.1.
+
+!!! compat "Julia 1.8"
+    The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
     notify::Threads.Condition
-    set::Bool
-    Event() = new(Threads.Condition(), false)
+    autoreset::Bool
+    @atomic set::Bool
+    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
 end
 
 function wait(e::Event)
-    e.set && return
-    lock(e.notify)
+    if e.autoreset
+        (@atomicswap :acquire_release e.set = false) && return
+    else
+        (@atomic e.set) && return # full barrier also
+    end
+    lock(e.notify) # acquire barrier
     try
-        while !e.set
-            wait(e.notify)
+        if e.autoreset
+            (@atomicswap :acquire_release e.set = false) && return
+        else
+            e.set && return
+        end
+        wait(e.notify)
+    finally
+        unlock(e.notify) # release barrier
+    end
+    nothing
+end
+
+function notify(e::Event)
+    lock(e.notify) # acquire barrier
+    try
+        if e.autoreset
+            if notify(e.notify, all=false) == 0
+                @atomic :release e.set = true
+            end
+        elseif !e.set
+            @atomic :release e.set = true
+            notify(e.notify)
         end
     finally
         unlock(e.notify)
@@ -397,16 +478,14 @@ function wait(e::Event)
     nothing
 end
 
-function notify(e::Event)
-    lock(e.notify)
-    try
-        if !e.set
-            e.set = true
-            notify(e.notify)
-        end
-    finally
-        unlock(e.notify)
-    end
+"""
+    reset(::Event)
+
+Reset an Event back into an un-set state. Then any future calls to `wait` will
+block until `notify` is called again.
+"""
+function reset(e::Event)
+    @atomic e.set = false # full barrier
     nothing
 end
 

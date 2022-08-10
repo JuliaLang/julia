@@ -209,7 +209,7 @@ function show(
 
     # early out for short strings
     len = ncodeunits(str)
-    len ≤ limit - 2 && # quote chars
+    len ≤ limit - 2 && # quote chars
         return show(io, str)
 
     # these don't depend on string data

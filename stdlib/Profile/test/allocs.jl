@@ -111,31 +111,6 @@ end
     Allocs.clear()
 end
 
-@testset "alloc profiler warning message" begin
-    @testset "no allocs" begin
-        Profile.Allocs.clear()
-        Profile.Allocs.fetch()
-    end
-    @testset "catches all allocations" begin
-        foo() = []
-        precompile(foo, ())
-        Profile.Allocs.clear()
-        Profile.Allocs.@profile sample_rate=1 foo()
-        # Fake that we expected exactly 1 alloc, since we should have recorded >= 1
-        Profile.Allocs._g_expected_sampled_allocs[] = 1
-        @assert length(Profile.Allocs.fetch().allocs) >= 1
-    end
-    @testset "misses some allocations" begin
-        foo() = []
-        precompile(foo, ())
-        Profile.Allocs.clear()
-        Profile.Allocs.@profile sample_rate=1 foo()
-        # Fake some allocs that we missed, to force the print statement
-        Profile.Allocs._g_expected_sampled_allocs[] += 10
-        @assert 1 <= length(Profile.Allocs.fetch().allocs) < 10
-    end
-end
-
 @testset "alloc profiler catches strings" begin
     Allocs.@profile sample_rate=1 "$(rand())"
 

@@ -380,6 +380,9 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     # based on arbitrary logger-specific logic.
                     if _invoked_shouldlog(logger, level, _module, group, id)
                         file = $(log_data._file)
+                        if file isa String
+                            file = Base.fixup_stdlib_path(file)
+                        end
                         line = $(log_data._line)
                         local msg, kwargs
                         $(logrecord) && handle_message(
@@ -457,7 +460,7 @@ end
     msg = try
               "Exception while generating log record in module $_module at $filepath:$line"
           catch ex
-              "Exception handling log message: $ex"
+              LazyString("Exception handling log message: ", ex)
           end
     bt = real ? catch_backtrace() : backtrace()
     handle_message(
@@ -674,7 +677,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = eachsplit(chomp(string(message)::String), '\n')
+    msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
     msg1, rest = Iterators.peel(msglines)
     println(iob, "┌ ", levelstr, ": ", msg1)
     for msg in rest

@@ -236,8 +236,10 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
     if haskey(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
-        # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ === Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
+        # is suppressed for symbols in Main (or current active module),
+        # for interactive use (#23011).
+        __module__ === Base.active_module() ||
+            @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
@@ -297,9 +299,8 @@ function astname(x::Expr, ismacro::Bool)
     head = x.head
     if head === :.
         ismacro ? macroname(x) : x
-    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
-    elseif (head === :function || head === :(=)) && isexpr(x.args[1], :call) && isexpr((x.args[1]::Expr).args[1], :(::))
-        return astname(((x.args[1]::Expr).args[1]::Expr).args[end], ismacro)
+    elseif head === :call && isexpr(x.args[1], :(::))
+        return astname((x.args[1]::Expr).args[end], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
         astname(x.args[n], ismacro)

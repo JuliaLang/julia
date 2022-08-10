@@ -14,24 +14,40 @@
 
 #include "llvm-version.h"
 
-#define DEBUG_TYPE "demote_float16"
-
 #include "support/dtypes.h"
+#include "passes.h"
 
+#include <llvm/Pass.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 
+#define DEBUG_TYPE "demote_float16"
+
 using namespace llvm;
+
+STATISTIC(TotalChanged, "Total number of instructions changed");
+STATISTIC(TotalExt, "Total number of FPExt instructions inserted");
+STATISTIC(TotalTrunc, "Total number of FPTrunc instructions inserted");
+#define INST_STATISTIC(Opcode) STATISTIC(Opcode##Changed, "Number of " #Opcode " instructions changed")
+INST_STATISTIC(FNeg);
+INST_STATISTIC(FAdd);
+INST_STATISTIC(FSub);
+INST_STATISTIC(FMul);
+INST_STATISTIC(FDiv);
+INST_STATISTIC(FRem);
+INST_STATISTIC(FCmp);
+#undef INST_STATISTIC
 
 namespace {
 
 static bool demoteFloat16(Function &F)
 {
     auto &ctx = F.getContext();
-    auto T_float16 = Type::getHalfTy(ctx);
     auto T_float32 = Type::getFloatTy(ctx);
 
 
@@ -44,6 +60,16 @@ static bool demoteFloat16(Function &F)
     SmallVector<Instruction *, 0> erase;
     for (auto &BB : F) {
         for (auto &I : BB) {
+            // extend Float16 operands to Float32
+            bool Float16 = I.getType()->getScalarType()->isHalfTy();
+            for (size_t i = 0; !Float16 && i < I.getNumOperands(); i++) {
+                Value *Op = I.getOperand(i);
+                if (Op->getType()->getScalarType()->isHalfTy())
+                    Float16 = true;
+            }
+            if (!Float16)
+                continue;
+
             switch (I.getOpcode()) {
             case Instruction::FNeg:
             case Instruction::FAdd:
@@ -54,6 +80,7 @@ static bool demoteFloat16(Function &F)
             case Instruction::FCmp:
                 break;
             default:
+                // TODO: Do calls to llvm.fma.f16 may need to go to f64 to be correct?
                 continue;
             }
 
@@ -65,67 +92,75 @@ static bool demoteFloat16(Function &F)
             IRBuilder<> builder(&I);
 
             // extend Float16 operands to Float32
-            bool OperandsChanged = false;
             SmallVector<Value *, 2> Operands(I.getNumOperands());
             for (size_t i = 0; i < I.getNumOperands(); i++) {
                 Value *Op = I.getOperand(i);
-                if (Op->getType() == T_float16) {
-                    Op = builder.CreateFPExt(Op, T_float32);
-                    OperandsChanged = true;
+                if (Op->getType()->getScalarType()->isHalfTy()) {
+                    ++TotalExt;
+                    Op = builder.CreateFPExt(Op, Op->getType()->getWithNewType(T_float32));
                 }
-                Operands[i] = (Op);
+                Operands[i] = Op;
             }
 
             // recreate the instruction if any operands changed,
             // truncating the result back to Float16
-            if (OperandsChanged) {
-                Value *NewI;
-                switch (I.getOpcode()) {
-                case Instruction::FNeg:
-                    assert(Operands.size() == 1);
-                    NewI = builder.CreateFNeg(Operands[0]);
-                    break;
-                case Instruction::FAdd:
-                    assert(Operands.size() == 2);
-                    NewI = builder.CreateFAdd(Operands[0], Operands[1]);
-                    break;
-                case Instruction::FSub:
-                    assert(Operands.size() == 2);
-                    NewI = builder.CreateFSub(Operands[0], Operands[1]);
-                    break;
-                case Instruction::FMul:
-                    assert(Operands.size() == 2);
-                    NewI = builder.CreateFMul(Operands[0], Operands[1]);
-                    break;
-                case Instruction::FDiv:
-                    assert(Operands.size() == 2);
-                    NewI = builder.CreateFDiv(Operands[0], Operands[1]);
-                    break;
-                case Instruction::FRem:
-                    assert(Operands.size() == 2);
-                    NewI = builder.CreateFRem(Operands[0], Operands[1]);
-                    break;
-                case Instruction::FCmp:
-                    assert(Operands.size() == 2);
-                    NewI = builder.CreateFCmp(cast<FCmpInst>(&I)->getPredicate(),
-                                              Operands[0], Operands[1]);
-                    break;
-                default:
-                    abort();
-                }
-                cast<Instruction>(NewI)->copyMetadata(I);
-                cast<Instruction>(NewI)->copyFastMathFlags(&I);
-                if (NewI->getType() != I.getType())
-                    NewI = builder.CreateFPTrunc(NewI, I.getType());
-                I.replaceAllUsesWith(NewI);
-                erase.push_back(&I);
+            Value *NewI;
+            ++TotalChanged;
+            switch (I.getOpcode()) {
+            case Instruction::FNeg:
+                assert(Operands.size() == 1);
+                ++FNegChanged;
+                NewI = builder.CreateFNeg(Operands[0]);
+                break;
+            case Instruction::FAdd:
+                assert(Operands.size() == 2);
+                ++FAddChanged;
+                NewI = builder.CreateFAdd(Operands[0], Operands[1]);
+                break;
+            case Instruction::FSub:
+                assert(Operands.size() == 2);
+                ++FSubChanged;
+                NewI = builder.CreateFSub(Operands[0], Operands[1]);
+                break;
+            case Instruction::FMul:
+                assert(Operands.size() == 2);
+                ++FMulChanged;
+                NewI = builder.CreateFMul(Operands[0], Operands[1]);
+                break;
+            case Instruction::FDiv:
+                assert(Operands.size() == 2);
+                ++FDivChanged;
+                NewI = builder.CreateFDiv(Operands[0], Operands[1]);
+                break;
+            case Instruction::FRem:
+                assert(Operands.size() == 2);
+                ++FRemChanged;
+                NewI = builder.CreateFRem(Operands[0], Operands[1]);
+                break;
+            case Instruction::FCmp:
+                assert(Operands.size() == 2);
+                ++FCmpChanged;
+                NewI = builder.CreateFCmp(cast<FCmpInst>(&I)->getPredicate(),
+                                          Operands[0], Operands[1]);
+                break;
+            default:
+                abort();
             }
+            cast<Instruction>(NewI)->copyMetadata(I);
+            cast<Instruction>(NewI)->copyFastMathFlags(&I);
+            if (NewI->getType() != I.getType()) {
+                ++TotalTrunc;
+                NewI = builder.CreateFPTrunc(NewI, I.getType());
+            }
+            I.replaceAllUsesWith(NewI);
+            erase.push_back(&I);
         }
     }
 
     if (erase.size() > 0) {
         for (auto V : erase)
             V->eraseFromParent();
+        assert(!verifyFunction(F, &errs()));
         return true;
     }
     else
@@ -134,13 +169,11 @@ static bool demoteFloat16(Function &F)
 
 } // end anonymous namespace
 
-struct DemoteFloat16 : PassInfoMixin<DemoteFloat16> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
-};
-
 PreservedAnalyses DemoteFloat16::run(Function &F, FunctionAnalysisManager &AM)
 {
-    demoteFloat16(F);
+    if (demoteFloat16(F)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 

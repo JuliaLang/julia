@@ -42,4 +42,3 @@ function binunpack(s::String)
     name = read(io, String)
     return PkgId(UUID(uuid), name)
 end
-

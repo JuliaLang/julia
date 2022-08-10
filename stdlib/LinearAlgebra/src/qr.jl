@@ -34,19 +34,22 @@ The object has two fields:
 * `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
 
 """
-struct QR{T,S<:AbstractMatrix{T}} <: Factorization{T}
+struct QR{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: Factorization{T}
     factors::S
-    τ::Vector{T}
+    τ::C
 
-    function QR{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+    function QR{T,S,C}(factors, τ) where {T,S<:AbstractMatrix{T},C<:AbstractVector{T}}
         require_one_based_indexing(factors)
-        new{T,S}(factors, τ)
+        new{T,S,C}(factors, τ)
     end
 end
-QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
-function QR{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
-    QR(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
-end
+QR(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T} =
+    QR{T,typeof(factors),typeof(τ)}(factors, τ)
+QR{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
+    QR(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(QR{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
+           QR{T,S,typeof(τ)}(factors, τ), false)
 
 # iteration for destructuring into components
 Base.iterate(S::QR) = (S.Q, Val(:R))
@@ -108,19 +111,22 @@ The object has two fields:
 
 [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](https://doi.org/10.1137/0910005)
 """
-struct QRCompactWY{S,M<:AbstractMatrix{S}} <: Factorization{S}
+struct QRCompactWY{S,M<:AbstractMatrix{S},C<:AbstractMatrix{S}} <: Factorization{S}
     factors::M
-    T::Matrix{S}
+    T::C
 
-    function QRCompactWY{S,M}(factors, T) where {S,M<:AbstractMatrix{S}}
+    function QRCompactWY{S,M,C}(factors, T) where {S,M<:AbstractMatrix{S},C<:AbstractMatrix{S}}
         require_one_based_indexing(factors)
-        new{S,M}(factors, T)
+        new{S,M,C}(factors, T)
     end
 end
-QRCompactWY(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
-function QRCompactWY{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S}
-    QRCompactWY(convert(AbstractMatrix{S}, factors), convert(Matrix{S}, T))
-end
+QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} =
+    QRCompactWY{S,typeof(factors),typeof(T)}(factors, T)
+QRCompactWY{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S} =
+    QRCompactWY(convert(AbstractMatrix{S}, factors), convert(AbstractMatrix{S}, T))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(QRCompactWY{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M},
+           QRCompactWY{S,M,typeof(T)}(factors, T), false)
 
 # iteration for destructuring into components
 Base.iterate(S::QRCompactWY) = (S.Q, Val(:R))
@@ -153,7 +159,7 @@ function Base.hash(F::QRCompactWY, h::UInt)
     return hash(F.factors, foldr(hash, _triuppers_qr(F.T); init=hash(QRCompactWY, h)))
 end
 function Base.:(==)(A::QRCompactWY, B::QRCompactWY)
-    return A.factors == B.factors && all(splat(==), zip(_triuppers_qr.((A.T, B.T))...))
+    return A.factors == B.factors && all(Splat(==), zip(_triuppers_qr.((A.T, B.T))...))
 end
 function Base.isequal(A::QRCompactWY, B::QRCompactWY)
     return isequal(A.factors, B.factors) && all(zip(_triuppers_qr.((A.T, B.T))...)) do (a, b)
@@ -194,23 +200,26 @@ The object has three fields:
 
 * `jpvt` is an integer vector of length `n` corresponding to the permutation ``P``.
 """
-struct QRPivoted{T,S<:AbstractMatrix{T}} <: Factorization{T}
+struct QRPivoted{T,S<:AbstractMatrix{T},C<:AbstractVector{T},P<:AbstractVector{<:Integer}} <: Factorization{T}
     factors::S
-    τ::Vector{T}
-    jpvt::Vector{BlasInt}
+    τ::C
+    jpvt::P
 
-    function QRPivoted{T,S}(factors, τ, jpvt) where {T,S<:AbstractMatrix{T}}
+    function QRPivoted{T,S,C,P}(factors, τ, jpvt) where {T,S<:AbstractMatrix{T},C<:AbstractVector{T},P<:AbstractVector{<:Integer}}
         require_one_based_indexing(factors, τ, jpvt)
-        new{T,S}(factors, τ, jpvt)
+        new{T,S,C,P}(factors, τ, jpvt)
     end
 end
-QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
-    QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
-function QRPivoted{T}(factors::AbstractMatrix, τ::AbstractVector, jpvt::AbstractVector) where {T}
-    QRPivoted(convert(AbstractMatrix{T}, factors),
-              convert(Vector{T}, τ),
-              convert(Vector{BlasInt}, jpvt))
-end
+QRPivoted(factors::AbstractMatrix{T}, τ::AbstractVector{T},
+          jpvt::AbstractVector{<:Integer}) where {T} =
+    QRPivoted{T,typeof(factors),typeof(τ),typeof(jpvt)}(factors, τ, jpvt)
+QRPivoted{T}(factors::AbstractMatrix, τ::AbstractVector,
+             jpvt::AbstractVector{<:Integer}) where {T} =
+    QRPivoted(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ), jpvt)
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(QRPivoted{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T},
+                          jpvt::AbstractVector{<:Integer}) where {T,S},
+           QRPivoted{T,S,typeof(τ),typeof(jpvt)}(factors, τ, jpvt), false)
 
 # iteration for destructuring into components
 Base.iterate(S::QRPivoted) = (S.Q, Val(:R))
@@ -276,7 +285,7 @@ function qrfactPivotedUnblocked!(A::AbstractMatrix)
         # Update trailing submatrix with reflector
         reflectorApply!(x, τj, view(A, j:m, j+1:n))
     end
-    return QRPivoted{eltype(A), typeof(A)}(A, τ, piv)
+    return QRPivoted{eltype(A), typeof(A), typeof(τ), typeof(piv)}(A, τ, piv)
 end
 
 # LAPACK version
@@ -305,9 +314,9 @@ julia> a = [1. 2.; 3. 4.]
  3.0  4.0
 
 julia> qr!(a)
-LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
 Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
+2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}:
  -0.316228  -0.948683
  -0.948683   0.316228
 R factor:
@@ -392,9 +401,9 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
  0.0   1.0
 
 julia> F = qr(A)
-LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}}
+LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
 Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}}:
+3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}:
  -0.6   0.0   0.8
  -0.8   0.0  -0.6
   0.0  -1.0   0.0
@@ -517,19 +526,22 @@ inv(Q::AbstractQ) = Q'
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
 [`QRPivoted`](@ref) format.
 """
-struct QRPackedQ{T,S<:AbstractMatrix{T}} <: AbstractQ{T}
+struct QRPackedQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: AbstractQ{T}
     factors::S
-    τ::Vector{T}
+    τ::C
 
-    function QRPackedQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+    function QRPackedQ{T,S,C}(factors, τ) where {T,S<:AbstractMatrix{T},C<:AbstractVector{T}}
         require_one_based_indexing(factors)
-        new{T,S}(factors, τ)
+        new{T,S,C}(factors, τ)
     end
 end
-QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
-function QRPackedQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
-    QRPackedQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
-end
+QRPackedQ(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T} =
+    QRPackedQ{T,typeof(factors),typeof(τ)}(factors, τ)
+QRPackedQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
+    QRPackedQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(QRPackedQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
+           QRPackedQ{T,S,typeof(τ)}(factors, τ), false)
 
 """
     QRCompactWYQ <: AbstractMatrix
@@ -537,19 +549,22 @@ end
 The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QRCompactWY`](@ref)
 format.
 """
-struct QRCompactWYQ{S, M<:AbstractMatrix{S}} <: AbstractQ{S}
+struct QRCompactWYQ{S, M<:AbstractMatrix{S}, C<:AbstractMatrix{S}} <: AbstractQ{S}
     factors::M
-    T::Matrix{S}
+    T::C
 
-    function QRCompactWYQ{S,M}(factors, T) where {S,M<:AbstractMatrix{S}}
+    function QRCompactWYQ{S,M,C}(factors, T) where {S,M<:AbstractMatrix{S},C<:AbstractMatrix{S}}
         require_one_based_indexing(factors)
-        new{S,M}(factors, T)
+        new{S,M,C}(factors, T)
     end
 end
-QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) where {S} = QRCompactWYQ{S,typeof(factors)}(factors, T)
-function QRCompactWYQ{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S}
-    QRCompactWYQ(convert(AbstractMatrix{S}, factors), convert(Matrix{S}, T))
-end
+QRCompactWYQ(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} =
+    QRCompactWYQ{S,typeof(factors),typeof(T)}(factors, T)
+QRCompactWYQ{S}(factors::AbstractMatrix, T::AbstractMatrix) where {S} =
+    QRCompactWYQ(convert(AbstractMatrix{S}, factors), convert(AbstractMatrix{S}, T))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(QRCompactWYQ{S,M}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S,M},
+           QRCompactWYQ{S,M,typeof(T)}(factors, T), false)
 
 QRPackedQ{T}(Q::QRPackedQ) where {T} = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 AbstractMatrix{T}(Q::QRPackedQ{T}) where {T} = Q
@@ -557,18 +572,20 @@ AbstractMatrix{T}(Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
 QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix{S}, Q.factors), convert(AbstractMatrix{S}, Q.T))
 AbstractMatrix{S}(Q::QRCompactWYQ{S}) where {S} = Q
 AbstractMatrix{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
-Matrix{T}(Q::AbstractQ{S}) where {T,S} = Matrix{T}(lmul!(Q, Matrix{S}(I, size(Q, 1), min(size(Q.factors)...))))
+Matrix{T}(Q::AbstractQ{S}) where {T,S} = convert(Matrix{T}, lmul!(Q, Matrix{S}(I, size(Q, 1), min(size(Q.factors)...))))
 Matrix(Q::AbstractQ{T}) where {T} = Matrix{T}(Q)
 Array{T}(Q::AbstractQ) where {T} = Matrix{T}(Q)
 Array(Q::AbstractQ) = Matrix(Q)
 
 size(F::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(F, :factors), dim)
 size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
-size(Q::AbstractQ, dim::Integer) = size(getfield(Q, :factors), dim == 2 ? 1 : dim)
-size(Q::AbstractQ) = size(Q, 1), size(Q, 2)
+size(Q::Union{QRCompactWYQ,QRPackedQ}, dim::Integer) =
+    size(getfield(Q, :factors), dim == 2 ? 1 : dim)
+size(Q::Union{QRCompactWYQ,QRPackedQ}) = size(Q, 1), size(Q, 2)
 
-copy(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
-getindex(Q::AbstractQ, inds...) = copy(Q)[inds...]
+copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
+copy(Q::AbstractQ) = copymutable(Q)
+getindex(Q::AbstractQ, inds...) = copymutable(Q)[inds...]
 getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
 
 function getindex(Q::AbstractQ, ::Colon, j::Int)
@@ -640,7 +657,7 @@ function (*)(A::AbstractQ, b::StridedVector)
     TAb = promote_type(eltype(A), eltype(b))
     Anew = convert(AbstractMatrix{TAb}, A)
     if size(A.factors, 1) == length(b)
-        bnew = copy_oftype(b, TAb)
+        bnew = copymutable_oftype(b, TAb)
     elseif size(A.factors, 2) == length(b)
         bnew = [b; zeros(TAb, size(A.factors, 1) - length(b))]
     else
@@ -652,7 +669,7 @@ function (*)(A::AbstractQ, B::StridedMatrix)
     TAB = promote_type(eltype(A), eltype(B))
     Anew = convert(AbstractMatrix{TAB}, A)
     if size(A.factors, 1) == size(B, 1)
-        Bnew = copy_oftype(B, TAB)
+        Bnew = copymutable_oftype(B, TAB)
     elseif size(A.factors, 2) == size(B, 1)
         Bnew = [B; zeros(TAB, size(A.factors, 1) - size(B,1), size(B, 2))]
     else
@@ -706,7 +723,7 @@ end
 function *(adjQ::Adjoint{<:Any,<:AbstractQ}, B::StridedVecOrMat)
     Q = adjQ.parent
     TQB = promote_type(eltype(Q), eltype(B))
-    return lmul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copy_oftype(B, TQB))
+    return lmul!(adjoint(convert(AbstractMatrix{TQB}, Q)), copymutable_oftype(B, TQB))
 end
 
 ### QBc/QcBc
@@ -758,7 +775,7 @@ end
 function (*)(A::StridedMatrix, Q::AbstractQ)
     TAQ = promote_type(eltype(A), eltype(Q))
 
-    return rmul!(copy_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
+    return rmul!(copymutable_oftype(A, TAQ), convert(AbstractMatrix{TAQ}, Q))
 end
 
 function (*)(a::Number, B::AbstractQ)

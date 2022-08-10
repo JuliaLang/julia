@@ -20,6 +20,8 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
@@ -31,6 +33,9 @@
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
@@ -51,11 +56,6 @@
 
 
 using namespace llvm;
-
-// our passes
-namespace llvm {
-    extern Pass *createLowerSimdLoopPass();
-}
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -79,7 +79,7 @@ static T *addComdat(T *G)
 
 
 typedef struct {
-    std::unique_ptr<Module> M;
+    orc::ThreadSafeModule M;
     std::vector<GlobalValue*> jl_sysimg_fvars;
     std::vector<GlobalValue*> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
@@ -115,11 +115,11 @@ int32_t jl_get_llvm_gv_impl(void *native_code, jl_value_t *p)
 }
 
 extern "C" JL_DLLEXPORT
-Module* jl_get_llvm_module_impl(void *native_code)
+LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
-        return data->M.get();
+        return wrap(&data->M);
     else
         return NULL;
 }
@@ -130,16 +130,6 @@ GlobalValue* jl_get_llvm_function_impl(void *native_code, uint32_t idx)
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
         return data->jl_sysimg_fvars[idx];
-    else
-        return NULL;
-}
-
-extern "C" JL_DLLEXPORT
-LLVMContext* jl_get_llvm_context_impl(void *native_code)
-{
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    if (data)
-        return &data->M->getContext();
     else
         return NULL;
 }
@@ -258,27 +248,34 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // all reachable & inferrrable functions. The `policy` flag switches between the default
 // mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, int _policy)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy)
 {
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
-    jl_codegen_params_t params;
-    params.params = cgparams;
-    std::map<jl_code_instance_t*, jl_compile_result_t> emitted;
+    CompilationPolicy policy = (CompilationPolicy) _policy;
+    bool imaging = imaging_default() || policy == CompilationPolicy::ImagingMode;
+    jl_workqueue_t emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&jl_codegen_lock);
+    orc::ThreadSafeContext ctx;
+    orc::ThreadSafeModule backing;
+    if (!llvmmod) {
+        ctx = jl_ExecutionEngine->acquireContext();
+        backing = jl_create_llvm_module("text", ctx, imaging);
+    }
+    orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
+    auto ctxt = clone.getContext();
+    jl_codegen_params_t params(ctxt);
+    params.params = cgparams;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    CompilationPolicy policy = (CompilationPolicy) _policy;
-    if (policy == CompilationPolicy::ImagingMode)
-        imaging_mode = 1;
-    std::unique_ptr<Module> clone(jl_create_llvm_module("text"));
+    params.imaging = imaging;
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -296,7 +293,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
             jl_value_t *item = jl_array_ptr_ref(methods, i);
             if (jl_is_simplevector(item)) {
                 if (worlds == 1)
-                    jl_compile_extern_c(clone.get(), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+                    jl_compile_extern_c(wrap(&clone), &params, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
                 continue;
             }
             mi = (jl_method_instance_t*)item;
@@ -311,15 +308,19 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
                 if (src && !emitted.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
-                    jl_compile_result_t result = jl_emit_code(mi, src, codeinst->rettype, params);
-                    if (std::get<0>(result))
-                        emitted[codeinst] = std::move(result);
+                    orc::ThreadSafeModule result_m = jl_create_llvm_module(name_from_method_instance(codeinst->def),
+                            params.tsctx, params.imaging,
+                            clone.getModuleUnlocked()->getDataLayout(),
+                            Triple(clone.getModuleUnlocked()->getTargetTriple()));
+                    jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params);
+                    if (result_m)
+                        emitted[codeinst] = {std::move(result_m), std::move(decls)};
                 }
             }
         }
 
         // finally, make sure all referenced methods also get compiled or fixed up
-        jl_compile_workqueue(emitted, params, policy);
+        jl_compile_workqueue(emitted, *clone.getModuleUnlocked(), params, policy);
     }
     JL_GC_POP();
 
@@ -334,7 +335,7 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
     for (auto &def : emitted) {
-        jl_merge_module(clone.get(), std::move(std::get<0>(def.second)));
+        jl_merge_module(clone, std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
         jl_llvm_functions_t decls = std::get<1>(def.second);
         StringRef func = decls.functionObject;
@@ -348,44 +349,47 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
             func_id = -2;
         }
         else {
-            data->jl_sysimg_fvars.push_back(cast<Function>(clone->getNamedValue(func)));
+            //Safe b/c context is locked by params
+            data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(func)));
             func_id = data->jl_sysimg_fvars.size();
         }
         if (!cfunc.empty()) {
-            data->jl_sysimg_fvars.push_back(cast<Function>(clone->getNamedValue(cfunc)));
+            //Safe b/c context is locked by params
+            data->jl_sysimg_fvars.push_back(cast<Function>(clone.getModuleUnlocked()->getNamedValue(cfunc)));
             cfunc_id = data->jl_sysimg_fvars.size();
         }
         data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
     }
     if (params._shared_module) {
-        std::unique_ptr<Module> shared(params._shared_module);
-        params._shared_module = NULL;
-        jl_merge_module(clone.get(), std::move(shared));
+        jl_merge_module(clone, std::move(params._shared_module));
     }
 
     // now get references to the globals in the merged module
     // and set them to be internalized and initialized at startup
     for (auto &global : gvars) {
-        GlobalVariable *G = cast<GlobalVariable>(clone->getNamedValue(global));
+        //Safe b/c context is locked by params
+        GlobalVariable *G = cast<GlobalVariable>(clone.getModuleUnlocked()->getNamedValue(global));
         G->setInitializer(ConstantPointerNull::get(cast<PointerType>(G->getValueType())));
         G->setLinkage(GlobalVariable::InternalLinkage);
         data->jl_sysimg_gvars.push_back(G);
     }
 
+    //Safe b/c context is locked by params
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
     // setting the function personality enables stack unwinding and catching exceptions
     // so make sure everything has something set
-    Type *T_int32 = Type::getInt32Ty(clone->getContext());
+    Type *T_int32 = Type::getInt32Ty(clone.getModuleUnlocked()->getContext());
     Function *juliapersonality_func =
        Function::Create(FunctionType::get(T_int32, true),
-           Function::ExternalLinkage, "__julia_personality", clone.get());
+           Function::ExternalLinkage, "__julia_personality", clone.getModuleUnlocked());
     juliapersonality_func->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
 #endif
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
     if (policy == CompilationPolicy::Default) {
-        for (GlobalObject &G : clone->global_objects()) {
+        //Safe b/c context is locked by params
+        for (GlobalObject &G : clone.getModuleUnlocked()->global_objects()) {
             if (!G.isDeclaration()) {
                 G.setLinkage(Function::InternalLinkage);
                 makeSafeName(G);
@@ -402,8 +406,9 @@ void *jl_create_native_impl(jl_array_t *methods, const jl_cgparams_t *cgparams, 
     data->M = std::move(clone);
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-    if (policy == CompilationPolicy::ImagingMode)
-        imaging_mode = 0;
+    if (ctx.getContext()) {
+        jl_ExecutionEngine->releaseContext(std::move(ctx));
+    }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
@@ -431,6 +436,23 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
+{
+    Function *target = M.getFunction(alias);
+    if (!target) {
+        target = Function::Create(FT, Function::ExternalLinkage, alias, M);
+    }
+    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+    appendToCompilerUsed(M, {interposer});
+
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
+    SmallVector<Value *, 4> CallArgs;
+    for (auto &arg : interposer->args())
+        CallArgs.push_back(&arg);
+    auto val = builder.CreateCall(target, CallArgs);
+    builder.CreateRet(val);
+}
+
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -442,11 +464,13 @@ void jl_dump_native_impl(void *native_code,
 {
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    LLVMContext &Context = data->M->getContext();
+    auto TSCtx = data->M.getContext();
+    auto lock = TSCtx.getLock();
+    LLVMContext &Context = *TSCtx.getContext();
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
-    Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
+    Triple TheTriple = Triple(jl_ExecutionEngine->getTargetTriple());
     // make sure to emit the native object format, even if FORCE_ELF was set in codegen
 #if defined(_OS_WINDOWS_)
     TheTriple.setObjectFormat(Triple::COFF);
@@ -455,11 +479,11 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine> TM(
-        jl_TargetMachine->getTarget().createTargetMachine(
+        jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_TargetMachine->getTargetCPU(),
-            jl_TargetMachine->getTargetFeatureString(),
-            jl_TargetMachine->Options,
+            jl_ExecutionEngine->getTargetCPU(),
+            jl_ExecutionEngine->getTargetFeatureString(),
+            jl_ExecutionEngine->getTargetOptions(),
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
             Reloc::PIC_,
 #else
@@ -475,8 +499,6 @@ void jl_dump_native_impl(void *native_code,
             CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
             ));
 
-    legacy::PassManager PM;
-    addTargetPasses(&PM, TM.get());
 
     // set up optimization passes
     SmallVector<char, 0> bc_Buffer;
@@ -493,26 +515,36 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
+    PassBuilder emptyPB;
+    AnalysisManagers empty(emptyPB);
+    ModulePassManager preopt, postopt;
+    legacy::PassManager emitter; // MC emission is only supported on legacy PM
+
     if (unopt_bc_fname)
-        PM.add(createBitcodeWriterPass(unopt_bc_OS));
-    if (bc_fname || obj_fname || asm_fname) {
-        addOptimizationPasses(&PM, jl_options.opt_level, true, true);
-        addMachinePasses(&PM, TM.get(), jl_options.opt_level);
-    }
+        preopt.addPass(BitcodeWriterPass(unopt_bc_OS));
+
     if (bc_fname)
-        PM.add(createBitcodeWriterPass(bc_OS));
+        postopt.addPass(BitcodeWriterPass(bc_OS));
+    //Is this necessary for TM?
+    addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (obj_fname)
-        if (TM->addPassesToEmitFile(PM, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(emitter, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(PM, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
+    legacy::PassManager optimizer;
+    if (bc_fname || obj_fname || asm_fname) {
+        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+        addMachinePasses(&optimizer, jl_options.opt_level);
+    }
+
     // Reset the target triple to make sure it matches the new target machine
-    data->M->setTargetTriple(TM->getTargetTriple().str());
-    DataLayout DL = TM->createDataLayout();
-    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12:13");
-    data->M->setDataLayout(DL);
+    auto dataM = data->M.getModuleUnlocked();
+    dataM->setTargetTriple(TM->getTargetTriple().str());
+    dataM->setDataLayout(jl_create_datalayout(*TM));
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);
@@ -521,14 +553,14 @@ void jl_dump_native_impl(void *native_code,
     Type *T_psize = T_size->getPointerTo();
 
     // add metadata information
-    if (imaging_mode) {
-        emit_offset_table(*data->M, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
-        emit_offset_table(*data->M, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
+    if (imaging_default()) {
+        emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
+        emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
-        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(data->M.get());
-        addComdat(new GlobalVariable(*data->M,
+        GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(dataM);
+        addComdat(new GlobalVariable(*dataM,
                                      jlRTLD_DEFAULT_var->getType(),
                                      true,
                                      GlobalVariable::ExternalLinkage,
@@ -538,7 +570,27 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        PM.run(M);
+        preopt.run(M, empty.MAM);
+        optimizer.run(M);
+
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+        postopt.run(M, empty.MAM);
+        emitter.run(M);
+
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -549,29 +601,30 @@ void jl_dump_native_impl(void *native_code,
             emit_result(asm_Archive, asm_Buffer, asm_Name, outputs);
     };
 
-    add_output(*data->M, "unopt.bc", "text.bc", "text.o", "text.s");
+    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s");
 
-    std::unique_ptr<Module> sysimage(new Module("sysimage", Context));
-    sysimage->setTargetTriple(data->M->getTargetTriple());
-    sysimage->setDataLayout(data->M->getDataLayout());
+    orc::ThreadSafeModule sysimage(std::make_unique<Module>("sysimage", Context), TSCtx);
+    auto sysimageM = sysimage.getModuleUnlocked();
+    sysimageM->setTargetTriple(dataM->getTargetTriple());
+    sysimageM->setDataLayout(dataM->getDataLayout());
 #if JL_LLVM_VERSION >= 130000
-    sysimage->setStackProtectorGuard(data->M->getStackProtectorGuard());
-    sysimage->setOverrideStackAlignment(data->M->getOverrideStackAlignment());
+    sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
+    sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
 #endif
-    data->M.reset(); // free memory for data->M
+    data->M = orc::ThreadSafeModule(); // free memory for data->M
 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(Context,
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        addComdat(new GlobalVariable(*sysimage, data->getType(), false,
+        addComdat(new GlobalVariable(*sysimageM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data"))->setAlignment(Align(64));
         Constant *len = ConstantInt::get(T_size, sysimg_len);
-        addComdat(new GlobalVariable(*sysimage, len->getType(), true,
+        addComdat(new GlobalVariable(*sysimageM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"));
     }
-    add_output(*sysimage, "data.bc", "data.bc", "data.o", "data.s");
+    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s");
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
@@ -590,14 +643,14 @@ void jl_dump_native_impl(void *native_code,
     delete data;
 }
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
 {
-    PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
-    PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlevel)
+void addMachinePasses(legacy::PassManagerBase *PM, int optlevel)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
@@ -608,7 +661,8 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM, int optlev
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
 void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                           bool lower_intrinsics, bool dump_native)
+                           bool lower_intrinsics, bool dump_native,
+                           bool external_use)
 {
     // Note: LLVM 12 disabled the hoisting of common instruction
     //       before loop vectorization (https://reviews.llvm.org/D84108).
@@ -617,7 +671,19 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     //       to merge allocations and sometimes eliminate them,
     //       since AllocOpt does not handle PhiNodes.
     //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
+    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true);
+    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true)
+        //These mess with loop rotation, so only do them after that
+        .hoistCommonInsts(true)
+        // Causes an SRET assertion error in late-gc-lowering
+        // .sinkCommonInsts(true)
+        ;
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -632,7 +698,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             if (opt_level == 1)
                 PM->add(createInstSimplifyLegacyPass());
         }
-        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -657,12 +723,12 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         }
         PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
         if (dump_native) {
-            PM->add(createMultiVersioningPass());
+            PM->add(createMultiVersioningPass(external_use));
             PM->add(createCPUFeaturesPass());
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
                 PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -683,7 +749,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -697,9 +763,9 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     if (dump_native)
-        PM->add(createMultiVersioningPass());
+        PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
     PM->add(createSROAPass());
     PM->add(createInstSimplifyLegacyPass());
@@ -767,14 +833,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
     }
     PM->add(createDeadStoreEliminationPass());
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
+    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
+
+    // More dead allocation (store) deletion before loop optimization
+    // consider removing this:
+    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
+    PM->add(createAllocOptPass());
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
@@ -782,12 +849,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Cleanup after LV pass
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        SimplifyCFGOptions()
-            .forwardSwitchCondToPhi(true)
-            .convertSwitchToLookupTable(true)
-            .needCanonicalLoops(false)
-            .hoistCommonInsts(true)
-            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+        aggressiveSimplifyCFGOptions
     ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
@@ -798,7 +860,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (lower_intrinsics) {
         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
         // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        // pass pipeline being re-executed. Prevent this by inserting a barrier.
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
@@ -837,7 +899,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
 
 // An LLVM module pass that just runs all julia passes in order. Useful for
 // debugging
-template <int OptLevel>
+template <int OptLevel, bool dump_native>
 class JuliaPipeline : public Pass {
 public:
     static char ID;
@@ -851,25 +913,71 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addTargetPasses(&Adapter, jl_TargetMachine);
-        addOptimizationPasses(&Adapter, OptLevel);
-        addMachinePasses(&Adapter, jl_TargetMachine, OptLevel);
+        addTargetPasses(&Adapter, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
+        addOptimizationPasses(&Adapter, OptLevel, true, dump_native, true);
+        addMachinePasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
         return createPrintModulePass(O, Banner);
     }
 };
-template<> char JuliaPipeline<0>::ID = 0;
-template<> char JuliaPipeline<2>::ID = 0;
-template<> char JuliaPipeline<3>::ID = 0;
-static RegisterPass<JuliaPipeline<0>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
-static RegisterPass<JuliaPipeline<2>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
-static RegisterPass<JuliaPipeline<3>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
+template<> char JuliaPipeline<0,false>::ID = 0;
+template<> char JuliaPipeline<2,false>::ID = 0;
+template<> char JuliaPipeline<3,false>::ID = 0;
+template<> char JuliaPipeline<0,true>::ID = 0;
+template<> char JuliaPipeline<2,true>::ID = 0;
+template<> char JuliaPipeline<3,true>::ID = 0;
+static RegisterPass<JuliaPipeline<0,false>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
+static RegisterPass<JuliaPipeline<2,false>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
+static RegisterPass<JuliaPipeline<3,false>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);
+
+static RegisterPass<JuliaPipeline<0,true>> XS("juliaO0-sysimg", "Runs the entire julia pipeline (at -O0/sysimg mode)", false, false);
+static RegisterPass<JuliaPipeline<2,true>> YS("julia-sysimg", "Runs the entire julia pipeline (at -O2/sysimg mode)", false, false);
+static RegisterPass<JuliaPipeline<3,true>> ZS("juliaO3-sysimg", "Runs the entire julia pipeline (at -O3/sysimg mode)", false, false);
 
 extern "C" JL_DLLEXPORT
-void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
+void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int lower_intrinsics) {
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
+}
+
+// new pass manager plugin
+
+// NOTE: Instead of exporting all the constructors in passes.h we could
+// forward the callbacks to the respective passes. LLVM seems to prefer this,
+// and when we add the full pass builder having them directly will be helpful.
+static void registerCallbacks(PassBuilder &PB) {
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, FunctionPassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef FUNCTION_PASS
+            return false;
+        });
+
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, ModulePassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef MODULE_PASS
+            return false;
+        });
+
+    PB.registerPipelineParsingCallback(
+        [](StringRef Name, LoopPassManager &PM,
+           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef LOOP_PASS
+            return false;
+        });
+}
+
+extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
+llvmGetPassPluginInfo() {
+      return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
 }
 
 // --- native code info, and dump function to IR and ASM ---
@@ -878,59 +986,58 @@ void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level, int lower_
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
         // not a generic function
-        return NULL;
-    }
-
-    static legacy::PassManager *PM;
-    if (!PM) {
-        PM = new legacy::PassManager();
-        addTargetPasses(PM, jl_TargetMachine);
-        addOptimizationPasses(PM, jl_options.opt_level);
-        addMachinePasses(PM, jl_TargetMachine, jl_options.opt_level);
+        dump->F = NULL;
+        return;
     }
 
     // get the source code for this function
     jl_value_t *jlrettype = (jl_value_t*)jl_any_type;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH2(&src, &jlrettype);
-    jl_value_t *ci = jl_rettype_inferred(mi, world, world);
-    if (ci != jl_nothing) {
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-        src = (jl_code_info_t*)codeinst->inferred;
-        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
-        jlrettype = codeinst->rettype;
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
-        if (src)
-            jlrettype = src->rettype;
-        else if (jl_is_method(mi->def.method)) {
-            src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
-            if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && jl_ir_flag_inferred((jl_array_t*)mi->def.method->source)) {
+        src = (jl_code_info_t*)mi->def.method->source;
+        if (src && !jl_is_code_info(src))
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+    } else {
+        jl_value_t *ci = jl_rettype_inferred(mi, world, world);
+        if (ci != jl_nothing) {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+            src = (jl_code_info_t*)codeinst->inferred;
+            if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
+            jlrettype = codeinst->rettype;
         }
-        // TODO: use mi->uninferred
+        if (!src || (jl_value_t*)src == jl_nothing) {
+            src = jl_type_infer(mi, world, 0);
+            if (src)
+                jlrettype = src->rettype;
+            else if (jl_is_method(mi->def.method)) {
+                src = mi->def.method->generator ? jl_code_for_staged(mi) : (jl_code_info_t*)mi->def.method->source;
+                if (src && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
+            }
+            // TODO: use mi->uninferred
+        }
     }
 
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
-        jl_codegen_params_t output;
+        JL_LOCK(&jl_codegen_lock);
+        auto ctx = jl_ExecutionEngine->getContext();
+        jl_codegen_params_t output(*ctx);
         output.world = world;
         output.params = &params;
-        std::unique_ptr<Module> m;
-        jl_llvm_functions_t decls;
-        JL_LOCK(&jl_codegen_lock);
+        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx, output.imaging);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
-        std::tie(m, decls) = jl_emit_code(mi, src, jlrettype, output);
+        auto decls = jl_emit_code(m, mi, src, jlrettype, output);
 
         Function *F = NULL;
         if (m) {
@@ -940,8 +1047,14 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             // and will better match what's actually in sysimg.
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
-            if (optimize)
-                PM->run(*m.get());
+            if (optimize) {
+                legacy::PassManager PM;
+                addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
+                addOptimizationPasses(&PM, jl_options.opt_level);
+                addMachinePasses(&PM, jl_options.opt_level);
+                //Safe b/c context lock is held by output
+                PM.run(*m.getModuleUnlocked());
+            }
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
                 getwrapper = false;
@@ -949,15 +1062,17 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
                 fname = &decls.specFunctionObject;
             else
                 fname = &decls.functionObject;
-            F = cast<Function>(m->getNamedValue(*fname));
-            m.release(); // the return object `llvmf` will be the owning pointer
+            F = cast<Function>(m.getModuleUnlocked()->getNamedValue(*fname));
         }
         JL_GC_POP();
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
-        if (F)
-            return F;
+        if (F) {
+            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(m)));
+            dump->F = wrap(F);
+            return;
+        }
     }
 
     const char *mname = name_from_method_instance(mi);

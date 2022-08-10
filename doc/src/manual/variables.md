@@ -81,13 +81,13 @@ julia> pi
 π = 3.1415926535897...
 
 julia> pi = 3
-ERROR: cannot assign a value to variable MathConstants.pi from module Main
+ERROR: cannot assign a value to imported variable MathConstants.pi from module Main
 
 julia> sqrt(100)
 10.0
 
 julia> sqrt = 4
-ERROR: cannot assign a value to variable Base.sqrt from module Main
+ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
 
 ## [Allowed Variable Names](@id man-allowed-variable-names)
@@ -135,7 +135,7 @@ ERROR: syntax: unexpected "="
 
 Some Unicode characters are considered to be equivalent in identifiers.
 Different ways of entering Unicode combining characters (e.g., accents)
-are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.macchiato.com/unicode/nfc-faq)-normalized).
+are treated as equivalent (specifically, Julia identifiers are [NFC](https://www.macchiato.com/unicode-intl-sw/nfc-faq)-normalized).
 Julia also includes a few non-standard equivalences for characters that are
 visually similar and are easily entered by some input methods. The Unicode
 characters `ɛ` (U+025B: Latin small letter open e) and `µ` (U+00B5: micro sign)

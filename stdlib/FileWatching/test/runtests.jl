@@ -3,6 +3,8 @@
 using Test, FileWatching
 using Base: uv_error, Experimental
 
+@testset "FileWatching" begin
+
 # This script does the following
 # Sets up N unix pipes (or WSA sockets)
 # For the odd pipes, a byte is written to the write end at intervals specified in intvls
@@ -157,8 +159,8 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-const F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
-const F_PATH = F_GETPATH ? "afile.txt" : ""
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 
@@ -322,8 +324,10 @@ function test_dirmonitor_wait2(tval)
                     fname, events = wait(fm)
                 end
                 for i = 1:3
-                    @test fname == "$F_PATH$i"
-                    @test !events.changed && !events.timedout && events.renamed
+                    @testset let (fname, events) = (fname, events)
+                        @test fname == "$F_PATH$i"
+                        @test !events.changed && !events.timedout && events.renamed
+                    end
                     i == 3 && break
                     fname, events = wait(fm)
                 end
@@ -431,3 +435,9 @@ unwatch_folder(dir)
 @test isempty(FileWatching.watched_folders)
 rm(file)
 rm(dir)
+
+@testset "Pidfile" begin
+    include("pidfile.jl")
+end
+
+end # testset

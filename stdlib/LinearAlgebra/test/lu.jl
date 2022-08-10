@@ -296,7 +296,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}}
+LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -424,6 +424,15 @@ end
             @test lu(A, pivot; check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
         end
     end
+end
+
+@testset "can push to vector after 3-arg ldiv! (#43507)" begin
+    u = rand(3)
+    A = rand(3,3)
+    b = rand(3)
+    ldiv!(u,lu(A),b)
+    push!(b,4.0)
+    @test length(b) == 4
 end
 
 end # module TestLU

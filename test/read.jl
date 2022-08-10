@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using DelimitedFiles, Random, Sockets
+using Random, Sockets
 
 mktempdir() do dir
 
@@ -312,12 +312,6 @@ for (name, f) in l
 
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
-
-        verbose && println("$name readdlm...")
-        @test readdlm(io(), ',') == readdlm(IOBuffer(text), ',')
-        @test readdlm(io(), ',') == readdlm(filename, ',')
-
-        cleanup()
     end
 
     text = old_text
@@ -604,7 +598,7 @@ end
     read!(io, @view y[4:7])
     @test y[4:7] == v
     seekstart(io)
-    @test_throws ErrorException read!(io, @view z[4:6])
+    @test_throws Base.CanonicalIndexError read!(io, @view z[4:6])
 end
 
 # Bulk read from pipe
@@ -658,4 +652,3 @@ end
         @test isempty(r) && isempty(collect(r))
     end
 end
-

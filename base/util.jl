@@ -133,7 +133,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
     printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()))
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -149,7 +149,7 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 !!! compat "Julia 1.5"
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
     cpu_target = unsafe_string(opts.cpu_target)
     image_file = unsafe_string(opts.image_file)
@@ -196,6 +196,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                 push!(addflags, "--code-coverage=user")
             elseif opts.code_coverage == 2
                 push!(addflags, "--code-coverage=all")
+            elseif opts.code_coverage == 3
+                push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
@@ -204,6 +206,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
         push!(addflags, "--track-allocation=user")
     elseif opts.malloc_log == 2
         push!(addflags, "--track-allocation=all")
+    elseif opts.malloc_log == 3
+        push!(addflags, "--track-allocation=@$(unsafe_string(opts.tracked_path))")
     end
     if opts.color == 1
         push!(addflags, "--color=yes")
@@ -253,33 +257,83 @@ graphical interface.
 """
 function getpass end
 
-if Sys.iswindows()
+# Note, this helper only works within `with_raw_tty()` on POSIX platforms!
+function _getch()
+    @static if Sys.iswindows()
+        return UInt8(ccall(:_getch, Cint, ()))
+    else
+        return read(stdin, UInt8)
+    end
+end
+
+const termios_size = Int(ccall(:jl_termios_size, Cint, ()))
+make_termios() = zeros(UInt8, termios_size)
+
+# These values seem to hold on all OSes we care about:
+# glibc Linux, musl Linux, macOS, FreeBSD
+@enum TCSETATTR_FLAGS TCSANOW=0 TCSADRAIN=1 TCSAFLUSH=2
+
+function tcgetattr(fd::RawFD, termios)
+    ret = ccall(:tcgetattr, Cint, (Cint, Ptr{Cvoid}), fd, termios)
+    if ret != 0
+        throw(IOError("tcgetattr failed", ret))
+    end
+end
+function tcsetattr(fd::RawFD, termios, mode::TCSETATTR_FLAGS = TCSADRAIN)
+    ret = ccall(:tcsetattr, Cint, (Cint, Cint, Ptr{Cvoid}), fd, Cint(mode), termios)
+    if ret != 0
+        throw(IOError("tcsetattr failed", ret))
+    end
+end
+cfmakeraw(termios) = ccall(:cfmakeraw, Cvoid, (Ptr{Cvoid},), termios)
+
+function with_raw_tty(f::Function, input::TTY)
+    input === stdin || throw(ArgumentError("with_raw_tty only works for stdin"))
+    fd = RawFD(0)
+
+    # If we're on windows, we do nothing, as we have access to `_getch()` quite easily
+    @static if Sys.iswindows()
+        return f()
+    end
+
+    # Get the current terminal mode
+    old_termios = make_termios()
+    tcgetattr(fd, old_termios)
+    try
+        # Set a new, raw, terminal mode
+        new_termios = copy(old_termios)
+        cfmakeraw(new_termios)
+        tcsetattr(fd, new_termios)
+
+        # Call the user-supplied callback
+        f()
+    finally
+        # Always restore the terminal mode
+        tcsetattr(fd, old_termios)
+    end
+end
+
 function getpass(input::TTY, output::IO, prompt::AbstractString)
     input === stdin || throw(ArgumentError("getpass only works for stdin"))
-    print(output, prompt, ": ")
-    flush(output)
-    s = SecretBuffer()
-    plen = 0
-    while true
-        c = UInt8(ccall(:_getch, Cint, ()))
-        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-            break # EOF or return
-        elseif c == 0x00 || c == 0xe0
-            ccall(:_getch, Cint, ()) # ignore function/arrow keys
-        elseif c == UInt8('\b') && plen > 0
-            plen -= 1 # delete last character on backspace
-        elseif !iscntrl(Char(c)) && plen < 128
-            write(s, c)
+    with_raw_tty(stdin) do
+        print(output, prompt, ": ")
+        flush(output)
+        s = SecretBuffer()
+        plen = 0
+        while true
+            c = _getch()
+            if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
+                break # EOF or return
+            elseif c == 0x00 || c == 0xe0
+                _getch() # ignore function/arrow keys
+            elseif c == UInt8('\b') && plen > 0
+                plen -= 1 # delete last character on backspace
+            elseif !iscntrl(Char(c)) && plen < 128
+                write(s, c)
+            end
         end
+        return seekstart(s)
     end
-    return seekstart(s)
-end
-else
-function getpass(input::TTY, output::IO, prompt::AbstractString)
-    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
-    msg = string(prompt, ": ")
-    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
-end
 end
 
 # allow new getpass methods to be defined if stdin has been
@@ -523,7 +577,16 @@ function _kwdef!(blk, params_args, call_args)
             push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
-            if ei.head === :(=)
+            is_atomic = ei.head === :atomic
+            ei = is_atomic ? first(ei.args) : ei # strip "@atomic" and add it back later
+            is_const = ei.head === :const
+            ei = is_const ? first(ei.args) : ei # strip "const" and add it back later
+            # Note: `@atomic const ..` isn't valid, but reconstruct it anyway to serve a nice error
+            if ei isa Symbol
+                # const var
+                push!(params_args, ei)
+                push!(call_args, ei)
+            elseif ei.head === :(=)
                 lhs = ei.args[1]
                 if lhs isa Symbol
                     #  var = defexpr
@@ -539,7 +602,9 @@ function _kwdef!(blk, params_args, call_args)
                 defexpr = ei.args[2]  # defexpr
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
-                blk.args[i] = lhs
+                lhs = is_const ? Expr(:const, lhs) : lhs
+                lhs = is_atomic ? Expr(:atomic, lhs) : lhs
+                blk.args[i] = lhs # overrides arg
             elseif ei.head === :(::) && ei.args[1] isa Symbol
                 # var::Typ
                 var = ei.args[1]
@@ -569,7 +634,7 @@ to the standard libraries before running the tests.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   seed::Union{BitInteger,Nothing}=nothing)
@@ -585,12 +650,14 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS::Int 
     delete!(ENV2, "JULIA_LOAD_PATH")
     delete!(ENV2, "JULIA_PROJECT")
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
+        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch
         buf = PipeBuffer()
+        original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
         Base.require(Base, :InteractiveUtils).versioninfo(buf)
+        empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end

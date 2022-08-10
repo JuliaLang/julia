@@ -150,7 +150,7 @@ struct Decimal3 end
     len = ii - i
     if len > 3
         ms, r = divrem(ms0, Int64(10) ^ (len - 3))
-        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+        r == 0 || return nothing
     else
         ms = ms0 * Int64(10) ^ (3 - len)
     end
@@ -356,23 +356,23 @@ Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
 string:
 
-| Code       | Matches   | Comment                                                      |
-|:-----------|:----------|:-------------------------------------------------------------|
-| `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
-| `Y`        | 1996, 96  | Returns year of 1996, 0096. Equivalent to `y`                |
-| `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
-| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
-| `U`        | January   | Matches full month names according to the `locale` keyword   |
-| `d`        | 1, 01     | Matches 1 or 2-digit days                                    |
-| `H`        | 00        | Matches hours (24-hour clock)                                |
-| `I`        | 00        | For outputting hours with 12-hour clock                      |
-| `M`        | 00        | Matches minutes                                              |
-| `S`        | 00        | Matches seconds                                              |
-| `s`        | .500      | Matches milliseconds                                         |
-| `e`        | Mon, Tues | Matches abbreviated days of the week                         |
-| `E`        | Monday    | Matches full name days of the week                           |
-| `p`        | AM        | Matches AM/PM (case-insensitive)                             |
-| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
+| Code       | Matches   | Comment                                                       |
+|:-----------|:----------|:--------------------------------------------------------------|
+| `Y`        | 1996, 96  | Returns year of 1996, 0096                                    |
+| `y`        | 1996, 96  | Same as `Y` on `parse` but discards excess digits on `format` |
+| `m`        | 1, 01     | Matches 1 or 2-digit months                                   |
+| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword  |
+| `U`        | January   | Matches full month names according to the `locale` keyword    |
+| `d`        | 1, 01     | Matches 1 or 2-digit days                                     |
+| `H`        | 00        | Matches hours (24-hour clock)                                 |
+| `I`        | 00        | For outputting hours with 12-hour clock                       |
+| `M`        | 00        | Matches minutes                                               |
+| `S`        | 00        | Matches seconds                                               |
+| `s`        | .500      | Matches milliseconds                                          |
+| `e`        | Mon, Tues | Matches abbreviated days of the week                          |
+| `E`        | Monday    | Matches full name days of the week                            |
+| `p`        | AM        | Matches AM/PM (case-insensitive)                              |
+| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                      |
 
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
@@ -414,8 +414,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
         if !isempty(prev)
             letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
-
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
 
@@ -434,8 +432,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
-
         push!(tokens, DatePart{letter}(width, false))
     end
 
