@@ -45,15 +45,8 @@ using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&);
 
+extern Optional<bool> always_have_fp16();
 
-Optional<bool> always_have_fp16() {
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
-    // x86 doesn't support fp16
-    return false;
-#else
-    return {};
-#endif
-}
 
 namespace {
 constexpr uint32_t clone_mask =
