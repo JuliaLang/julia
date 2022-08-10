@@ -983,6 +983,9 @@ function getfield_notundefined(@nospecialize(typ0), @nospecialize(name))
         # tuples and named tuples can't be instantiated with undefined fields,
         # so we don't need to be conservative here
         return true
+    elseif isType(typ) || typ === DataType
+        # types have never undefined fields
+        return true
     end
     if !isa(name, Const)
         isvarargtype(name) && return false
