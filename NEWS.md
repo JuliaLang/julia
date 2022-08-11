@@ -82,6 +82,7 @@ Library changes
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* `@kwdef` is now exported and added to the public API ([#46273])
 
 Standard library changes
 ------------------------
