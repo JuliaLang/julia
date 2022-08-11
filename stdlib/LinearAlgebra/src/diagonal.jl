@@ -675,9 +675,9 @@ for f in (:exp, :cis, :log, :sqrt,
 end
 
 function inv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(one(T))))
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
-        if D.diag[i] == zero(T)
+        if iszero(D.diag[i])
             throw(SingularException(i))
         end
         Di[i] = inv(D.diag[i])
@@ -686,20 +686,34 @@ function inv(D::Diagonal{T}) where T
 end
 
 function pinv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
-        isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
+        if !iszero(D.diag[i])
+            invD = inv(D.diag[i])
+            if isfinite(invD)
+                Di[i] = invD
+                continue
+            end
+        end
+        # fallback
+        Di[i] = zero(T)
     end
     Diagonal(Di)
 end
 function pinv(D::Diagonal{T}, tol::Real) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
-    if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
-    for i = 1:length(D.diag)
-        if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
-            Di[i]=inv(D.diag[i])
-        else
-            Di[i]=zero(T)
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
+    if !isempty(D.diag)
+        maxabsD = maximum(abs.(D.diag))
+        for i = 1:length(D.diag)
+            if abs(D.diag[i]) > tol*maxabsD
+                invD = inv(D.diag[i])
+                if isfinite(invD)
+                    Di[i] = invD
+                    continue
+                end
+            end
+            # fallback
+            Di[i] = zero(T)
         end
     end
     Diagonal(Di)
