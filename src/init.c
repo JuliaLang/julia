@@ -802,7 +802,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         // TODO: set the number of existing symbols more precisely
         // This is probably important to do at the end because some symbols
         // depend on the specific order of its initialization.
-        jl_init_codegen_name_generator(80000);
+        jl_init_codegen_name_generator(200000);
     }
 }
 
