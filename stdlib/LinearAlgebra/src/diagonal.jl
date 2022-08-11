@@ -703,7 +703,7 @@ end
 function pinv(D::Diagonal{T}, tol::Real) where T
     Di = similar(D.diag, typeof(inv(oneunit(T))))
     if !isempty(D.diag)
-        maxabsD = maximum(abs.(D.diag))
+        maxabsD = maximum(abs, D.diag)
         for i = 1:length(D.diag)
             if abs(D.diag[i]) > tol*maxabsD
                 invD = inv(D.diag[i])
