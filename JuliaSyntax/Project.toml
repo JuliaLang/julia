@@ -4,7 +4,7 @@ authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
 version = "0.1.0"
 
 [compat]
-julia = "1.4"
+julia = "1.6"
 
 [deps]
 Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
