@@ -1466,7 +1466,7 @@ import ...Order: lt, DirectOrdering
 
 # IEEEFloat is not available in Core.Compiler
 const Floats = Union{Float16, Float32, Float64}
-# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}. 
+# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
 # This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
 const FPSortable = Union{
     AbstractVector{Union{Float16, Missing}},
