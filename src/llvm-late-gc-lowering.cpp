@@ -2236,7 +2236,6 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
 }
 
-
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     auto T_int32 = Type::getInt32Ty(F.getContext());
     auto T_size = getSizeTy(F.getContext());
@@ -2248,9 +2247,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     Instruction *StartOff = &*(F.getEntryBlock().begin());
     PointerType *T_pprjlvalue = nullptr;
     AllocaInst *Frame = nullptr;
+    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     if (T_prjlvalue) {
         T_pprjlvalue = T_prjlvalue->getPointerTo();
-        Frame = new AllocaInst(T_prjlvalue, 0,
+        Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,
             ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
     std::vector<CallInst*> write_barriers;
@@ -2422,7 +2422,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
-                    (llvm::Value*)Frame);
+                    (allocaAddressSpace ? Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)) : Frame));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
                     // move trailing arg to the end now

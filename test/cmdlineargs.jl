@@ -67,8 +67,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                     "JULIA_LOAD_PATH" => "",
                     "JULIA_DEPOT_PATH" => "",
                     "HOME" => homedir()))
-        @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
-        @test v[2]
+        @test v == ("false\nREPL: InteractiveUtilstrue\n", true)
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
@@ -76,10 +75,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                     "JULIA_DEPOT_PATH" => ";;;:::",
                     "HOME" => homedir()))
         # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
-        @test v[1] == "REPL: 3\n"
-        @test v[2]
+        @test v == ("REPL: 3\n", true)
     end
-    let v = readchomperrors(`$exename -i -e '
+    @testset let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
             @eval Sys STDLIB=mktempdir()
             Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
@@ -93,32 +91,32 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
         v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
-        @test v[1]
-        @test v[2] == real_threads
-        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
+        @test v == (true, real_threads,
+            "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads.")
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
-        @test v[1]
-        @test v[2] == "1"
-        @test isempty(v[3])
+        @testset let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
+            @test v[1]
+            @test v[2] == "1"
+            @test isempty(v[3])
+        end
     end
 
-    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
+    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 4")
         @test contains(v[2], r"enable-tail-merge + = 2")
         @test isempty(v[3])
     end
-    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
+    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
         @test !v[1]
         @test isempty(v[2])
         @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"

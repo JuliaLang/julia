@@ -324,8 +324,10 @@ function test_dirmonitor_wait2(tval)
                     fname, events = wait(fm)
                 end
                 for i = 1:3
-                    @test fname == "$F_PATH$i"
-                    @test !events.changed && !events.timedout && events.renamed
+                    @testset let (fname, events) = (fname, events)
+                        @test fname == "$F_PATH$i"
+                        @test !events.changed && !events.timedout && events.renamed
+                    end
                     i == 3 && break
                     fname, events = wait(fm)
                 end

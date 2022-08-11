@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
 const CC = Core.Compiler
 import Core: MethodInstance, CodeInstance
 import .CC: WorldRange, WorldView
@@ -7,7 +8,7 @@ import .CC: WorldRange, WorldView
 # define new `AbstractInterpreter` that satisfies the minimum interface requirements
 # while managing its cache independently
 macro newinterp(name)
-    cachename = gensym(string(name, "Cache"))
+    cachename = Symbol(string(name, "Cache"))
     name = esc(name)
     quote
         struct $cachename

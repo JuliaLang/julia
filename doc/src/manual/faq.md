@@ -103,43 +103,25 @@ which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
 `InterruptException` in the [`try`](@ref) block.
+Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
-Passing options to `julia` in so-called shebang by, e.g.,
-`#!/usr/bin/env julia --startup-file=no` may not work in some
-platforms such as Linux.  This is because argument parsing in shebang
-is platform-dependent and not well-specified.  In a Unix-like
-environment, a reliable way to pass options to `julia` in an
-executable script would be to start the script as a `bash` script and
-use `exec` to replace the process to `julia`:
+Passing options to `julia` in a so-called shebang line, as in
+`#!/usr/bin/env julia --startup-file=no`, will not work on many
+platforms (BSD, macOS, Linux) where the kernel, unlike the shell, does
+not split arguments at space characters. The option `env -S`, which
+splits a single argument string into multiple arguments at spaces,
+similar to a shell, offers a simple workaround:
 
 ```julia
-#!/bin/bash
-#=
-exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
-=#
-
+#!/usr/bin/env -S julia --color=yes --startup-file=no
 @show ARGS  # put any Julia code here
 ```
 
-In the example above, the code between `#=` and `=#` is run as a `bash`
-script.  Julia ignores this part since it is a multi-line comment for
-Julia.  The Julia code after `=#` is ignored by `bash` since it stops
-parsing the file once it reaches to the `exec` statement.
-
 !!! note
-    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
-    ```julia
-    #!/bin/bash
-    #=
-    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-        "${BASH_SOURCE[0]}" "$@"
-    =#
-
-    @show ARGS  # put any Julia code here
-    ```
-    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+    Option `env -S` appeared in FreeBSD 6.0 (2005), macOS Sierra (2016)
+    and GNU/Linux coreutils 8.30 (2018).
 
 ### Why doesn't `run` support `*` or pipes for scripting external programs?
 
