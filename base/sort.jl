@@ -1455,13 +1455,13 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
+using ..Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type,
+    reinterpret, IEEEFloat
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-const Floats = Union{Float16, Float32,Float64}
 const FPSortable = Union{ # Mixed bitwidths are not allowed.
     AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
@@ -1480,8 +1480,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
-lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:IEEEFloat} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:IEEEFloat} = slt_int(x, y)
 
 uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
 uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
@@ -1501,11 +1501,11 @@ uint_map(x::Float64, ::Right) = reinterpret(UInt64, x)
 uint_unmap(::Type{Float64}, u::UInt64, ::Right) = reinterpret(Float64, u)
 UIntMappable(::Type{Float64}, ::Union{Left, Right}) = UInt64
 
-isnan(o::DirectOrdering, x::Floats) = (x!=x)
+isnan(o::DirectOrdering, x::IEEEFloat) = (x!=x)
 isnan(o::DirectOrdering, x::Missing) = false
 isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
-ismissing(o::DirectOrdering, x::Floats) = false
+ismissing(o::DirectOrdering, x::IEEEFloat) = false
 ismissing(o::DirectOrdering, x::Missing) = true
 ismissing(o::Perm, i::Integer) = ismissing(o.order,o.data[i])
 
@@ -1577,8 +1577,8 @@ specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ForwardOrder
 specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ReverseOrdering}) =
     specials2left!(v, a, o)
 
-issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
-issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
+issignleft(o::ForwardOrdering, x::IEEEFloat) = lt(o, x, zero(x))
+issignleft(o::ReverseOrdering, x::IEEEFloat) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
