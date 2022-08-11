@@ -2417,7 +2417,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "min_world",
                             "max_world",
                             "inferred",
-                            "inlineable",
+                            "inlining_cost",
                             "propagate_inbounds",
                             "pure",
                             "constprop",
@@ -2438,7 +2438,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
-                            jl_bool_type,
+                            jl_uint16_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_uint8_type,
@@ -2578,8 +2578,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1] = { 0x00000001 }; // (1<<1);
+    const static uint32_t code_instance_constfields[1] = { 0b000001010111101 }; // Set fields 1, 3-6, 8, 10 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b011100101000010 }; // Set fields 2, 7, 9, 12-14 as atomic
+    //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;
+    jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
 
     jl_const_type = jl_new_datatype(jl_symbol("Const"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "val"),

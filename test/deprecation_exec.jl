@@ -157,7 +157,7 @@ begin # tuple indexed by float deprecation
     @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
 end
 
-@testset "@deprecated error message" begin
+begin #@deprecated error message
     @test_throws(
         "if the third `export_old` argument is not specified or `true`,",
         @eval @deprecate M.f() g()

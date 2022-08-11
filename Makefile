@@ -24,12 +24,12 @@ configure-y: | $(BUILDDIRMAKE)
 configure:
 ifeq ("$(origin O)", "command line")
 	@if [ "$$(ls '$(BUILDROOT)' 2> /dev/null)" ]; then \
-		echo 'WARNING: configure called on non-empty directory $(BUILDROOT)'; \
+		printf $(WARNCOLOR)'WARNING: configure called on non-empty directory'$(ENDCOLOR)' %s\n' '$(BUILDROOT)'; \
 		read -p "Proceed [y/n]? " answer; \
 	else \
 		answer=y;\
 	fi; \
-	[ $$answer = 'y' ] && $(MAKE) configure-$$answer
+	[ "y$$answer" = yy ] && $(MAKE) configure-$$answer
 else
 	$(error "cannot rerun configure from within a build directory")
 endif

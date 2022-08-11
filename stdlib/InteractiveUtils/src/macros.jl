@@ -2,7 +2,7 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!
+import Base: typesof, insert!, replace_ref_begin_end!
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -32,6 +32,9 @@ function recursive_dotcalls!(ex, args, i=1)
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
+    if Meta.isexpr(ex0, :ref)
+        ex0 = replace_ref_begin_end!(ex0)
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -248,7 +251,7 @@ end
 
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
-It calls out to the `functionloc` function.
+It calls out to the [`functionloc`](@ref) function.
 """
 :@functionloc
 
@@ -267,7 +270,7 @@ See also: [`@less`](@ref), [`@edit`](@ref).
 """
     @less
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`less`](@ref)
 function on the resulting expression.
 
 See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
@@ -277,7 +280,7 @@ See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
     @edit
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`edit`](@ref)
 function on the resulting expression.
 
 See also: [`@less`](@ref), [`@which`](@ref).

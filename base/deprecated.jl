@@ -314,4 +314,17 @@ const var"@_noinline_meta" = var"@noinline"
 
 @deprecate splat(x) Splat(x) false
 
+# We'd generally like to avoid direct external access to internal fields
+# Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
+# but we need to keep these around for compat
+function getproperty(ci::CodeInfo, s::Symbol)
+    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    return getfield(ci, s)
+end
+
+function setproperty!(ci::CodeInfo, s::Symbol, v)
+    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
+
 # END 1.9 deprecations

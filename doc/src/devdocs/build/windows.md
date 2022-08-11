@@ -66,13 +66,10 @@ MinGW-w64 compilers available through Cygwin's package manager.
     6.  For 64 bit Julia, and also from the *Devel* category:
         `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
- 4. At the *'Resolving Dependencies'* step, be sure to leave *'Select required
-    packages (RECOMMENDED)'* enabled.
-
- 5. Allow Cygwin installation to finish, then start from the installed shortcut
+ 4. Allow Cygwin installation to finish, then start from the installed shortcut
     a *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
 
- 6. Build Julia and its dependencies from source:
+ 5. Build Julia and its dependencies from source:
 
     1. Get the Julia sources
        ```sh
@@ -110,7 +107,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
     > make -C julia-win64  # build for Windows x86-64 in julia-win64 folder
     > ```
 
- 7. Run Julia using the Julia executables directly
+ 6. Run Julia using the Julia executables directly
     ```sh
     usr/bin/julia.exe
     usr/bin/julia-debug.exe
