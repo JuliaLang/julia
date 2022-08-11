@@ -154,8 +154,7 @@ for TupleType = Any[Tuple{Int,Int,Int}, Tuple{Int,Vararg{Int}}, Tuple{Any}, Tupl
     FieldType = Any[Int, Symbol, Any]
     @test getfield_notundefined(TupleType, FieldType)
 end
-
-# TODO add equivalent test cases for `Ref` once we handle mutability more nicely
+# high-level tests for `getfield_notundefined`
 @test Base.infer_effects() do
     Maybe{Int}()
 end |> !Core.Compiler.is_consistent
@@ -171,9 +170,28 @@ end |> Core.Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{String}()[]
 end |> Core.Compiler.is_consistent
-@test Base.return_types() do
-    Maybe{String}()[] # this expression should be concrete evaluated
-end |> only === Union{}
+let f() = Maybe{String}()[]
+    @test Base.return_types() do
+        f() # this call should be concrete evaluated
+    end |> only === Union{}
+end
+@test Base.infer_effects() do
+    Ref{Int}()
+end |> !Core.Compiler.is_consistent
+@test Base.infer_effects() do
+    Ref{Int}()[]
+end |> !Core.Compiler.is_consistent
+@test !fully_eliminated() do
+    Ref{Int}()[]
+end
+@test Base.infer_effects() do
+    Ref{String}()[]
+end |> Core.Compiler.is_consistent
+let f() = Ref{String}()[]
+    @test Base.return_types() do
+        f() # this call should be concrete evaluated
+    end |> only === Union{}
+end
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
@@ -405,7 +423,7 @@ function mutable_consistent(s)
     SafeRef(s)[]
 end
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(mutable_consistent, (Symbol,)))
-@test fully_eliminated(; retval=QuoteNode(:foo)) do
+@test fully_eliminated(; retval=:foo) do
     mutable_consistent(:foo)
 end
 
@@ -413,7 +431,7 @@ function nested_mutable_consistent(s)
     SafeRef(SafeRef(SafeRef(SafeRef(SafeRef(s)))))[][][][][]
 end
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(nested_mutable_consistent, (Symbol,)))
-@test fully_eliminated(; retval=QuoteNode(:foo)) do
+@test fully_eliminated(; retval=:foo) do
     nested_mutable_consistent(:foo)
 end
 

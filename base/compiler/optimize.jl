@@ -509,8 +509,8 @@ macro pass(name, expr)
     end
 end
 
-matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
-matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(optimize_until::Int, stage, _) = optimize_until == stage
+matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
 function run_passes(
@@ -519,7 +519,7 @@ function run_passes(
     caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
-    __stage__ = 1  # used by @pass
+    __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
