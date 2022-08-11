@@ -74,10 +74,6 @@ static inline bool imaging_default() {
     return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
 }
 
-#ifndef _COMPILER_ASAN_ENABLED_
-#define JL_USE_NEW_PM
-#endif
-
 struct OptimizationOptions {
     bool lower_intrinsics;
     bool dump_native;
