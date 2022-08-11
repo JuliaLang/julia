@@ -151,9 +151,6 @@ static jl_callptr_t _jl_compile_codeinst(
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
             NewGlobals[global.second->getName()] = global.first;
-            if (global.second->getName().empty()){
-                jl_error("JIT Here is a problem - empty name ! (add_gv)");
-            }
         }
         for (auto &def : emitted) {
             orc::ThreadSafeModule &TSM = std::get<0>(def.second);
@@ -1186,7 +1183,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
                         SectionMemoryManager::getSymbolAddressInProcess(
                             getMangledName(F->getName())))) {
                     llvm::errs() << "FATAL ERROR: "
-                                << "Symbol \"" << F->getName().str() << "\" "
+                                << "Symbol \"" << F->getName().str() << "\""
                                 << "not found";
                     abort();
                 }
