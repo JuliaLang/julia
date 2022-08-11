@@ -1388,10 +1388,18 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_
         e->Lunions.more = 0;
         if (subtype(x, y, e, param))
             return 1;
-        restore_env(e, saved, se);
         int set = e->Runions.more;
-        if (!set)
+        if (set) {
+            // We preserve `envout` here as `subtype_unionall` needs previous assigned env values.
+            int oldidx = e->envidx;
+            e->envidx = e->envsz;
+            restore_env(e, saved, se);
+            e->envidx = oldidx;
+        }
+        else {
+            restore_env(e, saved, se);
             return 0;
+        }
         for (int i = set; i <= lastset; i++)
             statestack_set(&e->Runions, i, 0);
         lastset = set - 1;
