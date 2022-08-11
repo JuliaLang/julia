@@ -275,15 +275,28 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
-@testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> (@inline; x))).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline function f(x) x end)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) @inline; x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) x end)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x @inline; x end).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x x end).source)
+using Core.Compiler: is_inlineable, set_inlineable!
+
+@testset "check jl_ir_inlining_cost for inline macro" begin
+    @test is_inlineable(only(methods(@inline x -> x)).source)
+    @test is_inlineable(only(methods(x -> (@inline; x))).source)
+    @test !is_inlineable(only(methods(x -> x)).source)
+    @test is_inlineable(only(methods(@inline function f(x) x end)).source)
+    @test is_inlineable(only(methods(function f(x) @inline; x end)).source)
+    @test !is_inlineable(only(methods(function f(x) x end)).source)
+    @test is_inlineable(only(methods() do x @inline; x end).source)
+    @test !is_inlineable(only(methods() do x x end).source)
+end
+
+@testset "basic set_inlineable! functionality" begin
+    ci = code_typed1() do
+        x -> x
+    end
+    set_inlineable!(ci, true)
+    @test is_inlineable(ci)
+    set_inlineable!(ci, false)
+    @test !is_inlineable(ci)
+    @test_throws MethodError set_inlineable!(ci, 5)
 end
 
 const _a_global_array = [1]
@@ -317,7 +330,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-@test fully_eliminated(NonIsBitsDims, (); retval=QuoteNode(NonIsBitsDims()))
+@test fully_eliminated(NonIsBitsDims, (); retval=NonIsBitsDims())
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
@@ -370,26 +383,6 @@ end
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
-
-import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Any[]
-
-code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
-get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
-
-# check if `x` is a dynamic call of a given function
-iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
-    return iscall(x) do @nospecialize x
-        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
-    end
-end
-iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
-isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
 
 @testset "@inline/@noinline annotation before definition" begin
     M = Module()
@@ -632,7 +625,7 @@ let
         specs = collect(only(methods(f42078)).specializations)
         mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
         codeinf = getcache(mi)::Core.CodeInstance
-        codeinf.inferred = nothing
+        @atomic codeinf.inferred = nothing
     end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code
@@ -995,13 +988,6 @@ end
     @invoke conditional_escape!(false::Any, x::Any)
 end
 
-@testset "strides for ReshapedArray (PR#44027)" begin
-    # Type-based contiguous check
-    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
-    f(a) = only(strides(a));
-    @test fully_eliminated(f, Tuple{typeof(a)}) && f(a) == 1
-end
-
 @testset "elimination of `get_binding_type`" begin
     m = Module()
     @eval m begin
@@ -1240,7 +1226,7 @@ let src = code_typed1(g_call_peel, Tuple{Any})
 end
 
 const my_defined_var = 42
-@test fully_eliminated((); retval=42) do
+@test fully_eliminated(; retval=42) do
     getglobal(@__MODULE__, :my_defined_var, :monotonic)
 end
 @test !fully_eliminated() do
@@ -1484,12 +1470,12 @@ end
 @testset "propagate :meta annotations to keyword sorter methods" begin
     # @inline, @noinline, @constprop
     let @inline f(::Any; x::Int=1) = 2x
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test is_inlineable(only(methods(f)).source)
+        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
     end
     let @noinline f(::Any; x::Int=1) = 2x
-        @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
-        @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test !is_inlineable(only(methods(f)).source)
+        @test !is_inlineable(only(methods(Core.kwfunc(f))).source)
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
@@ -1515,9 +1501,9 @@ end
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(f)).source)
+        @test is_inlineable(only(methods(f)).source)
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(Core.kwfunc(f))).source)
+        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
         @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
         @test only(methods(f)).nospecialize == -1
         @test only(methods(Core.kwfunc(f))).nospecialize == -1

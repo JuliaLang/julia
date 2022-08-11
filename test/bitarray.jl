@@ -15,12 +15,11 @@ bitcheck(x) = true
 bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
 
 function check_bitop_call(ret_type, func, args...; kwargs...)
-    r1 = func(args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
-    ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, typeof(r1)
-    ret_type ≢ nothing && @test isa(r1, ret_type)
+    r1 = func(args...; kwargs...)
+    ret_type ≢ nothing && (@test isa(r1, ret_type) || @show ret_type, typeof(r1))
     @test tc(r1, r2)
-    @test isequal(r1, ret_type ≡ nothing ? r2 : r2)
+    @test isequal(r1, r2)
     @test bitcheck(r1)
 end
 macro check_bit_operation(ex, ret_type)
@@ -518,12 +517,14 @@ timesofar("constructors")
             end
         end
 
+        self_copyto!(a, n1, n2, l) = copyto!(a, n1, a, n2, l)
         for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
             for p2 = [rand(1:v1) 1 63 64 65 191 192 193]
                 for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
                     b1 = bitrand(v1)
                     b2 = bitrand(v1)
                     @check_bit_operation copyto!(b1, p1, b2, p2, n) BitVector
+                    @check_bit_operation self_copyto!(b1, p1, p2, n) BitVector
                 end
             end
         end

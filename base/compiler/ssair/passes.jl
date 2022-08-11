@@ -956,7 +956,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
             et !== nothing && push!(et, mi)
             return true
         end
-        src = code.inferred
+        src = @atomic :monotonic code.inferred
     else
         src = code
     end

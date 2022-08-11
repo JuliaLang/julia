@@ -363,7 +363,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst->min_world <= min_world && max_world <= codeinst->max_world) {
-            jl_value_t *code = codeinst->inferred;
+            jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
             if (code && (code == jl_nothing || jl_ir_flag_inferred((jl_array_t*)code)))
                 return (jl_value_t*)codeinst;
         }
@@ -409,7 +409,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     codeinst->min_world = min_world;
     codeinst->max_world = max_world;
     codeinst->rettype = rettype;
-    codeinst->inferred = inferred;
+    jl_atomic_store_release(&codeinst->inferred, inferred);
     //codeinst->edges = NULL;
     if ((const_flags & 2) == 0)
         inferred_const = NULL;
@@ -424,7 +424,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     codeinst->ipo_purity_bits = ipo_effects;
-    codeinst->purity_bits = effects;
+    jl_atomic_store_relaxed(&codeinst->purity_bits, effects);
     codeinst->argescapes = argescapes;
     codeinst->relocatability = relocatability;
     return codeinst;
