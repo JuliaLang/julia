@@ -165,15 +165,15 @@ void jl_safepoint_wait_gc(void)
     /* // Use normal volatile load in the loop for speed until GC finishes. */
     /* // Then use an acquire load to make sure the GC result is visible on this thread. */
   
-    jl_safe_printf("jl_safepoint_wait_gc thread = %d\n", jl_threadid());
     jl_ptls_t ptls = jl_current_task->ptls;
     while (jl_atomic_load_relaxed(&jl_gc_running) ||
            jl_atomic_load_acquire(&jl_gc_running)) {
         // Try to help with parallel marking
         if (jl_atomic_load_relaxed(&jl_gc_recruiting_location)) {
             void *location = jl_atomic_load_acquire(&jl_gc_recruiting_location);
-            if (location)
+            if (location) {
                 ((void (*)(jl_ptls_t))location)(ptls);
+            }
         }
         // Clean-up buffers from `reclaim_set`
         /* jl_gc_markqueue_t *mq = &ptls->mark_queue; */
