@@ -1464,8 +1464,11 @@ import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-const Floats = Union{Float16, Float32, Float64} # IEEEFloat is not available in Core.Compiler
-const FPSortable = Union{ # Mixed bitwidths are not allowed.
+# IEEEFloat is not available in Core.Compiler
+const Floats = Union{Float16, Float32, Float64}
+# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}. 
+# This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
+const FPSortable = Union{
     AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
     AbstractVector{Union{Float64, Missing}},
