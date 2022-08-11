@@ -418,15 +418,16 @@ static void jl_load_sysimg_so(void)
         jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
 
         size_t *tls_offset_idx;
-        jl_dlsym(jl_sysimg_handle, "jl_sysimg_tls_offset", (void **)&tls_offset_idx, 1);
+        jl_dlsym(jl_sysimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
         *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 
+        uint64_t sysimage_base_chained = 0;
 #ifdef _OS_WINDOWS_
-        sysimage_base = 0;
+        sysimage_base = (intptr_t)jl_sysimg_handle;
 #else
         Dl_info dlinfo;
         if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
-            sysimage_base = (intptr_t)dlinfo.dli_fbase;
+            sysimage_base_chained = sysimage_base = (intptr_t)dlinfo.dli_fbase;
         }
 #endif
     }
@@ -440,7 +441,7 @@ static void jl_load_sysimg_so(void)
     jl_restore_system_image_data(sysimg_data, *plen);
 
     if (jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_CHAINED && sysimg_fname) {
-        jl_init_sysimage_chaining((void*)(uintptr_t)sysimage_base, sysimg_fname, jl_sysimg_handle);
+        jl_init_sysimage_chaining((void*)(uintptr_t)sysimage_base_chained, sysimg_fname, jl_sysimg_handle);
     }
 }
 

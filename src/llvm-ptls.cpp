@@ -276,7 +276,7 @@ bool LowerPTLS::runOnModule(Module &_M, bool *CFGModified)
     if (imaging_mode) {
         pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
         pgcstack_key_slot = create_aliased_global(getSizeTy(_M.getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-        pgcstack_offset = create_aliased_global(getSizeTy(_M.getContext()), "jl_sysimg_tls_offset");
+        pgcstack_offset = create_aliased_global(getSizeTy(_M.getContext()), "jl_tls_offset");
     }
 
     for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
