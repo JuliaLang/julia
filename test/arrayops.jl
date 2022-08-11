@@ -1203,10 +1203,9 @@ end
     @test o == fill(1, 3, 4)
 
     # issue #18524
-    # m = mapslices(x->tuple(x), [1 2; 3 4], dims=1) # see variations of this below
-    # ERROR: fatal error in type inference (type bound), https://github.com/JuliaLang/julia/issues/43064
-    # @test m[1,1] == ([1,3],)
-    # @test m[1,2] == ([2,4],)
+    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1) # see variations of this below
+    @test m[1,1] == ([1,3],)
+    @test m[1,2] == ([2,4],)
 
     r = rand(Int8, 4,5,2)
     @test vec(mapslices(repr, r, dims=(2,1))) == map(repr, eachslice(r, dims=3))
@@ -1216,8 +1215,6 @@ end
     # failures
     @test_broken @inferred(mapslices(tuple, [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
     @test_broken @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
-    # ERROR: fatal error in type inference (type bound), https://github.com/JuliaLang/julia/issues/43064
-    @test_broken @inferred(mapslices(x -> tuple(x), [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
 
     # re-write, #40996
     @test_throws ArgumentError mapslices(identity, rand(2,3), dims=0) # previously BoundsError

@@ -2020,3 +2020,30 @@ end
 #issue #43082
 struct X43082{A, I, B<:Union{Ref{I},I}}; end
 @testintersect(Tuple{X43082{T}, Int} where T, Tuple{X43082{Int}, Any}, Tuple{X43082{Int}, Int})
+
+# issue #43064
+let
+    env_tuple(@nospecialize(x), @nospecialize(y)) = (intersection_env(x, y)[2]...,)
+    all_var(x::UnionAll) = (x.var, all_var(x.body)...)
+    all_var(x::DataType) = ()
+    TT0 = Tuple{Type{T},Union{Real,Missing,Nothing}} where {T}
+    TT1 = Union{Type{Int8},Type{Int16}}
+    @test env_tuple(Tuple{TT1,Missing}, TT0) ===
+          env_tuple(Tuple{TT1,Nothing}, TT0) ===
+          env_tuple(Tuple{TT1,Int}, TT0) === all_var(TT0)
+
+    TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
+    TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
+    TT2 = Tuple{Union{Int,Int8},Union{Int,Int8},Int}
+    TT3 = Tuple{Int,Union{Int,Int8},Int}
+    @test env_tuple(TT2, TT0) === all_var(TT0)
+    @test env_tuple(TT2, TT1) === all_var(TT1)
+    @test env_tuple(TT3, TT0) === Base.setindex(all_var(TT0), Int, 1)
+    @test env_tuple(TT3, TT1) === Base.setindex(all_var(TT1), Int, 2)
+
+    TT0 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T1,T2}
+    TT1 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T2,T1}
+    TT2 = Tuple{Int,Union{Int,Int8},Int,Int}
+    @test env_tuple(TT2, TT0) === Base.setindex(all_var(TT0), Int, 1)
+    @test env_tuple(TT2, TT1) === Base.setindex(all_var(TT1), Int, 2)
+end
