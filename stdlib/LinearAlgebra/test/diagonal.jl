@@ -539,7 +539,7 @@ end
 end
 
 @testset "pseudoinverse" begin
-    for d in [randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
+    for d in Any[randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
         D = Diagonal(d)
         @test pinv(D) ≈ pinv(Array(D))
         @test pinv(D, 1.0e-2) ≈ pinv(Array(D), 1.0e-2)
