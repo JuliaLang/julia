@@ -516,7 +516,7 @@ end
     @test isequal(a, [8,6,7,NaN,5,3,0,9])
 end
 
-@testset "sort!(iterable)" begin # issue #38328
+@testset "sort!(iterable)" begin
     gen = (x % 7 + 0.1x for x in 1:50)
     @test sort(gen) == sort!(collect(gen))
     gen = (x % 7 + 0.1y for x in 1:10, y in 1:5)
@@ -528,6 +528,9 @@ end
     @test_throws UndefKeywordError(:dims) sort(gen)
     @test_throws UndefKeywordError(:dims) sort(collect(gen))
     @test_throws UndefKeywordError(:dims) sort!(collect(gen))
+
+    @test_throws ArgumentError sort("string")
+    @test_throws ArgumentError("1 cannot be sorted") sort(1)
 end
 
 @testset "sort!(::AbstractVector{<:Integer}) with short int range" begin
