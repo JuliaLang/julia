@@ -1107,9 +1107,15 @@ function const_prop_methodinstance_heuristic(
             return false
         else
             code = get(code_cache(interp), mi, nothing)
-            if isdefined(code, :inferred) && inlining_policy(
-                    interp, code.inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
-                return true
+            if isdefined(code, :inferred)
+                if isa(code, CodeInstance)
+                    inferred = @atomic :monotonic code.inferred
+                else
+                    inferred = code.inferred
+                end
+                if inlining_policy(interp, inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
+                    return true
+                end
             end
         end
     end
