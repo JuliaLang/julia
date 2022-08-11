@@ -108,7 +108,7 @@ static value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
     return tagptr(pcp, TAG_CPRIM);
 }
 
-value_t _cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz, int may_finalize)
+static value_t _cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz, int may_finalize)
 {
     cvalue_t *pcv;
     int str=0;
