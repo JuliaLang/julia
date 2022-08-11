@@ -754,6 +754,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
         jl_serialize_value(s, jl_nothing);
     }
     write_uint8(s->s, codeinst->relocatability);
+    write_uint64(s->s, codeinst->build_id);
     jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal, 0);
 }
 
@@ -2018,6 +2019,7 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
         codeinst->precompile = 1;
     codeinst->relocatability = read_uint8(s->s);
     assert(codeinst->relocatability <= 1);
+    codeinst->build_id = read_uint64(s->s);
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
     if (validate) {

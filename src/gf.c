@@ -391,6 +391,13 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
     return codeinst;
 }
 
+JL_DLLEXPORT uint64_t jl_current_build_id()
+{
+    if (jl_precompile_toplevel_module != NULL)
+        return jl_precompile_toplevel_module->build_id;
+    return 0;
+}
+
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *rettype,
         jl_value_t *inferred_const, jl_value_t *inferred,
@@ -425,6 +432,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->purity_bits, effects);
     codeinst->argescapes = argescapes;
     codeinst->relocatability = relocatability;
+    codeinst->build_id = jl_current_build_id();
     return codeinst;
 }
 

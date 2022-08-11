@@ -323,6 +323,7 @@
     XX(jl_method_table_insert) \
     XX(jl_methtable_lookup) \
     XX(jl_mi_cache_insert) \
+    XX(jl_current_build_id) \
     XX(jl_module_build_id) \
     XX(jl_module_export) \
     XX(jl_module_exports_p) \

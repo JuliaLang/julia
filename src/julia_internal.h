@@ -294,6 +294,7 @@ extern arraylist_t jl_linkage_blobs;                        // external linkage:
 extern jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED;         // external linkage: corresponding build_ids
 extern arraylist_t jl_image_relocs;                        // external linkage: sysimg/pkgimages
 extern uint64_t jl_worklist_key(jl_array_t *worklist);
+JL_DLLEXPORT uint64_t jl_current_build_id();
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
