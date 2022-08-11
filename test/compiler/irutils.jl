@@ -27,7 +27,14 @@ isinvoke(pred::Function, @nospecialize(x)) = isexpr(x, :invoke) && pred(x.args[1
 function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
     code = code_typed1(args...; kwargs...).code
     if retval !== (@__FILE__)
-        return length(code) == 1 && isreturn(code[1]) && code[1].val == retval
+        length(code) == 1 || return false
+        code1 = code[1]
+        isreturn(code1) || return false
+        val = code1.val
+        if val isa QuoteNode
+            val = val.value
+        end
+        return val == retval
     else
         return length(code) == 1 && isreturn(code[1])
     end

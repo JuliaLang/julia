@@ -330,7 +330,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-@test fully_eliminated(NonIsBitsDims, (); retval=QuoteNode(NonIsBitsDims()))
+@test fully_eliminated(NonIsBitsDims, (); retval=NonIsBitsDims())
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
