@@ -605,11 +605,13 @@ has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,),
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
-const _TYPE_NAME = Type.body.name
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
-        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+        (isType(v) && !has_free_typevars(v))
 end
+
+const _TYPE_NAME = Type.body.name
+isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 """
     isconcretetype(T)
