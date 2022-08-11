@@ -1285,6 +1285,17 @@ using Downloads: download
 
 dirwalk = mktempdir()
 cd(dirwalk) do
+    # Make directory structure:
+    # sub_dir1
+    #  L subsub_dir1
+    #  L subsub_dir2
+    #  L file1
+    #  L file2
+    #  L link -> sub_dir2 [if has_symlinks]
+    # sub_dir2
+    #  L file_dir2
+    # file1
+    # file2
     for i=1:2
         mkdir("sub_dir$i")
         open("file$i", "w") do f end
@@ -1376,6 +1387,31 @@ cd(dirwalk) do
         @test dirs == ["sub_dir1", "sub_dir2"]
         @test files == ["file1", "file2"]
     end
+
+    # Test filter
+    chnl = walkdir(".", filter = p -> p == "." || endswith(p, '1'))
+    (root, dirs, files) = take!(chnl)
+    @test root == "."
+    @test dirs == ["sub_dir1", "sub_dir2"]
+    @test files == ["file1", "file2"]
+
+    (root, dirs, files) = take!(chnl)
+    @test root == joinpath(".", "sub_dir1")
+    @test dirs == ["subsub_dir1", "subsub_dir2"]
+    if has_symlinks
+        @test files == ["file1", "file2", "link"]
+    else
+        @test files == ["file1", "file2"]
+    end
+    (root, dirs, files) = take!(chnl)
+    @test root == joinpath(".", "sub_dir1", "subsub_dir1")
+    @test dirs == []
+    @test files == []
+    @test isempty(chnl)
+
+    chnl = walkdir(".", filter = endswith("not_here"))
+    @test isempty(chnl)
+
     #test of error handling
     chnl_error = walkdir(".")
     chnl_noerror = walkdir(".", onerror=x->x)
