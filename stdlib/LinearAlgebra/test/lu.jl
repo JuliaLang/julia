@@ -224,6 +224,11 @@ dimg  = randn(n)/2
     end
 end
 
+@testset "Small tridiagonal matrices" for T in (Float64, ComplexF64)
+    A = Tridiagonal(T[], T[1], T[])
+    @test inv(A) == A
+end
+
 @testset "Singular matrices" for T in (Float64, ComplexF64)
     A = T[1 2; 0 0]
     @test_throws SingularException lu(A)
