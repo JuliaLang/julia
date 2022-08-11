@@ -190,6 +190,8 @@ Every macro also implicitly gets passed the arguments `__source__`, which contai
 and file name the macro is called from, and `__module__`, which is the module the macro is expanded
 in.
 
+See the manual section on [Metaprogramming](@ref) for more information about how to write a macro.
+
 # Examples
 ```jldoctest
 julia> macro sayhello(name)

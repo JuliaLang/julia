@@ -275,7 +275,7 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
-    XX(jl_ir_flag_inlineable) \
+    XX(jl_ir_inlining_cost) \
     XX(jl_ir_flag_pure) \
     XX(jl_ir_nslots) \
     XX(jl_ir_slotflag) \
@@ -287,6 +287,7 @@
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
     XX(jl_is_debugbuild) \
+    XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
     XX(jl_is_imported) \
     XX(jl_is_initialized) \

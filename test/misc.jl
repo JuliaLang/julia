@@ -366,7 +366,7 @@ macro capture_stdout(ex)
     end
 end
 
-# compilation reports in @time
+# compilation reports in @time, @timev
 let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
@@ -393,6 +393,36 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
 
         $f(::Float64) = 2
         out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time:", out)
         @test occursin("% of which was recompilation", out)
     end
@@ -1073,6 +1103,37 @@ const outsidevar = 7
 end
 @test TestOutsideVar() == TestOutsideVar(7)
 
+@kwdef mutable struct Test_kwdef_const_atomic
+    a
+    b::Int
+    c::Int = 1
+    const d
+    const e::Int
+    const f = 1
+    const g::Int = 1
+    @atomic h::Int
+end
+
+@testset "const and @atomic fields in @kwdef" begin
+    x = Test_kwdef_const_atomic(a = 1, b = 1, d = 1, e = 1, h = 1)
+    for f in fieldnames(Test_kwdef_const_atomic)
+        @test getfield(x, f) == 1
+    end
+    @testset "const fields" begin
+        @test_throws ErrorException x.d = 2
+        @test_throws ErrorException x.e = 2
+        @test_throws MethodError x.e = "2"
+        @test_throws ErrorException x.f = 2
+        @test_throws ErrorException x.g = 2
+    end
+    @testset "atomic fields" begin
+        @test_throws ConcurrencyViolationError x.h = 1
+        @atomic x.h = 1
+        @test @atomic(x.h) == 1
+        @atomic x.h = 2
+        @test @atomic(x.h) == 2
+    end
+end
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules

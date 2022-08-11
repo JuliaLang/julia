@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def]),
+        (Core.CodeInstance, [:def, :min_world, :max_world, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
         (Core.MethodTable, [:module]),
@@ -7811,4 +7811,8 @@ f45350() = (global x45350 = 2)
 
 @testset "effect override on Symbol(::String)" begin
     @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end

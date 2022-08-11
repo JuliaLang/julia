@@ -178,9 +178,9 @@ mutable struct InferenceState
         #       are stronger than the inbounds assumptions, since the latter
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
-        inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
-        consistent = inbounds_taints_consistency ? ALWAYS_FALSE : ALWAYS_TRUE
-        ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
+        noinbounds = inbounds === :on || (inbounds === :default && !any_inbounds(code))
+        consistent = noinbounds ? ALWAYS_TRUE : ALWAYS_FALSE
+        ipo_effects = Effects(EFFECTS_TOTAL; consistent, noinbounds)
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
@@ -206,11 +206,11 @@ end
 
 Effects(state::InferenceState) = state.ipo_effects
 
-function tristate_merge!(caller::InferenceState, effects::Effects)
-    caller.ipo_effects = tristate_merge(caller.ipo_effects, effects)
+function merge_effects!(caller::InferenceState, effects::Effects)
+    caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
-tristate_merge!(caller::InferenceState, callee::InferenceState) =
-    tristate_merge!(caller, Effects(callee))
+merge_effects!(caller::InferenceState, callee::InferenceState) =
+    merge_effects!(caller, Effects(callee))
 
 is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)

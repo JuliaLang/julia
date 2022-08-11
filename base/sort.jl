@@ -13,7 +13,7 @@ using .Base: length, first, last, axes, firstindex, lastindex, eltype,
     identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
     reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned, Val,
     Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
-    (:), >, <, <=, >=, ==, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor,
+    (:), >, <, <=, >=, ==, !=, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor,
     midpoint, @boundscheck, checkbounds
 
 import .Base:
@@ -172,18 +172,20 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 # index of the first value of vector a that is greater than or equal to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
+    hi = hi + T(1)
+    len = hi - lo
+    @inbounds while len != 0
+        half_len = len >>> 0x01
+        m = lo + half_len
         if lt(o, v[m], x)
-            lo = m
+            lo = m + 1
+            len -= half_len + 1
         else
             hi = m
+            len = half_len
         end
     end
-    return hi
+    return lo
 end
 
 # index of the last value of vector a that is less than or equal to x;
@@ -863,14 +865,15 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
         u[i] -= u_min
     end
 
+    len = lenm1 + 1
     if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned buffer
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, t))
         uint_unmap!(v, u2, lo, hi, o, u_min)
-    elseif t !== nothing && (applicable(resize!, t) || length(t) >= hi-lo+1) # Viable buffer
-        length(t) >= hi-lo+1 || resize!(t, hi-lo+1)
+    elseif t !== nothing && (applicable(resize!, t, len) || length(t) >= len) # Viable buffer
+        length(t) >= len || resize!(t, len)
         t1 = axes(t, 1) isa OneTo ? t : view(t, firstindex(t):lastindex(t))
-        u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, reinterpret(U, t1))
-        uint_unmap!(view(v, lo:hi), u2, 1, hi-lo+1, o, u_min)
+        u2 = radix_sort!(view(u, lo:hi), 1, len, bits, reinterpret(U, t1))
+        uint_unmap!(view(v, lo:hi), u2, 1, len, o, u_min)
     else # No viable buffer
         u2 = radix_sort!(u, lo, hi, bits, similar(u))
         uint_unmap!(v, u2, lo, hi, o, u_min)

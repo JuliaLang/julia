@@ -255,12 +255,18 @@ end
 
 let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
     ir = Core.Compiler.inflate_ir(ci)
-    @test OpaqueClosure(ir; nargs=2, isva=true)(40, 2) === (40, (2,))
-    @test OpaqueClosure(ci)(40, 2) === (40, (2,))
-end
+    let oc = OpaqueClosure(ir; nargs=2, isva=true)
+        @test oc(40, 2) === (40, (2,))
+        @test_throws MethodError oc(1,2,3)
+    end
+    let oc = OpaqueClosure(ci)
+        @test oc(40, 2) === (40, (2,))
+        @test_throws MethodError oc(1,2,3)
+    end
 
-let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
-    ir = Core.Compiler.inflate_ir(ci)
-    @test_throws MethodError OpaqueClosure(ir; nargs=2, isva=true)(1, 2, 3)
-    @test_throws MethodError OpaqueClosure(ci)(1, 2, 3)
+    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Tuple{Int}])
+    let oc = OpaqueClosure(ir; nargs=2, isva=true)
+        @test oc(40, 2) === (40, (2,))
+        @test_throws MethodError oc(1,2,3)
+    end
 end
