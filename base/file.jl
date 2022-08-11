@@ -926,6 +926,9 @@ julia> (root, dirs, files) = first(itr)
 julia> (root, dirs, files) = first(itr)
 ("my/test/dir", String[], String[])
 ```
+
+!!! compat "Julia 1.9"
+    The `filter` keyword argument was added in Julia 1.9.
 """
 function walkdir(
     root;
