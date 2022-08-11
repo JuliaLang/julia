@@ -46,7 +46,7 @@ swap(x, y) = y
 let T1 = Refxy{NTuple{3,UInt8}},
     T2 = ARefxy{NTuple{3,UInt8}}
     @test sizeof(T1) == 6
-    @test sizeof(T2) == 8
+    @test sizeof(T2) == 7
     @test fieldoffset(T1, 1) == 0
     @test fieldoffset(T2, 1) == 0
     @test fieldoffset(T1, 2) == 3

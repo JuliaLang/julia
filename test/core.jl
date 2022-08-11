@@ -6085,7 +6085,7 @@ let
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == 12
+    @test sizeof(b) == 11
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)
@@ -6118,17 +6118,17 @@ struct UnionFieldInlineStruct
     y::Union{Float64, Missing}
 end
 
-@test sizeof(Vector{UnionFieldInlineStruct}(undef, 2)) == sizeof(UnionFieldInlineStruct) * 2
+@test sizeof(Vector{UnionFieldInlineStruct}(undef, 2)) >= sizeof(UnionFieldInlineStruct) * 2
 
 let x = UnionFieldInlineStruct(1, 3.14)
     AInlineUnion = [x for i = 1:10]
-    @test sizeof(AInlineUnion) == sizeof(UnionFieldInlineStruct) * 10
+    @test sizeof(AInlineUnion) >= sizeof(UnionFieldInlineStruct) * 10
     BInlineUnion = Vector{UnionFieldInlineStruct}(undef, 10)
     copyto!(BInlineUnion, AInlineUnion)
     @test AInlineUnion == BInlineUnion
     @test BInlineUnion[end] == x
     CInlineUnion = vcat(AInlineUnion, BInlineUnion)
-    @test sizeof(CInlineUnion) == sizeof(UnionFieldInlineStruct) * 20
+    @test sizeof(CInlineUnion) >= sizeof(UnionFieldInlineStruct) * 20
     @test CInlineUnion[end] == x
 end
 

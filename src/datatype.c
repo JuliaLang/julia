@@ -282,7 +282,7 @@ static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbyte
         size_t sz = jl_datatype_size(ty);
         size_t al = jl_datatype_align(ty);
         // primitive types in struct slots need their sizes aligned. issue #37974
-        if (asfield && jl_is_primitivetype(ty))
+        if (asfield)
             sz = LLT_ALIGN(sz, al);
         if (*nbytes < sz)
             *nbytes = sz;
@@ -465,6 +465,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->haspadding)
                         haspadding = 1;
+                    if (jl_datatype_size(fld) < fsz)
+                        haspadding = 1;
                     if (i >= nfields - st->name->n_uninitialized && fld_npointers &&
                         fld_npointers * sizeof(void*) != fsz) {
                         // field may be undef (may be uninitialized and contains pointer),
@@ -491,8 +493,13 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
             if (isatomic && fsz > MAX_ATOMIC_SIZE)
                 needlock = 1;
-            if (isatomic && fsz <= MAX_ATOMIC_SIZE)
-                al = fsz = next_power_of_two(fsz);
+            if (isatomic && fsz <= MAX_ATOMIC_SIZE) {
+                size_t nfsz = next_power_of_two(fsz);
+                if (nfsz > fsz) {
+                    haspadding = 1;
+                }
+                al = fsz = nfsz;
+            }
             if (al != 0) {
                 size_t alsz = LLT_ALIGN(sz, al);
                 if (alsz != sz)
@@ -525,9 +532,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
-        st->size = LLT_ALIGN(sz, alignm);
-        if (st->size > sz)
-            haspadding = 1;
+        st->size = sz;
         if (should_malloc && npointers)
             pointers = (uint32_t*)malloc_s(npointers * sizeof(uint32_t));
         else
@@ -1470,6 +1475,7 @@ static inline void memassign_safe(int hasptr, jl_value_t *parent, char *dst, con
         memmove_refs((void**)dst, (void**)src, nptr);
         jl_gc_multi_wb(parent, src);
         src = (jl_value_t*)((char*)src + nptr * sizeof(void*));
+        dst += nptr * sizeof(void*);
         nb -= nptr * sizeof(void*);
     }
     else {
