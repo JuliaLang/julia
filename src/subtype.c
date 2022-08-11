@@ -773,33 +773,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // widen Type{x} to typeof(x) in argument position
         if (!vb.occurs_inv)
             vb.lb = widen_Type(vb.lb);
-        // fill variable values into `envout` up to `envsz`
-        if (e->envidx < e->envsz) {
-            jl_value_t *val;
-            if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-                val = (jl_value_t*)jl_wrap_vararg(NULL, NULL);
-            else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
-                val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
-            else if (vb.lb == vb.ub)
-                val = vb.lb;
-            else if (vb.lb != jl_bottom_type)
-                // TODO: for now return the least solution, which is what
-                // method parameters expect.
-                val = vb.lb;
-            else if (vb.lb == u->var->lb && vb.ub == u->var->ub)
-                val = (jl_value_t*)u->var;
-            else
-                val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
-            jl_value_t *oldval = e->envout[e->envidx];
-            // if we try to assign different variable values (due to checking
-            // multiple union members), consider the value unknown.
-            if (oldval && !jl_egal(oldval, val))
-                e->envout[e->envidx] = (jl_value_t*)u->var;
-            else
-                e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
-            // TODO: substitute the value (if any) of this variable into previous envout entries
         }
-    }
     else
         ans = subtype(u->body, t, e, param);
 
@@ -846,6 +820,33 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             }
             btemp = btemp->prev;
         }
+    }
+
+    // fill variable values into `envout` up to `envsz`
+    if (R && ans && e->envidx < e->envsz) {
+        jl_value_t *val;
+        if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL);
+        else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
+            val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
+        else if (vb.lb == vb.ub)
+            val = vb.lb;
+        else if (vb.lb != jl_bottom_type)
+            // TODO: for now return the least solution, which is what
+            // method parameters expect.
+            val = vb.lb;
+        else if (vb.lb == u->var->lb && vb.ub == u->var->ub)
+            val = (jl_value_t*)u->var;
+        else
+            val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
+        jl_value_t *oldval = e->envout[e->envidx];
+        // if we try to assign different variable values (due to checking
+        // multiple union members), consider the value unknown.
+        if (oldval && !jl_egal(oldval, val))
+            e->envout[e->envidx] = (jl_value_t*)u->var;
+        else
+            e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
+        // TODO: substitute the value (if any) of this variable into previous envout entries
     }
 
     JL_GC_POP();
