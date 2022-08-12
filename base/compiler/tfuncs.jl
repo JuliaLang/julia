@@ -2244,7 +2244,7 @@ function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     na = length(argtypes)
     na == 0 && return EFFECTS_THROWS
     obj = argtypes[1]
-    consistent = is_immutable_argtype(unwrapva(obj)) ? ALWAYS_TRUE : ALWAYS_FALSE
+    consistent = is_immutable_argtype(unwrapva(obj)) ? ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
     nothrow = !isvarargtype(argtypes[end]) && na == 2 && isdefined_nothrow(𝕃, obj, argtypes[2])
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
