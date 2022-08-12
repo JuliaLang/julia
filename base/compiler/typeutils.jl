@@ -299,19 +299,35 @@ function unwraptv(@nospecialize t)
     return t
 end
 
-# this query is specially written for `adjust_effects` and returns true if a value of this type
-# never involves inconsistency of mutable objects that are allocated somewhere within a call graph
-is_consistent_argtype(@nospecialize ty) = is_consistent_type(widenconst(ignorelimited(ty)))
-is_consistent_type(@nospecialize ty) = _is_consistent_type(unwrap_unionall(ty))
-function _is_consistent_type(@nospecialize ty)
+"""
+    is_egal_argtype(argtype) -> Bool
+
+Returns `true` if `argtype` object is egal always.
+This query is specifically written for the `:consistent` effect property and is supposed to
+refine the effect property tainted by mutable allocation(s) that happen somewhere in a call
+graph in a case when the return value is guaranteed to not involve that mutable object(s)
+at all (see `adjust_effects`).
+"""
+is_egal_argtype(@nospecialize argtype) = is_egal_type(widenconst(ignorelimited(argtype)))
+is_egal_type(@nospecialize ty) = _is_egal_type(unwrap_unionall(ty))
+function _is_egal_type(@nospecialize ty)
     if isa(ty, Union)
-        return is_consistent_type(ty.a) && is_consistent_type(ty.b)
+        return is_egal_type(ty.a) && is_egal_type(ty.b)
     end
     # N.B. String and Symbol are mutable, but also egal always, and so they never be inconsistent
     return ty === String || ty === Symbol || isbitstype(ty)
 end
 
-is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
+"""
+    is_immutable_argtype(argtype) -> Bool
+
+Returns `true` if `argtype` object is known to be immutable.
+This query is specifically used for analyzing the `:consistent` effect property of
+`getfield` / `isdefined` call, where they are `:consistent` when applied to immutable
+object but otherwise we additionally need to prove the non-immutable object is not a
+global object in order to conclude the `:consistent`-cy later on.
+"""
+is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst(ignorelimited(argtype)))
 is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
 function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
@@ -323,7 +339,15 @@ function _is_immutable_type(@nospecialize ty)
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 
-is_mutation_free_argtype(@nospecialize argtype) =
+"""
+    is_mutation_free_argtype(argtype) -> Bool
+
+Returns `true` if `argtype` object can never be mutated.
+This query is specifically written for analyzing the `:inaccessiblememonly` effect property
+and is supposed to improve the analysis accuracy by not tainting the `:inaccessiblememonly`
+property when a program accesses mutation-free global object.
+"""
+is_mutation_free_argtype(@nospecialize(argtype)) =
     is_mutation_free_type(widenconst(ignorelimited(argtype)))
 is_mutation_free_type(@nospecialize ty) =
     _is_mutation_free_type(unwrap_unionall(ty))
