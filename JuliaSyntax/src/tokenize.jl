@@ -7,8 +7,6 @@ using ..JuliaSyntax: Kind, @K_str
 import ..JuliaSyntax: kind,
     is_literal, is_error, is_contextual_keyword, is_word_operator
 
-import Base.eof
-
 include("tokenize_utils.jl")
 
 #-------------------------------------------------------------------------------
@@ -223,7 +221,7 @@ Base.position(l::Lexer) = l.charspos[1]
 
 Determine whether the end of the lexer's underlying buffer has been reached.
 """# Base.position(l::Lexer) = Base.position(l.io)
-eof(l::Lexer) = eof(l.io)
+Base.eof(l::Lexer) = eof(l.io)
 
 Base.seek(l::Lexer, pos) = seek(l.io, pos)
 
@@ -335,7 +333,7 @@ function next_token(l::Lexer, start = true)
 end
 
 function _next_token(l::Lexer, c)
-    if eof(c)
+    if c == EOF_CHAR
         return emit(l, K"EndMarker")
     elseif iswhitespace(c)
         return lex_whitespace(l, c)
@@ -454,12 +452,12 @@ function lex_string_chunk(l)
             # characters and let the parser deal with it.
         end
     elseif l.last_token == K"Identifier" &&
-            !(eof(pc) || is_operator_start_char(pc) || is_never_id_char(pc))
+            !(pc == EOF_CHAR || is_operator_start_char(pc) || is_never_id_char(pc))
         # Only allow certain characters after interpolated vars
         # https://github.com/JuliaLang/julia/pull/25234
         return emit_error(l, K"ErrorInvalidInterpolationTerminator")
     end
-    if eof(pc)
+    if pc == EOF_CHAR
         return emit(l, K"EndMarker")
     elseif !state.raw && pc == '$'
         # Start interpolation
@@ -495,7 +493,7 @@ function lex_string_chunk(l)
         # the closing quotes can be escaped with an odd number of \ characters.
         while true
             pc = peekchar(l)
-            if string_terminates(l, state.delim, state.triplestr) || eof(pc)
+            if string_terminates(l, state.delim, state.triplestr) || pc == EOF_CHAR
                 break
             elseif state.triplestr && (pc == '\n' || pc == '\r')
                 # triple quoted newline splitting
@@ -520,7 +518,7 @@ function lex_string_chunk(l)
     else
         while true
             pc = peekchar(l)
-            if pc == '$' || eof(pc)
+            if pc == '$' || pc == EOF_CHAR
                 break
             elseif state.triplestr && (pc == '\n' || pc == '\r')
                 # triple quoted newline splitting
@@ -541,7 +539,7 @@ function lex_string_chunk(l)
             c = readchar(l)
             if c == '\\'
                 c = readchar(l)
-                eof(c) && break
+                c == EOF_CHAR && break
                 continue
             end
         end
@@ -570,7 +568,7 @@ function lex_comment(l::Lexer, doemit=true)
     if peekchar(l) != '='
         while true
             pc = peekchar(l)
-            if pc == '\n' || eof(pc)
+            if pc == '\n' || pc == EOF_CHAR
                 return doemit ? emit(l, K"Comment") : EMPTY_TOKEN
             end
             readchar(l)
@@ -580,7 +578,7 @@ function lex_comment(l::Lexer, doemit=true)
         c = readchar(l) # consume the '='
         n_start, n_end = 1, 0
         while true
-            if eof(c)
+            if c == EOF_CHAR
                 return doemit ? emit_error(l, K"ErrorEofMultiComment") : EMPTY_TOKEN
             end
             nc = readchar(l)
@@ -810,7 +808,7 @@ function lex_digit(l::Lexer, kind)
             || ppc == '"'
             || ppc == ':'
             || ppc == '?'
-            || eof(ppc)))
+            || ppc == EOF_CHAR))
             kind = K"Integer"
 
             return emit(l, kind)
@@ -833,7 +831,7 @@ function lex_digit(l::Lexer, kind)
             else
                 return emit_error(l)
             end
-        elseif pc == '.' && (is_identifier_start_char(ppc) || eof(ppc))
+        elseif pc == '.' && (is_identifier_start_char(ppc) || ppc == EOF_CHAR)
             readchar(l)
             return emit_error(l, K"ErrorInvalidNumericConstant")
         end
@@ -910,10 +908,10 @@ function lex_prime(l, doemit = true)
         end
         while true
             c = readchar(l)
-            if eof(c)
+            if c == EOF_CHAR
                 return doemit ? emit_error(l, K"ErrorEofChar") : EMPTY_TOKEN
             elseif c == '\\'
-                if eof(readchar(l))
+                if readchar(l) == EOF_CHAR
                     return doemit ? emit_error(l, K"ErrorEofChar") : EMPTY_TOKEN
                 end
             elseif c == '\''
