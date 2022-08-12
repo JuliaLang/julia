@@ -314,8 +314,12 @@ function _is_egal_type(@nospecialize ty)
     if isa(ty, Union)
         return is_egal_type(ty.a) && is_egal_type(ty.b)
     end
-    # N.B. String and Symbol are mutable, but also egal always, and so they never be inconsistent
-    return ty === String || ty === Symbol || isbitstype(ty)
+    # non-isbitstype, but these types are egal always
+    if isType(ty) || ty === DataType || ty === String || ty === Symbol
+        return true
+    end
+    # TODO improve this analysis, e.g. allow `Some{Symbol}`
+    return isbitstype(ty)
 end
 
 """
@@ -355,6 +359,7 @@ function _is_mutation_free_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_mutation_free_type(ty.a) && _is_mutation_free_type(ty.b)
     end
+    # non-isbitstype, but these types are mutation-free always
     if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
         return true
     end

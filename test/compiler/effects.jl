@@ -53,6 +53,14 @@ end |> !Core.Compiler.is_consistent
 @test Base.infer_effects((Int,)) do x
     return x < 0 ? Ref(x) : nothing
 end |> !Core.Compiler.is_consistent
+@test Base.infer_effects((String,)) do a
+    x = Ref(a)
+    typeof(x)
+end |> Core.Compiler.is_consistent
+@test Base.infer_effects((String,)) do a
+    x = Ref(a)
+    Core.svec(x)
+end |> !Core.Compiler.is_consistent
 @test Base.infer_effects((Int,)) do x
     if x < 0
         throw(DomainError(x, lazy"$x is negative"))
