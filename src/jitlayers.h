@@ -200,6 +200,7 @@ typedef struct _jl_codegen_params_t {
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
+    bool external_linkage = false;
     bool imaging;
     _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
 } jl_codegen_params_t;

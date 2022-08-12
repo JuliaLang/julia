@@ -354,7 +354,7 @@ static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
     return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), precompile_enq_all_specializations__, env);
 }
 
-static void *jl_precompile_(jl_array_t *m)
+static void *jl_precompile_(jl_array_t *m, int external_linkage)
 {
     jl_array_t *m2 = NULL;
     jl_method_instance_t *mi = NULL;
@@ -377,7 +377,7 @@ static void *jl_precompile_(jl_array_t *m)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage);
     JL_GC_POP();
     return native_code;
 }
@@ -390,7 +390,7 @@ static void *jl_precompile(int all)
     if (all)
         jl_compile_all_defs(m);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
-    void *native_code = jl_precompile_(m);
+    void *native_code = jl_precompile_(m, 0);
     JL_GC_POP();
     return native_code;
 }
@@ -409,7 +409,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist)
         assert(jl_is_module(mod));
         foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
     }
-    void *native_code = jl_precompile_(m);
+    void *native_code = jl_precompile_(m, 1);
     JL_GC_POP();
     return native_code;
 }

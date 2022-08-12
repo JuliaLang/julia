@@ -267,10 +267,12 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
-// all reachable & inferrrable functions. The `policy` flag switches between the default
-// mode `0`, the extern mode `1`.
+// all reachable & inferrrable functions.
+// The `policy` flag switches between the default mode `0` and the extern mode `1` used by GPUCompiler.
+// `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
+// `_external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage)
 {
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
@@ -300,6 +302,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         compiler_start_time = jl_hrtime();
 
     params.imaging = imaging;
+    params.external_linkage = _external_linkage;
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
