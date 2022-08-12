@@ -349,14 +349,13 @@ int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *
             goto exit;
         JL_GC_POP();
         return 1;
+exit:
+        JL_GC_POP();
+        return 0;
     }
     else {
         return jl_typemap_node_visitor((jl_typemap_entry_t*)cache, fptr, closure);
     }
-
-exit:
-    JL_GC_POP();
-    return 0;
 }
 
 static unsigned jl_supertype_height(jl_datatype_t *dt)
