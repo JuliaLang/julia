@@ -588,7 +588,7 @@ isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x8)
 
 Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
-isbits(@nospecialize x) = (@_total_meta; typeof(x).flags & 0x8 == 0x8)
+isbits(@nospecialize x) = isbitstype(typeof(x))
 
 """
     isdispatchtuple(T)
