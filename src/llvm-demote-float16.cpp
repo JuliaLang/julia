@@ -67,7 +67,7 @@ bool have_fp16(Function &caller) {
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
-#if defined _CPU_AARCH64_
+#if defined(_CPU_AARCH64_)
     if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
         return true;
     }
@@ -83,16 +83,9 @@ static bool demoteFloat16(Function &F)
 {
     if (have_fp16(F))
         return false;
+
     auto &ctx = F.getContext();
     auto T_float32 = Type::getFloatTy(ctx);
-
-
-    // auto feat_string = TM->getTargetFeatureString();
-    //TODO: change this check to something else pending decision on
-    // https://github.com/JuliaLang/julia/pull/43085#discussion_r788197603
-    // if(feat_string.find("+fp16fml") == llvm::StringRef::npos||feat_string.find("+fullfp16") == llvm::StringRef::npos){
-    //     return false;
-    // }
     SmallVector<Instruction *, 0> erase;
     for (auto &BB : F) {
         for (auto &I : BB) {
