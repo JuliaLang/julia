@@ -2582,13 +2582,11 @@ static void gc_premark(jl_ptls_t ptls2)
     for (size_t i = 0; i < len; i++) {
         jl_value_t *item = (jl_value_t *)items[i];
         objprofile_count(jl_typeof(item), 2, 0);
-        jl_astaggedvalue(item)->bits.gc = GC_OLD_MARKED;
-    }
-    len = ptls2->heap.rem_bindings.len;
-    items = ptls2->heap.rem_bindings.items;
-    for (size_t i = 0; i < len; i++) {
-        void *ptr = items[i];
-        jl_astaggedvalue(ptr)->bits.gc = GC_OLD_MARKED;
+        // Avoid duplicates in the `remset`
+        if (jl_astaggedvalue(item)->bits.gc == GC_MARKED) {
+            jl_astaggedvalue(item)->bits.gc = GC_OLD_MARKED;
+            gc_mark_outrefs(ptls2, &ptls2->mark_queue, item, 1);
+        }
     }
 }
 
@@ -2615,20 +2613,14 @@ static void gc_queue_bt_buf(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
     }
 }
 
-static void gc_queue_remset(jl_ptls_t ptls, jl_ptls_t ptls2)
+static void gc_queue_rem_binding(jl_ptls_t ptls)
 {
-    size_t len = ptls2->heap.last_remset->len;
-    void **items = ptls2->heap.last_remset->items;
-    for (size_t i = 0; i < len; i++) {
-        // Objects in the `remset` are already marked,
-        // so a `gc_try_claim_and_push` wouldn't work here
-        gc_mark_outrefs(ptls, &ptls->mark_queue, (jl_value_t *)items[i], 1);
-    }
     int n_bnd_refyoung = 0;
-    len = ptls2->heap.rem_bindings.len;
-    items = ptls2->heap.rem_bindings.items;
+    size_t len = ptls->heap.rem_bindings.len;
+    void **items = ptls->heap.rem_bindings.items;
     for (size_t i = 0; i < len; i++) {
         jl_binding_t *ptr = (jl_binding_t *)items[i];
+        jl_astaggedvalue(ptr)->bits.gc = GC_OLD_MARKED;
         // A null pointer can happen here when the binding is cleaned up
         // as an exception is thrown after it was already queued (#10221)
         jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
@@ -2638,7 +2630,7 @@ static void gc_queue_remset(jl_ptls_t ptls, jl_ptls_t ptls2)
             n_bnd_refyoung++;
         }
     }
-    ptls2->heap.rem_bindings.len = n_bnd_refyoung;
+    ptls->heap.rem_bindings.len = n_bnd_refyoung;
 }
 
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
@@ -2805,7 +2797,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // main mark-loop
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
-    // 1. fix GC bits of objects in the remset.
+    // 1. fix GC bits of objects in the remset and mark outgoing
+    // references from them
     for (int t_i = 0; t_i < jl_n_threads; t_i++) {
         gc_premark(jl_all_tls_states[t_i]);
     }
@@ -2815,8 +2808,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_queue_thread_local(&ptls2->mark_queue, ptls2);
         // 2.2 mark any managed objects in the backtrace buffer
         gc_queue_bt_buf(&ptls2->mark_queue, ptls2);
-        // 2.3. mark every object in the `last_remsets` and `rem_binding`
-        gc_queue_remset(ptls2, ptls2);
+        // 2.3. mark every object in the `rem_binding`
+        gc_queue_rem_binding(ptls2);
     }
     // 3. walk roots
     gc_mark_roots(&ptls->mark_queue);
