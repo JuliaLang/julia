@@ -427,7 +427,7 @@ end |> !Core.Compiler.is_inaccessiblememonly
 end |> !Core.Compiler.is_inaccessiblememonly
 
 # the `:inaccessiblememonly` helper effect allows us to prove `:consistent`-cy of frames
-# including `getfield` / `isdefined` accessing to local mutable object
+# including `getfield` accessing to local mutable object
 
 mutable struct SafeRef{T}
     x::T
@@ -452,32 +452,23 @@ end
     nested_mutable_consistent(:foo)
 end
 
-mutable_isassigned_consistent(s) = isassigned(Ref(s))
-@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(mutable_isassigned_consistent, (Symbol,)))
-@test Core.Compiler.is_consistent(Base.infer_effects(mutable_isassigned_consistent, (Symbol,)))
-@test fully_eliminated(; retval=true) do
-    mutable_isassigned_consistent(:foo)
-end
-
 const consistent_global = Some(:foo)
 @test Base.infer_effects() do
     consistent_global.value
 end |> Core.Compiler.is_consistent
+
 const inconsistent_global = SafeRef(:foo)
 @test Base.infer_effects() do
     inconsistent_global[]
 end |> !Core.Compiler.is_consistent
-const inconsistent_condition_ref = Ref{Bool}(false)
+
+global inconsistent_condition_ref = Ref{Bool}(false)
 @test Base.infer_effects() do
     if inconsistent_condition_ref[]
         return 0
     else
         return 1
     end
-end |> !Core.Compiler.is_consistent
-const inconsistent_undef_ref = Ref{String}()
-@test Base.infer_effects() do
-    isassigned(inconsistent_undef_ref)
 end |> !Core.Compiler.is_consistent
 
 # the `:inaccessiblememonly` helper effect allows us to prove `:effect_free`-ness of frames
