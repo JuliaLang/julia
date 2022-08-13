@@ -435,7 +435,7 @@ function adjust_effects(sv::InferenceState)
         end
         ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
     end
-    if is_consistent_if_notreturned(ipo_effects) && is_consistent_argtype(rt)
+    if is_consistent_if_notreturned(ipo_effects) && is_egal_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
         # (indicated by `CONSISTENT_IF_NOTRETURNED`), we may be able to refine it if the return
         # type guarantees that the allocations are never returned
