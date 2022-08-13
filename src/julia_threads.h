@@ -5,6 +5,8 @@
 #define JL_THREADS_H
 
 #include "julia_atomics.h"
+#include "options.h"
+#include "wsqueue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
@@ -168,16 +170,17 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
-// Cache of thread local change to global metadata during GC
-// This is sync'd after marking.
-typedef union _jl_gc_mark_data jl_gc_mark_data_t;
-
 typedef struct {
-    void **pc; // Current stack address for the pc (up growing)
-    jl_gc_mark_data_t *data; // Current stack address for the data (up growing)
-    void **pc_start; // Cached value of `gc_cache->pc_stack`
-    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
-} jl_gc_mark_sp_t;
+// Debugging infrastructure is limited to single threaded GC
+#ifdef GC_VERIFY
+    struct _jl_value_t **start;
+    struct _jl_value_t **current;
+    struct _jl_value_t **end;
+#else
+    ws_queue_t q;
+    idemp_ws_queue_t cq;
+#endif
+} jl_gc_markqueue_t;
 
 typedef struct {
     // thread local increment of `perm_scanned_bytes`
@@ -195,9 +198,6 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
-    void **pc_stack;
-    void **pc_stack_end;
-    jl_gc_mark_data_t *data_stack;
 } jl_gc_mark_cache_t;
 
 struct _jl_bt_element_t;
@@ -213,11 +213,13 @@ typedef struct _jl_tls_states_t {
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
-    // gc_state = 1 means the thread is doing GC or is waiting for the GC to
-    //              finish.
+    // gc_state = 1 means the thread is waiting for the GC to finish or doing
+    //              sequential sweep work.
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
+#define JL_GC_STATE_PARALLEL 3
+    // gc_state = 3 means the thread is doing parallel-mark work.
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain
@@ -263,9 +265,9 @@ typedef struct _jl_tls_states_t {
 #endif
     jl_thread_t system_id;
     arraylist_t finalizers;
+    jl_gc_markqueue_t mark_queue;
     jl_gc_mark_cache_t gc_cache;
     arraylist_t sweep_objs;
-    jl_gc_mark_sp_t gc_mark_sp;
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;

@@ -9,6 +9,7 @@
 #include "julia_internal.h"
 #include "gc.h"
 #include "threading.h"
+#include "options.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,7 +76,7 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
 
 // GC functions used
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
-                                         jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
+                                         jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT;
 
 // parallel task runtime
 // ---
@@ -105,7 +106,7 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-// thread function: used by all except the main thread
+// thread function: used by all except the main thread and gc threads
 void jl_threadfun(void *arg)
 {
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
@@ -129,6 +130,133 @@ void jl_threadfun(void *arg)
     jl_finish_task(ct); // noreturn
 }
 
+// Thread recruitment scheme inspired by Hassanein's "spin-master",
+// `Understanding and Improving JVM GC Work Stealing at the
+// Data Center Scale`
+
+const uint64_t timeout_ns = 1e5;
+
+jl_mutex_t spinmaster_lock;
+uv_mutex_t sweep_lock;
+uv_cond_t sweep_cond;
+
+extern void gc_mark_loop(jl_ptls_t ptls);
+extern _Atomic(int32_t) nworkers_marking;
+
+int jl_spinmaster_all_workers_done(jl_ptls_t ptls)
+{
+    return (jl_atomic_load_acquire(&nworkers_marking) == 0);
+}
+
+int64_t jl_spinmaster_count_work(jl_ptls_t ptls)
+{
+    int64_t work = 0;
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        jl_gc_markqueue_t *mq2 = &ptls2->mark_queue;
+        ws_queue_t *q2 = &mq2->q;
+        // This count can be slightly off, but it doesn't matter
+        // for recruitment heuristics
+        int64_t t2 = jl_atomic_load_relaxed(&q2->top);
+        int64_t b2 = jl_atomic_load_relaxed(&q2->bottom);
+        work += b2 - t2;
+    }
+    return work;
+}
+
+void jl_spinmaster_notify_all(jl_ptls_t ptls)
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
+    }
+}
+
+void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers)
+{
+    for (int i = 0; i < jl_n_threads && nworkers > 0; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
+            uv_cond_signal(&ptls->wake_signal);
+            nworkers--;
+        }
+    }
+}
+
+int jl_spinmaster_end_marking(jl_ptls_t ptls)
+{
+    // Fast path for mark-loop termination
+    if (jl_spinmaster_all_workers_done(ptls)) {
+        return 1;
+    }
+    if (jl_mutex_trylock_nogc(&spinmaster_lock)) {
+        spin : {
+            if (!jl_spinmaster_all_workers_done(ptls)) {
+                int64_t work = jl_spinmaster_count_work(ptls);
+                if (work > 1) {
+                    jl_spinmaster_recruit_workers(ptls, work - 1);
+                    jl_mutex_unlock_nogc(&spinmaster_lock);
+                    gc_mark_loop(ptls);
+                    return 0;
+                }
+                jl_cpu_pause();
+                goto spin;
+            }
+        }
+        jl_spinmaster_notify_all(ptls);
+        jl_mutex_unlock_nogc(&spinmaster_lock);
+        return 1;
+    }
+    return 0;
+}
+
+void jl_spinmaster_wait_pmark(void)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    while(!jl_spinmaster_end_marking(ptls)) {
+        uv_mutex_lock(&ptls->sleep_lock);
+        if (!uv_cond_timedwait(&ptls->wake_signal,
+                               &ptls->sleep_lock, timeout_ns)) {
+            // Stopped waiting because we got a notification
+            // from spin-master: try to get recruited
+            gc_mark_loop(ptls);
+        }
+        uv_mutex_unlock(&ptls->sleep_lock);
+    }
+}
+
+void jl_spinmaster_wait_sweeping(void)
+{
+    // Use system mutexes rather than spin locking to minimize wasted CPU
+    // time on the idle cores while we wait for the GC to finish.
+    // This is particularly important when run under rr.
+    uv_mutex_lock(&sweep_lock);
+    uv_cond_wait(&sweep_cond, &sweep_lock);
+    uv_mutex_unlock(&sweep_lock);
+}
+
+// thread function: used by gc threads
+void jl_gc_threadfun(void *arg)
+{
+    jl_threadarg_t *targ = (jl_threadarg_t*)arg;
+
+    // initialize this thread (set tid, create heap, set up root task)
+    jl_ptls_t ptls = jl_init_threadtls(targ->tid);
+    
+    // wait for all threads
+    uv_barrier_wait(targ->barrier);
+
+    // free the thread argument here
+    free(targ);
+
+    while (1) {
+        // jl_spinmaster_wait_pmark();
+        jl_spinmaster_wait_sweeping();
+    }
+}
 
 int jl_running_under_rr(int recheck)
 {
@@ -406,7 +534,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
-                // TODO: help with gc work here, if applicable
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             uv_mutex_unlock(&ptls->sleep_lock);
