@@ -17,7 +17,6 @@ cd(@__DIR__)
 rm("JuliaSyntax", force=true, recursive=true)
 mkdir("JuliaSyntax")
 cp("../src", "JuliaSyntax/src")
-cp("../Tokenize", "JuliaSyntax/Tokenize")
 cp("../test", "JuliaSyntax/test")
 projstr = replace(read("../Project.toml", String),
     "70703baa-626e-46a2-a12c-08ffd08c73b4"=>"54354a4c-6cac-4c00-8566-e7c1beb8bfd8")
