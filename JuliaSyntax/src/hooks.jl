@@ -1,7 +1,28 @@
-_debug_log = nothing
+# World age which the parser will be invoked in.
+# Set to typemax(UInt) to invoke in the world of the caller.
+const _parser_world_age = Ref{UInt}(typemax(UInt))
 
 # Adaptor for the API/ABI expected by the Julia runtime code.
 function core_parser_hook(code, filename, lineno, offset, options)
+    if _parser_world_age[] != typemax(UInt)
+        Base.invoke_in_world(_parser_world_age[], _core_parser_hook, 
+                             code, filename, lineno, offset, options)
+    else
+        _core_parser_hook(code, filename, lineno, offset, options)
+    end
+end
+
+# Core._parse gained a `lineno` argument in
+# https://github.com/JuliaLang/julia/pull/43876
+# Prior to this, the following signature was needed:
+function core_parser_hook(code, filename, offset, options)
+    core_parser_hook(code, filename, LineNumberNode(0), offset, options)
+end
+
+# Debug log file for dumping parsed code
+const _debug_log = Ref{Union{Nothing,IO}}(nothing)
+
+function _core_parser_hook(code, filename, lineno, offset, options)
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -10,13 +31,13 @@ function core_parser_hook(code, filename, lineno, offset, options)
             (ptr,len) = code
             code = String(unsafe_wrap(Array, ptr, len))
         end
-        if !isnothing(_debug_log)
-            print(_debug_log, """
+        if !isnothing(_debug_log[])
+            print(_debug_log[], """
                   #-#-#-------------------------------
                   # ENTER filename=$filename, lineno=$lineno, offset=$offset, options=$options"
                   #-#-#-------------------------------
                   """)
-            write(_debug_log, code)
+            write(_debug_log[], code)
         end
 
         io = IOBuffer(code)
@@ -58,8 +79,8 @@ function core_parser_hook(code, filename, lineno, offset, options)
         # of one cancel here.
         last_offset = last_byte(stream)
 
-        if !isnothing(_debug_log)
-            println(_debug_log, """
+        if !isnothing(_debug_log[])
+            println(_debug_log[], """
                     #-#-#-
                     # EXIT last_offset=$last_offset
                     #-#-#-
@@ -69,19 +90,25 @@ function core_parser_hook(code, filename, lineno, offset, options)
         # Rewrap result in an svec for use by the C code
         return Core.svec(ex, last_offset)
     catch exc
+        if !isnothing(_debug_log[])
+            println(_debug_log[], """
+                    #-#-#-
+                    # ERROR EXIT
+                    # $exc
+                    #-#-#-
+                    """)
+        end
         @error("JuliaSyntax parser failed — falling back to flisp!",
                exception=(exc,catch_backtrace()),
                offset=offset,
                code=code)
-    end
-    return Core.Compiler.fl_parse(code, filename, offset, options)
-end
 
-# Core._parse gained a `lineno` argument in
-# https://github.com/JuliaLang/julia/pull/43876
-# Prior to this, the following signature was needed:
-function core_parser_hook(code, filename, offset, options)
-    core_parser_hook(code, filename, LineNumberNode(0), offset, options)
+        if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
+            return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
+        else
+            return Core.Compiler.fl_parse(code, filename, offset, options)
+        end
+    end
 end
 
 # Hack:
@@ -92,19 +119,27 @@ Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 const _default_parser = Core._parse
 
 """
-Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
-flisp parser for all parsing work.
+    enable_in_core!([enable=true; freeze_world_age, debug_filename])
 
-That is, JuliaSyntax will be used for `include()` `Meta.parse()`, the REPL, etc.
+Connect the JuliaSyntax parser to the Julia runtime so that it replaces the
+flisp parser for all parsing work. That is, JuliaSyntax will be used for
+`include()` `Meta.parse()`, the REPL, etc. To disable, set use
+`enable_in_core!(false)`.
+
+Keyword arguments:
+* `freeze_world_age` - Use a fixed world age for the parser to prevent
+  recompilation of the parser due to any user-defined methods (default `true`).
+* `debug_filename` - File name of parser debug log (defaults to `nothing` or
+  the value of `ENV["JULIA_SYNTAX_DEBUG_FILE"]`).
 """
-function enable_in_core!(enable=true)
-    debug_filename = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing)
-    global _debug_log 
+function enable_in_core!(enable=true; freeze_world_age = true,
+        debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
+    _parser_world_age[] = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
     if enable && !isnothing(debug_filename)
-        _debug_log = open(debug_filename, "w")
-    elseif !enable && !isnothing(_debug_log)
-        close(_debug_log)
-        _debug_log = nothing
+        _debug_log[] = open(debug_filename, "w")
+    elseif !enable && !isnothing(_debug_log[])
+        close(_debug_log[])
+        _debug_log[] = nothing
     end
     parser = enable ? core_parser_hook : _default_parser
     Base.eval(Core, :(_parse = $parser))
