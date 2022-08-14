@@ -200,12 +200,9 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_N
     jl_varbinding_t *v = e->vars;
     int i = 0, j = 0;
     while (v != NULL) {
-        if (root) v->lb = jl_svecref(root, i);
-        i++;
-        if (root) v->ub = jl_svecref(root, i);
-        i++;
-        if (root) v->innervars = (jl_array_t*)jl_svecref(root, i);
-        i++;
+        if (root) v->lb = jl_svecref(root, i++);
+        if (root) v->ub = jl_svecref(root, i++);
+        if (root) v->innervars = (jl_array_t*)jl_svecref(root, i++);
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
         v = v->prev;
@@ -2323,6 +2320,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                 JL_GC_POP();
                 return jl_bottom_type;
             }
+            if (jl_is_uniontype(ub) && !jl_is_uniontype(a)) {
+                bb->ub = ub;
+                bb->lb = jl_bottom_type;
+                ub = (jl_value_t*)b;
+            }
         }
         if (ub != (jl_value_t*)b) {
             if (jl_has_free_typevars(ub)) {
@@ -3166,26 +3168,45 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     return jl_bottom_type;
 }
 
+static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int count) {
+    if (!count) {
+        save_env(e, root, se);
+        return 1;
+    }
+    int n = 0;
+    jl_varbinding_t *v = e->vars;
+    while (v != NULL) {
+        if (v->ub != v->var->ub || v->lb != v->var->lb) {
+            jl_value_t *lb = jl_svecref(*root, n);
+            if (v->lb != lb)
+                jl_svecset(*root, n, lb ? jl_bottom_type : v->lb);
+            jl_value_t *ub = jl_svecref(*root, n+1);
+            if (v->ub != ub)
+                jl_svecset(*root, n+1, ub ? simple_join(ub, v->ub) : v->ub);
+        }
+        n = n + 3;
+        v = v->prev;
+    }
+    return count;
+}
+
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     e->Runions.depth = 0;
     e->Runions.more = 0;
     e->Runions.used = 0;
     jl_value_t **is;
-    JL_GC_PUSHARGS(is, 3);
+    JL_GC_PUSHARGS(is, 4);
     jl_value_t **saved = &is[2];
-    jl_savedenv_t se;
+    jl_value_t **merged = &is[3];
+    jl_savedenv_t se, me;
     save_env(e, saved, &se);
-    int lastset = 0, niter = 0, total_iter = 0;
+    int lastset = 0, niter = 0, total_iter = 0, merge_count = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
     is[0] = ii;  // root
-    if (ii == jl_bottom_type) {
-        restore_env(e, *saved, &se);
-    }
-    else {
-        free_env(&se);
-        save_env(e, saved, &se);
-    }
+    if (is[0] != jl_bottom_type)
+        merge_count = merge_env(e, merged, &me, merge_count);
+    restore_env(e, *saved, &se);
     while (e->Runions.more) {
         if (e->emptiness_only && ii != jl_bottom_type)
             break;
@@ -3199,13 +3220,9 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 
         is[0] = ii;
         is[1] = intersect(x, y, e, 0);
-        if (is[1] == jl_bottom_type) {
-            restore_env(e, *saved, &se);
-        }
-        else {
-            free_env(&se);
-            save_env(e, saved, &se);
-        }
+        if (is[1] != jl_bottom_type)
+            merge_count = merge_env(e, merged, &me, merge_count);
+        restore_env(e, *saved, &se);
         if (is[0] == jl_bottom_type)
             ii = is[1];
         else if (is[1] == jl_bottom_type)
@@ -3220,6 +3237,10 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             ii = y;
             break;
         }
+    }
+    if (merge_count){
+        restore_env(e, *merged, &me);
+        free_env(&me);
     }
     free_env(&se);
     JL_GC_POP();
