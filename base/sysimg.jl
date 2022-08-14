@@ -71,7 +71,7 @@ let
         # 7-depth packages
         :LazyArtifacts,
     ]
-    maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
+    maxlen = maximum(textwidth.(string.(stdlibs)))
 
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
