@@ -14,6 +14,14 @@ pushfirst!(Base._included_files, (@__MODULE__, joinpath(@__DIR__, "sysimg.jl")))
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
 let
+    # Loading here does not call __init__(). This leads to uninitialized RNG
+    # state which causes rand(::UnitRange{Int}) to hang. This is a workaround:
+    task = current_task()
+    task.rngState0 = 0x5156087469e170ab
+    task.rngState1 = 0x7431eaead385992c
+    task.rngState2 = 0x503e1d32781c2608
+    task.rngState3 = 0x3a77f7189200c20b
+
     # set up depot & load paths to be able to find stdlib packages
     push!(empty!(LOAD_PATH), "@stdlib")
     Base.append_default_depot_path!(DEPOT_PATH)
