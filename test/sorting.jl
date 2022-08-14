@@ -664,8 +664,7 @@ end
         T = eltype(x)
         U = UIntN(Val(sizeof(T)))
         for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
-            if order isa Base.Order.By || T === Float16 ||
-                ((T <: AbstractFloat) == (order isa DirectOrdering))
+            if order isa Base.Order.By || ((T <: AbstractFloat) == (order isa DirectOrdering))
                 @test Base.Sort.UIntMappable(T, order) === nothing
                 continue
             end
