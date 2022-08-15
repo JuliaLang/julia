@@ -28,6 +28,12 @@ function core_parser_hook(code, filename, lineno, offset, options)
             # To copy the flisp parser driver, we ignore leading and trailing
             # trivia when parsing statements or atoms
             bump_trivia(stream)
+            if peek(stream) == K"EndMarker"
+                # If we're at the end of stream after skipping whitespace, just
+                # return `nothing` to indicate this rather than attempting to
+                # parse a statement or atom and failing.
+                return Core.svec(nothing, last_byte(stream))
+            end
         end
         JuliaSyntax.parse(stream; rule=rule)
         if rule !== :toplevel
