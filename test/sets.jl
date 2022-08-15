@@ -419,6 +419,15 @@ end
     @test issubset(Set(Bool[]), rand(Bool, 100)) == true
     # neither has a fast in, right doesn't have a length
     @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
+
+    # range fast-path
+    @test isdisjoint(1:10, 11:20)
+    @test !isdisjoint(1:10, 10:20)
+    @test !isdisjoint(1:10, 5:20)
+    @test isdisjoint(11:20, 1:10)
+    @test !isdisjoint(10:20, 1:10)
+    @test !isdisjoint(5:20, 1:10)
+    @test isdisjoint(10:9, 1:10)
 end
 
 @testset "unique" begin

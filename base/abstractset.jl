@@ -480,6 +480,12 @@ function isdisjoint(a, b)
     _isdisjoint(a, b)
 end
 
+function isdisjoint(a::AbstractRange, b::AbstractRange)
+    isempty(a) && return true
+    isempty(b) && return true
+    ((last(a) < first(b)) & (first(a) < first(b))) | ((last(b) < first(a)) & (first(b) < first(a)))
+end
+
 ## partial ordering of sets by containment
 
 ==(a::AbstractSet, b::AbstractSet) = length(a) == length(b) && a ⊆ b
