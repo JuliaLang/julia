@@ -1,14 +1,22 @@
-# World age which the parser will be invoked in.
-# Set to typemax(UInt) to invoke in the world of the caller.
-const _parser_world_age = Ref{UInt}(typemax(UInt))
+# This file provides an adaptor to match the API expected by the Julia runtime
+# code in the binding Core._parse
 
-# Adaptor for the API/ABI expected by the Julia runtime code.
+# Use caller's world age.
+const _caller_world = typemax(UInt)
+const _parser_world_age = Ref{UInt}(_caller_world)
+
 function core_parser_hook(code, filename, lineno, offset, options)
-    if _parser_world_age[] != typemax(UInt)
-        Base.invoke_in_world(_parser_world_age[], _core_parser_hook, 
+    # `hook` is always _core_parser_hook, but that's hidden from the compiler
+    # via a Ref to prevent invalidation / recompilation when other packages are
+    # loaded. This wouldn't seem like it should be necessary given the use of
+    # invoke_in_world, but it is in Julia-1.7.3. I'm not sure exactly which
+    # latency it's removing.
+    hook = _core_parser_hook_ref[]
+    if _parser_world_age[] != _caller_world
+        Base.invoke_in_world(_parser_world_age[], hook,
                              code, filename, lineno, offset, options)
     else
-        _core_parser_hook(code, filename, lineno, offset, options)
+        hook(code, filename, lineno, offset, options)
     end
 end
 
@@ -113,10 +121,13 @@ end
 
 # Hack:
 # Meta.parse() attempts to construct a ParseError from a string if it receives
-# `Expr(:error)`.
+# `Expr(:error)`. Add an override to the ParseError constructor to prevent this.
+# FIXME: Improve this in Base somehow?
 Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 
 const _default_parser = Core._parse
+# NB: Never reassigned, but the compiler doesn't know this!
+const _core_parser_hook_ref = Ref{Function}(_core_parser_hook)
 
 """
     enable_in_core!([enable=true; freeze_world_age, debug_filename])
@@ -134,7 +145,7 @@ Keyword arguments:
 """
 function enable_in_core!(enable=true; freeze_world_age = true,
         debug_filename   = get(ENV, "JULIA_SYNTAX_DEBUG_FILE", nothing))
-    _parser_world_age[] = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
+    _parser_world_age[] = freeze_world_age ? Base.get_world_counter() : _caller_world
     if enable && !isnothing(debug_filename)
         _debug_log[] = open(debug_filename, "w")
     elseif !enable && !isnothing(_debug_log[])
