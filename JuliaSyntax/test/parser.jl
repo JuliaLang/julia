@@ -458,6 +458,8 @@ tests = [
         "function f() where T   end"  =>  "(function (where (call f) T) (block))"
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
+        # Errors
+        "function"            => "(function (error (error)) (block (error)) (error-t))"
     ],
     JuliaSyntax.parse_try => [
         "try \n x \n catch e \n y \n finally \n z end" =>
@@ -560,8 +562,13 @@ tests = [
         ":foo"   => "(quote foo)"
         ": foo"  => "(quote (error-t) foo)"
         # Literal colons
-        ":)"   => ":"
-        ": end"   => ":"
+        ":)"     => ":"
+        ": end"  => ":"
+        # plain equals
+        "="      => "(error =)"
+        # Identifiers
+        "xx"     => "xx"
+        "x₁"     => "x₁"
         # var syntax
         """var"x" """  =>  "x"
         """var"x"+"""  =>  "x"
@@ -586,14 +593,16 @@ tests = [
         ":.="  =>  "(quote .=)"
         # Special symbols quoted
         ":end" => "(quote end)"
-        ":(end)" => "(quote (error (end)))"
+        ":(end)" => "(quote (error-t))"
         ":<:"  => "(quote <:)"
+        # unexpect =
+        "="    => "(error =)"
         # parse_cat
         "[]"        =>  "(vect)"
         "[x,]"      =>  "(vect x)"
         "[x]"       =>  "(vect x)"
-        "[x"        =>  "(vect x (error-t))"
         "[x \n ]"   =>  "(vect x)"
+        "[x"        =>  "(vect x (error-t))"
         "[x \n\n ]" =>  "(vect x)"
         "[x for a in as]"  =>  "(comprehension (generator x (= a as)))"
         "[x \n\n for a in as]"  =>  "(comprehension (generator x (= a as)))"
@@ -625,8 +634,10 @@ tests = [
         "``"         =>  "(macrocall :(Core.var\"@cmd\") \"\")"
         "`cmd`"      =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
         "```cmd```"  =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
-        # Errors
-        ": foo" => "(quote (error-t) foo)"
+        # literals
+        "42"   => "42"
+        # closing tokens
+        ")"    => "(error)"
     ],
     JuliaSyntax.parse_atom => [
         # Actually parse_array

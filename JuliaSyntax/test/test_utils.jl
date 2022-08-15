@@ -243,7 +243,7 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
         show(stdout, MIME"text/plain"(), f_ex)
 
         printstyled(stdout, "\n\n# Diff of AST dump:\n", color=:red)
-        show_expr_text_diff(showfunc, ex, f_ex, context=10)
+        show_expr_text_diff(show, ex, f_ex, context=10)
         # return (ex, f_ex)
         # return (code, stream, t, s, ex)
     end
