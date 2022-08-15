@@ -2010,9 +2010,13 @@ let T = TypeVar(:T, Real),
     @test !(UnionAll(T, UnionAll(V, UnionAll(T, S))) <: UnionAll(T, UnionAll(V, S)))
 end
 
-# issue 41096
+# issue #41096
 let C = Val{Val{B}} where {B}
     @testintersect(Val{<:Union{Missing, Val{false}, Val{true}}}, C, Val{<:Union{Val{true}, Val{false}}})
     @testintersect(Val{<:Union{Nothing, Val{true}, Val{false}}}, C, Val{<:Union{Val{true}, Val{false}}})
     @testintersect(Val{<:Union{Nothing, Val{false}}}, C, Val{Val{false}})
 end
+
+#issue #43082
+struct X43082{A, I, B<:Union{Ref{I},I}}; end
+@testintersect(Tuple{X43082{T}, Int} where T, Tuple{X43082{Int}, Any}, Tuple{X43082{Int}, Int})
