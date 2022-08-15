@@ -2068,10 +2068,7 @@ See also: [`$(Symbol("Int", Sys.WORD_SIZE))`](@ref), [`UInt`](@ref).
 julia> 1 isa Int
 true
 
-julia> typeof(length(Dict())) === Int
-true
-
-julia> Threads.nthreads() isa Int
+julia> typeof(length([1,2])) === Int
 true
 ```
 """
