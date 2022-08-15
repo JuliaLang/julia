@@ -132,7 +132,7 @@ f25130()
 testlogs = testlogger.logs
 @test length(testlogs) == 2
 @test testlogs[1].id != testlogs[2].id
-@test testlogs[1].kwargs[:caller].func == Symbol("top-level scope")
+@test testlogs[1].kwargs[:caller].func === Symbol("top-level scope")
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 
@@ -157,7 +157,7 @@ begin # tuple indexed by float deprecation
     @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
 end
 
-@testset "@deprecated error message" begin
+begin #@deprecated error message
     @test_throws(
         "if the third `export_old` argument is not specified or `true`,",
         @eval @deprecate M.f() g()

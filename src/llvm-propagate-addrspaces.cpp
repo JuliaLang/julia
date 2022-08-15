@@ -48,7 +48,7 @@ struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrsp
     std::vector<std::pair<Instruction *, Instruction *>> ToInsert;
 
 public:
-    Value *LiftPointer(Value *V, Instruction *InsertPt=nullptr);
+    Value *LiftPointer(Module *M, Value *V, Instruction *InsertPt=nullptr);
     void visitMemop(Instruction &I, Type *T, unsigned OpIndex);
     void visitLoadInst(LoadInst &LI);
     void visitStoreInst(StoreInst &SI);
@@ -82,10 +82,11 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklis
     }
 }
 
-Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *InsertPt) {
+Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
     std::vector<Value *> Worklist;
     std::set<Value *> LocalVisited;
+    unsigned allocaAddressSpace = M->getDataLayout().getAllocaAddrSpace();
     Worklist.push_back(V);
     // Follow pointer casts back, see if we're based on a pointer in
     // an untracked address space, in which case we're allowed to drop
@@ -165,15 +166,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Value *V, Instruction *Inser
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), AddressSpace::Generic);
+            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), allocaAddressSpace);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
-
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), AddressSpace::Generic);
+        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), allocaAddressSpace);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -222,7 +222,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemop(Instruction &I, Type *T, unsign
     unsigned AS = Original->getType()->getPointerAddressSpace();
     if (!isSpecialAS(AS))
         return;
-    Value *Replacement = LiftPointer(Original, &I);
+    Value *Replacement = LiftPointer(I.getModule(), Original, &I);
     if (!Replacement)
         return;
     I.setOperand(OpIndex, Replacement);
@@ -248,7 +248,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
     unsigned AS = MI.getDestAddressSpace();
     if (!isSpecialAS(AS))
         return;
-    Value *Replacement = LiftPointer(MI.getRawDest());
+    Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest());
     if (!Replacement)
         return;
     Function *TheFn = Intrinsic::getDeclaration(MI.getModule(), Intrinsic::memset,
@@ -264,13 +264,13 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
         return;
     Value *Dest = MTI.getRawDest();
     if (isSpecialAS(DestAS)) {
-        Value *Replacement = LiftPointer(Dest, &MTI);
+        Value *Replacement = LiftPointer(MTI.getModule(), Dest, &MTI);
         if (Replacement)
             Dest = Replacement;
     }
     Value *Src = MTI.getRawSource();
     if (isSpecialAS(SrcAS)) {
-        Value *Replacement = LiftPointer(Src, &MTI);
+        Value *Replacement = LiftPointer(MTI.getModule(), Src, &MTI);
         if (Replacement)
             Src = Replacement;
     }

@@ -546,7 +546,9 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3].inlineable
+let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
+    @test Core.Compiler.is_inlineable(src)
+end
 
 # issue #16096
 module M16096
@@ -649,7 +651,7 @@ function get_expr_list(ex::Core.CodeInfo)
     return ex.code::Array{Any,1}
 end
 function get_expr_list(ex::Expr)
-    if ex.head == :thunk
+    if ex.head === :thunk
         return get_expr_list(ex.args[1])
     else
         return ex.args
@@ -755,7 +757,7 @@ end
 if test + test == test
     println(test)
 end
-```.head == :if
+```.head === :if
 
 end
 
@@ -853,7 +855,7 @@ end
 # Check that the body of a `where`-qualified short form function definition gets
 # a :block for its body
 short_where_call = :(f(x::T) where T = T)
-@test short_where_call.args[2].head == :block
+@test short_where_call.args[2].head === :block
 
 # `where` with multi-line anonymous functions
 let f = function (x::T) where T
@@ -1543,7 +1545,8 @@ end
 # issue #27129
 f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source)
+    @test Core.Compiler.is_inlineable(src)
 end
 
 # issue #27710
@@ -2212,7 +2215,7 @@ end
 
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
-@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) === :string
 
 @testset "issue #30341" begin
     @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
@@ -3039,10 +3042,10 @@ end
 end
 
 # issue #19012
-@test Meta.parse("\U2200", raise=false) == Symbol("∀")
-@test Meta.parse("\U2203", raise=false) == Symbol("∃")
-@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
-@test Meta.parse("\U2204", raise=false) == Symbol("∄")
+@test Meta.parse("\U2200", raise=false) === Symbol("∀")
+@test Meta.parse("\U2203", raise=false) === Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) === Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) === Symbol("∄")
 
 # issue 42220
 macro m42220()

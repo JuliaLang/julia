@@ -31,7 +31,7 @@ import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
-    setfield!_nothrow, alloc_array_ndims, stmt_effect_free, check_effect_free!
+    setfield!_nothrow, alloc_array_ndims, check_effect_free!
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -1333,7 +1333,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any})
         return # ThrownEscape is already checked
     else
         # we escape statements with the `ThrownEscape` property using the effect-freeness
-        # computed by `stmt_effect_free` invoked within inlining
+        # computed by `stmt_effect_flags` invoked within inlining
         # TODO throwness ≠ "effect-free-ness"
         if is_effect_free(astate.ir, pc)
             add_liveness_changes!(astate, pc, args, 2)

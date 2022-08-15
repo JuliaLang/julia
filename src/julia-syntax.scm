@@ -562,6 +562,9 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
+            ;; propagate method metadata to keyword sorter
+            ,@(map propagate-method-meta (filter meta? prologue))
+            ,@(filter argwide-nospecialize-meta? prologue)
             ,@(let ((lnns (filter linenum? prologue)))
                 (if (pair? lnns)
                     (list (car lnns))

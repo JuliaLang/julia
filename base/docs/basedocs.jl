@@ -106,10 +106,10 @@ kw"module"
 """
     __init__
 
-`__init__()` function in your module would executes immediately *after* the module is loaded at
-runtime for the first time (i.e., it is only called once and only after all statements in the
-module have been executed). Because it is called *after* fully importing the module, `__init__`
-functions of submodules will be executed *first*. Two typical uses of `__init__` are calling
+The `__init__()` function in a module executes immediately *after* the module is loaded at
+runtime for the first time. It is called once, after all other statements in the module
+have been executed. Because it is called after fully importing the module, `__init__`
+functions of submodules will be executed first. Two typical uses of `__init__` are calling
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
@@ -189,6 +189,8 @@ variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
 and file name the macro is called from, and `__module__`, which is the module the macro is expanded
 in.
+
+See the manual section on [Metaprogramming](@ref) for more information about how to write a macro.
 
 # Examples
 ```jldoctest
@@ -681,6 +683,33 @@ Expr
 ```
 """
 Expr
+
+"""
+    (:)(expr)
+
+`:expr` quotes the expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+The AST may be of type `Expr`, `Symbol`, or a literal value.
+Which of these three types are returned for any given expression is an
+implementation detail.
+
+See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
+
+# Examples
+```jldoctest
+julia> expr = :(a = b + 2*x)
+:(a = b + 2x)
+
+julia> sym = :some_identifier
+:some_identifier
+
+julia> value = :0xff
+0xff
+
+julia> typeof((expr, sym, value))
+Tuple{Expr, Symbol, UInt8}
+```
+"""
+(:)
 
 """
     \$
@@ -2855,7 +2884,7 @@ Base.getproperty
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
-and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
+and the syntax `@atomic a.b = c` calls `setproperty!(a, :b, c, :sequentially_consistent)`.
 
 !!! compat "Julia 1.8"
     `setproperty!` on modules requires at least Julia 1.8.

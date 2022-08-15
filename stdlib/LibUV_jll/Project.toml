@@ -1,6 +1,6 @@
 name = "LibUV_jll"
 uuid = "183b4373-6708-53ba-ad28-60e28bb38547"
-version = "2.0.1+6"
+version = "2.0.1+8"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

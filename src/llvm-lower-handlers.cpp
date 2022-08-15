@@ -166,17 +166,24 @@ static bool lowerExcHandlers(Function &F) {
     Value *handler_sz64 = ConstantInt::get(Type::getInt64Ty(F.getContext()),
                                            sizeof(jl_handler_t));
     Instruction *firstInst = &F.getEntryBlock().front();
-    std::vector<AllocaInst *> buffs;
+    std::vector<Instruction *> buffs;
+    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), 0,
+        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
                 handler_sz, Align(16), "", firstInst);
-        buffs.push_back(buff);
+        if (allocaAddressSpace) {
+            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, Type::getInt8PtrTy(F.getContext(), AddressSpace::Generic));
+            buff_casted->insertAfter(buff);
+            buffs.push_back(buff_casted);
+        } else {
+            buffs.push_back(buff);
+        }
     }
 
     // Lower enter funcs
     for (auto it : EnterDepth) {
         assert(it.second >= 0);
-        AllocaInst *buff = buffs[it.second];
+        Instruction *buff = buffs[it.second];
         CallInst *enter = it.first;
         auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
         Value *lifetime_args[] = {

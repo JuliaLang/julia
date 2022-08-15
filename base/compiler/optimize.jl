@@ -27,8 +27,24 @@ const IR_FLAG_THROW_BLOCK = 0x01 << 3
 # This statement may be removed if its result is unused. In particular it must
 # thus be both pure and effect free.
 const IR_FLAG_EFFECT_FREE = 0x01 << 4
+# This statement was proven not to throw
+const IR_FLAG_NOTHROW     = 0x01 << 5
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
+
+# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
+const InlineCostType = UInt16
+const MAX_INLINE_COST = typemax(InlineCostType)
+const MIN_INLINE_COST = InlineCostType(10)
+
+is_inlineable(src::Union{CodeInfo, Vector{UInt8}}) = ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+set_inlineable!(src::CodeInfo, val::Bool) = src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
+
+function inline_cost_clamp(x::Int)::InlineCostType
+    x > MAX_INLINE_COST && return MAX_INLINE_COST
+    x < MIN_INLINE_COST && return MIN_INLINE_COST
+    return convert(InlineCostType, x)
+end
 
 #####################
 # OptimizationState #
@@ -65,7 +81,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
                          mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = is_source_inferred(src)
-        src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inferred && src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
@@ -96,17 +112,20 @@ mutable struct OptimizationState
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
     inlining::InliningState
-    function OptimizationState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
+    cfg::Union{Nothing,CFG}
+    function OptimizationState(frame::InferenceState, params::OptimizationParams,
+                               interp::AbstractInterpreter, recompute_cfg::Bool=true)
         s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
             EdgeTracker(s_edges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
             interp)
-        return new(frame.linfo,
-                   frame.src, nothing, frame.stmt_info, frame.mod,
-                   frame.sptypes, frame.slottypes, inlining)
+        cfg = recompute_cfg ? nothing : frame.cfg
+        return new(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
+                   frame.sptypes, frame.slottypes, inlining, cfg)
     end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams, interp::AbstractInterpreter)
+    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
+                               interp::AbstractInterpreter)
         # prepare src for running optimization passes
         # if it isn't already
         nssavalues = src.ssavaluetypes
@@ -115,6 +134,7 @@ mutable struct OptimizationState
         else
             nssavalues = length(src.ssavaluetypes::Vector{Any})
         end
+        sptypes = sptypes_from_meth_instance(linfo)
         nslots = length(src.slotflags)
         slottypes = src.slottypes
         if slottypes === nothing
@@ -130,9 +150,8 @@ mutable struct OptimizationState
             nothing,
             WorldView(code_cache(interp), get_world_counter()),
             interp)
-        return new(linfo,
-                   src, nothing, stmt_info, mod,
-                   sptypes_from_meth_instance(linfo), slottypes, inlining)
+        return new(linfo, src, nothing, stmt_info, mod,
+                   sptypes, slottypes, inlining, nothing)
     end
 end
 
@@ -182,149 +201,94 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 """
-    stmt_effect_free(stmt, rt, src::Union{IRCode,IncrementalCompact})
+    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact})
 
-Determine whether a `stmt` is "side-effect-free", i.e. may be removed if it has no uses.
+Returns a tuple of (effect_free_and_nothrow, nothrow) for a given statement.
 """
-function stmt_effect_free(@nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
-    isa(stmt, PiNode) && return true
-    isa(stmt, PhiNode) && return true
-    isa(stmt, ReturnNode) && return false
-    isa(stmt, GotoNode) && return false
-    isa(stmt, GotoIfNot) && return false
-    isa(stmt, Slot) && return false # Slots shouldn't occur in the IR at this point, but let's be defensive here
-    isa(stmt, GlobalRef) && return isdefined(stmt.mod, stmt.name)
+function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+    # TODO: We're duplicating analysis from inference here.
+    isa(stmt, PiNode) && return (true, true)
+    isa(stmt, PhiNode) && return (true, true)
+    isa(stmt, ReturnNode) && return (false, true)
+    isa(stmt, GotoNode) && return (false, true)
+    isa(stmt, GotoIfNot) && return (false, argextype(stmt.cond, src) ⊑ Bool)
+    isa(stmt, Slot) && return (false, false) # Slots shouldn't occur in the IR at this point, but let's be defensive here
+    if isa(stmt, GlobalRef)
+        nothrow = isdefined(stmt.mod, stmt.name)
+        return (nothrow, nothrow)
+    end
     if isa(stmt, Expr)
         (; head, args) = stmt
         if head === :static_parameter
             etyp = (isa(src, IRCode) ? src.sptypes : src.ir.sptypes)[args[1]::Int]
             # if we aren't certain enough about the type, it might be an UndefVarError at runtime
-            return isa(etyp, Const)
+            nothrow = isa(etyp, Const)
+            return (nothrow, nothrow)
         end
         if head === :call
             f = argextype(args[1], src)
             f = singleton_type(f)
-            f === nothing && return false
+            f === nothing && return (false, false)
             if isa(f, IntrinsicFunction)
-                intrinsic_effect_free_if_nothrow(f) || return false
-                return intrinsic_nothrow(f,
-                        Any[argextype(args[i], src) for i = 2:length(args)])
+                nothrow = intrinsic_nothrow(f,
+                    Any[argextype(args[i], src) for i = 2:length(args)])
+                nothrow || return (false, false)
+                return (intrinsic_effect_free_if_nothrow(f), nothrow)
             end
-            contains_is(_PURE_BUILTINS, f) && return true
+            contains_is(_PURE_BUILTINS, f) && return (true, true)
             # `get_binding_type` sets the type to Any if the binding doesn't exist yet
             if f === Core.get_binding_type
                 length(args) == 3 || return false
                 M, s = argextype(args[2], src), argextype(args[3], src)
-                return get_binding_type_effect_free(M, s)
+                total = get_binding_type_effect_free(M, s)
+                return (total, total)
             end
-            contains_is(_EFFECT_FREE_BUILTINS, f) || return false
-            rt === Bottom && return false
-            return _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
+            rt === Bottom && return (false, false)
+            nothrow = _builtin_nothrow(f, Any[argextype(args[i], src) for i = 2:length(args)], rt)
+            nothrow || return (false, false)
+            return (contains_is(_EFFECT_FREE_BUILTINS, f), nothrow)
         elseif head === :new
             typ = argextype(args[1], src)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
             typ, isexact = instanceof_tfunc(typ)
-            isexact || return false
-            isconcretedispatch(typ) || return false
+            isexact || return (false, false)
+            isconcretedispatch(typ) || return (false, false)
             typ = typ::DataType
-            fieldcount(typ) >= length(args) - 1 || return false
+            fieldcount(typ) >= length(args) - 1 || return (false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
-                eT ⊑ fT || return false
+                eT ⊑ fT || return (false, false)
             end
-            return true
+            return (true, true)
         elseif head === :foreigncall
-            return foreigncall_effect_free(stmt, src)
+            effects = foreigncall_effects(stmt) do @nospecialize x
+                argextype(x, src)
+            end
+            effect_free = is_effect_free(effects)
+            nothrow = is_nothrow(effects)
+            return (effect_free & nothrow, nothrow)
         elseif head === :new_opaque_closure
-            length(args) < 4 && return false
+            length(args) < 4 && return (false, false)
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ)
-            isexact || return false
-            typ ⊑ Tuple || return false
+            isexact || return (false, false)
+            typ ⊑ Tuple || return (false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
-            src = argextype(args[4], src)
-            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
-                return false
+            source = argextype(args[4], src)
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && source ⊑ Method)
+                return (false, false)
             end
-            return true
+            return (true, true)
         elseif head === :isdefined || head === :the_exception || head === :copyast || head === :inbounds || head === :boundscheck
-            return true
+            return (true, true)
         else
             # e.g. :loopinfo
-            return false
+            return (false, false)
         end
     end
-    return true
-end
-
-function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
-    args = stmt.args
-    name = args[1]
-    isa(name, QuoteNode) && (name = name.value)
-    isa(name, Symbol) || return false
-    ndims = alloc_array_ndims(name)
-    if ndims !== nothing
-        if ndims == 0
-            return new_array_no_throw(args, src)
-        else
-            return alloc_array_no_throw(args, ndims, src)
-        end
-    end
-    return false
-end
-
-function alloc_array_ndims(name::Symbol)
-    if name === :jl_alloc_array_1d
-        return 1
-    elseif name === :jl_alloc_array_2d
-        return 2
-    elseif name === :jl_alloc_array_3d
-        return 3
-    elseif name === :jl_new_array
-        return 0
-    end
-    return nothing
-end
-
-const FOREIGNCALL_ARG_START = 6
-
-function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
-    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
-    dims = Csize_t[]
-    for i in 1:ndims
-        dim = argextype(args[i+FOREIGNCALL_ARG_START], src)
-        isa(dim, Const) || return false
-        dimval = dim.val
-        isa(dimval, Int) || return false
-        push!(dims, reinterpret(Csize_t, dimval))
-    end
-    return _new_array_no_throw(atype, ndims, dims)
-end
-
-function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
-    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
-    dims = argextype(args[FOREIGNCALL_ARG_START+1], src)
-    isa(dims, Const) || return dims === Tuple{}
-    dimsval = dims.val
-    isa(dimsval, Tuple{Vararg{Int}}) || return false
-    ndims = nfields(dimsval)
-    isa(ndims, Int) || return false
-    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
-    return _new_array_no_throw(atype, ndims, dims)
-end
-
-function _new_array_no_throw(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
-    isa(atype, DataType) || return false
-    eltype = atype.parameters[1]
-    iskindtype(typeof(eltype)) || return false
-    elsz = aligned_sizeof(eltype)
-    return ccall(:jl_array_validate_dims, Cint,
-        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
-        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
+    return (true, true)
 end
 
 """
@@ -415,7 +379,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
             for i in 1:length(ir.stmts)
                 node = ir.stmts[i]
                 stmt = node[:inst]
-                if stmt_affects_purity(stmt, ir) && !stmt_effect_free(stmt, node[:type], ir)
+                if stmt_affects_purity(stmt, ir) && !stmt_effect_flags(stmt, node[:type], ir)[1]
                     proven_pure = false
                     break
                 end
@@ -447,7 +411,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 @assert isconstType(result)
                 analyzed = ConstAPI(result.parameters[1])
             end
-            force_noinline || (src.inlineable = true)
+            force_noinline || set_inlineable!(src, true)
         end
     end
 
@@ -468,14 +432,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
         else
             force_noinline = true
         end
-        if !src.inlineable && result === Bottom
+        if !is_inlineable(src) && result === Bottom
             force_noinline = true
         end
     end
     if force_noinline
-        src.inlineable = false
+        set_inlineable!(src, false)
     elseif isa(def, Method)
-        if src.inlineable && isdispatchtuple(specTypes)
+        if is_inlineable(src) && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             # compute the cost (size) of inlining this code
@@ -484,7 +448,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 cost_threshold += params.inline_tupleret_bonus
             end
             # if the method is declared as `@inline`, increase the cost threshold 20x
-            if src.inlineable
+            if is_inlineable(src)
                 cost_threshold += 19*default
             end
             # a few functions get special treatment
@@ -494,7 +458,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                     cost_threshold += 4*default
                 end
             end
-            src.inlineable = inline_worthy(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
         end
     end
 
@@ -545,8 +509,8 @@ macro pass(name, expr)
     end
 end
 
-matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
-matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(optimize_until::Int, stage, _) = optimize_until == stage
+matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
 function run_passes(
@@ -555,7 +519,7 @@ function run_passes(
     caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
-    __stage__ = 1  # used by @pass
+    __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
@@ -564,7 +528,7 @@ function run_passes(
     @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
-    @pass "SROA"      ir = sroa_pass!(ir)
+    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      ir = adce_pass!(ir)
     @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
@@ -603,8 +567,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     meta = Expr[]
     idx = 1
     oldidx = 1
-    ssachangemap = fill(0, length(code))
-    labelchangemap = coverage ? fill(0, length(code)) : ssachangemap
+    nstmts = length(code)
+    ssachangemap = labelchangemap = nothing
     prevloc = zero(eltype(ci.codelocs))
     while idx <= length(code)
         codeloc = codelocs[idx]
@@ -615,6 +579,12 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, nothing)
             insert!(ssaflags, idx, IR_FLAG_NULL)
+            if ssachangemap === nothing
+                ssachangemap = fill(0, nstmts)
+            end
+            if labelchangemap === nothing
+                labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+            end
             ssachangemap[oldidx] += 1
             if oldidx < length(labelchangemap)
                 labelchangemap[oldidx + 1] += 1
@@ -630,6 +600,12 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, nothing)
                 insert!(ssaflags, idx + 1, ssaflags[idx])
+                if ssachangemap === nothing
+                    ssachangemap = fill(0, nstmts)
+                end
+                if labelchangemap === nothing
+                    labelchangemap = coverage ? fill(0, nstmts) : ssachangemap
+                end
                 if oldidx < length(ssachangemap)
                     ssachangemap[oldidx + 1] += 1
                     coverage && (labelchangemap[oldidx + 1] += 1)
@@ -641,7 +617,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
         oldidx += 1
     end
 
-    renumber_ir_elements!(code, ssachangemap, labelchangemap)
+    cfg = sv.cfg
+    if ssachangemap !== nothing && labelchangemap !== nothing
+        renumber_ir_elements!(code, ssachangemap, labelchangemap)
+        cfg = nothing # recompute CFG
+    end
 
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
@@ -649,7 +629,9 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     strip_trailing_junk!(ci, code, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
-    cfg = compute_basic_blocks(code)
+    if cfg === nothing
+        cfg = compute_basic_blocks(code)
+    end
     return IRCode(stmts, cfg, linetable, sv.slottypes, meta, sv.sptypes)
 end
 
@@ -739,7 +721,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             return 0
         end
         return error_path ? params.inline_error_path_cost : params.inline_nonleaf_penalty
-    elseif head === :foreigncall || head === :invoke || head == :invoke_modify
+    elseif head === :foreigncall || head === :invoke || head === :invoke_modify
         # Calls whose "return type" is Union{} do not actually return:
         # they are errors. Since these are not part of the typical
         # run-time of the function, we omit them from
@@ -788,16 +770,16 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_worthy(ir::IRCode,
-                       params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
+function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
+                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
         thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return false
+        bodycost > cost_threshold && return MAX_INLINE_COST
     end
-    return true
+    return inline_cost_clamp(bodycost)
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)

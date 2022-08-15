@@ -13,9 +13,14 @@
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
+#include <llvm/Passes/StandardInstrumentations.h>
+
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 #include "debug-registry.h"
+#include "platform.h"
 
 #include <stack>
 #include <queue>
@@ -69,6 +74,41 @@ static inline bool imaging_default() {
     return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
 }
 
+struct OptimizationOptions {
+    bool lower_intrinsics;
+    bool dump_native;
+    bool external_use;
+
+    static constexpr OptimizationOptions defaults() {
+        return {true, false, false};
+    }
+};
+
+struct NewPM {
+    std::unique_ptr<TargetMachine> TM;
+    StandardInstrumentations SI;
+    std::unique_ptr<PassInstrumentationCallbacks> PIC;
+    PassBuilder PB;
+    ModulePassManager MPM;
+    OptimizationLevel O;
+
+    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults());
+
+    void run(Module &M);
+};
+
+struct AnalysisManagers {
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    AnalysisManagers(PassBuilder &PB);
+    AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O);
+};
+
+OptimizationLevel getOptLevel(int optlevel);
+
 struct jl_locked_stream {
     JL_STREAM *stream = nullptr;
     std::mutex mutex;
@@ -115,11 +155,6 @@ struct jl_returninfo_t {
     size_t union_align;
     size_t union_minalign;
     unsigned return_roots;
-};
-
-struct jl_llvmf_dump_t {
-    LLVMOrcThreadSafeModuleRef TSM;
-    LLVMValueRef F;
 };
 
 typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
@@ -374,6 +409,7 @@ public:
     void RegisterJITEventListener(JITEventListener *L);
 #endif
 
+    orc::SymbolStringPtr mangle(StringRef Name);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(orc::ThreadSafeModule M);
 

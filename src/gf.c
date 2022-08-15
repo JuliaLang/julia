@@ -109,7 +109,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
     for (int locked = 0; ; locked++) {
         jl_array_t *speckeyset = jl_atomic_load_acquire(&m->speckeyset);
         jl_svec_t *specializations = jl_atomic_load_relaxed(&m->specializations);
-        size_t i, cl = jl_svec_len(specializations);
+        size_t i = -1, cl = jl_svec_len(specializations);
         if (hv) {
             ssize_t idx = jl_smallintset_lookup(speckeyset, speccache_eq, type, specializations, hv);
             if (idx != -1) {
@@ -363,7 +363,7 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_method_instance_t *mi, size_t mi
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst->min_world <= min_world && max_world <= codeinst->max_world) {
-            jl_value_t *code = codeinst->inferred;
+            jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
             if (code && (code == jl_nothing || jl_ir_flag_inferred((jl_array_t*)code)))
                 return (jl_value_t*)codeinst;
         }
@@ -409,7 +409,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     codeinst->min_world = min_world;
     codeinst->max_world = max_world;
     codeinst->rettype = rettype;
-    codeinst->inferred = inferred;
+    jl_atomic_store_release(&codeinst->inferred, inferred);
     //codeinst->edges = NULL;
     if ((const_flags & 2) == 0)
         inferred_const = NULL;
@@ -424,7 +424,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     codeinst->ipo_purity_bits = ipo_effects;
-    codeinst->purity_bits = effects;
+    jl_atomic_store_relaxed(&codeinst->purity_bits, effects);
     codeinst->argescapes = argescapes;
     codeinst->relocatability = relocatability;
     return codeinst;
@@ -1946,7 +1946,8 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
 // full is a boolean indicating if that method fully covers the input
 //
 // lim is the max # of methods to return. if there are more, returns jl_false.
-// -1 for no limit.
+// Negative values stand for no limit.
+// Unless lim == -1, remove matches that are unambiguously covered by earler ones
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig)
 {
@@ -3036,7 +3037,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 if (!subt2 && subt)
                     break;
                 if (subt == subt2) {
-                    if (lim >= 0) {
+                    if (lim != -1) {
                         if (subt || !jl_has_empty_intersection(m->sig, m2->sig))
                             if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig))
                                 break;
@@ -3190,7 +3191,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 }
             }
             // when limited, skip matches that are covered by earlier ones (and aren't perhaps ambiguous with them)
-            if (lim >= 0) {
+            if (lim != -1) {
                 for (i = 0; i < len; i++) {
                     if (skip[i])
                         continue;

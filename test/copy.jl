@@ -245,3 +245,10 @@ end
 @testset "deepcopy_internal arrays" begin
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
+
+@testset "`copyto!`'s unaliasing" begin
+    a = view([1:3;], :)
+    @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
+    a = [1:3;]
+    @test copyto!(a, 2:3, 1:1, a, 1:2, 1:1) == [1;1:2;]
+end
