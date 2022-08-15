@@ -1,10 +1,13 @@
 @testset "Hooks for Core integration" begin
-    @testset "parsing empty strings" begin
+    @testset "whitespace parsing" begin
         @test JuliaSyntax.core_parser_hook("", "somefile", 0, :statement) == Core.svec(nothing, 0)
         @test JuliaSyntax.core_parser_hook("", "somefile", 0, :statement) == Core.svec(nothing, 0)
 
         @test JuliaSyntax.core_parser_hook("  ", "somefile", 2, :statement) == Core.svec(nothing,2)
         @test JuliaSyntax.core_parser_hook(" #==# ", "somefile", 6, :statement) == Core.svec(nothing,6)
+
+        @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 0, :statement) == Core.svec(:x,4)
+        @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 0, :atom)      == Core.svec(:x,2)
     end
 
     @testset "filename is used" begin

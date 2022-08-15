@@ -24,9 +24,10 @@ function core_parser_hook(code, filename, lineno, offset, options)
 
         stream = ParseStream(io)
         rule = options === :all ? :toplevel : options
-        if rule !== :toplevel
-            # To copy the flisp parser driver, we ignore leading and trailing
-            # trivia when parsing statements or atoms
+        if rule === :statement || rule === :atom
+            # To copy the flisp parser driver:
+            # * Parsing atoms      consumes leading trivia
+            # * Parsing statements consumes leading+trailing trivia
             bump_trivia(stream)
             if peek(stream) == K"EndMarker"
                 # If we're at the end of stream after skipping whitespace, just
@@ -36,7 +37,7 @@ function core_parser_hook(code, filename, lineno, offset, options)
             end
         end
         JuliaSyntax.parse(stream; rule=rule)
-        if rule !== :toplevel
+        if rule === :statement
             bump_trivia(stream)
         end
 
