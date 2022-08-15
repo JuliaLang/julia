@@ -1261,8 +1261,7 @@ issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
 -(r::StepRangeLen{T,R,S,L}) where {T,R,S,L} =
     StepRangeLen{T,R,S,L}(-r.ref, -r.step, r.len, r.offset)
 function -(r::LinRange)
-    start = -r.start
-    LinRange{typeof(start)}(start, -r.stop, length(r))
+    LinRange{typeof(r.start)}(-r.start, -r.stop, length(r))
 end
 
 # promote eltype if at least one container wouldn't change, otherwise join container types.
