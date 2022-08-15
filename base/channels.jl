@@ -380,8 +380,26 @@ end
 """
     fetch(c::Channel)
 
-Wait for and get the first available item from the channel. Does not
-remove the item. `fetch` is unsupported on an unbuffered (0-size) channel.
+Waits for and returns (with removing) the first available item from the `Channel`.
+Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(3) do ch
+           foreach(i -> put!(ch, i), 1:3)
+       end;
+
+julia> fetch(c)
+1
+
+julia> collect(c)  # item is not removed
+3-element Vector{Any}:
+ 1
+ 2
+ 3
+```
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
 function fetch_buffered(c::Channel)
@@ -402,10 +420,32 @@ fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on
 """
     take!(c::Channel)
 
-Remove and return a value from a [`Channel`](@ref). Blocks until data is available.
+Removes and returns a value from a [`Channel`](@ref) in order. Blocks until data is available.
+For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different task.
 
-For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different
-task.
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> put!(c, 1);
+
+julia> take!(c)
+1
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel(0);
+
+julia> task = Task(() -> put!(c, 1));
+
+julia> schedule(task);
+
+julia> take!(c)
+1
+```
 """
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
@@ -439,11 +479,41 @@ end
 """
     isready(c::Channel)
 
-Determine whether a [`Channel`](@ref) has a value stored to it. Returns
-immediately, does not block.
+Determines whether a [`Channel`](@ref) has a value stored in it.
+Returns immediately, does not block.
 
-For unbuffered channels returns `true` if there are tasks waiting
-on a [`put!`](@ref).
+For unbuffered channels returns `true` if there are tasks waiting on a [`put!`](@ref).
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> isready(c)
+false
+
+julia> put!(c, 1);
+
+julia> isready(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel();
+
+julia> isready(c)  # no tasks waiting to put!
+false
+
+julia> task = Task(() -> put!(c, 1));
+
+julia> schedule(task);  # schedule a put! task
+
+julia> isready(c)
+true
+```
+
 """
 isready(c::Channel) = n_avail(c) > 0
 isempty(c::Channel) = n_avail(c) == 0
@@ -457,6 +527,30 @@ lock(f, c::Channel) = lock(f, c.cond_take)
 unlock(c::Channel) = unlock(c.cond_take)
 trylock(c::Channel) = trylock(c.cond_take)
 
+"""
+    wait(c::Channel)
+
+Blocks until the `Channel` [`isready`](@ref).
+
+```jldoctest
+julia> c = Channel(1);
+
+julia> isready(c)
+false
+
+julia> task = Task(() -> wait(c));
+
+julia> schedule(task);
+
+julia> istaskdone(task)  # task is blocked because channel is not ready
+false
+
+julia> put!(c, 1);
+
+julia> istaskdone(task)  # task is now unblocked
+true
+```
+"""
 function wait(c::Channel)
     isready(c) && return
     lock(c)

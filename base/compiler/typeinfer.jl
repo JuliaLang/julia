@@ -430,12 +430,35 @@ function adjust_effects(sv::InferenceState)
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
+    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv)) do i::Int
+            return is_mutation_free_argtype(sv.slottypes[i])
+        end
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
     if is_consistent_if_notreturned(ipo_effects) && is_consistent_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
         # (indicated by `CONSISTENT_IF_NOTRETURNED`), we may be able to refine it if the return
         # type guarantees that the allocations are never returned
         consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
         ipo_effects = Effects(ipo_effects; consistent)
+    end
+    if is_consistent_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; consistent)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
+        end
+    end
+    if is_effect_free_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; effect_free)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_FALSE)
+        end
     end
 
     # override the analyzed effects using manually annotated effect settings
@@ -446,7 +469,7 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :effect_free)
-            ipo_effects = Effects(ipo_effects; effect_free=true)
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :nothrow)
             ipo_effects = Effects(ipo_effects; nothrow=true)
@@ -456,6 +479,9 @@ function adjust_effects(sv::InferenceState)
         end
         if is_effect_overridden(override, :notaskstate)
             ipo_effects = Effects(ipo_effects; notaskstate=true)
+        end
+        if is_effect_overridden(override, :inaccessiblememonly)
+            ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
     end
 
@@ -854,7 +880,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
+        inferred = @atomic :monotonic code.inferred
+        if inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
             # we already inferred this edge before and decided to discard the inferred code,
             # nevertheless we re-infer it here again and keep it around in the local cache
             # since the inliner will request to use it later
@@ -984,7 +1011,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            inf = code.inferred
+            inf = @atomic :monotonic code.inferred
             if use_const_api(code)
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())

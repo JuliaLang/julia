@@ -147,6 +147,8 @@ end
 @test Base.front((a = 1, )) ≡ NamedTuple()
 @test_throws ArgumentError Base.tail(NamedTuple())
 @test_throws ArgumentError Base.front(NamedTuple())
+@test @inferred(reverse((a=1,))) === (a=1,)
+@test @inferred(reverse((a=1, b=:c))) === (b=:c, a=1)
 
 # syntax errors
 

@@ -1309,6 +1309,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset let v = (...) ... end
 
 # With begin/end or function call
 
@@ -1717,8 +1718,7 @@ Int64
 
 julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
-  from f(a)
-     @ Main none:1
+  from f(a) @ Main none:1
 Arguments
   #self#::Core.Const(f)
   a::Int64

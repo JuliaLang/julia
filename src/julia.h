@@ -230,8 +230,8 @@ typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
     jl_value_t *method;
     jl_sym_t *file;
-    intptr_t line;
-    intptr_t inlined_at;
+    int32_t line;
+    int32_t inlined_at;
 } jl_line_info_node_t;
 
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
@@ -247,6 +247,7 @@ typedef union __jl_purity_overrides_t {
         // assertions about any called functions.
         uint8_t ipo_terminates_locally  : 1;
         uint8_t ipo_notaskstate         : 1;
+        uint8_t ipo_inaccessiblememonly : 1;
     } overrides;
     uint8_t bits;
 } _jl_purity_overrides_t;
@@ -391,7 +392,7 @@ typedef struct _jl_code_instance_t {
     // inference state cache
     jl_value_t *rettype; // return type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
-    jl_value_t *inferred; // inferred jl_code_info_t, or jl_nothing, or null
+    _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t, or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
@@ -401,28 +402,30 @@ typedef struct _jl_code_instance_t {
     union {
         uint32_t ipo_purity_bits;
         struct {
-            uint8_t ipo_consistent   : 2;
-            uint8_t ipo_effect_free  : 2;
-            uint8_t ipo_nothrow      : 2;
-            uint8_t ipo_terminates   : 2;
-            uint8_t ipo_nonoverlayed : 1;
-            uint8_t ipo_notaskstate  : 2;
+            uint8_t ipo_consistent          : 2;
+            uint8_t ipo_effect_free         : 2;
+            uint8_t ipo_nothrow             : 2;
+            uint8_t ipo_terminates          : 2;
+            uint8_t ipo_nonoverlayed        : 1;
+            uint8_t ipo_notaskstate         : 2;
+            uint8_t ipo_inaccessiblememonly : 2;
         } ipo_purity_flags;
     };
     union {
         uint32_t purity_bits;
         struct {
-            uint8_t consistent   : 2;
-            uint8_t effect_free  : 2;
-            uint8_t nothrow      : 2;
-            uint8_t terminates   : 2;
-            uint8_t nonoverlayed : 1;
-            uint8_t notaskstate  : 2;
+            uint8_t consistent          : 2;
+            uint8_t effect_free         : 2;
+            uint8_t nothrow             : 2;
+            uint8_t terminates          : 2;
+            uint8_t nonoverlayed        : 1;
+            uint8_t notaskstate         : 2;
+            uint8_t inaccessiblememonly : 2;
         } purity_flags;
     };
 #else
     uint32_t ipo_purity_bits;
-    uint32_t purity_bits;
+    _Atomic(uint32_t) purity_bits;
 #endif
     jl_value_t *argescapes; // escape information of call arguments
 

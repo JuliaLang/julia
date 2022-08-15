@@ -581,15 +581,6 @@ any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
-# equivalent to any(f, t), to be used only in bootstrap
-_tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
-function _tuple_any(f::Function, tf::Bool, a, b...)
-    @inline
-    _tuple_any(f, tf | f(a), b...)
-end
-_tuple_any(f::Function, tf::Bool) = tf
-
-
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
     @_total_meta
