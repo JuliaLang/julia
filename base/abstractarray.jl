@@ -2745,12 +2745,12 @@ function _stack(dims, ::Union{HasShape, HasLength}, iter)
     end
 end
 
-function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, S}
+function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_iterator_axes(A)) where {T, S}
     xit = iterate(A)
     nothing === xit && return _empty_stack(:, T, S, A)
     x1, _ = xit
-    ax1 = _axes(x1)
-    B = similar(_first_array(x1, A), T, ax1..., Aax...)
+    ax1 = _iterator_axes(x1)
+    B = similar(_ensure_array(x1), T, ax1..., Aax...)
     off = firstindex(B)
     len = length(x1)
     while xit !== nothing
@@ -2763,9 +2763,9 @@ function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_axes(A)) where {T, 
     B
 end
 
-_axes(x) = _axes(x, IteratorSize(x))
-_axes(x, ::HasLength) = (OneTo(length(x)),)
-_axes(x, ::IteratorSize) = axes(x)
+_iterator_axes(x) = _iterator_axes(x, IteratorSize(x))
+_iterator_axes(x, ::HasLength) = (OneTo(length(x)),)
+_iterator_axes(x, ::IteratorSize) = axes(x)
 
 # For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
@@ -2782,19 +2782,19 @@ end
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S} =
     _dim_stack(dims, T, S, A)
 
-_vec_axis(A, ax=_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
+_vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
 @constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit
-    ax1 = _axes(x1)
+    ax1 = _iterator_axes(x1)
     N1 = length(ax1)+1
-    dims in 1:N1 || throw(ArgumentError(lazy"cannot stack slices ndims(x) = $(N1-1) along dims = $dims"))
+    dims in 1:N1 || throw(ArgumentError("cannot stack slices ndims(x) = $(N1-1) along dims = $dims"))
 
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
-    B = similar(_first_array(x1, A), T, outax...)
+    B = similar(_ensure_array(x1), T, outax...)
 
     if dims == 1
         _dim_stack!(Val(1), B, x1, xrest)
@@ -2814,25 +2814,23 @@ function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
     copyto!(view(B, before..., i, after...), x1)
 
     for x in xrest
-        _stack_size_check(x, _axes(x1))
+        _stack_size_check(x, _iterator_axes(x1))
         i += 1
         @inbounds copyto!(view(B, before..., i, after...), x)
     end
 end
 
 @inline function _stack_size_check(x, ax1::Tuple)
-    if _axes(x) != ax1
+    if _iterator_axes(x) != ax1
         uax1 = map(UnitRange, ax1)
         uaxN = map(UnitRange, axes(x))
         throw(DimensionMismatch(
-            lazy"stack expects uniform slices, got axes(x) = $uaxN while first had $uax1"))
+            "stack expects uniform slices, got axes(x) = $uaxN while first had $uax1"))
     end
 end
 
-# For `similar`, the goal is to stack an Array of CuArrays to a CuArray:
-_first_array(x::AbstractArray, ys...) = x
-_first_array(x, ys...) = _first_array(ys...)
-_first_array() = 1:0
+_ensure_array(x::AbstractArray) = x
+_ensure_array(x) = 1:0  # passed to similar, makes stack's output an Array
 
 _empty_stack(_...) = throw(ArgumentError("`stack` on an empty collection is not allowed"))
 
