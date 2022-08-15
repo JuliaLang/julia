@@ -483,7 +483,15 @@ end
 function isdisjoint(a::AbstractRange, b::AbstractRange)
     isempty(a) && return true
     isempty(b) && return true
-    ((last(a) < first(b)) & (first(a) < first(b))) | ((last(b) < first(a)) & (first(b) < first(a)))
+    fa, la = first(a), last(a)
+    fb, lb = first(b), last(b)
+    if step(a) < 0
+        fa, la = la, fa
+    end
+    if step(b) < 0
+        fb, lb = lb, fb
+    end
+    return ((la < fb) & (fa < fb)) | ((lb < fa) & (fb < fa))
 end
 
 ## partial ordering of sets by containment

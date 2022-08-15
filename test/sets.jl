@@ -428,6 +428,9 @@ end
     @test !isdisjoint(10:20, 1:10)
     @test !isdisjoint(5:20, 1:10)
     @test isdisjoint(10:9, 1:10)
+    @test !isdisjoint(10:-1:1, 3:4)
+    @test !isdisjoint(3:4, 10:-1:1)
+    @test !isdisjoint(4:-1:3, 10:-1:1)
 end
 
 @testset "unique" begin
