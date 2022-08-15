@@ -1928,12 +1928,24 @@ let A = Tuple{Ref{T}, Vararg{T}} where T,
     B = Tuple{Ref{U}, Union{Ref{S}, Ref{U}, Int}, Union{Ref{S}, S}} where S where U,
     C = Tuple{Ref{U}, Union{Ref{S}, Ref{U}, Ref{W}}, Union{Ref{S}, W, V}} where V<:AbstractArray where W where S where U
     I = typeintersect(A, B)
+    Ts = (Tuple{Ref{Int}, Int, Int}, Tuple{Ref{Ref{Int}}, Ref{Int}, Ref{Int}})
     @test I != Union{}
     @test I <: A
-    @test I <: B
-    # avoid stack overflow
+    @test_broken I <: B
+    for T in Ts
+        if T <: A && T <: B
+            @test T <: I
+        end
+    end
     J = typeintersect(A, C)
-    @test_broken J != Union{}
+    @test J != Union{}
+    @test J <: A
+    @test_broken J <: C
+    for T in Ts
+        if T <: A && T <: C
+            @test T <: J
+        end
+    end
 end
 
 let A = Tuple{Dict{I,T}, I, T} where T where I,
@@ -1964,8 +1976,9 @@ let A = Tuple{Any, Type{Ref{_A}} where _A},
     B = Tuple{Type{T}, Type{<:Union{Ref{T}, T}}} where T,
     I = typeintersect(A, B)
     @test I != Union{}
-    # TODO: this intersection result is still too narrow
-    @test_broken Tuple{Type{Ref{Integer}}, Type{Ref{Integer}}} <: I
+    @test Tuple{Type{Ref{Integer}}, Type{Ref{Integer}}} <: I
+    # TODO: this intersection result seems too wide (I == B) ?
+    @test_broken !<:(Tuple{Type{Int}, Type{Int}}, I)
 end
 
 @testintersect(Tuple{Type{T}, T} where T<:(Tuple{Vararg{_A, _B}} where _B where _A),
