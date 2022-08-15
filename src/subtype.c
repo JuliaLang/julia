@@ -3191,7 +3191,7 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
         v = v->prev;
     }
     JL_GC_POP();
-    return count;
+    return count + 1;
 }
 
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -3205,11 +3205,11 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     jl_value_t **merged = &is[3];
     jl_savedenv_t se, me;
     save_env(e, saved, &se);
-    int lastset = 0, niter = 0, total_iter = 0, merge_count = 0;
+    int lastset = 0, niter = 0, total_iter = 0;
     jl_value_t *ii = intersect(x, y, e, 0);
     is[0] = ii;  // root
     if (is[0] != jl_bottom_type)
-        merge_count = merge_env(e, merged, &me, merge_count);
+        niter = merge_env(e, merged, &me, niter);
     restore_env(e, *saved, &se);
     while (e->Runions.more) {
         if (e->emptiness_only && ii != jl_bottom_type)
@@ -3225,7 +3225,7 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         is[0] = ii;
         is[1] = intersect(x, y, e, 0);
         if (is[1] != jl_bottom_type)
-            merge_count = merge_env(e, merged, &me, merge_count);
+            niter = merge_env(e, merged, &me, niter);
         restore_env(e, *saved, &se);
         if (is[0] == jl_bottom_type)
             ii = is[1];
@@ -3234,15 +3234,14 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         else {
             // TODO: the repeated subtype checks in here can get expensive
             ii = jl_type_union(is, 2);
-            niter++;
         }
         total_iter++;
-        if (niter > 3 || total_iter > 400000) {
+        if (niter > 4 || total_iter > 400000) {
             ii = y;
             break;
         }
     }
-    if (merge_count){
+    if (niter){
         restore_env(e, *merged, &me);
         free_env(&me);
     }
