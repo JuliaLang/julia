@@ -2784,13 +2784,13 @@ _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S}
 
 _vec_axis(A, ax=_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
-function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit
     ax1 = _axes(x1)
     N1 = length(ax1)+1
-    dims in 1:N1 || throw(ArgumentError("cannot stack slices ndims(x) = $(N1-1) along dims = $dims"))
+    dims in 1:N1 || throw(ArgumentError(lazy"cannot stack slices ndims(x) = $(N1-1) along dims = $dims"))
 
     newaxis = _vec_axis(A)
     outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
@@ -2822,10 +2822,10 @@ end
 
 @inline function _stack_size_check(x, ax1::Tuple)
     if _axes(x) != ax1
-        uax1 = UnitRange.(ax1)
-        uaxN = UnitRange.(axes(x))
+        uax1 = map(UnitRange, ax1)
+        uaxN = map(UnitRange, axes(x))
         throw(DimensionMismatch(
-            "stack expects uniform slices, got axes(x) = $uaxN while first had $uax1"))
+            lazy"stack expects uniform slices, got axes(x) = $uaxN while first had $uax1"))
     end
 end
 
