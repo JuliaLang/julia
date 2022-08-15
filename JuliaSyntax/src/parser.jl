@@ -151,7 +151,7 @@ function bump_closing_token(ps, closing_kind)
     end
     # mark as trivia => ignore in AST.
     emit(ps, mark, K"error", TRIVIA_FLAG,
-         error="Expected `$(untokenize(closing_kind))` but got unexpected tokens")
+         error="Expected `$(untokenize(closing_kind))`")
     if peek(ps) == closing_kind
         bump(ps, TRIVIA_FLAG)
     end
@@ -2798,11 +2798,11 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     if k == K"," || (is_closing_token(ps, k) && k != K";")
         if k == K","
             # [x,]  ==>  (vect x)
-            # [x    ==>  (vect x)
             bump(ps, TRIVIA_FLAG)
         end
         # [x]      ==>  (vect x)
         # [x \n ]  ==>  (vect x)
+        # [x       ==>  (vect x (error-t))
         parse_vect(ps, closer)
     elseif k == K"for"
         # [x for a in as]  ==>  (comprehension (generator x (= a as)))
@@ -2957,6 +2957,9 @@ function parse_brackets(after_parse::Function,
             num_semis += 1
             bump(ps, TRIVIA_FLAG)
             bump_trivia(ps)
+        elseif is_closing_token(ps, k)
+            # Error; handled below in bump_closing_token
+            break
         else
             mark = position(ps)
             eq_pos = parse_eq_star(ps)
@@ -3279,8 +3282,11 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         end
         emit(ps, mark, K"quote")
     elseif leading_kind == K"=" && is_plain_equals(peek_token(ps))
-        bump(ps, TRIVIA_FLAG, error="unexpected `=`")
+        # =   ==> (error =)
+        bump(ps, error="unexpected `=`")
     elseif leading_kind == K"Identifier"
+        # xx  ==>  xx
+        # x₁  ==>  x₁
         bump(ps)
     elseif is_operator(leading_kind)
         if check_identifiers && is_syntactic_operator(leading_kind)
@@ -3375,14 +3381,16 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         parse_string(ps, true)
         emit(ps, mark, K"macrocall")
     elseif is_literal(leading_kind)
+        # 42   ==>  42
         bump(ps)
     elseif is_closing_token(ps, leading_kind)
         # Leave closing token in place for other productions to 
-        # recover with (??)
+        # recover with
+        # )  ==>  error
         msg = leading_kind == K"EndMarker" ?
               "premature end of input" :
               "unexpected closing token"
-        emit_diagnostic(ps, error=msg)
+        bump_invisible(ps, K"error", error=msg)
     else
         bump(ps, error="invalid syntax atom")
     end
