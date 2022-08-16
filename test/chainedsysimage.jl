@@ -39,7 +39,7 @@ end
     else
         sysimage_path = Base.unsafe_string(Base.JLOptions().image_file)
         object_file = replace(sysimage_path, ".$(Libdl.dlext)" => "-o.a")
-        if !isfile(object_file)
+        if true || !isfile(object_file)
             # Compile julia sysimage because `sys-o.a` file is not distributed
             object_file = tempname() * ".o"
             # Use the default values from PackageCompiler for incremental sysimage build (without re-using native code
@@ -55,10 +55,19 @@ end
                     incremental=true)
             # Use the newly compiled sysimage
             sysimage_path = tempname() * ".$(Libdl.dlext)"
-            PackageCompiler.create_sysimg_from_object_file([object_file], sysimage_path;
-                    compat_level="major",
-                    version=nothing,
-                    soname=nothing)
+            compat_level="major"
+            version=nothing
+            soname=nothing
+            # Prevent compiler from stripping all symbols from the shared lib.
+            o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_file` : `-Wl,--whole-archive $object_file -Wl,--no-whole-archive`
+            extra = PackageCompiler.get_extra_linker_flags(version, compat_level, soname)
+            cmd = `$clang -shared \
+                    -L$(PackageCompiler.julia_libdir()) \
+                    -L$(PackageCompiler.julia_private_libdir()) \
+                    -o $sysimage_path $o_file_flags \
+                    $(Base.shell_split(PackageCompiler.ldlibs())) $extra`
+            @show cmd
+            @test success(cmd)
         end
         dir = mktempdir()
         dir = mkpath("chained")
