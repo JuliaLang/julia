@@ -92,6 +92,8 @@ typedef struct {
     std::vector<GlobalValue*> jl_sysimg_fvars;
     std::vector<GlobalValue*> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
+    // Both maps below index into `jl_sysimg_gvars`.
+    std::map<jl_code_instance_t*, int32_t> jl_external_to_llvm; // uses 1-based indexing
     std::map<void*, int32_t> jl_value_to_llvm; // uses 1-based indexing
 } jl_native_code_desc_t;
 
@@ -359,6 +361,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         data->jl_value_to_llvm[global.first] = gvars.size();
     }
     CreateNativeMethods += emitted.size();
+
+    for (auto &global : params.external_fns) {
+        gvars.push_back(std::string(global.second->getName()));
+        data->jl_external_to_llvm[global.first] = gvars.size();
+    }
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have

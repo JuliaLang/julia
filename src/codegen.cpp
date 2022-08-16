@@ -1414,6 +1414,7 @@ public:
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     std::map<void*, GlobalVariable*> &global_targets;
+    std::map<jl_code_instance_t*, GlobalVariable*> &external_calls;
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -1460,6 +1461,7 @@ public:
         emission_context(params),
         call_targets(),
         global_targets(params.globals),
+        external_calls(params.external_fns),
         world(params.world),
         use_cache(params.cache),
         external_linkage(params.external_linkage),
@@ -4063,14 +4065,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         assert(!need_to_emit);
                         llvm::outs() << *(result.V) << "\n";
                         if (auto CI = dyn_cast<llvm::CallInst>(result.V)) {
+                            // TODO: Avoid this non-sense with RAUW
+                            // TODO: Make sure that we can call the same function and get the same GV
+                            // TODO: We probably need the calling convention?
                             Value *Callee = CI->getCalledOperand();
                             Module *M = ctx.f->getParent();
                             auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
-                            Value *GV = new GlobalVariable(*M, T_pvoidfunc, false,
+                            GlobalVariable *GV = new GlobalVariable(*M, T_pvoidfunc, false,
                                                         GlobalVariable::ExternalLinkage,
                                                         Constant::getNullValue(T_pvoidfunc), protoname);
-                            GV = ctx.builder.CreatePointerCast(GV, CI->getFunctionType()->getPointerTo());
-                            Callee->replaceAllUsesWith(GV); 
+                            Value *FN = ctx.builder.CreatePointerCast(GV, CI->getFunctionType()->getPointerTo());
+                            Callee->replaceAllUsesWith(FN);
+                            ctx.external_calls[codeinst] = GV;
                         }
                         llvm::outs() << *(result.V) << "\n";
                     }
