@@ -4018,7 +4018,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     StringRef protoname;
                     bool need_to_emit = true;
                     bool cache_valid = ctx.use_cache;
-
+                    bool external = false;
                     if (ctx.external_linkage) {
                        uint64_t current_build_id = jl_current_build_id();
                        assert(current_build_id);
@@ -4028,6 +4028,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                            // Target is present in another pkgimage
                            jl_printf(JL_STDERR, "\n (emit_invoke:) Want to resolve method from %ld in current build id %ld\n", build_id, jl_current_build_id());
                            cache_valid = true;
+                           external = true;
                        }
                     }
 
@@ -4058,6 +4059,21 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
                     else
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
+                    if (external) {
+                        assert(!need_to_emit);
+                        llvm::outs() << *(result.V) << "\n";
+                        if (auto CI = dyn_cast<llvm::CallInst>(result.V)) {
+                            Value *Callee = CI->getCalledOperand();
+                            Module *M = ctx.f->getParent();
+                            auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
+                            Value *GV = new GlobalVariable(*M, T_pvoidfunc, false,
+                                                        GlobalVariable::ExternalLinkage,
+                                                        Constant::getNullValue(T_pvoidfunc), protoname);
+                            GV = ctx.builder.CreatePointerCast(GV, CI->getFunctionType()->getPointerTo());
+                            Callee->replaceAllUsesWith(GV); 
+                        }
+                        llvm::outs() << *(result.V) << "\n";
+                    }
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
