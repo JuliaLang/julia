@@ -709,16 +709,16 @@ end
 const localhost = ip"127.0.0.1"
 
 """
-    listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
+    listenany([host::IPAddr,] port_hint; backlog::Integer=BACKLOG_DEFAULT) -> (UInt16, TCPServer)
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
 """
-function listenany(host::IPAddr, default_port)
+function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
     addr = InetAddr(host, default_port)
     while true
         sock = TCPServer()
-        if bind(sock, addr) && trylisten(sock) == 0
+        if bind(sock, addr) && trylisten(sock; backlog) == 0
             if default_port == 0
                 _addr, port = getsockname(sock)
                 return (port, sock)
@@ -733,7 +733,7 @@ function listenany(host::IPAddr, default_port)
     end
 end
 
-listenany(default_port) = listenany(localhost, default_port)
+listenany(default_port; backlog::Integer=BACKLOG_DEFAULT) = listenany(localhost, default_port; backlog)
 
 function udp_set_membership(sock::UDPSocket, group_addr::String,
                             interface_addr::Union{Nothing, String}, operation)
