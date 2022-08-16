@@ -158,6 +158,8 @@ Standard library changes
 
 #### DelimitedFiles
 
+* DelimitedFiles has been promoted from being a standard library to a separate package. It now has to be explicitly installed to be used.
+
 
 Deprecated or removed
 ---------------------

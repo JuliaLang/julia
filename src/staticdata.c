@@ -1736,13 +1736,16 @@ static void strip_specializations_(jl_method_instance_t *mi)
     assert(jl_is_method_instance(mi));
     jl_code_instance_t *codeinst = mi->cache;
     while (codeinst) {
-        if (codeinst->inferred && codeinst->inferred != jl_nothing) {
+        jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+        if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
-                record_field_change(&codeinst->inferred, jl_nothing);
+                record_field_change(&inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
-                codeinst->inferred = strip_codeinfo_meta(mi->def.method, codeinst->inferred, 0);
-                jl_gc_wb(codeinst, codeinst->inferred);
+                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
+                if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
+                    jl_gc_wb(codeinst, stripped);
+                }
             }
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);

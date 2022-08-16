@@ -880,7 +880,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
+        inferred = @atomic :monotonic code.inferred
+        if inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
             # we already inferred this edge before and decided to discard the inferred code,
             # nevertheless we re-infer it here again and keep it around in the local cache
             # since the inliner will request to use it later
@@ -1010,7 +1011,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            inf = code.inferred
+            inf = @atomic :monotonic code.inferred
             if use_const_api(code)
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())

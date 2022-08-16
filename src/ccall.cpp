@@ -762,6 +762,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     ir = static_eval(ctx, ir_arg);
     if (!ir) {
         emit_error(ctx, "error statically evaluating llvm IR argument");
+        JL_GC_POP();
         return jl_cgval_t();
     }
     if (jl_is_ssavalue(args[2]) && !jl_is_long(ctx.source->ssavaluetypes)) {
@@ -773,6 +774,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         rt = static_eval(ctx, args[2]);
         if (!rt) {
             emit_error(ctx, "error statically evaluating llvmcall return type");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }
@@ -785,6 +787,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         at = static_eval(ctx, args[3]);
         if (!at) {
             emit_error(ctx, "error statically evaluating llvmcall argument tuple");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }
@@ -792,23 +795,27 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         // if the IR is a tuple, we expect (mod, fn)
         if (jl_nfields(ir) != 2) {
             emit_error(ctx, "Tuple as first argument to llvmcall must have exactly two children");
+            JL_GC_POP();
             return jl_cgval_t();
         }
         entry = jl_fieldref(ir, 1);
         if (!jl_is_string(entry)) {
             emit_error(ctx, "Function name passed to llvmcall must be a string");
+            JL_GC_POP();
             return jl_cgval_t();
         }
         ir = jl_fieldref(ir, 0);
 
         if (!jl_is_string(ir) && !jl_typeis(ir, jl_array_uint8_type)) {
             emit_error(ctx, "Module IR passed to llvmcall must be a string or an array of bytes");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }
     else {
         if (!jl_is_string(ir)) {
             emit_error(ctx, "Function IR passed to llvmcall must be a string");
+            JL_GC_POP();
             return jl_cgval_t();
         }
     }
@@ -837,6 +844,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         argtypes.push_back(t);
         if (4 + i > nargs) {
             emit_error(ctx, "Missing arguments to llvmcall!");
+            JL_GC_POP();
             return jl_cgval_t();
         }
         jl_value_t *argi = args[4 + i];
@@ -891,6 +899,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
             raw_string_ostream stream(message);
             Err.print("", stream, true);
             emit_error(ctx, stream.str());
+            JL_GC_POP();
             return jl_cgval_t();
         }
 
@@ -908,6 +917,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                 raw_string_ostream stream(message);
                 Err.print("", stream, true);
                 emit_error(ctx, stream.str());
+                JL_GC_POP();
                 return jl_cgval_t();
             }
         }
@@ -925,6 +935,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
                 raw_string_ostream stream(message);
                 stream << Message;
                 emit_error(ctx, stream.str());
+                JL_GC_POP();
                 return jl_cgval_t();
             }
             Mod = std::move(ModuleOrErr.get());
@@ -933,6 +944,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         Function *f = Mod->getFunction(jl_string_data(entry));
         if (!f) {
             emit_error(ctx, "Module IR does not contain specified entry function");
+            JL_GC_POP();
             return jl_cgval_t();
         }
         f->setName(ir_name);
@@ -961,6 +973,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     raw_string_ostream stream(message);
     if (verifyFunction(*def, &stream)) {
         emit_error(ctx, stream.str());
+        JL_GC_POP();
         return jl_cgval_t();
     }
     def->setLinkage(GlobalVariable::LinkOnceODRLinkage);

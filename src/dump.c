@@ -689,10 +689,10 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     write_uint8(s->s, TAG_CODE_INSTANCE);
     write_uint8(s->s, flags);
     write_uint32(s->s, codeinst->ipo_purity_bits);
-    write_uint32(s->s, codeinst->purity_bits);
+    write_uint32(s->s, jl_atomic_load_relaxed(&codeinst->purity_bits));
     jl_serialize_value(s, (jl_value_t*)codeinst->def);
     if (write_ret_type) {
-        jl_serialize_value(s, codeinst->inferred);
+        jl_serialize_value(s, jl_atomic_load_relaxed(&codeinst->inferred));
         jl_serialize_value(s, codeinst->rettype_const);
         jl_serialize_value(s, codeinst->rettype);
         jl_serialize_value(s, codeinst->argescapes);
@@ -1907,11 +1907,12 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     int validate = (flags >> 0) & 3;
     int constret = (flags >> 2) & 1;
     codeinst->ipo_purity_bits = read_uint32(s->s);
-    codeinst->purity_bits = read_uint32(s->s);
+    jl_atomic_store_relaxed(&codeinst->purity_bits, read_uint32(s->s));
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
-    codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
-    jl_gc_wb(codeinst, codeinst->inferred);
+    jl_value_t *inferred = jl_deserialize_value(s, NULL);
+    jl_atomic_store_release(&codeinst->inferred, inferred);
+    jl_gc_wb(codeinst, inferred);
     codeinst->rettype_const = jl_deserialize_value(s, &codeinst->rettype_const);
     if (codeinst->rettype_const)
         jl_gc_wb(codeinst, codeinst->rettype_const);
