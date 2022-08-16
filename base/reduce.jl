@@ -616,15 +616,15 @@ prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 _fast(::typeof(min),x,y) = min(x,y)
 _fast(::typeof(max),x,y) = max(x,y)
 function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
+    Core.ifelse(isnan(x),
         x,
-        ifelse(x > y, x, y))
+        Core.ifelse(x > y, x, y))
 end
 
 function _fast(::typeof(min),x::AbstractFloat, y::AbstractFloat)
-    ifelse(isnan(x),
+    Core.ifelse(isnan(x),
         x,
-        ifelse(x < y, x, y))
+        Core.ifelse(x < y, x, y))
 end
 
 isbadzero(::typeof(max), x::AbstractFloat) = (x == zero(x)) & signbit(x)
@@ -860,8 +860,8 @@ ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
     (x1, x2), (y1, y2) = x, y
     anynan = isnan(x1)|isnan(y1)
-    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
-    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1 = Core.ifelse(anynan, x1-y1, Core.ifelse(signbit(x1-y1), x1, y1))
+    z2 = Core.ifelse(anynan, x1-y1, Core.ifelse(signbit(x2-y2), y2, x2))
     z1, z2
 end
 

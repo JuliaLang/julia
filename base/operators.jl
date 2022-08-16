@@ -464,7 +464,7 @@ julia> max(2, 5, 1)
 5
 ```
 """
-max(x, y) = ifelse(isless(y, x), x, y)
+max(x, y) = Core.ifelse(isless(y, x), x, y)
 
 """
     min(x, y, ...)
