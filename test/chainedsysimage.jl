@@ -73,7 +73,7 @@ end
         dir = mkpath("chained")
         cd(dir) do
             cp("$object_file", "sys-o.a", force=true)
-            @test success(`ar x sys-o.a`)
+            @test success(`$ar x sys-o.a`)
             rm("data.o")
             mv("text.o", "text-old.o", force = true)
             @test success(`$objcopy --remove-section .data.jl.sysimg_link text-old.o`)
