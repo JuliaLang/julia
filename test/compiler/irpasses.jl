@@ -950,8 +950,9 @@ end
 let # effect-freeness computation for array allocation
 
     # should eliminate dead allocations
-    good_dims = 1:10
-    for dim in good_dims, N in 0:10
+    good_dims = @static Int === Int64 ? (1:10) : (1:8)
+    Ns = @static Int === Int64 ? (1:10) : (1:8)
+    for dim = good_dims, N = Ns
         dims = ntuple(i->dim, N)
         @test @eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
