@@ -491,7 +491,18 @@ function isdisjoint(a::AbstractRange, b::AbstractRange)
     if step(b) < 0
         fb, lb = lb, fb
     end
-    return ((la < fb) & (fa < fb)) | ((lb < fa) & (fb < fa))
+    not_overlapping = ((la < fb) & (fa < fb)) | ((lb < fa) & (fb < fa))
+    if not_overlapping
+        return not_overlapping
+    elseif abs(step(a)) === abs(step(b))
+        if mod(abs(fa - fb), step(a)) == 0
+            return false
+        else
+            return true
+        end
+    else
+        return invoke(isdisjoint, Tuple{Any,Any}, a, b)
+    end
 end
 
 ## partial ordering of sets by containment
