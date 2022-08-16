@@ -1212,7 +1212,7 @@ julia> Iterators.flatmap(n -> -n:2:n, 1:3) |> collect
   3
 
 julia> stack(n -> -n:2:n, 1:3)
-ERROR: DimensionMismatch: stack expects uniform slices, got axes(x) = (1:3,) while first had (1:2,)
+ERROR: DimensionMismatch: stack expects uniform slices, got axes(x) == (1:3,) while first had (1:2,)
 [...]
 
 julia> Iterators.flatmap(n -> (-n, 10n), 1:2) |> collect
