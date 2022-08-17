@@ -602,5 +602,3 @@ empty(@nospecialize x::Tuple) = ()
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
 
-mapreduce(f::F, op::OP, x::Tuple) where {F,OP} = reduce(op, map(f, x))
-
