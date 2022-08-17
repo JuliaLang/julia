@@ -93,8 +93,9 @@ typedef struct {
     std::vector<GlobalValue*> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
     // Both maps below index into `jl_sysimg_gvars`.
-    std::map<std::tuple<jl_code_instance_t*, bool>, int32_t> jl_external_to_llvm; // uses 1-based indexing
     std::map<void*, int32_t> jl_value_to_llvm; // uses 1-based indexing
+    std::map<std::tuple<jl_code_instance_t*, bool>, int32_t> jl_external_to_llvm; // uses 1-based indexing
+    int32_t external_fns_begin;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT
@@ -145,6 +146,15 @@ void jl_iterate_llvm_external_fns_impl(void *native_code, void (*callback)(void*
             callback(ctx, pair.second, std::get<0>(pair.first), std::get<1>(pair.first));
         }
     }
+}
+extern "C" JL_DLLEXPORT
+int32_t jl_get_llvm_external_fns_begin_impl(void *native_code)
+{
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    if (data) {
+        return data->external_fns_begin;
+    }
+    return 0;
 }
 
 extern "C" JL_DLLEXPORT
@@ -372,6 +382,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         data->jl_value_to_llvm[global.first] = gvars.size();
     }
     CreateNativeMethods += emitted.size();
+
+    data->external_fns_begin = gvars.size() + 1;
 
     for (auto &extern_fn : params.external_fns) {
         // jl_code_instance_t *this_code = std::get<0>(extern_fn.first);

@@ -1721,7 +1721,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
 
 
 // Pointer relocation for native-code referenced global variables
-static void jl_update_all_gvars(jl_serializer_state *s)
+static void jl_update_all_gvars(jl_serializer_state *s, int32_t external_fns_begin)
 {
     if (sysimg_gvars_base == NULL)
         return;
@@ -1730,40 +1730,26 @@ static void jl_update_all_gvars(jl_serializer_state *s)
     size_t size = s->s->size;
     reloc_t *gvars = (reloc_t*)&s->gvar_record->buf[0];
     reloc_t *end = gvars + s->gvar_record->size / sizeof(reloc_t);
-    int link_index = 0;
+    int gvar_link_index = 0;
+    int external_fns_link_index = 0;
     while (gvars < end) {
         uintptr_t offset = *gvars;
         if (offset) {
-            uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &link_index);
-            *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+            if (gvname_index < external_fns_begin) {
+                uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &gvar_link_index);
+                *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+            }
+            else {
+                uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_external_fnvars, &external_fns_link_index);
+                jl_breakpoint((jl_value_t*)v);
+                *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+            }
         }
         gvname_index += 1;
         gvars++;
     }
-    assert(!s->link_ids_gvars || link_index == jl_array_len(s->link_ids_gvars));
-}
-
-// Pointer relocation for native-code referenced external functions
-static void jl_update_all_external_fnvars(jl_serializer_state *s)
-{
-    if (sysimg_gvars_base == NULL)
-        return;
-    size_t gvname_index = 0;
-    uintptr_t base = (uintptr_t)&s->s->buf[0];
-    size_t size = s->s->size;
-    uintptr_t gvars = (uintptr_t)&s->gvar_record->buf[0];
-    uintptr_t end = gvars + s->gvar_record->size;
-    int link_index = 0;
-    while (gvars < end) {
-        uint32_t offset = load_uint32(&gvars);
-        if (offset) {
-            uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_external_fnvars, &link_index);
-            jl_breakpoint((jl_value_t*)v);
-            *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
-        }
-        gvname_index += 1;
-    }
-    assert(!s->link_ids_external_fnvars || link_index == jl_array_len(s->link_ids_external_fnvars));
+    assert(!s->link_ids_gvars || gvar_link_index == jl_array_len(s->link_ids_gvars));
+    assert(!s->link_ids_external_fnvars || external_fns_link_index == jl_array_len(s->link_ids_external_fnvars));
 }
 
 // Reinitialization
@@ -2289,6 +2275,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
         ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
         write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
+
+        // write the gvar boundary between global variables and external functions
+        write_int32(f, jl_get_llvm_external_fns_begin(native_functions));
+
         jl_finalize_serializer(&s, &reinit_list);
         jl_finalize_serializer(&s, &ccallable_list);
     }
@@ -2466,6 +2456,8 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     }
     s.s = NULL;
 
+    int32_t external_fns_begin = read_int32(f);
+
     // step 3: apply relocations
     assert(!ios_eof(f));
     jl_read_symbols(&s);
@@ -2480,10 +2472,10 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     (void)sizeof_tags;
     jl_read_relocations(&s, s.link_ids_relocs, 0);
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
+    // s.link_ids_external_fnvars will be processed in `jl_update_all_gvars`
     ios_close(&relocs);
     ios_close(&const_data);
-    jl_update_all_gvars(&s); // gvars relocs
-    jl_update_all_external_fnvars(&s);
+    jl_update_all_gvars(&s, external_fns_begin); // gvars relocs
     ios_close(&gvar_record);
     s.s = NULL;
 
