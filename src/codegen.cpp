@@ -4063,11 +4063,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
                     if (external) {
                         assert(!need_to_emit);
-                        if (auto CI = dyn_cast<llvm::CallInst>(result.V)) {
-                            ctx.external_calls[std::make_tuple(codeinst, specsig)] = CI->getCalledFunction();
-                        } else {
-                            assert(false);
-                        }
+                        auto calledF = jl_Module->getFunction(protoname);
+                        assert(calledF);
+                        // TODO: Check if already present?
+                        ctx.external_calls[std::make_tuple(codeinst, specsig)] = calledF;
                     }
                     handled = true;
                     if (need_to_emit) {

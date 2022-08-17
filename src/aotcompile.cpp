@@ -400,22 +400,16 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
 
         // Need to insert load instruction... can't RAUW
-        SmallVector<CallInst*, 8> toDelete;
         for (Value *Use: F->users()) {
             if (auto CI = dyn_cast<CallInst>(Use)) {
                 auto Callee = new LoadInst(T_funcp, GV, "", false, Align(1), CI); // TODO correct Align?
-                auto newCI = CallInst::Create(F->getFunctionType(), Callee, "", CI);
-                CI->replaceAllUsesWith(newCI);
-                toDelete.push_back(CI);
+                CI->setCalledOperand(Callee);
                 continue;
             } else {
                 llvm::outs() << *Use << "\n";
                 assert(false);
             }
         }
-
-        for (CallInst *CI: toDelete)
-            CI->eraseFromParent();
 
         assert(F->getNumUses() == 0); // declaration counts as use
         GV->takeName(F);

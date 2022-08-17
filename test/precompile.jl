@@ -1672,6 +1672,43 @@ end
     CNE = wl[1]   # the CacheNativeEmpty module
 end
 
+@testset "linking against sysimage" begin
+    srcdir   = mktempdir()
+    cachedir = mktempdir()
+    cnpath = joinpath(srcdir, "CacheNativeSysimg.jl")
+    open(cnpath, "w") do io
+        write(io, """
+        module CacheNativeSysimg
+        my_fce() = println("hello")
+        precompile(my_fce, ())
+        end
+        """)
+    end
+    p, arfile = compilecache(Base.PkgId("CacheNativeSysimg"), cnpath, cachedir)
+    @test success(p)
+    libfile = arfile * ".so"
+    link_jilib(arfile, libfile)
+    wl = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+    CNS = wl[1]   # the CacheNativeSysimg module
+    f = getfield(CNS, :my_fce)
+    m = only(methods(f))
+    mi = m.specializations[1]
+    ci = mi.cache
+    @test build_id(CNS) != 0
+    @test ci.build_id == build_id(CNS)
+    @test ci.specptr != C_NULL
+
+    let filename = tempname()
+        ret = open(filename, "w") do io
+            redirect_stdout(io) do
+                f()
+            end
+        end
+        @test ret === nothing
+        @test chomp(read(filename, String)) == "hello"
+    end
+end
+
 @testset "static compilation" begin
     srcdir   = mktempdir()
     cachedir = mktempdir()
