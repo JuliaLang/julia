@@ -713,6 +713,7 @@ const localhost = ip"127.0.0.1"
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
+The backlog argument defines the maximum length to which the queue of pending connections for sockfd may grow.
 """
 function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
     addr = InetAddr(host, default_port)
