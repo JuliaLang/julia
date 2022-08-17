@@ -2441,6 +2441,7 @@ function findsubseq(A::AbstractArray, B::AbstractArray)
     end
     return matchFirstIndex
 end
+findsubseq(A::AbstractString, B::AbstractString) = findsubseq(collect(A),collect(B))
 
 """
     issubseq(A,B)
@@ -2462,7 +2463,7 @@ false
 function issubseq(A::AbstractArray, B::AbstractArray)::Bool
     length(findsubseq(A,B))≠0
 end
-
+issubseq(A::AbstractString, B::AbstractString) = issubseq(collect(A),collect(B))
 # similar to Matlab's ismember
 """
     indexin(a, b)
