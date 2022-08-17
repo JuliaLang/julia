@@ -391,11 +391,33 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         Function *F = extern_fn.second;
         Module *M = F->getParent();
 
-        Type *T_func = F->getFunctionType();
-        GlobalVariable *GV = new GlobalVariable(*M, T_func, false,
+        Type *T_funcp = F->getFunctionType()->getPointerTo();
+        // Can't create a GC with type FunctionType grr
+        GlobalVariable *GV = new GlobalVariable(*M, T_funcp, false,
                                                 GlobalVariable::ExternalLinkage,
-                                                Constant::getNullValue(T_func), F->getName());
-        F->replaceAllUsesWith(GV);
+                                                Constant::getNullValue(T_funcp),
+                                                F->getName());
+
+
+        // Need to insert load instruction... can't RAUW
+        SmallVector<CallInst*, 8> toDelete;
+        for (Value *Use: F->users()) {
+            if (auto CI = dyn_cast<CallInst>(Use)) {
+                auto Callee = new LoadInst(T_funcp, GV, "", false, Align(1), CI); // TODO correct Align?
+                auto newCI = CallInst::Create(F->getFunctionType(), Callee, "", CI);
+                CI->replaceAllUsesWith(newCI);
+                toDelete.push_back(CI);
+                continue;
+            } else {
+                llvm::outs() << *Use << "\n";
+                assert(false);
+            }
+        }
+
+        for (CallInst *CI: toDelete)
+            CI->eraseFromParent();
+
+        assert(F->getNumUses() == 0); // declaration counts as use
         GV->takeName(F);
         F->eraseFromParent();
 

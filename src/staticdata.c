@@ -1735,14 +1735,16 @@ static void jl_update_all_gvars(jl_serializer_state *s, int32_t external_fns_beg
     while (gvars < end) {
         uintptr_t offset = *gvars;
         if (offset) {
-            if (gvname_index < external_fns_begin) {
+            if (gvname_index < (external_fns_begin-1)) { // external_fns_begin is 1-indexed, gvname_index is 0-indexed
                 uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &gvar_link_index);
                 *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
             }
             else {
                 uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_external_fnvars, &external_fns_link_index);
                 jl_breakpoint((jl_value_t*)v);
-                *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+                jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
+                // TODO: use side-table to decide if call location is specsig or not instead of assuming
+                *sysimg_gvars(sysimg_gvars_base, gvname_index) = codeinst->isspecsig ? codeinst->specptr.fptr : codeinst->invoke;
             }
         }
         gvname_index += 1;
