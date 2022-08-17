@@ -37,6 +37,7 @@ let
         :Unicode,
 
         # 1-depth packages
+        :JuliaSyntax,
         :LinearAlgebra,
         :Markdown,
         :Printf,
