@@ -1,23 +1,27 @@
 # This file provides an adaptor to match the API expected by the Julia runtime
 # code in the binding Core._parse
 
-function _set_core_parse_hook(parser)
-    # HACK! Fool the runtime into allowing us to set Core._parse, even during
-    # incremental compilation. (Ideally we'd just arrange for Core._parse to be
-    # set to the JuliaSyntax parser. But how do we signal that to the dumping
-    # code outside of the initial creation of Core?)
-    i = findfirst(==(:incremental), fieldnames(Base.JLOptions))
-    ptr = convert(Ptr{fieldtype(Base.JLOptions, i)},
-                  cglobal(:jl_options, Base.JLOptions) + fieldoffset(Base.JLOptions, i))
-    incremental = unsafe_load(ptr)
-    if incremental != 0
-        unsafe_store!(ptr, 0)
-    end
+if isdefined(Core, :set_parser)
+    const _set_core_parse_hook = Core.set_parser
+else
+    function _set_core_parse_hook(parser)
+        # HACK! Fool the runtime into allowing us to set Core._parse, even during
+        # incremental compilation. (Ideally we'd just arrange for Core._parse to be
+        # set to the JuliaSyntax parser. But how do we signal that to the dumping
+        # code outside of the initial creation of Core?)
+        i = findfirst(==(:incremental), fieldnames(Base.JLOptions))
+        ptr = convert(Ptr{fieldtype(Base.JLOptions, i)},
+                      cglobal(:jl_options, Base.JLOptions) + fieldoffset(Base.JLOptions, i))
+        incremental = unsafe_load(ptr)
+        if incremental != 0
+            unsafe_store!(ptr, 0)
+        end
 
-    Base.eval(Core, :(_parse = $parser))
+        Base.eval(Core, :(_parse = $parser))
 
-    if incremental != 0
-        unsafe_store!(ptr, incremental)
+        if incremental != 0
+            unsafe_store!(ptr, incremental)
+        end
     end
 end
 
