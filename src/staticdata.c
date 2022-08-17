@@ -359,6 +359,7 @@ typedef struct {
     jl_array_t *link_ids_relocs;
     jl_array_t *link_ids_gctags;
     jl_array_t *link_ids_gvars;
+    jl_array_t *link_ids_external_fnvars;
     jl_ptls_t ptls;
 } jl_serializer_state;
 
@@ -1357,6 +1358,22 @@ static void jl_ensure_extern_gv(jl_serializer_state *s) {
     jl_iterate_llvm_gv(native_functions, jl_ensure_extern, (void*)s);
 }
 
+static void jl_ensure_extern_fn(void* ctx, int32_t GV, jl_code_instance_t* codeinst, uint8_t specsig) {
+    jl_serializer_state *s = (jl_serializer_state*)ctx;
+
+    // TODO: Record specsig in a side-table?
+    uintptr_t item = external_linkage(s, (jl_value_t*)codeinst, s->link_ids_external_fnvars);
+    jl_printf(JL_STDOUT, "External Functions: %ld, record_gvar for %lx\n", GV, item);
+    if (item == 0)
+        return;
+
+    assert(item >> RELOC_TAG_OFFSET == ExternalLinkage);
+    record_gvar(s, GV, item);
+}
+
+static void jl_ensure_extern_fns(jl_serializer_state *s) {
+    jl_iterate_llvm_external_fns(native_functions, jl_ensure_extern_fn, (void*)s);
+}
 
 // Record all symbols that get referenced by the generated code
 // and queue them for pointer relocation
@@ -1726,6 +1743,29 @@ static void jl_update_all_gvars(jl_serializer_state *s)
     assert(!s->link_ids_gvars || link_index == jl_array_len(s->link_ids_gvars));
 }
 
+// Pointer relocation for native-code referenced external functions
+static void jl_update_all_external_fnvars(jl_serializer_state *s)
+{
+    if (sysimg_gvars_base == NULL)
+        return;
+    size_t gvname_index = 0;
+    uintptr_t base = (uintptr_t)&s->s->buf[0];
+    size_t size = s->s->size;
+    uintptr_t gvars = (uintptr_t)&s->gvar_record->buf[0];
+    uintptr_t end = gvars + s->gvar_record->size;
+    int link_index = 0;
+    while (gvars < end) {
+        uint32_t offset = load_uint32(&gvars);
+        if (offset) {
+            uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_external_fnvars, &link_index);
+            jl_breakpoint((jl_value_t*)v);
+            *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+        }
+        gvname_index += 1;
+    }
+    assert(!s->link_ids_external_fnvars || link_index == jl_array_len(s->link_ids_external_fnvars));
+}
+
 // Reinitialization
 static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
 {
@@ -2085,6 +2125,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
     s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
+    s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
     jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
 
     if (worklist == NULL) {
@@ -2160,8 +2201,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
     { // step 2: build all the sysimg sections
         write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
-        if (worklist)
+        if (worklist) {
             jl_ensure_extern_gv(&s);
+            jl_ensure_extern_fns(&s);
+        }
         jl_write_relocations(&s);
         jl_write_gv_syms(&s, jl_get_root_symbol());
         jl_write_gv_tagrefs(&s);
@@ -2244,6 +2287,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
         ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
         write_uint32(f, jl_array_len(s.link_ids_gvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
+        write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
+        ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
         jl_finalize_serializer(&s, &reinit_list);
         jl_finalize_serializer(&s, &ccallable_list);
     }
@@ -2335,7 +2380,7 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     s.ptls = jl_current_task->ptls;
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
-    s.link_ids_relocs = s.link_ids_gctags = s.link_ids_gvars = NULL;
+    s.link_ids_relocs = s.link_ids_gctags = s.link_ids_gvars = s.link_ids_external_fnvars = NULL;
     jl_value_t **const*const tags = get_tags();
 
     int incremental = jl_linkage_blobs.len > 0;
@@ -2414,6 +2459,11 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
         s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gvars);
         ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
     }
+    size_t nlinks_external_fnvars = read_uint32(f);
+    if (nlinks_gvars > 0) {
+        s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_external_fnvars);
+        ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint64_t));
+    }
     s.s = NULL;
 
     // step 3: apply relocations
@@ -2433,6 +2483,7 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     ios_close(&relocs);
     ios_close(&const_data);
     jl_update_all_gvars(&s); // gvars relocs
+    jl_update_all_external_fnvars(&s);
     ios_close(&gvar_record);
     s.s = NULL;
 

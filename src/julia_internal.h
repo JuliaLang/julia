@@ -976,6 +976,7 @@ void jl_dump_native(void *native_code,
         const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(void *native_code, jl_value_t *p) JL_NOTSAFEPOINT;
 void jl_iterate_llvm_gv(void *native_code, void (*callback)(void*, int32_t, void*), void*) JL_NOTSAFEPOINT;
+void jl_iterate_llvm_external_fns(void *native_code, void (*callback)(void*, int32_t, jl_code_instance_t*, uint8_t), void*) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 
