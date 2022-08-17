@@ -2416,6 +2416,7 @@ findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
     findsubseq(A,B)
 
 Return the indices of one or many existing subsequences B in A.
+A and B may be of type AbstractString or AbstractArray.
 If there are none in `A`, return an empty array.
 
 See also: [`issubseq`](@ref).
@@ -2429,6 +2430,10 @@ julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
 
 julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[4,6])
 Any[]
+
+julia> findsubseq("Hello","el")
+1-element Vector{Any}:
+ 2
 ```
 
 """
@@ -2447,6 +2452,7 @@ findsubseq(A::AbstractString, B::AbstractString) = findsubseq(collect(A),collect
     issubseq(A,B)
 
 Return true if one or many subsequences B exist in A.
+A and B may be of type AbstractString or AbstractArray.
 If there are none in `A`, return false.
 
 See also: [`findsubseq`](@ref).
@@ -2458,12 +2464,16 @@ true
 
 julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[4,6])
 false
+
+julia> issubseq("Hello","el")
+true
 ```
 """
 function issubseq(A::AbstractArray, B::AbstractArray)::Bool
     length(findsubseq(A,B))≠0
 end
 issubseq(A::AbstractString, B::AbstractString) = issubseq(collect(A),collect(B))
+
 # similar to Matlab's ismember
 """
     indexin(a, b)
