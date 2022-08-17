@@ -104,7 +104,7 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
 // returns. `fptr` will execute on the signal stack, and must not return.
 // jl_call_in_ctx is also currently executing on that signal stack,
 // so be careful not to smash it
-static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
+JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
     // sigreturn oriented programming mitigation can work against us
@@ -310,7 +310,7 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
-static void segv_handler(int sig, siginfo_t *info, void *context)
+JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     if (jl_get_safe_restore()) { // restarting jl_ or profile
         jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
