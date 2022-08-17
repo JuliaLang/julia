@@ -391,7 +391,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
     return codeinst;
 }
 
-JL_DLLEXPORT uint64_t jl_current_build_id()
+JL_DLLEXPORT uint64_t jl_current_build_id(void)
 {
     if (jl_precompile_toplevel_module != NULL)
         return jl_precompile_toplevel_module->build_id;
