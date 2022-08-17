@@ -2420,7 +2420,7 @@ If there are none in `A`, return an empty array.
 
 See also: [`issubseq`](@ref).
 
-#Examples
+# Examples
 ```jldoctest
 julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
 2-element Vector{Any}:
@@ -2450,7 +2450,7 @@ If there are none in `A`, return false.
 
 See also: [`findsubseq`](@ref).
 
-#Examples
+# Examples
 ```jldoctest
 julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
 true
