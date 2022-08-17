@@ -2119,6 +2119,9 @@ static void jl_init_function(Function *F)
     attr.addAttribute("probe-stack", "inline-asm");
     //attr.addAttribute("stack-probe-size", "4096"); // can use this to change the default
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_)
+    attr.addAttribute(Attribute::SanitizeAddress);
+#endif
 #if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);
 #else

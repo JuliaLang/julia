@@ -25,8 +25,45 @@
 extern "C" {
 #endif
 #ifdef _COMPILER_ASAN_ENABLED_
+#if defined(__GLIBC__) && defined(_CPU_X86_64_)
+/* TODO: This is terrible - we're reaching deep into glibc internals here.
+   We should probably just switch to our own setjmp/longjmp implementation. */
+#define JB_RSP 6
+static inline uintptr_t demangle_ptr(uintptr_t var)
+{
+    asm ("ror $17, %0\n\t"
+         "xor %%fs:0x30, %0\n\t"
+        : "=r" (var)
+        : "0" (var));
+    return var;
+}
+static inline uintptr_t jmpbuf_sp(jl_jmp_buf *buf)
+{
+    return demangle_ptr((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
+}
+#else
+#error Need to implement jmpbuf_sp for this architecture
+#endif
 void __sanitizer_start_switch_fiber(void**, const void*, size_t);
 void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
+extern void __asan_unpoison_stack_memory(uintptr_t addr, size_t size);
+static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
+{
+    if (!ct)
+        return;
+    /* Unpoison everything from the base of the stack allocation to the address
+       that we're resetting to. The idea is to remove the posion from the frames
+       that we're skipping over, since they won't be unwound. */
+    uintptr_t top = jmpbuf_sp(buf);
+    uintptr_t bottom = (uintptr_t)ct->stkbuf;
+    __asan_unpoison_stack_memory(bottom, top - bottom);
+}
+static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) {
+    __asan_unpoison_stack_memory(addr, size);
+}
+#else
+static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf) JL_NOTSAFEPOINT {}
+static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) JL_NOTSAFEPOINT {}
 #endif
 #ifdef _COMPILER_TSAN_ENABLED_
 void *__tsan_create_fiber(unsigned flags);
