@@ -254,3 +254,14 @@ end
 end
 
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+
+@testset "<= (issue #46327)" begin
+    struct A46327 <: Real end
+    Base.:(==)(::A46327, ::A46327) = false
+    Base.:(<)(::A46327, ::A46327) = false
+    @test !(A46327() <= A46327())
+    struct B46327 <: Real end
+    Base.:(==)(::B46327, ::B46327) = true
+    Base.:(<)(::B46327, ::B46327) = false
+    @test B46327() <= B46327()
+end
