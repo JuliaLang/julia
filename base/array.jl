@@ -2417,7 +2417,7 @@ findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 Return the indices of one or many existing subsequences B in A.
 A and B may be of type AbstractString or AbstractArray.
-If there are none in `A`, return an empty array.
+If there are none in A, return an empty array.
 
 See also: [`issubseq`](@ref).
 
@@ -2428,7 +2428,7 @@ julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
  3
  7
 
-julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[4,6])
+julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[4, 6])
 Any[]
 
 julia> findsubseq("Hello","el")
@@ -2453,7 +2453,7 @@ findsubseq(A::AbstractString, B::AbstractString) = findsubseq(collect(A),collect
 
 Return true if one or many subsequences B exist in A.
 A and B may be of type AbstractString or AbstractArray.
-If there are none in `A`, return false.
+If there are none in A, return false.
 
 See also: [`findsubseq`](@ref).
 
@@ -2462,7 +2462,7 @@ See also: [`findsubseq`](@ref).
 julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
 true
 
-julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[4,6])
+julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[4, 6])
 false
 
 julia> issubseq("Hello","el")
