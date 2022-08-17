@@ -2412,6 +2412,37 @@ findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
+"""
+    findsubseq(A,B)
+
+Return the indices of one or many existing subsequences B in A.
+If there are none in `A`, return an empty array.
+
+See also: [`issubseq`](@ref).
+
+"""
+function findsubseq(A::AbstractArray, B::AbstractArray)
+    BinA = findall(isequal(B[1]), A)
+    matchFirstIndex = []
+    for i in BinA
+        if length(A[i:end]) < length(B) continue end
+        if A[i:i + length(B) - 1] == B push!(matchFirstIndex, i) end
+    end
+    return matchFirstIndex
+end
+
+"""
+    issubseq(A,B)
+
+Return true if one or many subsequences B exist in A.
+If there are none in `A`, return false.
+
+See also: [`findsubseq`](@ref).
+"""
+function issubseq(A::AbstractArray, B::AbstractArray)::Bool
+    length(findsubseq(A,B))≠0
+end
+
 # similar to Matlab's ismember
 """
     indexin(a, b)
