@@ -422,3 +422,6 @@ function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
     names_front, names_last_n = split_rest(names, n, st...)
     return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)
 end
+
+mapreduce(f::F, op::OP, x::NamedTuple) where {F,OP} = reduce(op, map(f, Tuple(x)))
+
