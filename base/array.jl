@@ -2420,6 +2420,17 @@ If there are none in `A`, return an empty array.
 
 See also: [`issubseq`](@ref).
 
+#Examples
+```jldoctest
+julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
+2-element Vector{Any}:
+ 3
+ 7
+
+julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[4,6])
+Any[]
+```
+
 """
 function findsubseq(A::AbstractArray, B::AbstractArray)
     BinA = findall(isequal(B[1]), A)
@@ -2438,6 +2449,15 @@ Return true if one or many subsequences B exist in A.
 If there are none in `A`, return false.
 
 See also: [`findsubseq`](@ref).
+
+#Examples
+```jldoctest
+julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
+true
+
+julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[4,6])
+false
+```
 """
 function issubseq(A::AbstractArray, B::AbstractArray)::Bool
     length(findsubseq(A,B))≠0
