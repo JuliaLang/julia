@@ -1059,4 +1059,27 @@ end
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
 end
 
+struct SMatrix1{T} <: AbstractArray{T,2}
+    elt::T
+end
+Base.:(==)(A::SMatrix1, B::SMatrix1) = A.elt == B.elt
+Base.zero(::Type{SMatrix1{T}}) where {T} = SMatrix1(zero(T))
+Base.iszero(A::SMatrix1) = iszero(A.elt)
+Base.getindex(A::SMatrix1, inds...) = A.elt
+Base.size(::SMatrix1) = (1, 1)
+@testset "map for Diagonal matrices (#46292)" begin
+    A = Diagonal([1])
+    @test A isa Diagonal{Int,Vector{Int}}
+    @test 2*A isa Diagonal{Int,Vector{Int}}
+    @test A.+1 isa Matrix{Int}
+    # Numeric element types remain diagonal
+    B = map(SMatrix1, A)
+    @test B == fill(SMatrix1(1), 1, 1)
+    @test B isa Diagonal{SMatrix1{Int},Vector{SMatrix1{Int}}}
+    # Non-numeric element types become dense
+    C = map(a -> SMatrix1(string(a)), A)
+    @test C == fill(SMatrix1(string(1)), 1, 1)
+    @test C isa Matrix{SMatrix1{String}}
+end
+
 end # module TestDiagonal
