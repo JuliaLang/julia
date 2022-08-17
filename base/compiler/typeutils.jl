@@ -4,8 +4,6 @@
 # lattice utilities #
 #####################
 
-isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
-
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
 isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])

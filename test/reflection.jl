@@ -2,6 +2,8 @@
 
 using Test
 
+include("compiler/irutils.jl")
+
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be
 # sufficient to catch segfault bugs.
@@ -66,6 +68,7 @@ end # module ReflectionTest
 @test isbits((1,2))
 @test !isbits([1])
 @test isbits(nothing)
+@test fully_eliminated(isbits, (Int,))
 
 # issue #16670
 @test isconcretetype(Int)

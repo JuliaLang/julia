@@ -730,6 +730,14 @@ end
     end
 end
 
+@testset "Issue #25719" begin
+    empty!(LOAD_PATH)
+    @test Base.root_module(Core, :Core) == Core
+    push!(LOAD_PATH, "@stdlib")
+    @test Base.root_module(Base, :Test) == Test
+    @test_throws KeyError(:SomeNonExistentPackage) Base.root_module(Base, :SomeNonExistentPackage)
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)

@@ -262,8 +262,12 @@ function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IR
             end
             return (true, true)
         elseif head === :foreigncall
-            total = foreigncall_effect_free(stmt, src)
-            return (total, total)
+            effects = foreigncall_effects(stmt) do @nospecialize x
+                argextype(x, src)
+            end
+            effect_free = is_effect_free(effects)
+            nothrow = is_nothrow(effects)
+            return (effect_free & nothrow, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false)
             typ = argextype(args[1], src)
@@ -272,8 +276,8 @@ function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IR
             typ ⊑ Tuple || return (false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
-            src = argextype(args[4], src)
-            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+            source = argextype(args[4], src)
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && source ⊑ Method)
                 return (false, false)
             end
             return (true, true)
@@ -285,74 +289,6 @@ function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IR
         end
     end
     return (true, true)
-end
-
-function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
-    args = stmt.args
-    name = args[1]
-    isa(name, QuoteNode) && (name = name.value)
-    isa(name, Symbol) || return false
-    ndims = alloc_array_ndims(name)
-    if ndims !== nothing
-        if ndims == 0
-            return new_array_no_throw(args, src)
-        else
-            return alloc_array_no_throw(args, ndims, src)
-        end
-    end
-    return false
-end
-
-function alloc_array_ndims(name::Symbol)
-    if name === :jl_alloc_array_1d
-        return 1
-    elseif name === :jl_alloc_array_2d
-        return 2
-    elseif name === :jl_alloc_array_3d
-        return 3
-    elseif name === :jl_new_array
-        return 0
-    end
-    return nothing
-end
-
-const FOREIGNCALL_ARG_START = 6
-
-function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
-    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
-    dims = Csize_t[]
-    for i in 1:ndims
-        dim = argextype(args[i+FOREIGNCALL_ARG_START], src)
-        isa(dim, Const) || return false
-        dimval = dim.val
-        isa(dimval, Int) || return false
-        push!(dims, reinterpret(Csize_t, dimval))
-    end
-    return _new_array_no_throw(atype, ndims, dims)
-end
-
-function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
-    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
-    dims = argextype(args[FOREIGNCALL_ARG_START+1], src)
-    isa(dims, Const) || return dims === Tuple{}
-    dimsval = dims.val
-    isa(dimsval, Tuple{Vararg{Int}}) || return false
-    ndims = nfields(dimsval)
-    isa(ndims, Int) || return false
-    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
-    return _new_array_no_throw(atype, ndims, dims)
-end
-
-function _new_array_no_throw(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
-    isa(atype, DataType) || return false
-    eltype = atype.parameters[1]
-    iskindtype(typeof(eltype)) || return false
-    elsz = aligned_sizeof(eltype)
-    return ccall(:jl_array_validate_dims, Cint,
-        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
-        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
 end
 
 """
@@ -573,8 +509,8 @@ macro pass(name, expr)
     end
 end
 
-matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
-matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(optimize_until::Int, stage, _) = optimize_until == stage
+matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
 function run_passes(
@@ -583,7 +519,7 @@ function run_passes(
     caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
-    __stage__ = 1  # used by @pass
+    __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)

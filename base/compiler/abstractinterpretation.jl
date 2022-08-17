@@ -1107,9 +1107,15 @@ function const_prop_methodinstance_heuristic(
             return false
         else
             code = get(code_cache(interp), mi, nothing)
-            if isdefined(code, :inferred) && inlining_policy(
-                    interp, code.inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
-                return true
+            if isdefined(code, :inferred)
+                if isa(code, CodeInstance)
+                    inferred = @atomic :monotonic code.inferred
+                else
+                    inferred = code.inferred
+                end
+                if inlining_policy(interp, inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
+                    return true
+                end
             end
         end
     end
@@ -2075,7 +2081,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 @goto always_throw
             end
         end
-        effects = EFFECTS_UNKNOWN
+        effects = foreigncall_effects(e) do @nospecialize x
+            abstract_eval_value(interp, x, vtypes, sv)
+        end
         cconv = e.args[5]
         if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt8}))
             override = decode_effects_override(v[2])

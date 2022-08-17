@@ -251,7 +251,7 @@ end
 
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
-It calls out to the `functionloc` function.
+It calls out to the [`functionloc`](@ref) function.
 """
 :@functionloc
 
@@ -270,7 +270,7 @@ See also: [`@less`](@ref), [`@edit`](@ref).
 """
     @less
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`less`](@ref)
 function on the resulting expression.
 
 See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
@@ -280,7 +280,7 @@ See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
     @edit
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`edit`](@ref)
 function on the resulting expression.
 
 See also: [`@less`](@ref), [`@which`](@ref).

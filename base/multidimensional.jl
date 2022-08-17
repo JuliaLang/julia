@@ -335,6 +335,7 @@ module IteratorsMD
     # AbstractArray implementation
     Base.axes(iter::CartesianIndices{N,R}) where {N,R} = map(Base.axes1, iter.indices)
     Base.IndexStyle(::Type{CartesianIndices{N,R}}) where {N,R} = IndexCartesian()
+    Base.has_offset_axes(iter::CartesianIndices) = Base.has_offset_axes(iter.indices...)
     # getindex for a 0D CartesianIndices is necessary for disambiguation
     @propagate_inbounds function Base.getindex(iter::CartesianIndices{0,R}) where {R}
         CartesianIndex()

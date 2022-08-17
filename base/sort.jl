@@ -1464,10 +1464,15 @@ import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-const Floats = Union{Float32,Float64}
-const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+# IEEEFloat is not available in Core.Compiler
+const Floats = Union{Float16, Float32, Float64}
+# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
+# This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
+const FPSortable = Union{
+    AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
     AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float16},
     AbstractVector{Float32},
     AbstractVector{Float64},
     AbstractVector{Missing}}
@@ -1483,6 +1488,12 @@ right(o::Perm) = Perm(right(o.order), o.data)
 
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+
+uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
+uint_map(x::Float16, ::Right) = reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Right) = reinterpret(Float16, u)
+UIntMappable(::Type{Float16}, ::Union{Left, Right}) = UInt16
 
 uint_map(x::Float32, ::Left) = ~reinterpret(UInt32, x)
 uint_unmap(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, ~u)

@@ -542,6 +542,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // leave happens during normal control flow, but we must
                 // longjmp to pop the eval_body call for each enter.
                 s->continue_at = next_ip;
+                asan_unpoison_task_stack(ct, &eh->eh_ctx);
                 jl_longjmp(eh->eh_ctx, 1);
             }
             else if (head == jl_pop_exception_sym) {

@@ -330,7 +330,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-@test fully_eliminated(NonIsBitsDims, (); retval=QuoteNode(NonIsBitsDims()))
+@test fully_eliminated(NonIsBitsDims, (); retval=NonIsBitsDims())
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
@@ -383,26 +383,6 @@ end
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
-
-import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Any[]
-
-code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
-get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
-
-# check if `x` is a dynamic call of a given function
-iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
-    return iscall(x) do @nospecialize x
-        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
-    end
-end
-iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
-isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
 
 @testset "@inline/@noinline annotation before definition" begin
     M = Module()
@@ -645,7 +625,7 @@ let
         specs = collect(only(methods(f42078)).specializations)
         mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
         codeinf = getcache(mi)::Core.CodeInstance
-        codeinf.inferred = nothing
+        @atomic codeinf.inferred = nothing
     end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code
@@ -1008,13 +988,6 @@ end
     @invoke conditional_escape!(false::Any, x::Any)
 end
 
-@testset "strides for ReshapedArray (PR#44027)" begin
-    # Type-based contiguous check
-    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
-    f(a) = only(strides(a));
-    @test fully_eliminated(f, Tuple{typeof(a)}) && f(a) == 1
-end
-
 @testset "elimination of `get_binding_type`" begin
     m = Module()
     @eval m begin
@@ -1253,7 +1226,7 @@ let src = code_typed1(g_call_peel, Tuple{Any})
 end
 
 const my_defined_var = 42
-@test fully_eliminated((); retval=42) do
+@test fully_eliminated(; retval=42) do
     getglobal(@__MODULE__, :my_defined_var, :monotonic)
 end
 @test !fully_eliminated() do
