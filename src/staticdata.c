@@ -2959,6 +2959,19 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname)
     sysimg_gvars_offsets += 1;
     jl_value_t* mod = jl_restore_system_image_data(pkgimg_data, *plen);
     sysimg_fptrs = old_sysimg_fptrs;
+
+    void *pgcstack_func_slot;
+    jl_dlsym(pkgimg_handle, "jl_pgcstack_func_slot", &pgcstack_func_slot, 0);
+    if (pgcstack_func_slot) { // Empty package images might miss these
+        void *pgcstack_key_slot;
+        jl_dlsym(pkgimg_handle, "jl_pgcstack_key_slot", &pgcstack_key_slot, 1);
+        jl_pgcstack_getkey((jl_get_pgcstack_func**)pgcstack_func_slot, (jl_pgcstack_key_t*)pgcstack_key_slot);
+
+        size_t *tls_offset_idx;
+        jl_dlsym(pkgimg_handle, "jl_tls_offset", (void **)&tls_offset_idx, 1);
+        *tls_offset_idx = (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
+    }
+
     return mod;
 }
 
