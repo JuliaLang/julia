@@ -2423,13 +2423,13 @@ See also: [`issubseq`](@ref).
 
 # Examples
 ```jldoctest
-julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
+julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8], [7, 8])
 2-element Vector{Any}:
  3
  7
 
-julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8],[4, 6])
-Any[]
+julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8], [4, 6])
+Int64[]
 
 julia> findsubseq("Hello","el")
 1-element Vector{Any}:
@@ -2439,7 +2439,7 @@ julia> findsubseq("Hello","el")
 """
 function findsubseq(A::AbstractArray, B::AbstractArray)
     BinA = findall(isequal(B[1]), A)
-    matchFirstIndex = []
+    matchFirstIndex = eltype(eachindex(A))[]
     for i in BinA
         if length(A[i:end]) < length(B) continue end
         if A[i:i + length(B) - 1] == B push!(matchFirstIndex, i) end
@@ -2459,10 +2459,10 @@ See also: [`findsubseq`](@ref).
 
 # Examples
 ```jldoctest
-julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[7, 8])
+julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8], [7, 8])
 true
 
-julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8],[4, 6])
+julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8], [4, 6])
 false
 
 julia> issubseq("Hello","el")
