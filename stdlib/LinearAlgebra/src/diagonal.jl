@@ -368,6 +368,15 @@ end
     return out
 end
 
+function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
+    _muldiag_size_check(Da, A)
+    _muldiag_size_check(A, Db)
+    dda = Da.diag
+    ddb = Db.diag
+    n = length(dda)
+    return broadcast(*, reshape(dda, n, 1), A, reshape(ddb, 1, n))
+end
+
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
     _muldiag!(out, D, V, alpha, beta)
