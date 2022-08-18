@@ -766,15 +766,17 @@ function lex_xor(l::Lexer)
 end
 
 function accept_number(l::Lexer, f::F) where {F}
+    lexed_number = false
     while true
         pc, ppc = dpeekchar(l)
         if pc == '_' && !f(ppc)
-            return
+            return lexed_number
         elseif f(pc) || pc == '_'
             readchar(l)
         else
-            return
+            return lexed_number
         end
+        lexed_number = true
     end
 end
 
@@ -864,7 +866,9 @@ function lex_digit(l::Lexer, kind)
             if accept(l, "pP")
                 kind = K"Float"
                 accept(l, "+-−")
-                accept_number(l, isdigit)
+                if !accept_number(l, isdigit)
+                    return emit_error(l, K"ErrorInvalidNumericConstant")
+                end
             elseif isfloat
                 return emit_error(l, K"ErrorInvalidNumericConstant")
             end
