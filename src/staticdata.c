@@ -429,10 +429,12 @@ static int externally_linked(jl_value_t *v)
     // The special handling for a few items here represents a downpayment on a
     // more extensive mirroring/porting of functionality from dump.c.
     // To be continued in a future PR.
-    if (jl_is_method_instance(v))
-        return externally_linked(((jl_method_instance_t*)v)->def.value);
-    else if (jl_is_code_instance(v))
-        return externally_linked(((jl_code_instance_t*)v)->def->def.value);
+    
+    // What about MethodInstances that are instantiated from a pkgimage, and don't exist prior.
+    // if (jl_is_method_instance(v))
+    //     return externally_linked(((jl_method_instance_t*)v)->def.value);
+    // else if (jl_is_code_instance(v))
+    //     return externally_linked(((jl_code_instance_t*)v)->def->def.value); // Use build_id instead of "derivation"
 
     jl_module_t *vmod = NULL;
     if (jl_is_module(v))

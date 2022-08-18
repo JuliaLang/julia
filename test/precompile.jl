@@ -1679,8 +1679,20 @@ end
     open(cnpath, "w") do io
         write(io, """
         module CacheNativeSysimg
+
         my_fce() = println("hello")
         precompile(my_fce, ())
+
+        my_fce2() = println("result = ", 42) 
+        precompile(my_fce2, ())
+
+        # TODO:
+        # my_ptls() = Core.getptls()
+        # precompile(my_ptls, ())
+        # my_alloc(val) = Ref(val)
+        # precompile(my_alloc, (Int,))
+        # my_alloc2() = Ref(10)
+        # precompile(my_alloc2, ())
         end
         """)
     end
@@ -1698,14 +1710,23 @@ end
     @test ci.build_id == build_id(CNS)
     @test ci.specptr != C_NULL
 
+    f2= getfield(CNS, :my_fce2)
+    m = only(methods(f2))
+    mi = m.specializations[1]
+    ci = mi.cache
+    @test build_id(CNS) != 0
+    @test ci.build_id == build_id(CNS)
+    @test ci.specptr != C_NULL
+
     let filename = tempname()
         ret = open(filename, "w") do io
             redirect_stdout(io) do
                 f()
+                f2()
             end
         end
         @test ret === nothing
-        @test chomp(read(filename, String)) == "hello"
+        @test chomp(read(filename, String)) == "hello\nresult = 42"
     end
 end
 
