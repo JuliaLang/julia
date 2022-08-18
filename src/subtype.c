@@ -3168,7 +3168,8 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     return jl_bottom_type;
 }
 
-static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int count) {
+static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int count)
+{
     if (!count) {
         save_env(e, root, se);
         return 1;
