@@ -325,7 +325,12 @@ function symdiff!(s::BitSet, ns)
     end
     return s
 end
-
+function symdiff!(s::BitSet, ns::AbstractSet)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
 function int_symdiff!(s::BitSet, n::Integer)
     n0 = _check_bitset_bounds(n)
     val = !(n0 in s)

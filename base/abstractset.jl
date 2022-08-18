@@ -287,11 +287,19 @@ function symdiff!(s::AbstractSet, itrs...)
 end
 
 function symdiff!(s::AbstractSet, itr)
+    for x in unique(itr)
+        x in s ? delete!(s, x) : push!(s, x)
+    end
+    return s
+end
+
+function symdiff!(s::AbstractSet, itr::AbstractSet)
     for x in itr
         x in s ? delete!(s, x) : push!(s, x)
     end
     return s
 end
+
 
 ## non-strict subset comparison
 
