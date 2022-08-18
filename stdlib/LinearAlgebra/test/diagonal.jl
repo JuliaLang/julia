@@ -12,7 +12,7 @@ using .Main.Furlongs
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-n=12 #Size of matrix problem to test
+const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
@@ -529,13 +529,21 @@ end
 end
 
 @testset "inverse" begin
-    for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
+    for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
     @test_throws SingularException inv(Diagonal(zeros(n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
+end
+
+@testset "pseudoinverse" begin
+    for d in Any[randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
+        D = Diagonal(d)
+        @test pinv(D) ≈ pinv(Array(D))
+        @test pinv(D, 1.0e-2) ≈ pinv(Array(D), 1.0e-2)
+    end
 end
 
 # allow construct from range

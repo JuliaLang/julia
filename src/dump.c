@@ -1273,9 +1273,10 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_
 {
     if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))
         return;
-    jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
-                *callees = *pcallees;
-    if (callees != HT_NOTFOUND) {
+    if (ptrhash_has(&edges_map, caller)) {
+        jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
+                    *callees = *pcallees;
+        assert(callees != HT_NOTFOUND);
         *pcallees = (jl_array_t*) HT_NOTFOUND;
         size_t i, l = jl_array_len(callees);
         for (i = 0; i < l; i++) {
@@ -1298,7 +1299,10 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
     htable_new(&all_callees, 0);
     size_t i;
     void **table = edges_map.table;    // edges is caller => callees
-    for (i = 0; i < edges_map.size; i += 2) {
+    size_t table_size = edges_map.size;
+    for (i = 0; i < table_size; i += 2) {
+        assert(table == edges_map.table && table_size == edges_map.size &&
+               "edges_map changed during iteration");
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
         if (callees == HT_NOTFOUND)
@@ -2090,6 +2094,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             jl_gc_wb(tn, tn->mt);
             ios_read(s->s, (char*)&tn->hash, sizeof(tn->hash));
             int8_t flags = read_int8(s->s);
+            tn->_reserved = 0;
             tn->abstract = flags & 1;
             tn->mutabl = (flags>>1) & 1;
             tn->mayinlinealloc = (flags>>2) & 1;

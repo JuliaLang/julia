@@ -1451,7 +1451,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         return jl_cgval_t();
     }
     if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
-        jl_add_method_root(ctx, rt);
+        rt = jl_ensure_rooted(ctx, rt);
     function_sig_t sig("ccall", lrt, rt, retboxed,
                        (jl_svec_t*)at, unionall, nreqargs,
                        cc, llvmcall, &ctx.emission_context);
@@ -1927,7 +1927,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 jl_svec_len(ctx.linfo->sparam_vals) > 0) {
             jargty_in_env = jl_instantiate_type_in_env(jargty_in_env, unionall_env, jl_svec_data(ctx.linfo->sparam_vals));
             if (jargty_in_env != jargty)
-                jl_add_method_root(ctx, jargty_in_env);
+                jargty_in_env = jl_ensure_rooted(ctx, jargty_in_env);
         }
 
         Value *v;
