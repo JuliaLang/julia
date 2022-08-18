@@ -374,7 +374,7 @@ function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     dda = Da.diag
     ddb = Db.diag
     n = length(dda)
-    return broadcast(*, reshape(dda, n, 1), A, reshape(ddb, 1, n))
+    return broadcast(*, dda, A, reshape(ddb, 1, n))
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
