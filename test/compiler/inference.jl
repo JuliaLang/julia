@@ -4111,3 +4111,15 @@ struct Issue45780
 end
 f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
 @test (@inferred f45780()) == Val{1}()
+
+# issue #45600
+@test only(code_typed() do
+    while true
+        x = try finally end
+    end
+end)[2] == Union{}
+@test only(code_typed() do
+    while true
+        @time 1
+    end
+end)[2] == Union{}
