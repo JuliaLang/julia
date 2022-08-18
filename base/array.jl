@@ -2424,7 +2424,7 @@ See also: [`issubseq`](@ref).
 # Examples
 ```jldoctest
 julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8], [7, 8])
-2-element Vector{Any}:
+2-element Vector{Int64}:
  3
  7
 
@@ -2432,7 +2432,7 @@ julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8], [4, 6])
 Int64[]
 
 julia> findsubseq("Hello","el")
-1-element Vector{Any}:
+1-element Vector{Int64}:
  2
 ```
 
