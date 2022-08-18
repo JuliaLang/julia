@@ -20,7 +20,7 @@ specified, then `-t`/`--threads` takes precedence.
 
 The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
-(see [Command-line Options](@ref command-line-options) for more details).
+(see [Command-line Options](@ref command-line-interface) for more details).
 
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
