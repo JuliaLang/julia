@@ -58,7 +58,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         elseif isa(stmt, GotoIfNot)
             stmt = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            stmt = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
+            stmt = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, Expr) && stmt.head === :enter
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
         end
