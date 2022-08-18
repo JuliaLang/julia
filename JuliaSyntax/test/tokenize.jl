@@ -589,6 +589,7 @@ end
     @test kind.(collect(tokenize("3.2e2.2"))) == [K"ErrorInvalidNumericConstant", K"Integer", K"EndMarker"]
     @test kind.(collect(tokenize("3e2.2"))) == [K"ErrorInvalidNumericConstant", K"Integer", K"EndMarker"]
     @test kind.(collect(tokenize("0b101__101"))) == [K"BinInt", K"Identifier", K"EndMarker"]
+    @test tok("0x1p").kind == K"ErrorInvalidNumericConstant"
 end
 
 @testset "floating points" begin
