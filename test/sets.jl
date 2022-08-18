@@ -393,7 +393,7 @@ end
     @test symdiff(Set([1]), BitSet()) isa Set{Int}
     @test symdiff(BitSet([1]), Set{Int}()) isa BitSet
     @test symdiff([1], BitSet()) isa Vector{Int}
-    #symdiff does uniquify 
+    #symdiff does uniquify
     @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [1,2]
     @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
     @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
