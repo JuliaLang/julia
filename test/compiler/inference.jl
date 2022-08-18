@@ -3090,3 +3090,15 @@ end
 f41908(x::Complex{T}) where {String<:T<:String} = 1
 g41908() = f41908(Any[1][1])
 @test only(Base.return_types(g41908, ())) <: Int
+
+# issue #45600
+@test only(code_typed() do
+    while true
+        x = try finally end
+    end
+end)[2] == Union{}
+@test only(code_typed() do
+    while true
+        @time 1
+    end
+end)[2] == Union{}
