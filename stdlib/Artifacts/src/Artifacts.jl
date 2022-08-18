@@ -61,7 +61,7 @@ end
 
 Artifact locations can be overridden by writing `Override.toml` files within the artifact
 directories of Pkg depots.  For example, in the default depot `~/.julia`, one may create
-a `~/.julia/artifacts/Override.toml` file with the following contents:
+a `~/.julia/artifacts/Overrides.toml` file with the following contents:
 
     78f35e74ff113f02274ce60dab6e92b4546ef806 = "/path/to/replacement"
     c76f8cda85f83a06d17de6c57aabf9e294eb2537 = "fb886e813a4aed4147d5979fcdf27457d20aa35d"
