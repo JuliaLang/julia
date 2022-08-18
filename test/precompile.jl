@@ -1686,13 +1686,12 @@ end
         my_fce2() = println("result = ", 42) 
         precompile(my_fce2, ())
 
-        # TODO:
-        # my_ptls() = Core.getptls()
-        # precompile(my_ptls, ())
-        # my_alloc(val) = Ref(val)
-        # precompile(my_alloc, (Int,))
-        # my_alloc2() = Ref(10)
-        # precompile(my_alloc2, ())
+        my_ptls() = Core.getptls()
+        precompile(my_ptls, ())
+        my_alloc() = Ref(10)
+        precompile(my_alloc, ())
+        my_alloc2(val) = Ref(val)
+        precompile(my_alloc2, (Int,))
         end
         """)
     end
@@ -1728,6 +1727,14 @@ end
         @test ret === nothing
         @test chomp(read(filename, String)) == "hello\nresult = 42"
     end
+
+    alloc =  getfield(CNS, :my_alloc)
+    alloc2 =  getfield(CNS, :my_alloc2)
+    get_ptls = getfield(CNS, :my_ptls)
+
+    @test alloc()[] == 10
+    @test alloc2(5)[] == 5
+    @test get_ptls() === Core.getptls()
 end
 
 @testset "static compilation" begin

@@ -431,6 +431,7 @@ static int externally_linked(jl_value_t *v)
     // To be continued in a future PR.
     
     // What about MethodInstances that are instantiated from a pkgimage, and don't exist prior.
+    // TODO(@timholy): This turned problematic for some of our test-cases
     // if (jl_is_method_instance(v))
     //     return externally_linked(((jl_method_instance_t*)v)->def.value);
     // else if (jl_is_code_instance(v))
@@ -1023,7 +1024,7 @@ static void jl_write_values(jl_serializer_state *s)
         record_gvar(s, GV, ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
 
         if (externally_linked(v)) {
-            assert(!GV);
+            // assert(!GV); TODO (@timholy) why the assert
             write_pointerfield(s, v);
             continue;
         }
