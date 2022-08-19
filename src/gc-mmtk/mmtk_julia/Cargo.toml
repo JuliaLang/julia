@@ -1,0 +1,44 @@
+[package]
+name = "mmtk-julia"
+version = "0.1.0"
+authors = ["Eduardo Souza <ledusou@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+# Metadata for the Julia repository
+[package.metadata.julia]
+# Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
+julia_repo = "https://github.com/mmtk/julia.git"
+julia_version = "6c9aa5c10de3acaaea95cdb0b93ec3332b419426"
+
+[lib]
+crate-type = ["staticlib", "rlib", "dylib"]
+
+[build-dependencies]
+cc = "*"
+built = "*"
+
+
+[dependencies]
+libc = "0.2"
+lazy_static = "1.1"
+mmtk = { git = "https://github.com/udesou/mmtk-core.git", branch="master", version = "*" }
+# mmtk = { git = "https://github.com/mmtk/mmtk-core.git", branch="master", version = "*" }
+# mmtk = { path = "/home/eduardo/mmtk-core", version="*" }
+log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
+enum-map = "=2.1"
+atomic = "0.4.6"
+
+# ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
+
+[features]
+default = []
+nogc = []
+semispace = []
+gencopy = []
+marksweep = []
+pageprotect = []
+malloc_counted_size = ["mmtk/malloc_counted_size"]
+immix = ["malloc_counted_size"]
+scan_obj_c = ["immix"]
