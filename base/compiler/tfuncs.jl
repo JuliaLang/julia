@@ -1854,7 +1854,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     apply_type,
     arraysize,
     Core.ifelse,
-    sizeof,
+    Core.sizeof,
     svec,
     fieldtype,
     isa,
