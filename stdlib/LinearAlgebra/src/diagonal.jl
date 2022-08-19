@@ -371,10 +371,7 @@ end
 function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
     _muldiag_size_check(Da, A)
     _muldiag_size_check(A, Db)
-    dda = Da.diag
-    ddb = Db.diag
-    n = length(dda)
-    return broadcast(*, dda, A, reshape(ddb, 1, n))
+    return broadcast(*, Da.diag, A, permutedims(Db.diag))
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
