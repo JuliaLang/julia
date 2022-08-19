@@ -77,24 +77,14 @@ Ideally a lexer is stateless but some state is needed here for:
 """
 mutable struct Lexer{IO_t <: IO}
     io::IO_t
-    io_startpos::Int
 
-    token_start_row::Int
-    token_start_col::Int
     token_startpos::Int
-
-    current_row::Int
-    current_col::Int
-    current_pos::Int
 
     last_token::Kind
     string_states::Vector{StringState}
-    charstore::IOBuffer
     chars::Tuple{Char,Char,Char,Char}
     charspos::Tuple{Int,Int,Int,Int}
-    doread::Bool
     dotop::Bool
-    errored::Bool
 end
 
 function Lexer(io::IO)
@@ -121,9 +111,9 @@ function Lexer(io::IO)
             end
         end
     end
-    Lexer(io, position(io), 1, 1, position(io), 1, 1, position(io),
-                  K"error", Vector{StringState}(), IOBuffer(),
-                  (c1,c2,c3,c4), (p1,p2,p3,p4), false, false, false)
+    Lexer(io, position(io),
+                  K"error", Vector{StringState}(),
+                  (c1,c2,c3,c4), (p1,p2,p3,p4), false)
 end
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
@@ -143,14 +133,8 @@ Base.eltype(::Type{<:Lexer}) = Token
 
 
 function Base.iterate(l::Lexer)
-    seekstart(l)
     l.token_startpos = position(l)
-    l.token_start_row = 1
-    l.token_start_col = 1
 
-    l.current_row = 1
-    l.current_col = 1
-    l.current_pos = l.io_startpos
     t = next_token(l)
     return t, t.kind == K"EndMarker"
 end
@@ -178,15 +162,6 @@ startpos(l::Lexer) = l.token_startpos
 Set a new starting position.
 """
 startpos!(l::Lexer, i::Integer) = l.token_startpos = i
-
-Base.seekstart(l::Lexer) = seek(l.io, l.io_startpos)
-
-"""
-    seek2startpos!(l::Lexer)
-
-Sets the lexer's current position to the beginning of the latest `Token`.
-"""
-seek2startpos!(l::Lexer) = seek(l, startpos(l))
 
 """
     peekchar(l::Lexer)
@@ -220,7 +195,7 @@ Base.position(l::Lexer) = l.charspos[1]
     eof(l::Lexer)
 
 Determine whether the end of the lexer's underlying buffer has been reached.
-"""# Base.position(l::Lexer) = Base.position(l.io)
+"""
 Base.eof(l::Lexer) = eof(l.io)
 
 Base.seek(l::Lexer, pos) = seek(l.io, pos)
@@ -233,8 +208,6 @@ position.
 """
 function start_token!(l::Lexer)
     l.token_startpos = l.charspos[1]
-    l.token_start_row = l.current_row
-    l.token_start_col = l.current_col
 end
 
 """
@@ -312,7 +285,6 @@ end
 Returns an `K"error"` token with error `err` and starts a new `Token`.
 """
 function emit_error(l::Lexer, err::Kind = K"error")
-    l.errored = true
     @assert is_error(err)
     return emit(l, err)
 end

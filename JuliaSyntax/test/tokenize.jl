@@ -25,13 +25,11 @@ strtok(str) = untokenize.(collect(tokenize(str)), str)
         l = tokenize(s)
         @test Tokenize.readchar(l) == 'a'
 
-        # @test l.current_pos == 0
         l_old = l
         @test l == l_old
         @test Tokenize.eof(l)
         @test Tokenize.readchar(l) == Tokenize.EOF_CHAR
 
-        # @test l.current_pos == 0
     end
 end # testset
 
