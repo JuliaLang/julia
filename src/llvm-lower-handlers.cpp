@@ -7,6 +7,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/DepthFirstIterator.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -27,6 +28,8 @@
 
 #define DEBUG_TYPE "lower_handlers"
 #undef DEBUG
+STATISTIC(MaxExceptionHandlerDepth, "Maximum nesting of exception handlers");
+STATISTIC(ExceptionHandlerBuffers, "Number of exception handler buffers inserted");
 
 using namespace llvm;
 
@@ -156,6 +159,8 @@ static bool lowerExcHandlers(Function &F) {
         /* Remember the depth at the BB boundary */
         ExitDepth[BB] = Depth;
     }
+    MaxExceptionHandlerDepth.updateMax(MaxDepth);
+    ExceptionHandlerBuffers += MaxDepth;
 
     /* Step 2: EH Frame lowering */
     // Allocate stack space for each handler. We allocate these as separate
