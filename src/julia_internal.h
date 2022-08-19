@@ -238,6 +238,10 @@ JL_DLLEXPORT extern const char *jl_filename;
 jl_value_t *jl_gc_pool_alloc_noinline(jl_ptls_t ptls, int pool_offset,
                                    int osize);
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
+#ifdef MMTKHEAP
+JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int pool_offset, int osize);
+JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_big(jl_ptls_t ptls, size_t allocsz);
+#endif
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize);
 extern uv_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
@@ -364,14 +368,22 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
         int pool_id = jl_gc_szclass(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
+#ifndef MMTKHEAP
         // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
         v = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
+#else
+        v = jl_mmtk_gc_alloc_default(ptls, pool_id, osize);
+#endif
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
+#ifndef MMTKHEAP
         v = jl_gc_big_alloc_noinline(ptls, allocsz);
+#else
+        v = jl_mmtk_gc_alloc_big(ptls, allocsz);
+#endif
     }
     jl_set_typeof(v, ty);
     maybe_record_alloc_to_profile(v, sz, (jl_datatype_t*)ty);
@@ -470,18 +482,22 @@ void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) JL_NOTSAFEPOINT // val isa jl_value_t*
 {
+#ifndef MMTKHEAP
     if (__unlikely(jl_astaggedvalue(bnd)->bits.gc == 3 &&
                    (jl_astaggedvalue(val)->bits.gc & 1) == 0))
-        gc_queue_binding(bnd);
+        jl_gc_queue_binding(bnd);
+#endif
 }
 
 STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
 {
+#ifndef MMTKHEAP
     // if parent is marked and buf is not
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc & 1)) {
         jl_task_t *ct = jl_current_task;
         gc_setmark_buf(ct->ptls, bufptr, 3, minsz);
     }
+#endif
 }
 
 void jl_gc_debug_print_status(void);

@@ -213,8 +213,13 @@ namespace jl_intrinsics {
 }
 
 namespace jl_well_known {
+#ifndef MMTKHEAP
     static const char *GC_BIG_ALLOC_NAME = XSTR(jl_gc_big_alloc);
     static const char *GC_POOL_ALLOC_NAME = XSTR(jl_gc_pool_alloc);
+#else
+    static const char *GC_BIG_ALLOC_NAME = XSTR(jl_mmtk_gc_alloc_big);
+    static const char *GC_POOL_ALLOC_NAME = XSTR(jl_mmtk_gc_alloc_default_llvm);
+#endif
     static const char *GC_QUEUE_ROOT_NAME = XSTR(jl_gc_queue_root);
 
     using jl_intrinsics::addGCAllocAttributes;
@@ -239,7 +244,11 @@ namespace jl_well_known {
             auto poolAllocFunc = Function::Create(
                 FunctionType::get(
                     context.T_prjlvalue,
-                    { context.T_pint8, context.T_int32, context.T_int32 },
+#ifndef MMTKHEAP
+                    { Type::getInt8PtrTy(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
+#else
+                    { Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
+#endif
                     false),
                 Function::ExternalLinkage,
                 GC_POOL_ALLOC_NAME);

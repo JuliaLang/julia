@@ -905,22 +905,27 @@ JL_DLLEXPORT void jl_gc_queue_multiroot(const jl_value_t *root, const jl_value_t
 
 STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
+#ifndef MMTKHEAP
     // parent and ptr isa jl_value_t*
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 && // parent is old and not in remset
                    (jl_astaggedvalue(ptr)->bits.gc & 1) == 0)) // ptr is young
         jl_gc_queue_root((jl_value_t*)parent);
+#endif
 }
 
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
 {
+#ifndef MMTKHEAP
     // if ptr is old
     if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3)) {
         jl_gc_queue_root((jl_value_t*)ptr);
     }
+#endif
 }
 
 STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
+#ifndef MMTKHEAP
     // ptr is an immutable object
     if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
         return; // parent is young or in remset
@@ -930,6 +935,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
     const jl_datatype_layout_t *ly = dt->layout;
     if (ly->npointers)
         jl_gc_queue_multiroot((jl_value_t*)parent, ptr);
+#endif
 }
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);

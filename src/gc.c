@@ -7,6 +7,10 @@
 #include <malloc.h> // for malloc_trim
 #endif
 
+#ifdef MMTKHEAP
+#include "mmtk_julia.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -270,7 +274,10 @@ static void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 1);
 }
 
-static void run_finalizer(jl_task_t *ct, jl_value_t *o, jl_value_t *ff)
+#ifndef MMTKHEAP
+static
+#endif
+void run_finalizer(jl_task_t *ct, jl_value_t *o, jl_value_t *ff)
 {
     if (gc_ptr_tag(o, 1)) {
         ((void (*)(void*))ff)(gc_ptr_clear_tag(o, 1));
@@ -374,7 +381,10 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     JL_GC_POP();
 }
 
-static uint64_t finalizer_rngState[4];
+#ifndef MMTKHEAP
+static
+#endif
+uint64_t finalizer_rngState[4];
 
 void jl_rng_split(uint64_t to[4], uint64_t from[4]);
 
@@ -385,6 +395,9 @@ JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
 
 static void run_finalizers(jl_task_t *ct)
 {
+#ifdef MMTKHEAP
+    mmtk_jl_run_finalizers(ct->ptls);
+#endif
     // Racy fast path:
     // The race here should be OK since the race can only happen if
     // another thread is writing to it with the lock held. In such case,
@@ -507,6 +520,10 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
 
 static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 {
+#ifdef MMTKHEAP
+    register_finalizer(v, f, 0);
+    return;
+#endif
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
     arraylist_t *a = &ptls->finalizers;
     // This acquire load and the release store at the end are used to
@@ -535,7 +552,11 @@ static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
-    gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+#ifndef MMTKHEAP
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+#else
+    register_finalizer(v, f, 1);
+#endif
 }
 
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT
@@ -550,6 +571,10 @@ JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_funct
 
 JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
 {
+#ifdef MMTKHEAP
+    run_finalizers_for_obj(o);
+    return;
+#endif
     JL_LOCK_NOGC(&finalizers_lock);
     // Copy the finalizers into a temporary list so that code in the finalizer
     // won't change the list as we loop through them.
@@ -901,12 +926,14 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v) JL_NOTSAFEPOINT
 
 static inline void maybe_collect(jl_ptls_t ptls)
 {
+#ifndef MMTKHEAP
     if (jl_atomic_load_relaxed(&ptls->gc_num.allocd) >= 0 || jl_gc_debug_check_other()) {
         jl_gc_collect(JL_GC_AUTO);
     }
     else {
         jl_gc_safepoint_(ptls);
     }
+#endif
 }
 
 // weak references
@@ -917,7 +944,11 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
                                                   jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here
+#ifdef MMTKHEAP
+    mmtk_add_weak_candidate(wr);
+#else
     arraylist_push(&ptls->heap.weak_refs, wr);
+#endif
     return wr;
 }
 
@@ -1146,7 +1177,10 @@ size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
     return sz;
 }
 
-static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
+#ifndef MMTKHEAP
+static
+#endif
+void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
 {
     if (a->flags.how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
@@ -1677,8 +1711,13 @@ void gc_queue_binding(jl_binding_t *bnd)
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
 
+#ifndef MMTKHEAP
 static void *sysimg_base;
 static void *sysimg_end;
+#else
+void *sysimg_base;
+void *sysimg_end;
+#endif
 void jl_gc_set_permalloc_region(void *start, void *end)
 {
     sysimg_base = start;
@@ -2981,8 +3020,14 @@ JL_DLLEXPORT int jl_gc_enable(int on)
             gc_num.allocd += gc_num.deferred_alloc;
             gc_num.deferred_alloc = 0;
         }
+#ifdef MMTKHEAP
+        enable_collection();
+#endif
     }
     else if (prev && !on) {
+#ifdef MMTKHEAP
+        disable_collection();
+#endif
         // enable -> disable
         jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
         // check if the GC is running and wait for it to finish
@@ -3048,7 +3093,10 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
     return live_bytes;
 }
 
-static void jl_gc_premark(jl_ptls_t ptls2)
+#ifndef MMTKHEAP
+static
+#endif
+void jl_gc_premark(jl_ptls_t ptls2)
 {
     arraylist_t *remset = ptls2->heap.remset;
     ptls2->heap.remset = ptls2->heap.last_remset;
@@ -3357,6 +3405,10 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         jl_atomic_fetch_add((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
         return;
     }
+#ifdef MMTKHEAP
+    handle_user_collection_request(ptls);
+    return;
+#endif
     jl_gc_debug_print();
 
     int8_t old_state = jl_atomic_load_relaxed(&ptls->gc_state);
@@ -3446,6 +3498,10 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 {
     if (ptls->tid == 0)
         ptls->disable_gc = 1;
+#ifdef MMTKHEAP
+    if (ptls->tid == 0)
+        disable_collection();
+#endif
     jl_thread_heap_t *heap = &ptls->heap;
     jl_gc_pool_t *p = heap->norm_pools;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
@@ -3478,6 +3534,10 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     assert(gc_num.interval == default_collect_interval);
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+#ifdef MMTKHEAP
+    MMTk_Mutator mmtk_mutator = bind_mutator((void *)ptls, ptls->tid);
+    ptls->mmtk_mutator_ptr = ((MMTkMutatorContext*)mmtk_mutator);
+#endif
 }
 
 // System-wide initializations
@@ -3510,6 +3570,34 @@ void jl_gc_init(void)
     if (maxmem > max_collect_interval)
         max_collect_interval = maxmem;
 #endif
+
+#ifdef MMTKHEAP
+    long long heap_size;
+    char* size_def = getenv("MMTK_HEAP_SIZE");
+    char* size_gb = getenv("MMTK_HEAP_SIZE_G");
+
+    if (size_def != NULL) {
+        char *p;
+        double size = strtod(size_def, &p);
+        heap_size = (long) 1024 * 1024 * size;
+    } else if (size_gb != NULL) {
+        char *p;
+        double size = strtod(size_gb, &p);
+        heap_size = (long) 1024 * 1024 * 1024 * size;
+    } else {
+        heap_size = 1024 * 1024 * 1024 * (long) 6;
+    }
+
+    gc_init(heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t))); // currently set as 6GB
+#endif
+
+    // We allocate with abandon until we get close to the free memory on the machine.
+    uint64_t free_mem = uv_get_free_memory();
+    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
+
+    if (high_water_mark < max_total_memory)
+       max_total_memory = high_water_mark;
+
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
     t_start = jl_hrtime();
@@ -3534,6 +3622,10 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+#ifdef MMTKHEAP
+        mmtk_gc_poll(ptls);
+        return mmtk_counted_malloc(sz);
+#endif
     }
     return malloc(sz);
 }
@@ -3549,6 +3641,10 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + nm*sz);
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+#ifdef MMTKHEAP
+        mmtk_gc_poll(ptls);
+        return mmtk_counted_calloc(nm, sz);
+#endif
     }
     return calloc(nm, sz);
 }
@@ -3557,14 +3653,18 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    free(p);
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         jl_atomic_store_relaxed(&ptls->gc_num.freed,
             jl_atomic_load_relaxed(&ptls->gc_num.freed) + sz);
         jl_atomic_store_relaxed(&ptls->gc_num.freecall,
             jl_atomic_load_relaxed(&ptls->gc_num.freecall) + 1);
+#ifdef MMTKHEAP
+        mmtk_free_with_size(p, sz);
+        return;
+#endif
     }
+    free(p);
 }
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
@@ -3582,6 +3682,10 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
                 jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (sz - old));
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
             jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
+#ifdef MMTKHEAP
+        mmtk_gc_poll(ptls);
+        return mmtk_realloc_with_old_size(p, sz, old);
+#endif
     }
     return realloc(p, sz);
 }
@@ -3723,6 +3827,7 @@ JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
 
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
 {
+#ifndef MMTKHEAP
     size_t len = jl_string_len(s);
     if (sz <= len) return s;
     jl_taggedvalue_t *v = jl_astaggedvalue(s);
@@ -3756,6 +3861,16 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     jl_value_t *snew = jl_valueof(&newbig->header);
     *(size_t*)snew = sz;
     return snew;
+#else
+    size_t len = jl_string_len(s);
+    if (sz <= len) return s;
+    jl_taggedvalue_t *v = jl_astaggedvalue(s);
+    size_t strsz = len + sizeof(size_t) + 1;
+
+    jl_value_t *snew = jl_alloc_string(sz);
+    memcpy(jl_string_data(snew), jl_string_data(s), len);
+    return snew;
+#endif
 }
 
 // Perm gen allocator

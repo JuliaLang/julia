@@ -233,7 +233,11 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
+#ifndef MMTKHEAP
     jl_gc_run_all_finalizers(ct);
+#else
+    mmtk_jl_gc_run_all_finalizers();
+#endif
 
     uv_loop_t *loop = jl_global_event_loop();
 
@@ -692,6 +696,16 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
+
+#ifdef MMTKHEAP
+    // start MMTk's GC
+    initialize_collection((void*) ptls);
+#endif
+
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);

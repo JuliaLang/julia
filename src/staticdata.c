@@ -2167,6 +2167,10 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     sysimg_relocs = &relocs.buf[0];
     jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
 
+#ifdef MMTKHEAP
+    map_boot_image_metadata((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
+#endif
+
     s.s = &sysimg;
     jl_read_relocations(&s, GC_OLD); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
